@@ -1,0 +1,24 @@
+version: "3"
+services:
+  postgres:
+    image: "postgres:11.1-alpine"
+    expose:
+      - "5432"
+    env_file:
+      - .env
+    volumes:
+      - ../postgres-data:/var/lib/postgresql/data
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    volumes:
+      - ./:/code
+  redis:
+    image: "redis:alpine"
+    volumes:
+      - ../redis-data:/postgres-data

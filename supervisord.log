@@ -1,0 +1,66 @@
+2020-02-19 09:21:23,808 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-19 09:21:23,820 INFO RPC interface 'supervisor' initialized
+2020-02-19 09:21:23,821 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-19 09:21:23,824 INFO supervisord started with pid 1
+2020-02-19 09:21:24,829 INFO spawned: 'celery_missed_deposit_block' with pid 52
+2020-02-19 09:21:24,832 INFO spawned: 'celery_per_block_deposit_scanner' with pid 53
+2020-02-19 09:21:24,835 INFO spawned: 'celery_scan_user_deposits' with pid 54
+2020-02-19 09:21:24,838 INFO spawned: 'celery_worker_beat' with pid 55
+2020-02-19 09:21:24,854 INFO spawned: 'celery_worker_deposit' with pid 56
+2020-02-19 09:21:24,857 INFO spawned: 'celery_worker_deposit_block' with pid 57
+2020-02-19 09:21:24,873 INFO spawned: 'celery_worker_deposit_socket' with pid 58
+2020-02-19 09:21:24,884 INFO spawned: 'celery_worker_media' with pid 59
+2020-02-19 09:21:24,897 INFO spawned: 'webserver' with pid 60
+2020-02-19 09:21:25,912 INFO success: celery_missed_deposit_block entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,913 INFO success: celery_per_block_deposit_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,913 INFO success: celery_scan_user_deposits entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,914 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,915 INFO success: celery_worker_deposit entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,915 INFO success: celery_worker_deposit_block entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,916 INFO success: celery_worker_deposit_socket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,917 INFO success: celery_worker_media entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:21:25,917 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:24:57,688 WARN received SIGINT indicating exit request
+2020-02-19 09:24:57,705 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media, webserver to die
+2020-02-19 09:24:57,933 INFO stopped: webserver (exit status 0)
+2020-02-19 09:24:59,597 INFO stopped: celery_worker_media (exit status 0)
+2020-02-19 09:25:01,023 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket to die
+2020-02-19 09:25:01,647 INFO stopped: celery_worker_deposit_socket (exit status 0)
+2020-02-19 09:25:04,321 INFO stopped: celery_worker_deposit_block (exit status 0)
+2020-02-19 09:25:04,323 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit to die
+2020-02-19 09:25:06,024 INFO stopped: celery_worker_deposit (exit status 0)
+2020-02-19 09:25:07,544 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat to die
+2020-02-19 09:25:07,728 INFO stopped: celery_worker_beat (exit status 0)
+2020-02-19 09:25:07,729 INFO reaped unknown pid 99
+2020-02-19 09:25:09,402 INFO stopped: celery_scan_user_deposits (exit status 0)
+2020-02-19 09:25:10,925 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner to die
+2020-02-19 09:25:11,075 INFO stopped: celery_per_block_deposit_scanner (exit status 0)
+2020-02-19 09:25:13,749 INFO stopped: celery_missed_deposit_block (exit status 0)
+2020-02-19 09:25:26,150 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-19 09:25:26,162 INFO RPC interface 'supervisor' initialized
+2020-02-19 09:25:26,164 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-19 09:25:26,169 INFO supervisord started with pid 1
+2020-02-19 09:25:27,174 INFO spawned: 'celery_missed_deposit_block' with pid 43
+2020-02-19 09:25:27,180 INFO spawned: 'celery_per_block_deposit_scanner' with pid 44
+2020-02-19 09:25:27,186 INFO spawned: 'celery_scan_user_deposits' with pid 45
+2020-02-19 09:25:27,197 INFO spawned: 'celery_worker_beat' with pid 46
+2020-02-19 09:25:27,215 INFO spawned: 'celery_worker_deposit' with pid 47
+2020-02-19 09:25:27,239 INFO spawned: 'celery_worker_deposit_block' with pid 48
+2020-02-19 09:25:27,259 INFO spawned: 'celery_worker_deposit_socket' with pid 49
+2020-02-19 09:25:27,279 INFO spawned: 'celery_worker_media' with pid 50
+2020-02-19 09:25:27,307 INFO spawned: 'webserver' with pid 51
+2020-02-19 09:25:28,314 INFO success: celery_missed_deposit_block entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,315 INFO success: celery_per_block_deposit_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,316 INFO success: celery_scan_user_deposits entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,316 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,318 INFO success: celery_worker_deposit entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,319 INFO success: celery_worker_deposit_block entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,320 INFO success: celery_worker_deposit_socket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,321 INFO success: celery_worker_media entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:28,322 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-19 09:25:57,525 WARN received SIGTERM indicating exit request
+2020-02-19 09:25:57,531 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media, webserver to die
+2020-02-19 09:25:59,072 INFO stopped: webserver (exit status 0)
+2020-02-19 09:26:01,088 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media to die
+2020-02-19 09:26:04,096 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media to die
+2020-02-19 09:26:07,104 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media to die
