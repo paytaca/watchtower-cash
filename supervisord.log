@@ -64,3 +64,67 @@
 2020-02-19 09:26:01,088 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media to die
 2020-02-19 09:26:04,096 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media to die
 2020-02-19 09:26:07,104 INFO waiting for celery_missed_deposit_block, celery_per_block_deposit_scanner, celery_scan_user_deposits, celery_worker_beat, celery_worker_deposit, celery_worker_deposit_block, celery_worker_deposit_socket, celery_worker_media to die
+2020-02-20 08:54:59,909 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-20 08:54:59,922 INFO RPC interface 'supervisor' initialized
+2020-02-20 08:54:59,922 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-20 08:54:59,926 INFO supervisord started with pid 1
+2020-02-20 08:55:00,930 INFO spawned: 'celery_task_a' with pid 54
+2020-02-20 08:55:00,939 INFO spawned: 'celery_task_b' with pid 55
+2020-02-20 08:55:00,948 INFO spawned: 'celery_task_c' with pid 56
+2020-02-20 08:55:00,959 INFO spawned: 'celery_worker_beat' with pid 57
+2020-02-20 08:55:00,963 INFO spawned: 'webserver' with pid 58
+2020-02-20 08:55:01,942 INFO success: celery_task_a entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 08:55:01,942 INFO success: celery_task_b entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 08:55:02,946 INFO success: celery_task_c entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 08:55:02,959 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 08:55:02,960 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 08:58:01,331 WARN received SIGTERM indicating exit request
+2020-02-20 08:58:01,339 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat, webserver to die
+2020-02-20 08:58:01,668 INFO stopped: webserver (exit status 0)
+2020-02-20 08:58:04,685 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-20 08:58:07,697 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-20 08:58:10,713 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-20 09:02:12,131 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-20 09:02:12,140 INFO RPC interface 'supervisor' initialized
+2020-02-20 09:02:12,141 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-20 09:02:12,145 INFO supervisord started with pid 1
+2020-02-20 09:02:13,114 INFO spawned: 'celery_task_a' with pid 61
+2020-02-20 09:02:13,118 INFO spawned: 'celery_task_b' with pid 62
+2020-02-20 09:02:13,121 INFO spawned: 'celery_task_c' with pid 63
+2020-02-20 09:02:13,125 INFO spawned: 'celery_worker_beat' with pid 64
+2020-02-20 09:02:13,133 INFO spawned: 'webserver' with pid 65
+2020-02-20 09:02:14,980 INFO success: celery_task_a entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:02:14,982 INFO success: celery_task_b entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:02:14,983 INFO success: celery_task_c entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:02:14,985 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:02:15,008 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:02:42,198 WARN received SIGINT indicating exit request
+2020-02-20 09:02:42,201 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat, webserver to die
+2020-02-20 09:02:42,444 INFO stopped: webserver (exit status 0)
+2020-02-20 09:02:44,062 INFO stopped: celery_worker_beat (exit status 0)
+2020-02-20 09:02:44,063 INFO reaped unknown pid 87 (exit status 0)
+2020-02-20 09:02:45,604 INFO waiting for celery_task_a, celery_task_b, celery_task_c to die
+2020-02-20 09:02:45,742 INFO stopped: celery_task_c (exit status 0)
+2020-02-20 09:02:47,419 INFO stopped: celery_task_b (exit status 0)
+2020-02-20 09:02:48,975 INFO waiting for celery_task_a to die
+2020-02-20 09:02:50,093 INFO stopped: celery_task_a (exit status 0)
+2020-02-20 09:03:04,484 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-20 09:03:04,490 INFO RPC interface 'supervisor' initialized
+2020-02-20 09:03:04,492 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-20 09:03:04,497 INFO supervisord started with pid 1
+2020-02-20 09:03:05,502 INFO spawned: 'celery_task_a' with pid 42
+2020-02-20 09:03:05,508 INFO spawned: 'celery_task_b' with pid 43
+2020-02-20 09:03:05,519 INFO spawned: 'celery_task_c' with pid 44
+2020-02-20 09:03:05,526 INFO spawned: 'celery_worker_beat' with pid 45
+2020-02-20 09:03:05,530 INFO spawned: 'webserver' with pid 46
+2020-02-20 09:03:06,554 INFO success: celery_task_a entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:03:06,555 INFO success: celery_task_b entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:03:06,557 INFO success: celery_task_c entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:03:06,558 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:03:06,559 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-20 09:07:28,658 WARN received SIGTERM indicating exit request
+2020-02-20 09:07:28,673 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat, webserver to die
+2020-02-20 09:07:30,023 INFO stopped: webserver (exit status 0)
+2020-02-20 09:07:32,049 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-20 09:07:35,065 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-20 09:07:38,082 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
