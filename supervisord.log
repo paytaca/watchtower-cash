@@ -128,3 +128,43 @@
 2020-02-20 09:07:32,049 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
 2020-02-20 09:07:35,065 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
 2020-02-20 09:07:38,082 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-21 04:17:57,336 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-21 04:17:57,343 INFO RPC interface 'supervisor' initialized
+2020-02-21 04:17:57,344 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-21 04:17:57,349 INFO supervisord started with pid 1
+2020-02-21 04:17:58,356 INFO spawned: 'celery_task_a' with pid 45
+2020-02-21 04:17:58,368 INFO spawned: 'celery_task_b' with pid 46
+2020-02-21 04:17:58,384 INFO spawned: 'celery_task_c' with pid 47
+2020-02-21 04:17:58,404 INFO spawned: 'celery_worker_beat' with pid 48
+2020-02-21 04:17:58,420 INFO spawned: 'webserver' with pid 49
+2020-02-21 04:17:59,396 INFO success: celery_task_a entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:17:59,410 INFO success: celery_task_b entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:17:59,417 INFO success: celery_task_c entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:17:59,423 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:17:59,427 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:19:36,167 WARN received SIGTERM indicating exit request
+2020-02-21 04:19:36,228 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat, webserver to die
+2020-02-21 04:19:36,346 INFO stopped: webserver (exit status 0)
+2020-02-21 04:19:39,358 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-21 04:19:42,372 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-21 04:19:45,378 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-21 04:24:38,181 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-21 04:24:38,188 INFO RPC interface 'supervisor' initialized
+2020-02-21 04:24:38,190 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-21 04:24:38,195 INFO supervisord started with pid 1
+2020-02-21 04:24:39,201 INFO spawned: 'celery_task_a' with pid 55
+2020-02-21 04:24:39,208 INFO spawned: 'celery_task_b' with pid 56
+2020-02-21 04:24:39,214 INFO spawned: 'celery_task_c' with pid 57
+2020-02-21 04:24:39,221 INFO spawned: 'celery_worker_beat' with pid 58
+2020-02-21 04:24:39,227 INFO spawned: 'webserver' with pid 59
+2020-02-21 04:24:41,170 INFO success: celery_task_a entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:24:41,171 INFO success: celery_task_b entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:24:41,173 INFO success: celery_task_c entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:24:41,189 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 04:24:41,190 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-21 10:05:08,941 WARN received SIGTERM indicating exit request
+2020-02-21 10:05:08,952 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat, webserver to die
+2020-02-21 10:05:09,656 INFO stopped: webserver (exit status 0)
+2020-02-21 10:05:12,673 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-21 10:05:15,684 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die
+2020-02-21 10:05:18,694 INFO waiting for celery_task_a, celery_task_b, celery_task_c, celery_worker_beat to die

@@ -1,8 +1,8 @@
 from django.contrib import admin
-from main.models import BchToken, Transaction, SlpAddress
+from main.models import Token, Transaction, SlpAddress
 from django.contrib.auth.models import User, Group
 
-class BchTokenAdmin(admin.ModelAdmin):
+class TokenAdmin(admin.ModelAdmin):
     list_display = [
         'tokenid',
         'confirmation_limit'
@@ -24,6 +24,6 @@ class SlpAddressAdmin(admin.ModelAdmin):
 
 admin.site.unregister(User)
 admin.site.unregister(Group)
-admin.site.register(BchToken, BchTokenAdmin)
+admin.site.register(Token, TokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
