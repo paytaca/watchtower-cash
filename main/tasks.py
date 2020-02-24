@@ -1,11 +1,11 @@
 """
-sample
+All celery tasks for SLPNotify
 """
 from __future__ import absolute_import, unicode_literals
 import logging
 from celery import shared_task
-import request
-from main.models import BlockHeight, Token, Transaction
+import requests
+from main.models import BlockHeight, Token, Transaction, SlpAddress
 import json
 
 
@@ -14,28 +14,23 @@ LOGGER = logging.getLogger(__name__)
 @shared_task(queue='save_record')
 def save_record(tokenid, address, transactionid, blockheightid=None):
     """
-    Handles updating records in database
+    Update database records
     """
-    token_obj = Token.objects.get(id=tokenid)
+    LOGGER.info('-- SAVING RECORDS --')
+    token_obj = Token.objects.get(tokenid=tokenid)
     transaction_obj = Transaction.objects.get(id=transactionid)
     address_obj, created = SlpAddress.objects.get_or_create(
         token=token_obj,
         address=address,
     )
-    transaction_obj.amount = amount
-    transaction_obj.save()
-    address_obj.add(transaction_obj)
-    if blockheight is not None:
-        blockheight_instance = BlockHeight.objects.get(id=blockheightid)
-        blockheight_instance.processed = True
-        blockheight_instance.save()
-    msg = f'FOUND DEPOSIT {amount} -> {address_data['slpAddress']}'
-    LOGGER.INFO(msg)
+    address_obj.transactions.add(transaction_obj)
+    msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {address}"
+    LOGGER.info(msg)
 
 @shared_task(queue='deposit_filter')
-def deposit_filter(txn_id, blockheightid):
+def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_transactions):
     """
-    This function check if transaction id 
+    Tracks every transactions that belongs to the registered token
     """
     transaction_qs = Transaction.objects.filter(txid=txn_id)
     if not transaction_qs.exists():
@@ -47,34 +42,46 @@ def deposit_filter(txn_id, blockheightid):
                 transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
                 token_query = Token.objects.filter(tokenid=transaction_token_id)
                 if token_query.exists():
-                    amount = float(this['tokenInfo']['sendOutputs'][1]) / 100000000
-                    legacy = this['retData']['vout'][1]['scriptPubKey']['addresses'][0]
+                    amount = float(transaction_data['tokenInfo']['sendOutputs'][1]) / 100000000
+                    legacy = transaction_data['retData']['vout'][1]['scriptPubKey']['addresses'][0]
                     address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
                     address_response = requests.get(address_url)
                     address_data = json.loads(address_response.text)
                     if not 'error' in address_data.keys():
+                        token_obj = token_query.first()
+                        address_obj, created = SlpAddress.objects.get_or_create(
+                            token=token_obj,
+                            address=address_data['slpAddress'],
+                        )
                         transaction_obj, created = Transaction.objects.get_or_create(txid=txn_id)
                         if created:
-                            token_obj = token_query.first()
+                            transaction_obj.amount = amount
+                            transaction_obj.source = 'blockheight-scanning'
+                            transaction_obj.blockheight_id = blockheightid
+                            transaction_obj.save()
                             save_record(
-                                tokenidtoken_obj.id,
+                                token_obj.tokenid,
                                 address_data['slpAddress'],
                                 transaction_obj.id,
                                 blockheightid
                             )
+    if currentcount == total_transactions:
+        blockheight_instance = BlockHeight.objects.get(id=blockheightid)
+        blockheight_instance.processed = True
+        blockheight_instance.save()
 
 @shared_task(queue='kickstart_blockheight')
 def kickstart_blockheight():
     """
-    This task intended for checking new blockheight.
-    This will beat every 3 seconds.
+    Intended for checking new blockheight.
+    This will beat every 5 seconds.
     """
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
     try:
         resp = requests.get(url)
         number = json.loads(resp.text)['blocks']
     except Exception as exc:
-        self.retry(countdown=60)
+        LOGGER.error(exc)
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created:
         blockheight.delay(obj.id)
@@ -82,7 +89,7 @@ def kickstart_blockheight():
 @shared_task(queue='blockheight')
 def blockheight(id):
     """
-    This task process missed transactions per blockheight
+    Process missed transactions per blockheight
     """
     blockheight_instance= BlockHeight.objects.get(id=id)
     heightnumber = blockheight_instance.number
@@ -91,17 +98,31 @@ def blockheight(id):
     data = json.loads(resp.text)
     if 'error' not in data.keys():
         transactions = data['tx']
+        total_transactions = len(transactions)
+        counter = 1
         for txn_id in transactions:
-            deposit_filter.delay(txn_id, blockheight_instance.id)
+            for token in Token.objects.all():
+                deposit_filter.delay(
+                    txn_id,
+                    blockheight_instance.id,
+                    token.tokenid,
+                    counter,
+                    total_transactions
+                )
+            counter += 1
+        blockheight_instance.transactions_count = total_transactions
+        blockheight_instance.save()
             
 
 @shared_task(bind=True, queue='slpfountainhead', max_retries=10)
 def slpfountainhead(self):
     """
-    This is a live stream of SLP transactions
+    A live stream of SLP transactions
     """
+    url = "https://slpsocket.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjogewogICAgfQogIH0KfQ=="
     resp = requests.get(url, stream=True)
-    logger.info('socket ready in : %s' % source)
+    source = 'slpsocket.fountainhead.cash'
+    LOGGER.info('socket ready in : %s' % source)
     previous = ''
     for content in resp.iter_content(chunk_size=1024*1024):
         loaded_data = None
@@ -122,7 +143,7 @@ def slpfountainhead(self):
                 info = loaded_data['data'][0]
                 if 'slp' in info.keys():
                     if 'detail' in info['slp'].keys():
-                        if 'tokenIdHex' in info['slp']['detail'].keys():
+                        if 'toknIdHex' in info['slp']['detail'].keys():
                             if info['slp']['detail']['tokenIdHex'] == settings.SPICE_TOKEN_ID:
                                 amount = float(info['slp']['detail']['outputs'][0]['amount'])
                                 slp_address = info['slp']['detail']['outputs'][0]['address']
@@ -133,12 +154,14 @@ def slpfountainhead(self):
                                         token=token_obj,
                                         address=address_data['slpAddress'],
                                     )
-                                    transaction_obj, created = Transaction.objects.get_or_create(txid=txn_id)
+                                    transaction_obj, created = Transaction.objects.get_or_create(
+                                        txid=txn_id,
+                                    )
                                     if created:
                                         transaction_obj.amount = amount
+                                        transaction_obj.source = source
                                         transaction_obj.save()
-                                        address_obj.add(transaction_obj)
-                                        msg = f'FOUND DEPOSIT {amount} -> {address_data['slpAddress']}'
+                                        msg = f"FOUND DEPOSIT {amount} -> {address_data['slpAddress']}"
                                         LOGGER.INFO(msg)
                                         save_record.delay(
                                             info['slp']['detail']['tokenIdHex'],

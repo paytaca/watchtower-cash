@@ -1,5 +1,5 @@
 """
-ASGI config for slpnotify project.
+ASGI config for x project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 

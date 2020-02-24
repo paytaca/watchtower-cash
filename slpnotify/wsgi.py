@@ -1,5 +1,5 @@
 """
-WSGI config for slpnotify project.
+WSGI config for x project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
