@@ -19,14 +19,20 @@ class BlockHeightAdmin(admin.ModelAdmin):
         'processed'
     ]
 
-
 class TransactionAdmin(admin.ModelAdmin):
     list_display = [
         'txid',
         'amount',
-        'saved_by_client',
+        'source',
+        'blockheight_number',
+        'acknowledge',
         'created_datetime'
     ]
+
+    def blockheight_number(self, obj):
+        if obj.blockheight is not None:
+            return obj.blockheight.number
+        return '---' 
 
 class SlpAddressAdmin(admin.ModelAdmin):
     list_display = [

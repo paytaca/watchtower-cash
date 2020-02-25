@@ -27,6 +27,7 @@ pytz==2019.3
 redis==3.4.1
 requests==2.23.0
 six==1.14.0
+sseclient==0.0.24
 sqlparse==0.3.0
 supervisor==4.1.0
 traitlets==4.3.3

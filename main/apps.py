@@ -5,4 +5,6 @@ class MainConfig(AppConfig):
                
     def ready(self):
         import main.signals
-        
+        from main.tasks import slpfountainhead, slpbitcoin
+        slpfountainhead.delay()
+        slpbitcoin.delay()

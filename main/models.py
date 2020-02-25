@@ -28,7 +28,7 @@ class BlockHeight(models.Model):
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, unique=True)
     amount = models.FloatField(default=0)
-    saved_by_client = models.BooleanField(default=False)
+    acknowledge = models.BooleanField(default=False)
     blockheight = models.ForeignKey(BlockHeight, on_delete=models.CASCADE, related_name='transactions', null=True)
     source = models.CharField(max_length=200, null=True)
     created_datetime = models.DateTimeField(default=timezone.now)
