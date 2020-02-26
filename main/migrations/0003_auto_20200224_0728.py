@@ -17,6 +17,12 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(default='', on_delete=django.db.models.deletion.CASCADE, related_name='transactions', to='main.BlockHeight'),
             preserve_default=False,
         ),
+        migrations.AddField(
+            model_name='transaction',
+            name='token',
+            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='main.Token'),
+            preserve_default=False,
+        ),
         migrations.AlterField(
             model_name='transaction',
             name='txid',

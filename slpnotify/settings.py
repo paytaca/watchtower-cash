@@ -28,19 +28,22 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'slpnotify.scibizinformatics.com',
+    'localhost'
+]
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'main'
+    'main',
+    'django.contrib.admin',
 ]
 
 MIDDLEWARE = [
@@ -130,10 +133,20 @@ REDIS_HOST = config('REDIS_HOST', default='localhost')
 REDIS_PASSWORD = config('REDIS_PASSWORD', default='')
 REDIS_PORT = config('REDIS_PORT', default=6379)
 CELERY_IMPORTS = ('main.tasks',)
-CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
-CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
 
-REDISKV = redis.StrictRedis(
+if REDIS_PASSWORD:
+    CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    REDISKV = redis.StrictRedis(
+        host=REDIS_HOST,
+        password=REDIS_PASSWORD,
+        port=6379,
+        db=DB_NUM[2]
+    )
+else:
+    CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    REDISKV = redis.StrictRedis(
     host=REDIS_HOST,
     port=6379,
     db=DB_NUM[2]
@@ -156,3 +169,4 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 5
     }
 }
+

@@ -3,11 +3,13 @@ from django.utils import timezone
 
 
 class Token(models.Model):
+    name = models.CharField(max_length=100)
     tokenid = models.CharField(max_length=200)
+    target_address = models.CharField(max_length=500)
     confirmation_limit = models.IntegerField(default=0)
 
     def __str__(self):
-        return self.tokenid
+        return self.name
 
 
 class BlockHeight(models.Model):
@@ -32,10 +34,10 @@ class Transaction(models.Model):
     blockheight = models.ForeignKey(BlockHeight, on_delete=models.CASCADE, related_name='transactions', null=True)
     source = models.CharField(max_length=200, null=True)
     created_datetime = models.DateTimeField(default=timezone.now)
+    token = models.ForeignKey(Token, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.txid
-
 
 class SlpAddress(models.Model):
     token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='slpaddress')

@@ -20,5 +20,6 @@ class Migration(migrations.Migration):
             model_name='transaction',
             name='blockheight',
             field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='transactions', to='main.BlockHeight'),
-        ),
+        )
+        
     ]

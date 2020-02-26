@@ -12,19 +12,34 @@ from sseclient import SSEClient
 
 LOGGER = logging.getLogger(__name__)
 
+@shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
+def client_acknowledgement(tokenid, transactionid):
+    token_obj = Token.objects.get(tokenid=tokenid)
+    target_address = token_obj.target_address
+    trans = Transaction.objects.get(id=transactionid)
+    data = trans.__dict__
+    resp = requests.post(target_address,data=data)
+    if resp.status_code == 200:
+        response_data = json.loads(resp.text)
+        if response_data['success']:
+            trans.acknowledge = True
+            trans.save()
+            return 'success'
+    self.retry(countdown=60)
+
 @shared_task(queue='save_record')
 def save_record(tokenid, address, transactionid, amount, source, blockheightid=None):
     """
     Update database records
     """
-    transaction_obj, created = Transaction.objects.get_or_create(txid=transactionid)
+    token_obj = Token.objects.get(tokenid=tokenid)
+    transaction_obj, created = Transaction.objects.get_or_create(token=token_obj, txid=transactionid)
     transaction_obj.amount = amount
     if created:
         transaction_obj.source = source
     if blockheightid is not None:
         transaction_obj.blockheight_id = blockheightid
     transaction_obj.save()
-    token_obj = Token.objects.get(tokenid=tokenid)
     address_obj, created = SlpAddress.objects.get_or_create(
         token=token_obj,
         address=address,
@@ -33,7 +48,8 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
     if created:
         msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {address}"
         LOGGER.info(msg)
-
+        client_acknowledgement.delay(tokenid, transaction_obj.id)
+        
 @shared_task(queue='deposit_filter')
 def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_transactions):
     """
@@ -112,6 +128,8 @@ def blockheight(id):
                 )
             counter += 1
         blockheight_instance.transactions_count = total_transactions
+        if len(transactions) == 0:
+            blockheight_instance.processed = True
         blockheight_instance.save()
             
 @shared_task(bind=True, queue='slpbitcoin', max_retries=10)

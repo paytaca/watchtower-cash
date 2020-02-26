@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: slpnotify-prod
+  namespace: spicebot-prod
+  labels:
+    app: slpnotify-prod
+spec:
+  selector:
+    app: slpnotify-prod
+  type: NodePort
+  ports:
+    - name: backend-prod
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slpnotify-prod
+  namespace: spicebot-prod
+  labels:
+    app: slpnotify-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slpnotify-prod
+  template:
+    metadata:
+      labels:
+        app: slpnotify-prod
+    spec:
+      containers  :
+        - name: slpnotify
+          image: gcr.io/spice-slp-token/slpnotify-prod:0.0.4
+          env:
+            - name: POSTGRES_DB
+              value: slpnotify-prod
+            - name: POSTGRES_HOST
+              value: 127.0.0.1
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql-db-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql-db-credentials
+                  key: password
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: hostname
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: port
+        - name: cloudsql-proxy
+          image: gcr.io/cloudsql-docker/gce-proxy:1.11
+          command:
+            [
+              "/cloud_sql_proxy",
+              "-instances=spice-slp-token:us-central1:spicebot=tcp:5432",
+              "-credential_file=/secrets/cloudsql/credentials.json",
+            ]
+          volumeMounts:
+            - name: cloudsql-instance-credentials
+              mountPath: /secrets/cloudsql
+              readOnly: true
+      volumes:
+        - name: cloudsql-instance-credentials
+          secret:
+            secretName: cloudsql-instance-credentials
