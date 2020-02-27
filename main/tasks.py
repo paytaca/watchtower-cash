@@ -91,17 +91,18 @@ def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_tran
 def kickstart_blockheight():
     """
     Intended for checking new blockheight.
-    This will beat every 5 seconds.
+    This will beat every 10 seconds.
     """
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
     try:
         resp = requests.get(url)
         number = json.loads(resp.text)['blocks']
+        obj, created = BlockHeight.objects.get_or_create(number=number)
+        if created:
+            blockheight.delay(obj.id)
     except Exception as exc:
         LOGGER.error(exc)
-    obj, created = BlockHeight.objects.get_or_create(number=number)
-    if created:
-        blockheight.delay(obj.id)
+    
 
 @shared_task(queue='blockheight')
 def blockheight(id):

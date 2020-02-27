@@ -166,7 +166,7 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 CELERY_BEAT_SCHEDULE = {
     'kickstart_blockheight': {
         'task': 'main.tasks.kickstart_blockheight',
-        'schedule': 5
+        'schedule': 10
     }
 }
 

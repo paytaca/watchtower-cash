@@ -13,6 +13,8 @@ class TokenAdmin(admin.ModelAdmin):
     ]
 
 class BlockHeightAdmin(admin.ModelAdmin):
+    actions = ['rescan_selected_blockheights']
+
     list_display = [
         'number',
         'transactions_count',
@@ -21,6 +23,17 @@ class BlockHeightAdmin(admin.ModelAdmin):
         'processed',
         '_actions'
     ]
+
+    def rescan_selected_blockheights(modeladmin, request, queryset):
+        for trans in queryset:
+            blockheight.delay(trans.id)
+            BlockHeight.objects.filter(id=trans.id).update(processed=False)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
 
     def _actions(self, obj):
         if obj.processed:
@@ -42,7 +55,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
 
 class TransactionAdmin(admin.ModelAdmin):
-    actions = ['resend_transactions']
+    actions = ['resend_unacknowledge_transactions']
 
     list_display = [
         'txid',
@@ -65,7 +78,7 @@ class TransactionAdmin(admin.ModelAdmin):
             return obj.blockheight.number
         return '---' 
 
-    def resend_transactions(modeladmin, request, queryset):
+    def resend_unacknowledge_transactions(modeladmin, request, queryset):
         for trans in queryset.filter(acknowledge=False):
             client_acknowledgement.delay(trans.token.tokenid, trans.id)
 

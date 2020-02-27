@@ -15704,3 +15704,31 @@
 2020-02-26 09:23:19,924 INFO waiting for celery_blockheight, celery_client_acknowledgement, celery_deposit_filter, celery_kickstart_blockheight, celery_save_record, celery_slpbitcoin, celery_slpfountainhead, celery_worker_beat to die
 2020-02-26 09:23:22,952 INFO waiting for celery_blockheight, celery_client_acknowledgement, celery_deposit_filter, celery_kickstart_blockheight, celery_save_record, celery_slpbitcoin, celery_slpfountainhead, celery_worker_beat to die
 2020-02-26 09:23:25,981 INFO waiting for celery_blockheight, celery_client_acknowledgement, celery_deposit_filter, celery_kickstart_blockheight, celery_save_record, celery_slpbitcoin, celery_slpfountainhead, celery_worker_beat to die
+2020-02-27 02:20:11,191 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-02-27 02:20:11,202 INFO RPC interface 'supervisor' initialized
+2020-02-27 02:20:11,203 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-02-27 02:20:11,208 INFO supervisord started with pid 1
+2020-02-27 02:20:12,214 INFO spawned: 'celery_blockheight' with pid 50
+2020-02-27 02:20:12,221 INFO spawned: 'celery_client_acknowledgement' with pid 51
+2020-02-27 02:20:12,226 INFO spawned: 'celery_deposit_filter' with pid 52
+2020-02-27 02:20:12,239 INFO spawned: 'celery_kickstart_blockheight' with pid 53
+2020-02-27 02:20:12,244 INFO spawned: 'celery_save_record' with pid 54
+2020-02-27 02:20:12,260 INFO spawned: 'celery_slpbitcoin' with pid 55
+2020-02-27 02:20:12,278 INFO spawned: 'celery_slpfountainhead' with pid 56
+2020-02-27 02:20:12,293 INFO spawned: 'celery_worker_beat' with pid 57
+2020-02-27 02:20:12,326 INFO spawned: 'webserver' with pid 58
+2020-02-27 02:20:13,330 INFO success: celery_blockheight entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,331 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,332 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,333 INFO success: celery_kickstart_blockheight entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,335 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,336 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,336 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,341 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:13,341 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-02-27 02:20:57,120 WARN received SIGTERM indicating exit request
+2020-02-27 02:20:57,148 INFO waiting for celery_blockheight, celery_client_acknowledgement, celery_deposit_filter, celery_kickstart_blockheight, celery_save_record, celery_slpbitcoin, celery_slpfountainhead, celery_worker_beat, webserver to die
+2020-02-27 02:20:57,557 INFO stopped: webserver (exit status 0)
+2020-02-27 02:21:00,293 INFO waiting for celery_blockheight, celery_client_acknowledgement, celery_deposit_filter, celery_kickstart_blockheight, celery_save_record, celery_slpbitcoin, celery_slpfountainhead, celery_worker_beat to die
+2020-02-27 02:21:03,315 INFO waiting for celery_blockheight, celery_client_acknowledgement, celery_deposit_filter, celery_kickstart_blockheight, celery_save_record, celery_slpbitcoin, celery_slpfountainhead, celery_worker_beat to die
+2020-02-27 02:21:06,340 INFO waiting for celery_blockheight, celery_client_acknowledgement, celery_deposit_filter, celery_kickstart_blockheight, celery_save_record, celery_slpbitcoin, celery_slpfountainhead, celery_worker_beat to die
