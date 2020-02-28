@@ -18,7 +18,7 @@ class BlockHeight(models.Model):
     created_datetime = models.DateTimeField(null=True, blank=True)
     updated_datetime = models.DateTimeField(null=True, blank=True)
     processed = models.BooleanField(default=False)
-
+    
     def save(self, *args, **kwargs):
         if not self.id:
             self.created_datetime = timezone.now()
@@ -40,7 +40,6 @@ class Transaction(models.Model):
         return self.txid
 
 class SlpAddress(models.Model):
-    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='slpaddress')
     address = models.CharField(max_length=200)
     transactions = models.ManyToManyField(Transaction) 
 

@@ -84,8 +84,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
 class SlpAddressAdmin(admin.ModelAdmin):
     list_display = [
-        'token',
-        'address'
+        'address',
     ]
 
 admin.site.unregister(User)

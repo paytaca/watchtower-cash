@@ -167,6 +167,10 @@ CELERY_BEAT_SCHEDULE = {
     'kickstart_blockheight': {
         'task': 'main.tasks.kickstart_blockheight',
         'schedule': 10
+    },
+    'openfromredis': {
+        'task': 'main.tasks.openfromredis',
+        'schedule': 1800
     }
 }
 
