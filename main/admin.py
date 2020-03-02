@@ -1,5 +1,5 @@
 from django.contrib import admin
-from main.models import Token, Transaction, SlpAddress, BlockHeight
+from main.models import Token, Transaction, SlpAddress, BlockHeight, Subscriber
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
 from main.tasks import blockheight, client_acknowledgement
@@ -9,8 +9,15 @@ class TokenAdmin(admin.ModelAdmin):
     list_display = [
         'name',
         'tokenid',
-        'target_address'
+        'target_address',
     ]
+
+    def get_queryset(self, request): 
+        # For Django < 1.6, override queryset instead of get_queryset
+        qs = super(TokenAdmin, self).get_queryset(request) 
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(subscriber__user=request.user)
 
 class BlockHeightAdmin(admin.ModelAdmin):
     actions = ['rescan_selected_blockheights']
@@ -23,6 +30,8 @@ class BlockHeightAdmin(admin.ModelAdmin):
         'processed',
         '_actions'
     ]
+
+    
 
     def rescan_selected_blockheights(modeladmin, request, queryset):
         for trans in queryset:
@@ -55,10 +64,12 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
 
 class TransactionAdmin(admin.ModelAdmin):
+    search_fields = ['token__name', 'source', 'txid']
+
     actions = ['resend_unacknowledge_transactions']
 
     list_display = [
-        'txid',
+        '_txid',
         'amount',
         'source',
         'blockheight_number',
@@ -66,6 +77,19 @@ class TransactionAdmin(admin.ModelAdmin):
         'acknowledge',
         'created_datetime'
     ]
+
+    def _txid(self, obj):
+        url = f'https://explorer.bitcoin.com/bch/tx/{obj.txid}'
+        return format_html(
+            f"""<a class="button"
+            target="_blank" 
+            href="{url}"
+            style="background-color:transparent;
+            padding:0px;
+            color:#447e9b;
+            text-decoration:None;
+            font-weight:bold;">{obj.txid}</a>"""
+        )
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -82,14 +106,34 @@ class TransactionAdmin(admin.ModelAdmin):
         for trans in queryset.filter(acknowledge=False):
             client_acknowledgement.delay(trans.token.tokenid, trans.id)
 
+    def get_queryset(self, request): 
+        # For Django < 1.6, override queryset instead of get_queryset
+        qs = super(TransactionAdmin, self).get_queryset(request) 
+        if request.user.is_superuser:
+            return qs
+        subscriber = Subscriber.objects.filter(user=request.user)
+        if subscriber.exists():
+            obj = subscriber.first()
+            token_ids = obj.token.values_list('id',flat=True).distinct()
+            return Transaction.objects.filter(token__id__in=token_ids)
+        else:
+            return qs.filter(id=0)
+
 class SlpAddressAdmin(admin.ModelAdmin):
     list_display = [
         'address',
     ]
 
-admin.site.unregister(User)
-admin.site.unregister(Group)
+
+class SubscriberAdmin(admin.ModelAdmin):
+    list_display = [
+        'user',
+    ]
+
+# admin.site.register(User)
+# admin.site.register(Group)
 admin.site.register(Token, TokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
 admin.site.register(BlockHeight, BlockHeightAdmin)
+admin.site.register(Subscriber, SubscriberAdmin)

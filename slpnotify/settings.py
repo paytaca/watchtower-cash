@@ -171,6 +171,10 @@ CELERY_BEAT_SCHEDULE = {
     'openfromredis': {
         'task': 'main.tasks.openfromredis',
         'schedule': 1800
+    },
+    'slpdb_token_scanner': {
+        'task': 'main.tasks.slpdb_token_scanner',
+        'schedule': 600
     }
 }
 
