@@ -7,6 +7,7 @@ from celery import shared_task
 import requests
 from main.models import BlockHeight, Token, Transaction, SlpAddress
 import json, random
+from main.utils import slpdb
 from django.conf import settings
 import traceback
 from sseclient import SSEClient
@@ -154,38 +155,34 @@ def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_tran
 def slpdb_token_scanner(queue='slpdb_token_scanner'):
     tokens = Token.objects.all()
     for token in tokens:
-        if token.slpdb_api is not None:
-            resp = requests.get(token.slpdb_api)
-            if resp.status_code == 200:
-                data = json.loads(resp.text)
-                for transaction in data['c']:
-                    required_keys = transaction.keys()
-                    tx_exists = 'txid' in required_keys
-                    token_exists = 'tokenDetails' in required_keys
-                    blk_exists = 'blk' in required_keys
-                    if  tx_exists and token_exists and blk_exists:
-                        tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
-                        tokenqs = Token.objects.filter(tokenid=tokenid)
-                        if tokenqs.exists():
-                            # This line is temporary only. let this run overnight to create initial gap
-                            if transaction['blk'] > 624651:
-                                token_obj = tokenqs.first()
-                                block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
-                                if created:
-                                    blockheight.delay(block.id)
-                                amount = transaction['tokenDetails']['detail']['outputs'][0]['amount']
-                                slpaddress = transaction['tokenDetails']['detail']['outputs'][0]['address']
-                                _,_ = SlpAddress.objects.get_or_create(address=slpaddress)
-                                save_record.delay(
-                                    token_obj.tokenid,
-                                    slpaddress,
-                                    transaction['txid'],
-                                    amount,
-                                    "slpdb_token_scanner",
-                                    block.id
-                                )
-                            
-                            
+        obj = slpdb.SLPDB()
+        data = obj.process_api(**{'tokenid': token.tokenid})
+        if data['status'] == 'success':
+            for transaction in data['data']['c']:
+                required_keys = transaction.keys()
+                tx_exists = 'txid' in required_keys
+                token_exists = 'tokenDetails' in required_keys
+                blk_exists = 'blk' in required_keys
+                if  tx_exists and token_exists and blk_exists:
+                    tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
+                    tokenqs = Token.objects.filter(tokenid=tokenid)
+                    if tokenqs.exists():
+                        token_obj = tokenqs.first()
+                        block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
+                        if created:
+                            blockheight.delay(block.id)
+                        amount = transaction['tokenDetails']['detail']['outputs'][0]['amount']
+                        slpaddress = transaction['tokenDetails']['detail']['outputs'][0]['address']
+                        _,_ = SlpAddress.objects.get_or_create(address=slpaddress)
+                        save_record.delay(
+                            token_obj.tokenid,
+                            slpaddress,
+                            transaction['txid'],
+                            amount,
+                            "slpdb_token_scanner",
+                            block.id
+                        )
+                                               
 @shared_task(queue='kickstart_blockheight')
 def kickstart_blockheight():
     """
@@ -202,38 +199,61 @@ def kickstart_blockheight():
     except Exception as exc:
         LOGGER.error(exc)
     
-
 @shared_task(bind=True, queue='blockheight', max_retries=10)
 def blockheight(self, id):
     """
     Process missed transactions per blockheight
     """
-    blockheight_instance= BlockHeight.objects.get(id=id)
+    blockheight_instance = BlockHeight.objects.get(id=id)
     heightnumber = blockheight_instance.number
-    url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
-    resp = requests.get(url)
-    if resp.status_code == 200:
-        data = json.loads(resp.text)
-        if 'error' not in data.keys():
-            transactions = data['tx']
-            total_transactions = len(transactions)
-            counter = 1
-            for txn_id in transactions:
-                for token in Token.objects.all():
-                    deposit_filter.delay(
-                        txn_id,
-                        blockheight_instance.id,
-                        token.tokenid,
-                        counter,
-                        total_transactions
+    obj = slpdb.SLPDB()
+    data = obj.process_api(**{'block': int(heightnumber)})
+    if data['status'] == 'success':
+        LOGGER.info(f'CHECKING BLOCK {heightnumber} via SLPDB')
+        transactions = data['data']['c']
+        total_transactions = len(transactions)
+        for transaction in transactions:
+            if transaction['tokenDetails']['detail']['transactionType'].lower() == 'send':
+                token = transaction['tokenDetails']['detail']['tokenIdHex']
+                qs = Token.objects.filter(tokenid=token)
+                if qs.exists():
+                    save_record(
+                        transaction['tokenDetails']['detail']['tokenIdHex'],
+                        transaction['tokenDetails']['detail']['outputs'][0]['address'],
+                        transaction['txid'],
+                        transaction['tokenDetails']['detail']['outputs'][0]['amount'],
+                        'SLPDB-block-scanner',
+                        blockheight_instance.id
                     )
-                counter += 1
-            blockheight_instance.transactions_count = total_transactions
-            blockheight_instance.save()
-        else:
-            self.retry(countdown=120)    
+        blockheight_instance.transactions_count = total_transactions
+        blockheight_instance.processed = True
+        blockheight_instance.save()
     else:
-        self.retry(countdown=120)
+        LOGGER.info(f'CHECKING BLOCK {heightnumber} via REST.BITCOIN.COM')
+        url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            data = json.loads(resp.text)
+            if 'error' not in data.keys():
+                transactions = data['tx']
+                total_transactions = len(transactions)
+                counter = 1
+                for txn_id in transactions:
+                    for token in Token.objects.all():
+                        deposit_filter.delay(
+                            txn_id,
+                            blockheight_instance.id,
+                            token.tokenid,
+                            counter,
+                            total_transactions
+                        )
+                    counter += 1
+                blockheight_instance.transactions_count = total_transactions
+                blockheight_instance.save()
+            else:
+                self.retry(countdown=120)
+        else:
+            self.retry(countdown=120)
             
 @shared_task(bind=True, queue='slpbitcoin', max_retries=10)
 def slpbitcoin(self):

@@ -21,10 +21,11 @@ class TokenAdmin(admin.ModelAdmin):
 
 class BlockHeightAdmin(admin.ModelAdmin):
     actions = ['rescan_selected_blockheights']
+    ordering = ('-number',)
 
     list_display = [
         'number',
-        'transactions_count',
+        '_slp_transactions',
         'created_datetime',
         'updated_datetime',
         'processed',
@@ -32,6 +33,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
     ]
 
     
+
 
     def rescan_selected_blockheights(modeladmin, request, queryset):
         for trans in queryset:
@@ -43,6 +45,9 @@ class BlockHeightAdmin(admin.ModelAdmin):
         if 'delete_selected' in actions:
             del actions['delete_selected']
         return actions
+
+    def _slp_transactions(self, obj):
+        return obj.transactions_count
 
     def _actions(self, obj):
         if obj.processed:
@@ -60,7 +65,6 @@ class BlockHeightAdmin(admin.ModelAdmin):
             blockheight.delay(self.param)
             BlockHeight.objects.filter(id=self.param).update(processed=False)
         return super(BlockHeightAdmin,self).changelist_view(request, extra_context=extra_context)
-
 
 
 class TransactionAdmin(admin.ModelAdmin):

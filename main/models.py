@@ -7,7 +7,6 @@ class Token(models.Model):
     tokenid = models.CharField(max_length=200)
     target_address = models.CharField(max_length=500)
     confirmation_limit = models.IntegerField(default=0)
-    slpdb_api = models.TextField(blank=True)
 
     def __str__(self):
         return self.name
