@@ -14,11 +14,17 @@ from sseclient import SSEClient
 LOGGER = logging.getLogger(__name__)
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
-def client_acknowledgement(tokenid, transactionid):
+def client_acknowledgement(self, tokenid, transactionid):
     token_obj = Token.objects.get(tokenid=tokenid)
     target_address = token_obj.target_address
     trans = Transaction.objects.get(id=transactionid)
-    data = trans.__dict__
+    data = {
+        'amount': trans.amount,
+        'address': list(trans.slpaddress_set.values_list('address', flat=True))[0],
+        'source': trans.source,
+        'token': trans.token.tokenid,
+        'txid': trans.txid
+    }
     resp = requests.post(target_address,data=data)
     if resp.status_code == 200:
         response_data = json.loads(resp.text)
@@ -207,11 +213,16 @@ def blockheight(self, id):
     blockheight_instance = BlockHeight.objects.get(id=id)
     heightnumber = blockheight_instance.number
     obj = slpdb.SLPDB()
-    data = obj.process_api(**{'block': int(heightnumber)})
-    if data['status'] == 'success':
+    try:
+        data = obj.process_api(**{'block': int(heightnumber)})
+        proceed_slpdb_checking = True
+    except Exception as exc:
+        LOGGER.error(exc)
+        proceed_slpdb_checking = False
+    if data['status'] == 'success' and proceed_slpdb_checking:
         LOGGER.info(f'CHECKING BLOCK {heightnumber} via SLPDB')
         transactions = data['data']['c']
-        total_transactions = len(transactions)
+        slpdb_total_transactions = len(transactions)
         for transaction in transactions:
             if transaction['tokenDetails']['detail']['transactionType'].lower() == 'send':
                 token = transaction['tokenDetails']['detail']['tokenIdHex']
@@ -225,10 +236,11 @@ def blockheight(self, id):
                         'SLPDB-block-scanner',
                         blockheight_instance.id
                     )
-        blockheight_instance.transactions_count = total_transactions
+        blockheight_instance.transactions_count = slpdb_total_transactions
         blockheight_instance.processed = True
         blockheight_instance.save()
-    else:
+    
+    if (data['status'] == 'failed' and not proceed_slpdb_checking) or slpdb_total_transactions == 0:
         LOGGER.info(f'CHECKING BLOCK {heightnumber} via REST.BITCOIN.COM')
         url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
         resp = requests.get(url)
