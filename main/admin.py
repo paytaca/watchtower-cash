@@ -104,7 +104,7 @@ class TransactionAdmin(admin.ModelAdmin):
     def blockheight_number(self, obj):
         if obj.blockheight is not None:
             return obj.blockheight.number
-        return '---' 
+        return f'----'
 
     def resend_unacknowledge_transactions(modeladmin, request, queryset):
         for trans in queryset.filter(acknowledge=False):

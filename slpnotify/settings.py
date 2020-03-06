@@ -168,13 +168,21 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.kickstart_blockheight',
         'schedule': 10
     },
-    'openfromredis': {
-        'task': 'main.tasks.openfromredis',
-        'schedule': 1800
+    'blockheight_transactions': {
+        'task': 'main.tasks.blockheight_transactions',
+        'schedule': 60
+    },
+    'blockheight': {
+        'task': 'main.tasks.blockheight',
+        'schedule': 120
     },
     'slpdb_token_scanner': {
         'task': 'main.tasks.slpdb_token_scanner',
         'schedule': 600
-    }
+    },
+    'openfromredis': {
+        'task': 'main.tasks.openfromredis',
+        'schedule': 1800
+    },
 }
 

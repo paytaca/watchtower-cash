@@ -60,9 +60,12 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
 def openfromredis():
     redis_storage = settings.REDISKV
     updateddata = []
+    if 'deposit_filter' not in redis_storage.keys():
+        data = json.dumps([])
+        redis_storage.set('deposit_filter', data)
     deposit_filter = redis_storage.get('deposit_filter')
-    if deposit_filter is not None:
-        transactions = json.loads(deposit_filter)
+    transactions = json.loads(deposit_filter)
+    if len(transactions) is not 0:
         for params in transactions:
             LOGGER.info(f"rescanning txn_id - {params['txn_id']}")
             result = deposit_filter(
@@ -74,14 +77,16 @@ def openfromredis():
             )
             if result == 'failed':
                 updateddata.append(params)
-            redis_storage.set('deposit_filter', json.dumps(updateddata))
+        data = json.dumps(updateddata)
+        redis_storage.set('deposit_filter', data)
     return f'There are {len(updateddata)} transactions left in redis.'
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, token_obj_id, currentcount, total_transactions):
     redis_storage = settings.REDISKV
     if 'deposit_filter' not in redis_storage.keys():
-        redis_storage.set('deposit_filter', json.dumps([]))
+        data = json.dumps([])
+        redis_storage.set('deposit_filter', data)
     data = json.loads(redis_storage.get('deposit_filter'))
     data.append({
         'txn_id': txn_id,
@@ -90,7 +95,8 @@ def suspendtoredis(txn_id, blockheightid, token_obj_id, currentcount, total_tran
         'currentcount': currentcount,
         'total_transactions': total_transactions
     })
-    redis_storage.set('deposit_filter', json.dumps(data))
+    suspended_data = json.dumps(data)
+    redis_storage.set('deposit_filter', suspended_data)
     return f'{txn_id} - Suspended for a 30 minutes due to request limits on rest.bitcoin.com'
 
 @shared_task(queue='deposit_filter')
@@ -102,8 +108,6 @@ def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_tran
     # To minimize send request on rest.bitcoin.com
     qs = Transaction.objects.filter(txid=txn_id)
     if qs.exists():
-        blockheight = BlockHeight.objects.get(id=blockheightid)
-        qs.update(blockheight=blockheight)
         return 'success'
 
     transaction_url = 'https://rest.bitcoin.com/v2/slp/txDetails/%s' % (txn_id)
@@ -158,7 +162,7 @@ def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_tran
     return 'success'
     
 @shared_task(queue='slpdb_token_scanner')
-def slpdb_token_scanner(queue='slpdb_token_scanner'):
+def slpdb_token_scanner():
     tokens = Token.objects.all()
     for token in tokens:
         obj = slpdb.SLPDB()
@@ -173,21 +177,23 @@ def slpdb_token_scanner(queue='slpdb_token_scanner'):
                     tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
                     tokenqs = Token.objects.filter(tokenid=tokenid)
                     if tokenqs.exists():
-                        token_obj = tokenqs.first()
-                        block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
-                        if created:
-                            blockheight.delay(block.id)
-                        amount = transaction['tokenDetails']['detail']['outputs'][0]['amount']
-                        slpaddress = transaction['tokenDetails']['detail']['outputs'][0]['address']
-                        _,_ = SlpAddress.objects.get_or_create(address=slpaddress)
-                        save_record.delay(
-                            token_obj.tokenid,
-                            slpaddress,
-                            transaction['txid'],
-                            amount,
-                            "slpdb_token_scanner",
-                            block.id
-                        )
+                        # Block 625228 is the beginning...
+                        if transaction['blk'] >= 625228:
+                            token_obj = tokenqs.first()
+                            block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
+                            if created:
+                                blockheight.delay(block.id)
+                            amount = transaction['tokenDetails']['detail']['outputs'][0]['amount']
+                            slpaddress = transaction['tokenDetails']['detail']['outputs'][0]['address']
+                            _,_ = SlpAddress.objects.get_or_create(address=slpaddress)
+                            save_record.delay(
+                                token_obj.tokenid,
+                                slpaddress,
+                                transaction['txid'],
+                                amount,
+                                "slpdb_token_scanner",
+                                block.id
+                            )
                                                
 @shared_task(queue='kickstart_blockheight')
 def kickstart_blockheight():
@@ -201,16 +207,64 @@ def kickstart_blockheight():
         number = json.loads(resp.text)['blocks']
         obj, created = BlockHeight.objects.get_or_create(number=number)
         if created:
-            blockheight.delay(obj.id)
+            redis_storage = settings.REDISKV
+            if 'PENDING-BLOCKS' not in redis_storage.keys('*'):
+                data = json.dumps([])
+                redis_storage.set('PENDING-BLOCKS', data)
+            blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
+            blocks.append(number)
+            data = json.dumps(blocks)
+            redis_storage.set('PENDING-BLOCKS', data)
     except Exception as exc:
         LOGGER.error(exc)
-    
+
+@shared_task(bind=True, queue='blockheight_transactions')
+def blockheight_transactions(self):
+    redis_storage = settings.REDISKV
+    blocks = redis_storage.keys("BLOCK-*")
+    if blocks:
+        blocks.sort()
+        key = blocks[0]
+        number = key.split('-')[-1]
+        blockheight_instance = BlockHeight.object.get(number=number)
+        transactions = json.loads(redis_storage.get(key))
+        total_transactions = len(transactions)
+        counter = 1
+        for txn_id in transactions:
+            for token in Token.objects.all():
+                deposit_filter(
+                    txn_id,
+                    blockheight_instance.id,
+                    token.tokenid,
+                    counter,
+                    total_transactions
+                )
+            counter += 1
+        blockheight_instance.transactions_count = total_transactions
+        blockheight_instance.processed = True
+        blockheight_instance.save()
+        redis_storage.delete(key) 
+        LOGGER.info(f"  =======  PROCESSED BLOCK {number}   =======  ")
+    else:
+        LOGGER.info(f"  =======  NO BLOCKS FOUND   =======  ")
+        
 @shared_task(bind=True, queue='blockheight', max_retries=10)
-def blockheight(self, id):
+def blockheight(self, id=None):
+    if id is None:
+        redis_storage = settings.REDISKV
+        blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
+        if len(blocks) == 0:
+            return 'success'
+        number = blocks[0]
+        blockheight_instance = BlockHeight.objects.get(number=number)
+        blocks.remove(number)
+        data = json.dumps(blocks)
+        redis_storage.set('PENDING-BLOCKS', data)
+    else:
+        blockheight_instance = BlockHeight.objects.get(id=id)
     """
     Process missed transactions per blockheight
     """
-    blockheight_instance = BlockHeight.objects.get(id=id)
     heightnumber = blockheight_instance.number
     obj = slpdb.SLPDB()
     try:
@@ -221,6 +275,7 @@ def blockheight(self, id):
         proceed_slpdb_checking = False
     if data['status'] == 'success' and proceed_slpdb_checking:
         LOGGER.info(f'CHECKING BLOCK {heightnumber} via SLPDB')
+        redis_storage = settings.REDISKV
         transactions = data['data']['c']
         slpdb_total_transactions = len(transactions)
         for transaction in transactions:
@@ -236,32 +291,22 @@ def blockheight(self, id):
                         'SLPDB-block-scanner',
                         blockheight_instance.id
                     )
-        blockheight_instance.transactions_count = slpdb_total_transactions
-        blockheight_instance.processed = True
-        blockheight_instance.save()
+        if slpdb_total_transactions > 10:
+            blockheight_instance.transactions_count = slpdb_total_transactions
+            blockheight_instance.processed = True
+            blockheight_instance.save()
     
-    if (data['status'] == 'failed' and not proceed_slpdb_checking) or slpdb_total_transactions == 0:
+    if (data['status'] == 'failed' and not proceed_slpdb_checking) or slpdb_total_transactions <= 10:
         LOGGER.info(f'CHECKING BLOCK {heightnumber} via REST.BITCOIN.COM')
         url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
         resp = requests.get(url)
         if resp.status_code == 200:
             data = json.loads(resp.text)
             if 'error' not in data.keys():
-                transactions = data['tx']
-                total_transactions = len(transactions)
-                counter = 1
-                for txn_id in transactions:
-                    for token in Token.objects.all():
-                        deposit_filter.delay(
-                            txn_id,
-                            blockheight_instance.id,
-                            token.tokenid,
-                            counter,
-                            total_transactions
-                        )
-                    counter += 1
-                blockheight_instance.transactions_count = total_transactions
-                blockheight_instance.save()
+                # Save all transactions to redis after 60 minutes to avoid request timeouts.
+                transactions = json.dumps(data['tx'])
+                key = f"BLOCK-{heightnumber}"
+                redis_storage.set(key, transactions)
             else:
                 self.retry(countdown=120)
         else:
