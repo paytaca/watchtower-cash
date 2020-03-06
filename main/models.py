@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import JSONField
 
 class Token(models.Model):
     name = models.CharField(max_length=100)
@@ -42,6 +43,7 @@ class Transaction(models.Model):
 class Subscriber(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
     token = models.ManyToManyField(Token, related_name='subscriber')
+    data = JSONField(default=None, null=True)
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True)

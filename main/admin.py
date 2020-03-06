@@ -25,10 +25,10 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
     list_display = [
         'number',
-        '_slp_transactions',
+        'processed',
         'created_datetime',
         'updated_datetime',
-        'processed',
+        'transactions_count',
         '_actions'
     ]
 
@@ -46,8 +46,6 @@ class BlockHeightAdmin(admin.ModelAdmin):
             del actions['delete_selected']
         return actions
 
-    def _slp_transactions(self, obj):
-        return obj.transactions_count
 
     def _actions(self, obj):
         if obj.processed:
@@ -132,6 +130,7 @@ class SlpAddressAdmin(admin.ModelAdmin):
 class SubscriberAdmin(admin.ModelAdmin):
     list_display = [
         'user',
+        'data',
     ]
 
 # admin.site.register(User)

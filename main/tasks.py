@@ -40,9 +40,9 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
     Update database records
     """
     token_obj = Token.objects.get(tokenid=tokenid)
-    transaction_obj, created = Transaction.objects.get_or_create(token=token_obj, txid=transactionid)
+    transaction_obj, transaction_created = Transaction.objects.get_or_create(token=token_obj, txid=transactionid)
     transaction_obj.amount = amount
-    if created:
+    if transaction_created:
         transaction_obj.source = source
     if blockheightid is not None:
         transaction_obj.blockheight_id = blockheightid
@@ -51,7 +51,7 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
         address=address,
     )
     address_obj.transactions.add(transaction_obj)
-    if created:
+    if transaction_created:
         msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {address}"
         LOGGER.info(msg)
         client_acknowledgement.delay(tokenid, transaction_obj.id)
@@ -154,6 +154,8 @@ def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_tran
                     LOGGER.error()
                     suspendtoredis.delay(txn_id, blockheightid, token_obj_id, currentcount, total_transactions)
                     return 'failed'
+    
+    logger.info(f"{currentcount} out of {total_transactions}")
     if currentcount == total_transactions:
         obj = BlockHeight.objects.get(id=blockheightid)
         obj.processed=True
@@ -224,12 +226,14 @@ def blockheight_transactions(self):
     blocks = redis_storage.keys("BLOCK-*")
     if blocks:
         blocks.sort()
-        key = blocks[0]
-        number = key.split('-')[-1]
-        blockheight_instance = BlockHeight.object.get(number=number)
+        key = str(blocks[0].decode())
+        number = int(key.split('-')[-1])
+        blockheight_instance = BlockHeight.objects.get(number=number)
         transactions = json.loads(redis_storage.get(key))
         total_transactions = len(transactions)
         counter = 1
+        blockheight_instance.transactions_count = total_transactions
+        blockheight_instance.save()
         for txn_id in transactions:
             for token in Token.objects.all():
                 deposit_filter(
@@ -240,7 +244,6 @@ def blockheight_transactions(self):
                     total_transactions
                 )
             counter += 1
-        blockheight_instance.transactions_count = total_transactions
         blockheight_instance.processed = True
         blockheight_instance.save()
         redis_storage.delete(key) 
