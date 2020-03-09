@@ -56,6 +56,103 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
         LOGGER.info(msg)
         client_acknowledgement.delay(tokenid, transaction_obj.id)
 
+
+
+@shared_task(queue='suspendtoredis')
+def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
+    redis_storage = settings.REDISKV
+    if 'deposit_filter' not in redis_storage.keys():
+        data = json.dumps([])
+        redis_storage.set('deposit_filter', data)
+    data = json.loads(redis_storage.get('deposit_filter'))
+    data.append({
+        'txn_id': txn_id,
+        'blockheightid': blockheightid,
+        'currentcount': currentcount,
+        'total_transactions': total_transactions
+    })
+    suspended_data = json.dumps(data)
+    redis_storage.set('deposit_filter', suspended_data)
+    return f'{txn_id} - Suspended for a 30 minutes due to request limits on rest.bitcoin.com'
+
+
+
+@shared_task(queue='deposit_filter')
+def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
+    LOGGER.info(f"{currentcount} out of {total_transactions}")
+    """
+    Tracks every transactions that belongs to the registered token and blockheight.
+    """
+    # If txn_id is already in db, we'll just update its blockheight 
+    # To minimize send request on rest.bitcoin.com
+    qs = Transaction.objects.filter(txid=txn_id)
+    if qs.exists():
+        return 'success'
+
+    status = 'failed'
+    transaction_url = 'https://rest.bitcoin.com/v2/slp/txDetails/%s' % (txn_id)
+    proceed = True
+    try:
+        transaction_response = requests.get(transaction_url)
+    except Exception as exc:
+        proceed = False
+    if proceed == True:
+        if transaction_response.status_code == 200:
+            try:
+                transaction_data = json.loads(transaction_response.text)
+            except Exception as exc:
+                transaction_data = {}
+            if 'tokenInfo' in transaction_data.keys():
+                if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
+                    transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
+                    token_query = Token.objects.filter(tokenid=transaction_token_id)
+                    if token_query.exists():
+                        amount = float(transaction_data['tokenInfo']['sendOutputs'][1]) / 100000000
+                        legacy = transaction_data['retData']['vout'][1]['scriptPubKey']['addresses'][0]
+                        # Starting here is the extraction of SLP address using legacy address.
+                        # And this have to be execute perfectly.
+                        
+                        try:
+                            address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
+                            address_response = requests.get(address_url)
+                            address_data = json.loads(address_response.text)
+                        except Exception as exc:
+                            # Once fail in sending request, we'll store given params to
+                            # redis temporarily and retry after 30 minutes cooldown.
+                            msg = f'---> FOUND this error {exc} --> Now Delaying...'
+                            LOGGER.error(msg)
+                            proceed = False
+
+                        if (not 'error' in address_data.keys()) and proceed == True:
+                            token_obj = token_query.first()
+                            _,_ = SlpAddress.objects.get_or_create(
+                                address=address_data['slpAddress'],
+                            )
+                            save_record.delay(
+                                token_obj.tokenid,
+                                address_data['slpAddress'],
+                                address_data['transactions'][0],
+                                amount,
+                                "per-blockheight",
+                                blockheightid
+                            )
+                            status = 'success'
+        elif transaction_response.status_code == 404:
+            status = 'success'
+                        
+    if currentcount == total_transactions:
+        obj = BlockHeight.objects.get(id=blockheightid)
+        obj.processed=True
+        obj.save()
+    if status == 'failed':
+        # Once error found, we'll saved its params to
+        # redis temporarily and resume it after 30 minutes cooldown.
+        msg = f'!!! Error found !!! Suspending to redis...'
+        LOGGER.error(msg)
+        suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
+    return status
+
+
 @shared_task(queue='openfromredis')
 def openfromredis():
     redis_storage = settings.REDISKV
@@ -71,7 +168,6 @@ def openfromredis():
             result = deposit_filter(
                 params['txn_id'],
                 params['blockheightid'],
-                params['token_obj_id'],
                 params['currentcount'],
                 params['total_transactions']
             )
@@ -79,89 +175,7 @@ def openfromredis():
                 updateddata.append(params)
         data = json.dumps(updateddata)
         redis_storage.set('deposit_filter', data)
-    return f'There are {len(updateddata)} transactions left in redis.'
-
-@shared_task(queue='suspendtoredis')
-def suspendtoredis(txn_id, blockheightid, token_obj_id, currentcount, total_transactions):
-    redis_storage = settings.REDISKV
-    if 'deposit_filter' not in redis_storage.keys():
-        data = json.dumps([])
-        redis_storage.set('deposit_filter', data)
-    data = json.loads(redis_storage.get('deposit_filter'))
-    data.append({
-        'txn_id': txn_id,
-        'blockheightid': blockheightid,
-        'token_obj_id': token_obj_id,
-        'currentcount': currentcount,
-        'total_transactions': total_transactions
-    })
-    suspended_data = json.dumps(data)
-    redis_storage.set('deposit_filter', suspended_data)
-    return f'{txn_id} - Suspended for a 30 minutes due to request limits on rest.bitcoin.com'
-
-@shared_task(queue='deposit_filter')
-def deposit_filter(txn_id, blockheightid, token_obj_id, currentcount, total_transactions):
-    """
-    Tracks every transactions that belongs to the registered token and blockheight.
-    """
-    # If txn_id is already in db, we'll just update its blockheight 
-    # To minimize send request on rest.bitcoin.com
-    qs = Transaction.objects.filter(txid=txn_id)
-    if qs.exists():
-        return 'success'
-
-    transaction_url = 'https://rest.bitcoin.com/v2/slp/txDetails/%s' % (txn_id)
-    transaction_response = requests.get(transaction_url)
-    if transaction_response.status_code == 200:
-        transaction_data = json.loads(transaction_response.text)
-        if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
-            transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
-            token_query = Token.objects.filter(tokenid=transaction_token_id)
-            if token_query.exists():
-                amount = float(transaction_data['tokenInfo']['sendOutputs'][1]) / 100000000
-                legacy = transaction_data['retData']['vout'][1]['scriptPubKey']['addresses'][0]
-                # Starting here is the extraction of SLP address using legacy address.
-                # And this have to be execute perfectly.
-                try:
-                    address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
-                    address_response = requests.get(address_url)
-                    address_data = json.loads(address_response.text)
-                except Exception as exc:
-                    # Once fail in sending request, we'll store given params to
-                    # redis temporarily and retry after 30 minutes cooldown.
-                    msg = f'---> FOUND this error {exc} --> Now Delaying...'
-                    LOGGER.error()
-                    suspendtoredis.delay(txn_id, blockheightid, token_obj_id, currentcount, total_transactions)
-                    return 'failed'
-
-                if not 'error' in address_data.keys():
-                    token_obj = token_query.first()
-                    _,_ = SlpAddress.objects.get_or_create(
-                        address=address_data['slpAddress'],
-                    )
-                    save_record.delay(
-                        token_obj.tokenid,
-                        address_data['slpAddress'],
-                        address_data['transactions'][0],
-                        amount,
-                        "per-blockheight",
-                        blockheightid
-                    )
-                else:
-                    # Once error found, we'll saved its params to
-                    # redis temporarily and resume it after 30 minutes cooldown.
-                    msg = f'---> FOUND this error {exc} --> Now Delaying...'
-                    LOGGER.error()
-                    suspendtoredis.delay(txn_id, blockheightid, token_obj_id, currentcount, total_transactions)
-                    return 'failed'
-    
-    logger.info(f"{currentcount} out of {total_transactions}")
-    if currentcount == total_transactions:
-        obj = BlockHeight.objects.get(id=blockheightid)
-        obj.processed=True
-        obj.save()
-
-    return 'success'
+    return f'There are {len(updateddata)} transactions left in redis.'   
     
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
@@ -239,7 +253,6 @@ def blockheight_transactions(self):
                 deposit_filter(
                     txn_id,
                     blockheight_instance.id,
-                    token.tokenid,
                     counter,
                     total_transactions
                 )
