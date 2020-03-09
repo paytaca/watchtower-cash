@@ -87,8 +87,9 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     # To minimize send request on rest.bitcoin.com
     qs = Transaction.objects.filter(txid=txn_id)
     if qs.exists():
-        return 'success'
-
+        instance = qs.first()
+        if instance.amount or instance.source:
+            return 'success'
     status = 'failed'
     transaction_url = 'https://rest.bitcoin.com/v2/slp/txDetails/%s' % (txn_id)
     proceed = True
