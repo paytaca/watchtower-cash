@@ -42,7 +42,7 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
     token_obj = Token.objects.get(tokenid=tokenid)
     transaction_obj, transaction_created = Transaction.objects.get_or_create(token=token_obj, txid=transactionid)
     transaction_obj.amount = amount
-    if transaction_created:
+    if not transaction_obj.source:
         transaction_obj.source = source
     if blockheightid is not None:
         transaction_obj.blockheight_id = blockheightid
@@ -132,7 +132,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
                             save_record.delay(
                                 token_obj.tokenid,
                                 address_data['slpAddress'],
-                                address_data['transactions'][0],
+                                txn_id,
                                 amount,
                                 "per-blockheight",
                                 blockheightid
