@@ -2,7 +2,7 @@ from django.contrib import admin
 from main.models import Token, Transaction, SlpAddress, BlockHeight, Subscriber
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
-from main.tasks import blockheight, client_acknowledgement
+from main.tasks import blockheight, client_acknowledgement, checktransaction
 admin.site.site_header = 'SPLNotify'
 
 class TokenAdmin(admin.ModelAdmin):
@@ -77,8 +77,27 @@ class TransactionAdmin(admin.ModelAdmin):
         'blockheight_number',
         'token',
         'acknowledge',
-        'created_datetime'
+        'created_datetime',
+        '_actions'
     ]
+
+    def _actions(self, obj):
+        if not obj.scanning:
+            return format_html(
+                f"""<a class="button"
+                href="/main/transaction?rescan={obj.txid}"
+                style="background-color: transparent;padding:0px;"><img src='/static/admin/img/search.svg'></img></a>"""
+            )
+        else:
+            return format_html('<span style="color:blue"> Scanning...</span>')
+    
+    def changelist_view(self, request, extra_context=None):
+        self.param = request.GET.get('rescan', None)
+        if self.param:
+            checktransaction.delay(self.param)
+            Transaction.objects.filter(txid=self.param).update(scanning=True)
+        return super(TransactionAdmin,self).changelist_view(request, extra_context=extra_context)
+
 
     def _txid(self, obj):
         url = f'https://explorer.bitcoin.com/bch/tx/{obj.txid}'

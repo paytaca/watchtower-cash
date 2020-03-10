@@ -57,11 +57,10 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
         client_acknowledgement.delay(tokenid, transaction_obj.id)
 
 
-
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
     redis_storage = settings.REDISKV
-    if 'deposit_filter' not in redis_storage.keys():
+    if b'deposit_filter' not in redis_storage.keys():
         data = json.dumps([])
         redis_storage.set('deposit_filter', data)
     data = json.loads(redis_storage.get('deposit_filter'))
@@ -76,10 +75,10 @@ def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
     return f'{txn_id} - Suspended for a 30 minutes due to request limits on rest.bitcoin.com'
 
 
-
 @shared_task(queue='deposit_filter')
 def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
-    LOGGER.info(f"{currentcount} out of {total_transactions}")
+    obj = BlockHeight.objects.get(id=blockheightid)
+    LOGGER.info(f"BLOCK {obj.number} | {currentcount} out of {total_transactions}")
     """
     Tracks every transactions that belongs to the registered token and blockheight.
     """
@@ -88,7 +87,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     qs = Transaction.objects.filter(txid=txn_id)
     if qs.exists():
         instance = qs.first()
-        if instance.amount or instance.source:
+        if not instance.amount or not instance.source:
             return 'success'
     status = 'failed'
     transaction_url = 'https://rest.bitcoin.com/v2/slp/txDetails/%s' % (txn_id)
@@ -151,13 +150,14 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
         msg = f'!!! Error found !!! Suspending to redis...'
         LOGGER.error(msg)
         suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
+    if status == 'success':
+        Transaction.objects.filter(txid=txn_id).update(scanning=False)
     return status
 
-
+    
 @shared_task(queue='openfromredis')
 def openfromredis():
     redis_storage = settings.REDISKV
-    updateddata = []
     if 'deposit_filter' not in redis_storage.keys():
         data = json.dumps([])
         redis_storage.set('deposit_filter', data)
@@ -166,18 +166,36 @@ def openfromredis():
     if len(transactions) is not 0:
         for params in transactions:
             LOGGER.info(f"rescanning txn_id - {params['txn_id']}")
-            result = deposit_filter(
+            deposit_filter(
                 params['txn_id'],
                 params['blockheightid'],
                 params['currentcount'],
                 params['total_transactions']
             )
-            if result == 'failed':
-                updateddata.append(params)
-        data = json.dumps(updateddata)
-        redis_storage.set('deposit_filter', data)
-    return f'There are {len(updateddata)} transactions left in redis.'   
     
+@shared_task(bind=True, queue='checktransaction', max_retries=4)
+def checktransaction(self, txn_id):
+    status = 'failed'
+    url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
+    try:
+        response = requests.get(url)
+    except Exception as exc:
+        self.retry(countdown=60)
+    if response.status_code == 200:
+        data = json.loads(response.text)
+        if 'blockheight' in data.keys():
+            blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
+            deposit_filter(
+                txn_id,
+                blockheight_obj.id,
+                0,
+                0
+            )
+            LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
+            blockheight.delay(id=blockheight_obj.id)
+            status = 'success'
+    return status
+
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
     tokens = Token.objects.all()
@@ -195,7 +213,8 @@ def slpdb_token_scanner():
                     tokenqs = Token.objects.filter(tokenid=tokenid)
                     if tokenqs.exists():
                         # Block 625228 is the beginning...
-                        if transaction['blk'] >= 625228:
+                        # if transaction['blk'] >= 625228:
+                        if transaction['blk'] >= 625190:    
                             token_obj = tokenqs.first()
                             block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
                             if created:
@@ -218,6 +237,7 @@ def kickstart_blockheight():
     Intended for checking new blockheight.
     This will beat every 10 seconds.
     """
+    proceed = False
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
     try:
         resp = requests.get(url)
@@ -283,6 +303,8 @@ def blockheight(self, id=None):
     Process missed transactions per blockheight
     """
     heightnumber = blockheight_instance.number
+    blockheight_instance.processed = False
+    blockheight_instance.save()
     obj = slpdb.SLPDB()
     try:
         data = obj.process_api(**{'block': int(heightnumber)})

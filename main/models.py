@@ -36,6 +36,7 @@ class Transaction(models.Model):
     source = models.CharField(max_length=200, null=True)
     created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(Token, on_delete=models.CASCADE)
+    scanning = models.BooleanField(default=False)
 
     def __str__(self):
         return self.txid
