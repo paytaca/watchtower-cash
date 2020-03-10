@@ -330,26 +330,20 @@ def blockheight(self, id=None):
                         'SLPDB-block-scanner',
                         blockheight_instance.id
                     )
-        if slpdb_total_transactions > 10:
-            blockheight_instance.transactions_count = slpdb_total_transactions
-            blockheight_instance.processed = True
-            blockheight_instance.save()
-    
-    if (data['status'] == 'failed' and not proceed_slpdb_checking) or slpdb_total_transactions <= 10:
-        LOGGER.info(f'CHECKING BLOCK {heightnumber} via REST.BITCOIN.COM')
-        url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
-        resp = requests.get(url)
-        if resp.status_code == 200:
-            data = json.loads(resp.text)
-            if 'error' not in data.keys():
-                # Save all transactions to redis after 60 minutes to avoid request timeouts.
-                transactions = json.dumps(data['tx'])
-                key = f"BLOCK-{heightnumber}"
-                redis_storage.set(key, transactions)
-            else:
-                self.retry(countdown=120)
+    LOGGER.info(f'CHECKING BLOCK {heightnumber} via REST.BITCOIN.COM')
+    url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
+    resp = requests.get(url)
+    if resp.status_code == 200:
+        data = json.loads(resp.text)
+        if 'error' not in data.keys():
+            # Save all transactions to redis after 60 minutes to avoid request timeouts.
+            transactions = json.dumps(data['tx'])
+            key = f"BLOCK-{heightnumber}"
+            redis_storage.set(key, transactions)
         else:
             self.retry(countdown=120)
+    else:
+        self.retry(countdown=120)
             
 @shared_task(bind=True, queue='slpbitcoin', max_retries=10)
 def slpbitcoin(self):
