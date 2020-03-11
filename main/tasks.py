@@ -152,6 +152,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
         suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
     if status == 'success':
         Transaction.objects.filter(txid=txn_id).update(scanning=False)
+        BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
     return status
 
     
@@ -231,11 +232,11 @@ def slpdb_token_scanner():
                                 block.id
                             )
                                                
-@shared_task(queue='kickstart_blockheight')
-def kickstart_blockheight():
+@shared_task(queue='latest_blockheight_getter')
+def latest_blockheight_getter():
     """
     Intended for checking new blockheight.
-    This will beat every 10 seconds.
+    This will beat every 5 seconds.
     """
     proceed = False
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
@@ -245,7 +246,7 @@ def kickstart_blockheight():
         obj, created = BlockHeight.objects.get_or_create(number=number)
         if created:
             redis_storage = settings.REDISKV
-            if 'PENDING-BLOCKS' not in redis_storage.keys('*'):
+            if b'PENDING-BLOCKS' not in redis_storage.keys('*'):
                 data = json.dumps([])
                 redis_storage.set('PENDING-BLOCKS', data)
             blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
@@ -255,8 +256,8 @@ def kickstart_blockheight():
     except Exception as exc:
         LOGGER.error(exc)
 
-@shared_task(bind=True, queue='blockheight_transactions')
-def blockheight_transactions(self):
+@shared_task(bind=True, queue='second_blockheight_scanner')
+def second_blockheight_scanner(self):
     redis_storage = settings.REDISKV
     blocks = redis_storage.keys("BLOCK-*")
     if blocks:
@@ -269,24 +270,22 @@ def blockheight_transactions(self):
         counter = 1
         blockheight_instance.transactions_count = total_transactions
         blockheight_instance.save()
+        redis_storage.delete(key) 
         for txn_id in transactions:
             for token in Token.objects.all():
-                deposit_filter(
+                deposit_filter.delay(
                     txn_id,
                     blockheight_instance.id,
                     counter,
                     total_transactions
                 )
             counter += 1
-        blockheight_instance.processed = True
-        blockheight_instance.save()
-        redis_storage.delete(key) 
         LOGGER.info(f"  =======  PROCESSED BLOCK {number}   =======  ")
     else:
         LOGGER.info(f"  =======  NO BLOCKS FOUND   =======  ")
         
-@shared_task(bind=True, queue='blockheight', max_retries=10)
-def blockheight(self, id=None):
+@shared_task(bind=True, queue='first_blockheight_scanner', max_retries=10)
+def first_blockheight_scanner(self, id=None):
     if id is None:
         redis_storage = settings.REDISKV
         blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))

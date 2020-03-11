@@ -2,7 +2,7 @@ from django.contrib import admin
 from main.models import Token, Transaction, SlpAddress, BlockHeight, Subscriber
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
-from main.tasks import blockheight, client_acknowledgement, checktransaction
+from main.tasks import first_blockheight_scanner, client_acknowledgement, checktransaction
 admin.site.site_header = 'SPLNotify'
 
 class TokenAdmin(admin.ModelAdmin):
@@ -28,6 +28,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
         'processed',
         'created_datetime',
         'updated_datetime',
+        'currentcount',
         'transactions_count',
         '_actions'
     ]
@@ -37,7 +38,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
     def rescan_selected_blockheights(modeladmin, request, queryset):
         for trans in queryset:
-            blockheight.delay(trans.id)
+            first_blockheight_scanner.delay(trans.id)
             BlockHeight.objects.filter(id=trans.id).update(processed=False)
 
     def get_actions(self, request):
@@ -60,7 +61,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         self.param = request.GET.get('rescan', None)
         if self.param:
-            blockheight.delay(self.param)
+            first_blockheight_scanner.delay(self.param)
             BlockHeight.objects.filter(id=self.param).update(processed=False)
         return super(BlockHeightAdmin,self).changelist_view(request, extra_context=extra_context)
 

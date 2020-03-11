@@ -19,6 +19,7 @@ class BlockHeight(models.Model):
     created_datetime = models.DateTimeField(null=True, blank=True)
     updated_datetime = models.DateTimeField(null=True, blank=True)
     processed = models.BooleanField(default=False)
+    currentcount = models.IntegerField(default=0)
     
     def save(self, *args, **kwargs):
         if not self.id:

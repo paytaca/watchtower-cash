@@ -164,16 +164,16 @@ CELERYD_PREFETCH_MULTIPLIER = 1
 CELERYD_MAX_TASKS_PER_CHILD = 5
 
 CELERY_BEAT_SCHEDULE = {
-    'kickstart_blockheight': {
-        'task': 'main.tasks.kickstart_blockheight',
-        'schedule': 10
+    'latest_blockheight_getter': {
+        'task': 'main.tasks.latest_blockheight_getter',
+        'schedule': 5
     },
-    'blockheight_transactions': {
-        'task': 'main.tasks.blockheight_transactions',
+    'second_blockheight_scanner': {
+        'task': 'main.tasks.second_blockheight_scanner',
         'schedule': 60
     },
-    'blockheight': {
-        'task': 'main.tasks.blockheight',
+    'first_blockheight_scanner': {
+        'task': 'main.tasks.first_blockheight_scanner',
         'schedule': 120
     },
     'slpdb_token_scanner': {
