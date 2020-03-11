@@ -10,9 +10,6 @@ class Command(BaseCommand):
         
 
     def handle(self, *args, **options):
-        print(args)
-        print(options)
-        # if options['transaction']:
-        #     checktransaction.delay()
-        
-        self.stdout.write(self.style.SUCCESS(f'aw')) 
+        for txid in options['txn_ids']:
+            checktransaction.delay(txid)
+        self.stdout.write(self.style.SUCCESS('A task to check transaction has be deployed!')) 
