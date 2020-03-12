@@ -17,7 +17,15 @@ from django.contrib import admin
 from django.urls import path
 from django.conf.urls.static import static
 from django.conf import settings
+from main.views import (
+  Loginpage,   
+  Profile,
+  Logout
+)
 
 urlpatterns = [
-    path('', admin.site.urls),
+    path('login/', Loginpage.as_view(), name='loginpage'),
+    path('admin/', admin.site.urls),
+    path('logout/', Logout.as_view(), name='logout'),
+    path('', Profile.as_view(), name='profile'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

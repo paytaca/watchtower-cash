@@ -125,7 +125,7 @@ class TransactionAdmin(admin.ModelAdmin):
         return f'----'
 
     def resend_unacknowledge_transactions(modeladmin, request, queryset):
-        for trans in queryset.filter(acknowledge=False):
+        for trans in queryset:
             client_acknowledgement.delay(trans.token.tokenid, trans.id)
 
     def get_queryset(self, request): 
