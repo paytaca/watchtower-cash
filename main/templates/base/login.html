@@ -1,11 +1,12 @@
 {% extends "base/index.html" %}
 {% load static  %}
 {% block content %}
+<div class="container">
 <style>
     body{
       padding-top:4.2rem;
       padding-bottom:4.2rem;
-      background:rgba(0, 0, 0, 0.76);
+      background: #232f3e !important;
     }
     a{
       text-decoration:none !important;
@@ -29,10 +30,15 @@
     .tx-tfm{
       text-transform:uppercase;
     }
-    .mybtn{
-      border-radius:50px;
+    .mybtn {
+      padding: 10px;
+      border: none;
+      border-radius:4px;
+      background: #74d8b8;
     }
-    
+    .mybtn:hover {
+      background: #447e9b;
+    }
     .login-or {
       position: relative;
       color: #aaa;
@@ -67,7 +73,12 @@
     form .error {
       color: #ff0000;
     }
-    #second{display:none;}
+    #second{
+      display:none;
+    }
+    .container-title {
+      color: #232f3e;
+    }
   </style>
   <div class="row">
     <div class="col-md-5 mx-auto">
@@ -75,7 +86,7 @@
         <div class="myform form ">
           <div class="logo mb-3">
             <div class="col-md-12 text-center">
-              <h1>SLPNotify</h1>
+              <h1 class="container-title">SLPNotify</h1>
             </div>
           </div>
           <form method="POST" id="add_form" action="{% url 'loginpage' %}">{% csrf_token %}
@@ -89,7 +100,7 @@
                 <p class="text-center">By signing up you accept our <a href="#">Terms Of Use</a></p>
               </div>
               <div class="col-md-12 text-center ">
-                <button type="submit" class=" btn btn-block mybtn btn-primary tx-tfm">Login</button>
+                <button type="submit" class=" button btn-block mybtn btn-primary tx-tfm">Login</button>
               </div>
               <div class="col-md-12 ">
                 <div class="login-or">
@@ -107,21 +118,24 @@
         <div class="myform form ">
           <div class="logo mb-3">
             <div class="col-md-12 text-center">
-                <h1 >Signup</h1>
+                <h1 class="container-title">Signup</h1>
             </div>
           </div>
           <form action="#" name="registration">
             <div class="form-group">
-                <input type="text"  name="firstname" class="form-control" id="firstname" aria-describedby="emailHelp" placeholder="Enter Firstname">
+                <input type="text"  name="firstname" class="form-control" id="firstname" aria-describedby="emailHelp" placeholder="Firstname">
             </div>
             <div class="form-group">
-                <input type="text"  name="lastname" class="form-control" id="lastname" aria-describedby="emailHelp" placeholder="Enter Lastname">
+                <input type="text"  name="lastname" class="form-control" id="lastname" aria-describedby="emailHelp" placeholder="Lastname">
             </div>
             <div class="form-group">
-                <input type="email" name="email"  class="form-control" id="email" aria-describedby="emailHelp" placeholder="Enter email">
+                <input type="email" name="email"  class="form-control" id="email" aria-describedby="emailHelp" placeholder="Email Address">
             </div>
             <div class="form-group">
-                <input type="password" name="password" id="password"  class="form-control" aria-describedby="emailHelp" placeholder="Enter Password">
+                <input type="password" name="password" id="password"  class="form-control" aria-describedby="emailHelp" placeholder="Password">
+            </div>
+            <div class="form-group">
+              <input type="password" name="repassword" id="repassword"  class="form-control" aria-describedby="emailHelp" placeholder="Re-Type Password">
             </div>
             <div class="col-md-12 text-center mb-3">
                 <button type="submit" class=" btn btn-block mybtn btn-primary tx-tfm">Get Started For Free</button>
@@ -207,4 +221,5 @@
     });
 
   </script>
+</div>
 {% endblock content %}

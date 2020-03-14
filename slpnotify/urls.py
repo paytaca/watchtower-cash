@@ -19,13 +19,17 @@ from django.conf.urls.static import static
 from django.conf import settings
 from main.views import (
   Loginpage,   
-  Profile,
-  Logout
+  Home,
+  Logout,
+  Account,
+  Settings
 )
 
 urlpatterns = [
     path('login/', Loginpage.as_view(), name='loginpage'),
     path('admin/', admin.site.urls),
     path('logout/', Logout.as_view(), name='logout'),
-    path('', Profile.as_view(), name='profile'),
+    path('account/', Account.as_view(), name='account'),
+    path('settings/', Settings.as_view(), name='settings'),
+    path('', Home.as_view(), name='home'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
