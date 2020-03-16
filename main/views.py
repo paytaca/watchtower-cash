@@ -1,9 +1,13 @@
 from django.shortcuts import render, redirect
+from django.http import JsonResponse
 from django.views import View
-from django.contrib.auth import authenticate
-
-
+from django.contrib.auth import authenticate, login, logout
+from main.models import Subscriber
 from django.contrib.auth.models import User 
+from django.urls import reverse
+import json
+
+
 
 class Loginpage(View):
 
@@ -14,8 +18,7 @@ class Loginpage(View):
         if user.exists():
             user = authenticate(request=request, username=username, password=password)
             if user is not None:
-                request.user = user
-                request.session['username'] = username
+                login(request, user)
                 return redirect('home')
         return render(request, 'base/login.html', {})
         
@@ -24,9 +27,8 @@ class Home(View):
     
     def get(self, request):
         query = {}
-        if request.session.has_key('username'):
-            users = request.session['username']
-            query = User.objects.filter(username=users) 
+        if request.user.is_authenticated:
+            query = User.objects.filter(username=request.user.username) 
             return render(request, 'base/home.html', {"query":query})
         else:
             return render(request, 'base/login.html', query)
@@ -35,30 +37,56 @@ class Account(View):
     
     def get(self, request):
         query = {}
-        if request.session.has_key('username'):
-            users = request.session['username']
-            query = User.objects.filter(username=users) 
+        if request.user.is_authenticated:
+            query = User.objects.filter(username=request.user.username) 
             return render(request, 'base/account.html', {"query":query})
         else:
             return render(request, 'base/login.html', query)
 
-
-class Settings(View):
+class Token(View):
     
     def get(self, request):
         query = {}
-        if request.session.has_key('username'):
-            users = request.session['username']
-            query = User.objects.filter(username=users) 
-            return render(request, 'base/settings.html', {"query":query})
+        if request.user.is_authenticated:
+            query = User.objects.filter(username=request.user.username) 
+            return render(request, 'base/token.html', {"query":query})
         else:
             return render(request, 'base/login.html', query)
+
+    def post(self, request):
+        user_qs = User.objects.filter(username=users)
+        status = 'failed'
+        if user_qs.exists():
+            user = user_qs.first()
+            subscription_qs = Subscriber.objects.filter(user=user)
+            if subscription_qs.exists():
+                subscriber = subscription_qs.first()
+                # Get all token changes and update the model
+
+                # token = models.ManyToManyField(Token, related_name='subscriber')
+                # data = JSONField(default=None, null=True)
+        return JsonResponse({"status": status})
 
 class Logout(View):
 
     def get(self, request):
-        try:
-            del request.session['username']
-        except:
-            pass
+        from django.contrib.auth import logout
+        logout(request)
         return redirect('home')
+
+
+class SignUp(View):
+
+    def post(self, request):
+        data = json.loads(request.body)
+        username = data.get('username', '')
+        fname = data.get('firstname', '')
+        lname = data.get('lastname', '')
+        email = data.get('email', '')
+        password = data.get('password', '')
+        status = 'failed'
+        if username and fname and lname and email and password:
+            # process the subscription here
+            # Subscriber
+            status = 'success'
+        return JsonResponse({"status": status}) 

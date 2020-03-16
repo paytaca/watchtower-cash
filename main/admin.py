@@ -12,7 +12,7 @@ class TokenAdmin(admin.ModelAdmin):
         'target_address',
     ]
 
-    def get_queryset(self, request): 
+    def get_query(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset
         qs = super(TokenAdmin, self).get_queryset(request) 
         if request.user.is_superuser:
@@ -126,7 +126,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
     def resend_unacknowledge_transactions(modeladmin, request, queryset):
         for trans in queryset:
-            client_acknowledgement.delay(trans.token.tokenid, trans.id)
+            x = client_acknowledgement(tr.token.tokenid, tr.id)
 
     def get_queryset(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset
@@ -152,7 +152,8 @@ class SubscriberAdmin(admin.ModelAdmin):
         'user',
         'data',
     ]
-
+    # [{"token_id": 0,"target_addresses":[],"confirmation":0}]
+    
 # admin.site.register(User)
 # admin.site.register(Group)
 admin.site.register(Token, TokenAdmin)

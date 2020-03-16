@@ -51,6 +51,7 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
         address=address,
     )
     address_obj.transactions.add(transaction_obj)
+    address_obj.save()
     if transaction_created:
         msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {address}"
         LOGGER.info(msg)

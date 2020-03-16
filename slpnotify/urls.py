@@ -22,7 +22,7 @@ from main.views import (
   Home,
   Logout,
   Account,
-  Settings
+  Token
 )
 
 urlpatterns = [
@@ -30,6 +30,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('logout/', Logout.as_view(), name='logout'),
     path('account/', Account.as_view(), name='account'),
-    path('settings/', Settings.as_view(), name='settings'),
+    path('token/', Token.as_view(), name='token'),
     path('', Home.as_view(), name='home'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
