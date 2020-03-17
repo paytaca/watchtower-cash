@@ -10,7 +10,7 @@
             </nav>
             <div class="container-fluid">
                 <div class="card mb-4">
-                    <div class="card-header text-primary"><i class="fas fa-table mr-1 "></i>Spice Transactions</div>
+                    <div class="card-header text-primary"><i class="fas fa-table mr-1 "></i>Transactions</div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
@@ -29,22 +29,13 @@
                                     </tr>
                                 </tfoot>
                                 <tbody>
-                                    <tr>
-                                        <td>2a61059fed4188975494d70ce63d5f4381f58a75ec256d77e51d8add331e5636</td>
-                                        <td>108238.77361217</td>
-                                        <td>626314</td>
-                                        
-                                    </tr>
-                                    <tr>
-                                        <td>9f7dad2e7e21c26465dcba15b3df9c234ead7b58fa97baf3e81f7148475781d3</td>
-                                        <td>500</td>
-                                        <td>626314</td>
-                                    </tr>
-                                    <tr>
-                                        <td>7612c2de34f0c5e1a9e864ca576c4dd040e003f142f5bbd570a7563ca36f1ba6</td>
-                                        <td>3920</td>
-                                        <td>626313</td>
-                                    </tr>
+                                    {% for trans in transactions %}
+                                        <tr>
+                                            <td>{{ trans.txid }}</td>
+                                            <td>{{ trans.amount }}</td>
+                                            <td>{{ trans.blockheight__number }}</td>
+                                        </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>

@@ -131,6 +131,17 @@
     table.table th:last-child {
         width: 100px;
     }
+    table.table td {
+        border-bottom:1px solid #fff;
+        border-left:1px solid #fff;
+        color:#336699;
+        border-top:1px solid transparent;
+        padding:8px;
+        text-overflow:ellipsis;
+        overflow:hidden;
+        white-space:nowrap;
+    }
+
     table.table td a {
 		cursor: pointer;
         display: inline-block;
@@ -189,38 +200,30 @@
             <table class="table table-bordered">
                 <thead>
                     <tr>
-                        <th>Token/Address</th>
-                        <th style="width:150px;">Confirmation</th>
-                        <th style="width:250px;">Send To</th>
+                        <th style="display:none;">id</th>
+                        <th>Token ID</th>
+                        <th>Send To</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td><input type="text" class="token" value="9239213123901239812398712" disabled /></td>
-                        <td><input type="text" class="confirmation" value="10" disabled /></td>
-                        <td><input type="text" class="sendto" value="https://spicebot.scibizinformatics.com/slpnotify" disabled /></td>
-                        <td>
-                            <a class="add"><i class="fas fa-plus"></i></a>
-                            <a class="edit"><i class="fas fa-edit"></i></a>
-                            <a class="delete"><i class="fas fa-trash"></i></a>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>2a6100000000e5636</td>
-                        <td>20</td>
-                        <td>https://www.sample.com</td>
-                        <td>
-                            <a class="add"><i class="fas fa-plus"></i></a>
-                            <a class="edit"><i class="fas fa-edit"></i></a>
-                            <a class="delete"><i class="fas fa-trash"></i></a>
-                        </td>
-                    </tr>
+                    {% for subscription in subscriptions %}
+                        <tr>
+                            <td style="display:none;"> {{ subscription.id}}</td>
+                            <td> {{ subscription.token__tokenid}}</td>
+                            <td> {{ subscription.address__address }}</td>
+                            <td>
+                                <a class="add"><i class="fas fa-plus"></i></a>
+                                <a class="edit"><i class="fas fa-edit"></i></a>
+                                <a class="delete"><i class="fas fa-trash"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
-
+    
     <footer class="py-4 bg-light mt-auto">
         <div class="container-fluid">
             <div class="d-flex align-items-center justify-content-between small">
@@ -234,17 +237,22 @@
         </div>
     </footer>
 </div>
+
 <script type="text/javascript">
     $(document).ready(function(){
         $('[data-toggle="tooltip"]').tooltip();
-        var actions = $("table td:last-child").html();
+        // var actions = $("table td:last-child").html();
+        var actions = "" +
+            "<a class='add'><i class='fas fa-plus'></i></a>" +
+            "<a class='edit'><i class='fas fa-edit'></i></a>" +
+            "<a class='delete'><i class='fas fa-trash'></i></a>";
         // Append table with add row form on add new button click
         $(".add-new").click(function(){
             $(this).attr("disabled", "disabled");
             var index = $("table tbody tr:last-child").index();
             var row = '<tr>' +
+                '<td style="display:none;"><input type="text" class="form-control" name="id" id="id" value="0">0</td>' +
                 '<td><input type="text" class="form-control" name="idaddress" id="idaddress"></td>' +
-                '<td><input type="text" class="form-control" name="confirmation" id="confirmation"></td>' +
                 '<td><input type="text" class="form-control" name="sendto" id="sendto"></td>' +
                 '<td>' + actions + '</td>' +
             '</tr>';
@@ -259,6 +267,7 @@
             input.each(function(){
                 if(!$(this).val()){
                     $(this).addClass("error");
+                    alert($(this));
                     empty = true;
                 } else{
                     $(this).removeClass("error");
@@ -267,34 +276,68 @@
             $(this).parents("tr").find(".error").first().focus();
             if(!empty){
                 input.each(function(){
-                    input.disabled = true;
+                    $(this).parent("td").html($(this).val());
                 });			
-                $(this).parents("tr").find(".add, .edit").toggle();
-                $(".add-new").removeAttr("disabled");
+                var row = $(this).parents("tr");
+                var data = row.children("td");
+                var rowid = data[0].innerHTML.replace(" ","");
+                var tokenid = data[1].innerHTML.replace(" ","")
+                var sendto = data[2].innerHTML.replace(" ","")
+                
+                var response = $.ajax({
+                    url: "/token/",
+                    method: "POST",
+                    data:
+                    {
+                        action: 'add-edit',
+                        id: rowid,
+                        sendto: sendto,
+                        tokenid:tokenid,
+                        csrfmiddlewaretoken: '{{ csrf_token }}'
+                    }
+                });
+                response.then(function(data, status){
+                    if(data.status == 'success'){
+                        $(this).parents("tr").find(".add, .edit").toggle();
+                        $(".add-new").removeAttr("disabled");
+                    };
+                })
             }		
         });
         // Edit row on edit button click
         $(document).on("click", ".edit", function(){		
             $(this).parents("tr").find("td:not(:last-child)").each(function(){
-                var input = $(this)[0].getElementsByTagName( 'input' ); 
-                // for ( var z = 0; z < input.length; z++ ) { 
-                    input[0].disabled = false;
-                    
-                // } 
-                
-                // var elem = $(this).getElementsByClassName('sendto');
-                // element.setAttribute("style", "background-color: red;");
-                // var inputVal = document.getElementById("myInput").value;
-                // console.log($(this));
-                // $(this).html('<input type="text" class="form-control" value="' + $(this).text() + '">');
+                $(this).html('<input type="text" class="form-control" value="' + $(this).text() + '">');
             });		
             $(this).parents("tr").find(".add, .edit").toggle();
             $(".add-new").attr("disabled", "disabled");
         });
         // Delete row on delete button click
         $(document).on("click", ".delete", function(){
-            $(this).parents("tr").remove();
-            $(".add-new").removeAttr("disabled");
+            // send post request here
+            var row = $(this).parents("tr");
+            var data = row.children("td");
+            var rowid = data[0].innerHTML.replace(" ","");
+            var tokenid = data[1].innerHTML.replace(" ","")
+            var sendto = data[2].innerHTML.replace(" ","")
+            var response = $.ajax({
+                url: "/token/",
+                method: "POST",
+                data:
+                {
+                    action: 'delete',
+                    id: rowid,
+                    sendto: sendto,
+                    tokenid:tokenid,
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                }
+            });
+            response.then(function(data, status){
+                if (data['status'] == 'success') {
+                    row.remove();
+                    $(".add-new").removeAttr("disabled");
+                };
+            });
         });
     });
     </script>

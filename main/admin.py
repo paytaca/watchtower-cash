@@ -1,5 +1,13 @@
 from django.contrib import admin
-from main.models import Token, Transaction, SlpAddress, BlockHeight, Subscriber
+from main.models import (
+    Token,
+    Transaction,
+    SlpAddress,
+    BlockHeight,
+    Subscriber,
+    Subscription,
+    SendTo
+)
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
 from main.tasks import first_blockheight_scanner, client_acknowledgement, checktransaction
@@ -9,7 +17,6 @@ class TokenAdmin(admin.ModelAdmin):
     list_display = [
         'name',
         'tokenid',
-        'target_address',
     ]
 
     def get_query(self, request): 
@@ -146,12 +153,23 @@ class SlpAddressAdmin(admin.ModelAdmin):
         'address',
     ]
 
+class SendToAdmin(admin.ModelAdmin):
+    list_display = [
+        'address',
+    ]
+
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = [
+        'token',
+        'address'
+    ]
+
 
 class SubscriberAdmin(admin.ModelAdmin):
     list_display = [
         'user',
-        'data',
     ]
+
     # [{"token_id": 0,"target_addresses":[],"confirmation":0}]
     
 # admin.site.register(User)
@@ -161,3 +179,5 @@ admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
 admin.site.register(BlockHeight, BlockHeightAdmin)
 admin.site.register(Subscriber, SubscriberAdmin)
+admin.site.register(Subscription, SubscriptionAdmin)
+admin.site.register(SendTo, SendToAdmin)
