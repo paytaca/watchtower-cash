@@ -82,109 +82,89 @@
     font-size: 25px;
 }
 </style>
-<nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-    <a class="navbar-brand" href="/">SLPNotify</a><button class="btn btn-link btn-sm order-1 order-lg-0" id="sidebarToggle" href="#"><i class="fas fa-bars"></i></button
-    ><!-- Navbar Search-->
-    <form class="d-none d-md-inline-block form-inline ml-auto mr-0 mr-md-3 my-2 my-md-0">
-        <div class="input-group"></div>
-    </form>
-    <!-- Navbar-->
-    <ul class="navbar-nav ml-auto ml-md-0">
-        <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" id="userDropdown" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-user fa-fw"></i></a>
-            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
-                <a class="dropdown-item" href="#">Account</a>
-                <div class="dropdown-divider"></div>
-                <a class="dropdown-item" href="{% url 'logout' %}">Logout</a>
+<div id="layoutSidenav_content">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item active" aria-current="page"><h2>Account</h2></li>
+        </ol>
+    </nav>
+    <div class="container">
+        <form name="updateaccount" id="updateaccount" action="{% url 'account' %}" method="post">
+            {% csrf_token %}
+            <input style="display:none;" type="text"  name="action" class="form-control" id="action" value="update">
+            <div class="form-group">
+                <input type="text"  name="firstname" class="form-control" id="firstname" aria-describedby="emailHelp" placeholder="Firstname">
             </div>
-        </li>
-    </ul>
-</nav>
-<div id="layoutSidenav">
-    <div id="layoutSidenav_nav">
-        <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
-            <div class="sb-sidenav-menu">
-                <div class="nav">
-                    <div class="sb-sidenav-menu-heading"></div>
-                    <a class="nav-link" href="/">
-                        <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>Dashboard</a>
-                        <div class="sb-sidenav-menu-heading">Management</div>
-                            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseLayouts" aria-expanded="false" aria-controls="collapseLayouts">
-                                <div class="sb-nav-link-icon"><i class="fas fa-columns"></i></div>Control Panel<div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div></a>
-                    <div class="collapse" id="collapseLayouts" aria-labelledby="headingOne" data-parent="#sidenavAccordion">
-                        <nav class="sb-sidenav-menu-nested nav">
-                            <a class="nav-link" href="/settings">Settings</a>
-                            <a class="nav-link" href="/account">Account</a>
-                        </nav>
-                    </div>
-                </div>
+            <div class="form-group">
+                <input type="text"  name="lastname" class="form-control" id="lastname" aria-describedby="emailHelp" placeholder="Lastname">
             </div>
-            <div class="sb-sidenav-footer">
-                <div class="small">Logged in as:</div>
-                {{ session.username}}
+            <div class="form-group">
+                <input type="email" name="email"  class="form-control" id="email" aria-describedby="emailHelp" placeholder="Email Address">
             </div>
-        </nav>
+            <div class="form-group">
+                <input type="password" name="password" id="setpassword"  class="form-control" aria-describedby="emailHelp" placeholder="Password">
+            </div>
+            <div class="form-group">
+                <input type="password" name="repassword" id="repassword"  class="form-control" aria-describedby="emailHelp" placeholder="Re-Type Password">
+            </div>
+            <div class="form-group">
+                <input class="btn btn-primary btn-block" type="submit" value="Update"/>
+            </div>
+        </form>
     </div>
-    <div id="layoutSidenav_content">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item active" aria-current="page">Control Panel / Account</li>
-            </ol>
-        </nav>
-        <div class="container">
-            <form action="" method="post">
-                <div class="preview text-center">
-                    <img class="preview-img" src="{%static 'img/user-default.png'%}" alt="Preview Image" width="200" height="200"/>
-                    <div class="browse-button">
-                        <i class="fa fa-pencil-alt"></i>
-                        <input class="browse-input" type="file" required name="UploadedFile" id="UploadedFile"/>
-                    </div>
-                    <span class="Error"></span>
+            
+    <footer class="py-4 bg-light mt-auto">
+        <div class="container-fluid">
+            <div class="d-flex align-items-center justify-content-between small">
+                <div class="text-muted">Copyright &copy; SPICE 2020</div>
+                <div>
+                    <a href="#">Privacy Policy</a>
+                    &middot;
+                    <a href="#">Terms &amp; Conditions</a>
                 </div>
-                <div class="form-group">
-                    <label>Full Name:</label>
-                    <input class="form-control" type="text" name="fullname" required placeholder="Enter Your Full Name"/>
-                    <span class="Error"></span>
-                </div>
-                <div class="form-group">
-                    <label>Email:</label>
-                    <input class="form-control" type="email" name="email" required placeholder="Enter Your Email"/>
-                    <span class="Error"></span>
-                </div>
-                <div class="form-group">
-                    <label>Password:</label>
-                    <input class="form-control" type="password" name="password" required placeholder="Enter Password"/>
-                    <span class="Error"></span>
-                </div>
-                <div class="form-group">
-                    <input class="btn btn-primary btn-block" type="submit" value="Submit"/>
-                </div>
-            </form>
+            </div>
         </div>
-             
-
-        <footer class="py-4 bg-light mt-auto">
-            <div class="container-fluid">
-                <div class="d-flex align-items-center justify-content-between small">
-                    <div class="text-muted">Copyright &copy; SPICE 2020</div>
-                    <div>
-                        <a href="#">Privacy Policy</a>
-                        &middot;
-                        <a href="#">Terms &amp; Conditions</a>
-                    </div>
-                </div>
-            </div>
-        </footer>
-    </div>
+    </footer>
+    <script>
+        $(function() {
+          $("form[name='updateaccount']").validate({
+            rules: {
+              firstname: "required",
+              lastname: "required",
+              email: {
+                required: true,
+                email: true
+              },
+              password: {
+                required: true,
+                minlength: 5
+              },
+              repassword: {
+                required: true,
+                equalTo: "#setpassword"
+              }
+            },
+            
+            messages: {
+              firstname: "Field required.",
+              lastname: "Field required.",
+              password: {
+                required: "Field required.",
+                minlength: "Your password must be at least 5 characters long"
+              },
+              email: "Must be a valid email address",
+              repassword: {
+                required: "Field required",
+                equalTo: "Password mismatch"
+              }
+            },
+          
+            submitHandler: function(form) {
+              form.submit();
+            }
+          });
+        });
+    
+      </script>
 </div>
-<script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-<script src="{% static 'js/scripts.js' %}"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.js" crossorigin="anonymous"></script>
-<script src="{% static 'assets/demo/chart-area-demo.js' %}"></script>
-<script src="{% static 'assets/demo/chart-bar-demo.js' %}"></script>
-<script src="https://cdn.datatables.net/1.10.20/js/jquery.dataTables.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.datatables.net/1.10.20/js/dataTables.bootstrap4.min.js" crossorigin="anonymous"></script>
-<script src="{% static 'assets/demo/datatables-demo.js' %}"></script>
-
 {% endblock content %}

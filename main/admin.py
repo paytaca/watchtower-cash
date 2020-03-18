@@ -1,5 +1,13 @@
 from django.contrib import admin
-from main.models import Token, Transaction, SlpAddress, BlockHeight, Subscriber
+from main.models import (
+    Token,
+    Transaction,
+    SlpAddress,
+    BlockHeight,
+    Subscriber,
+    Subscription,
+    SendTo
+)
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
 from main.tasks import first_blockheight_scanner, client_acknowledgement, checktransaction
@@ -9,10 +17,9 @@ class TokenAdmin(admin.ModelAdmin):
     list_display = [
         'name',
         'tokenid',
-        'target_address',
     ]
 
-    def get_queryset(self, request): 
+    def get_query(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset
         qs = super(TokenAdmin, self).get_queryset(request) 
         if request.user.is_superuser:
@@ -125,8 +132,8 @@ class TransactionAdmin(admin.ModelAdmin):
         return f'----'
 
     def resend_unacknowledge_transactions(modeladmin, request, queryset):
-        for trans in queryset:
-            client_acknowledgement.delay(trans.token.tokenid, trans.id)
+        for tr in queryset:
+            x = client_acknowledgement(tr.token.tokenid, tr.id)
 
     def get_queryset(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset
@@ -146,13 +153,27 @@ class SlpAddressAdmin(admin.ModelAdmin):
         'address',
     ]
 
+class SendToAdmin(admin.ModelAdmin):
+    list_display = [
+        'address',
+    ]
+
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = [
+        'token',
+        'address'
+    ]
+
 
 class SubscriberAdmin(admin.ModelAdmin):
     list_display = [
         'user',
-        'data',
+        'confirmed'
     ]
+    exclude = ('subscription',)
 
+    # [{"token_id": 0,"target_addresses":[],"confirmation":0}]
+    
 # admin.site.register(User)
 # admin.site.register(Group)
 admin.site.register(Token, TokenAdmin)
@@ -160,3 +181,5 @@ admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
 admin.site.register(BlockHeight, BlockHeightAdmin)
 admin.site.register(Subscriber, SubscriberAdmin)
+admin.site.register(Subscription, SubscriptionAdmin)
+admin.site.register(SendTo, SendToAdmin)

@@ -121,7 +121,12 @@
                 <h1 class="container-title">Signup</h1>
             </div>
           </div>
-          <form action="#" name="registration">
+          <form method="POST"  id="register_form" action="{% url 'account' %}" name="registration">
+            {% csrf_token %}
+            <input style="display:none;" type="text"  name="action" class="form-control" id="action" aria-describedby="emailHelp" value="register">
+            <div class="form-group">
+                <input type="text"  name="username" class="form-control" id="username" aria-describedby="emailHelp" placeholder="Username">
+            </div>
             <div class="form-group">
                 <input type="text"  name="firstname" class="form-control" id="firstname" aria-describedby="emailHelp" placeholder="Firstname">
             </div>
@@ -132,7 +137,7 @@
                 <input type="email" name="email"  class="form-control" id="email" aria-describedby="emailHelp" placeholder="Email Address">
             </div>
             <div class="form-group">
-                <input type="password" name="password" id="password"  class="form-control" aria-describedby="emailHelp" placeholder="Password">
+                <input type="password" name="password" id="setpassword"  class="form-control" aria-describedby="emailHelp" placeholder="Password">
             </div>
             <div class="form-group">
               <input type="password" name="repassword" id="repassword"  class="form-control" aria-describedby="emailHelp" placeholder="Re-Type Password">
@@ -145,7 +150,6 @@
                   <p class="text-center"><a href="#" id="signin">Already have an account?</a></p>
                 </div>
             </div>
-              </div>
           </form>
         </div>
       </div>
@@ -176,6 +180,7 @@
           }
         },
         messages: {
+          username: 'Please enter username',
           email: "Please enter a valid email address",
           password: {
             required: "Please enter password",
@@ -192,6 +197,7 @@
       
       $("form[name='registration']").validate({
         rules: {
+          username: "required",
           firstname: "required",
           lastname: "required",
           email: {
@@ -201,17 +207,26 @@
           password: {
             required: true,
             minlength: 5
+          },
+          repassword: {
+            required: true,
+            equalTo: "#setpassword"
           }
         },
         
         messages: {
-          firstname: "Please enter your firstname",
-          lastname: "Please enter your lastname",
+          username: "Field required.",
+          firstname: "Field required.",
+          lastname: "Field required.",
           password: {
-            required: "Please provide a password",
+            required: "Field required.",
             minlength: "Your password must be at least 5 characters long"
           },
-          email: "Please enter a valid email address"
+          email: "Must be a valid email address",
+          repassword: {
+            required: "Field required",
+            equalTo: "Password mismatch"
+          }
         },
       
         submitHandler: function(form) {

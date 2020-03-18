@@ -4,9 +4,8 @@ from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
 
 class Token(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, null=True)
     tokenid = models.CharField(max_length=200)
-    target_address = models.CharField(max_length=500)
     confirmation_limit = models.IntegerField(default=0)
 
     def __str__(self):
@@ -42,10 +41,18 @@ class Transaction(models.Model):
     def __str__(self):
         return self.txid
 
+class SendTo(models.Model):
+    address = models.CharField(max_length=500)
+
+class Subscription(models.Model):
+    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='subscription')
+    address = models.ForeignKey(SendTo, on_delete=models.CASCADE, related_name='subscription')
+
 class Subscriber(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
-    token = models.ManyToManyField(Token, related_name='subscriber')
-    data = JSONField(default=None, null=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscriber')
+    subscription = models.ManyToManyField(Subscription, related_name='subscriber', null=True)
+    confirmed = models.BooleanField(default=False)
+    date_started = models.DateTimeField(default=timezone.now)
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True)
