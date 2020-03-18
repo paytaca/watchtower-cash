@@ -50,8 +50,9 @@ class Subscription(models.Model):
 
 class Subscriber(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscriber')
-    subscription = models.ManyToManyField(Subscription, related_name='subscriber')
-    
+    subscription = models.ManyToManyField(Subscription, related_name='subscriber', null=True)
+    confirmed = models.BooleanField(default=False)
+    date_started = models.DateTimeField(default=timezone.now)
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True)

@@ -89,32 +89,26 @@
         </ol>
     </nav>
     <div class="container">
-        <form action="" method="post">
-            <div class="preview text-center">
-                <img class="preview-img" src="{%static 'img/user-default.png'%}" alt="Preview Image" width="200" height="200"/>
-                <div class="browse-button">
-                    <i class="fa fa-pencil-alt"></i>
-                    <input class="browse-input" type="file" required name="UploadedFile" id="UploadedFile"/>
-                </div>
-                <span class="Error"></span>
+        <form name="updateaccount" id="updateaccount" action="{% url 'account' %}" method="post">
+            {% csrf_token %}
+            <input style="display:none;" type="text"  name="action" class="form-control" id="action" value="update">
+            <div class="form-group">
+                <input type="text"  name="firstname" class="form-control" id="firstname" aria-describedby="emailHelp" placeholder="Firstname">
             </div>
             <div class="form-group">
-                <label>Full Name:</label>
-                <input class="form-control" type="text" name="fullname" required placeholder="Enter Your Full Name"/>
-                <span class="Error"></span>
+                <input type="text"  name="lastname" class="form-control" id="lastname" aria-describedby="emailHelp" placeholder="Lastname">
             </div>
             <div class="form-group">
-                <label>Email:</label>
-                <input class="form-control" type="email" name="email" required placeholder="Enter Your Email"/>
-                <span class="Error"></span>
+                <input type="email" name="email"  class="form-control" id="email" aria-describedby="emailHelp" placeholder="Email Address">
             </div>
             <div class="form-group">
-                <label>Password:</label>
-                <input class="form-control" type="password" name="password" required placeholder="Enter Password"/>
-                <span class="Error"></span>
+                <input type="password" name="password" id="setpassword"  class="form-control" aria-describedby="emailHelp" placeholder="Password">
             </div>
             <div class="form-group">
-                <input class="btn btn-primary btn-block" type="submit" value="Submit"/>
+                <input type="password" name="repassword" id="repassword"  class="form-control" aria-describedby="emailHelp" placeholder="Re-Type Password">
+            </div>
+            <div class="form-group">
+                <input class="btn btn-primary btn-block" type="submit" value="Update"/>
             </div>
         </form>
     </div>
@@ -131,5 +125,46 @@
             </div>
         </div>
     </footer>
+    <script>
+        $(function() {
+          $("form[name='updateaccount']").validate({
+            rules: {
+              firstname: "required",
+              lastname: "required",
+              email: {
+                required: true,
+                email: true
+              },
+              password: {
+                required: true,
+                minlength: 5
+              },
+              repassword: {
+                required: true,
+                equalTo: "#setpassword"
+              }
+            },
+            
+            messages: {
+              firstname: "Field required.",
+              lastname: "Field required.",
+              password: {
+                required: "Field required.",
+                minlength: "Your password must be at least 5 characters long"
+              },
+              email: "Must be a valid email address",
+              repassword: {
+                required: "Field required",
+                equalTo: "Password mismatch"
+              }
+            },
+          
+            submitHandler: function(form) {
+              form.submit();
+            }
+          });
+        });
+    
+      </script>
 </div>
 {% endblock content %}

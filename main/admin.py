@@ -132,7 +132,7 @@ class TransactionAdmin(admin.ModelAdmin):
         return f'----'
 
     def resend_unacknowledge_transactions(modeladmin, request, queryset):
-        for trans in queryset:
+        for tr in queryset:
             x = client_acknowledgement(tr.token.tokenid, tr.id)
 
     def get_queryset(self, request): 
@@ -168,7 +168,9 @@ class SubscriptionAdmin(admin.ModelAdmin):
 class SubscriberAdmin(admin.ModelAdmin):
     list_display = [
         'user',
+        'confirmed'
     ]
+    exclude = ('subscription',)
 
     # [{"token_id": 0,"target_addresses":[],"confirmation":0}]
     

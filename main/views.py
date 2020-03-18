@@ -22,10 +22,12 @@ class Loginpage(View):
         password =  request.POST['password']
         user = User.objects.filter(username=username)
         if user.exists():
-            user = authenticate(request=request, username=username, password=password)
-            if user is not None:
-                login(request, user)
-                return redirect('home')
+            subscriber = Subscriber.objects.get(user=user.first())
+            if subscriber.confirmed:
+                user = authenticate(request=request, username=username, password=password)
+                if user is not None:
+                    login(request, user)
+                    return redirect('home')
         return render(request, 'base/login.html', {})
         
 
@@ -50,13 +52,13 @@ class Home(View):
 
 class Account(View):
     
-    def get(self, request):
-        query = {}
-        if request.user.is_authenticated:
-            query = User.objects.filter(username=request.user.username) 
-            return render(request, 'base/account.html', {"query":query})
-        else:
-            return render(request, 'base/login.html', query)
+    # def get(self, request):
+    #     query = {}
+    #     if request.user.is_authenticated:
+    #         query = User.objects.filter(username=request.user.username) 
+    #         return render(request, 'base/account.html', {"query":query})
+    #     else:
+    #         return render(request, 'base/login.html', query)
 
     def post(self, request):
         action = request.POST['action']
@@ -66,9 +68,10 @@ class Account(View):
             lastname = request.POST['lastname']
             email = request.POST['email']
             password = request.POST['password']
+            username = request.POST['username']
             # Create User
             user = User()
-            user.username = firstname
+            user.username = username
             user.first_name = firstname
             user.last_name = lastname
             user.email = email
@@ -93,7 +96,7 @@ class Token(View):
             subscriber = Subscriber.objects.get(user=request.user)
             subscriptions = subscriber.subscription.all()
             data = list(subscriptions.values('id','token__tokenid', 'address__address'))
-            return render(request, 'base/token.html', {"subscriptions": data})
+            return render(request, 'base/tokens.html', {"subscriptions": data})
         else:
             return render(request, 'base/login.html', query)
 

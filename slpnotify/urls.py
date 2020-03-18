@@ -30,6 +30,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('logout/', Logout.as_view(), name='logout'),
     path('account/', Account.as_view(), name='account'),
-    path('token/', Token.as_view(), name='token'),
+    path('tokens/', Token.as_view(), name='token'),
     path('', Home.as_view(), name='home'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

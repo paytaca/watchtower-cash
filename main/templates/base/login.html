@@ -125,6 +125,9 @@
             {% csrf_token %}
             <input style="display:none;" type="text"  name="action" class="form-control" id="action" aria-describedby="emailHelp" value="register">
             <div class="form-group">
+                <input type="text"  name="username" class="form-control" id="username" aria-describedby="emailHelp" placeholder="Username">
+            </div>
+            <div class="form-group">
                 <input type="text"  name="firstname" class="form-control" id="firstname" aria-describedby="emailHelp" placeholder="Firstname">
             </div>
             <div class="form-group">
@@ -147,7 +150,6 @@
                   <p class="text-center"><a href="#" id="signin">Already have an account?</a></p>
                 </div>
             </div>
-              </div>
           </form>
         </div>
       </div>
@@ -178,6 +180,7 @@
           }
         },
         messages: {
+          username: 'Please enter username',
           email: "Please enter a valid email address",
           password: {
             required: "Please enter password",
@@ -194,6 +197,7 @@
       
       $("form[name='registration']").validate({
         rules: {
+          username: "required",
           firstname: "required",
           lastname: "required",
           email: {
@@ -211,6 +215,7 @@
         },
         
         messages: {
+          username: "Field required.",
           firstname: "Field required.",
           lastname: "Field required.",
           password: {

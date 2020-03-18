@@ -183,7 +183,7 @@
 <div id="layoutSidenav_content">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item active" aria-current="page"><h2>Token</h2></li>
+            <li class="breadcrumb-item active" aria-current="page"><h2>Tokens</h2></li>
         </ol>
     </nav>
                 
@@ -285,7 +285,7 @@
                 var sendto = data[2].innerHTML.replace(" ","")
                 
                 var response = $.ajax({
-                    url: "/token/",
+                    url: "/tokens/",
                     method: "POST",
                     data:
                     {
@@ -321,7 +321,7 @@
             var tokenid = data[1].innerHTML.replace(" ","")
             var sendto = data[2].innerHTML.replace(" ","")
             var response = $.ajax({
-                url: "/token/",
+                url: "/tokens/",
                 method: "POST",
                 data:
                 {

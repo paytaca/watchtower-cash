@@ -5,7 +5,7 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from celery import shared_task
 import requests
-from main.models import BlockHeight, Token, Transaction, SlpAddress
+from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription
 import json, random
 from main.utils import slpdb
 from django.conf import settings
@@ -16,23 +16,25 @@ LOGGER = logging.getLogger(__name__)
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
 def client_acknowledgement(self, tokenid, transactionid):
     token_obj = Token.objects.get(tokenid=tokenid)
-    target_address = token_obj.target_address
-    trans = Transaction.objects.get(id=transactionid)
-    data = {
-        'amount': trans.amount,
-        'address': list(trans.slpaddress_set.values_list('address', flat=True))[0],
-        'source': trans.source,
-        'token': trans.token.tokenid,
-        'txid': trans.txid
-    }
-    resp = requests.post(target_address,data=data)
-    if resp.status_code == 200:
-        response_data = json.loads(resp.text)
-        if response_data['success']:
-            trans.acknowledge = True
-            trans.save()
-            return 'success'
-    self.retry(countdown=60)
+    subscriptions = Subscription.objects.filter(token=token_obj)
+    for subscription in subscriptions:
+        target_address = subscription.address.address
+        trans = Transaction.objects.get(id=transactionid)
+        data = {
+            'amount': trans.amount,
+            'address': list(trans.slpaddress_set.values_list('address', flat=True))[0],
+            'source': trans.source,
+            'token': trans.token.tokenid,
+            'txid': trans.txid
+        }
+        resp = requests.post(target_address,data=data)
+        if resp.status_code == 200:
+            response_data = json.loads(resp.text)
+            if response_data['success']:
+                trans.acknowledge = True
+                trans.save()
+                return 'success'
+        self.retry(countdown=60)
     
 @shared_task(queue='save_record')
 def save_record(tokenid, address, transactionid, amount, source, blockheightid=None):
