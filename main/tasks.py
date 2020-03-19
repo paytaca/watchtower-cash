@@ -328,14 +328,15 @@ def first_blockheight_scanner(self, id=None):
                 token = transaction['tokenDetails']['detail']['tokenIdHex']
                 qs = Token.objects.filter(tokenid=token)
                 if qs.exists():
-                    save_record(
-                        transaction['tokenDetails']['detail']['tokenIdHex'],
-                        transaction['tokenDetails']['detail']['outputs'][0]['address'],
-                        transaction['txid'],
-                        transaction['tokenDetails']['detail']['outputs'][0]['amount'],
-                        'SLPDB-block-scanner',
-                        blockheight_instance.id
-                    )
+                    if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
+                        save_record(
+                            transaction['tokenDetails']['detail']['tokenIdHex'],
+                            transaction['tokenDetails']['detail']['outputs'][0]['address'],
+                            transaction['txid'],
+                            transaction['tokenDetails']['detail']['outputs'][0]['amount'],
+                            'SLPDB-block-scanner',
+                            blockheight_instance.id
+                        )
     LOGGER.info(f'CHECKING BLOCK {heightnumber} via REST.BITCOIN.COM')
     url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
     resp = requests.get(url)
