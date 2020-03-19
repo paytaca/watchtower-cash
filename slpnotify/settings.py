@@ -184,5 +184,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.openfromredis',
         'schedule': 1800
     },
+    'slpbitcoinsocketsocket': {
+        'task': 'main.tasks.slpbitcoinsocket',
+        'schedule': 1800
+    },
+    'slpfountainheadsocket': {
+        'task': 'main.tasks.slpfountainheadsocket',
+        'schedule': 1800
+    },
 }
 

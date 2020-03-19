@@ -40,7 +40,7 @@ class Home(View):
             subscriptions = subscriber.subscription.all()
             ids = subscriptions.values('token__tokenid')
             tokens = MyToken.objects.filter(tokenid__in=ids).values_list('id', flat=True)
-            transactions = Transaction.objects.filter(token__id__in=tokens).values(
+            transactions = Transaction.objects.filter(token__id__in=tokens).order_by('-blockheight__number').values(
                 'id',
                 'txid',
                 'amount',
