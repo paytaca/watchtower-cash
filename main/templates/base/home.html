@@ -9,8 +9,35 @@
                 </ol>
             </nav>
             <div class="container-fluid">
+                    <!-- {{ transactions.count }} -->
+                {% if transactions.count == 0 %}
+                <div class="card mb-4 text-center">
+                    <div class="card-body">
+                        SLPNotify will monitor SLP transactions after setting up <a href="{% url 'setuptoken'%}">token id</a> and <a href="{% url 'setupslpaddress'%}">simple ledger address</a>.
+                    </div>
+                </div>
+                {% else %}
                 <div class="card mb-4">
-                    <div class="card-header text-primary"><i class="fas fa-table mr-1 "></i>Transactions</div>
+                    <div class="card-header text-primary">
+                        <div class="d-flex flex-row-reverse">
+                        <div class="row">
+                            <form class="form-inline">
+                                <div class="form-group mb-2">
+                                    <select class="form-control" id="first-choice">
+                                        <option selected value="base">All Token</option>
+                                        <option value="spice">Spice</option>
+                                        <option value="chilli">Chilli</option>
+                                    </select>
+                                </div>
+                                <div class="form-group mx-sm-3 mb-2">
+                                    <select class="form-control" id="second-choice">
+                                        <option>All SLP Address</option>
+                                    </select>
+                                </div>
+                            </form>
+                        </div>
+                        </div>
+                    </div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
@@ -41,6 +68,7 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </main>
         <footer class="py-4 bg-light mt-auto">
@@ -56,4 +84,37 @@
             </div>
         </footer>
     </div>
+    <script>
+        $("#first-choice").change(function() {
+
+        var $dropdown = $(this);
+
+        // $.getJSON("getTokens/", function(x) {
+            data = {
+                "spice": "simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs,simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs",
+                "chilli": "simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs,simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs",
+            }
+            var key = $dropdown.val();
+            var vals = [];
+                                
+            switch(key) {
+                case 'spice':
+                    vals = data.spice.split(",");
+                    break;
+                case 'chilli':
+                    vals = data.chilli.split(",");
+                    break;
+                case 'base':
+                    vals = ['Please choose from above'];
+            }
+            
+            var $secondChoice = $("#second-choice");
+            $secondChoice.empty();
+            $.each(vals, function(index, value) {
+                $secondChoice.append("<option>" + value + "</option>");
+            });
+
+        });
+        // });
+    </script>
 {% endblock content %}

@@ -153,6 +153,10 @@ class SlpAddressAdmin(admin.ModelAdmin):
         'address',
     ]
 
+    exclude = [
+        'transactions',
+    ]
+    
 class SendToAdmin(admin.ModelAdmin):
     list_display = [
         'address',

@@ -92,7 +92,7 @@ class Account(View):
             return redirect('account')
         
 
-class Token(View):
+class SetupToken(View):
     
     def get(self, request):
         query = {}
@@ -100,7 +100,7 @@ class Token(View):
             subscriber = Subscriber.objects.get(user=request.user)
             subscriptions = subscriber.subscription.all()
             data = list(subscriptions.values('id','token__tokenid', 'address__address'))
-            return render(request, 'base/tokens.html', {"subscriptions": data})
+            return render(request, 'base/setuptoken.html', {"subscriptions": data})
         else:
             return render(request, 'base/login.html', query)
 
@@ -108,8 +108,8 @@ class Token(View):
         action = request.POST['action']
         status = 'failed'
         rowid =  request.POST['id']
-        sendto = request.POST['sendto']
-        tokenid = request.POST['tokenid']
+        sendto = request.POST.get('sendto', None)
+        tokenid = request.POST.get('tokenid', None)
         if action == 'delete':
             qs = Subscription.objects.filter(id=rowid)
             if qs.exists():
@@ -136,6 +136,49 @@ class Token(View):
                     )
                 status = 'success'
         return JsonResponse({"status": status})
+
+
+class SetupSLPAddress(View):
+    
+    def get(self, request):
+        query = {}
+        if request.user.is_authenticated:
+            subscriber = Subscriber.objects.get(user=request.user)
+            subscriptions = subscriber.subscription.all()
+            data = list(subscriptions.values('id','slp__address'))
+            return render(request, 'base/setupaddress.html', {"subscriptions": data})
+        else:
+            return render(request, 'base/login.html', query)
+
+    def post(self, request):
+        action = request.POST['action']
+        rowid =  request.POST['id']
+        status = 'failed'
+        slpaddress = request.POST.get('slpaddress', None)
+        if action == 'delete':
+            qs = Subscription.objects.filter(id=rowid)
+            if qs.exists():
+                subscription = qs.first()
+                subscription.delete()
+                status = 'success'
+        if action == 'add-edit':
+            address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
+            if int(rowid) == 0:
+                subscriber = Subscriber.objects.get(user=request.user)
+                obj = Subscription()
+                obj.address = address_obj
+                obj.save()
+                subscriber.subscription.add(obj)
+                status = 'success'
+            else:
+                qs = Subscription.objects.filter(id=rowid)
+                if qs.exists():
+                    qs.update(
+                        address=address_obj,
+                    )
+                status = 'success'
+        return JsonResponse({"status": status})
+
 
 class Logout(View):
 

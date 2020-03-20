@@ -14,7 +14,7 @@ from sseclient import SSEClient
 LOGGER = logging.getLogger(__name__)
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
-def client_acknowledgement(self, tokenid, transactionid):
+def client_acknowledgement(self, tokenid, transactionid, address):
     token_obj = Token.objects.get(tokenid=tokenid)
     subscriptions = Subscription.objects.filter(token=token_obj)
     for subscription in subscriptions:
@@ -25,7 +25,7 @@ def client_acknowledgement(self, tokenid, transactionid):
             block = trans.blockheight.number
         data = {
             'amount': trans.amount,
-            'address': list(trans.slpaddress_set.values_list('address', flat=True))[0],
+            'address': address,
             'source': trans.source,
             'token': trans.token.tokenid,
             'txid': trans.txid,
@@ -39,7 +39,7 @@ def client_acknowledgement(self, tokenid, transactionid):
                 trans.save()
                 return 'success'
         self.retry(countdown=60)
-    
+
 @shared_task(queue='save_record')
 def save_record(tokenid, address, transactionid, amount, source, blockheightid=None):
     """
@@ -53,16 +53,15 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
     if blockheightid is not None:
         transaction_obj.blockheight_id = blockheightid
     transaction_obj.save()
-    address_obj, created = SlpAddress.objects.get_or_create(
-        address=address,
-    )
-    address_obj.transactions.add(transaction_obj)
-    address_obj.save()
     if transaction_created:
         msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {address}"
         LOGGER.info(msg)
-        client_acknowledgement.delay(tokenid, transaction_obj.id)
-
+        qs = SlpAddress.objects.filter(address=address)
+        if qs.exists():
+            address_obj = qs.first()
+            address_obj.transactions.add(transaction_obj)
+            address_obj.save()
+        client_acknowledgement.delay(tokenid, transaction_obj.id, address)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
@@ -80,7 +79,6 @@ def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
     suspended_data = json.dumps(data)
     redis_storage.set('deposit_filter', suspended_data)
     return f'{txn_id} - Suspended for a 30 minutes due to request limits on rest.bitcoin.com'
-
 
 @shared_task(queue='deposit_filter')
 def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
@@ -132,9 +130,6 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
 
                         if (not 'error' in address_data.keys()) and proceed == True:
                             token_obj = token_query.first()
-                            _,_ = SlpAddress.objects.get_or_create(
-                                address=address_data['slpAddress'],
-                            )
                             save_record.delay(
                                 token_obj.tokenid,
                                 address_data['slpAddress'],
@@ -162,7 +157,6 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
         BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
     return status
 
-    
 @shared_task(queue='openfromredis')
 def openfromredis():
     redis_storage = settings.REDISKV
@@ -226,10 +220,9 @@ def slpdb_token_scanner():
                             token_obj = tokenqs.first()
                             block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
                             if created:
-                                blockheight.delay(block.id)
+                                first_blockheight_scanner.delay(block.id)
                             amount = transaction['tokenDetails']['detail']['outputs'][0]['amount']
                             slpaddress = transaction['tokenDetails']['detail']['outputs'][0]['address']
-                            _,_ = SlpAddress.objects.get_or_create(address=slpaddress)
                             save_record.delay(
                                 token_obj.tokenid,
                                 slpaddress,
@@ -391,9 +384,6 @@ def slpbitcoinsocket(self):
                                 slp_address= readable_dict['data'][0]['slp']['detail']['outputs'][0]['address']
                                 amount = float(readable_dict['data'][0]['slp']['detail']['outputs'][0]['amount'])
                                 token_obj = token_query.first()
-                                _,_ = SlpAddress.objects.get_or_create(
-                                    address=slp_address,
-                                )
                                 save_record.delay(
                                     readable_dict['data'][0]['slp']['detail']['tokenIdHex'],
                                     slp_address,
@@ -455,9 +445,6 @@ def slpfountainheadsocket(self):
                                     if 'tx' in info.keys():
                                         txn_id = info['tx']['h']
                                         token_obj = token_query.first()
-                                        _,_ = SlpAddress.objects.get_or_create(
-                                            address=slp_address,
-                                        )
                                         save_record.delay(
                                             info['slp']['detail']['tokenIdHex'],
                                             slp_address,

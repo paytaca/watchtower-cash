@@ -183,7 +183,7 @@
 <div id="layoutSidenav_content">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item active" aria-current="page"><h2>Tokens</h2></li>
+            <li class="breadcrumb-item active" aria-current="page"><h2>SLP Address</h2></li>
         </ol>
     </nav>
                 
@@ -201,8 +201,7 @@
                 <thead>
                     <tr>
                         <th style="display:none;">id</th>
-                        <th>Token ID</th>
-                        <th>Send To</th>
+                        <th>Address</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -210,8 +209,7 @@
                     {% for subscription in subscriptions %}
                         <tr>
                             <td style="display:none;"> {{ subscription.id}}</td>
-                            <td> {{ subscription.token__tokenid}}</td>
-                            <td> {{ subscription.address__address }}</td>
+                            <td> {{ subscription.slp__address}}</td>
                             <td>
                                 <a class="add"><i class="fas fa-plus"></i></a>
                                 <a class="edit"><i class="fas fa-edit"></i></a>
@@ -253,7 +251,6 @@
             var row = '<tr>' +
                 '<td style="display:none;"><input type="text" class="form-control" name="id" id="id" value="0">0</td>' +
                 '<td><input type="text" class="form-control" name="idaddress" id="idaddress"></td>' +
-                '<td><input type="text" class="form-control" name="sendto" id="sendto"></td>' +
                 '<td>' + actions + '</td>' +
             '</tr>';
             $("table").append(row);		
@@ -282,10 +279,9 @@
                 var data = row.children("td");
                 var rowid = data[0].innerHTML.replace(" ","");
                 var tokenid = data[1].innerHTML.replace(" ","")
-                var sendto = data[2].innerHTML.replace(" ","")
                 
                 var response = $.ajax({
-                    url: "/tokens/",
+                    url: "/setupslptokens/",
                     method: "POST",
                     data:
                     {
@@ -317,27 +313,28 @@
             // send post request here
             var row = $(this).parents("tr");
             var data = row.children("td");
-            var rowid = data[0].innerHTML.replace(" ","");
-            var tokenid = data[1].innerHTML.replace(" ","")
-            var sendto = data[2].innerHTML.replace(" ","")
-            var response = $.ajax({
-                url: "/tokens/",
-                method: "POST",
-                data:
-                {
-                    action: 'delete',
-                    id: rowid,
-                    sendto: sendto,
-                    tokenid:tokenid,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                }
-            });
-            response.then(function(data, status){
-                if (data['status'] == 'success') {
-                    row.remove();
-                    $(".add-new").removeAttr("disabled");
-                };
-            });
+            var rowid = data[0].innerText.replace(" ","");
+            if (rowid == "0"){
+                row.remove();
+                $(".add-new").removeAttr("disabled");
+            }else{
+                var response = $.ajax({
+                    url: "/setuptokens/",
+                    method: "POST",
+                    data:
+                    {
+                        action: 'delete',
+                        id: rowid,
+                        csrfmiddlewaretoken: '{{ csrf_token }}'
+                    }
+                });
+                response.then(function(data, status){
+                    if (data['status'] == 'success') {
+                        row.remove();
+                        $(".add-new").removeAttr("disabled");
+                    };
+                });
+            }
         });
     });
     </script>
