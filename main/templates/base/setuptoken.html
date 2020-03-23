@@ -201,6 +201,7 @@
                 <thead>
                     <tr>
                         <th style="display:none;">id</th>
+                        <th>Name</th>
                         <th>Token ID</th>
                         <th>Send To</th>
                         <th>Actions</th>
@@ -208,8 +209,10 @@
                 </thead>
                 <tbody>
                     {% for subscription in subscriptions %}
+                        {% if subscription.token__tokenid %}
                         <tr>
                             <td style="display:none;"> {{ subscription.id}}</td>
+                            <td> {{ subscription.token__name }}</td>
                             <td> {{ subscription.token__tokenid}}</td>
                             <td> {{ subscription.address__address }}</td>
                             <td>
@@ -218,6 +221,7 @@
                                 <a class="delete"><i class="fas fa-trash"></i></a>
                             </td>
                         </tr>
+                        {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -252,6 +256,7 @@
             var index = $("table tbody tr:last-child").index();
             var row = '<tr>' +
                 '<td style="display:none;"><input type="text" class="form-control" name="id" id="id" value="0">0</td>' +
+                '<td><input type="text" class="form-control" name="name" id="name"></td>' +
                 '<td><input type="text" class="form-control" name="idaddress" id="idaddress"></td>' +
                 '<td><input type="text" class="form-control" name="sendto" id="sendto"></td>' +
                 '<td>' + actions + '</td>' +
@@ -267,7 +272,6 @@
             input.each(function(){
                 if(!$(this).val()){
                     $(this).addClass("error");
-                    alert($(this));
                     empty = true;
                 } else{
                     $(this).removeClass("error");
@@ -281,8 +285,9 @@
                 var row = $(this).parents("tr");
                 var data = row.children("td");
                 var rowid = data[0].innerHTML.replace(" ","");
-                var tokenid = data[1].innerHTML.replace(" ","")
-                var sendto = data[2].innerHTML.replace(" ","")
+                var name = data[1].innerHTML.replace(" ","");
+                var tokenid = data[2].innerHTML.replace(" ","")
+                var sendto = data[3].innerHTML.replace(" ","")
                 
                 var response = $.ajax({
                     url: "/setuptokens/",
@@ -291,13 +296,13 @@
                     {
                         action: 'add-edit',
                         id: rowid,
+                        name: name,
                         sendto: sendto,
                         tokenid:tokenid,
                         csrfmiddlewaretoken: '{{ csrf_token }}'
                     }
                 });
                 response.then(function(data, status){
-                    alert(data.status)
                     if(data.status == 'success'){
                         $(this).parents("tr").find(".add, .edit").toggle();
                         $(".add-new").removeAttr("disabled");

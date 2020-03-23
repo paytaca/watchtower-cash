@@ -9,11 +9,10 @@
                 </ol>
             </nav>
             <div class="container-fluid">
-                    <!-- {{ transactions.count }} -->
-                {% if transactions.count == 0 %}
+                {% if not new %}
                 <div class="card mb-4 text-center">
                     <div class="card-body">
-                        SLPNotify will monitor SLP transactions after setting up <a href="{% url 'setuptoken'%}">token id</a> and <a href="{% url 'setupslpaddress'%}">simple ledger address</a>.
+                        SLPNotify will monitor SLP transactions after setting up <a href="{% url 'setuptoken'%}">token id</a> (required) and <a href="{% url 'setupslpaddress'%}">simple ledger address</a> (optional).
                     </div>
                 </div>
                 {% else %}
@@ -24,14 +23,24 @@
                             <form class="form-inline">
                                 <div class="form-group mb-2">
                                     <select class="form-control" id="first-choice">
-                                        <option selected value="base">All Token</option>
-                                        <option value="spice">Spice</option>
-                                        <option value="chilli">Chilli</option>
+                                        {% for token in tokens%}
+                                            {% if token.tokenid == querytoken %}
+                                                <option selected value="{{ token.tokenid }}">{{ token.name }}</option>
+                                            {% else %}
+                                                <option value="{{ token.tokenid }}">{{ token.name }}</option>
+                                            {% endif %}
+                                        {% endfor %}
                                     </select>
                                 </div>
                                 <div class="form-group mx-sm-3 mb-2">
                                     <select class="form-control" id="second-choice">
-                                        <option>All SLP Address</option>
+                                        {% for slp in slpaddresses %}
+                                            {% if slp.id == queryslpaddress %}
+                                                <option selected value="{{ slp.id }}">{{ slp.address }}</option>
+                                            {% else %}
+                                                <option value="{{ slp.id }}">{{ slp.address }}</option>
+                                            {% endif %}
+                                        {% endfor %}
                                     </select>
                                 </div>
                             </form>
@@ -85,36 +94,30 @@
         </footer>
     </div>
     <script>
+        function updateQueryStringParameter(uri, key, value) {
+            var re = new RegExp("([?&])" + key + "=.*?(&|$)", "i");
+            var separator = uri.indexOf('?') !== -1 ? "&" : "?";
+            if (uri.match(re)) {
+                return uri.replace(re, '$1' + key + "=" + value + '$2');
+            }
+            else {
+                return uri + separator + key + "=" + value;
+            }
+        }
+
         $("#first-choice").change(function() {
-
-        var $dropdown = $(this);
-
-        // $.getJSON("getTokens/", function(x) {
-            data = {
-                "spice": "simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs,simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs",
-                "chilli": "simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs,simpleledger:qqpwl8vp65hvx5rhjgzxn2fkan8mrm37py3v9qm5vs",
-            }
-            var key = $dropdown.val();
-            var vals = [];
-                                
-            switch(key) {
-                case 'spice':
-                    vals = data.spice.split(",");
-                    break;
-                case 'chilli':
-                    vals = data.chilli.split(",");
-                    break;
-                case 'base':
-                    vals = ['Please choose from above'];
-            }
-            
-            var $secondChoice = $("#second-choice");
-            $secondChoice.empty();
-            $.each(vals, function(index, value) {
-                $secondChoice.append("<option>" + value + "</option>");
-            });
-
+            var e = document.getElementById("first-choice");
+            var id = e.options[e.selectedIndex].value;
+            var url = updateQueryStringParameter(window.location.href, 'token', id)
+            window.location = url;
         });
-        // });
+        
+        $("#second-choice").change(function() {
+            var e = document.getElementById("second-choice");
+            var id = e.options[e.selectedIndex].value;
+            // window.location = window.location.href +'&slp=' + id;
+            var url = updateQueryStringParameter(window.location.href, 'slp', id)
+            window.location = url;
+        });
     </script>
 {% endblock content %}

@@ -208,7 +208,7 @@
                 <tbody>
                     {% for subscription in subscriptions %}
                         <tr>
-                            <td style="display:none;"> {{ subscription.id}}</td>
+                            <td style="display:none;"> {{ subscription.slp__id}}</td>
                             <td> {{ subscription.slp__address}}</td>
                             <td>
                                 <a class="add"><i class="fas fa-plus"></i></a>
@@ -264,7 +264,6 @@
             input.each(function(){
                 if(!$(this).val()){
                     $(this).addClass("error");
-                    alert($(this));
                     empty = true;
                 } else{
                     $(this).removeClass("error");
@@ -278,17 +277,16 @@
                 var row = $(this).parents("tr");
                 var data = row.children("td");
                 var rowid = data[0].innerHTML.replace(" ","");
-                var tokenid = data[1].innerHTML.replace(" ","")
+                var address = data[1].innerHTML.replace(" ","")
                 
                 var response = $.ajax({
-                    url: "/setupslptokens/",
+                    url: "/setupslpaddresses/",
                     method: "POST",
                     data:
                     {
                         action: 'add-edit',
                         id: rowid,
-                        sendto: sendto,
-                        tokenid:tokenid,
+                        slpaddress:address,
                         csrfmiddlewaretoken: '{{ csrf_token }}'
                     }
                 });
@@ -319,7 +317,7 @@
                 $(".add-new").removeAttr("disabled");
             }else{
                 var response = $.ajax({
-                    url: "/setuptokens/",
+                    url: "/setupslpaddresses/",
                     method: "POST",
                     data:
                     {

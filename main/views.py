@@ -7,7 +7,8 @@ from main.models import (
     Token as MyToken,
     Transaction,
     Subscription,
-    SendTo
+    SendTo,
+    SlpAddress
 )
 from django.contrib.auth.models import User 
 from django.urls import reverse
@@ -36,8 +37,19 @@ class Home(View):
     def get(self, request):
         query = {}
         if request.user.is_authenticated:
+            token = request.GET.get('token', 'all')
+            slpaddress = request.GET.get('slp', 'all')
             subscriber = Subscriber.objects.get(user=request.user)
             subscriptions = subscriber.subscription.all()
+            new = True
+            if not subscriptions.count():
+                new = False
+            if token != 'all':
+                subscriptions = subscriptions.filter(token__tokenid=token)
+            if slpaddress != 'all':
+                slpaddress = int(slpaddress)
+                subscriptions = subscriptions.filter(slp__id=slpaddress)
+
             ids = subscriptions.values('token__tokenid')
             tokens = MyToken.objects.filter(tokenid__in=ids).values_list('id', flat=True)
             transactions = Transaction.objects.filter(
@@ -50,19 +62,29 @@ class Home(View):
                 'amount',
                 'blockheight__number'
             )
-            return render(request, 'base/home.html', {"transactions": transactions})
+            slpaddresses = list(SlpAddress.objects.all().values('id', 'address'))
+            tokens = list(MyToken.objects.all().values('tokenid', 'name'))
+            slpaddresses.insert(0, {
+                'id': 'all',
+                'address': 'All SLP Addresses'
+            })
+            tokens.insert(0, {
+                'tokenid': 'all',
+                'name': 'All Tokens' 
+            })
+            return render(request, 'base/home.html', {
+                "new": new,
+                "transactions": transactions,
+                "querytoken": token,
+                "queryslpaddress": slpaddress,
+                "slpaddresses": slpaddresses,
+                "tokens": tokens
+            })
         else:
             return render(request, 'base/login.html', query)
 
 class Account(View):
     
-    # def get(self, request):
-    #     query = {}
-    #     if request.user.is_authenticated:
-    #         query = User.objects.filter(username=request.user.username) 
-    #         return render(request, 'base/account.html', {"query":query})
-    #     else:
-    #         return render(request, 'base/login.html', query)
 
     def post(self, request):
         action = request.POST['action']
@@ -99,7 +121,7 @@ class SetupToken(View):
         if request.user.is_authenticated:
             subscriber = Subscriber.objects.get(user=request.user)
             subscriptions = subscriber.subscription.all()
-            data = list(subscriptions.values('id','token__tokenid', 'address__address'))
+            data = list(subscriptions.values('id','token__name','token__tokenid', 'address__address'))
             return render(request, 'base/setuptoken.html', {"subscriptions": data})
         else:
             return render(request, 'base/login.html', query)
@@ -108,6 +130,7 @@ class SetupToken(View):
         action = request.POST['action']
         status = 'failed'
         rowid =  request.POST['id']
+        name = request.POST.get('name', None)
         sendto = request.POST.get('sendto', None)
         tokenid = request.POST.get('tokenid', None)
         if action == 'delete':
@@ -119,6 +142,8 @@ class SetupToken(View):
         if action == 'add-edit':
             sendto_obj, created = SendTo.objects.get_or_create(address=sendto)
             token_obj, created = MyToken.objects.get_or_create(tokenid=tokenid)
+            token_obj.name = name
+            token_obj.save()
             if int(rowid) == 0:
                 subscriber = Subscriber.objects.get(user=request.user)
                 obj = Subscription()
@@ -145,8 +170,13 @@ class SetupSLPAddress(View):
         if request.user.is_authenticated:
             subscriber = Subscriber.objects.get(user=request.user)
             subscriptions = subscriber.subscription.all()
-            data = list(subscriptions.values('id','slp__address'))
-            return render(request, 'base/setupaddress.html', {"subscriptions": data})
+            data = []
+            for subscription in subscriptions:
+                if subscription.slp:
+                    data.append({'slp__id': subscription.slp.id, 'slp__address': subscription.slp.address})
+            return render(request, 'base/setupaddress.html', {
+                "subscriptions": data,
+            })
         else:
             return render(request, 'base/login.html', query)
 
@@ -156,17 +186,17 @@ class SetupSLPAddress(View):
         status = 'failed'
         slpaddress = request.POST.get('slpaddress', None)
         if action == 'delete':
-            qs = Subscription.objects.filter(id=rowid)
+            qs = SlpAddress.objects.filter(id=rowid)
             if qs.exists():
-                subscription = qs.first()
-                subscription.delete()
+                slpaddress = qs.first()
+                slpaddress.delete()
                 status = 'success'
         if action == 'add-edit':
             address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
             if int(rowid) == 0:
                 subscriber = Subscriber.objects.get(user=request.user)
                 obj = Subscription()
-                obj.address = address_obj
+                obj.slp = address_obj
                 obj.save()
                 subscriber.subscription.add(obj)
                 status = 'success'
