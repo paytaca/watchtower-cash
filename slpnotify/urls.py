@@ -22,7 +22,8 @@ from main.views import (
   Home,
   Logout,
   Account,
-  Token
+  SetupToken,
+  SetupSLPAddress
 )
 
 urlpatterns = [
@@ -30,6 +31,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('logout/', Logout.as_view(), name='logout'),
     path('account/', Account.as_view(), name='account'),
-    path('tokens/', Token.as_view(), name='token'),
+    path('setuptokens/', SetupToken.as_view(), name='setuptoken'),
+    path('setupslpaddresses/', SetupSLPAddress.as_view(), name='setupslpaddress'),
     path('', Home.as_view(), name='home'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

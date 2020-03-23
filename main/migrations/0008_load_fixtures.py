@@ -25,5 +25,5 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(create_super_user),
-         migrations.RunPython(create_vip_token)
+        migrations.RunPython(create_vip_token)
     ]

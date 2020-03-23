@@ -11,7 +11,6 @@ class Token(models.Model):
     def __str__(self):
         return self.name
 
-
 class BlockHeight(models.Model):
     number = models.IntegerField(default=0, unique=True)
     transactions_count = models.IntegerField(default=0)
@@ -26,7 +25,6 @@ class BlockHeight(models.Model):
         if self.processed:
             self.updated_datetime = timezone.now()
         super(BlockHeight,self).save(*args, **kwargs)
-
 
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, unique=True)
@@ -44,19 +42,13 @@ class Transaction(models.Model):
 class SendTo(models.Model):
     address = models.CharField(max_length=500)
 
-class Subscription(models.Model):
-    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='subscription')
-    address = models.ForeignKey(SendTo, on_delete=models.CASCADE, related_name='subscription')
-
-class Subscriber(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscriber')
-    subscription = models.ManyToManyField(Subscription, related_name='subscriber', null=True)
-    confirmed = models.BooleanField(default=False)
-    date_started = models.DateTimeField(default=timezone.now)
+    class Meta:
+        verbose_name = 'Send To'
+        verbose_name_plural = 'Send To'
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True)
-    transactions = models.ManyToManyField(Transaction) 
+    transactions = models.ManyToManyField(Transaction, related_name='slpaddress', blank=True)
 
     class Meta:
         verbose_name = 'Slp Address'
@@ -64,3 +56,14 @@ class SlpAddress(models.Model):
         
     def __str__(self):
         return self.address
+
+class Subscription(models.Model):
+    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='subscription', null=True)
+    address = models.ForeignKey(SendTo, on_delete=models.CASCADE, related_name='subscription', null=True)
+    slp = models.ForeignKey(SlpAddress, on_delete=models.CASCADE, related_name='subscription', null=True)
+
+class Subscriber(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscriber')
+    subscription = models.ManyToManyField(Subscription, related_name='subscriber')
+    confirmed = models.BooleanField(default=False)
+    date_started = models.DateTimeField(default=timezone.now)
