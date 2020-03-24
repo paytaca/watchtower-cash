@@ -40,6 +40,7 @@ class Home(View):
             token = request.GET.get('token', 'all')
             slpaddress = request.GET.get('slp', 'all')
             subscriber = Subscriber.objects.get(user=request.user)
+            start_date = subscriber.date_started
             subscriptions = subscriber.subscription.all()
             new = True
             if not subscriptions.count():
@@ -62,12 +63,13 @@ class Home(View):
                 transactions = transactions.filter(
                     id__in=trids
                 )
-            transactions.values(
+            transactions = transactions.order_by('-created_datetime')
+            transactions = transactions.values(
                 'id',
                 'txid',
                 'amount',
                 'blockheight__number'
-            )
+            )[0:100]
             subs = subscriber.subscription.all()
             slpaddresses = list(subs.values('slp__id', 'slp__address'))
             tokens = list(subs.values('token__tokenid', 'token__name'))
@@ -79,6 +81,7 @@ class Home(View):
                 'token__tokenid': 'all',
                 'token__name': 'All Tokens' 
             })
+            
             return render(request, 'base/home.html', {
                 "new": new,
                 "transactions": transactions,

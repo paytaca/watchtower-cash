@@ -133,7 +133,10 @@ class TransactionAdmin(admin.ModelAdmin):
 
     def resend_unacknowledge_transactions(modeladmin, request, queryset):
         for tr in queryset:
-            x = client_acknowledgement(tr.token.tokenid, tr.id)
+            qs = tr.slpaddress.all()
+            if qs.exists():
+                slp = qs.first()
+                x = client_acknowledgement(tr.token.tokenid, tr.id, slp.address)
 
     def get_queryset(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset

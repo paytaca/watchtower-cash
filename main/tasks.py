@@ -14,18 +14,19 @@ from sseclient import SSEClient
 LOGGER = logging.getLogger(__name__)
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
-def client_acknowledgement(self, tokenid, transactionid, address):
+def client_acknowledgement(self, tokenid, transactionid, slpaddress):
     token_obj = Token.objects.get(tokenid=tokenid)
     subscriptions = Subscription.objects.filter(token=token_obj)
     for subscription in subscriptions:
         target_address = subscription.address.address
         trans = Transaction.objects.get(id=transactionid)
+        trans.slpaddress
         block = None
         if trans.blockheight:
             block = trans.blockheight.number
         data = {
             'amount': trans.amount,
-            'address': address,
+            'address': slpaddress,
             'source': trans.source,
             'token': trans.token.tokenid,
             'txid': trans.txid,
@@ -41,7 +42,7 @@ def client_acknowledgement(self, tokenid, transactionid, address):
         self.retry(countdown=60)
 
 @shared_task(queue='save_record')
-def save_record(tokenid, address, transactionid, amount, source, blockheightid=None):
+def save_record(tokenid, slpaddress, transactionid, amount, source, blockheightid=None):
     """
     Update database records
     """
@@ -53,14 +54,13 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
     if blockheightid is not None:
         transaction_obj.blockheight_id = blockheightid
     transaction_obj.save()
+    address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
+    address_obj.transactions.add(transaction_obj)
+    address_obj.save()
     if transaction_created:
-        msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {address}"
+        msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {slpaddress}"
         LOGGER.info(msg)
-        addressobj, created = SlpAddress.objects.get_or_create(address=address)
-        address_obj = qs.first()
-        address_obj.transactions.add(transaction_obj)
-        address_obj.save()
-        client_acknowledgement.delay(tokenid, transaction_obj.id, address)
+        client_acknowledgement.delay(tokenid, transaction_obj.id, slpaddress)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
@@ -174,28 +174,6 @@ def openfromredis():
                 params['total_transactions']
             )
     
-@shared_task(bind=True, queue='checktransaction', max_retries=4)
-def checktransaction(self, txn_id):
-    status = 'failed'
-    url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
-    try:
-        response = requests.get(url)
-    except Exception as exc:
-        self.retry(countdown=60)
-    if response.status_code == 200:
-        data = json.loads(response.text)
-        if 'blockheight' in data.keys():
-            blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
-            deposit_filter(
-                txn_id,
-                blockheight_obj.id,
-                0,
-                0
-            )
-            LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
-            blockheight.delay(id=blockheight_obj.id)
-            status = 'success'
-    return status
 
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
@@ -344,6 +322,29 @@ def first_blockheight_scanner(self, id=None):
     else:
         self.retry(countdown=120)
             
+@shared_task(bind=True, queue='checktransaction', max_retries=4)
+def checktransaction(self, txn_id):
+    status = 'failed'
+    url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
+    try:
+        response = requests.get(url)
+    except Exception as exc:
+        self.retry(countdown=60)
+    if response.status_code == 200:
+        data = json.loads(response.text)
+        if 'blockheight' in data.keys():
+            blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
+            deposit_filter(
+                txn_id,
+                blockheight_obj.id,
+                0,
+                0
+            )
+            LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
+            first_blockheight_scanner.delay(id=blockheight_obj.id)
+            status = 'success'
+    return status
+    
 @shared_task(bind=True, queue='slpbitcoinsocket')
 def slpbitcoinsocket(self):
     """
