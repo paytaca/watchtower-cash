@@ -24,10 +24,12 @@
                                 <div class="form-group mb-2">
                                     <select class="form-control" id="first-choice">
                                         {% for token in tokens%}
-                                            {% if token.tokenid == querytoken %}
-                                                <option selected value="{{ token.tokenid }}">{{ token.name }}</option>
-                                            {% else %}
-                                                <option value="{{ token.tokenid }}">{{ token.name }}</option>
+                                            {% if token.token__tokenid %}
+                                                {% if token.token__tokenid == querytoken %}
+                                                    <option selected value="{{ token.token__tokenid }}">{{ token.token__name }}</option>
+                                                {% else %}
+                                                    <option value="{{ token.token__tokenid }}">{{ token.token__name }}</option>
+                                                {% endif %}
                                             {% endif %}
                                         {% endfor %}
                                     </select>
@@ -35,10 +37,12 @@
                                 <div class="form-group mx-sm-3 mb-2">
                                     <select class="form-control" id="second-choice">
                                         {% for slp in slpaddresses %}
-                                            {% if slp.id == queryslpaddress %}
-                                                <option selected value="{{ slp.id }}">{{ slp.address }}</option>
-                                            {% else %}
-                                                <option value="{{ slp.id }}">{{ slp.address }}</option>
+                                            {% if slp.slp__id %}
+                                                {% if slp.slp__id == queryslpaddress %}
+                                                    <option selected value="{{ slp.slp__id }}">{{ slp.slp__address }}</option>
+                                                {% else %}
+                                                    <option value="{{ slp.slp__id }}">{{ slp.slp__address }}</option>
+                                                {% endif %}
                                             {% endif %}
                                         {% endfor %}
                                     </select>
@@ -52,24 +56,24 @@
                             <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
                                 <thead>
                                     <tr>
+                                        <th>Block</th>
                                         <th>Transaction ID</th>
                                         <th>Amount</th>
-                                        <th>Block</th>
                                     </tr>
                                 </thead>
                                 <tfoot>
                                     <tr>
+                                        <th>Block</th>
                                         <th>Transaction ID</th>
                                         <th>Amount</th>
-                                        <th>Block</th>
                                     </tr>
                                 </tfoot>
                                 <tbody>
                                     {% for trans in transactions %}
                                         <tr>
+                                            <td>{{ trans.blockheight.number }}</td>
                                             <td>{{ trans.txid }}</td>
                                             <td>{{ trans.amount }}</td>
-                                            <td>{{ trans.blockheight__number }}</td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
@@ -118,6 +122,13 @@
             // window.location = window.location.href +'&slp=' + id;
             var url = updateQueryStringParameter(window.location.href, 'slp', id)
             window.location = url;
+        });
+    </script>
+    <script>
+        $(document).ready(function() {
+        $('#dataTable').DataTable({
+            order: [[ 0, 'desc' ]]
+        });
         });
     </script>
 {% endblock content %}

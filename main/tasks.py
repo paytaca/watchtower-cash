@@ -56,11 +56,10 @@ def save_record(tokenid, address, transactionid, amount, source, blockheightid=N
     if transaction_created:
         msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {address}"
         LOGGER.info(msg)
-        qs = SlpAddress.objects.filter(address=address)
-        if qs.exists():
-            address_obj = qs.first()
-            address_obj.transactions.add(transaction_obj)
-            address_obj.save()
+        addressobj, created = SlpAddress.objects.get_or_create(address=address)
+        address_obj = qs.first()
+        address_obj.transactions.add(transaction_obj)
+        address_obj.save()
         client_acknowledgement.delay(tokenid, transaction_obj.id, address)
 
 @shared_task(queue='suspendtoredis')

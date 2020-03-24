@@ -49,28 +49,35 @@ class Home(View):
             if slpaddress != 'all':
                 slpaddress = int(slpaddress)
                 subscriptions = subscriptions.filter(slp__id=slpaddress)
-
-            ids = subscriptions.values('token__tokenid')
-            tokens = MyToken.objects.filter(tokenid__in=ids).values_list('id', flat=True)
-            transactions = Transaction.objects.filter(
-                token__id__in=tokens
-            ).filter(
-                acknowledge=True
-            ).order_by('-blockheight__number').values(
+            
+            transactions = Transaction.objects.all()
+            if token != 'all':
+                ids = subscriptions.values('token__tokenid')
+                tokens = MyToken.objects.filter(tokenid__in=ids).values_list('id', flat=True)
+                transactions = transactions.filter(
+                    token__id__in=tokens
+                )
+            if slpaddress != 'all':
+                trids = SlpAddress.objects.filter(id=slpaddress).values_list('transactions__id', flat=True)
+                transactions = transactions.filter(
+                    id__in=trids
+                )
+            transactions.values(
                 'id',
                 'txid',
                 'amount',
                 'blockheight__number'
             )
-            slpaddresses = list(SlpAddress.objects.all().values('id', 'address'))
-            tokens = list(MyToken.objects.all().values('tokenid', 'name'))
+            subs = subscriber.subscription.all()
+            slpaddresses = list(subs.values('slp__id', 'slp__address'))
+            tokens = list(subs.values('token__tokenid', 'token__name'))
             slpaddresses.insert(0, {
-                'id': 'all',
-                'address': 'All SLP Addresses'
+                'slp__id': 'all',
+                'slp__address': 'All SLP Addresses'
             })
             tokens.insert(0, {
-                'tokenid': 'all',
-                'name': 'All Tokens' 
+                'token__tokenid': 'all',
+                'token__name': 'All Tokens' 
             })
             return render(request, 'base/home.html', {
                 "new": new,
