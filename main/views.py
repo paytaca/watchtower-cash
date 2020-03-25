@@ -13,8 +13,10 @@ from main.models import (
 from django.contrib.auth.models import User 
 from django.urls import reverse
 import json
-
-
+from django.db.models import Q 
+from operator import or_
+from functools import reduce
+from django.db.models import Q 
 
 class Loginpage(View):
 
@@ -40,29 +42,33 @@ class Home(View):
             token = request.GET.get('token', 'all')
             slpaddress = request.GET.get('slp', 'all')
             subscriber = Subscriber.objects.get(user=request.user)
-            start_date = subscriber.date_started
             subscriptions = subscriber.subscription.all()
             new = True
             if not subscriptions.count():
                 new = False
+            subquery = []
             if token != 'all':
-                subscriptions = subscriptions.filter(token__tokenid=token)
+                subquery.append(Q(token__tokenid=token))
+
             if slpaddress != 'all':
                 slpaddress = int(slpaddress)
-                subscriptions = subscriptions.filter(slp__id=slpaddress)
-            
+                subquery.append(Q(slp__id=slpaddress))
+            if subquery:
+                mainquery = reduce(or_, subquery)
+                subscriptions = subscriptions.filter(mainquery)
+
             transactions = Transaction.objects.all()
+            subquery = []
             if token != 'all':
                 ids = subscriptions.values('token__tokenid')
                 tokens = MyToken.objects.filter(tokenid__in=ids).values_list('id', flat=True)
-                transactions = transactions.filter(
-                    token__id__in=tokens
-                )
+                subquery.append(Q(token__id__in=tokens))
             if slpaddress != 'all':
                 trids = SlpAddress.objects.filter(id=slpaddress).values_list('transactions__id', flat=True)
-                transactions = transactions.filter(
-                    id__in=trids
-                )
+                subquery.append(Q(id__in=trids))
+            if subquery:
+                mainquery = reduce(or_, subquery)
+                transactions = transactions.filter(mainquery)
             transactions = transactions.order_by('-created_datetime')
             transactions = transactions.values(
                 'id',
