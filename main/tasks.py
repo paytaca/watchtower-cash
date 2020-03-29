@@ -107,8 +107,8 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             except Exception as exc:
                 transaction_data = {}
             if 'tokenInfo' in transaction_data.keys():
-                if 'tokenIsValid' in transaction_data['retData'].keys():
-                    if transaction_data['retData']['tokenIsValid']:
+                if 'tokenIsValid' in transaction_data.keys():
+                    if transaction_data['tokenIsValid']:
                         if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
                             transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
                             token_query = Token.objects.filter(tokenid=transaction_token_id)
