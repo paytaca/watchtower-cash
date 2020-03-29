@@ -107,38 +107,41 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             except Exception as exc:
                 transaction_data = {}
             if 'tokenInfo' in transaction_data.keys():
-                if transaction_data['tokenIsValid']:
-                    if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
-                        transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
-                        token_query = Token.objects.filter(tokenid=transaction_token_id)
-                        if token_query.exists():
-                            amount = float(transaction_data['tokenInfo']['sendOutputs'][1]) / 100000000
-                            legacy = transaction_data['retData']['vout'][1]['scriptPubKey']['addresses'][0]
-                            # Starting here is the extraction of SLP address using legacy address.
-                            # And this have to be execute perfectly.
-                            
-                            try:
-                                address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
-                                address_response = requests.get(address_url)
-                                address_data = json.loads(address_response.text)
-                            except Exception as exc:
-                                # Once fail in sending request, we'll store given params to
-                                # redis temporarily and retry after 30 minutes cooldown.
-                                msg = f'---> FOUND this error {exc} --> Now Delaying...'
-                                LOGGER.error(msg)
-                                proceed = False
+                if 'tokenIsValid' in transaction_data.keys():
+                    if transaction_data['retData']['tokenIsValid']:
+                        if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
+                            transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
+                            token_query = Token.objects.filter(tokenid=transaction_token_id)
+                            if token_query.exists():
+                                amount = float(transaction_data['tokenInfo']['sendOutputs'][1]) / 100000000
+                                legacy = transaction_data['retData']['vout'][1]['scriptPubKey']['addresses'][0]
+                                # Starting here is the extraction of SLP address using legacy address.
+                                # And this have to be execute perfectly.
+                                
+                                try:
+                                    address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
+                                    address_response = requests.get(address_url)
+                                    address_data = json.loads(address_response.text)
+                                except Exception as exc:
+                                    # Once fail in sending request, we'll store given params to
+                                    # redis temporarily and retry after 30 minutes cooldown.
+                                    msg = f'---> FOUND this error {exc} --> Now Delaying...'
+                                    LOGGER.error(msg)
+                                    proceed = False
 
-                            if (not 'error' in address_data.keys()) and proceed == True:
-                                token_obj = token_query.first()
-                                save_record.delay(
-                                    token_obj.tokenid,
-                                    address_data['slpAddress'],
-                                    txn_id,
-                                    amount,
-                                    "per-blockheight",
-                                    blockheightid
-                                )
-                                status = 'success'
+                                if (not 'error' in address_data.keys()) and proceed == True:
+                                    token_obj = token_query.first()
+                                    save_record.delay(
+                                        token_obj.tokenid,
+                                        address_data['slpAddress'],
+                                        txn_id,
+                                        amount,
+                                        "per-blockheight",
+                                        blockheightid
+                                    )
+                                    status = 'success'
+                else:
+                    LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
         elif transaction_response.status_code == 404:
             status = 'success'
                         
