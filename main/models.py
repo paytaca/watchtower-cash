@@ -27,7 +27,8 @@ class BlockHeight(models.Model):
         super(BlockHeight,self).save(*args, **kwargs)
 
 class Transaction(models.Model):
-    txid = models.CharField(max_length=200, unique=True)
+    txid = models.CharField(max_length=200)
+    address = models.CharField(max_length=500,null=True)
     amount = models.FloatField(default=0)
     acknowledge = models.BooleanField(default=False)
     blockheight = models.ForeignKey(BlockHeight, on_delete=models.CASCADE, related_name='transactions', null=True)
@@ -35,6 +36,9 @@ class Transaction(models.Model):
     created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(Token, on_delete=models.CASCADE)
     scanning = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('txid', 'address',)
 
     def __str__(self):
         return self.txid
