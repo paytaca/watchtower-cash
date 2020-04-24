@@ -80,6 +80,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
     list_display = [
         '_txid',
+        'address',
         'amount',
         'source',
         'blockheight_number',
@@ -135,8 +136,7 @@ class TransactionAdmin(admin.ModelAdmin):
         for tr in queryset:
             qs = tr.slpaddress.all()
             if qs.exists():
-                slp = qs.first()
-                x = client_acknowledgement(tr.token.tokenid, tr.id, slp.address)
+                client_acknowledgement(tr.token.tokenid, tr.id)
 
     def get_queryset(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset

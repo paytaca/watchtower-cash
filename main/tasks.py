@@ -15,19 +15,18 @@ LOGGER = logging.getLogger(__name__)
 from django.db import transaction as trans
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
-def client_acknowledgement(self, tokenid, transactionid, slpaddress):
+def client_acknowledgement(self, tokenid, transactionid):
     token_obj = Token.objects.get(tokenid=tokenid)
     subscriptions = Subscription.objects.filter(token=token_obj)
     for subscription in subscriptions:
         target_address = subscription.address.address
         trans = Transaction.objects.get(id=transactionid)
-        trans.slpaddress
         block = None
         if trans.blockheight:
             block = trans.blockheight.number
         data = {
             'amount': trans.amount,
-            'address': slpaddress,
+            'address': trans.address,
             'source': trans.source,
             'token': trans.token.tokenid,
             'txid': trans.txid,
@@ -49,23 +48,21 @@ def save_record(tokenid, slpaddress, transactionid, amount, source, blockheighti
     """
     with trans.atomic():
         token_obj = Token.objects.get(tokenid=tokenid)
-        transaction_obj, transaction_created = Transaction.objects.get_or_create(token=token_obj, txid=transactionid)
+        transaction_obj, transaction_created = Transaction.objects.get_or_create(
+            txid=transactionid,
+            address=slpaddress,
+            token=token_obj
+        )
         transaction_obj.amount = amount
         if not transaction_obj.source:
             transaction_obj.source = source
         if blockheightid is not None:
             transaction_obj.blockheight_id = blockheightid
         transaction_obj.save()
-        old_count = transaction_obj.slpaddress.count()
         address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-        new_count = Transaction.objects.get(id=transaction_obj.id).slpaddress.count()
-        if new_count > old_count:
-            if transaction_created:
-                msg = f"FOUND DEPOSIT {transaction_obj.amount} -> {slpaddress}"
-                LOGGER.info(msg)
-                client_acknowledgement.delay(tokenid, transaction_obj.id, slpaddress)
+        client_acknowledgement.delay(tokenid, transaction_obj.id)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
@@ -119,32 +116,32 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
                             token_query = Token.objects.filter(tokenid=transaction_token_id)
                             if token_query.exists():
                                 amount = float(transaction_data['tokenInfo']['sendOutputs'][1]) / 100000000
-                                legacy = transaction_data['retData']['vout'][1]['scriptPubKey']['addresses'][0]
+
+                                for legacy in transaction_data['retData']['vout'][1]['scriptPubKey']['addresses']:
                                 # Starting here is the extraction of SLP address using legacy address.
                                 # And this have to be execute perfectly.
-                                
-                                try:
-                                    address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
-                                    address_response = requests.get(address_url)
-                                    address_data = json.loads(address_response.text)
-                                except Exception as exc:
-                                    # Once fail in sending request, we'll store given params to
-                                    # redis temporarily and retry after 30 minutes cooldown.
-                                    msg = f'---> FOUND this error {exc} --> Now Delaying...'
-                                    LOGGER.error(msg)
-                                    proceed = False
+                                    try:
+                                        address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
+                                        address_response = requests.get(address_url)
+                                        address_data = json.loads(address_response.text)
+                                    except Exception as exc:
+                                        # Once fail in sending request, we'll store given params to
+                                        # redis temporarily and retry after 30 minutes cooldown.
+                                        msg = f'---> FOUND this error {exc} --> Now Delaying...'
+                                        LOGGER.error(msg)
+                                        proceed = False
 
-                                if (not 'error' in address_data.keys()) and proceed == True:
-                                    token_obj = token_query.first()
-                                    save_record.delay(
-                                        token_obj.tokenid,
-                                        address_data['slpAddress'],
-                                        txn_id,
-                                        amount,
-                                        "per-blockheight",
-                                        blockheightid
-                                    )
-                                    status = 'success'
+                                    if (not 'error' in address_data.keys()) and proceed == True:
+                                        token_obj = token_query.first()
+                                        save_record.delay(
+                                            token_obj.tokenid,
+                                            address_data['slpAddress'],
+                                            txn_id,
+                                            amount,
+                                            "per-blockheight",
+                                            blockheightid
+                                        )
+                                        status = 'success'
                 else:
                     LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
         elif transaction_response.status_code == 404:
@@ -313,6 +310,7 @@ def first_blockheight_scanner(self, id=None):
                     if qs.exists():
                         if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
                             for trans in transaction['tokenDetails']['detail']['outputs']:
+                                print('aw')
                                 save_record(
                                     transaction['tokenDetails']['detail']['tokenIdHex'],
                                     trans['address'],
