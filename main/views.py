@@ -21,21 +21,33 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import authentication, permissions
 
-class TestView(APIView):
+class SetSLPAddressView(APIView):
     """
     View to list all users in the system.
     * Requires token authentication.
     * Only admin users are able to access this view.
     """
     authentication_classes = [authentication.TokenAuthentication]
-    permission_classes = [permissions.IsAdminUser]
+    # permission_classes = [permissions.IsAdminUser]
 
-    def get(self, request, format=None):
+    def post(self, request, format=None):
         """
         Return a list of all users.
         """
-        usernames = [user.username for user in User.objects.all()]
-        return Response(usernames)
+        status = 'failed'
+        slpaddress = request.POST.get('slpaddress', None)
+        address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
+        subscriber_qs = Subscriber.objects.filter(user=request.user)
+        reason = 'Invalid subscriber'
+        if subscriber_qs.exists():
+            subscriber = subscriber_qs.first()
+            obj = Subscription()
+            obj.slp = address_obj
+            obj.save()
+            subscriber.subscription.add(obj)
+            status = 'success'
+            reason = 'SLPAddress was added!'
+        return Response({'status': status, 'reason': reason})
         
 
 class Loginpage(View):

@@ -202,5 +202,5 @@ CORS_ORIGIN_WHITELIST = [
     "https://example.com",
 ]
 
-if debug:
+if DEBUG:
     CORS_ORIGIN_WHITELIST += ['http://localhost:8000']
