@@ -15,15 +15,8 @@ class Migration(migrations.Migration):
         user.is_staff = True
         user.save()
         
-    def create_vip_token(apps, schema_editor):
-        from main.models import Token
-        token = Token()
-        token.name = 'spice'
-        token.target_address = 'https://spicebot-staging.scibizinformatics.com/slpnotify/'
-        token.tokenid = '4de69e374a8ed21cbddd47f2338cc0f479dc58daa2bbe11cd604ca488eca0ddf'
-        token.save()
+    
 
     operations = [
         migrations.RunPython(create_super_user),
-        migrations.RunPython(create_vip_token)
     ]
