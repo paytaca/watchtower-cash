@@ -44,6 +44,7 @@ INSTALLED_APPS=[
 'django.contrib.staticfiles',
 'rest_framework',
 'rest_framework.authtoken',
+'corsheaders',
 'main',
 'django.contrib.admin',
 ]
@@ -51,6 +52,7 @@ INSTALLED_APPS=[
 MIDDLEWARE=[
 'django.middleware.security.SecurityMiddleware',
 'django.contrib.sessions.middleware.SessionMiddleware',
+'corsheaders.middleware.CorsMiddleware',
 'django.middleware.common.CommonMiddleware',
 'django.middleware.csrf.CsrfViewMiddleware',
 'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -196,3 +198,9 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+CORS_ORIGIN_WHITELIST = [
+    "https://example.com",
+]
+
+if debug:
+    CORS_ORIGIN_WHITELIST += ['http://localhost:8000']
