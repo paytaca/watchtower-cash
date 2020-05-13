@@ -28,7 +28,8 @@ class SetSLPAddressView(APIView):
     * Only admin users are able to access this view.
     """
     authentication_classes = [authentication.TokenAuthentication]
-    # permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
+    
 
     def post(self, request, format=None):
         """
