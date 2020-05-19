@@ -199,8 +199,16 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 CORS_ORIGIN_WHITELIST = [
-    "https://example.com",
+    "https://tokensale-staging.scibizinformatics.com",
+    "https://tokensale.scibizinformatics.com"
 ]
 
 if DEBUG:
     CORS_ORIGIN_WHITELIST += ['http://localhost:8000']
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication', 
+    ],
+}

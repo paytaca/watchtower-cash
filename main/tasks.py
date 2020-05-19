@@ -181,7 +181,6 @@ def openfromredis():
                 params['total_transactions']
             )
     
-
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
     tokens = Token.objects.all()
