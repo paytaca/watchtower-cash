@@ -471,3 +471,57 @@ def slpfountainheadsocket(self):
         redis_storage.set('slpfountainheadsocket', 0)
     else:
         LOGGER.info('slpfountainhead is still running')
+
+
+@shared_task(bind=True, queue='slpstreamfountainheadsocket')
+def slpstreamfountainheadsocket(self):
+    """
+    A live stream of SLP transactions via SLP Stream Fountainhead
+    """
+    url = "https://slpstream.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
+    resp = requests.get(url, stream=True)
+    source = 'slpstreamfountainhead'
+    msg = 'Service not available!'
+    LOGGER.info('socket ready in : %s' % source)
+    redis_storage = settings.REDISKV
+    if b'slpstreamfountainheadsocket' not in redis_storage.keys():
+        redis_storage.set('slpstreamfountainheadsocket', 0)
+    withsocket = int(redis_storage.get('slpstreamfountainheadsocket'))
+    if not withsocket:
+        for content in resp.iter_content(chunk_size=1024*1024):
+            redis_storage.set('slpstreamfountainheadsocket', 1)
+            decoded_text = content.decode('utf8')
+            if 'heartbeat' not in decoded_text:
+                data = decoded_text.strip().split('data: ')[-1]
+                proceed = True
+                try:
+                    readable_dict = json.loads(data)
+                except json.decoder.JSONDecodeError as exc:
+                    msg = f'Its alright. This is an expected error. --> {exc}'
+                    LOGGER.error(msg)
+                    proceed = False
+                except Exception as exc:
+                    msg = f'This is a novel issue {exc}'
+                    break
+                if proceed:
+                    if len(readable_dict['data']) != 0:
+                        token_query =  Token.objects.filter(tokenid=readable_dict['data'][0]['slp']['detail']['tokenIdHex'])
+                        if token_query.exists():
+                            if 'tx' in readable_dict['data'][0].keys():
+                                if readable_dict['data'][0]['slp']['valid']:
+                                    txn_id = readable_dict['data'][0]['tx']['h']
+                                    for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
+                                        slp_address = trans['address']
+                                        amount = float(trans['amount']) / 100000000
+                                        token_obj = token_query.first()
+                                        save_record.delay(
+                                            token_obj.tokenid,
+                                            slp_address,
+                                            txn_id,
+                                            amount,
+                                            source
+                                        )
+        LOGGER.error(msg)
+        redis_storage.set('slpstreamfountainheadsocket', 0)
+    else:
+        LOGGER.info('slpstreamfountainheadsocket is still running')
