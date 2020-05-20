@@ -34,25 +34,19 @@ class SetSLPAddressView(APIView):
     def post(self, request, format=None):
         slpaddress = request.data.get('slpAddress', None)
         destinationAddress = request.data.get('destinationAddress', None)
-        tokenid = request.data.get('tokenId', None)
         tokenname = request.data.get('tokenName', None)
         reason = 'Invalid params.'
         status = 'failed'
-        if slpaddress and destinationAddress and tokenid and tokenname:
+        if slpaddress and destinationAddress and tokenname:
             subscriber_qs = Subscriber.objects.filter(user=request.user)
             reason = 'Not yet subscribed.'
             if subscriber_qs.exists():
                 subscriber = subscriber_qs.first()
                 sendto_obj, created = SendTo.objects.get_or_create(address=destinationAddress)
                 address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
-
-                token_obj, created = MyToken.objects.get_or_create(tokenid=tokenid)
-                token_obj.name = tokenname
-                token_obj.save()
-
+                
                 subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj)
                 subscription_obj.address = sendto_obj
-                subscription_obj.token = token_obj
                 subscription_obj.save()
 
                 subscriber.subscription.add(subscription_obj)

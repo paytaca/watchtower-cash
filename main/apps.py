@@ -10,3 +10,4 @@ class MainConfig(AppConfig):
         redis.set('slpfountainheadsocket', 0)
         redis.set('slpbitcoinsocket', 0)
         redis.set('slpstreamfountainheadsocket', 0)
+        redis.set('bitsocket', 0)

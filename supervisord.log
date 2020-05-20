@@ -26834,3 +26834,37 @@
 2020-05-20 05:43:41,933 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 2020-05-20 05:43:41,946 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 2020-05-20 05:43:41,948 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:09,993 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-05-20 09:10:10,309 INFO RPC interface 'supervisor' initialized
+2020-05-20 09:10:10,310 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-05-20 09:10:10,314 INFO supervisord started with pid 1
+2020-05-20 09:10:11,319 INFO spawned: 'celery_checktransaction' with pid 52
+2020-05-20 09:10:11,326 INFO spawned: 'celery_client_acknowledgement' with pid 53
+2020-05-20 09:10:11,330 INFO spawned: 'celery_deposit_filter' with pid 54
+2020-05-20 09:10:11,336 INFO spawned: 'celery_first_blockheight_scanner' with pid 55
+2020-05-20 09:10:11,345 INFO spawned: 'celery_latest_blockheight_getter' with pid 56
+2020-05-20 09:10:11,348 INFO spawned: 'celery_openfromredis' with pid 57
+2020-05-20 09:10:11,356 INFO spawned: 'celery_save_record' with pid 58
+2020-05-20 09:10:11,375 INFO spawned: 'celery_second_blockheight_scanner' with pid 59
+2020-05-20 09:10:11,393 INFO spawned: 'celery_slpbitcoin' with pid 60
+2020-05-20 09:10:11,414 INFO spawned: 'celery_slpdb_token_scanner' with pid 61
+2020-05-20 09:10:11,438 INFO spawned: 'celery_slpfountainhead' with pid 62
+2020-05-20 09:10:11,496 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 63
+2020-05-20 09:10:11,537 INFO spawned: 'celery_suspendtoredis' with pid 64
+2020-05-20 09:10:11,682 INFO spawned: 'celery_worker_beat' with pid 65
+2020-05-20 09:10:11,687 INFO spawned: 'webserver' with pid 66
+2020-05-20 09:10:12,724 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,725 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,725 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,726 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,726 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,727 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,727 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,728 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,729 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,729 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,730 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,730 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,731 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,732 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 09:10:12,732 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)

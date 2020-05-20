@@ -525,3 +525,54 @@ def slpstreamfountainheadsocket(self):
         redis_storage.set('slpstreamfountainheadsocket', 0)
     else:
         LOGGER.info('slpstreamfountainheadsocket is still running')
+
+@shared_task(bind=True, queue='bitsocket')
+def bitsocket(self):
+    """
+    A live stream of BCH transactions via bitsocket
+    """
+    url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
+    resp = requests.get(url, stream=True)
+    source = 'bitsocket'
+    msg = 'Service not available!'
+    LOGGER.info('socket ready in : %s' % source)
+    redis_storage = settings.REDISKV
+    if b'bitsocket' not in redis_storage.keys():
+        redis_storage.set('bitsocket', 0)
+    withsocket = int(redis_storage.get('bitsocket'))
+    if not withsocket:
+        for content in resp.iter_content(chunk_size=1024*1024):
+            redis_storage.set('bitsocket', 1)
+            decoded_text = content.decode('utf8')
+            if 'heartbeat' not in decoded_text:
+                data = decoded_text.strip().split('data: ')[-1]
+                proceed = True
+                try:
+                    readable_dict = json.loads(data)
+                except json.decoder.JSONDecodeError as exc:
+                    msg = f'Its alright. This is an expected error. --> {exc}'
+                    LOGGER.error(msg)
+                    proceed = False
+                except Exception as exc:
+                    msg = f'This is a novel issue {exc}'
+                        break
+                if proceed:
+                    if len(readable_dict['data']) != 0:
+                        txn_id = readable_dict['data'][0]['tx']['h'] 
+                        for out in readable_dict['data'][0]['out']: 
+                            amount = out['e']['v'] / 100000000
+                            bchaddress = 'bitcoincash:' + out['e']['a']
+                            subscriptions = Subscription.objects.filter(token=None)
+                            qs = subscriptions.filter(adress__address=bchaddress)
+                            if qs.exists():
+                                save_record.delay(
+                                    bchaddress,
+                                    txn_id,
+                                    amount,
+                                    source,
+                                    bch=True
+                                )
+        LOGGER.error(msg)
+        redis_storage.set('bitsocket', 0)
+    else:
+        LOGGER.info('bitsocket is still running')
