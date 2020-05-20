@@ -25987,3 +25987,850 @@
 2020-05-20 04:43:02,445 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 2020-05-20 04:43:02,466 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 2020-05-20 04:43:02,468 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:43,150 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-05-20 05:36:43,162 INFO RPC interface 'supervisor' initialized
+2020-05-20 05:36:43,164 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-05-20 05:36:43,169 INFO supervisord started with pid 1
+2020-05-20 05:36:44,175 INFO spawned: 'celery_checktransaction' with pid 52
+2020-05-20 05:36:44,180 INFO spawned: 'celery_client_acknowledgement' with pid 53
+2020-05-20 05:36:44,186 INFO spawned: 'celery_deposit_filter' with pid 54
+2020-05-20 05:36:44,191 INFO spawned: 'celery_first_blockheight_scanner' with pid 55
+2020-05-20 05:36:44,203 INFO spawned: 'celery_latest_blockheight_getter' with pid 56
+2020-05-20 05:36:44,240 INFO spawned: 'celery_openfromredis' with pid 57
+2020-05-20 05:36:44,245 INFO spawned: 'celery_save_record' with pid 58
+2020-05-20 05:36:44,282 INFO spawned: 'celery_second_blockheight_scanner' with pid 59
+2020-05-20 05:36:44,304 INFO spawned: 'celery_slpbitcoin' with pid 60
+2020-05-20 05:36:44,341 INFO spawned: 'celery_slpdb_token_scanner' with pid 61
+2020-05-20 05:36:44,347 INFO spawned: 'celery_slpfountainhead' with pid 62
+2020-05-20 05:36:44,452 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 63
+2020-05-20 05:36:44,458 INFO spawned: 'celery_suspendtoredis' with pid 64
+2020-05-20 05:36:44,484 INFO spawned: 'celery_worker_beat' with pid 65
+2020-05-20 05:36:44,561 INFO spawned: 'webserver' with pid 66
+2020-05-20 05:36:45,567 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,568 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,571 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,573 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,575 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,576 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,579 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,580 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,582 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,584 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,586 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,588 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,611 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,613 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:45,614 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:53,432 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:36:53,536 INFO spawned: 'celery_second_blockheight_scanner' with pid 117
+2020-05-20 05:36:54,023 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:36:54,142 INFO spawned: 'celery_deposit_filter' with pid 118
+2020-05-20 05:36:54,146 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:36:54,233 INFO spawned: 'webserver' with pid 119
+2020-05-20 05:36:54,236 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:36:54,314 INFO spawned: 'celery_latest_blockheight_getter' with pid 120
+2020-05-20 05:36:54,380 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:36:54,530 INFO spawned: 'celery_openfromredis' with pid 121
+2020-05-20 05:36:54,533 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:54,579 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:36:54,764 INFO spawned: 'celery_first_blockheight_scanner' with pid 122
+2020-05-20 05:36:54,901 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:36:54,903 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:36:54,907 INFO spawned: 'celery_checktransaction' with pid 123
+2020-05-20 05:36:54,963 INFO spawned: 'celery_slpdb_token_scanner' with pid 124
+2020-05-20 05:36:54,966 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:36:55,012 INFO spawned: 'celery_slpbitcoin' with pid 125
+2020-05-20 05:36:55,199 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:55,201 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:55,202 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:36:55,204 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:36:55,208 INFO spawned: 'celery_save_record' with pid 126
+2020-05-20 05:36:55,235 INFO spawned: 'celery_slpfountainhead' with pid 127
+2020-05-20 05:36:55,241 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:36:55,450 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:55,455 INFO spawned: 'celery_suspendtoredis' with pid 129
+2020-05-20 05:36:55,458 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:36:55,798 INFO spawned: 'celery_client_acknowledgement' with pid 132
+2020-05-20 05:36:55,801 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:55,802 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:55,850 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:36:55,852 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:36:55,856 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 133
+2020-05-20 05:36:55,876 INFO spawned: 'celery_worker_beat' with pid 134
+2020-05-20 05:36:56,903 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,905 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,907 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,950 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,952 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,955 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,957 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,959 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:36:56,960 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:06,448 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:06,625 INFO spawned: 'celery_second_blockheight_scanner' with pid 182
+2020-05-20 05:37:07,140 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:37:07,142 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:37:07,143 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:37:07,207 INFO spawned: 'celery_checktransaction' with pid 183
+2020-05-20 05:37:07,225 INFO spawned: 'celery_deposit_filter' with pid 184
+2020-05-20 05:37:07,337 INFO spawned: 'celery_openfromredis' with pid 185
+2020-05-20 05:37:07,401 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:37:07,510 INFO spawned: 'celery_slpfountainhead' with pid 186
+2020-05-20 05:37:07,633 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:37:07,648 INFO spawned: 'celery_latest_blockheight_getter' with pid 187
+2020-05-20 05:37:07,651 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:07,764 INFO exited: webserver (exit status 1; not expected)
+2020-05-20 05:37:07,766 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:37:07,960 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 188
+2020-05-20 05:37:08,010 INFO spawned: 'webserver' with pid 189
+2020-05-20 05:37:08,012 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:08,621 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:08,622 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:08,631 INFO spawned: 'celery_first_blockheight_scanner' with pid 192
+2020-05-20 05:37:08,674 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:08,675 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:08,676 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:08,678 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:37:08,874 INFO spawned: 'celery_client_acknowledgement' with pid 194
+2020-05-20 05:37:08,914 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:37:08,979 INFO spawned: 'celery_save_record' with pid 195
+2020-05-20 05:37:08,987 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:09,024 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:09,168 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:37:09,189 INFO spawned: 'celery_slpbitcoin' with pid 196
+2020-05-20 05:37:09,200 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:37:09,209 INFO spawned: 'celery_worker_beat' with pid 197
+2020-05-20 05:37:10,286 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:10,289 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:10,292 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:10,294 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:10,299 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:10,301 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:37:10,718 INFO spawned: 'celery_suspendtoredis' with pid 216
+2020-05-20 05:37:10,721 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:37:10,748 INFO spawned: 'celery_slpdb_token_scanner' with pid 217
+2020-05-20 05:37:11,722 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:11,750 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:19,524 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:37:19,534 INFO spawned: 'webserver' with pid 247
+2020-05-20 05:37:20,216 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:37:20,221 INFO spawned: 'celery_deposit_filter' with pid 248
+2020-05-20 05:37:20,426 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:20,507 INFO spawned: 'celery_second_blockheight_scanner' with pid 249
+2020-05-20 05:37:20,632 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:21,421 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:21,423 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:37:21,464 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:37:21,466 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:37:21,470 INFO spawned: 'celery_client_acknowledgement' with pid 250
+2020-05-20 05:37:21,560 INFO spawned: 'celery_latest_blockheight_getter' with pid 252
+2020-05-20 05:37:21,562 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:21,620 INFO spawned: 'celery_worker_beat' with pid 253
+2020-05-20 05:37:21,624 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:37:21,626 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:37:21,630 INFO spawned: 'celery_openfromredis' with pid 254
+2020-05-20 05:37:21,637 INFO spawned: 'celery_save_record' with pid 255
+2020-05-20 05:37:22,073 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:37:22,075 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:37:22,207 INFO spawned: 'celery_checktransaction' with pid 258
+2020-05-20 05:37:22,212 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 259
+2020-05-20 05:37:22,466 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:37:22,469 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:37:22,546 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:22,548 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:22,551 INFO spawned: 'celery_slpbitcoin' with pid 264
+2020-05-20 05:37:22,581 INFO spawned: 'celery_slpfountainhead' with pid 265
+2020-05-20 05:37:22,586 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:22,918 INFO spawned: 'celery_first_blockheight_scanner' with pid 266
+2020-05-20 05:37:22,920 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:22,921 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:22,963 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:22,966 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:37:23,221 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:23,250 INFO spawned: 'celery_slpdb_token_scanner' with pid 273
+2020-05-20 05:37:23,253 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:23,684 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:23,686 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:23,689 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:37:23,724 INFO spawned: 'celery_suspendtoredis' with pid 278
+2020-05-20 05:37:24,732 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:24,874 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:24,875 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:31,173 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:37:31,428 INFO spawned: 'webserver' with pid 313
+2020-05-20 05:37:32,021 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:37:32,487 INFO spawned: 'celery_deposit_filter' with pid 314
+2020-05-20 05:37:32,506 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:33,107 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:33,437 INFO spawned: 'celery_second_blockheight_scanner' with pid 315
+2020-05-20 05:37:33,670 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:34,054 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:37:34,066 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:37:34,076 INFO spawned: 'celery_client_acknowledgement' with pid 316
+2020-05-20 05:37:34,099 INFO spawned: 'celery_openfromredis' with pid 317
+2020-05-20 05:37:34,387 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:37:34,389 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:37:34,412 INFO spawned: 'celery_checktransaction' with pid 318
+2020-05-20 05:37:34,415 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:34,465 INFO spawned: 'celery_worker_beat' with pid 319
+2020-05-20 05:37:34,565 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:37:34,660 INFO spawned: 'celery_save_record' with pid 320
+2020-05-20 05:37:34,875 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:37:34,877 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:37:34,906 INFO spawned: 'celery_latest_blockheight_getter' with pid 325
+2020-05-20 05:37:34,912 INFO spawned: 'celery_slpbitcoin' with pid 326
+2020-05-20 05:37:35,066 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:37:35,139 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:35,140 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:35,227 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 332
+2020-05-20 05:37:35,229 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:35,306 INFO spawned: 'celery_first_blockheight_scanner' with pid 333
+2020-05-20 05:37:35,962 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:35,964 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:35,965 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:35,966 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:35,967 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:35,969 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:37:35,973 INFO spawned: 'celery_slpfountainhead' with pid 337
+2020-05-20 05:37:36,375 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:36,377 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:36,378 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:37:37,382 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:37,386 INFO spawned: 'celery_suspendtoredis' with pid 356
+2020-05-20 05:37:38,364 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:37:39,402 INFO spawned: 'celery_slpdb_token_scanner' with pid 372
+2020-05-20 05:37:39,405 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:40,409 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:43,547 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:37:44,212 INFO spawned: 'webserver' with pid 379
+2020-05-20 05:37:45,139 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:37:45,540 INFO spawned: 'celery_deposit_filter' with pid 380
+2020-05-20 05:37:45,543 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:45,636 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:45,665 INFO spawned: 'celery_second_blockheight_scanner' with pid 381
+2020-05-20 05:37:46,770 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:46,771 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:46,773 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:37:46,775 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:37:46,870 INFO spawned: 'celery_checktransaction' with pid 382
+2020-05-20 05:37:46,983 INFO spawned: 'celery_worker_beat' with pid 383
+2020-05-20 05:37:47,632 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:37:47,731 INFO spawned: 'celery_openfromredis' with pid 384
+2020-05-20 05:37:47,733 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:37:47,760 INFO spawned: 'celery_client_acknowledgement' with pid 385
+2020-05-20 05:37:47,940 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:47,943 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:47,947 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:37:48,003 INFO spawned: 'celery_slpbitcoin' with pid 388
+2020-05-20 05:37:48,507 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:37:48,533 INFO spawned: 'celery_slpfountainhead' with pid 394
+2020-05-20 05:37:48,542 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:37:48,543 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:37:48,572 INFO spawned: 'celery_save_record' with pid 396
+2020-05-20 05:37:48,578 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 397
+2020-05-20 05:37:48,761 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:48,766 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:49,015 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:49,593 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:49,594 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:49,595 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:49,715 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:37:49,742 INFO spawned: 'celery_latest_blockheight_getter' with pid 416
+2020-05-20 05:37:49,744 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:49,800 INFO spawned: 'celery_first_blockheight_scanner' with pid 417
+2020-05-20 05:37:50,520 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:37:50,524 INFO spawned: 'celery_suspendtoredis' with pid 423
+2020-05-20 05:37:50,526 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:37:51,529 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:51,530 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:51,534 INFO spawned: 'celery_slpdb_token_scanner' with pid 435
+2020-05-20 05:37:51,536 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:52,601 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:54,592 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:37:54,616 INFO spawned: 'webserver' with pid 444
+2020-05-20 05:37:55,908 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:56,922 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:37:56,923 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:37:56,928 INFO spawned: 'celery_deposit_filter' with pid 445
+2020-05-20 05:37:56,936 INFO spawned: 'celery_second_blockheight_scanner' with pid 446
+2020-05-20 05:37:57,167 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:37:57,237 INFO spawned: 'celery_worker_beat' with pid 447
+2020-05-20 05:37:58,206 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:58,216 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:58,328 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:37:58,334 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:37:58,343 INFO spawned: 'celery_openfromredis' with pid 453
+2020-05-20 05:37:58,521 INFO spawned: 'celery_slpbitcoin' with pid 454
+2020-05-20 05:37:58,525 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:58,649 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:37:58,695 INFO spawned: 'celery_checktransaction' with pid 455
+2020-05-20 05:37:58,699 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:37:58,774 INFO spawned: 'celery_save_record' with pid 456
+2020-05-20 05:37:58,871 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:37:58,872 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:37:59,423 INFO spawned: 'celery_client_acknowledgement' with pid 467
+2020-05-20 05:37:59,425 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:59,428 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:59,433 INFO spawned: 'celery_slpfountainhead' with pid 468
+2020-05-20 05:37:59,458 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:37:59,870 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:59,871 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:37:59,876 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 471
+2020-05-20 05:37:59,910 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:00,080 INFO spawned: 'celery_first_blockheight_scanner' with pid 472
+2020-05-20 05:38:00,729 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:00,755 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:01,267 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:01,306 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:01,322 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:38:01,512 INFO spawned: 'celery_latest_blockheight_getter' with pid 478
+2020-05-20 05:38:02,490 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:03,241 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:38:04,256 INFO spawned: 'celery_suspendtoredis' with pid 498
+2020-05-20 05:38:04,987 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:38:05,003 INFO spawned: 'celery_slpdb_token_scanner' with pid 502
+2020-05-20 05:38:05,389 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:06,290 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:07,630 INFO exited: webserver (exit status 1; not expected)
+2020-05-20 05:38:08,336 INFO spawned: 'webserver' with pid 509
+2020-05-20 05:38:09,463 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:09,915 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:09,917 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:38:10,330 INFO spawned: 'celery_second_blockheight_scanner' with pid 510
+2020-05-20 05:38:10,346 INFO spawned: 'celery_worker_beat' with pid 511
+2020-05-20 05:38:10,349 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:38:10,459 INFO spawned: 'celery_openfromredis' with pid 512
+2020-05-20 05:38:10,639 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:38:10,717 INFO spawned: 'celery_deposit_filter' with pid 513
+2020-05-20 05:38:10,721 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:38:10,727 INFO spawned: 'celery_slpbitcoin' with pid 514
+2020-05-20 05:38:11,546 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:11,549 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:11,583 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:11,809 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:11,811 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:12,261 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:38:12,435 INFO spawned: 'celery_checktransaction' with pid 519
+2020-05-20 05:38:12,440 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:12,516 INFO spawned: 'celery_first_blockheight_scanner' with pid 520
+2020-05-20 05:38:12,874 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:38:12,875 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:38:12,882 INFO spawned: 'celery_save_record' with pid 528
+2020-05-20 05:38:12,957 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 529
+2020-05-20 05:38:13,706 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:13,707 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:13,709 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:38:13,711 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:38:13,748 INFO spawned: 'celery_client_acknowledgement' with pid 542
+2020-05-20 05:38:13,827 INFO spawned: 'celery_slpfountainhead' with pid 543
+2020-05-20 05:38:14,371 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:14,421 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:14,436 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:38:15,240 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:15,255 INFO spawned: 'celery_latest_blockheight_getter' with pid 550
+2020-05-20 05:38:15,257 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:16,522 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:17,359 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:38:17,362 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:38:18,372 INFO spawned: 'celery_slpdb_token_scanner' with pid 566
+2020-05-20 05:38:18,505 INFO spawned: 'celery_suspendtoredis' with pid 567
+2020-05-20 05:38:19,546 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:19,548 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:21,354 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:38:22,176 INFO spawned: 'webserver' with pid 574
+2020-05-20 05:38:22,325 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:38:22,387 INFO spawned: 'celery_openfromredis' with pid 575
+2020-05-20 05:38:23,242 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:23,243 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:38:23,567 INFO spawned: 'celery_deposit_filter' with pid 576
+2020-05-20 05:38:23,594 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:23,595 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:38:23,600 INFO spawned: 'celery_worker_beat' with pid 577
+2020-05-20 05:38:24,041 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:24,173 INFO spawned: 'celery_second_blockheight_scanner' with pid 578
+2020-05-20 05:38:24,441 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:38:24,764 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:24,804 INFO spawned: 'celery_slpbitcoin' with pid 580
+2020-05-20 05:38:24,814 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:25,062 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:38:25,183 INFO spawned: 'celery_client_acknowledgement' with pid 583
+2020-05-20 05:38:25,185 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:25,187 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:25,547 INFO spawned: 'celery_first_blockheight_scanner' with pid 586
+2020-05-20 05:38:25,794 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:25,795 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:38:25,800 INFO spawned: 'celery_checktransaction' with pid 590
+2020-05-20 05:38:26,104 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:38:26,195 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:26,200 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 591
+2020-05-20 05:38:26,204 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:38:26,248 INFO spawned: 'celery_save_record' with pid 592
+2020-05-20 05:38:26,563 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:27,637 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:27,641 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:27,753 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:27,764 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:38:27,773 INFO spawned: 'celery_slpfountainhead' with pid 609
+2020-05-20 05:38:28,703 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:38:28,710 INFO spawned: 'celery_latest_blockheight_getter' with pid 616
+2020-05-20 05:38:28,819 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:29,810 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:31,515 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:38:31,529 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:38:31,539 INFO spawned: 'celery_slpdb_token_scanner' with pid 630
+2020-05-20 05:38:31,550 INFO spawned: 'celery_suspendtoredis' with pid 632
+2020-05-20 05:38:32,575 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:32,578 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:33,707 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:38:33,809 INFO spawned: 'webserver' with pid 634
+2020-05-20 05:38:35,001 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:35,069 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:38:35,693 INFO spawned: 'celery_openfromredis' with pid 640
+2020-05-20 05:38:35,705 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:38:36,107 INFO spawned: 'celery_worker_beat' with pid 641
+2020-05-20 05:38:36,403 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:36,716 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:38:36,822 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:38:36,824 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:38:36,829 INFO spawned: 'celery_client_acknowledgement' with pid 642
+2020-05-20 05:38:36,906 INFO spawned: 'celery_deposit_filter' with pid 643
+2020-05-20 05:38:36,919 INFO spawned: 'celery_slpbitcoin' with pid 644
+2020-05-20 05:38:37,416 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:37,960 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:37,962 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:37,974 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:37,976 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:38:38,445 INFO spawned: 'celery_save_record' with pid 646
+2020-05-20 05:38:38,457 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:38,560 INFO spawned: 'celery_second_blockheight_scanner' with pid 649
+2020-05-20 05:38:39,896 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:39,900 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:39,906 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:38:39,979 INFO spawned: 'celery_checktransaction' with pid 662
+2020-05-20 05:38:39,984 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:40,054 INFO spawned: 'celery_first_blockheight_scanner' with pid 664
+2020-05-20 05:38:40,539 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:38:41,516 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:41,518 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:41,564 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 672
+2020-05-20 05:38:41,567 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:38:41,879 INFO spawned: 'celery_slpfountainhead' with pid 675
+2020-05-20 05:38:42,891 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:42,893 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:43,232 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:38:43,842 INFO spawned: 'celery_latest_blockheight_getter' with pid 686
+2020-05-20 05:38:44,852 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:45,577 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:38:45,960 INFO spawned: 'celery_slpdb_token_scanner' with pid 693
+2020-05-20 05:38:47,180 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:48,923 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:38:48,980 INFO spawned: 'celery_suspendtoredis' with pid 697
+2020-05-20 05:38:49,606 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:38:50,611 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:50,627 INFO spawned: 'webserver' with pid 699
+2020-05-20 05:38:51,782 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:53,037 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:38:53,478 INFO spawned: 'celery_openfromredis' with pid 705
+2020-05-20 05:38:53,649 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:38:54,350 INFO spawned: 'celery_worker_beat' with pid 706
+2020-05-20 05:38:54,386 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:38:54,641 INFO spawned: 'celery_client_acknowledgement' with pid 707
+2020-05-20 05:38:54,735 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:54,877 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:38:55,800 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:55,806 INFO spawned: 'celery_slpbitcoin' with pid 710
+2020-05-20 05:38:55,809 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:56,801 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:56,888 INFO spawned: 'celery_second_blockheight_scanner' with pid 717
+2020-05-20 05:38:56,924 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:56,927 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:38:57,025 INFO spawned: 'celery_deposit_filter' with pid 718
+2020-05-20 05:38:57,526 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:38:57,528 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:38:57,575 INFO spawned: 'celery_first_blockheight_scanner' with pid 722
+2020-05-20 05:38:57,598 INFO spawned: 'celery_save_record' with pid 723
+2020-05-20 05:38:58,213 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:58,216 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:58,219 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:38:59,145 INFO spawned: 'celery_checktransaction' with pid 731
+2020-05-20 05:38:59,147 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:59,150 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:38:59,236 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:38:59,239 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:38:59,246 INFO spawned: 'celery_slpfountainhead' with pid 732
+2020-05-20 05:38:59,332 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 733
+2020-05-20 05:39:00,338 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:00,343 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:00,367 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:02,140 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:39:02,364 INFO spawned: 'celery_latest_blockheight_getter' with pid 748
+2020-05-20 05:39:03,373 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:04,768 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:39:04,850 INFO spawned: 'celery_slpdb_token_scanner' with pid 758
+2020-05-20 05:39:06,144 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:07,439 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:39:07,463 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:39:08,474 INFO spawned: 'celery_suspendtoredis' with pid 763
+2020-05-20 05:39:08,482 INFO spawned: 'webserver' with pid 764
+2020-05-20 05:39:10,135 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:10,137 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:10,825 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:39:11,167 INFO spawned: 'celery_openfromredis' with pid 767
+2020-05-20 05:39:11,169 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:39:11,593 INFO spawned: 'celery_worker_beat' with pid 769
+2020-05-20 05:39:11,691 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:39:11,707 INFO spawned: 'celery_client_acknowledgement' with pid 770
+2020-05-20 05:39:12,463 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:12,748 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:12,769 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:14,267 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:39:14,421 INFO spawned: 'celery_slpbitcoin' with pid 778
+2020-05-20 05:39:14,437 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:39:14,481 INFO spawned: 'celery_deposit_filter' with pid 779
+2020-05-20 05:39:15,374 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:39:15,543 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:15,551 INFO spawned: 'celery_second_blockheight_scanner' with pid 787
+2020-05-20 05:39:15,578 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:16,214 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:39:16,258 INFO spawned: 'celery_first_blockheight_scanner' with pid 793
+2020-05-20 05:39:17,268 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:17,270 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:17,670 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:39:17,673 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:39:17,680 INFO spawned: 'celery_save_record' with pid 794
+2020-05-20 05:39:17,763 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 795
+2020-05-20 05:39:18,397 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:39:19,069 INFO spawned: 'celery_checktransaction' with pid 799
+2020-05-20 05:39:19,086 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:19,090 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:20,095 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:21,185 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:39:21,188 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:39:21,407 INFO spawned: 'celery_latest_blockheight_getter' with pid 807
+2020-05-20 05:39:21,467 INFO spawned: 'celery_slpfountainhead' with pid 808
+2020-05-20 05:39:22,534 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:22,540 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:25,535 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:39:25,656 INFO spawned: 'celery_slpdb_token_scanner' with pid 821
+2020-05-20 05:39:26,676 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:27,073 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:39:28,088 INFO spawned: 'webserver' with pid 827
+2020-05-20 05:39:29,965 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:30,335 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:39:30,596 INFO spawned: 'celery_suspendtoredis' with pid 831
+2020-05-20 05:39:31,813 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:31,854 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:39:31,861 INFO spawned: 'celery_client_acknowledgement' with pid 832
+2020-05-20 05:39:32,303 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:39:32,306 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:39:32,685 INFO spawned: 'celery_openfromredis' with pid 833
+2020-05-20 05:39:32,857 INFO spawned: 'celery_worker_beat' with pid 834
+2020-05-20 05:39:33,457 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:33,747 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:33,749 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:34,807 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:39:34,947 INFO spawned: 'celery_deposit_filter' with pid 844
+2020-05-20 05:39:36,691 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:37,439 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:39:37,601 INFO spawned: 'celery_slpbitcoin' with pid 854
+2020-05-20 05:39:37,604 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:39:37,607 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:39:37,614 INFO spawned: 'celery_first_blockheight_scanner' with pid 855
+2020-05-20 05:39:37,623 INFO spawned: 'celery_second_blockheight_scanner' with pid 856
+2020-05-20 05:39:38,724 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:38,728 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:38,772 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:38,788 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:39:38,929 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:39:39,140 INFO spawned: 'celery_checktransaction' with pid 860
+2020-05-20 05:39:39,250 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 861
+2020-05-20 05:39:39,381 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:39:39,396 INFO spawned: 'celery_save_record' with pid 862
+2020-05-20 05:39:40,008 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:40,981 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:40,984 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:41,010 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:39:42,047 INFO spawned: 'celery_slpfountainhead' with pid 870
+2020-05-20 05:39:43,033 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:39:44,044 INFO spawned: 'celery_latest_blockheight_getter' with pid 882
+2020-05-20 05:39:44,061 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:45,462 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:46,079 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:39:46,440 INFO spawned: 'celery_slpdb_token_scanner' with pid 886
+2020-05-20 05:39:47,795 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:48,697 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:39:48,724 INFO spawned: 'webserver' with pid 893
+2020-05-20 05:39:49,732 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:50,300 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:39:51,319 INFO spawned: 'celery_suspendtoredis' with pid 897
+2020-05-20 05:39:52,507 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:53,417 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:39:53,973 INFO spawned: 'celery_openfromredis' with pid 898
+2020-05-20 05:39:53,980 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:39:54,675 INFO spawned: 'celery_client_acknowledgement' with pid 901
+2020-05-20 05:39:55,092 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:56,081 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:56,711 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:39:56,713 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:39:56,723 INFO spawned: 'celery_deposit_filter' with pid 910
+2020-05-20 05:39:56,764 INFO spawned: 'celery_worker_beat' with pid 911
+2020-05-20 05:39:58,434 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:58,438 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:39:58,490 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:39:58,934 INFO spawned: 'celery_slpbitcoin' with pid 917
+2020-05-20 05:39:58,938 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:39:59,005 INFO spawned: 'celery_first_blockheight_scanner' with pid 918
+2020-05-20 05:39:59,030 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:39:59,092 INFO spawned: 'celery_second_blockheight_scanner' with pid 919
+2020-05-20 05:39:59,720 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:39:59,849 INFO spawned: 'celery_save_record' with pid 922
+2020-05-20 05:40:00,859 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:00,860 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:00,862 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:00,864 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:01,281 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:40:01,783 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 929
+2020-05-20 05:40:01,792 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:40:02,802 INFO spawned: 'celery_checktransaction' with pid 931
+2020-05-20 05:40:02,855 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:02,937 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:40:03,182 INFO spawned: 'celery_slpfountainhead' with pid 936
+2020-05-20 05:40:04,195 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:04,208 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:04,960 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:40:05,163 INFO spawned: 'celery_latest_blockheight_getter' with pid 944
+2020-05-20 05:40:05,231 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:40:05,264 INFO spawned: 'celery_slpdb_token_scanner' with pid 945
+2020-05-20 05:40:06,812 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:06,815 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:07,175 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:40:08,152 INFO spawned: 'webserver' with pid 955
+2020-05-20 05:40:09,193 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:11,682 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:40:12,748 INFO spawned: 'celery_suspendtoredis' with pid 962
+2020-05-20 05:40:13,582 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:40:13,708 INFO spawned: 'celery_openfromredis' with pid 967
+2020-05-20 05:40:13,716 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:14,637 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:14,640 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:40:14,703 INFO spawned: 'celery_worker_beat' with pid 970
+2020-05-20 05:40:15,244 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:40:15,872 INFO spawned: 'celery_client_acknowledgement' with pid 973
+2020-05-20 05:40:15,916 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:15,922 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:40:16,758 INFO spawned: 'celery_deposit_filter' with pid 975
+2020-05-20 05:40:16,947 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:18,408 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:18,410 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:40:18,456 INFO spawned: 'celery_slpbitcoin' with pid 981
+2020-05-20 05:40:19,220 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:40:19,222 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:40:19,471 INFO spawned: 'celery_first_blockheight_scanner' with pid 986
+2020-05-20 05:40:19,480 INFO spawned: 'celery_save_record' with pid 987
+2020-05-20 05:40:19,487 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:19,492 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:40:19,581 INFO spawned: 'celery_second_blockheight_scanner' with pid 988
+2020-05-20 05:40:21,420 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:21,422 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:21,424 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:21,858 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:40:21,925 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 997
+2020-05-20 05:40:21,970 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:40:22,150 INFO spawned: 'celery_slpfountainhead' with pid 998
+2020-05-20 05:40:22,746 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:40:22,851 INFO spawned: 'celery_checktransaction' with pid 1000
+2020-05-20 05:40:22,988 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:23,001 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:24,000 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:24,578 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:40:24,605 INFO spawned: 'celery_slpdb_token_scanner' with pid 1009
+2020-05-20 05:40:24,965 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:40:25,060 INFO spawned: 'webserver' with pid 1012
+2020-05-20 05:40:25,063 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:40:25,237 INFO spawned: 'celery_latest_blockheight_getter' with pid 1013
+2020-05-20 05:40:26,242 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:26,244 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:26,246 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:30,488 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:40:30,651 INFO spawned: 'celery_suspendtoredis' with pid 1035
+2020-05-20 05:40:31,734 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:31,735 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:40:31,741 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:40:31,991 INFO spawned: 'celery_client_acknowledgement' with pid 1036
+2020-05-20 05:40:32,043 INFO spawned: 'celery_openfromredis' with pid 1037
+2020-05-20 05:40:32,227 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:40:32,230 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:40:32,369 INFO spawned: 'celery_deposit_filter' with pid 1038
+2020-05-20 05:40:32,378 INFO spawned: 'celery_worker_beat' with pid 1039
+2020-05-20 05:40:33,468 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:33,470 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:33,472 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:33,474 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:37,002 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:40:37,201 INFO spawned: 'celery_slpbitcoin' with pid 1056
+2020-05-20 05:40:37,204 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:40:37,224 INFO spawned: 'celery_save_record' with pid 1057
+2020-05-20 05:40:37,608 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:40:37,610 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:40:37,912 INFO spawned: 'celery_first_blockheight_scanner' with pid 1058
+2020-05-20 05:40:37,992 INFO spawned: 'celery_second_blockheight_scanner' with pid 1059
+2020-05-20 05:40:38,208 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:38,286 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:39,112 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:39,113 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:39,798 INFO exited: webserver (exit status 3; not expected)
+2020-05-20 05:40:39,962 INFO spawned: 'webserver' with pid 1063
+2020-05-20 05:40:39,965 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:40:39,973 INFO spawned: 'celery_slpfountainhead' with pid 1064
+2020-05-20 05:40:40,117 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:40:40,183 INFO spawned: 'celery_checktransaction' with pid 1065
+2020-05-20 05:40:40,363 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:40:40,746 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 1068
+2020-05-20 05:40:41,411 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:41,413 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:41,447 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:42,150 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:42,152 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:40:42,661 INFO spawned: 'celery_slpdb_token_scanner' with pid 1076
+2020-05-20 05:40:42,665 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:40:42,684 INFO spawned: 'celery_latest_blockheight_getter' with pid 1077
+2020-05-20 05:40:43,689 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:43,690 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:47,691 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:40:48,189 INFO spawned: 'celery_suspendtoredis' with pid 1101
+2020-05-20 05:40:48,278 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:40:48,290 INFO spawned: 'celery_client_acknowledgement' with pid 1102
+2020-05-20 05:40:49,328 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:49,330 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:49,333 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:40:49,422 INFO spawned: 'celery_openfromredis' with pid 1103
+2020-05-20 05:40:49,496 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:40:49,673 INFO spawned: 'celery_worker_beat' with pid 1104
+2020-05-20 05:40:49,676 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:40:50,684 INFO spawned: 'celery_deposit_filter' with pid 1106
+2020-05-20 05:40:50,716 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:50,718 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:52,159 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:52,941 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:40:53,127 INFO spawned: 'celery_first_blockheight_scanner' with pid 1116
+2020-05-20 05:40:53,130 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:40:53,263 INFO spawned: 'celery_slpbitcoin' with pid 1117
+2020-05-20 05:40:54,109 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:54,111 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:40:54,118 INFO spawned: 'celery_second_blockheight_scanner' with pid 1120
+2020-05-20 05:40:54,627 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:54,643 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:40:54,831 INFO spawned: 'celery_save_record' with pid 1122
+2020-05-20 05:40:55,238 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:55,253 INFO exited: webserver (exit status 1; not expected)
+2020-05-20 05:40:56,198 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:56,204 INFO spawned: 'webserver' with pid 1125
+2020-05-20 05:40:56,218 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:40:56,432 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 1127
+2020-05-20 05:40:56,438 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:40:56,476 INFO spawned: 'celery_slpfountainhead' with pid 1128
+2020-05-20 05:40:56,511 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:40:56,592 INFO spawned: 'celery_checktransaction' with pid 1129
+2020-05-20 05:40:57,739 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:57,741 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:57,743 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:57,745 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:40:59,639 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:40:59,642 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:41:00,502 INFO spawned: 'celery_latest_blockheight_getter' with pid 1152
+2020-05-20 05:41:00,534 INFO spawned: 'celery_slpdb_token_scanner' with pid 1155
+2020-05-20 05:41:01,608 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:02,612 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:03,379 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:41:03,969 INFO spawned: 'celery_client_acknowledgement' with pid 1162
+2020-05-20 05:41:05,468 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:06,093 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:41:06,243 INFO spawned: 'celery_suspendtoredis' with pid 1167
+2020-05-20 05:41:06,267 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:41:06,991 INFO spawned: 'celery_worker_beat' with pid 1168
+2020-05-20 05:41:07,655 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:07,662 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:41:07,665 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:41:07,674 INFO spawned: 'celery_deposit_filter' with pid 1172
+2020-05-20 05:41:07,714 INFO spawned: 'celery_openfromredis' with pid 1173
+2020-05-20 05:41:08,514 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:09,078 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:09,123 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:09,311 INFO exited: celery_slpbitcoin (exit status 1; not expected)
+2020-05-20 05:41:09,318 INFO spawned: 'celery_slpbitcoin' with pid 1175
+2020-05-20 05:41:10,418 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:10,420 INFO exited: celery_first_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:41:10,523 INFO exited: celery_save_record (exit status 1; not expected)
+2020-05-20 05:41:10,625 INFO spawned: 'celery_first_blockheight_scanner' with pid 1182
+2020-05-20 05:41:10,634 INFO spawned: 'celery_save_record' with pid 1183
+2020-05-20 05:41:10,813 INFO exited: webserver (exit status 1; not expected)
+2020-05-20 05:41:10,845 INFO spawned: 'webserver' with pid 1187
+2020-05-20 05:41:11,001 INFO exited: celery_second_blockheight_scanner (exit status 1; not expected)
+2020-05-20 05:41:11,179 INFO spawned: 'celery_second_blockheight_scanner' with pid 1190
+2020-05-20 05:41:11,943 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:11,946 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:11,950 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:11,964 INFO exited: celery_checktransaction (exit status 1; not expected)
+2020-05-20 05:41:11,970 INFO spawned: 'celery_checktransaction' with pid 1191
+2020-05-20 05:41:12,403 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:12,406 INFO exited: celery_slpfountainhead (exit status 1; not expected)
+2020-05-20 05:41:12,456 INFO spawned: 'celery_slpfountainhead' with pid 1192
+2020-05-20 05:41:12,482 INFO exited: celery_slpstreamfountainheadsocket (exit status 1; not expected)
+2020-05-20 05:41:12,499 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 1193
+2020-05-20 05:41:13,505 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:13,508 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:13,509 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:15,125 INFO exited: celery_slpdb_token_scanner (exit status 1; not expected)
+2020-05-20 05:41:16,184 INFO spawned: 'celery_slpdb_token_scanner' with pid 1223
+2020-05-20 05:41:16,189 INFO exited: celery_latest_blockheight_getter (exit status 1; not expected)
+2020-05-20 05:41:16,362 INFO spawned: 'celery_latest_blockheight_getter' with pid 1224
+2020-05-20 05:41:17,605 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:17,608 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:19,047 INFO exited: celery_client_acknowledgement (exit status 1; not expected)
+2020-05-20 05:41:19,875 INFO spawned: 'celery_client_acknowledgement' with pid 1231
+2020-05-20 05:41:21,394 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:21,399 INFO exited: celery_suspendtoredis (exit status 1; not expected)
+2020-05-20 05:41:21,401 INFO exited: celery_openfromredis (exit status 1; not expected)
+2020-05-20 05:41:21,672 INFO spawned: 'celery_openfromredis' with pid 1232
+2020-05-20 05:41:21,679 INFO spawned: 'celery_suspendtoredis' with pid 1233
+2020-05-20 05:41:22,104 INFO exited: celery_worker_beat (exit status 1; not expected)
+2020-05-20 05:41:22,318 INFO spawned: 'celery_worker_beat' with pid 1234
+2020-05-20 05:41:22,693 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:22,695 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:23,395 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:41:23,897 INFO exited: celery_deposit_filter (exit status 1; not expected)
+2020-05-20 05:41:23,918 INFO spawned: 'celery_deposit_filter' with pid 1238
+2020-05-20 05:43:39,397 CRIT Supervisor is running as root.  Privileges were not dropped because no user is specified in the config file.  If you intend to run as root, you can set user=root in the config file to avoid this message.
+2020-05-20 05:43:39,405 INFO RPC interface 'supervisor' initialized
+2020-05-20 05:43:39,407 CRIT Server 'unix_http_server' running without any HTTP authentication checking
+2020-05-20 05:43:39,414 INFO supervisord started with pid 1
+2020-05-20 05:43:40,421 INFO spawned: 'celery_checktransaction' with pid 54
+2020-05-20 05:43:40,431 INFO spawned: 'celery_client_acknowledgement' with pid 55
+2020-05-20 05:43:40,439 INFO spawned: 'celery_deposit_filter' with pid 56
+2020-05-20 05:43:40,446 INFO spawned: 'celery_first_blockheight_scanner' with pid 57
+2020-05-20 05:43:40,452 INFO spawned: 'celery_latest_blockheight_getter' with pid 58
+2020-05-20 05:43:40,458 INFO spawned: 'celery_openfromredis' with pid 59
+2020-05-20 05:43:40,495 INFO spawned: 'celery_save_record' with pid 60
+2020-05-20 05:43:40,500 INFO spawned: 'celery_second_blockheight_scanner' with pid 61
+2020-05-20 05:43:40,537 INFO spawned: 'celery_slpbitcoin' with pid 62
+2020-05-20 05:43:40,575 INFO spawned: 'celery_slpdb_token_scanner' with pid 63
+2020-05-20 05:43:40,582 INFO spawned: 'celery_slpfountainhead' with pid 64
+2020-05-20 05:43:40,599 INFO spawned: 'celery_slpstreamfountainheadsocket' with pid 65
+2020-05-20 05:43:40,655 INFO spawned: 'celery_suspendtoredis' with pid 66
+2020-05-20 05:43:40,660 INFO spawned: 'celery_worker_beat' with pid 67
+2020-05-20 05:43:40,746 INFO spawned: 'webserver' with pid 68
+2020-05-20 05:43:41,752 INFO success: celery_checktransaction entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,866 INFO success: celery_client_acknowledgement entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,868 INFO success: celery_deposit_filter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,870 INFO success: celery_first_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,894 INFO success: celery_latest_blockheight_getter entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,897 INFO success: celery_openfromredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,899 INFO success: celery_save_record entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,925 INFO success: celery_second_blockheight_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,926 INFO success: celery_slpbitcoin entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,928 INFO success: celery_slpdb_token_scanner entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,929 INFO success: celery_slpfountainhead entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,931 INFO success: celery_slpstreamfountainheadsocket entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,933 INFO success: celery_suspendtoredis entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,946 INFO success: celery_worker_beat entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2020-05-20 05:43:41,948 INFO success: webserver entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)

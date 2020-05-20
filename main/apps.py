@@ -9,4 +9,4 @@ class MainConfig(AppConfig):
         redis = settings.REDISKV
         redis.set('slpfountainheadsocket', 0)
         redis.set('slpbitcoinsocket', 0)
-        redis_storage.set('slpstreamfountainheadsocket', 0)
+        redis.set('slpstreamfountainheadsocket', 0)
