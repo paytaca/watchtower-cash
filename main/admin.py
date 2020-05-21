@@ -3,6 +3,7 @@ from main.models import (
     Token,
     Transaction,
     SlpAddress,
+    BchAddress,
     BlockHeight,
     Subscriber,
     Subscription,
@@ -160,6 +161,15 @@ class SlpAddressAdmin(admin.ModelAdmin):
         'transactions',
     ]
     
+class BchAddressAdmin(admin.ModelAdmin):
+    list_display = [
+        'address',
+    ]
+
+    exclude = [
+        'transactions',
+    ]
+
 class SendToAdmin(admin.ModelAdmin):
     list_display = [
         'address',
@@ -186,6 +196,7 @@ class SubscriberAdmin(admin.ModelAdmin):
 admin.site.register(Token, TokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
+admin.site.register(BchAddress, BchAddressAdmin)
 admin.site.register(BlockHeight, BlockHeightAdmin)
 admin.site.register(Subscriber, SubscriberAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)

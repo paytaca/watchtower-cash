@@ -5,7 +5,7 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from celery import shared_task
 import requests
-from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription
+from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress
 import json, random
 from main.utils import slpdb
 from django.conf import settings
@@ -13,10 +13,14 @@ import traceback
 from sseclient import SSEClient
 LOGGER = logging.getLogger(__name__)
 from django.db import transaction as trans
+from django.core.exceptions import ObjectDoesNotExist
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
-def client_acknowledgement(self, tokenid, transactionid):
-    token_obj = Token.objects.get(tokenid=tokenid)
+def client_acknowledgement(self, token, transactionid):
+    try:
+        token_obj = Token.objects.get(tokenid=token)
+    except ObjectDoesNotExist:
+        token_obj = Token.objects.get(name=token)
     subscriptions = Subscription.objects.filter(token=token_obj)
     for subscription in subscriptions:
         target_address = subscription.address.address
@@ -28,7 +32,7 @@ def client_acknowledgement(self, tokenid, transactionid):
             'amount': trans.amount,
             'address': trans.address,
             'source': trans.source,
-            'token': trans.token.tokenid,
+            'token': token,
             'txid': trans.txid,
             'block': block
         }
@@ -42,15 +46,18 @@ def client_acknowledgement(self, tokenid, transactionid):
         self.retry(countdown=60)
 
 @shared_task(queue='save_record')
-def save_record(tokenid, slpaddress, transactionid, amount, source, blockheightid=None):
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None):
     """
     Update database records
     """
     with trans.atomic():
-        token_obj = Token.objects.get(tokenid=tokenid)
+        try:
+            token_obj = Token.objects.get(tokenid=token)
+        except ObjectDoesNotExist:
+            token_obj = Token.objects.get(name=token)
         transaction_obj, transaction_created = Transaction.objects.get_or_create(
             txid=transactionid,
-            address=slpaddress,
+            address=transaction_address,
             token=token_obj
         )
         transaction_obj.amount = amount
@@ -59,10 +66,13 @@ def save_record(tokenid, slpaddress, transactionid, amount, source, blockheighti
         if blockheightid is not None:
             transaction_obj.blockheight_id = blockheightid
         transaction_obj.save()
-        address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
+        if token == 'bch':
+            address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
+        else:
+            address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-        client_acknowledgement.delay(tokenid, transaction_obj.id)
+        client_acknowledgement.delay(token, transaction_obj.id)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
@@ -502,6 +512,7 @@ def slpstreamfountainheadsocket(self):
                     proceed = False
                 except Exception as exc:
                     msg = f'This is a novel issue {exc}'
+                    LOGGER.error(msg)
                     break
                 if proceed:
                     if len(readable_dict['data']) != 0:
@@ -537,41 +548,46 @@ def bitsocket(self):
     msg = 'Service not available!'
     LOGGER.info('socket ready in : %s' % source)
     redis_storage = settings.REDISKV
+    previous = ''
     if b'bitsocket' not in redis_storage.keys():
         redis_storage.set('bitsocket', 0)
     withsocket = int(redis_storage.get('bitsocket'))
     if not withsocket:
         for content in resp.iter_content(chunk_size=1024*1024):
             redis_storage.set('bitsocket', 1)
-            decoded_text = content.decode('utf8')
-            if 'heartbeat' not in decoded_text:
-                data = decoded_text.strip().split('data: ')[-1]
-                proceed = True
-                try:
-                    readable_dict = json.loads(data)
-                except json.decoder.JSONDecodeError as exc:
-                    msg = f'Its alright. This is an expected error. --> {exc}'
-                    LOGGER.error(msg)
-                    proceed = False
-                except Exception as exc:
-                    msg = f'This is a novel issue {exc}'
-                        break
-                if proceed:
-                    if len(readable_dict['data']) != 0:
-                        txn_id = readable_dict['data'][0]['tx']['h'] 
-                        for out in readable_dict['data'][0]['out']: 
-                            amount = out['e']['v'] / 100000000
-                            bchaddress = 'bitcoincash:' + out['e']['a']
-                            subscriptions = Subscription.objects.filter(token=None)
-                            qs = subscriptions.filter(adress__address=bchaddress)
-                            if qs.exists():
-                                save_record.delay(
-                                    bchaddress,
-                                    txn_id,
-                                    amount,
-                                    source,
-                                    bch=True
-                                )
+            loaded_data = None
+            try:
+                content = content.decode('utf8')
+                if '"tx":{"h":"' in previous:
+                    data = previous + content
+                    data = data.strip().split('data: ')[-1]
+                    loaded_data = json.loads(data)
+                    proceed = True
+            except (ValueError, UnicodeDecodeError, TypeError) as exc:
+                msg = traceback.format_exc()
+                msg = f'Its alright. This is an expected error. --> {msg}'
+                # LOGGER.error(msg)
+            except json.decoder.JSONDecodeError as exc:
+                msg = f'Its alright. This is an expected error. --> {exc}'
+                # LOGGER.error(msg)
+            except Exception as exc:
+                msg = f'Novel exception found --> {exc}'
+                break
+            previous = content
+            if loaded_data is not None:
+                if len(loaded_data['data']) != 0:
+                    txn_id = loaded_data['data'][0]['tx']['h'] 
+                    for out in loaded_data['data'][0]['out']: 
+                        amount = out['e']['v'] / 100000000
+                        if amount and 'a' in out['e'].keys():
+                            bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                            save_record(
+                                'bch',
+                                bchaddress,
+                                txn_id,
+                                amount,
+                                source
+                            )
         LOGGER.error(msg)
         redis_storage.set('bitsocket', 0)
     else:

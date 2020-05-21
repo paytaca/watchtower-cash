@@ -5,7 +5,7 @@ from django.contrib.postgres.fields import JSONField
 
 class Token(models.Model):
     name = models.CharField(max_length=100, null=True)
-    tokenid = models.CharField(max_length=200)
+    tokenid = models.CharField(max_length=200, null=True, blank=True)
     confirmation_limit = models.IntegerField(default=0)
 
     def __str__(self):
@@ -55,8 +55,19 @@ class SlpAddress(models.Model):
     transactions = models.ManyToManyField(Transaction, related_name='slpaddress', blank=True)
 
     class Meta:
-        verbose_name = 'Slp Address'
-        verbose_name_plural = 'Slp Addresses'
+        verbose_name = 'SLP Address'
+        verbose_name_plural = 'SLP Addresses'
+        
+    def __str__(self):
+        return self.address
+
+class BchAddress(models.Model):
+    address = models.CharField(max_length=200, unique=True)
+    transactions = models.ManyToManyField(Transaction, related_name='bchaddress', blank=True)
+
+    class Meta:
+        verbose_name = 'BCH Address'
+        verbose_name_plural = 'BCH Addresses'
         
     def __str__(self):
         return self.address
