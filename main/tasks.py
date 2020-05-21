@@ -581,7 +581,7 @@ def bitsocket(self):
                         amount = out['e']['v'] / 100000000
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
-                            save_record(
+                            save_record.delay(
                                 'bch',
                                 bchaddress,
                                 txn_id,
