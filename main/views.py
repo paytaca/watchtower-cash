@@ -36,10 +36,9 @@ class SetAddressView(APIView):
         token = request.data.get('token', None)
         tokenaddress = request.data.get('tokenAddress', None)
         destinationAddress = request.data.get('destinationAddress', None)
-        tokenname = request.data.get('tokenName', None)
         reason = 'Invalid params.'
         status = 'failed'
-        if tokenaddress and destinationAddress and tokenname:
+        if tokenaddress and destinationAddress:
             subscriber_qs = Subscriber.objects.filter(user=request.user)
             reason = 'Not yet subscribed.'
             if subscriber_qs.exists():
