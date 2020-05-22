@@ -8,7 +8,8 @@ from main.models import (
     Transaction,
     Subscription,
     SendTo,
-    SlpAddress
+    SlpAddress,
+    BchAddress
 )
 from django.contrib.auth.models import User 
 from django.urls import reverse
@@ -32,18 +33,22 @@ class SetAddressView(APIView):
     
 
     def post(self, request, format=None):
-        slpaddress = request.data.get('slpAddress', None)
+        token = request.data.get('token', None)
+        tokenaddress = request.data.get('tokenAddress', None)
         destinationAddress = request.data.get('destinationAddress', None)
         tokenname = request.data.get('tokenName', None)
         reason = 'Invalid params.'
         status = 'failed'
-        if slpaddress and destinationAddress and tokenname:
+        if tokenaddress and destinationAddress and tokenname:
             subscriber_qs = Subscriber.objects.filter(user=request.user)
             reason = 'Not yet subscribed.'
             if subscriber_qs.exists():
                 subscriber = subscriber_qs.first()
                 sendto_obj, created = SendTo.objects.get_or_create(address=destinationAddress)
-                address_obj, created = SlpAddress.objects.get_or_create(address=slpaddress)
+                if token == 'bch':
+                    address_obj, created = BchAddress.objects.get_or_create(address=tokenaddress)
+                else:
+                    address_obj, created = SlpAddress.objects.get_or_create(address=tokenaddress)
                 
                 subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj)
                 subscription_obj.address = sendto_obj
