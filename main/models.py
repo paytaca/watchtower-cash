@@ -76,6 +76,7 @@ class Subscription(models.Model):
     token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='subscription', null=True)
     address = models.ForeignKey(SendTo, on_delete=models.CASCADE, related_name='subscription', null=True)
     slp = models.ForeignKey(SlpAddress, on_delete=models.CASCADE, related_name='subscription', null=True)
+    bch = models.ForeignKey(BchAddress, on_delete=models.CASCADE, related_name='subscription', null=True)
 
 class Subscriber(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscriber')

@@ -46,10 +46,11 @@ class SetAddressView(APIView):
                 sendto_obj, created = SendTo.objects.get_or_create(address=destinationAddress)
                 if token == 'bch':
                     address_obj, created = BchAddress.objects.get_or_create(address=tokenaddress)
+                    subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
                 else:
                     address_obj, created = SlpAddress.objects.get_or_create(address=tokenaddress)
+                    subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj)
                 
-                subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj)
                 subscription_obj.address = sendto_obj
                 subscription_obj.save()
 
