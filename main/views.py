@@ -33,7 +33,6 @@ class SetAddressView(APIView):
     
 
     def post(self, request, format=None):
-        token = request.data.get('token', None)
         tokenaddress = request.data.get('tokenAddress', None)
         destinationAddress = request.data.get('destinationAddress', None)
         reason = 'Invalid params.'
@@ -44,7 +43,7 @@ class SetAddressView(APIView):
             if subscriber_qs.exists():
                 subscriber = subscriber_qs.first()
                 sendto_obj, created = SendTo.objects.get_or_create(address=destinationAddress)
-                if token == 'bch':
+                if 'bitcoincash' in tokenaddress:
                     address_obj, created = BchAddress.objects.get_or_create(address=tokenaddress)
                     subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
                 else:
