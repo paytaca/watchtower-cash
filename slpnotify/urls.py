@@ -26,7 +26,7 @@ from main.views import (
   Account,
   SetupToken,
   SetupSLPAddress,
-  SetSLPAddressView
+  SetAddressView
 )
 
 urlpatterns=[
@@ -37,6 +37,6 @@ urlpatterns=[
     path('setuptokens/', SetupToken.as_view(), name='setuptoken'),
     path('setupslpaddresses/', SetupSLPAddress.as_view(), name='setupslpaddress'),
     path('', Home.as_view(), name='home'),
-    path('set-slpaddress/', SetSLPAddressView.as_view()),
+    path('set-address/', SetAddressView.as_view()),
     url(r'^api-token-auth/', views.obtain_auth_token),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

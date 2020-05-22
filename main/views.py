@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import authentication, permissions
 
-class SetSLPAddressView(APIView):
+class SetAddressView(APIView):
     """
     Subscribers can set address using api view.
     * Requires token authentication.
