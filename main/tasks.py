@@ -58,9 +58,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         transaction_obj, transaction_created = Transaction.objects.get_or_create(
             txid=transactionid,
             address=transaction_address,
-            token=token_obj
+            token=token_obj,
+            amount=amount
         )
-        transaction_obj.amount = amount
         if not transaction_obj.source:
             transaction_obj.source = source
         if blockheightid is not None:
