@@ -21,13 +21,13 @@ def client_acknowledgement(self, token, transactionid):
         token_obj = Token.objects.get(tokenid=token)
     except ObjectDoesNotExist:
         token_obj = Token.objects.get(name=token)
-    subscriptions = Subscription.objects.filter(token=token_obj)
+    subscriptions = Subscription.objects.filter(token=token_obj).values('address__address').distinct()
+    trans = Transaction.objects.get(id=transactionid)
+    block = None
+    if trans.blockheight:
+        block = trans.blockheight.number
     for subscription in subscriptions:
-        target_address = subscription.address.address
-        trans = Transaction.objects.get(id=transactionid)
-        block = None
-        if trans.blockheight:
-            block = trans.blockheight.number
+        target_address = subscription['address__address']
         data = {
             'amount': trans.amount,
             'address': trans.address,
