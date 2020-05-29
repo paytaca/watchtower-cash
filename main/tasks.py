@@ -41,8 +41,9 @@ def client_acknowledgement(self, token, transactionid):
             response_data = json.loads(resp.text)
             if response_data['success']:
                 trans.acknowledge = True
-                trans.save()
-                return 'success'
+        else:
+            trans.acknowledge = False
+        trans.save()
         self.retry(countdown=60)
 
 @shared_task(queue='save_record')
