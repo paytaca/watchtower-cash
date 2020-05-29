@@ -15,7 +15,7 @@ LOGGER = logging.getLogger(__name__)
 from django.db import transaction as trans
 from django.core.exceptions import ObjectDoesNotExist
 
-@shared_task(bind=True, queue='client_acknowledgement', max_retries=10)
+@shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, token, transactionid):
     try:
         token_obj = Token.objects.get(tokenid=token)
@@ -26,6 +26,7 @@ def client_acknowledgement(self, token, transactionid):
     block = None
     if trans.blockheight:
         block = trans.blockheight.number
+    retry = False
     for subscription in subscriptions:
         target_address = subscription['address__address']
         data = {
@@ -38,13 +39,20 @@ def client_acknowledgement(self, token, transactionid):
         }
         resp = requests.post(target_address,data=data)
         if resp.status_code == 200:
+            print('a')
             response_data = json.loads(resp.text)
             if response_data['success']:
                 trans.acknowledge = True
+        elif resp.status_code == 404:
+            LOGGER.error(f'this is no longer valid > {target_address}')
         else:
+            retry = True
             trans.acknowledge = False
         trans.save()
-        self.retry(countdown=60)
+    if retry:
+        self.retry(countdown=180)
+    else:
+        return 'success'
 
 @shared_task(queue='save_record')
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None):
