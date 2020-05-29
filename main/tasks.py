@@ -39,7 +39,6 @@ def client_acknowledgement(self, token, transactionid):
         }
         resp = requests.post(target_address,data=data)
         if resp.status_code == 200:
-            print('a')
             response_data = json.loads(resp.text)
             if response_data['success']:
                 trans.acknowledge = True
@@ -328,7 +327,6 @@ def first_blockheight_scanner(self, id=None):
                     if qs.exists():
                         if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
                             for trans in transaction['tokenDetails']['detail']['outputs']:
-                                print('aw')
                                 save_record(
                                     transaction['tokenDetails']['detail']['tokenIdHex'],
                                     trans['address'],
