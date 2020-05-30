@@ -27,6 +27,7 @@ def client_acknowledgement(self, token, transactionid):
     if trans.blockheight:
         block = trans.blockheight.number
     retry = False
+    print(subscriptions.count())
     for subscription in subscriptions:
         target_address = subscription['address__address']
         data = {
@@ -39,12 +40,15 @@ def client_acknowledgement(self, token, transactionid):
         }
         resp = requests.post(target_address,data=data)
         if resp.status_code == 200:
+            print('aw')
             response_data = json.loads(resp.text)
             if response_data['success']:
                 trans.acknowledge = True
         elif resp.status_code == 404:
+            print('waddd')
             LOGGER.error(f'this is no longer valid > {target_address}')
         else:
+            print('boom')
             retry = True
             trans.acknowledge = False
         trans.save()

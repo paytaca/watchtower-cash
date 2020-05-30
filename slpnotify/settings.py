@@ -196,10 +196,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.slpfountainheadsocket',
         'schedule': 1800
     },
-    'slpstreamfountainheadsocket': {
-        'task': 'main.tasks.slpstreamfountainheadsocket',
-        'schedule': 1800
-    },
+    # 'slpstreamfountainheadsocket': {
+    #     'task': 'main.tasks.slpstreamfountainheadsocket',
+    #     'schedule': 1800
+    # },
     'bitsocket': {
         'task': 'main.tasks.bitsocket',
         'schedule': 1800
