@@ -544,6 +544,36 @@ def slpstreamfountainheadsocket(self):
     else:
         LOGGER.info('slpstreamfountainheadsocket is still running')
 
+@shared_task(bind=True, queue='bitdbquery')
+def bitdbquery(self):
+    source = 'bitdbquery'
+    query = {
+        "v": 3,
+        "q": {
+            "find": {
+            },
+            "limit": 1000
+        }
+    }
+    json_string = bytes(json.dumps(query), 'utf-8')
+    url = base64.b64encode(json_string)
+    resp = requests.get(BITDB_URL + url.decode('utf-8'))
+    data = resp.json()
+    for row in data['u']: 
+        txn_id = row['tx']['h']
+        for outs in row['out']: 
+            for out in outs:
+                amount = out['e']['v'] / 100000000
+                bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                save_record.delay(
+                    'bch',
+                    bchaddress,
+                    txn_id,
+                    amount,
+                    source
+                )
+
+
 @shared_task(bind=True, queue='bitsocket')
 def bitsocket(self):
     """
@@ -569,6 +599,7 @@ def bitsocket(self):
                     data = previous + content
                     data = data.strip().split('data: ')[-1]
                     loaded_data = json.loads(data)
+
                     proceed = True
             except (ValueError, UnicodeDecodeError, TypeError) as exc:
                 msg = traceback.format_exc()
@@ -583,7 +614,7 @@ def bitsocket(self):
             previous = content
             if loaded_data is not None:
                 if len(loaded_data['data']) != 0:
-                    txn_id = loaded_data['data'][0]['tx']['h'] 
+                    txn_id = loaded_data['data'][0]['tx']['h']
                     for out in loaded_data['data'][0]['out']: 
                         amount = out['e']['v'] / 100000000
                         if amount and 'a' in out['e'].keys():

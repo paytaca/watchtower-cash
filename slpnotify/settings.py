@@ -203,6 +203,10 @@ CELERY_BEAT_SCHEDULE = {
     'bitsocket': {
         'task': 'main.tasks.bitsocket',
         'schedule': 1800
+    },
+    'bitdbquery': {
+        'task': 'main.tasks.bitdbquery',
+        'schedule': 600
     }
 }
 

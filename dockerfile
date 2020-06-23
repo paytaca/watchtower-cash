@@ -9,8 +9,8 @@ RUN apt-get -y install build-essential sudo postgresql libpq-dev postgresql-clie
 RUN pip install --upgrade pip
 COPY ./requirements.txt requirements.txt
 
-RUN rm -r /opt/bitnami/python/lib/python3.6/site-packages/setuptools*
-RUN pip install --no-cache-dir -U setuptools
+# RUN rm -r /opt/bitnami/python/lib/python3.6/site-packages/setuptools*
+# RUN pip install --no-cache-dir -U setuptools
 RUN pip install --no-cache-dir -r requirements.txt
 
 
