@@ -14,6 +14,8 @@ from sseclient import SSEClient
 LOGGER = logging.getLogger(__name__)
 from django.db import transaction as trans
 from django.core.exceptions import ObjectDoesNotExist
+import base64
+import sseclient
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, token, transactionid):
@@ -546,6 +548,7 @@ def slpstreamfountainheadsocket(self):
 
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self):
+    BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
     source = 'bitdbquery'
     query = {
         "v": 3,
@@ -561,9 +564,9 @@ def bitdbquery(self):
     data = resp.json()
     for row in data['u']: 
         txn_id = row['tx']['h']
-        for outs in row['out']: 
-            for out in outs:
-                amount = out['e']['v'] / 100000000
+        for out in row['out']: 
+            amount = out['e']['v'] / 100000000
+            if 'a' in out['e'].keys():
                 bchaddress = 'bitcoincash:' + str(out['e']['a'])
                 save_record.delay(
                     'bch',
