@@ -262,6 +262,7 @@ def latest_blockheight_getter():
             blocks.append(number)
             data = json.dumps(blocks)
             redis_storage.set('PENDING-BLOCKS', data)
+            bitcoincash_tracker.delay(obj.id)
     except Exception as exc:
         LOGGER.error(exc)
 
@@ -370,6 +371,21 @@ def checktransaction(self, txn_id):
         data = json.loads(response.text)
         if 'blockheight' in data.keys():
             blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
+            if 'vout' in data.keys():
+                for out in data['vout']:
+                    if 'scriptPubKey' in out.keys():
+                        for cashaddr in out['scriptPubKey']['cashAddrs']:
+                            if cashaddr.startswith('bitcoincash:'):
+                                tr_qs = Transaction.objects.filter(address=cashaddr, txid=txn_id)
+                                if not tr_qs.exists():
+                                    save_record(
+                                        'bch',
+                                        cashaddr,
+                                        data['txid'],
+                                        out['value'],
+                                        "per-bch-blockheight",
+                                        obj.id
+                                    )
             deposit_filter(
                 txn_id,
                 blockheight_obj.id,
@@ -593,6 +609,7 @@ def bitdbquery(self):
 
 @shared_task(bind=True, queue='bitsocket')
 def bitsocket(self):
+
     """
     A live stream of BCH transactions via bitsocket
     """
@@ -649,3 +666,32 @@ def bitsocket(self):
         redis_storage.set('bitsocket', 0)
     else:
         LOGGER.info('bitsocket is still running')
+
+@shared_task(bind=True, queue='bitcoincash_tracker')
+def bitcoincash_tracker(self,id):
+    blockheight_obj= BlockHeight.objects.get(id=id)
+    url = f"https://rest.bitcoin.com/v2/block/detailsByHeight/{blockheight_obj.number}"
+    resp = requests.get(url)
+    data = json.loads(resp.text)
+    for txn_id in data['tx']:
+        trans = Transaction.objects.filter(txid=txn_id)
+        if not trans.exists():
+            url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
+            response = requests.get(url)
+            if response.status_code == 200:
+                data = json.loads(response.text)
+                if 'vout' in data.keys():
+                    for out in data['vout']:
+                        if 'scriptPubKey' in out.keys():
+                            for cashaddr in out['scriptPubKey']['cashAddrs']:
+                                if cashaddr.startswith('bitcoincash:'):
+                                    tr_qs = Transaction.objects.filter(address=cashaddr, txid=txn_id)
+                                    if not tr_qs.exists():
+                                        save_record.delay(
+                                            'bch',
+                                            cashaddr,
+                                            txn_id,
+                                            out['value'],
+                                            "alt-bch-tracker",
+                                            blockheight_obj.id
+                                        )
