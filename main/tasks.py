@@ -262,7 +262,7 @@ def latest_blockheight_getter():
             blocks.append(number)
             data = json.dumps(blocks)
             redis_storage.set('PENDING-BLOCKS', data)
-            bitcoincash_tracker.delay(obj.id)
+        bitcoincash_tracker.delay(obj.id)
     except Exception as exc:
         LOGGER.error(exc)
 
