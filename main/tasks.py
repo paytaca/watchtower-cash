@@ -683,15 +683,16 @@ def bitcoincash_tracker(self,id):
                 if 'vout' in data.keys():
                     for out in data['vout']:
                         if 'scriptPubKey' in out.keys():
-                            for cashaddr in out['scriptPubKey']['cashAddrs']:
-                                if cashaddr.startswith('bitcoincash:'):
-                                    tr_qs = Transaction.objects.filter(address=cashaddr, txid=txn_id)
-                                    if not tr_qs.exists():
-                                        save_record.delay(
-                                            'bch',
-                                            cashaddr,
-                                            txn_id,
-                                            out['value'],
-                                            "alt-bch-tracker",
-                                            blockheight_obj.id
-                                        )
+                            if 'cashAddrs' in out['scriptPubKey'].keys():
+                                for cashaddr in out['scriptPubKey']['cashAddrs']:
+                                    if cashaddr.startswith('bitcoincash:'):
+                                        tr_qs = Transaction.objects.filter(address=cashaddr, txid=txn_id)
+                                        if not tr_qs.exists():
+                                            save_record.delay(
+                                                'bch',
+                                                cashaddr,
+                                                txn_id,
+                                                out['value'],
+                                                "alt-bch-tracker",
+                                                blockheight_obj.id
+                                            )
