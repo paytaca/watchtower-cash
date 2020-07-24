@@ -38,7 +38,7 @@ class Transaction(models.Model):
     scanning = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ('txid', 'address',)
+        unique_together = ('txid', 'address')
 
     def __str__(self):
         return self.txid
