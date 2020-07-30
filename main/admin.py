@@ -87,6 +87,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'blockheight_number',
         'token',
         'acknowledge',
+        'subscribed',
         'created_datetime',
         '_actions'
     ]

@@ -46,7 +46,7 @@ INSTALLED_APPS=[
 'rest_framework.authtoken',
 'corsheaders',
 'main',
-'django.contrib.admin',
+'django.contrib.admin'
 ]
 
 MIDDLEWARE=[

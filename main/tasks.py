@@ -23,32 +23,42 @@ def client_acknowledgement(self, token, transactionid):
         token_obj = Token.objects.get(tokenid=token)
     except ObjectDoesNotExist:
         token_obj = Token.objects.get(name=token)
-    subscriptions = Subscription.objects.filter(token=token_obj).values('address__address').distinct()
+    # subscriptions = Subscription.objects.filter(token=token_obj).values('address__address').distinct()
+    
     trans = Transaction.objects.get(id=transactionid)
     block = None
     if trans.blockheight:
         block = trans.blockheight.number
     retry = False
-    for subscription in subscriptions:
-        target_address = subscription['address__address']
-        data = {
-            'amount': trans.amount,
-            'address': trans.address,
-            'source': trans.source,
-            'token': token,
-            'txid': trans.txid,
-            'block': block
-        }
-        resp = requests.post(target_address,data=data)
-        if resp.status_code == 200:
-            response_data = json.loads(resp.text)
-            if response_data['success']:
-                trans.acknowledge = True
-        elif resp.status_code == 404:
-            LOGGER.error(f'this is no longer valid > {target_address}')
-        else:
-            retry = True
-            trans.acknowledge = False
+    # address can be bch or slp
+    address = trans.address
+    if 'bitcoincash' in address:
+        subscription = Subscription.objects.filter(bch__address=address)
+    else:
+        subscription = Subscription.objects.filter(slp__address=address)
+    if subscription.exists():
+        trans.subscribed = True
+        for target_address in subscription.first().address:
+            data = {
+                'amount': trans.amount,
+                'address': trans.address,
+                'source': trans.source,
+                'token': token,
+                'txid': trans.txid,
+                'block': block
+            }
+            resp = requests.post(target_address,data=data)
+            if resp.status_code == 200:
+                response_data = json.loads(resp.text)
+                if response_data['success']:
+                    trans.acknowledge = True
+                    trans.queued = False
+            elif resp.status_code == 404:
+                LOGGER.error(f'this is no longer valid > {target_address}')
+            else:
+                retry = True
+                trans.acknowledge = False
+        # This is no longer reliable since a subscriber can have multiple subscription
         trans.save()
     if retry:
         self.retry(countdown=180)
@@ -89,7 +99,12 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-        client_acknowledgement.delay(token, transaction_obj.id)
+        if token != 'bch':
+            client_acknowledgement.delay(token, transaction_obj.id)
+        else:
+            # To avoid too much sending of requests to spicebot., client_acknowledgement will monitor bch transactions
+            transaction_obj.queued = True
+            transaction_obj.save()
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):

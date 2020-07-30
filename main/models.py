@@ -34,8 +34,9 @@ class Transaction(models.Model):
     blockheight = models.ForeignKey(BlockHeight, on_delete=models.CASCADE, related_name='transactions', null=True)
     source = models.CharField(max_length=200, null=True)
     created_datetime = models.DateTimeField(default=timezone.now)
-    token = models.ForeignKey(Token, on_delete=models.CASCADE)
+    token = models.ForeignKey(Token, on_delete=models.DO_NOTHING)
     scanning = models.BooleanField(default=False)
+    subscribed = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('txid', 'address')
