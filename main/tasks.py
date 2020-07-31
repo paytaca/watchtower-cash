@@ -68,7 +68,12 @@ def client_acknowledgement(self, token, transactionid):
 @shared_task(queue='save_record')
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None):
     """
-    Update database records
+        token                : can be tokenid (slp token) or token name (bch)
+        transaction_address  : the destination address where token had been deposited.
+        transactionid        : transaction id generated over blockchain.
+        amount               : the amount being transacted.
+        source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
+        blockheight          : an optional argument indicating the block height number of a transaction.
     """
     with trans.atomic():
         try:
@@ -79,8 +84,12 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         transaction_qs = Transaction.objects.filter(txid=transactionid, address=transaction_address,token=token_obj)
         if transaction_qs.exists():
             transaction_obj = transaction_qs.first()
-            transaction_obj.amount += float(amount)
-            transaction_obj.save()
+            if transaction_obj.source == source:
+                transaction_obj = transaction_qs.first()
+                transaction_obj.amount += float(amount)
+                transaction_obj.save()
+            else:
+                return f"Transaction {transactionid} with amount {amount} was already processed by {source}"
         else:
             transaction_obj, transaction_created = Transaction.objects.get_or_create(
                 txid=transactionid,
@@ -408,8 +417,8 @@ def checktransaction(self, txn_id):
             )
             LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
             first_blockheight_scanner.delay(id=blockheight_obj.id)
-            status = 'success'
     return status
+            status = 'success'
     
 @shared_task(bind=True, queue='slpbitcoinsocket')
 def slpbitcoinsocket(self):
@@ -527,7 +536,7 @@ def slpfountainheadsocket(self):
     else:
         LOGGER.info('slpfountainhead is still running')
 
-
+        
 @shared_task(bind=True, queue='slpstreamfountainheadsocket')
 def slpstreamfountainheadsocket(self):
     """
