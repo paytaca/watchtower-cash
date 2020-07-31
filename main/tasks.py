@@ -85,7 +85,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         if transaction_qs.exists():
             transaction_obj = transaction_qs.first()
             if transaction_obj.source == source:
-                transaction_obj = transaction_qs.first()
                 transaction_obj.amount += float(amount)
                 transaction_obj.save()
             else:
