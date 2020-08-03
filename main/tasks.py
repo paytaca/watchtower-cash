@@ -5,7 +5,7 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from celery import shared_task
 import requests
-from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress
+from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress, SendTo
 import json, random
 from main.utils import slpdb
 from django.conf import settings
@@ -43,7 +43,7 @@ def client_acknowledgement(self, token, transactionid):
         if target_addresses.count() == 0:
             sendto_obj = SendTo.objects.first()
             subscription.address.add(sendto_obj)
-            target_addresses = [sendto_obj]
+            target_addresses = [sendto_obj.address]
         for target_address in target_addresses:
             data = {
                 'amount': trans.amount,
@@ -53,7 +53,7 @@ def client_acknowledgement(self, token, transactionid):
                 'txid': trans.txid,
                 'block': block
             }
-            resp = requests.post(target_address,data=data)
+            resp = requests.post(target_address.address,data=data)
             if resp.status_code == 200:
                 response_data = json.loads(resp.text)
                 if response_data['success']:
