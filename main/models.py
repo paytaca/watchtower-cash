@@ -75,7 +75,7 @@ class BchAddress(models.Model):
 
 class Subscription(models.Model):
     token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='subscription', null=True)
-    address = models.ForeignKey(SendTo, on_delete=models.CASCADE, related_name='subscription', null=True)
+    address = models.ManyToManyField(SendTo, related_name='subscription')
     slp = models.ForeignKey(SlpAddress, on_delete=models.CASCADE, related_name='subscription', null=True)
     bch = models.ForeignKey(BchAddress, on_delete=models.CASCADE, related_name='subscription', null=True)
 

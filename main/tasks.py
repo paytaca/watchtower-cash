@@ -38,7 +38,13 @@ def client_acknowledgement(self, token, transactionid):
         subscription = Subscription.objects.filter(slp__address=address)
     if subscription.exists():
         trans.subscribed = True
-        for target_address in subscription.first().address:
+        subscription = subscription.first()
+        target_addresses = subscription.address.all()
+        if target_addresses.count() == 0:
+            sendto_obj = SendTo.objects.first()
+            subscription.address.add(sendto_obj)
+            target_addresses = [sendto_obj]
+        for target_address in target_addresses:
             data = {
                 'amount': trans.amount,
                 'address': trans.address,
@@ -416,8 +422,8 @@ def checktransaction(self, txn_id):
             )
             LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
             first_blockheight_scanner.delay(id=blockheight_obj.id)
-    return status
             status = 'success'
+    return status
     
 @shared_task(bind=True, queue='slpbitcoinsocket')
 def slpbitcoinsocket(self):

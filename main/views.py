@@ -55,9 +55,9 @@ class SetAddressView(APIView):
                     reason = 'SLP added.'
                 token_obj, created =  MyToken.objects.get_or_create(tokenid=tokenid)
                 token_obj.name = tokenname.lower()
-                subscription_obj.address = sendto_obj
                 subscription_obj.token = token_obj
                 subscription_obj.save()
+                subscription_obj.address.add(sendto_obj)
                 subscriber.subscription.add(subscription_obj)
                 status = 'success'
         return Response({'status': status, 'reason': reason})

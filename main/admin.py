@@ -178,8 +178,7 @@ class SendToAdmin(admin.ModelAdmin):
 
 class SubscriptionAdmin(admin.ModelAdmin):
     list_display = [
-        'token',
-        'address'
+        'token'
     ]
 
 
