@@ -43,13 +43,13 @@ def client_acknowledgement(self, token, transactionid):
         if target_addresses.count() == 0:
             sendto_obj = SendTo.objects.first()
             subscription.address.add(sendto_obj)
-            target_addresses = [sendto_obj.address]
+            target_addresses = [sendto_obj]
         for target_address in target_addresses:
             data = {
                 'amount': trans.amount,
                 'address': trans.address,
                 'source': trans.source,
-                'token': token,
+                'token': token_obj.tokenid,
                 'txid': trans.txid,
                 'block': block
             }
@@ -72,7 +72,7 @@ def client_acknowledgement(self, token, transactionid):
         return 'success'
 
 @shared_task(queue='save_record')
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None):
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -80,28 +80,26 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         amount               : the amount being transacted.
         source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
         blockheight          : an optional argument indicating the block height number of a transaction.
+        spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
     """
+    try:
+        spent_index = int(spent_index)
+    except TypeError as exc:
+        spent_index = 0
+
     with trans.atomic():
         try:
             token_obj = Token.objects.get(tokenid=token)
         except ObjectDoesNotExist:
             token_obj = Token.objects.get(name=token)
         
-        transaction_qs = Transaction.objects.filter(txid=transactionid, address=transaction_address,token=token_obj)
-        if transaction_qs.exists():
-            transaction_obj = transaction_qs.first()
-            if transaction_obj.source == source:
-                transaction_obj.amount += float(amount)
-                transaction_obj.save()
-            else:
-                return f"Transaction {transactionid} with amount {amount} was already processed by {source}"
-        else:
-            transaction_obj, transaction_created = Transaction.objects.get_or_create(
-                txid=transactionid,
-                address=transaction_address,
-                token=token_obj,
-                amount=amount
-            )
+        transaction_obj, transaction_created = Transaction.objects.get_or_create(
+            txid=transactionid,
+            address=transaction_address,
+            token=token_obj,
+            amount=amount,
+            spentIndex=spent_index
+        )
         if not transaction_obj.source:
             transaction_obj.source = source
         if blockheightid is not None:
@@ -113,12 +111,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-        if token != 'bch':
-            client_acknowledgement.delay(token, transaction_obj.id)
-        else:
-            # To avoid too much sending of requests to spicebot., client_acknowledgement will monitor bch transactions
-            transaction_obj.queued = True
-            transaction_obj.save()
+        client_acknowledgement.delay(token, transaction_obj.id)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
@@ -165,41 +158,60 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             except Exception as exc:
                 transaction_data = {}
             if 'tokenInfo' in transaction_data.keys():
-                if 'tokenIsValid' in transaction_data.keys():
-                    if transaction_data['tokenIsValid']:
-                        if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
-                            transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
-                            token_query = Token.objects.filter(tokenid=transaction_token_id)
-                            if token_query.exists():
-                                amount = float(transaction_data['tokenInfo']['sendOutputs'][1]) / 100000000
+                if transaction_data['tokenInfo']:
+                    if 'tokenIsValid' in transaction_data['tokenInfo'].keys():
+                        if transaction_data['tokenInfo']['tokenIsValid']:
+                            if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
+                                transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
+                                token_query = Token.objects.filter(tokenid=transaction_token_id)
+                                if token_query.exists():
+                                    
+                                    send_outputs = transaction_data['tokenInfo']['sendOutputs']
 
-                                for legacy in transaction_data['retData']['vout'][1]['scriptPubKey']['addresses']:
-                                # Starting here is the extraction of SLP address using legacy address.
-                                # And this have to be execute perfectly.
-                                    try:
-                                        address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
-                                        address_response = requests.get(address_url)
-                                        address_data = json.loads(address_response.text)
-                                    except Exception as exc:
-                                        # Once fail in sending request, we'll store given params to
-                                        # redis temporarily and retry after 30 minutes cooldown.
-                                        msg = f'---> FOUND this error {exc} --> Now Delaying...'
-                                        LOGGER.error(msg)
-                                        proceed = False
+                                    # the last index is intended to sender's current balance so we'll going to remove it in send_ouputs.
+                                    send_outputs.pop(-1)
 
-                                    if (not 'error' in address_data.keys()) and proceed == True:
-                                        token_obj = token_query.first()
-                                        save_record.delay(
-                                            token_obj.tokenid,
-                                            address_data['slpAddress'],
-                                            txn_id,
-                                            amount,
-                                            "per-blockheight",
-                                            blockheightid
-                                        )
-                                        status = 'success'
-                else:
-                    LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
+
+                                    spent_index = 1
+                                    
+                                    for output in send_outputs:
+                                        amount = float(output)
+                                                                        
+                                        for legacy in transaction_data['retData']['vout'][spent_index]['scriptPubKey']['addresses']:
+                                            """ 
+                                                Since there's no specification for slp addresses, we'll use legacy address that was 
+                                                mapped in every send ouputs.
+                                            """
+                                            
+                                            try:
+                                                address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
+                                                address_response = requests.get(address_url)
+                                                address_data = json.loads(address_response.text)
+                                            except Exception as exc:
+                                                # Once fail in sending request, we'll store given params to
+                                                # redis temporarily and retry after 30 minutes cooldown.
+                                                msg = f'---> FOUND this error {exc} --> Now Delaying...'
+                                                LOGGER.error(msg)
+                                                proceed = False
+
+                                            if (not 'error' in address_data.keys()) and proceed == True:
+                                                token_obj = token_query.first()
+                                                save_record.delay(
+                                                    token_obj.tokenid,
+                                                    address_data['slpAddress'],
+                                                    txn_id,
+                                                    amount,
+                                                    "per-blockheight",
+                                                    blockheightid=blockheightid,
+                                                    spent_index=spent_index
+                                                )
+                                                status = 'success'
+
+                                        spent_index += 1
+                    else:
+                        LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
+
+
         elif transaction_response.status_code == 404:
             status = 'success'
                         
@@ -261,6 +273,8 @@ def slpdb_token_scanner():
                                 block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
                                 if created:
                                     first_blockheight_scanner.delay(block.id)
+                                transaction['tokenDetails']['detail']['outputs'].pop(-1)
+                                spent_index = 1
                                 for trans in transaction['tokenDetails']['detail']['outputs']:
                                     amount = trans['amount']
                                     slpaddress = trans['address']
@@ -270,8 +284,10 @@ def slpdb_token_scanner():
                                         transaction['txid'],
                                         amount,
                                         "slpdb_token_scanner",
-                                        block.id
+                                        blockheightid=block.id,
+                                        spent_index=spent_index
                                     )
+                                    spent_index += 1
                                                
 @shared_task(queue='latest_blockheight_getter')
 def latest_blockheight_getter():    
@@ -365,6 +381,7 @@ def first_blockheight_scanner(self, id=None):
                     qs = Token.objects.filter(tokenid=token)
                     if qs.exists():
                         if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
+                            spent_index = 1
                             for trans in transaction['tokenDetails']['detail']['outputs']:
                                 save_record(
                                     transaction['tokenDetails']['detail']['tokenIdHex'],
@@ -372,8 +389,10 @@ def first_blockheight_scanner(self, id=None):
                                     transaction['txid'],
                                     trans['amount'],
                                     'SLPDB-block-scanner',
-                                    blockheight_instance.id
+                                    blockheightid=blockheight_instance.id,
+                                    spent_index=spent_index
                                 )
+                                spent_index += 1
     LOGGER.info(f'CHECKING BLOCK {heightnumber} via REST.BITCOIN.COM')
     url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % heightnumber
     resp = requests.get(url)
@@ -412,7 +431,8 @@ def checktransaction(self, txn_id):
                                     data['txid'],
                                     out['value'],
                                     "per-bch-blockheight",
-                                    blockheight_obj.id
+                                    blockheightid=blockheight_obj.id,
+                                    spent_index=out['spentIndex']
                                 )
             deposit_filter(
                 txn_id,
@@ -465,13 +485,16 @@ def slpbitcoinsocket(self):
                                     for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
                                         slp_address = trans['address']
                                         amount = float(trans['amount'])
+                                        spent_index = trans['spentIndex']
                                         token_obj = token_query.first()
                                         save_record.delay(
                                             token_obj.tokenid,
                                             slp_address,
                                             txn_id,
                                             amount,
-                                            source
+                                            source,
+                                            blockheightid=None,
+                                            spent_index=spent_index
                                         )
         LOGGER.error(msg)
         redis_storage.set('slpbitcoinsocket', 0)
@@ -523,6 +546,7 @@ def slpfountainheadsocket(self):
                                 if 'tokenIdHex' in info['slp']['detail'].keys():
                                     token_query =  Token.objects.filter(tokenid=info['slp']['detail']['tokenIdHex'])
                                     if token_query.exists():
+                                        spent_index = 1
                                         for trans in info['slp']['detail']['outputs']:
                                             amount = float(trans['amount'])
                                             slp_address = trans['address']
@@ -534,8 +558,11 @@ def slpfountainheadsocket(self):
                                                     slp_address,
                                                     txn_id,
                                                     amount,
-                                                    source
+                                                    source,
+                                                    blockheightid=None,
+                                                    spent_index=spent_index
                                                 )
+                                            spent_index += 1
         LOGGER.error(msg)
         redis_storage.set('slpfountainheadsocket', 0)
     else:
@@ -583,6 +610,7 @@ def slpstreamfountainheadsocket(self):
                                     for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
                                         slp_address = trans['address']
                                         amount = float(trans['amount']) / 100000000
+                                        spent_index = trans['spentIndex']
                                         token_obj = token_query.first()
                                         tr_qs = Transaction.objects.filter(address=slp_address, txid=txn_id)
                                         save_record.delay(
@@ -590,7 +618,9 @@ def slpstreamfountainheadsocket(self):
                                             slp_address,
                                             txn_id,
                                             amount,
-                                            source
+                                            source,
+                                            blockheightid=None,
+                                            spent_index=spent_index
                                         )
         LOGGER.error(msg)
         redis_storage.set('slpstreamfountainheadsocket', 0)
@@ -617,6 +647,7 @@ def bitdbquery(self):
         txn_id = row['tx']['h']
         for out in row['out']: 
             amount = out['e']['v'] / 100000000
+            spent_index = out['e']['i']
             if 'a' in out['e'].keys():
                 bchaddress = 'bitcoincash:' + str(out['e']['a'])
                 save_record.delay(
@@ -624,7 +655,9 @@ def bitdbquery(self):
                     bchaddress,
                     txn_id,
                     amount,
-                    source
+                    source,
+                    blockheightid=None,
+                    spent_index=spent_index
                 )
 
 
@@ -672,6 +705,7 @@ def bitsocket(self):
                     txn_id = loaded_data['data'][0]['tx']['h']
                     for out in loaded_data['data'][0]['out']: 
                         amount = out['e']['v'] / 100000000
+                        spent_index = out['e']['i']
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
                             save_record.delay(
@@ -679,7 +713,9 @@ def bitsocket(self):
                                 bchaddress,
                                 txn_id,
                                 amount,
-                                source
+                                source,
+                                blockheightid=None,
+                                spent_index=spent_index
                             )
         LOGGER.error(msg)
         redis_storage.set('bitsocket', 0)
@@ -711,5 +747,6 @@ def bitcoincash_tracker(self,id):
                                             txn_id,
                                             out['value'],
                                             "alt-bch-tracker",
-                                            blockheight_obj.id
+                                            blockheightid=blockheight_obj.id,
+                                            spent_index=out['spentIndex']
                                         )

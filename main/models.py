@@ -37,9 +37,10 @@ class Transaction(models.Model):
     token = models.ForeignKey(Token, on_delete=models.DO_NOTHING)
     scanning = models.BooleanField(default=False)
     subscribed = models.BooleanField(default=False)
-
+    spentIndex = models.IntegerField(default=0)
+    
     class Meta:
-        unique_together = ('txid', 'address')
+        unique_together = ('txid', 'address', 'spentIndex')
 
     def __str__(self):
         return self.txid
