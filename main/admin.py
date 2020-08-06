@@ -81,6 +81,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
     list_display = [
         '_txid',
+        'spentIndex',
         'address',
         'amount',
         'source',

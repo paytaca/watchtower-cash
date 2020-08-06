@@ -51,7 +51,8 @@ def client_acknowledgement(self, token, transactionid):
                 'source': trans.source,
                 'token': token_obj.tokenid,
                 'txid': trans.txid,
-                'block': block
+                'block': block,
+                'spent_index':trans.spentIndex
             }
             resp = requests.post(target_address.address,data=data)
             if resp.status_code == 200:
