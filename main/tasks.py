@@ -83,6 +83,11 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         blockheight          : an optional argument indicating the block height number of a transaction.
         spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
     """
+    with_existing_trans = Transaction.objects.filter(txid=transactionid).first()
+    if with_existing_trans:
+        if with_existing_trans.source != source:
+            return f"Transaction {with_existing_trans.txid} was already processed by {with_existing_trans.source}."
+
     try:
         spent_index = int(spent_index)
     except TypeError as exc:
@@ -101,6 +106,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             amount=amount,
             spentIndex=spent_index
         )
+        
         if not transaction_obj.source:
             transaction_obj.source = source
         if blockheightid is not None:
@@ -729,25 +735,26 @@ def bitcoincash_tracker(self,id):
     url = f"https://rest.bitcoin.com/v2/block/detailsByHeight/{blockheight_obj.number}"
     resp = requests.get(url)
     data = json.loads(resp.text)
-    for txn_id in data['tx']:
-        trans = Transaction.objects.filter(txid=txn_id)
-        if not trans.exists():
-            url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = json.loads(response.text)
-                if 'vout' in data.keys():
-                    for out in data['vout']:
-                        if 'scriptPubKey' in out.keys():
-                            if 'cashAddrs' in out['scriptPubKey'].keys():
-                                for cashaddr in out['scriptPubKey']['cashAddrs']:
-                                    if cashaddr.startswith('bitcoincash:'):
-                                        save_record.delay(
-                                            'bch',
-                                            cashaddr,
-                                            txn_id,
-                                            out['value'],
-                                            "alt-bch-tracker",
-                                            blockheightid=blockheight_obj.id,
-                                            spent_index=out['spentIndex']
-                                        )
+    if 'tx' in data.keys():
+        for txn_id in data['tx']:
+            trans = Transaction.objects.filter(txid=txn_id)
+            if not trans.exists():
+                url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
+                response = requests.get(url)
+                if response.status_code == 200:
+                    data = json.loads(response.text)
+                    if 'vout' in data.keys():
+                        for out in data['vout']:
+                            if 'scriptPubKey' in out.keys():
+                                if 'cashAddrs' in out['scriptPubKey'].keys():
+                                    for cashaddr in out['scriptPubKey']['cashAddrs']:
+                                        if cashaddr.startswith('bitcoincash:'):
+                                            save_record.delay(
+                                                'bch',
+                                                cashaddr,
+                                                txn_id,
+                                                out['value'],
+                                                "alt-bch-tracker",
+                                                blockheightid=blockheight_obj.id,
+                                                spent_index=out['spentIndex']
+                                            )
