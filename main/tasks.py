@@ -83,10 +83,10 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         blockheight          : an optional argument indicating the block height number of a transaction.
         spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
     """
-    with_existing_trans = Transaction.objects.filter(txid=transactionid).first()
-    if with_existing_trans:
-        if with_existing_trans.source != source:
-            return f"Transaction {with_existing_trans.txid} was already processed by {with_existing_trans.source}."
+    # with_existing_trans = Transaction.objects.filter(txid=transactionid).first()
+    # if with_existing_trans:
+    #     if with_existing_trans.source != source:
+    #         return f"Transaction {with_existing_trans.txid} was already processed by {with_existing_trans.source}."
 
     try:
         spent_index = int(spent_index)
