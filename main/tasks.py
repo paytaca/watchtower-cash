@@ -209,8 +209,8 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
                                                     txn_id,
                                                     amount,
                                                     "per-blockheight",
-                                                    blockheightid=blockheightid,
-                                                    spent_index=spent_index
+                                                    blockheightid,
+                                                    spent_index
                                                 )
                                                 save_record.delay(*args)
                                                 print(args)
@@ -293,8 +293,8 @@ def slpdb_token_scanner():
                                         transaction['txid'],
                                         amount,
                                         "slpdb_token_scanner",
-                                        blockheightid=block.id,
-                                        spent_index=spent_index
+                                        block.id,
+                                        spent_index
                                     )
                                     save_record.delay(*args)
                                     print(args)
@@ -504,8 +504,8 @@ def slpbitcoinsocket(self):
                                             txn_id,
                                             amount,
                                             source,
-                                            blockheightid=None,
-                                            spent_index=spent_index
+                                            None,
+                                            spent_index
                                         )
                                         save_record.delay(*args)
                                         print(args)
@@ -572,8 +572,8 @@ def slpfountainheadsocket(self):
                                                     txn_id,
                                                     amount,
                                                     source,
-                                                    blockheightid=None,
-                                                    spent_index=spent_index
+                                                    None,
+                                                    spent_index
                                                 )
                                                 save_record.delay(*args)
                                                 print(args)
@@ -634,8 +634,8 @@ def slpstreamfountainheadsocket(self):
                                             txn_id,
                                             amount,
                                             source,
-                                            blockheightid=None,
-                                            spent_index=spent_index
+                                            None,
+                                            spent_index
                                         )
                                         save_record.delay(*args)
                                         print(args)
@@ -673,8 +673,8 @@ def bitdbquery(self):
                     txn_id,
                     amount,
                     source,
-                    blockheightid=None,
-                    spent_index=spent_index
+                    None,
+                    spent_index
                 )
                 save_record.delay(*args)
                 print(args)
@@ -733,8 +733,8 @@ def bitsocket(self):
                                 txn_id,
                                 amount,
                                 source,
-                                blockheightid=None,
-                                spent_index=spent_index
+                                None,
+                                spent_index
                             )
                             save_record.delay(*args)
                             print(args)
@@ -769,8 +769,8 @@ def bitcoincash_tracker(self,id):
                                                 txn_id,
                                                 out['value'],
                                                 "alt-bch-tracker",
-                                                blockheightid=blockheight_obj.id,
-                                                spent_index=out['spentIndex']
+                                                blockheight_obj.id,
+                                                out['spentIndex']
                                             )
                                             save_record.delay(*args)
                                             print(args)
