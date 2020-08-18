@@ -6,7 +6,10 @@ class SaveRecordTest(object):
 	txid = None
 	blockheight = None
 	address = None
-	
+	spent_index = None
+	amount = None
+	source = None
+
 	def test(self, *args, **kwargs):
 		tasks.save_record(*args)
 		transaction = Transaction.objects.get(txid=args[2], spentIndex=args[6])
@@ -22,3 +25,6 @@ class SaveRecordTest(object):
 		assert address
 		self.txid = transaction.txid
 		self.address = address.address
+		self.spent_index = str(transaction.spentIndex)
+		self.amount = str(transaction.amount)
+		self.source = transaction.source

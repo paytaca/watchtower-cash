@@ -7,6 +7,7 @@ from tests.bch.objects import (
 
 @pytest.mark.django_db
 def test_bitdbquery_transaction(requests_mock, monkeypatch, capsys):
+    source = 'bitdbquery'
     # Test BitDBQuery from tasks.py
     script = obj_bitdbquery.BitDBQueryTest(requests_mock, capsys)
     script.test()
@@ -19,7 +20,10 @@ def test_bitdbquery_transaction(requests_mock, monkeypatch, capsys):
         if len(output):
             saving = obj_save_record.SaveRecordTest()
             saving.test(*args)
-            assert saving.txid == args[2]
             assert saving.address == args[1]
+            assert saving.txid == args[2]
+            assert saving.amount == args[3]
+            assert saving.source == args[4] == source
+            assert saving.spent_index == args[6]
             if args[5] != '':
                 assert saving.blockheight == args[5]
