@@ -2,7 +2,6 @@ from django.conf import settings
 import json, requests
 from main import tasks
 import requests_mock
-
 import pytest
 import requests
 
