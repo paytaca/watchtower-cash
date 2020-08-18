@@ -7,7 +7,7 @@ from tests.bch.objects import (
 )
 
 @pytest.mark.django_db
-def test_telegramBot_transaction(requests_mock, monkeypatch, capsys):
+def test_bitcoincashtracker_transaction(requests_mock, monkeypatch, capsys):
     # Get the latest blockheight
     latestblockheight.LatestBlockHeightTest(requests_mock).test()
 
