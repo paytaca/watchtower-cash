@@ -1,13 +1,13 @@
 import pytest
 import requests_mock
-from tests.bch.objects import obj_bitdbquery
+from tests.bch.objects import obj_bitsocket
 from tests.system.objects import obj_save_record
 
 @pytest.mark.django_db
-def test_bitdbquery_transaction(requests_mock, monkeypatch, capsys):
-    source = 'bitdbquery'
+def test_bitsocket_transaction(requests_mock, capsys):
+    source = 'bitsocket'
     # Test BitDBQuery from tasks.py
-    script = obj_bitdbquery.BitDBQueryTest(requests_mock, capsys)
+    script = obj_bitsocket.BitSocketTest(requests_mock, capsys)
     script.test()
 
     # Test recording of Transaction
