@@ -7,6 +7,7 @@ import requests
 
 
 class BitDBQueryTest(object):    
+    
 
     def __init__(self, requests_mock, capsys):
         self.requests_mock = requests_mock
@@ -313,4 +314,5 @@ class BitDBQueryTest(object):
         tasks.bitdbquery() 
         captured = self.capsys.readouterr()
         assert captured.out == self.output
-        
+
+    
