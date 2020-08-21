@@ -11,7 +11,6 @@ def test_slpbitcoinsocket_transaction(requests_mock, monkeypatch, capsys):
     script = obj_slpbitcoinsocket.SlpBitcoinSocketTest(requests_mock, capsys)
     script.test()
 
-
     # Test recording of Transaction
     outputs = getattr(script, 'output', None).split("\n")
     assert(outputs)

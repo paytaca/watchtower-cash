@@ -9,7 +9,8 @@ import requests
 class SlpBitcoinSocketTest(object):	
 
     def __init__(self, requests_mock, capsys):
-        self.url = ''
+        self.url = 'https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0='
+        self.output = '' # Get back into this soon. (Reamon Sumapig)
         self.expectation = ''
         self.requests_mock = requests_mock
         self.capsys = capsys
@@ -17,5 +18,6 @@ class SlpBitcoinSocketTest(object):
     def test(self):
         self.requests_mock.get(self.url, text=self.expectation)
         captured = self.capsys.readouterr()
+
         assert captured.out == self.output
         
