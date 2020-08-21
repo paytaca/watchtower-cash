@@ -1,14 +1,14 @@
 import pytest
 import requests_mock
 from tests.system.objects import obj_save_record
-from tests.slp.objects import obj_slpfountainheadsocket
+from tests.slp.objects import obj_slpstreamfountainheadsocket
 
 
 @pytest.mark.django_db
 def test_slpbitcoinsocket_transaction(requests_mock, monkeypatch, capsys):
     # Testing Task
     source = 'slpdb_token_scanner'
-    script = obj_slpfountainheadsocket.SLPFountainheadSocketTest(requests_mock, capsys)
+    script = obj_slpstreamfountainheadsocket.SlpstreamFountainheadSocket(requests_mock, capsys)
     script.test()
 
 

@@ -13,8 +13,9 @@ class SlpstreamFountainheadSocket(object):
     def __init__(self, requests_mock, capsys):
         self.requests_mock = requests_mock
         self.capsys = capsys
-        self.url = f""
+        self.url = f"https://slpstream.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
         self.expectation = ""
+        self.output = ""
 
     
     def test(self):
