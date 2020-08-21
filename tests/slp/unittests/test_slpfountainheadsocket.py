@@ -7,7 +7,7 @@ from tests.slp.objects import obj_slpfountainheadsocket
 @pytest.mark.django_db
 def test_slpfountainheadsocket_transaction(requests_mock, monkeypatch, capsys):
     # Testing Task
-    source = 'slpdb_token_scanner'
+    source = 'slpsocket.fountainhead.cash'
     script = obj_slpfountainheadsocket.SLPFountainheadSocketTest(requests_mock, capsys)
     script.test()
 

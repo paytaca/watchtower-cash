@@ -9,8 +9,9 @@ import requests
 class SLPFountainheadSocketTest(object):	
 
     def __init__(self, requests_mock, capsys):
-        self.url = ''
+        self.url = 'https://slpsocket.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjogewogICAgfQogIH0KfQ=='
         self.expectation = ''
+        self.output = ''
         self.requests_mock = requests_mock
         self.capsys = capsys
         
