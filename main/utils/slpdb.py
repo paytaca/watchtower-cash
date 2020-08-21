@@ -15,16 +15,16 @@ class SLPDB(object):
         tokenid : String (Optional)
         """
         data = json.loads(b64decode(self.reference.encode()))
-        tokenid = kw.get('tokenid', None)
+        self.tokenid = kw.get('tokenid', None)
         block = kw.get('block', None)
-        if tokenid:
-            data['q']['find']['$query']['slp.detail.tokenIdHex'] = tokenid
+        if self.tokenid:
+            data['q']['find']['$query']['slp.detail.tokenIdHex'] = self.tokenid
         else:
             del data['q']['find']['$query']['slp.detail.tokenIdHex']
         
         if block:
             data['q']['find']['$query']['blk.i'] = block
-            if not tokenid:
+            if not self.tokenid:
                 data['q']['limit'] = 10000
         else:
             del data['q']['find']['$query']['blk.i']

@@ -17,7 +17,7 @@ class SlpBitcoinSocketTest(object):
     
     def test(self):
         self.requests_mock.get(self.url, text=self.expectation)
+        # tasks.bitcoincash_tracker()
         captured = self.capsys.readouterr()
-
         assert captured.out == self.output
         
