@@ -202,4 +202,4 @@ dump.rdb
 /static
 node_modules
 /spiceslp/slp-sdk/
-
+supervisord.pid
