@@ -21,7 +21,6 @@ from django.conf.urls import url
 from rest_framework.authtoken import views
 from main.views import (
   Loginpage,   
-  Home,
   Logout,
   Account,
   SetupToken,
@@ -30,13 +29,12 @@ from main.views import (
 )
 
 urlpatterns=[
+    path('', admin.site.urls),
     path('login/', Loginpage.as_view(), name='loginpage'),
-    path('admin/', admin.site.urls),
     path('logout/', Logout.as_view(), name='logout'),
     path('account/', Account.as_view(), name='account'),
     path('setuptokens/', SetupToken.as_view(), name='setuptoken'),
     path('setupslpaddresses/', SetupSLPAddress.as_view(), name='setupslpaddress'),
-    path('', Home.as_view(), name='home'),
     path('set-address/', SetAddressView.as_view()),
     url(r'^api-token-auth/', views.obtain_auth_token),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
