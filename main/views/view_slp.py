@@ -1,4 +1,14 @@
-class SetupSLPAddress(View):
+from rest_framework.viewsets import ViewSet
+from django.shortcuts import render
+from django.http import JsonResponse
+from main.models import (
+    Subscriber,
+    Subscription,
+    SlpAddress
+)
+from operator import or_
+
+class SetupSLPAddress(ViewSet):
     
     def get(self, request):
         query = {}

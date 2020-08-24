@@ -1,4 +1,19 @@
-class SetupToken(View):
+from rest_framework.viewsets import ViewSet
+from django.shortcuts import render
+from django.http import JsonResponse
+from django.contrib.auth import authenticate
+from main.models import (
+    Subscriber,
+    Token as MyToken,
+    Subscription,
+    SendTo
+)
+from django.contrib.auth.models import User 
+import json
+from operator import or_
+from django.db.models import Q
+
+class SetupToken(ViewSet):
     
     def get(self, request):
         query = {}

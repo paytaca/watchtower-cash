@@ -169,46 +169,46 @@ CELERYD_PREFETCH_MULTIPLIER = 1
 CELERYD_MAX_TASKS_PER_CHILD = 5
 
 CELERY_BEAT_SCHEDULE = {
-    'latest_blockheight_getter': {
-        'task': 'main.tasks.latest_blockheight_getter',
-        'schedule': 5
-    },
-    'second_blockheight_scanner': {
-        'task': 'main.tasks.second_blockheight_scanner',
-        'schedule': 60
-    },
-    'first_blockheight_scanner': {
-        'task': 'main.tasks.first_blockheight_scanner',
-        'schedule': 120
-    },
-    'slpdb_token_scanner': {
-        'task': 'main.tasks.slpdb_token_scanner',
-        'schedule': 600
-    },
-    'openfromredis': {
-        'task': 'main.tasks.openfromredis',
-        'schedule': 1800
-    },
-    'slpbitcoinsocketsocket': {
-        'task': 'main.tasks.slpbitcoinsocket',
-        'schedule': 1800
-    },
-    'slpfountainheadsocket': {
-        'task': 'main.tasks.slpfountainheadsocket',
-        'schedule': 1800
-    },
+    # 'latest_blockheight_getter': {
+    #     'task': 'main.tasks.latest_blockheight_getter',
+    #     'schedule': 5
+    # },
+    # 'second_blockheight_scanner': {
+    #     'task': 'main.tasks.second_blockheight_scanner',
+    #     'schedule': 60
+    # },
+    # 'first_blockheight_scanner': {
+    #     'task': 'main.tasks.first_blockheight_scanner',
+    #     'schedule': 120
+    # },
+    # 'slpdb_token_scanner': {
+    #     'task': 'main.tasks.slpdb_token_scanner',
+    #     'schedule': 600
+    # },
+    # 'openfromredis': {
+    #     'task': 'main.tasks.openfromredis',
+    #     'schedule': 1800
+    # },
+    # 'slpbitcoinsocketsocket': {
+    #     'task': 'main.tasks.slpbitcoinsocket',
+    #     'schedule': 1800
+    # },
+    # 'slpfountainheadsocket': {
+    #     'task': 'main.tasks.slpfountainheadsocket',
+    #     'schedule': 1800
+    # },
     # 'slpstreamfountainheadsocket': {
     #     'task': 'main.tasks.slpstreamfountainheadsocket',
     #     'schedule': 1800
     # },
-    'bitsocket': {
-        'task': 'main.tasks.bitsocket',
-        'schedule': 1800
-    },
-    'bitdbquery': {
-        'task': 'main.tasks.bitdbquery',
-        'schedule': 300
-    }
+    # 'bitsocket': {
+    #     'task': 'main.tasks.bitsocket',
+    #     'schedule': 1800
+    # },
+    # 'bitdbquery': {
+    #     'task': 'main.tasks.bitdbquery',
+    #     'schedule': 300
+    # }
 }
 
 CORS_ORIGIN_WHITELIST = [

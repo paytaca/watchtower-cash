@@ -19,14 +19,11 @@ from django.conf.urls.static import static
 from django.conf import settings
 from django.conf.urls import url
 from rest_framework.authtoken import views
-from main.views import (
-  Loginpage,   
-  Logout,
-  Account,
-  SetupToken,
-  SetupSLPAddress,
-  SetAddressView
-)
+from main.views.view_account import Account
+from main.views.view_auth import Loginpage, Logout
+from main.views.view_token import SetupToken
+from main.views.view_slp import SetupSLPAddress
+from main.views.view_address import SetAddressView
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
