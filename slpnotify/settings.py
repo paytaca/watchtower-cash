@@ -47,6 +47,7 @@ INSTALLED_APPS=[
 'corsheaders',
 'main',
 'django.contrib.admin'
+'drf_yasg'
 ]
 
 MIDDLEWARE=[
