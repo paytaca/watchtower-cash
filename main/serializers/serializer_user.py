@@ -58,3 +58,39 @@ class CreateAccountSerializer(serializers.Serializer):
             
         # if action == 'update':
         #     return redirect('account')
+
+
+class PasswordSerializer(serializers.Serializer):
+    pass
+
+class UserSerializer(serializers.ModelSerializer):
+    model = User
+    fields = [
+        'txid',
+        'address',
+        'amount',
+        'acknowledge',
+        'blockheight',
+        'source',
+        'created_datetime',
+        'token',
+        'scanning',
+        'subscribed',
+        'spentIndex',
+    ]
+
+
+
+
+
+
+    
+
+
+
+
+    
+
+
+
+

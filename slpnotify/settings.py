@@ -14,6 +14,7 @@ import os
 from decouple import config
 import redis
 import psycopg2
+from datetime import timedelta
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -224,4 +225,22 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication', 
     ],
+}
+
+ACCESS_TOKEN_LIFETIME = int(config("ACCESS_TOKEN_LIFETIME", "0"))
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=ACCESS_TOKEN_LIFETIME or 7),
+    "USER_ID_FIELD": "uuid",
+    "USER_ID_CLAIM": "user_uuid",
+}
+
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "JWT": {
+            "description": 'Input as "Bearer <token_here>"',
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+        }
+    },
 }
