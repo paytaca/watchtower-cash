@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from main.serializers import UserSerializer, PasswordSerializer
+from main.serializers import UserSerializer
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -10,6 +10,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    
 
     @action(detail=True, methods=['post'])
     def set_password(self, request, pk=None):

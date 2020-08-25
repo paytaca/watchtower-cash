@@ -1,18 +1,11 @@
 from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import routers
-from main.views import (
-	view_account,
-    view_address,
-    view_auth,
-    view_home,
-    view_slp,
-    view_token
-)
+from main import views
 
 
 router = routers.DefaultRouter()
-router.register(r"users", view_account.UserViewSet, basename="create-account")
+router.register(r"users", views.UserViewSet)
 
 urlpatterns = router.urls
 

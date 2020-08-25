@@ -61,23 +61,19 @@ class CreateAccountSerializer(serializers.Serializer):
 
 
 class PasswordSerializer(serializers.Serializer):
-    pass
+    model = User
+    fields = ['id',]
+
 
 class UserSerializer(serializers.ModelSerializer):
-    model = User
-    fields = [
-        'txid',
-        'address',
-        'amount',
-        'acknowledge',
-        'blockheight',
-        'source',
-        'created_datetime',
-        'token',
-        'scanning',
-        'subscribed',
-        'spentIndex',
-    ]
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+        ]
+
 
 
 
