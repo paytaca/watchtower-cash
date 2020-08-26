@@ -44,6 +44,10 @@ psycopg2==2.8.4
 ptyprocess==0.6.0
 Pygments==2.5.2
 pyparsing==2.4.7
+pytest==5.0.1
+pytest-cov==2.7.1
+pytest-django==3.5.1
+pytest-mock==1.10.4
 python-decouple==3.3
 pytz==2019.3
 redis==3.4.1
