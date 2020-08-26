@@ -24,6 +24,7 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors,
                             status=status.HTTP_400_BAD_REQUEST)
 
+
     @action(detail=False)
     def recent_users(self, request):
         recent_users = User.objects.all().order_by('-last_login')

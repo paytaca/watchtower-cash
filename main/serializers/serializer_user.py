@@ -61,8 +61,9 @@ class CreateAccountSerializer(serializers.Serializer):
 
 
 class PasswordSerializer(serializers.Serializer):
-    model = User
-    fields = ['id',]
+    class Meta:
+        model = User
+        fields = ['id',]
 
 
 class UserSerializer(serializers.ModelSerializer):

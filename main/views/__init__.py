@@ -4,3 +4,4 @@ from main.views.view_auth import *
 from main.views.view_home import *
 from main.views.view_slp import *
 from main.views.view_token import *
+from main.views.view_subscription import *
