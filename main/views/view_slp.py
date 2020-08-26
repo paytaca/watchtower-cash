@@ -8,6 +8,11 @@ from main.models import (
 )
 from operator import or_
 
+
+
+
+
+
 class SetupSLPAddress(ViewSet):
     
     def get(self, request):
@@ -53,3 +58,21 @@ class SetupSLPAddress(ViewSet):
                     )
                 status = 'success'
         return JsonResponse({"status": status})
+
+
+
+# SLPAddress Model ViewSet
+
+from main.models import SlpAddress
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from main.serializers import SlpAddressSerializer
+
+class SlpAddressViewSet(viewsets.ModelViewSet):
+    """
+    A viewset that provides the standard actions
+    """
+    queryset = SlpAddress.objects.all()
+    serializer_class = SlpAddressSerializer
+

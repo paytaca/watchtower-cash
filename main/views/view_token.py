@@ -60,3 +60,20 @@ class SetupToken(ViewSet):
                     )
                 status = 'success'
         return JsonResponse({"status": status})
+
+
+# Token Model ViewSet
+
+from main.models import Token
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from main.serializers import TokenSerializer
+
+class TokenViewSet(viewsets.ModelViewSet):
+    """
+    A viewset that provides the standard actions
+    """
+    queryset = Token.objects.all()
+    serializer_class = TokenSerializer
+
