@@ -5,7 +5,6 @@ class TokenSerializer(serializers.ModelSerializer):
     class Meta:
         model = Token
         fields = [
-            'id',
             'name',
             'tokenid',
             'confirmation_limit'

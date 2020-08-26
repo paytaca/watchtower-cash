@@ -5,8 +5,8 @@ class SubscriberSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscriber
         fields = [
-                'user',
-                'subscription',
-                'confirmed',
-                'date_started',
-            ]
+            'user',
+            'subscription',
+            'confirmed',
+            'date_started',
+        ]

@@ -5,7 +5,6 @@ class BlockHeightSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlockHeight
         fields = [
-            'id',
             'number',
             'transactions_count',
             'created_datetime',

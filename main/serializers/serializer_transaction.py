@@ -10,10 +10,5 @@ class TransactionSerializer(serializers.ModelSerializer):
             'amount',
             'acknowledge',
             'blockheight',
-            'source',
-            'created_datetime',
-            'token',
-            'scanning',
-            'subscribed',
-            'spentIndex',
+            'token'
         ]
