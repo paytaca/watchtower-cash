@@ -76,4 +76,5 @@ class TokenViewSet(viewsets.ModelViewSet):
     """
     queryset = Token.objects.all()
     serializer_class = TokenSerializer
+    http_method_names = ['get', 'post', 'head']
 

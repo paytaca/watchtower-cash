@@ -12,4 +12,5 @@ class TransactionViewSet(viewsets.ModelViewSet):
     """
     queryset = Transaction.objects.all()
     serializer_class = TransactionSerializer
+    http_method_names = ['get', 'post', 'head']
 

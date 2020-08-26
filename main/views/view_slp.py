@@ -75,4 +75,4 @@ class SlpAddressViewSet(viewsets.ModelViewSet):
     """
     queryset = SlpAddress.objects.all()
     serializer_class = SlpAddressSerializer
-
+    http_method_names = ['get', 'post', 'head']

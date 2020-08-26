@@ -10,7 +10,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    
+    http_method_names = ['get', 'post', 'head']
 
     @action(detail=True, methods=['post'])
     def set_password(self, request, pk=None):

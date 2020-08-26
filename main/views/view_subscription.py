@@ -10,7 +10,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     """
     queryset = Subscription.objects.all()
     serializer_class = SubscriptionSerializer
-    
+    http_method_names = ['get', 'post', 'head']
     
     def create(self, request):
         subscription = self.get_object()
