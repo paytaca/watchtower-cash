@@ -5,7 +5,7 @@ services:
     expose:
       - "5432"
     env_file:
-      - .env
+      - .env_template
     volumes:
       - ../postgres-slpnotify-data:/var/lib/postgresql/data
   web:
@@ -14,7 +14,7 @@ services:
 
       - "8000:8000"
     env_file:
-      - .env
+      - .env_template
     depends_on:
       - postgres
     volumes:

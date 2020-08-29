@@ -1,3 +1,3 @@
-from .settings import *
+from slpnotify.settings import *
 
 

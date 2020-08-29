@@ -14,6 +14,7 @@ import os
 from decouple import config
 import redis
 import psycopg2
+from datetime import timedelta
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -46,13 +47,17 @@ INSTALLED_APPS=[
 'rest_framework.authtoken',
 'corsheaders',
 'main',
-'django.contrib.admin'
+'django.contrib.admin',
+'drf_yasg'
 ]
 
 MIDDLEWARE=[
 'django.middleware.security.SecurityMiddleware',
 'django.contrib.sessions.middleware.SessionMiddleware',
 'corsheaders.middleware.CorsMiddleware',
+
+'whitenoise.middleware.WhiteNoiseMiddleware',
+
 'django.middleware.common.CommonMiddleware',
 'django.middleware.csrf.CsrfViewMiddleware',
 'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -196,10 +201,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.slpfountainheadsocket',
         'schedule': 1800
     },
-    # 'slpstreamfountainheadsocket': {
-    #     'task': 'main.tasks.slpstreamfountainheadsocket',
-    #     'schedule': 1800
-    # },
+    'slpstreamfountainheadsocket': {
+        'task': 'main.tasks.slpstreamfountainheadsocket',
+        'schedule': 1800
+    },
     'bitsocket': {
         'task': 'main.tasks.bitsocket',
         'schedule': 1800
@@ -207,6 +212,10 @@ CELERY_BEAT_SCHEDULE = {
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
         'schedule': 300
+    },
+    'bch_address_scanner': {
+        'task': 'main.tasks.bch_address_scanner',
+        'schedule': 3600
     }
 }
 
@@ -221,6 +230,23 @@ if DEBUG:
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication', 
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ],
+}
+
+ACCESS_TOKEN_LIFETIME = int(config("ACCESS_TOKEN_LIFETIME", "0"))
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=ACCESS_TOKEN_LIFETIME or 1)
+}
+
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "JWT": {
+            "description": 'Input as "Bearer <token_here>"',
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+        }
+    },
 }

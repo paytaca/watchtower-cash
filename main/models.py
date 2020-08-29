@@ -66,7 +66,8 @@ class SlpAddress(models.Model):
 class BchAddress(models.Model):
     address = models.CharField(max_length=200, unique=True)
     transactions = models.ManyToManyField(Transaction, related_name='bchaddress', blank=True)
-
+    scanned = models.BooleanField(default=False)
+    
     class Meta:
         verbose_name = 'BCH Address'
         verbose_name_plural = 'BCH Addresses'
