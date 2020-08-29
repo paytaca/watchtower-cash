@@ -653,7 +653,7 @@ def bitdbquery(self):
         "q": {
             "find": {
             },
-            "limit": 1000
+            "limit": 30000
         }
     }
     json_string = bytes(json.dumps(query), 'utf-8')
@@ -662,7 +662,9 @@ def bitdbquery(self):
     data = resp.json()
     for row in data['u']: 
         txn_id = row['tx']['h']
+        counter = 1
         for out in row['out']: 
+            args = tuple()
             amount = out['e']['v'] / 100000000
             spent_index = out['e']['i']
             if 'a' in out['e'].keys():
@@ -677,7 +679,8 @@ def bitdbquery(self):
                     spent_index
                 )
                 save_record.delay(*args)
-                print(args)
+            print(f"{counter} | {args}")
+            counter += 1
 
 
 @shared_task(bind=True, queue='bitsocket')
@@ -774,3 +777,44 @@ def bitcoincash_tracker(self,id):
                                             )
                                             save_record.delay(*args)
                                             print(args)
+
+@shared_task(bind=True, queue='bch_address_scanner')
+def bch_address_scanner(self, bchaddress=None):
+    addresses = [bchaddress]
+    if bchaddress is None:
+        addresses = BchAddress.objects.filter(scanned=False)
+        if not addresses.exists(): 
+            BchAddress.objects.update(scanned=True)
+            addresses = BchAddress.objects.filter(scanned=False)
+        addresses = list(addresses.values_list('address',flat=True)[0:100])
+
+    source = 'bch-address-scanner'
+    url = 'https://rest.bitcoin.com/v2/address/transactions'
+    data = { "addresses": addresses}
+    resp = requests.post(url, json=data)
+    data = json.loads(resp.text)
+    for row in data:
+        for tr in row['txs']:
+            blockheight, created = BlockHeight.objects.get_or_create(number=tr['blockheight'])
+            for out in tr['vout']:
+                amount = out['value']
+                spent_index = tr['vout'][0]['spentIndex'] or 0
+                if 'addresses' in out['scriptPubKey'].keys():
+                    for legacy in out['scriptPubKey']['addresses']:
+                        address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
+                        address_response = requests.get(address_url)
+                        address_data = json.loads(address_response.text)
+                        args = (
+                            'bch',
+                            address_data['cashAddress'],
+                            tr['txid'],
+                            out['value'],
+                            source,
+                            blockheight.id,
+                            spent_index
+                        )
+                        LOGGER.info(f"{source} | txid : {tr['txid']} | amount : {out['value']}")
+                        save_record.delay(*args)
+                        print(args)
+    BchAddress.objects.filter(address__in=addresses).update(scanned=True)
+    

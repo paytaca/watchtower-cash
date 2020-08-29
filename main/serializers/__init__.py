@@ -7,3 +7,4 @@ from main.serializers.serializer_slp import *
 from main.serializers.serializer_sendto import *
 from main.serializers.serializer_blockheight import *
 from main.serializers.serializer_bch import *
+from main.serializers.serializer_auth import *

@@ -13,4 +13,4 @@ class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
     serializer_class = TransactionSerializer
     http_method_names = ['get', 'head']
-
+    lookup_field = "txid"

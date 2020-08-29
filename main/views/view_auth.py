@@ -19,14 +19,18 @@ from django.db.models import Q
 from operator import or_
 from functools import reduce
 from django.db.models import Q
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import authentication, permissions
-class Loginpage(ViewSet):
-	
-    def post(self, request):
-        username = request.POST['username']
-        password =  request.POST['password']
+from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+
+class SignIn(APIView):
+
+    def post(self, request, format=None):
+        username = request.data.get("username")
+        password = request.data.get("password")
         user = User.objects.filter(username=username)
         if user.exists():
             subscriber = Subscriber.objects.get(user=user.first())
@@ -34,18 +38,19 @@ class Loginpage(ViewSet):
                 user = authenticate(request=request, username=username, password=password)
                 if user is not None:
                     login(request, user)
-                    return redirect('home')
-        return render(request, 'base/login.html', {})
+                    token = AccessToken.for_user(user)
+                    return Response({'token': token.__str__()})
+        return Response(status=404)
 
-class Logout(ViewSet):
-	
+class SignOut(APIView):
+    
     def get(self, request):
         from django.contrib.auth import logout
         logout(request)
-        return redirect('home')
+        return Response({'signout': True})
 
 
-class SignUp(ViewSet):
+class SignUp(APIView):
 
     def post(self, request):
         data = json.loads(request.body)

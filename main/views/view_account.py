@@ -36,3 +36,4 @@ class UserViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(recent_users, many=True)
         return Response(serializer.data)
+

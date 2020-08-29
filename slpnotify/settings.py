@@ -55,6 +55,9 @@ MIDDLEWARE=[
 'django.middleware.security.SecurityMiddleware',
 'django.contrib.sessions.middleware.SessionMiddleware',
 'corsheaders.middleware.CorsMiddleware',
+
+'whitenoise.middleware.WhiteNoiseMiddleware',
+
 'django.middleware.common.CommonMiddleware',
 'django.middleware.csrf.CsrfViewMiddleware',
 'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -170,46 +173,50 @@ CELERYD_PREFETCH_MULTIPLIER = 1
 CELERYD_MAX_TASKS_PER_CHILD = 5
 
 CELERY_BEAT_SCHEDULE = {
-    # 'latest_blockheight_getter': {
-    #     'task': 'main.tasks.latest_blockheight_getter',
-    #     'schedule': 5
-    # },
-    # 'second_blockheight_scanner': {
-    #     'task': 'main.tasks.second_blockheight_scanner',
-    #     'schedule': 60
-    # },
-    # 'first_blockheight_scanner': {
-    #     'task': 'main.tasks.first_blockheight_scanner',
-    #     'schedule': 120
-    # },
-    # 'slpdb_token_scanner': {
-    #     'task': 'main.tasks.slpdb_token_scanner',
-    #     'schedule': 600
-    # },
-    # 'openfromredis': {
-    #     'task': 'main.tasks.openfromredis',
-    #     'schedule': 1800
-    # },
-    # 'slpbitcoinsocketsocket': {
-    #     'task': 'main.tasks.slpbitcoinsocket',
-    #     'schedule': 1800
-    # },
-    # 'slpfountainheadsocket': {
-    #     'task': 'main.tasks.slpfountainheadsocket',
-    #     'schedule': 1800
-    # },
-    # 'slpstreamfountainheadsocket': {
-    #     'task': 'main.tasks.slpstreamfountainheadsocket',
-    #     'schedule': 1800
-    # },
-    # 'bitsocket': {
-    #     'task': 'main.tasks.bitsocket',
-    #     'schedule': 1800
-    # },
-    # 'bitdbquery': {
-    #     'task': 'main.tasks.bitdbquery',
-    #     'schedule': 300
-    # }
+    'latest_blockheight_getter': {
+        'task': 'main.tasks.latest_blockheight_getter',
+        'schedule': 5
+    },
+    'second_blockheight_scanner': {
+        'task': 'main.tasks.second_blockheight_scanner',
+        'schedule': 60
+    },
+    'first_blockheight_scanner': {
+        'task': 'main.tasks.first_blockheight_scanner',
+        'schedule': 120
+    },
+    'slpdb_token_scanner': {
+        'task': 'main.tasks.slpdb_token_scanner',
+        'schedule': 600
+    },
+    'openfromredis': {
+        'task': 'main.tasks.openfromredis',
+        'schedule': 1800
+    },
+    'slpbitcoinsocketsocket': {
+        'task': 'main.tasks.slpbitcoinsocket',
+        'schedule': 1800
+    },
+    'slpfountainheadsocket': {
+        'task': 'main.tasks.slpfountainheadsocket',
+        'schedule': 1800
+    },
+    'slpstreamfountainheadsocket': {
+        'task': 'main.tasks.slpstreamfountainheadsocket',
+        'schedule': 1800
+    },
+    'bitsocket': {
+        'task': 'main.tasks.bitsocket',
+        'schedule': 1800
+    },
+    'bitdbquery': {
+        'task': 'main.tasks.bitdbquery',
+        'schedule': 300
+    },
+    'bch_address_scanner': {
+        'task': 'main.tasks.bch_address_scanner',
+        'schedule': 3600
+    }
 }
 
 CORS_ORIGIN_WHITELIST = [
@@ -223,15 +230,14 @@ if DEBUG:
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication', 
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ],
 }
 
 ACCESS_TOKEN_LIFETIME = int(config("ACCESS_TOKEN_LIFETIME", "0"))
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=ACCESS_TOKEN_LIFETIME or 7),
-    "USER_ID_FIELD": "uuid",
-    "USER_ID_CLAIM": "user_uuid",
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=ACCESS_TOKEN_LIFETIME or 1)
 }
 
 SWAGGER_SETTINGS = {
