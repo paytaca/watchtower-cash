@@ -8,10 +8,9 @@ services:
       - .env_template
     volumes:
       - ../postgres-slpnotify-data:/var/lib/postgresql/data
-  web:
+  backend:
     build: .
     ports:
-
       - "8000:8000"
     env_file:
       - .env_template
@@ -19,5 +18,10 @@ services:
       - postgres
     volumes:
       - ./:/code
+  frontend:
+    build: 
+      context: ./slpnotifyui
+    ports:
+      - "8080:8080"
   redis:
     image: "redis:alpine"
