@@ -8,8 +8,8 @@ def missing_blocks(L, start, end):
     # is the lower half consecutive? 
     consecutive_low =  L[index] == L[start] + (index - start) 
     if not consecutive_low: 
-        yield from missing_elements(L, start, index)   
+        yield from missing_blocks(L, start, index)   
     # is the upper part consecutive? 
     consecutive_high =  L[index] == L[end] - (end - index) 
     if not consecutive_high: 
-        yield from missing_elements(L, index, end) 
+        yield from missing_blocks(L, index, end) 
