@@ -7,9 +7,9 @@ from celery import shared_task
 import requests
 from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress, SendTo
 import json, random
-from main.utils import slpdb
+from main.utils import slpdb, missing_blocks, block_setter
 from django.conf import settings
-import traceback
+import traceback, datetime
 from sseclient import SSEClient
 LOGGER = logging.getLogger(__name__)
 from django.db import transaction as trans
@@ -299,7 +299,8 @@ def slpdb_token_scanner():
                                     save_record.delay(*args)
                                     print(args)
                                     spent_index += 1
-                                               
+
+
 @shared_task(queue='latest_blockheight_getter')
 def latest_blockheight_getter():    
     """
@@ -313,15 +314,20 @@ def latest_blockheight_getter():
         number = json.loads(resp.text)['blocks']
         obj, created = BlockHeight.objects.get_or_create(number=number)
         if created:
-            redis_storage = settings.REDISKV
-            if b'PENDING-BLOCKS' not in redis_storage.keys('*'):
-                data = json.dumps([])
-                redis_storage.set('PENDING-BLOCKS', data)
-            blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
-            blocks.append(number)
-            data = json.dumps(blocks)
-            redis_storage.set('PENDING-BLOCKS', data)
-        bitcoincash_tracker.delay(obj.id)
+            block_setter(number)
+            bitcoincash_tracker.delay(obj.id)
+        else:
+            # if no new block, this task will check missed blocks starting july 25, 2020
+            starting_date = datetime.date(day=25, year=2020, month=7)
+            blocks = list(BlockHeight.objects.filter(
+                created_datetime__gte=starting_date
+            ).order_by('number').values_list('number',flat=True))
+            missing_blocks = list(missing_blocks(blocks,0,len(blocks)-1))
+            for number in missing_blocks:
+                obj, created = BlockHeight.objects.get_or_create(number=number)
+                if created:
+                    block_setter(number)
+                    bitcoincash_tracker.delay(obj.id)   
     except Exception as exc:
         LOGGER.error(exc)
 
