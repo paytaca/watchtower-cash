@@ -789,7 +789,7 @@ def bch_address_scanner(self, bchaddress=None):
         if not addresses.exists(): 
             BchAddress.objects.update(scanned=True)
             addresses = BchAddress.objects.filter(scanned=False)
-        addresses = list(addresses.values_list('address',flat=True)[0:100])
+        addresses = list(addresses.values_list('address',flat=True)[0:10])
 
     source = 'bch-address-scanner'
     url = 'https://rest.bitcoin.com/v2/address/transactions'
