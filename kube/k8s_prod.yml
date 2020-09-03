@@ -34,7 +34,7 @@ spec:
     spec:
       containers  :
         - name: slpnotify
-          image: gcr.io/spice-slp-token/slpnotify-prod:0.0.200
+          image: gcr.io/spice-slp-token/slpnotify-prod:0.0.201
           env:
             - name: POSTGRES_DB
               value: slpnotify-prod
