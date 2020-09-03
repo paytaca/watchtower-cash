@@ -219,6 +219,9 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
                                         spent_index += 1
                     else:
                         LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
+                else:
+                    # Transaction with no token is a BCH transaction and have to be scanned.
+                    checktransaction.delay(txn_id)
 
 
         elif transaction_response.status_code == 404:
@@ -238,7 +241,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     if status == 'success':
         Transaction.objects.filter(txid=txn_id).update(scanning=False)
         BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
-    return status
+    return f" {status} | {transaction_url}"
 
 @shared_task(queue='openfromredis')
 def openfromredis():
@@ -322,8 +325,8 @@ def latest_blockheight_getter():
             blocks = list(BlockHeight.objects.filter(
                 created_datetime__gte=starting_date
             ).order_by('number').values_list('number',flat=True))
-            missing_blocks = list(missing_blocks(blocks,0,len(blocks)-1))
-            for number in missing_blocks:
+            blocks = list(missing_blocks(blocks,0,len(blocks)-1))
+            for number in blocks:
                 obj, created = BlockHeight.objects.get_or_create(number=number)
                 if created:
                     block_setter(number)
