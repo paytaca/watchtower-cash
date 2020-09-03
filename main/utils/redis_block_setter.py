@@ -7,6 +7,7 @@ def block_setter(number):
         data = json.dumps([])
         redis_storage.set('PENDING-BLOCKS', data)
     blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
-    blocks.append(number)
+    blocks = blocks.append(number)
+    blocks = list(set(blocks))
     data = json.dumps(blocks)
     redis_storage.set('PENDING-BLOCKS', data)
