@@ -444,17 +444,18 @@ def checktransaction(self, txn_id):
             if 'vout' in data.keys():
                 for out in data['vout']:
                     if 'scriptPubKey' in out.keys():
-                        for cashaddr in out['scriptPubKey']['cashAddrs']:
-                            if cashaddr.startswith('bitcoincash:'):
-                                save_record(
-                                    'bch',
-                                    cashaddr,
-                                    data['txid'],
-                                    out['value'],
-                                    "per-bch-blockheight",
-                                    blockheightid=blockheight_obj.id,
-                                    spent_index=out['spentIndex']
-                                )
+                        if 'cashAddrs' in out['scriptPubKey'].keys():
+                            for cashaddr in out['scriptPubKey']['cashAddrs']:
+                                if cashaddr.startswith('bitcoincash:'):
+                                    save_record(
+                                        'bch',
+                                        cashaddr,
+                                        data['txid'],
+                                        out['value'],
+                                        "per-bch-blockheight",
+                                        blockheightid=blockheight_obj.id,
+                                        spent_index=out['spentIndex']
+                                    )
             deposit_filter(
                 txn_id,
                 blockheight_obj.id,
