@@ -318,19 +318,24 @@ def latest_blockheight_getter():
         number = json.loads(resp.text)['blocks']
         obj, created = BlockHeight.objects.get_or_create(number=number)
         if created:
-            block_setter(number)
+            LOGGER.info(f'===== NEW BLOCK {number} =====')
+            block_setter(number, new=True)
             bitcoincash_tracker.delay(obj.id)
         else:
             # IF THERE'S ANY missed/unprocessed blocks, this task will automatically scan atleast 1 recent block.
             blocks = list(BlockHeight.objects.all().order_by('number').values_list('number',flat=True))
             blocks = list(missing_blocks(blocks,0,len(blocks)-1))
+            event = 'MISSED'
             if not len(blocks):
                 blocks = list(BlockHeight.objects.filter(processed=False).order_by('-number').values_list('number', flat=True))
+                event = 'UNPROCESSED'
             if len(blocks):
                 number = blocks[0]
-                obj, created = BlockHeight.objects.get_or_create(number=number)
-                block_setter(number)
-                bitcoincash_tracker.delay(obj.id)   
+                added = block_setter(number, new=False)
+                if added:
+                    obj, created = BlockHeight.objects.get_or_create(number=number)
+                    bitcoincash_tracker.delay(obj.id)   
+                    LOGGER.info(f'===== SCANNING {event} BLOCK {number} =====')
     except Exception as exc:
         LOGGER.error(exc)
 
