@@ -321,12 +321,12 @@ def latest_blockheight_getter():
             block_setter(number)
             bitcoincash_tracker.delay(obj.id)
         else:
-            # IF THERE'S ANY missed/unprocessed blocks, this task will automatically scan atleast 10 recent blocks.
+            # IF THERE'S ANY missed/unprocessed blocks, this task will automatically scan atleast 1 recent block.
             blocks = list(BlockHeight.objects.all().order_by('number').values_list('number',flat=True))
             blocks = list(missing_blocks(blocks,0,len(blocks)-1))[0:10]
             if not len(blocks):
                 blocks = list(BlockHeight.objects.filter(processed=False).order_by('number').values_list('number', flat=True))
-                blocks = blocks[0:10]
+                blocks = blocks[0:1]
             for number in blocks:
                 obj, created = BlockHeight.objects.get_or_create(number=number)
                 if created:
