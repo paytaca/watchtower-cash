@@ -215,7 +215,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'bch_address_scanner': {
         'task': 'main.tasks.bch_address_scanner',
-        'schedule': 1200
+        'schedule': 600
     }
 }
 
