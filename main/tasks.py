@@ -457,7 +457,6 @@ def checktransaction(self, txn_id):
                                         spent_index=out['spentIndex']
                                     )
             LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
-            first_blockheight_scanner.delay(id=blockheight_obj.id)
             status = 'success'
     return status
     
