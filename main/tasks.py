@@ -221,6 +221,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
                         LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
                 else:
                     # Transaction with no token is a BCH transaction and have to be scanned.
+                    status = 'success'
                     checktransaction.delay(txn_id)
 
 
@@ -241,7 +242,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     if status == 'success':
         Transaction.objects.filter(txid=txn_id).update(scanning=False)
         BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
-    return f" {status} | {transaction_url}"
+    return f" {status} : {txn_id}"
 
 @shared_task(queue='openfromredis')
 def openfromredis():
