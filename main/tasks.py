@@ -456,12 +456,6 @@ def checktransaction(self, txn_id):
                                         blockheightid=blockheight_obj.id,
                                         spent_index=out['spentIndex']
                                     )
-            deposit_filter(
-                txn_id,
-                blockheight_obj.id,
-                0,
-                0
-            )
             LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
             first_blockheight_scanner.delay(id=blockheight_obj.id)
             status = 'success'
