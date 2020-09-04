@@ -27,7 +27,13 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 from main.urls import urlpatterns as main_urls
-from main.views import SignIn, SignOut, SlackBotView
+from main.views import (
+    SignIn, 
+    SignOut, 
+    SlackBotView,
+    SetAddressView
+)
+    
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -44,6 +50,7 @@ schema_view = get_schema_view(
 urlpatterns = [
     path('signin/', SignIn.as_view(), name='signin'),
     path('signout/', SignOut.as_view(), name='signout'),
+    path('set-address/', SetAddressView.as_view(), name='setaddress'),
     path('webhook/slack/', csrf_exempt(SlackBotView.as_view()), name='slack'),
     path('accounts/login/', admin.site.urls),
     path('api/v1/', include(main_urls)),
