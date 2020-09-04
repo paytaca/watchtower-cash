@@ -86,3 +86,6 @@ class Subscriber(models.Model):
     subscription = models.ManyToManyField(Subscription, related_name='subscriber')
     confirmed = models.BooleanField(default=False)
     date_started = models.DateTimeField(default=timezone.now)
+
+    # slack_id = models.CharField(max_length=50, null=True)
+    # slack_channel_id = models.CharField(max_length=50, null=True)
