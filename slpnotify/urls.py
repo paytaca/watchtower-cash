@@ -26,7 +26,6 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 from main.urls import urlpatterns as main_urls
-from main import views
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -41,12 +40,8 @@ schema_view = get_schema_view(
 
 
 urlpatterns = [
-    path('signin/', views.SignIn.as_view(), name='signin'),
-    path('signup/', views.SignUp.as_view(), name='signup'),
-    path('signout/', views.SignOut.as_view(), name='signout'),
-    path('set-address/', views.SetAddressView.as_view(), name='setaddress'),
-    path('accounts/login/', admin.site.urls),
-    path('api/v1/', include(main_urls)),
+    path('admin/', admin.site.urls),
+    path('api/', include(main_urls)),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
