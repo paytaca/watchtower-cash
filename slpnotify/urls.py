@@ -19,6 +19,7 @@ from django.conf.urls.static import static
 from django.conf import settings
 from django.conf.urls import url
 from django.urls import path, include
+from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework.authtoken import views
 from rest_framework import permissions
@@ -26,7 +27,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 from main.urls import urlpatterns as main_urls
-from main.views import SignIn, SignOut, SetAddressView
+from main.views import SignIn, SignOut, SetAddressView, TelegramBotView
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -44,6 +45,7 @@ urlpatterns = [
     path('signin/', SignIn.as_view(), name='signin'),
     path('signout/', SignOut.as_view(), name='signout'),
     path('set-address/', SetAddressView.as_view(), name='setaddress'),
+    path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     path('accounts/login/', admin.site.urls),
     path('api/v1/', include(main_urls)),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

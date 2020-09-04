@@ -818,3 +818,22 @@ def bch_address_scanner(self, bchaddress=None):
                         print(args)
     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
+
+@shared_task(rate_limit='20/s', queue='telegram')
+def send_telegram_message(message, chat_id, update_id, reply_markup=None):
+    data = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+
+    if reply_markup:
+        data['reply_markup'] = json.dumps(reply_markup, separators=(',', ':'))
+
+    url = 'https://api.telegram.org/bot'
+    response = requests.post(
+        f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
+    )
+
+    #catxh error/excpt
