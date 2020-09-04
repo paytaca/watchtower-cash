@@ -818,3 +818,19 @@ def bch_address_scanner(self, bchaddress=None):
                         print(args)
     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
+
+@shared_task(rate_limit='20/s', queue='send_slack_message')
+def send_slack_message(message, channel, attachments=None):
+    data = {
+        "token": settings.SLACK_BOT_USER_TOKEN,
+        "channel": channel,
+        "text": message
+    }
+
+    if type(attachments) is list:
+        data['attachments'] = json.dumps(attachments)
+
+    response = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        data=data
+    )
