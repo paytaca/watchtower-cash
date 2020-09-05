@@ -28,6 +28,14 @@ from drf_yasg import openapi
 
 from main.urls import urlpatterns as main_urls
 
+from main.views import ( 
+    SlackDirectMessageView,
+    SlackNotificationView,
+    SetAddressView,
+    TelegramBotView, 
+    TelegramSendtoView
+)
+
 schema_view = get_schema_view(
    openapi.Info(
       title="SLPNotify",

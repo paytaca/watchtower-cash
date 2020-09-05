@@ -894,10 +894,10 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
     subscriber = None
 
     # check telegram & slack user fields in subscriber
-    # if platform == 'telegram':
-    #     subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
-    # elif platform == 'slack':
-    subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
+    if platform == 'telegram':
+        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
+    elif platform == 'slack':
+        subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
 
     if token and subscriber:
         destination_address = None
