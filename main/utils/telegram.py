@@ -29,7 +29,6 @@ class TelegramBotHandler(object):
 	def handle_message(self):
 		
 		if self.data:
-			logger.error('entered')
 
 			#process message
 			if 'message' in self.data.keys():
@@ -51,39 +50,39 @@ class TelegramBotHandler(object):
 						if self.text.replace('/', '').lower() == 'help':
 							self.message = get_message('help')
 							default_response = False
-
-
+						
 						#check subscription message
 						proceed = False
-						if re.findall(self.subscribe_regex, self.text):
+						if re.findall(self.subscribe_regex, self.text):							
+
 							address = self.text.split()[1].strip()
 							token_name = self.text.split()[-1].strip().lower()
-
+					
 							#verify address
-							if address.startswith('simpleledger:') and len(address) == 55:
+							if address.startswith('simpleledger:') and len(address) == 55:								
 								if token_name != 'bch':
 									proceed = True
-								else: 
+								else: 									
 									self.message+= '\nPlease enter your <b>BCH address</b> to watch <b>BCH</b>.\n\nExample:'
 									self.message+= '\nsubscribe bitcoincash:qrry9hqfzhmkxlzf5m3f45y92l9gk5msgyustqp7vh bch'
 
-							elif address.startswith('bitcoincash:') and len(address) == 54:
+							elif address.startswith('bitcoincash:') and len(address) == 54:								
 								if token_name == 'bch':
 									proceed = True
-								else:
+								else:									
 									self.message+= '\nPlease enter your <b>SLP address</b> to watch <b>SLP tokens</b>.\n\nExample:'
 									self.message+= '\nsubscribe simpleledger:qpgje2ycwhh2rn8v0rg5r7d8lgw2pp84zgpkd6wyer spice'
 
-							elif addr_temp.startswith('simpleledger') and not len(addr_temp) == 55:
+							elif address.startswith('simpleledger:') and not len(address) == 55:								
 								self.message = "<b>You have entered an invalid SLP address!</b>  🚫"
 
-							elif addr_temp.startswith('bitcoincash') and not len(addr_temp) == 54:
+							elif address.startswith('bitcoincash:') and not len(address) == 54:								
 								self.message = "<b>You have entered an invalid BCH address!</b>  🚫"
 
 							#verify token
 							token  = Token.objects.filter(name=token_name).first()
 
-							if token and proceed:
+							if token and proceed:								
 								#save sucscription
 								logger.error('saving subscription')
 								new_sub = save_subscription(address, token.id, chat_id, 'telegram')
@@ -92,8 +91,10 @@ class TelegramBotHandler(object):
 								else:
 									self.message = "You already subscribed this address"
 
-							else:
+							elif not token:								
 								self.message = "Sorry, the token you've input is not yet supported."
+							elif self.message == '':
+								self.message = "Invalid input, please try again."
 
 							default_response = False
 
