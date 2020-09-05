@@ -15,11 +15,11 @@ from main.utils.user_subscription import subscribe_to_address
 
 class SubscriptionViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated, ]
-    serializer_class = serializers.EmptySerializer
-    serializer_classes = serializers.SubscriptionSerializer
+    serializer_class = serializers.SubscriptionSerializer
 
     @action(methods=['POST', ], detail=False)
     def set_address(self, request):
+        request.data['user_id'] = request.user.id
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         subscription = subscribe_to_address(**serializer.validated_data)

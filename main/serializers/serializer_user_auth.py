@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.models import BaseUserManager
 from rest_framework.authtoken.models import Token
 from rest_framework import serializers
+from django.db import IntegrityError
 
 User = get_user_model()
 
@@ -10,6 +11,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     """
     A user serializer for registering the user
     """
+    
 
     class Meta:
         model = User
@@ -19,7 +21,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             'password',
             'username',
             'first_name',
-            'last_name'
+            'last_name',
         )
 
     def validate_email(self, value):
@@ -54,7 +56,10 @@ class AuthUserSerializer(serializers.ModelSerializer):
          read_only_fields = ('id', 'is_active', 'is_staff')
     
     def get_auth_token(self, obj):
-        token = Token.objects.create(user=obj)
+        try:
+            token = Token.objects.create(user=obj)
+        except IntegrityError as exc:
+            token = Token.objects.get(user=obj)
         return token.key
 
 
