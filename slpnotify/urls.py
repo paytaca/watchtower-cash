@@ -27,7 +27,17 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 from main.urls import urlpatterns as main_urls
-from main.views import SignIn, SignOut, SetAddressView, TelegramBotView, TelegramSendtoView
+
+from main.views import (
+    SignIn, 
+    SignOut, 
+    SlackDirectMessageView,
+    SlackNotificationView,
+    SetAddressView,
+    TelegramBotView, 
+    TelegramSendtoView
+)
+    
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -47,6 +57,8 @@ urlpatterns = [
     path('set-address/', SetAddressView.as_view(), name='setaddress'),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     path('telegram/notify/', csrf_exempt(TelegramSendtoView.as_view()), name="telegram-notify"),
+    path('slack/dm/', csrf_exempt(SlackDirectMessageView.as_view()), name='slack-dm'),
+    path('slack/notify/', csrf_exempt(SlackNotificationView.as_view()), name='slack-notify'),
     path('accounts/login/', admin.site.urls),
     path('api/v1/', include(main_urls)),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
