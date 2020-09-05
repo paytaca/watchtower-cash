@@ -65,6 +65,41 @@ spec:
                 secretKeyRef:
                   name: redis-credentials
                   key: port
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: telegrambottoken
+            - name: TELEGRAM_BOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: telegrambotuser
+            - name: SLACK_BOT_USER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackbotusertoken
+            - name: SLACK_VERIFICATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackverificationtoken
+            - name: SLACK_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackclientid
+            - name: SLACK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackclientsecret
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slacksigningsecret
         - name: cloudsql-proxy
           image: gcr.io/cloudsql-docker/gce-proxy:1.11
           command:
