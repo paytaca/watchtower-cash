@@ -5,7 +5,17 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from celery import shared_task
 import requests
-from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress, SendTo
+from main.models import (
+    BlockHeight, 
+    Token, 
+    Transaction,
+    SlpAddress, 
+    Subscription, 
+    BchAddress,
+    SendTo,
+    Subscriber
+)
+from django.contrib.auth.models import User
 import json, random
 from main.utils import slpdb
 from django.conf import settings
@@ -834,3 +844,53 @@ def send_slack_message(message, channel, attachments=None):
         "https://slack.com/api/chat.postMessage",
         data=data
     )
+
+
+def save_subscription(token_address, token_id, subscriber_id, platform):
+    # note: subscriber_id: unique identifier of telegram/slack user
+    token = Token.objects.get(tokenid=token_id)
+    platform = platform.lower()
+    subscriber = None
+
+    # check telegram & slack user fields in subscriber
+    # if platform == 'telegram':
+    #     subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
+    # elif platform == 'slack':
+    subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
+
+    if token and subscriber:
+        if token_address.startswith('bitcoincash'):
+            address_obj, created = BchAddress.objects.get_or_create(address=token_address)
+            subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
+        else:
+            address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
+            subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj) 
+
+        subscription_obj.token = token
+        subscription_obj.save()
+        
+        subscriber.subscription.add(subscription_obj)
+
+
+def register_user(user_details, platform):
+    platform = platform.lower()
+    user_id = user_details['id']
+
+    uname_pass = f"{platform}-{user_id}"
+    new_user, created = User.objects.get_or_create(
+        username=uname_pass,
+        password=uname_pass
+    )
+
+    new_subscriber = Subscriber()
+    new_subscriber.user = new_user
+    new_subscriber.confirmed = True
+
+    if platform == 'telegram':
+        # temporarily commented because telegram user details is not yet included in my branch migrations
+        # new_subscriber.telegram_user_details = user_details
+        pass
+    elif platform == 'slack':
+        new_subscriber.slack_user_details = user_details
+        
+    new_subscriber.save()

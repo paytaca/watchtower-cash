@@ -3,14 +3,17 @@ from django.conf import settings
 from main.models import (
     Subscriber,
     Subscription,
-    SendTo,
     Token
 )
 from main.utils.slack_responses import (
     get_message,
     get_attachment
 )
-from main.tasks import send_slack_message
+from main.tasks import (
+    send_slack_message,
+    save_subscription,
+    register_user
+)
 
 import requests, logging
 import random, re
@@ -39,36 +42,45 @@ class SlackBotHandler(object):
             event_dict = self.data['event']
             event_type = event_dict['type']
 
-            if event_type == 'message' and 'bot_id' not in event_dict.keys():
+            if (event_type == 'message') and ('bot_id' not in event_dict.keys()) and ('text' in event_dict.keys()):
                 text = self.clean_text(event_dict['text'])
                 user_id = event_dict['user']
                 channel = event_dict['channel']
                 attachment = None
                 message = ''
 
-                if self.user_is_connected(user_id):
-                    if (text == 'subscribe' or text == 'tokens'):
-                        message = get_message(text)
-                        attachment = get_attachment(text)
+                if not self.user_is_registered(user_id):
+                    slack_user_details = {
+                        "id": user_id,
+                        "channel_id": channel
+                    }
+                    register_user(slack_user_details, 'slack')
 
-                    elif text.startswith('subscribe '):
-                        if re.findall(self.subscribe_regex, text):
-                            splitted_text = text.split()
-                            address = splitted_text[1]
-                            token = 'bch'
 
-                            if address.startswith(self.simpleledger):
-                                token = splitted_text[2].lower()
+                if (text == 'subscribe' or text == 'tokens'):
+                    message = get_message(text)
+                    attachment = get_attachment(text)
 
-                            self.save_subscription(user_id, address, token)
-                        else:
-                            message = get_message('subscribe')
-                            attachment = get_attachment('subscribe')
+                elif text.startswith('subscribe '):
+                    if re.findall(self.subscribe_regex, text):
+                        splitted_text = text.split()
+                        address = splitted_text[1]
+                        token = 'bch'
+
+                        if address.startswith(self.simpleledger):
+                            token = splitted_text[2].lower()
+
+                        token_id = Token.objects.get(name__iexact=token).tokenid
+                        save_subscription(address, token_id, user_id, 'slack')
+
+                        message = f'<@{user_id}>, your address `{address}` is now subscribed to SLP Notify Slack!  :tada:'
+                        message += f'\nYou will now receive notifications for _{token.upper()}_ transactions made on that address.'
                     else:
-                        message = get_message('default')
-                        attachment = get_attachment('default')
+                        message = get_message('subscribe')
+                        attachment = get_attachment('subscribe')
                 else:
-                    message = get_message('not-connected')
+                    message = get_message('default')
+                    attachment = get_attachment('default')
 
                 send_slack_message.delay(message, channel, attachment)
 
@@ -84,10 +96,9 @@ class SlackBotHandler(object):
 
 
     # checks if a Slack user has connected its account to SLP Notify
-    def user_is_connected(self, user_id):
-        return True
-        # subscriber = Subscriber.objects.filter(slack_id=user_id)
-        # return subscriber.exists()
+    def user_is_registered(self, user_id):
+        subscriber = Subscriber.objects.filter(slack_user_details__id=user_id)
+        return subscriber.exists()
         
 
 ######### PROCESSING FUNCTIONS ###########
@@ -107,15 +118,3 @@ class SlackBotHandler(object):
         text = text.lower().strip()
         text = ' '.join(text.split())
         return text
-
-
-    def save_subscription(self, user_id, address, token):
-        subscriber = Subscriber.objects.get(slack_id=user_id)
-        token = Token.objects.get(name__iexact=token)
-
-        # new_subscription = Subscription(
-        #     token=token,
-        #     address='',
-
-        # )
-        # new_subscription.save()

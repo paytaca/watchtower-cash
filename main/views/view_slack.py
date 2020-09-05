@@ -11,7 +11,7 @@ import json
 LOGGER = logging.getLogger(__name__)
 
 
-class SlackBotView(View):
+class SlackDirectMessageView(View):
 
     def post(self, request):
         data = json.loads(request.body)
@@ -34,3 +34,21 @@ class SlackBotView(View):
             slackbothandler.handle_message(data)
 
         return JsonResponse(response)
+
+
+class SlackNotificationView(View):
+
+    def post(self, request):
+        response = {'success': False}
+
+        # payload from client_acknowledgement in tasks.py
+        amount = request.POST.get('amount', None)
+        address = request.POST.get('address', None)
+        source = request.POST.get('source', None)
+        token = request.POST.get('token', None)
+        txid = request.POST.get('txid', None)
+        block = request.POST.get('block', None)
+        spent_index = request.POST.get('spent_index', 0)
+
+        return JsonResponse(response)
+    

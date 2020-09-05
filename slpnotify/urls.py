@@ -30,7 +30,8 @@ from main.urls import urlpatterns as main_urls
 from main.views import (
     SignIn, 
     SignOut, 
-    SlackBotView,
+    SlackDirectMessageView,
+    SlackNotificationView,
     SetAddressView
 )
     
@@ -51,7 +52,8 @@ urlpatterns = [
     path('signin/', SignIn.as_view(), name='signin'),
     path('signout/', SignOut.as_view(), name='signout'),
     path('set-address/', SetAddressView.as_view(), name='setaddress'),
-    path('webhook/slack/', csrf_exempt(SlackBotView.as_view()), name='slack'),
+    path('slack/dm/', csrf_exempt(SlackDirectMessageView.as_view()), name='slack-dm'),
+    path('slack/notify/', csrf_exempt(SlackNotificationView.as_view()), name='slack-notify'),
     path('accounts/login/', admin.site.urls),
     path('api/v1/', include(main_urls)),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
