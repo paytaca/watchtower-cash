@@ -36,7 +36,6 @@ class BlockHeightAdmin(admin.ModelAdmin):
         'processed',
         'created_datetime',
         'updated_datetime',
-        'currentcount',
         'transactions_count',
         '_actions'
     ]
