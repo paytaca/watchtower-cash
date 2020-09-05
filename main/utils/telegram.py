@@ -53,11 +53,12 @@ class TelegramBotHandler(object):
 						
 						#check subscription message
 						proceed = False
-						if re.findall(self.subscribe_regex, self.text):							
+						if re.findall(self.subscribe_regex, self.text.lower()):							
+							default_response = False
 
 							address = self.text.split()[1].strip()
-							token_name = self.text.split()[-1].strip().lower()
-					
+							token_name = self.text.split()[-1].lower().strip()														
+
 							#verify address
 							if address.startswith('simpleledger:') and len(address) == 55:								
 								if token_name != 'bch':
@@ -95,8 +96,7 @@ class TelegramBotHandler(object):
 								self.message = "Sorry, the token you've input is not yet supported."
 							elif self.message == '':
 								self.message = "Invalid input, please try again."
-
-							default_response = False
+							
 
 						if default_response:
 							#Default Message
