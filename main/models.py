@@ -86,6 +86,7 @@ class Subscriber(models.Model):
     subscription = models.ManyToManyField(Subscription, related_name='subscriber')
     confirmed = models.BooleanField(default=False)
     date_started = models.DateTimeField(default=timezone.now)
+    telegram_user_details = JSONField(default=dict, blank=True)
 
     slack_user_details = JSONField(default=dict, null=True, blank=True)
     # slack_user_details = {

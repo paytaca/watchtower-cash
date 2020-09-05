@@ -27,12 +27,15 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
 from main.urls import urlpatterns as main_urls
+
 from main.views import (
     SignIn, 
     SignOut, 
     SlackDirectMessageView,
     SlackNotificationView,
-    SetAddressView
+    SetAddressView,
+    TelegramBotView, 
+    TelegramSendtoView
 )
     
 
@@ -52,6 +55,8 @@ urlpatterns = [
     path('signin/', SignIn.as_view(), name='signin'),
     path('signout/', SignOut.as_view(), name='signout'),
     path('set-address/', SetAddressView.as_view(), name='setaddress'),
+    path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
+    path('telegram/notify/', csrf_exempt(TelegramSendtoView.as_view()), name="telegram-notify"),
     path('slack/dm/', csrf_exempt(SlackDirectMessageView.as_view()), name='slack-dm'),
     path('slack/notify/', csrf_exempt(SlackNotificationView.as_view()), name='slack-notify'),
     path('accounts/login/', admin.site.urls),

@@ -16,6 +16,7 @@ from main.models import (
     Subscriber
 )
 from django.contrib.auth.models import User
+
 import json, random
 from main.utils import slpdb, missing_blocks, block_setter
 from django.conf import settings
@@ -57,6 +58,7 @@ def client_acknowledgement(self, token, transactionid):
             target_addresses = [sendto_obj]
             
         for target_address in target_addresses:
+            #check if telegram/slack user
             data = {
                 'amount': trans.amount,
                 'address': trans.address,
@@ -71,7 +73,11 @@ def client_acknowledgement(self, token, transactionid):
             if target_address == settings.SLACK_DESTINATION_ADDR:
                 subscribers = subscription.subscriber.all()
                 data['channel_id_list'] = list(subscribers.values('slack_user_details__channel_id'))
-
+                
+            if target_address == settings.TELEGRAM_DESTINATION_ADDR:
+                subscribers = subscription.subscriber.all()
+                data['chat_id_list'] = list(subscribers.values('telegram_user_details__id'))
+             
 
             resp = requests.post(target_address.address,data=data)
             if resp.status_code == 200:
@@ -846,6 +852,24 @@ def bch_address_scanner(self, bchaddress=None):
     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
 
+@shared_task(rate_limit='20/s', queue='telegram')
+def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
+    data = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+
+    if reply_markup:
+        data['reply_markup'] = json.dumps(reply_markup, separators=(',', ':'))
+
+    url = 'https://api.telegram.org/bot'
+    response = requests.post(
+        f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
+    )
+    
+
 @shared_task(rate_limit='20/s', queue='send_slack_message')
 def send_slack_message(message, channel, attachments=None):
     data = {
@@ -892,7 +916,7 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
             ) 
 
         if platform == 'telegram':
-            destination_address = ''
+            destination_address = settings.TELEGRAM_DESTINATION_ADDR
         elif platform == 'slack':
             destination_address = settings.SLACK_DESTINATION_ADDR
 
@@ -908,12 +932,12 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
 
     return False
 
-
 def register_user(user_details, platform):
     platform = platform.lower()
     user_id = user_details['id']
 
     uname_pass = f"{platform}-{user_id}"
+
     new_user, created = User.objects.get_or_create(
         username=uname_pass,
         password=uname_pass
@@ -924,9 +948,7 @@ def register_user(user_details, platform):
     new_subscriber.confirmed = True
 
     if platform == 'telegram':
-        # temporarily commented because telegram user details is not yet included in my branch migrations
-        # new_subscriber.telegram_user_details = user_details
-        pass
+        new_subscriber.telegram_user_details = user_details
     elif platform == 'slack':
         new_subscriber.slack_user_details = user_details
         

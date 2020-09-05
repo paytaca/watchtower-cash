@@ -252,6 +252,11 @@ SWAGGER_SETTINGS = {
     },
 }
 
+#Telegram bot settings
+TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
+TELEGRAM_BOT_USER = config('TELEGRAM_BOT_USER', default='')
+TELEGRAM_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/telegram/notify/'
+
 
 # Slack credentials and configurations
 
@@ -263,4 +268,3 @@ SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET', '')
 
 SLACK_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/slack/notify/'
 SLACK_THEME_COLOR = '#82E0AA'
-
