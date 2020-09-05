@@ -255,3 +255,6 @@ SWAGGER_SETTINGS = {
 #Telegram bot settings
 TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
 TELEGRAM_BOT_USER = config('TELEGRAM_BOT_USER', default='')
+
+#Destination Address
+TELEGRAM_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/telegram/notify/'

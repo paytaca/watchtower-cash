@@ -5,9 +5,6 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
-#commands
-	# help/start/etc
-	#subscribe address
 
 class TelegramBotHandler(object):
 
@@ -89,8 +86,11 @@ class TelegramBotHandler(object):
 							if token and proceed:
 								#save sucscription
 								logger.error('saving subscription')
-								save_subscription(address, token.tokenid, chat_id, 'telegram')
-								self.message = "Your address has been successfully saved!"
+								new_sub = save_subscription(address, token.id, chat_id, 'telegram')
+								if new_sub:
+									self.message = "Your address has been successfully saved!"
+								else:
+									self.message = "You already subscribed this address"
 
 							else:
 								self.message = "Sorry, the token you've input is not yet supported."

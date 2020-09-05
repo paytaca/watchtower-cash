@@ -46,6 +46,7 @@ def client_acknowledgement(self, token, transactionid):
             subscription.address.add(sendto_obj)
             target_addresses = [sendto_obj]
         for target_address in target_addresses:
+            #check if telegram/slack user
             data = {
                 'amount': trans.amount,
                 'address': trans.address,
@@ -55,6 +56,12 @@ def client_acknowledgement(self, token, transactionid):
                 'block': block,
                 'spent_index':trans.spentIndex
             }
+
+            # 
+            if target_address == settings.TELEGRAM_DESTINATION_ADDR:
+                subscribers = subscription.subscriber.all()
+                data['chat_id_list'] = list(subscribers.values('telegram_user_details__id'))
+
             resp = requests.post(target_address.address,data=data)
             if resp.status_code == 200:
                 response_data = json.loads(resp.text)
@@ -821,7 +828,7 @@ def bch_address_scanner(self, bchaddress=None):
     
 
 @shared_task(rate_limit='20/s', queue='telegram')
-def send_telegram_message(message, chat_id, update_id, reply_markup=None):
+def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
     data = {
         "chat_id": chat_id,
         "text": message,
@@ -836,37 +843,50 @@ def send_telegram_message(message, chat_id, update_id, reply_markup=None):
     response = requests.post(
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
-    #catxh error/excpt
+    
 
 
 @shared_task(queue='save_subscription')
 def save_subscription(token_address, token_id, subscriber_id, platform):
     #note: subscriber_id: unique identifier of telegram/slack user
-    token = Token.objects.get(tokenid=token_id)
+    token = Token.objects.get(id=token_id)
     platform = platform.lower()
     subscriber=None
 
-    #check telegram & slack user fields in subscriber
-    #Telegram
-    if platform == 'telegram':
-        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
-    #Slack
-    #if platform == 'slack':
 
     if token and subscriber:
+        destination_address = None
+
         if token_address.startswith('bitcoincash'):
             address_obj, created = BchAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
+            subscription_obj, created = Subscription.objects.get_or_create(
+                bch=address_obj,
+                token=token
+            )
         else:
             address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj) 
+            subscription_obj, created = Subscription.objects.get_or_create(
+                slp=address_obj,
+                token=token
+            ) 
 
+        if platform == 'telegram':
+            destination_address = settings.TELEGRAM_DESTINATION_ADDR
+        elif platform == 'slack':
+            destination_address = 'https://slpnotify.scibizinformatics.com/slack/notify/'
         
 
-        subscription_obj.token = token
-        subscription_obj.save()
+        if created:
+            sendto, created = SendTo.objects.get_or_create(address=destination_address)
 
-        subscriber.subscription.add(subscription_obj)
+            subscription_obj.address.add(sendto)
+            subscription_obj.token = token
+            subscription_obj.save()
+
+            subscriber.subscription.add(subscription_obj)
+            return True
+    return False
+
 
 @shared_task(queue='save_subscription')
 def register_user(user_details, platform):
