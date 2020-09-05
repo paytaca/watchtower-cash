@@ -29,7 +29,7 @@ class SlackBotHandler(object):
         self.simpleledger = 'simpleledger'
         self.bitcoincash = 'bitcoincash'
         slp_chars = ".{42}"
-        bch_chars = ".{43}"
+        bch_chars = ".{42}"
         self.token_regex = self.get_token_regex()
         self.subscribe_regex = f'^(subscribe\s(({self.simpleledger}:{slp_chars}\s{self.token_regex})|({self.bitcoincash}:{bch_chars})))$'
 
