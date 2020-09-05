@@ -44,15 +44,17 @@ class SlackNotificationView(View):
     def post(self, request):
         response = {'success': False}
 
+        data = json.loads(request.body)
+
         # payload from client_acknowledgement in tasks.py
-        amount = request.POST.get('amount', None)
-        address = request.POST.get('address', None)
-        source = request.POST.get('source', None)
-        token = request.POST.get('token', None)
-        txid = request.POST.get('txid', None)
-        block = request.POST.get('block', None)
-        spent_index = request.POST.get('spent_index', 0)
-        channel_id_list = request.POST.get('channel_id_list', None)
+        amount = data.get('amount', None)
+        address = data.get('address', None)
+        source = data.get('source', None)
+        token = data.get('token', None)
+        txid = data.get('txid', None)
+        block = data.get('block', None)
+        spent_index = data.get('spent_index', 0)
+        channel_id_list = data.get('channel_id_list', None)
 
         if amount and address and source and token and txid:
             amount = round(amount, 8)
