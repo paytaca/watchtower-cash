@@ -23,7 +23,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import authentication, permissions
 
-class SetAddressView(ViewSet):
+class SetAddressView(APIView):
     """
     Subscribers can set address using api view.
     * Requfires token authentication.

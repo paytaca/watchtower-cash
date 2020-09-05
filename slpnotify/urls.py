@@ -51,6 +51,7 @@ schema_view = get_schema_view(
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
+    path('set-address/', SetAddressView.as_view(), name='setaddress'),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     path('telegram/notify/', csrf_exempt(TelegramSendtoView.as_view()), name="telegram-notify"),
     path('slack/dm/', csrf_exempt(SlackDirectMessageView.as_view()), name='slack-dm'),
