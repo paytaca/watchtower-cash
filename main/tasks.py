@@ -50,10 +50,12 @@ def client_acknowledgement(self, token, transactionid):
         trans.subscribed = True
         subscription = subscription.first()
         target_addresses = subscription.address.all()
+
         if target_addresses.count() == 0:
             sendto_obj = SendTo.objects.first()
             subscription.address.add(sendto_obj)
             target_addresses = [sendto_obj]
+            
         for target_address in target_addresses:
             data = {
                 'amount': trans.amount,
@@ -64,6 +66,13 @@ def client_acknowledgement(self, token, transactionid):
                 'block': block,
                 'spent_index':trans.spentIndex
             }
+
+            # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+            if target_address == settings.SLACK_DESTINATION_ADDR:
+                subscribers = subscription.subscriber.all()
+                data['channel_id_list'] = list(subscribers.values('slack_user_details__channel_id'))
+
+
             resp = requests.post(target_address.address,data=data)
             if resp.status_code == 200:
                 response_data = json.loads(resp.text)
@@ -848,7 +857,7 @@ def send_slack_message(message, channel, attachments=None):
 
 def save_subscription(token_address, token_id, subscriber_id, platform):
     # note: subscriber_id: unique identifier of telegram/slack user
-    token = Token.objects.get(tokenid=token_id)
+    token = Token.objects.get(id=token_id)
     platform = platform.lower()
     subscriber = None
 
@@ -863,23 +872,33 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
 
         if token_address.startswith('bitcoincash'):
             address_obj, created = BchAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
+            subscription_obj, created = Subscription.objects.get_or_create(
+                bch=address_obj,
+                token=token
+            )
         else:
             address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj) 
+            subscription_obj, created = Subscription.objects.get_or_create(
+                slp=address_obj,
+                token=token
+            ) 
 
         if platform == 'telegram':
             destination_address = ''
         elif platform == 'slack':
-            destination_address = 'https://slpnotify.scibizinformatics.com/slack/notify/'
+            destination_address = settings.SLACK_DESTINATION_ADDR
 
-        sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+        if created:
+            sendTo, created = SendTo.objects.get_or_create(address=destination_address)
 
-        subscription.address = sendTo
-        subscription_obj.token = token
-        subscription_obj.save()
-        
-        subscriber.subscription.add(subscription_obj)
+            subscription_obj.address.add(sendTo)
+            subscription_obj.token = token
+            subscription_obj.save()
+            
+            subscriber.subscription.add(subscription_obj)
+            return True
+
+    return False
 
 
 def register_user(user_details, platform):

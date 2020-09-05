@@ -261,4 +261,6 @@ SLACK_CLIENT_ID = config('SLACK_CLIENT_ID', '')
 SLACK_CLIENT_SECRET = config('SLACK_CLIENT_SECRET', '')
 SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET', '')
 
+SLACK_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/slack/notify/'
 SLACK_THEME_COLOR = '#82E0AA'
+

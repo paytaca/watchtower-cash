@@ -70,11 +70,14 @@ class SlackBotHandler(object):
                         if address.startswith(self.simpleledger):
                             token = splitted_text[2].lower()
 
-                        token_id = Token.objects.get(name__iexact=token).tokenid
-                        save_subscription(address, token_id, user_id, 'slack')
+                        token_id = Token.objects.get(name__iexact=token).id
+                        created = save_subscription(address, token_id, user_id, 'slack')
 
-                        message = f'<@{user_id}>, your address `{address}` is now subscribed to SLP Notify Slack!  :tada:'
-                        message += f'\nYou will now receive notifications for _{token.upper()}_ transactions made on that address.'
+                        if created:
+                            message = f'Your address `{address}` is now subscribed to SLP Notify Slack!  :tada:'
+                            message += f'\nYou will now receive notifications for _{token.upper()}_ transactions made on that address.'
+                        else:
+                            message = f'Your address `{address}` is already subscribed with _{token}_ token!  :information_source:'
                     else:
                         message = get_message('subscribe')
                         attachment = get_attachment('subscribe')

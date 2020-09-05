@@ -8,6 +8,7 @@ MESSAGES = {}
 MESSAGES['default'] = '*Welcome to SLP Notify!*  :grinning:\nSubscribe now and receive notifications everytime transactions are made on any of your subscribed addresses!'
 MESSAGES['subscribe'] = '*Subscribing to SLP Notify*\nRegister your address and get notified in an instant!'
 MESSAGES['tokens'] = '*SLP Tokens Supported:*\nTokens supported when you subscribe using an SLP address'
+MESSAGES['notification'] = f'A transaction has been made on one of your subscribed addresses'
 # MESSAGES['not-connected'] = "*Slack Account Not Yet Connected*\nConnect your SLP Notify account to Slack first\n_Not yet registered to SLP Notify? Register now at https://www.facebook.com  :pencil2:_"
 
 ################## ATTACHMENTS ##################
