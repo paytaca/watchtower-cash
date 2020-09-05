@@ -19,6 +19,7 @@ from django.conf.urls.static import static
 from django.conf import settings
 from django.conf.urls import url
 from django.urls import path, include
+from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework.authtoken import views
 from rest_framework import permissions
@@ -42,6 +43,10 @@ schema_view = get_schema_view(
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
+    path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
+    path('telegram/notify/', csrf_exempt(TelegramSendtoView.as_view()), name="telegram-notify"),
+    path('slack/dm/', csrf_exempt(SlackDirectMessageView.as_view()), name='slack-dm'),
+    path('slack/notify/', csrf_exempt(SlackNotificationView.as_view()), name='slack-notify'),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

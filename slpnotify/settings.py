@@ -31,7 +31,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     'slpnotify.scibizinformatics.com',
-    'localhost'
+    'localhost',
+    '*'
 ]
 
 
@@ -215,7 +216,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'bch_address_scanner': {
         'task': 'main.tasks.bch_address_scanner',
-        'schedule': 3600
+        'schedule': 600
     }
 }
 
@@ -251,3 +252,20 @@ SWAGGER_SETTINGS = {
         }
     },
 }
+
+#Telegram bot settings
+TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
+TELEGRAM_BOT_USER = config('TELEGRAM_BOT_USER', default='')
+TELEGRAM_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/telegram/notify/'
+
+
+# Slack credentials and configurations
+
+SLACK_BOT_USER_TOKEN = config('SLACK_BOT_USER_TOKEN', '')
+SLACK_VERIFICATION_TOKEN = config('SLACK_VERIFICATION_TOKEN', '')
+SLACK_CLIENT_ID = config('SLACK_CLIENT_ID', '')
+SLACK_CLIENT_SECRET = config('SLACK_CLIENT_SECRET', '')
+SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET', '')
+
+SLACK_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/slack/notify/'
+SLACK_THEME_COLOR = '#82E0AA'
