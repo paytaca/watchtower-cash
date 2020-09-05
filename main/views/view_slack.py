@@ -1,3 +1,4 @@
+from rest_framework.response import Response
 from django.http import JsonResponse
 from django.conf import settings
 from django.views import View
