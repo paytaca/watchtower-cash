@@ -5,7 +5,17 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from celery import shared_task
 import requests
-from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress, SendTo
+from main.models import (
+    BlockHeight, 
+    Token, 
+    Transaction,
+    SlpAddress, 
+    Subscription, 
+    BchAddress,
+    SendTo,
+    Subscriber
+)
+from django.contrib.auth.models import User
 import json, random
 from main.utils import slpdb, missing_blocks, block_setter
 from django.conf import settings
@@ -40,10 +50,12 @@ def client_acknowledgement(self, token, transactionid):
         trans.subscribed = True
         subscription = subscription.first()
         target_addresses = subscription.address.all()
+
         if target_addresses.count() == 0:
             sendto_obj = SendTo.objects.first()
             subscription.address.add(sendto_obj)
             target_addresses = [sendto_obj]
+            
         for target_address in target_addresses:
             data = {
                 'amount': trans.amount,
@@ -54,6 +66,13 @@ def client_acknowledgement(self, token, transactionid):
                 'block': block,
                 'spent_index':trans.spentIndex
             }
+
+            # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+            if target_address == settings.SLACK_DESTINATION_ADDR:
+                subscribers = subscription.subscriber.all()
+                data['channel_id_list'] = list(subscribers.values('slack_user_details__channel_id'))
+
+
             resp = requests.post(target_address.address,data=data)
             if resp.status_code == 200:
                 response_data = json.loads(resp.text)
@@ -826,3 +845,89 @@ def bch_address_scanner(self, bchaddress=None):
                         print(args)
     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
+
+@shared_task(rate_limit='20/s', queue='send_slack_message')
+def send_slack_message(message, channel, attachments=None):
+    data = {
+        "token": settings.SLACK_BOT_USER_TOKEN,
+        "channel": channel,
+        "text": message
+    }
+
+    if type(attachments) is list:
+        data['attachments'] = json.dumps(attachments)
+
+    response = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        data=data
+    )
+
+
+def save_subscription(token_address, token_id, subscriber_id, platform):
+    # note: subscriber_id: unique identifier of telegram/slack user
+    token = Token.objects.get(id=token_id)
+    platform = platform.lower()
+    subscriber = None
+
+    # check telegram & slack user fields in subscriber
+    # if platform == 'telegram':
+    #     subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
+    # elif platform == 'slack':
+    subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
+
+    if token and subscriber:
+        destination_address = None
+
+        if token_address.startswith('bitcoincash'):
+            address_obj, created = BchAddress.objects.get_or_create(address=token_address)
+            subscription_obj, created = Subscription.objects.get_or_create(
+                bch=address_obj,
+                token=token
+            )
+        else:
+            address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
+            subscription_obj, created = Subscription.objects.get_or_create(
+                slp=address_obj,
+                token=token
+            ) 
+
+        if platform == 'telegram':
+            destination_address = ''
+        elif platform == 'slack':
+            destination_address = settings.SLACK_DESTINATION_ADDR
+
+        if created:
+            sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+
+            subscription_obj.address.add(sendTo)
+            subscription_obj.token = token
+            subscription_obj.save()
+            
+            subscriber.subscription.add(subscription_obj)
+            return True
+
+    return False
+
+
+def register_user(user_details, platform):
+    platform = platform.lower()
+    user_id = user_details['id']
+
+    uname_pass = f"{platform}-{user_id}"
+    new_user, created = User.objects.get_or_create(
+        username=uname_pass,
+        password=uname_pass
+    )
+
+    new_subscriber = Subscriber()
+    new_subscriber.user = new_user
+    new_subscriber.confirmed = True
+
+    if platform == 'telegram':
+        # temporarily commented because telegram user details is not yet included in my branch migrations
+        # new_subscriber.telegram_user_details = user_details
+        pass
+    elif platform == 'slack':
+        new_subscriber.slack_user_details = user_details
+        
+    new_subscriber.save()
