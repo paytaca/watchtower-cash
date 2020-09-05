@@ -5,7 +5,8 @@ from __future__ import absolute_import, unicode_literals
 import logging
 from celery import shared_task
 import requests
-from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress, SendTo
+from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress, SendTo, Subscriber
+from django.contrib.auth.models import User 
 import json, random
 from main.utils import slpdb
 from django.conf import settings
@@ -835,55 +836,58 @@ def send_telegram_message(message, chat_id, update_id, reply_markup=None):
     response = requests.post(
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
-
     #catxh error/excpt
 
-def save_address(token_address, token_id, token_name, subscriber_id):
+
+@shared_task(queue='save_subscription')
+def save_subscription(token_address, token_id, subscriber_id, platform):
     #note: subscriber_id: unique identifier of telegram/slack user
-    token = Token.objects.filter(tokenid=token_id).first()
+    token = Token.objects.get(tokenid=token_id)
+    platform = platform.lower()
+    subscriber=None
 
     #check telegram & slack user fields in subscriber
     #Telegram
-    subscriber = Subscriber.objects.filter(telegram_user_details__id=subscriber_id) #add OR query
+    if platform == 'telegram':
+        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
     #Slack
+    #if platform == 'slack':
 
     if token and subscriber:
-        if 'bitcoincash' in token_address:
+        if token_address.startswith('bitcoincash'):
             address_obj, created = BchAddress.objects.get_or_create(address=token_address)
             subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
         else:
             address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
             subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj) 
 
+        
+
         subscription_obj.token = token
         subscription_obj.save()
+
         subscriber.subscription.add(subscription_obj)
 
-    # tokenaddress = request.data.get('tokenAddress', None)
-    #     destinationAddress = request.data.get('destinationAddress', None)
-    #     tokenid = request.data.get('tokenid', None)
-    #     tokenname = request.data.get('tokenname', None)
-    #     reason = 'Invalid params.'
-    #     status = 'failed'
-    #     if tokenaddress and destinationAddress and tokenid and tokenname:
-    #         subscriber_qs = Subscriber.objects.filter(user=request.user)
-    #         reason = 'Not yet subscribed.'
-    #         if subscriber_qs.exists():
-    #             subscriber = subscriber_qs.first()
-    #             sendto_obj, created = SendTo.objects.get_or_create(address=destinationAddress)
-    #             if 'bitcoincash' in tokenaddress:
-    #                 address_obj, created = BchAddress.objects.get_or_create(address=tokenaddress)
-    #                 subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
-    #                 reason = 'BCH added.'
-    #             else:
-    #                 address_obj, created = SlpAddress.objects.get_or_create(address=tokenaddress)
-    #                 subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj)
-    #                 reason = 'SLP added.'
-    #             token_obj, created =  MyToken.objects.get_or_create(tokenid=tokenid)
-    #             token_obj.name = tokenname.lower()
-    #             subscription_obj.token = token_obj
-    #             subscription_obj.save()
-    #             subscription_obj.address.add(sendto_obj)
-    #             subscriber.subscription.add(subscription_obj)
-    #             status = 'success'
-    #     return Response({'status': status, 'reason': reason})
+@shared_task(queue='save_subscription')
+def register_user(user_details, platform):
+    platform = platform.lower()
+    user_id = user_details['id']
+
+    uname_pass = f"{platform}-{user_id}"
+    new_user = User(
+        username=uname_pass,
+        password=uname_pass
+    )
+    new_user.save()
+
+    new_subscriber = Subscriber()
+    new_subscriber.user = new_user
+    new_subscriber.confirmed = True
+
+    if platform == 'telegram':
+        new_subscriber.telegram_user_details = user_details
+    #if platform == 'slack':
+
+    new_subscriber.save()
+
+

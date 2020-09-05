@@ -1,6 +1,6 @@
-from main.tasks import send_telegram_message
+from main.tasks import send_telegram_message, save_subscription, register_user
 from main.models import Token, Subscription, Subscriber
-from main.utils.responses import get_message
+from main.utils.telegram_responses import get_message
 import logging
 import re
 
@@ -16,28 +16,6 @@ class TelegramBotHandler(object):
 		self.message = ""
 		self.text = ''
 		self.subscribe_regex = f"(^subscribe\s+(simpleledger:.*|bitcoincash:.*)\s+{self.generate_token_regex()})$"
-		self.subscribe_markup = {
-            "inline_keyboard": [
-                [
-                    {'text': 'Subscribe', 'callback_data': 'subscribe'}              
-                ]
-            ]
-        }
-	
-	# def generate_token_markup(self):
-	# 	tokens = Token.objects.all()
-	# 	inline_keyboard = []
-		
-	# 	for token in tokens:
-	# 		temp = [{'text': token.name.upper(), 'callback_data': token.name}]
-
-	# 		inline_keyboard.append(temp)
-		
-	# 	markup = {
-	# 		"inline_keyboard": inline_keyboard
-	# 	}
-
-	# 	return markup
 
 	def generate_token_regex(self):
 		tokens = Token.objects.all()
@@ -65,52 +43,76 @@ class TelegramBotHandler(object):
 				username=self.data['message']['from']['username'] or self.data['message']['from']['first_name'] 
 				self.text = self.data['message']['text']
 
-				if self.text.replace('/', '').lower() == 'start': 
-					#Default Message
-					self.message = get_message('telegram_default')
-					send_telegram_message(self.message, chat_id, update_id)
+				#check if private message
+				if self.data['message']['chat']['type'] == 'private':
+					#check if account exists
+					subscriber = Subscriber.objects.filter(telegram_user_details__id=chat_id).first()
 
-				if self.text.replace('/', '').lower() == 'help':
-					self.message = get_message('telegram_help')
-					send_telegram_message(self.message, chat_id, update_id)
+					if subscriber and subscriber.confirmed:					
+						default_response = True
+						#help message
+						if self.text.replace('/', '').lower() == 'help':
+							self.message = get_message('help')
+							default_response = False
 
 
-				#check subscription message
-				proceed = False
-				if re.findall(self.subscribe_regex, self.text):
-					address = self.text.split()[1].strip()
-					token_name = self.text.split()[-1].strip().lower()
+						#check subscription message
+						proceed = False
+						if re.findall(self.subscribe_regex, self.text):
+							address = self.text.split()[1].strip()
+							token_name = self.text.split()[-1].strip().lower()
 
-					#verify address
-					if address.startswith('simpleledger:') and len(address) == 55:
-						if token_name != 'bch':
-							proceed = True
-						else: 
-							self.message+= '\nPlease enter your <b>BCH address</b> to watch <b>BCH</b>.\n\nExample:'
-							self.message+= '\nsubscribe bitcoincash:qrry9hqfzhmkxlzf5m3f45y92l9gk5msgyustqp7vh bch'
+							#verify address
+							if address.startswith('simpleledger:') and len(address) == 55:
+								if token_name != 'bch':
+									proceed = True
+								else: 
+									self.message+= '\nPlease enter your <b>BCH address</b> to watch <b>BCH</b>.\n\nExample:'
+									self.message+= '\nsubscribe bitcoincash:qrry9hqfzhmkxlzf5m3f45y92l9gk5msgyustqp7vh bch'
 
-					elif address.startswith('bitcoincash:') and len(address) == 54:
-						if token_name == 'bch':
-							proceed = True
-						else:
-							self.message+= '\nPlease enter your <b>SLP address</b> to watch <b>SLP tokens</b>.\n\nExample:'
-							self.message+= '\nsubscribe simpleledger:qpgje2ycwhh2rn8v0rg5r7d8lgw2pp84zgpkd6wyer honk'
+							elif address.startswith('bitcoincash:') and len(address) == 54:
+								if token_name == 'bch':
+									proceed = True
+								else:
+									self.message+= '\nPlease enter your <b>SLP address</b> to watch <b>SLP tokens</b>.\n\nExample:'
+									self.message+= '\nsubscribe simpleledger:qpgje2ycwhh2rn8v0rg5r7d8lgw2pp84zgpkd6wyer spice'
 
-					elif addr_temp.startswith('simpleledger') and not len(addr_temp) == 55:
-						self.message = "<b>You have entered an invalid SLP address!</b>  🚫"
+							elif addr_temp.startswith('simpleledger') and not len(addr_temp) == 55:
+								self.message = "<b>You have entered an invalid SLP address!</b>  🚫"
 
-					elif addr_temp.startswith('bitcoincash') and not len(addr_temp) == 54:
-						self.message = "<b>You have entered an invalid BCH address!</b>  🚫"
+							elif addr_temp.startswith('bitcoincash') and not len(addr_temp) == 54:
+								self.message = "<b>You have entered an invalid BCH address!</b>  🚫"
 
-					#verify token
-					token  = Token.objects.filter(name=token_name).first()
+							#verify token
+							token  = Token.objects.filter(name=token_name).first()
 
-					if token:
-						logger.error('saving subscription')
+							if token and proceed:
+								#save sucscription
+								logger.error('saving subscription')
+								save_subscription(address, token.tokenid, chat_id, 'telegram')
+								self.message = "Your address has been successfully saved!"
 
+							else:
+								self.message = "Sorry, the token you've input is not yet supported."
+
+							default_response = False
+
+						if default_response:
+							#Default Message
+							self.message = get_message('default')
+						
+
+					elif subscriber and not subscriber.confirmed:
+							self.message = "<b>Account not yet confirmed</b>"
+
+					#not subscribed
 					else:
-						self.message = "Sorry, the token you've input is not yet supported."
-
+						#Register user
+						register_user(self.data['message']['from'], 'telegram')
+						self.message = get_message('default')
+					
 
 					send_telegram_message(self.message, chat_id, update_id)
+
+
 
