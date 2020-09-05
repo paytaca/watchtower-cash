@@ -859,6 +859,8 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
     subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
 
     if token and subscriber:
+        destination_address = None
+
         if token_address.startswith('bitcoincash'):
             address_obj, created = BchAddress.objects.get_or_create(address=token_address)
             subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
@@ -866,6 +868,14 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
             address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
             subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj) 
 
+        if platform == 'telegram':
+            destination_address = ''
+        elif platform == 'slack':
+            destination_address = 'https://slpnotify.scibizinformatics.com/slack/notify/'
+
+        sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+
+        subscription.address = sendTo
         subscription_obj.token = token
         subscription_obj.save()
         
