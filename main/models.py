@@ -87,5 +87,8 @@ class Subscriber(models.Model):
     confirmed = models.BooleanField(default=False)
     date_started = models.DateTimeField(default=timezone.now)
 
-    # slack_id = models.CharField(max_length=50, null=True)
-    # slack_channel_id = models.CharField(max_length=50, null=True)
+    slack_user_details = JSONField(default=dict, null=True, blank=True)
+    # slack_user_details = {
+    #   "id": string,
+    #   "channel_id": string (DM channel ID for the bot to reply to)
+    # }
