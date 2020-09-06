@@ -70,13 +70,16 @@ def client_acknowledgement(self, token, transactionid):
             }
 
             # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+            
             if target_address.address == settings.SLACK_DESTINATION_ADDR:
-                subscribers = subscription.subscriber.all()
-                data['channel_id_list'] = list(subscribers.values('slack_user_details__channel_id'))
+                subscribers = subscription.subscriber.exclude(slack_user_details={})
+                botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                data['channel_id_list'] = json.dumps(botlist)
                 
             if target_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                subscribers = subscription.subscriber.all()
-                data['chat_id_list'] = list(subscribers.values('telegram_user_details__id'))
+                subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                data['chat_id_list'] = json.dumps(botlist)
              
 
             resp = requests.post(target_address.address,data=data)
@@ -854,8 +857,9 @@ def bch_address_scanner(self, bchaddress=None):
     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
 
-@shared_task(rate_limit='20/s', queue='telegram')
+@shared_task(rate_limit='20/s', queue='send_telegram_message')
 def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
+    LOGGER.info(f'SENDING TO {chat_id}')
     data = {
         "chat_id": chat_id,
         "text": message,
@@ -870,10 +874,12 @@ def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
     response = requests.post(
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
+    return f"send notification to {chat_id}"
     
 
 @shared_task(rate_limit='20/s', queue='send_slack_message')
 def send_slack_message(message, channel, attachments=None):
+    LOGGER.info(f'SENDING TO {channel}')
     data = {
         "token": settings.SLACK_BOT_USER_TOKEN,
         "channel": channel,
@@ -887,6 +893,7 @@ def send_slack_message(message, channel, attachments=None):
         "https://slack.com/api/chat.postMessage",
         data=data
     )
+    return f"send notification to {channel}"
 
 
 def save_subscription(token_address, token_id, subscriber_id, platform):
