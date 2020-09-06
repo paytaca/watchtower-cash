@@ -70,11 +70,11 @@ def client_acknowledgement(self, token, transactionid):
             }
 
             # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
-            if target_address == settings.SLACK_DESTINATION_ADDR:
+            if target_address.address == settings.SLACK_DESTINATION_ADDR:
                 subscribers = subscription.subscriber.all()
                 data['channel_id_list'] = list(subscribers.values('slack_user_details__channel_id'))
                 
-            if target_address == settings.TELEGRAM_DESTINATION_ADDR:
+            if target_address.address == settings.TELEGRAM_DESTINATION_ADDR:
                 subscribers = subscription.subscriber.all()
                 data['chat_id_list'] = list(subscribers.values('telegram_user_details__id'))
              
