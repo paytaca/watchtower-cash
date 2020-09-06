@@ -8,6 +8,7 @@ from main.utils.slack_responses import get_message
 from main.tasks import send_slack_message
 from main.models import Token
 
+from urllib.parse import parse_qs
 import logging
 import json
 
@@ -45,17 +46,34 @@ class SlackNotificationView(View):
     def post(self, request):
         response = {'success': False}
 
-        data = json.loads(request.body)
+        data = request.body.decode('utf-8')
+        data = parse_qs(data)
 
-        # payload from client_acknowledgement in tasks.py
-        amount = data.get('amount', None)
-        address = data.get('address', None)
-        source = data.get('source', None)
-        token = data.get('token', None)
-        txid = data.get('txid', None)
-        block = data.get('block', None)
-        spent_index = data.get('spent_index', 0)
-        channel_id_list = data.get('channel_id_list', None)
+        amount = float(data['amount'][0])
+        address = data['address'][0]
+        source = data['source'][0]
+        token = data['token'][0]
+        txid = data['txid'][0]
+        spent_index = int(data['spent_index'][0])
+        channel_id_list = []
+
+        if 'channel_id_list' in data.keys():
+            channel_id_list = list(data['channel_id_list'][0])
+
+        if 'block' in data.keys():
+            block = int(data['block'][0])
+
+        # data = json.loads(request.body)
+
+        # # payload from client_acknowledgement in tasks.py
+        # amount = data.get('amount', None)
+        # address = data.get('address', None)
+        # source = data.get('source', None)
+        # token = data.get('token', None)
+        # txid = data.get('txid', None)
+        # block = data.get('block', None)
+        # spent_index = data.get('spent_index', 0)
+        # channel_id_list = data.get('channel_id_list', None)
 
         if amount and address and source and token and txid:
             amount = round(amount, 8)
