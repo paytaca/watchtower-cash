@@ -34,7 +34,7 @@ spec:
     spec:
       containers  :
         - name: slpnotify
-          image: gcr.io/spice-slp-token/slpnotify-prod:0.0.222
+          image: gcr.io/spice-slp-token/slpnotify-prod:0.0.224
           env:
             - name: POSTGRES_DB
               value: slpnotify-prod
@@ -53,17 +53,17 @@ spec:
             - name: REDIS_HOST
               valueFrom:
                 secretKeyRef:
-                  name: redis-credentials
+                  name: slpnotify-redis-credentials
                   key: hostname
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: redis-credentials
+                  name: slpnotify-redis-credentials
                   key: password
             - name: REDIS_PORT
               valueFrom:
                 secretKeyRef:
-                  name: redis-credentials
+                  name: slpnotify-redis-credentials
                   key: port
             - name: TELEGRAM_BOT_TOKEN
               valueFrom:

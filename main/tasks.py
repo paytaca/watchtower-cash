@@ -260,10 +260,10 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     if status == 'failed':
         pass
         # Once error found, we'll saved its params to
-        # redis temporarily and resume it after 30 minutes cooldown.
-        # msg = f'!!! Error found !!! Suspending to redis...'
-        # LOGGER.error(msg)
-        # suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
+        # redis temporarily and resume it after 2 minutes cooldown.
+        msg = f'!!! Error found !!! Suspending to redis...'
+        LOGGER.error(msg)
+        suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
     if status == 'success':
         Transaction.objects.filter(txid=txn_id).update(scanning=False)
         BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
@@ -355,7 +355,7 @@ def latest_blockheight_getter():
                 blocks = list(BlockHeight.objects.filter(processed=False).order_by('-number').values_list('number', flat=True))
                 event = 'UNPROCESSED'
             if len(blocks):
-                number = blocks[0]
+                number = blocks[-1]
                 added = block_setter(number, new=False)
                 if added:
                     obj, created = BlockHeight.objects.get_or_create(number=number)
@@ -458,7 +458,7 @@ def first_blockheight_scanner(self, id=None):
     else:
         self.retry(countdown=120)
             
-@shared_task(bind=True, queue='checktransaction', max_retries=4)
+@shared_task(bind=True, queue='checktransaction', max_retries=20)
 def checktransaction(self, txn_id):
     status = 'failed'
     url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
@@ -487,6 +487,8 @@ def checktransaction(self, txn_id):
                                     )
             LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
             status = 'success'
+    else:
+        self.retry(countdown=60)
     return status
     
 @shared_task(bind=True, queue='slpbitcoinsocket')

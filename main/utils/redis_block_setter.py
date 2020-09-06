@@ -8,10 +8,9 @@ def block_setter(number, new=False):
         data = json.dumps([])
         redis_storage.set('PENDING-BLOCKS', data)
     blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
-    if number not in blocks:
-        if new or len(blocks) < 3:
-            blocks.append(number)
-            added = True
+    if new or len(blocks) == 0:
+        blocks.append(number)
+        added = True
     data = json.dumps(blocks)
     redis_storage.set('PENDING-BLOCKS', data)
     return added

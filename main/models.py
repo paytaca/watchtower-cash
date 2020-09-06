@@ -9,7 +9,7 @@ class Token(models.Model):
     confirmation_limit = models.IntegerField(default=0)
 
     def __str__(self):
-        return self.name
+        return str(self.name)
 
 class BlockHeight(models.Model):
     number = models.IntegerField(default=0, unique=True)
