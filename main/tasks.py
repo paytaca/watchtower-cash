@@ -922,15 +922,15 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
         elif platform == 'slack':
             destination_address = settings.SLACK_DESTINATION_ADDR
 
-        if created:
-            sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+        
+        sendTo, created = SendTo.objects.get_or_create(address=destination_address)
 
-            subscription_obj.address.add(sendTo)
-            subscription_obj.token = token
-            subscription_obj.save()
-            
-            subscriber.subscription.add(subscription_obj)
-            return True
+        subscription_obj.address.add(sendTo)
+        subscription_obj.token = token
+        subscription_obj.save()
+        
+        subscriber.subscription.add(subscription_obj)
+        return True
 
     return False
 
