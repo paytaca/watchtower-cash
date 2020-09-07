@@ -9,6 +9,7 @@ MESSAGES['default'] = f"""Welcome to SLP Notify telegram bot!
 MESSAGES['help'] = """Hello! Here's a list of my commands:
 
 \n<b>/subscribe (SLP or BCH address) (token)</b> - to register your address and get notified.
+\n<b>/unsubscribe (SLP or BCH address) (token)</b> - to unregister your address.
 """
 
 MESSAGES['not_connected'] = """<b>Account not yet connected</b>
