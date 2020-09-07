@@ -12,6 +12,7 @@ from main.utils.slack_responses import (
 from main.tasks import (
     send_slack_message,
     save_subscription,
+    remove_subscription,
     register_user
 )
 
@@ -32,6 +33,7 @@ class SlackBotHandler(object):
         bch_chars = ".{42}"
         self.token_regex = self.get_token_regex()
         self.subscribe_regex = f'^(subscribe\s(({self.simpleledger}:{slp_chars}\s{self.token_regex})|({self.bitcoincash}:{bch_chars})))$'
+        self.unsubscribe_regex = self.subscribe_regex.replace('subscribe', 'unsubscribe')
 
     
     def handle_message(self, data):
@@ -57,13 +59,19 @@ class SlackBotHandler(object):
                     register_user(slack_user_details, 'slack')
 
 
-                if (text == 'subscribe' or text == 'tokens'):
+                if (text == 'subscribe' or text == 'tokens' or text == 'unsubscribe'):
                     message = get_message(text)
                     attachment = get_attachment(text)
 
-                elif text.startswith('subscribe '):
-                    if re.findall(self.subscribe_regex, text):
-                        splitted_text = text.split()
+                elif text.startswith('subscribe ') or text.startswith('unsubscribe '):
+                    splitted_text = text.split()
+                    command = splitted_text[0]
+                    command_regex = self.subscribe_regex
+
+                    if command == 'unsubscribe':
+                        command_regex = self.unsubscribe_regex
+                    
+                    if re.findall(command_regex, text):
                         address = splitted_text[1]
                         token = 'bch'
 
@@ -71,16 +79,29 @@ class SlackBotHandler(object):
                             token = splitted_text[2].lower()
 
                         token_id = Token.objects.get(name__iexact=token).id
-                        created = save_subscription(address, token_id, user_id, 'slack')
+                        token = token.upper()
 
-                        if created:
-                            message = f'Your address `{address}` is now subscribed to SLP Notify Slack!  :tada:'
-                            message += f'\nYou will now receive notifications for _{token.upper()}_ transactions made on that address.'
-                        else:
-                            message = f'Your address `{address}` is already subscribed with _{token}_ token!  :information_source:'
+                        if command == 'subscribe':
+                            created = save_subscription(address, token_id, user_id, 'slack')
+
+                            if created:
+                                message = f'Your address `{address}` is now subscribed to SLP Notify Slack!  :tada:'
+                                message += f'\nYou will now receive notifications for _{token}_ transactions made on that address.'
+                            else:
+                                message = f'Your address `{address}` is already subscribed with _{token}_ token!  :information_source:'
+
+                        elif command == 'unsubscribe':
+                            success = remove_subscription(address, token_id, user_id, 'slack')
+
+                            if success:
+                                message = f'_{token}_ token notifications for address `{address}` has been removed  :no_entry:'
+                                message += f'\nYou will no longer receive notifications for _{token}_ transactions on that address.'
+                            else:
+                                message = f'No address `{address}` is currently subscribed to _{token}_  :information_source:'
                     else:
-                        message = get_message('subscribe')
-                        attachment = get_attachment('subscribe')
+                        message = get_message(command)
+                        attachment = get_attachment(command)
+
                 else:
                     message = get_message('default')
                     attachment = get_attachment('default')

@@ -44,9 +44,16 @@ def client_acknowledgement(self, token, transactionid):
     # address can be bch or slp
     address = trans.address
     if 'bitcoincash' in address:
-        subscription = Subscription.objects.filter(bch__address=address).filter(token=token_obj)
+        subscription = Subscription.objects.filter(
+            bch__address=address, 
+            token=token_obj
+        )
     else:
-        subscription = Subscription.objects.filter(slp__address=address).filter(token=token_obj)
+        subscription = Subscription.objects.filter(
+            slp__address=address, 
+            token=token_obj
+        )
+        
     if subscription.exists():
         trans.subscribed = True
         subscription = subscription.first()
@@ -897,6 +904,38 @@ def send_slack_message(message, channel, attachments=None):
     return f"send notification to {channel}"
 
 
+def remove_subscription(token_address, token_id, subscriber_id, platform):
+    token = Token.objects.get(id=token_id)
+    platform = platform.lower()
+    subscriber = None
+
+    if platform == 'telegram':
+        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
+    elif platform == 'slack':
+        subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
+    
+    if token and subscriber:
+        if token_address.startswith('bitcoincash'):
+            address_obj = BchAddress.objects.get(address=token_address)
+            subscription = Subscription.objects.filter(
+                bch=address_obj,
+                token=token
+            )
+        else:
+            address_obj = SlpAddress.objects.get(address=token_address)
+            subscription = Subscription.objects.filter(
+                slp=address_obj,
+                token=token
+            ) 
+        
+        if subscription.exists():
+            subscription.delete()
+            return True
+    
+    return False
+
+
+
 def save_subscription(token_address, token_id, subscriber_id, platform):
     # note: subscriber_id: unique identifier of telegram/slack user
     token = Token.objects.get(id=token_id)
@@ -930,15 +969,15 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
         elif platform == 'slack':
             destination_address = settings.SLACK_DESTINATION_ADDR
 
-        
-        sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+        if created:
+            sendTo, created = SendTo.objects.get_or_create(address=destination_address)
 
-        subscription_obj.address.add(sendTo)
-        subscription_obj.token = token
-        subscription_obj.save()
-        
-        subscriber.subscription.add(subscription_obj)
-        return True
+            subscription_obj.address.add(sendTo)
+            subscription_obj.token = token
+            subscription_obj.save()
+            
+            subscriber.subscription.add(subscription_obj)
+            return True
 
     return False
 
