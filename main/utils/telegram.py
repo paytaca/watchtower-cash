@@ -54,7 +54,7 @@ class TelegramBotHandler(object):
     def get_info(self):
         return self.text.split()[1].strip() , self.text.split()[-1].lower().strip()                                                        
 
-    def scan_request(self, action):
+    def scan_request(self, action, chat_id):
         default_response = False
         address, token_name = self.get_info()
         proceed = self.verify_address(token_name, address)
@@ -113,15 +113,16 @@ class TelegramBotHandler(object):
                         #check subscription message
                         proceed = False
                         if re.findall(self.subscribe_regex, self.text.lower()):                            
-                            default_response = self.scan_request('subscribe')
+                            default_response = self.scan_request('subscribe', chat_id)
                         
                         #check unsubscription message
                         elif re.findall(self.unsubscribe_regex, self.text.lower()):
-                            default_response = self.scan_request('unsubscribe')
+                            default_response = self.scan_request('unsubscribe', chat_id)
                             
                         if default_response:
                             #Default Message
                             self.message = get_message('default')
+                            address, token_name = self.get_info()
                             proceed = self.verify_address(token_name, address)
                             #verify token
                             token  = Token.objects.filter(name=token_name).first()
