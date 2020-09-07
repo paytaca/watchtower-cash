@@ -44,9 +44,9 @@ def client_acknowledgement(self, token, transactionid):
     # address can be bch or slp
     address = trans.address
     if 'bitcoincash' in address:
-        subscription = Subscription.objects.filter(bch__address=address)
+        subscription = Subscription.objects.filter(bch__address=address).filter(token=token_obj)
     else:
-        subscription = Subscription.objects.filter(slp__address=address)
+        subscription = Subscription.objects.filter(slp__address=address).filter(token=token_obj)
     if subscription.exists():
         trans.subscribed = True
         subscription = subscription.first()
@@ -146,7 +146,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-        client_acknowledgement.delay(token, transaction_obj.id)
+        if transaction_created:
+            client_acknowledgement.delay(token, transaction_obj.id)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
