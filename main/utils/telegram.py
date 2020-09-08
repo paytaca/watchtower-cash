@@ -52,7 +52,10 @@ class TelegramBotHandler(object):
         return proceed
 
     def get_info(self):
-        return self.text.split()[1].strip() , self.text.split()[-1].lower().strip()                                                        
+        if len(self.text.split()) > 2:
+            return self.text.split()[1].strip() , self.text.split()[-1].lower().strip()
+        else:
+            return '' , self.text.split()[-1].lower().strip()
 
     def scan_request(self, action, chat_id):
         default_response = False
