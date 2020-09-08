@@ -143,8 +143,16 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         )
         
         if not transaction_obj.source:
+            # try:
+            #     Transaction.objects.filter(id=transaction_obj.id).update(source=source)
+            # except Exception as exc:
+            #     LOGGER.error('Operational Error while updating transaction source')
             transaction_obj.source = source
         if blockheightid is not None:
+            # try:
+            #     Transaction.objects.filter(id=transaction_obj.id).update(blockheight_id=blockheightid)
+            # except Exception as exc:
+            #     LOGGER.error('Operational Error while updating transaction blockheight')
             transaction_obj.blockheight_id = blockheightid
         transaction_obj.save()
         if token == 'bch':
@@ -358,6 +366,7 @@ def latest_blockheight_getter():
             block_setter(number, new=True)
             bitcoincash_tracker.delay(obj.id)
         else:
+            pass
             # IF THERE'S ANY missed/unprocessed blocks, this task will automatically scan atleast 1 recent block.
             blocks = list(BlockHeight.objects.all().order_by('number').values_list('number',flat=True))
             blocks = list(missing_blocks(blocks,0,len(blocks)-1))
@@ -444,7 +453,7 @@ def first_blockheight_scanner(self, id=None):
                         if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
                             spent_index = 1
                             for trans in transaction['tokenDetails']['detail']['outputs']:
-                                save_record(
+                                save_record.delay(
                                     transaction['tokenDetails']['detail']['tokenIdHex'],
                                     trans['address'],
                                     transaction['txid'],
@@ -487,7 +496,7 @@ def checktransaction(self, txn_id):
                         if 'cashAddrs' in out['scriptPubKey'].keys():
                             for cashaddr in out['scriptPubKey']['cashAddrs']:
                                 if cashaddr.startswith('bitcoincash:'):
-                                    save_record(
+                                    save_record.delay(
                                         'bch',
                                         cashaddr,
                                         data['txid'],
