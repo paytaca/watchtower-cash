@@ -280,9 +280,9 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
         pass
         # Once error found, we'll saved its params to
         # redis temporarily and resume it after 2 minutes cooldown.
-        msg = f'!!! Error found !!! Suspending to redis...'
-        LOGGER.error(msg)
-        suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
+        # msg = f'!!! Error found !!! Suspending to redis...'
+        # LOGGER.error(msg)
+        # suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
     if status == 'success':
         Transaction.objects.filter(txid=txn_id).update(scanning=False)
         BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
