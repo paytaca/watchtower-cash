@@ -18,7 +18,7 @@ from main.models import (
 from django.contrib.auth.models import User
 
 import json, random
-from main.utils import slpdb, missing_blocks, block_setter
+from main.utils import slpdb, missing_blocks, block_setter, check_wallet_address_subscription, check_token_subscription
 from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
@@ -28,79 +28,69 @@ from django.core.exceptions import ObjectDoesNotExist
 import base64
 import sseclient
 
+
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, token, transactionid):
-    try:
-        token_obj = Token.objects.get(tokenid=token)
-    except ObjectDoesNotExist:
-        token_obj = Token.objects.get(name=token)
-    # subscriptions = Subscription.objects.filter(token=token_obj).values('address__address').distinct()
-    
     trans = Transaction.objects.get(id=transactionid)
     block = None
     if trans.blockheight:
         block = trans.blockheight.number
     retry = False
-    # address can be bch or slp
-    address = trans.address
-    if 'bitcoincash' in address:
-        subscription = Subscription.objects.filter(
-            bch__address=address, 
-            token=token_obj
-        )
-    else:
-        subscription = Subscription.objects.filter(
-            slp__address=address, 
-            token=token_obj
-        )
-        
+
+    address = trans.address 
+    subscription = check_wallet_address_subscription(address)
+
     if subscription.exists():
         trans.subscribed = True
         subscription = subscription.first()
-        target_addresses = subscription.address.all()
+        webhook_addresses = subscription.address.all()
 
-        if target_addresses.count() == 0:
+        if webhook_addresses.count() == 0:
+            # If subscription found yet no webhook url found,
+            # We'll assign the webhook url for spicebot.
             sendto_obj = SendTo.objects.first()
             subscription.address.add(sendto_obj)
-            target_addresses = [sendto_obj]
+            webhook_addresses = [sendto_obj]
             
-        for target_address in target_addresses:
-            #check if telegram/slack user
-            data = {
-                'amount': trans.amount,
-                'address': trans.address,
-                'source': trans.source,
-                'token': token_obj.tokenid,
-                'txid': trans.txid,
-                'block': block,
-                'spent_index':trans.spentIndex
-            }
+        for webhook_address in webhook_addresses:
+            # check subscribed Token and Token from transaction if matched.
+            valid, token_obj = check_token_subscription(token, subscription.token.id)
+            if valid:
+                data = {
+                    'amount': trans.amount,
+                    'address': trans.address,
+                    'source': trans.source,
+                    'token': token_obj.tokenid,
+                    'txid': trans.txid,
+                    'block': block,
+                    'spent_index':trans.spentIndex
+                }
 
-            # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
-            
-            if target_address.address == settings.SLACK_DESTINATION_ADDR:
-                subscribers = subscription.subscriber.exclude(slack_user_details={})
-                botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                data['channel_id_list'] = json.dumps(botlist)
+                #check if telegram/slack user
+                # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
                 
-            if target_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                data['chat_id_list'] = json.dumps(botlist)
-             
+                if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
+                    subscribers = subscription.subscriber.exclude(slack_user_details={})
+                    botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                    data['channel_id_list'] = json.dumps(botlist)
+                    
+                if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
+                    subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                    botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                    data['chat_id_list'] = json.dumps(botlist)
+                
 
-            resp = requests.post(target_address.address,data=data)
-            if resp.status_code == 200:
-                response_data = json.loads(resp.text)
-                if response_data['success']:
-                    trans.acknowledge = True
-                    trans.queued = False
-            elif resp.status_code == 404:
-                LOGGER.error(f'this is no longer valid > {target_address}')
-            else:
-                retry = True
-                trans.acknowledge = False
-        # This is no longer reliable since a subscriber can have multiple subscription
+                resp = requests.post(webhook_address.address,data=data)
+                if resp.status_code == 200:
+                    response_data = json.loads(resp.text)
+                    if response_data['success']:
+                        trans.acknowledge = True
+                        trans.queued = False
+                elif resp.status_code == 404:
+                    LOGGER.error(f'this is no longer valid > {webhook_address}')
+                else:
+                    retry = True
+                    trans.acknowledge = False
         trans.save()
     if retry:
         self.retry(countdown=180)
