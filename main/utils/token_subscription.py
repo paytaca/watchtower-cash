@@ -1,4 +1,4 @@
-from django.contrib.auth imoprt get_user_model
+from django.contrib.auth import get_user_model
 from main.models import Subscriber, Token
 User = get_user_model()
 
