@@ -17,8 +17,8 @@ class TelegramBotHandler(object):
 
     def generate_token_regex(self):
         tokens = Token.objects.all()
-        token_names = [t.name.lower() for t in tokens]
-        regex = f"({token_names[0]}"
+        token_names = [t.name.lower() for t in tokens if t.name]
+        regex = f"(bch"
 
         for token in token_names:
             if token != token_names[0]:
