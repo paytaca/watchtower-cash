@@ -334,7 +334,7 @@ def slpdb_token_scanner():
                                         block.id,
                                         spent_index
                                     )
-                                    save_record.delay(*args)
+                                    save_record(*args)
                                     print(args)
                                     spent_index += 1
 
@@ -486,7 +486,7 @@ def checktransaction(self, txn_id):
                         if 'cashAddrs' in out['scriptPubKey'].keys():
                             for cashaddr in out['scriptPubKey']['cashAddrs']:
                                 if cashaddr.startswith('bitcoincash:'):
-                                    save_record.delay(
+                                    save_record(
                                         'bch',
                                         cashaddr,
                                         data['txid'],
@@ -552,7 +552,7 @@ def slpbitcoinsocket(self):
                                             None,
                                             spent_index
                                         )
-                                        save_record.delay(*args)
+                                        save_record(*args)
                                         print(args)
         LOGGER.error(msg)
         redis_storage.set('slpbitcoinsocket', 0)
@@ -620,7 +620,7 @@ def slpfountainheadsocket(self):
                                                     None,
                                                     spent_index
                                                 )
-                                                save_record.delay(*args)
+                                                save_record(*args)
                                                 print(args)
                                             spent_index += 1
         LOGGER.error(msg)
@@ -682,7 +682,7 @@ def slpstreamfountainheadsocket(self):
                                             None,
                                             spent_index
                                         )
-                                        save_record.delay(*args)
+                                        save_record(*args)
                                         print(args)
         LOGGER.error(msg)
         redis_storage.set('slpstreamfountainheadsocket', 0)
@@ -723,7 +723,8 @@ def bitdbquery(self):
                     None,
                     spent_index
                 )
-                save_record.delay(*args)
+                # For intant recording of transaction, its better not to delay.
+                save_record(*args)
             print(f"{counter} | {args}")
             counter += 1
 
@@ -784,7 +785,8 @@ def bitsocket(self):
                                 None,
                                 spent_index
                             )
-                            save_record.delay(*args)
+                            # For instant saving of transaction, its better not to delay task.
+                            save_record(*args)
                             print(args)
         LOGGER.error(msg)
         redis_storage.set('bitsocket', 0)
@@ -820,7 +822,8 @@ def bitcoincash_tracker(self,id):
                                                 blockheight_obj.id,
                                                 out['spentIndex']
                                             )
-                                            save_record.delay(*args)
+                                            # For instance saving of transaction, its better not to delay task
+                                            save_record(*args)
                                             print(args)
 
 @shared_task(bind=True, queue='bch_address_scanner')
