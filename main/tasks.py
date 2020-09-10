@@ -152,7 +152,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
         if transaction_created:
-            client_acknowledgement.delay(token, transaction_obj.id)
+            client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
