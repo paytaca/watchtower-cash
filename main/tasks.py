@@ -18,7 +18,7 @@ from main.models import (
 from django.contrib.auth.models import User
 
 import json, random
-from main.utils import slpdb, missing_blocks, block_setter
+from main.utils import slpdb, missing_blocks, block_setter, check_wallet_address_subscription, check_token_subscription
 from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
@@ -28,72 +28,69 @@ from django.core.exceptions import ObjectDoesNotExist
 import base64
 import sseclient
 
+
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, token, transactionid):
-    try:
-        token_obj = Token.objects.get(tokenid=token)
-    except ObjectDoesNotExist:
-        token_obj = Token.objects.get(name=token)
-    # subscriptions = Subscription.objects.filter(token=token_obj).values('address__address').distinct()
-    
     trans = Transaction.objects.get(id=transactionid)
     block = None
     if trans.blockheight:
         block = trans.blockheight.number
     retry = False
-    # address can be bch or slp
-    address = trans.address
-    if 'bitcoincash' in address:
-        subscription = Subscription.objects.filter(bch__address=address)
-    else:
-        subscription = Subscription.objects.filter(slp__address=address)
+
+    address = trans.address 
+    subscription = check_wallet_address_subscription(address)
+
     if subscription.exists():
         trans.subscribed = True
         subscription = subscription.first()
-        target_addresses = subscription.address.all()
+        webhook_addresses = subscription.address.all()
 
-        if target_addresses.count() == 0:
+        if webhook_addresses.count() == 0:
+            # If subscription found yet no webhook url found,
+            # We'll assign the webhook url for spicebot.
             sendto_obj = SendTo.objects.first()
             subscription.address.add(sendto_obj)
-            target_addresses = [sendto_obj]
+            webhook_addresses = [sendto_obj]
             
-        for target_address in target_addresses:
-            #check if telegram/slack user
-            data = {
-                'amount': trans.amount,
-                'address': trans.address,
-                'source': trans.source,
-                'token': token_obj.tokenid,
-                'txid': trans.txid,
-                'block': block,
-                'spent_index':trans.spentIndex
-            }
+        for webhook_address in webhook_addresses:
+            # check subscribed Token and Token from transaction if matched.
+            valid, token_obj = check_token_subscription(token, subscription.token.id)
+            if valid:
+                data = {
+                    'amount': trans.amount,
+                    'address': trans.address,
+                    'source': trans.source,
+                    'token': token_obj.tokenid,
+                    'txid': trans.txid,
+                    'block': block,
+                    'spent_index':trans.spentIndex
+                }
 
-            # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
-            
-            if target_address.address == settings.SLACK_DESTINATION_ADDR:
-                subscribers = subscription.subscriber.exclude(slack_user_details={})
-                botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                data['channel_id_list'] = json.dumps(botlist)
+                #check if telegram/slack user
+                # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
                 
-            if target_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                data['chat_id_list'] = json.dumps(botlist)
-             
+                if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
+                    subscribers = subscription.subscriber.exclude(slack_user_details={})
+                    botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                    data['channel_id_list'] = json.dumps(botlist)
+                    
+                if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
+                    subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                    botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                    data['chat_id_list'] = json.dumps(botlist)
+                
 
-            resp = requests.post(target_address.address,data=data)
-            if resp.status_code == 200:
-                response_data = json.loads(resp.text)
-                if response_data['success']:
-                    trans.acknowledge = True
-                    trans.queued = False
-            elif resp.status_code == 404:
-                LOGGER.error(f'this is no longer valid > {target_address}')
-            else:
-                retry = True
-                trans.acknowledge = False
-        # This is no longer reliable since a subscriber can have multiple subscription
+                resp = requests.post(webhook_address.address,data=data)
+                if resp.status_code == 200:
+                    response_data = json.loads(resp.text)
+                    if response_data['success']:
+                        trans.acknowledge = True
+                        trans.queued = False
+                elif resp.status_code == 404:
+                    LOGGER.error(f'this is no longer valid > {webhook_address}')
+                else:
+                    retry = True
+                    trans.acknowledge = False
         trans.save()
     if retry:
         self.retry(countdown=180)
@@ -136,8 +133,16 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         )
         
         if not transaction_obj.source:
+            # try:
+            #     Transaction.objects.filter(id=transaction_obj.id).update(source=source)
+            # except Exception as exc:
+            #     LOGGER.error('Operational Error while updating transaction source')
             transaction_obj.source = source
         if blockheightid is not None:
+            # try:
+            #     Transaction.objects.filter(id=transaction_obj.id).update(blockheight_id=blockheightid)
+            # except Exception as exc:
+            #     LOGGER.error('Operational Error while updating transaction blockheight')
             transaction_obj.blockheight_id = blockheightid
         transaction_obj.save()
         if token == 'bch':
@@ -146,7 +151,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-        client_acknowledgement.delay(token, transaction_obj.id)
+        if transaction_created:
+            client_acknowledgement.delay(token, transaction_obj.id)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
@@ -264,9 +270,9 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
         pass
         # Once error found, we'll saved its params to
         # redis temporarily and resume it after 2 minutes cooldown.
-        msg = f'!!! Error found !!! Suspending to redis...'
-        LOGGER.error(msg)
-        suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
+        # msg = f'!!! Error found !!! Suspending to redis...'
+        # LOGGER.error(msg)
+        # suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
     if status == 'success':
         Transaction.objects.filter(txid=txn_id).update(scanning=False)
         BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
@@ -350,6 +356,7 @@ def latest_blockheight_getter():
             block_setter(number, new=True)
             bitcoincash_tracker.delay(obj.id)
         else:
+            pass
             # IF THERE'S ANY missed/unprocessed blocks, this task will automatically scan atleast 1 recent block.
             blocks = list(BlockHeight.objects.all().order_by('number').values_list('number',flat=True))
             blocks = list(missing_blocks(blocks,0,len(blocks)-1))
@@ -436,7 +443,7 @@ def first_blockheight_scanner(self, id=None):
                         if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
                             spent_index = 1
                             for trans in transaction['tokenDetails']['detail']['outputs']:
-                                save_record(
+                                save_record.delay(
                                     transaction['tokenDetails']['detail']['tokenIdHex'],
                                     trans['address'],
                                     transaction['txid'],
@@ -479,7 +486,7 @@ def checktransaction(self, txn_id):
                         if 'cashAddrs' in out['scriptPubKey'].keys():
                             for cashaddr in out['scriptPubKey']['cashAddrs']:
                                 if cashaddr.startswith('bitcoincash:'):
-                                    save_record(
+                                    save_record.delay(
                                         'bch',
                                         cashaddr,
                                         data['txid'],
@@ -896,6 +903,38 @@ def send_slack_message(message, channel, attachments=None):
     return f"send notification to {channel}"
 
 
+def remove_subscription(token_address, token_id, subscriber_id, platform):
+    token = Token.objects.get(id=token_id)
+    platform = platform.lower()
+    subscriber = None
+
+    if platform == 'telegram':
+        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
+    elif platform == 'slack':
+        subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
+    
+    if token and subscriber:
+        if token_address.startswith('bitcoincash'):
+            address_obj = BchAddress.objects.get(address=token_address)
+            subscription = Subscription.objects.filter(
+                bch=address_obj,
+                token=token
+            )
+        else:
+            address_obj = SlpAddress.objects.get(address=token_address)
+            subscription = Subscription.objects.filter(
+                slp=address_obj,
+                token=token
+            ) 
+        
+        if subscription.exists():
+            subscription.delete()
+            return True
+    
+    return False
+
+
+
 def save_subscription(token_address, token_id, subscriber_id, platform):
     # note: subscriber_id: unique identifier of telegram/slack user
     token = Token.objects.get(id=token_id)
@@ -929,15 +968,15 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
         elif platform == 'slack':
             destination_address = settings.SLACK_DESTINATION_ADDR
 
-        
-        sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+        if created:
+            sendTo, created = SendTo.objects.get_or_create(address=destination_address)
 
-        subscription_obj.address.add(sendTo)
-        subscription_obj.token = token
-        subscription_obj.save()
-        
-        subscriber.subscription.add(subscription_obj)
-        return True
+            subscription_obj.address.add(sendTo)
+            subscription_obj.token = token
+            subscription_obj.save()
+            
+            subscriber.subscription.add(subscription_obj)
+            return True
 
     return False
 
