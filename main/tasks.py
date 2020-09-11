@@ -27,6 +27,8 @@ from django.db import transaction as trans
 from django.core.exceptions import ObjectDoesNotExist
 import base64
 import sseclient
+from django.db import OperationalError
+from psycopg2.extensions import TransactionRollbackError
 
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
@@ -144,7 +146,15 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             # except Exception as exc:
             #     LOGGER.error('Operational Error while updating transaction blockheight')
             transaction_obj.blockheight_id = blockheightid
-        transaction_obj.save()
+        try:
+            transaction_obj.save()
+        except OperationalError as e:
+            if e.__cause__.__class__ == TransactionRollbackError:
+                save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
+                return f"Retried saving of transaction | {transactionid}"
+            else:
+                raise
+
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
         else:
@@ -284,18 +294,18 @@ def openfromredis():
     if b'deposit_filter' not in redis_storage.keys():
         data = json.dumps([])
         redis_storage.set('deposit_filter', data)
-    deposit_filter = redis_storage.get('deposit_filter')
-    transactions = json.loads(deposit_filter)
+    data = redis_storage.get('deposit_filter')
+    transactions = json.loads(data)
     if len(transactions) is not 0:
-        for params in transactions:
+        for index, params in enumerate(transactions):
             LOGGER.info(f"rescanning txn_id - {params['txn_id']}")
-            deposit_filter(
-                params['txn_id'],
-                params['blockheightid'],
-                params['currentcount'],
-                params['total_transactions']
-            )
-    
+            deposit_filter(params)
+            # Remove in redis storage after rescanning
+            data = json.loads(redis_storage.get('deposit_filter'))
+            data.remove(**params)
+            suspended_data = json.dumps(data)
+            redis_storage.set('deposit_filter', suspended_data)
+
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
     tokens = Token.objects.all()
@@ -486,7 +496,7 @@ def checktransaction(self, txn_id):
                         if 'cashAddrs' in out['scriptPubKey'].keys():
                             for cashaddr in out['scriptPubKey']['cashAddrs']:
                                 if cashaddr.startswith('bitcoincash:'):
-                                    save_record(
+                                    save_record.delay(
                                         'bch',
                                         cashaddr,
                                         data['txid'],
