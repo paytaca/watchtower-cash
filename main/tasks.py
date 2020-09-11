@@ -297,10 +297,15 @@ def openfromredis():
     data = redis_storage.get('deposit_filter')
     transactions = json.loads(data)
     if len(transactions) is not 0:
-        for params in transactions:
+        for index, params in enumerate(transactions):
             LOGGER.info(f"rescanning txn_id - {params['txn_id']}")
-            deposit_filter(**params)
-    
+            deposit_filter(params)
+            # Remove in redis storage after rescanning
+            data = json.loads(redis_storage.get('deposit_filter'))
+            data.remove(**params)
+            suspended_data = json.dumps(data)
+            redis_storage.set('deposit_filter', suspended_data)
+
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
     tokens = Token.objects.all()
