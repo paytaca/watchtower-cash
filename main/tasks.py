@@ -294,17 +294,12 @@ def openfromredis():
     if b'deposit_filter' not in redis_storage.keys():
         data = json.dumps([])
         redis_storage.set('deposit_filter', data)
-    deposit_filter = redis_storage.get('deposit_filter')
-    transactions = json.loads(deposit_filter)
+    data = redis_storage.get('deposit_filter')
+    transactions = json.loads(data)
     if len(transactions) is not 0:
         for params in transactions:
             LOGGER.info(f"rescanning txn_id - {params['txn_id']}")
-            deposit_filter(
-                params['txn_id'],
-                params['blockheightid'],
-                params['currentcount'],
-                params['total_transactions']
-            )
+            deposit_filter(**params)
     
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
