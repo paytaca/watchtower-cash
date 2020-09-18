@@ -405,7 +405,7 @@ def second_blockheight_scanner(self):
                 blockheight_instance.id,
                 counter,
                 total_transactions
-            )
+            )   
             counter += 1
         LOGGER.info(f"  =======  PROCESSED BLOCK {number}   =======  ")
     else:
