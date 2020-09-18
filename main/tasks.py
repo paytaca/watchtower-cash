@@ -400,13 +400,12 @@ def second_blockheight_scanner(self):
         blockheight_instance.save()
         redis_storage.delete(key) 
         for txn_id in transactions:
-            for token in Token.objects.all():
-                deposit_filter.delay(
-                    txn_id,
-                    blockheight_instance.id,
-                    counter,
-                    total_transactions
-                )
+            deposit_filter.delay(
+                txn_id,
+                blockheight_instance.id,
+                counter,
+                total_transactions
+            )
             counter += 1
         LOGGER.info(f"  =======  PROCESSED BLOCK {number}   =======  ")
     else:
