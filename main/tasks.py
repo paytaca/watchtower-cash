@@ -101,6 +101,7 @@ def client_acknowledgement(self, token, transactionid):
 
 @shared_task(queue='save_record')
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
+    msg = f'| SAVE RECORD TASK : {transactionid}'
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -119,12 +120,15 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         spent_index = int(spent_index)
     except TypeError as exc:
         spent_index = 0
+    
+    msg += f'| SPENT_INDEX {spent_index}'
 
     with trans.atomic():
         try:
             token_obj = Token.objects.get(tokenid=token)
         except ObjectDoesNotExist:
             token_obj = Token.objects.get(name=token)
+        msg += f'| TOKEN: {token_obj.name}'
         
         transaction_obj, transaction_created = Transaction.objects.get_or_create(
             txid=transactionid,
@@ -140,12 +144,15 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             # except Exception as exc:
             #     LOGGER.error('Operational Error while updating transaction source')
             transaction_obj.source = source
+        msg += f'| SOURCE: {source}'
+
         if blockheightid is not None:
             # try:
             #     Transaction.objects.filter(id=transaction_obj.id).update(blockheight_id=blockheightid)
             # except Exception as exc:
             #     LOGGER.error('Operational Error while updating transaction blockheight')
             transaction_obj.blockheight_id = blockheightid
+
         try:
             transaction_obj.save()
         except OperationalError as e:
@@ -154,6 +161,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 return f"Retried saving of transaction | {transactionid}"
             else:
                 raise
+        if transaction_obj.blockheight is not None:
+            msg += f'| BLOCKHEIGHT: {transaction_obj.blockheight.number}'
 
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
@@ -163,6 +172,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         address_obj.save()
         if transaction_created:
             client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
+        LOGGER.info(msg)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):
@@ -400,13 +410,12 @@ def second_blockheight_scanner(self):
         blockheight_instance.save()
         redis_storage.delete(key) 
         for txn_id in transactions:
-            for token in Token.objects.all():
-                deposit_filter.delay(
-                    txn_id,
-                    blockheight_instance.id,
-                    counter,
-                    total_transactions
-                )
+            deposit_filter.delay(
+                txn_id,
+                blockheight_instance.id,
+                counter,
+                total_transactions
+            )   
             counter += 1
         LOGGER.info(f"  =======  PROCESSED BLOCK {number}   =======  ")
     else:
