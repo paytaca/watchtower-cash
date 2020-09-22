@@ -152,7 +152,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             # except Exception as exc:
             #     LOGGER.error('Operational Error while updating transaction blockheight')
             transaction_obj.blockheight_id = blockheightid
-        msg += f'| BLOCKHEIGHT: {blockheightid}'
 
         try:
             transaction_obj.save()
@@ -162,6 +161,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 return f"Retried saving of transaction | {transactionid}"
             else:
                 raise
+        if transaction_obj.blockheight is not None:
+            msg += f'| BLOCKHEIGHT: {transaction_obj.blockheight.number}'
 
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
@@ -171,7 +172,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         address_obj.save()
         if transaction_created:
             client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
-        logger.info(msg)
+        LOGGER.info(msg)
 
 @shared_task(queue='suspendtoredis')
 def suspendtoredis(txn_id, blockheightid, currentcount, total_transactions):

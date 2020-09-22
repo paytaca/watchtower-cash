@@ -213,11 +213,11 @@ CELERY_BEAT_SCHEDULE = {
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
         'schedule': 300
-    },
-    'bch_address_scanner': {
-        'task': 'main.tasks.bch_address_scanner',
-        'schedule': 600
     }
+    # 'bch_address_scanner': {
+    #     'task': 'main.tasks.bch_address_scanner',
+    #     'schedule': 600
+    # }
 }
 
 CORS_ORIGIN_WHITELIST = [
