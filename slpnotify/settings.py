@@ -192,23 +192,23 @@ CELERY_BEAT_SCHEDULE = {
     },
     'openfromredis': {
         'task': 'main.tasks.openfromredis',
-        'schedule': 600
+        'schedule': 300
     },
     'slpbitcoinsocketsocket': {
         'task': 'main.tasks.slpbitcoinsocket',
-        'schedule': 1800
+        'schedule': 120
     },
     'slpfountainheadsocket': {
         'task': 'main.tasks.slpfountainheadsocket',
-        'schedule': 1800
+        'schedule': 120
     },
     'slpstreamfountainheadsocket': {
         'task': 'main.tasks.slpstreamfountainheadsocket',
-        'schedule': 1800
+        'schedule': 120
     },
     'bitsocket': {
         'task': 'main.tasks.bitsocket',
-        'schedule': 1800
+        'schedule': 120
     },
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
