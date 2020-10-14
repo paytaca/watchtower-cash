@@ -19,6 +19,7 @@ from django.contrib.auth.models import User
 
 import json, random
 from main.utils import slpdb, missing_blocks, block_setter, check_wallet_address_subscription, check_token_subscription
+from main.utils.spicebot_token_registration import SpicebotTokens
 from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
@@ -924,6 +925,12 @@ def send_slack_message(message, channel, attachments=None):
     )
     return f"send notification to {channel}"
 
+@shared_task(queue='spicebot_subscription')
+def spicebot_subscription(tokenid, tokenname):
+    obj = SpicebotTokens()
+    obj.register(tokenid, tokename)
+    obj.subscribe()
+
 
 def remove_subscription(token_address, token_id, subscriber_id, platform):
     token = Token.objects.get(id=token_id)
@@ -954,7 +961,6 @@ def remove_subscription(token_address, token_id, subscriber_id, platform):
             return True
     
     return False
-
 
 
 def save_subscription(token_address, token_id, subscriber_id, platform):
@@ -1001,6 +1007,7 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
             return True
 
     return False
+
 
 def register_user(user_details, platform):
     platform = platform.lower()
