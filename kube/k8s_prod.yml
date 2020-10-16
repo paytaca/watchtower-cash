@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: slpnotify-prod
-  namespace: spicebot-prod
+  name: slpnotify
+  namespace: spice-prod
   labels:
-    app: slpnotify-prod
+    app: slpnotify
 spec:
   selector:
-    app: slpnotify-prod
+    app: slpnotify
   type: NodePort
   ports:
-    - name: backend-prod
+    - name: backend
       port: 8000
       targetPort: 8000
       protocol: TCP
@@ -18,37 +18,40 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: slpnotify-prod
-  namespace: spicebot-prod
+  name: slpnotify
+  namespace: spice-prod
   labels:
-    app: slpnotify-prod
+    app: slpnotify
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: slpnotify-prod
+      app: slpnotify
   template:
     metadata:
       labels:
-        app: slpnotify-prod
+        app: slpnotify
     spec:
       containers  :
         - name: slpnotify
-          image: gcr.io/spice-slp-token/slpnotify-prod:0.0.273
+          image: 967349720785.dkr.ecr.ap-southeast-1.amazonaws.com/slpnotify-prod:e9e9be80f490
           env:
             - name: POSTGRES_DB
               value: slpnotify-prod
             - name: POSTGRES_HOST
-              value: 127.0.0.1
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: host
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: cloudsql-db-credentials
+                  name: postgres-credentials
                   key: username
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: cloudsql-db-credentials
+                  name: postgres-credentials
                   key: password
             - name: REDIS_HOST
               valueFrom:
@@ -100,19 +103,5 @@ spec:
                 secretKeyRef:
                   name: slpnotify-credentials
                   key: slacksigningsecret
-        - name: cloudsql-proxy
-          image: gcr.io/cloudsql-docker/gce-proxy:1.11
-          command:
-            [
-              "/cloud_sql_proxy",
-              "-instances=spice-slp-token:us-central1:spicebot=tcp:5432",
-              "-credential_file=/secrets/cloudsql/credentials.json",
-            ]
-          volumeMounts:
-            - name: cloudsql-instance-credentials
-              mountPath: /secrets/cloudsql
-              readOnly: true
-      volumes:
-        - name: cloudsql-instance-credentials
-          secret:
-            secretName: cloudsql-instance-credentials
+      nodeSelector:
+        eks.amazonaws.com/nodegroup: spicebot-node-group
