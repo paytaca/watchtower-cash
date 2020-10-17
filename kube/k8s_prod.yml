@@ -104,4 +104,4 @@ spec:
                   name: slpnotify-credentials
                   key: slacksigningsecret
       nodeSelector:
-        eks.amazonaws.com/nodegroup: spicebot-node-group
+        eks.amazonaws.com/nodegroup: slpnotify-node-group
