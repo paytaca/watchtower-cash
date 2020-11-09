@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: slpnotify
+  namespace: spice-staging
+  labels:
+    app: slpnotify
+spec:
+  selector:
+    app: slpnotify
+  type: NodePort
+  ports:
+    - name: backend
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slpnotify
+  namespace: spice-staging
+  labels:
+    app: slpnotify
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slpnotify
+  template:
+    metadata:
+      labels:
+        app: slpnotify
+    spec:
+      containers  :
+        - name: slpnotify
+          image: 967349720785.dkr.ecr.ap-southeast-1.amazonaws.com/slpnotify-staging:e9e9be80f490
+          env:
+            - name: POSTGRES_DB
+              value: slpnotify-prod
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: host
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-redis-credentials
+                  key: hostname
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-redis-credentials
+                  key: password
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-redis-credentials
+                  key: port
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: telegrambottoken
+            - name: TELEGRAM_BOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: telegrambotuser
+            - name: SLACK_BOT_USER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackbotusertoken
+            - name: SLACK_VERIFICATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackverificationtoken
+            - name: SLACK_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackclientid
+            - name: SLACK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slackclientsecret
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: slpnotify-credentials
+                  key: slacksigningsecret
+      nodeSelector:
+        eks.amazonaws.com/nodegroup: slpnotify-node-group
