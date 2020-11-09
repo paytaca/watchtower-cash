@@ -31,6 +31,9 @@ import sseclient
 from django.db import OperationalError
 from psycopg2.extensions import TransactionRollbackError
 
+from django.utils import timezone
+from django.db.models import Q
+
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, token, transactionid):
@@ -1030,3 +1033,16 @@ def register_user(user_details, platform):
         new_subscriber.slack_user_details = user_details
         
     new_subscriber.save()
+
+
+@shared_task(queue='updates')
+def updates(message, channel, attachments=None):
+    start = timezone.now()- datetime.timedelta(days=7)
+    ending = timezone.now() - datetime.timedelta(seconds=4800)
+    qs = BlockHeight.objects.filter(
+        Q(created_datetime__gte=start) & Q(created_datetime__lte=ending)
+    )
+    to_process_blocks = qs.filter(processed=False)
+    for block in to_process_blocks:
+        first_blockheight_scanner.delay(block.id)
+    LOGGER.info('Updated blocks!')
