@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: slpnotify
-  namespace: spice-prod
+  namespace: spice-staging
   labels:
     app: slpnotify
 spec:
@@ -19,7 +19,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: slpnotify
-  namespace: spice-prod
+  namespace: spice-staging
   labels:
     app: slpnotify
 spec:
@@ -34,7 +34,7 @@ spec:
     spec:
       containers  :
         - name: slpnotify
-          image: 967349720785.dkr.ecr.ap-southeast-1.amazonaws.com/spicetrade-prod:e9e9be80f490
+          image: 967349720785.dkr.ecr.ap-southeast-1.amazonaws.com/slpnotify-staging:842ed2488f25
           env:
             - name: POSTGRES_DB
               value: slpnotify-prod
