@@ -208,6 +208,14 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     if qs.exists():
         instance = qs.first()
         if not instance.amount or not instance.source:
+            Transaction.objects.filter(txid=txn_id).update(scanning=False)
+            BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
+
+            if currentcount == total_transactions:
+                obj = BlockHeight.objects.get(id=blockheightid)
+                obj.processed=True
+                obj.save()
+                
             return 'success'
     status = 'failed'
     transaction_url = 'https://rest.bitcoin.com/v2/slp/txDetails/%s' % (txn_id)
@@ -287,6 +295,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             status = 'success'
                         
     if currentcount == total_transactions:
+        
         obj = BlockHeight.objects.get(id=blockheightid)
         obj.processed=True
         obj.save()
@@ -1036,7 +1045,7 @@ def register_user(user_details, platform):
 
 
 @shared_task(queue='updates')
-def updates(message, channel, attachments=None):
+def updates():
     start = timezone.now()- datetime.timedelta(days=7)
     ending = timezone.now() - datetime.timedelta(seconds=4800)
     qs = BlockHeight.objects.filter(
