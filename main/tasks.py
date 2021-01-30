@@ -267,7 +267,6 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
                                                     spent_index
                                                 )
                                                 save_record.delay(*args)
-                                                print(args)
                                                 status = 'success'
 
                                         spent_index += 1
@@ -355,7 +354,6 @@ def slpdb_token_scanner():
                                         spent_index
                                     )
                                     save_record(*args)
-                                    print(args)
                                     spent_index += 1
 
 
@@ -520,7 +518,7 @@ def checktransaction(self, txn_id):
         self.retry(countdown=60)
     return status
     
-@shared_task(bind=True, queue='slpbitcoinsocket')
+@shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
 def slpbitcoinsocket(self):
     """
     A live stream of SLP transactions via Bitcoin
@@ -572,141 +570,11 @@ def slpbitcoinsocket(self):
                                             spent_index
                                         )
                                         save_record(*args)
-                                        print(args)
         LOGGER.error(msg)
         redis_storage.set('slpbitcoinsocket', 0)
     else:
         LOGGER.info('slpbitcoin is still running')
 
-@shared_task(bind=True, queue='slpfountainheadsocket')
-def slpfountainheadsocket(self):
-    """
-    A live stream of SLP transactions via FountainHead
-    """
-    url = "https://slpsocket.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjogewogICAgfQogIH0KfQ=="
-    resp = requests.get(url, stream=True)
-    source = 'slpsocket.fountainhead.cash'
-    LOGGER.info('socket ready in : %s' % source)
-    previous = ''
-    msg = 'Service not available!'
-    redis_storage = settings.REDISKV
-    if b'slpfountainheadsocket' not in redis_storage.keys():
-        redis_storage.set('slpfountainheadsocket', 0)
-    withsocket = int(redis_storage.get('slpfountainheadsocket'))
-    if not withsocket:
-        for content in resp.iter_content(chunk_size=1024*1024):
-            loaded_data = None
-            redis_storage.set('slpfountainheadsocket', 1)
-            try:
-                content = content.decode('utf8')
-                if '"tx":{"h":"' in previous:
-                    data = previous + content
-                    data = data.strip().split('data: ')[-1]
-                    loaded_data = json.loads(data)
-            except (ValueError, UnicodeDecodeError, TypeError) as exc:
-                msg = traceback.format_exc()
-                msg = f'Its alright. This is an expected error. --> {msg}'
-                LOGGER.error(msg)
-            except json.decoder.JSONDecodeError as exc:
-                msg = f'Its alright. This is an expected error. --> {exc}'
-                LOGGER.error(msg)
-            except Exception as exc:
-                msg = f'Novel exception found --> {exc}'
-                break
-            previous = content
-            if loaded_data is not None:
-                if len(loaded_data['data']) > 0:
-                    info = loaded_data['data'][0]
-                    if 'slp' in info.keys():
-                        if info['slp']['valid']:
-                            if 'detail' in info['slp'].keys():
-                                if 'tokenIdHex' in info['slp']['detail'].keys():
-                                    token_query =  Token.objects.filter(tokenid=info['slp']['detail']['tokenIdHex'])
-                                    if token_query.exists():
-                                        spent_index = 1
-                                        for trans in info['slp']['detail']['outputs']:
-                                            amount = float(trans['amount'])
-                                            slp_address = trans['address']
-                                            if 'tx' in info.keys():
-                                                txn_id = info['tx']['h']
-                                                token_obj = token_query.first()
-                                                args = (
-                                                    info['slp']['detail']['tokenIdHex'],
-                                                    slp_address,
-                                                    txn_id,
-                                                    amount,
-                                                    source,
-                                                    None,
-                                                    spent_index
-                                                )
-                                                save_record(*args)
-                                                print(args)
-                                            spent_index += 1
-        LOGGER.error(msg)
-        redis_storage.set('slpfountainheadsocket', 0)
-    else:
-        LOGGER.info('slpfountainhead is still running')
-
-        
-@shared_task(bind=True, queue='slpstreamfountainheadsocket')
-def slpstreamfountainheadsocket(self):
-    """
-    A live stream of SLP transactions via SLP Stream Fountainhead
-    """
-    url = "https://slpstream.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
-    resp = requests.get(url, stream=True)
-    source = 'slpstreamfountainhead'
-    msg = 'Service not available!'
-    LOGGER.info('socket ready in : %s' % source)
-    redis_storage = settings.REDISKV
-    if b'slpstreamfountainheadsocket' not in redis_storage.keys():
-        redis_storage.set('slpstreamfountainheadsocket', 0)
-    withsocket = int(redis_storage.get('slpstreamfountainheadsocket'))
-    if not withsocket:
-        for content in resp.iter_content(chunk_size=1024*1024):
-            redis_storage.set('slpstreamfountainheadsocket', 1)
-            decoded_text = content.decode('utf8')
-            if 'heartbeat' not in decoded_text:
-                data = decoded_text.strip().split('data: ')[-1]
-                proceed = True
-                try:
-                    readable_dict = json.loads(data)
-                except json.decoder.JSONDecodeError as exc:
-                    msg = f'Its alright. This is an expected error. --> {exc}'
-                    LOGGER.error(msg)
-                    proceed = False
-                except Exception as exc:
-                    msg = f'This is a novel issue {exc}'
-                    LOGGER.error(msg)
-                    break
-                if proceed:
-                    if len(readable_dict['data']) != 0:
-                        token_query =  Token.objects.filter(tokenid=readable_dict['data'][0]['slp']['detail']['tokenIdHex'])
-                        if token_query.exists():
-                            if 'tx' in readable_dict['data'][0].keys():
-                                if readable_dict['data'][0]['slp']['valid']:
-                                    txn_id = readable_dict['data'][0]['tx']['h']
-                                    for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
-                                        slp_address = trans['address']
-                                        amount = float(trans['amount']) / 100000000
-                                        spent_index = trans['spentIndex']
-                                        token_obj = token_query.first()
-                                        tr_qs = Transaction.objects.filter(address=slp_address, txid=txn_id)
-                                        args = (
-                                            token_obj.tokenid,
-                                            slp_address,
-                                            txn_id,
-                                            amount,
-                                            source,
-                                            None,
-                                            spent_index
-                                        )
-                                        save_record(*args)
-                                        print(args)
-        LOGGER.error(msg)
-        redis_storage.set('slpstreamfountainheadsocket', 0)
-    else:
-        LOGGER.info('slpstreamfountainheadsocket is still running')
 
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self):
@@ -744,11 +612,10 @@ def bitdbquery(self):
                 )
                 # For intant recording of transaction, its better not to delay.
                 save_record(*args)
-            print(f"{counter} | {args}")
             counter += 1
 
 
-@shared_task(bind=True, queue='bitsocket')
+@shared_task(bind=True, queue='bitsocket', time_limit=600)
 def bitsocket(self):
 
     """
@@ -806,7 +673,6 @@ def bitsocket(self):
                             )
                             # For instant saving of transaction, its better not to delay task.
                             save_record(*args)
-                            print(args)
         LOGGER.error(msg)
         redis_storage.set('bitsocket', 0)
     else:
@@ -843,7 +709,6 @@ def bitcoincash_tracker(self,id):
                                             )
                                             # For instance saving of transaction, its better not to delay task
                                             save_record(*args)
-                                            print(args)
 
 @shared_task(bind=True, queue='bch_address_scanner')
 def bch_address_scanner(self, bchaddress=None):
@@ -882,7 +747,7 @@ def bch_address_scanner(self, bchaddress=None):
                         )
                         LOGGER.info(f"{source} | txid : {tr['txid']} | amount : {out['value']}")
                         save_record.delay(*args)
-                        print(args)
+
     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
 
