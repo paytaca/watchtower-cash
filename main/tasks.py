@@ -19,6 +19,7 @@ from django.contrib.auth.models import User
 
 import json, random
 from main.utils import slpdb, missing_blocks, block_setter, check_wallet_address_subscription, check_token_subscription
+from main.utils.spicebot_token_registration import SpicebotTokens
 from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
@@ -29,6 +30,9 @@ import base64
 import sseclient
 from django.db import OperationalError
 from psycopg2.extensions import TransactionRollbackError
+
+from django.utils import timezone
+from django.db.models import Q
 
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
@@ -204,6 +208,14 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     if qs.exists():
         instance = qs.first()
         if not instance.amount or not instance.source:
+            Transaction.objects.filter(txid=txn_id).update(scanning=False)
+            BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)
+
+            if currentcount == total_transactions:
+                obj = BlockHeight.objects.get(id=blockheightid)
+                obj.processed=True
+                obj.save()
+                
             return 'success'
     status = 'failed'
     transaction_url = 'https://rest.bitcoin.com/v2/slp/txDetails/%s' % (txn_id)
@@ -282,6 +294,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             status = 'success'
                         
     if currentcount == total_transactions:
+        
         obj = BlockHeight.objects.get(id=blockheightid)
         obj.processed=True
         obj.save()
@@ -789,6 +802,12 @@ def send_slack_message(message, channel, attachments=None):
     )
     return f"send notification to {channel}"
 
+@shared_task(queue='spicebot_subscription')
+def spicebot_subscription(tokenid, tokenname):
+    obj = SpicebotTokens()
+    obj.register(tokenid, tokename)
+    obj.subscribe()
+
 
 def remove_subscription(token_address, token_id, subscriber_id, platform):
     token = Token.objects.get(id=token_id)
@@ -819,7 +838,6 @@ def remove_subscription(token_address, token_id, subscriber_id, platform):
             return True
     
     return False
-
 
 
 def save_subscription(token_address, token_id, subscriber_id, platform):
@@ -867,6 +885,7 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
 
     return False
 
+
 def register_user(user_details, platform):
     platform = platform.lower()
     user_id = user_details['id']
@@ -888,3 +907,16 @@ def register_user(user_details, platform):
         new_subscriber.slack_user_details = user_details
         
     new_subscriber.save()
+
+
+@shared_task(queue='updates')
+def updates():
+    start = timezone.now()- datetime.timedelta(days=7)
+    ending = timezone.now() - datetime.timedelta(seconds=4800)
+    qs = BlockHeight.objects.filter(
+        Q(created_datetime__gte=start) & Q(created_datetime__lte=ending)
+    )
+    to_process_blocks = qs.filter(processed=False)
+    for block in to_process_blocks:
+        first_blockheight_scanner.delay(block.id)
+    LOGGER.info('Updated blocks!')

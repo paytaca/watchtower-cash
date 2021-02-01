@@ -204,6 +204,10 @@ CELERY_BEAT_SCHEDULE = {
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
         'schedule': 300
+    },
+    'updates': {
+        'task': 'main.tasks.updates',
+        'schedule': 4800
     }
 }
 

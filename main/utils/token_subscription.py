@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from main.models import Subscriber, Token
 User = get_user_model()
+from django.core.exceptions import ObjectDoesNotExist
 
 def spicebot_token_subscription(token_obj):
     # check if this token is under spicebot subscription
