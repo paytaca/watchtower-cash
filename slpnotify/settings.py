@@ -195,19 +195,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     'slpbitcoinsocketsocket': {
         'task': 'main.tasks.slpbitcoinsocket',
-        'schedule': 120
-    },
-    'slpfountainheadsocket': {
-        'task': 'main.tasks.slpfountainheadsocket',
-        'schedule': 120
-    },
-    'slpstreamfountainheadsocket': {
-        'task': 'main.tasks.slpstreamfountainheadsocket',
-        'schedule': 120
+        'schedule': 21
     },
     'bitsocket': {
         'task': 'main.tasks.bitsocket',
-        'schedule': 120
+        'schedule': 29
     },
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
