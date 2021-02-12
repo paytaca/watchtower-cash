@@ -34,7 +34,7 @@ spec:
     spec:
       containers  :
         - name: watchtower
-          image: 967349720785.dkr.ecr.ap-southeast-1.amazonaws.com/spicetrade-prod:6a694a282095
+          image: registry.digitalocean.com/spicetoken/watchtower:842ed2488f25
           env:
             - name: POSTGRES_DB
               value: watchtower-prod
@@ -56,52 +56,52 @@ spec:
             - name: REDIS_HOST
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-redis-credentials
+                  name: redis-credentials
                   key: hostname
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-redis-credentials
+                  name: redis-credentials
                   key: password
             - name: REDIS_PORT
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-redis-credentials
+                  name: redis-credentials
                   key: port
             - name: TELEGRAM_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-credentials
+                  name: app-credentials
                   key: telegrambottoken
             - name: TELEGRAM_BOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-credentials
+                  name: app-credentials
                   key: telegrambotuser
             - name: SLACK_BOT_USER_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-credentials
+                  name: app-credentials
                   key: slackbotusertoken
             - name: SLACK_VERIFICATION_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-credentials
+                  name: app-credentials
                   key: slackverificationtoken
             - name: SLACK_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-credentials
+                  name: app-credentials
                   key: slackclientid
             - name: SLACK_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-credentials
+                  name: app-credentials
                   key: slackclientsecret
             - name: SLACK_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: watchtower-credentials
+                  name: app-credentials
                   key: slacksigningsecret
       nodeSelector:
         eks.amazonaws.com/nodegroup: watchtower-node-group
