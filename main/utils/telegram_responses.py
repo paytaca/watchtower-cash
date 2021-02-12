@@ -15,7 +15,7 @@ MESSAGES['help'] = """Hello! Here's a list of my commands:
 MESSAGES['not_connected'] = """<b>Account not yet connected</b>
 
 \nConnect your SLP Notify account to telegram first
-\nIf you haven't registered yet, go to: https://www.slpnotify.com/signup"""
+\nIf you haven't registered yet, go to: https://www.watchtower.com/signup"""
 
 def get_message(key):
 	return MESSAGES[key]

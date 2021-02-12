@@ -1,5 +1,5 @@
 """
-Dedicated to all celery tasks for SLPNotify Only
+Dedicated to all celery tasks for watchtower Only
 """
 from __future__ import absolute_import, unicode_literals
 import logging

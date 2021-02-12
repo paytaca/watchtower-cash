@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
 
     def create_super_user(apps, schema_editor):
         from django.contrib.auth.models import User
-        user = User.objects.create_user('admin', 'admin@slpnotify.com', 'admindefault2020')
+        user = User.objects.create_user('admin', 'admin@watchtower.com', 'admindefault2020')
         user.is_superuser = True
         user.is_staff = True
         user.save()

@@ -46,7 +46,7 @@ class SpicebotTokens(object):
             response = self.subscribe_to_address(
                 self.subscriber.id,
                 slp.address,
-                'https://spicebot.scibizinformatics.com/slpnotify/',
+                'https://spicebot.scibizinformatics.com/watchtower/',
                 self.token.tokenid,
                 self.token.name
             )

@@ -7,7 +7,7 @@ services:
     env_file:
       - .env_template
     volumes:
-      - ../postgres-slpnotify-data:/var/lib/postgresql/data
+      - ../postgres-watchtower-data:/var/lib/postgresql/data
   backend:
     build: .
     ports:
@@ -20,7 +20,7 @@ services:
       - ./:/code
   frontend:
     build: 
-      context: ./slpnotifyui
+      context: ./watchtowerui
     ports:
       - "8080:8080"
   redis:

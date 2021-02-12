@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: slpnotify
-  namespace: spice-staging
+  name: watchtower
+  namespace: staging
   labels:
-    app: slpnotify
+    app: watchtower
 spec:
   selector:
-    app: slpnotify
+    app: watchtower
   type: NodePort
   ports:
     - name: backend
@@ -18,26 +18,26 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: slpnotify
-  namespace: spice-staging
+  name: watchtower
+  namespace: staging
   labels:
-    app: slpnotify
+    app: watchtower
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: slpnotify
+      app: watchtower
   template:
     metadata:
       labels:
-        app: slpnotify
+        app: watchtower
     spec:
       containers  :
-        - name: slpnotify
-          image: 967349720785.dkr.ecr.ap-southeast-1.amazonaws.com/slpnotify-staging:842ed2488f25
+        - name: watchtower
+          image: 967349720785.dkr.ecr.ap-southeast-1.amazonaws.com/watchtower-staging:842ed2488f25
           env:
             - name: POSTGRES_DB
-              value: slpnotify-prod
+              value: watchtower-prod
             - name: POSTGRES_HOST
               valueFrom:
                 secretKeyRef:
@@ -56,52 +56,52 @@ spec:
             - name: REDIS_HOST
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-redis-credentials
+                  name: watchtower-redis-credentials
                   key: hostname
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-redis-credentials
+                  name: watchtower-redis-credentials
                   key: password
             - name: REDIS_PORT
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-redis-credentials
+                  name: watchtower-redis-credentials
                   key: port
             - name: TELEGRAM_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-credentials
+                  name: watchtower-credentials
                   key: telegrambottoken
             - name: TELEGRAM_BOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-credentials
+                  name: watchtower-credentials
                   key: telegrambotuser
             - name: SLACK_BOT_USER_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-credentials
+                  name: watchtower-credentials
                   key: slackbotusertoken
             - name: SLACK_VERIFICATION_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-credentials
+                  name: watchtower-credentials
                   key: slackverificationtoken
             - name: SLACK_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-credentials
+                  name: watchtower-credentials
                   key: slackclientid
             - name: SLACK_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-credentials
+                  name: watchtower-credentials
                   key: slackclientsecret
             - name: SLACK_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: slpnotify-credentials
+                  name: watchtower-credentials
                   key: slacksigningsecret
       nodeSelector:
-        eks.amazonaws.com/nodegroup: slpnotify-node-group
+        eks.amazonaws.com/nodegroup: watchtower-node-group

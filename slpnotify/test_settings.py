@@ -1,3 +1,0 @@
-from slpnotify.settings import *
-
-

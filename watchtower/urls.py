@@ -38,10 +38,10 @@ from main.views import (
 
 schema_view = get_schema_view(
    openapi.Info(
-      title="SLPNotify",
+      title="watchtower",
       default_version='v1',
       description="Reliable SLP transaction notifications",
-      contact=openapi.Contact(name="Support",url="https://t.me/slpnotify")
+      contact=openapi.Contact(name="Support",url="https://t.me/watchtower")
    ),
    public=True,
    permission_classes=(permissions.AllowAny,),

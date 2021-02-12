@@ -30,7 +30,7 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 DEBUG = False
 
 ALLOWED_HOSTS = [
-    'slpnotify.scibizinformatics.com',
+    'watchtower.scibizinformatics.com',
     'localhost',
     '*'
 ]
@@ -65,7 +65,7 @@ MIDDLEWARE=[
 'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'slpnotify.urls'
+ROOT_URLCONF = 'watchtower.urls'
 
 TEMPLATES = [
     {
@@ -83,7 +83,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'slpnotify.wsgi.application'
+WSGI_APPLICATION = 'watchtower.wsgi.application'
 
 
 # Database
@@ -92,7 +92,7 @@ WSGI_APPLICATION = 'slpnotify.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': config('POSTGRES_DB', default='slpnotify'),
+        'NAME': config('POSTGRES_DB', default='watchtower'),
         'HOST': config('POSTGRES_HOST', default='localhost'),
         'PORT': config('POSTGRES_PORT', default=5432, cast=int),
         'USER': config('POSTGRES_USER', default='postgres'),
@@ -247,7 +247,7 @@ SWAGGER_SETTINGS = {
 #Telegram bot settings
 TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
 TELEGRAM_BOT_USER = config('TELEGRAM_BOT_USER', default='')
-TELEGRAM_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/telegram/notify/'
+TELEGRAM_DESTINATION_ADDR = 'https://watchtower.scibizinformatics.com/telegram/notify/'
 
 
 # Slack credentials and configurations
@@ -258,5 +258,5 @@ SLACK_CLIENT_ID = config('SLACK_CLIENT_ID', default='')
 SLACK_CLIENT_SECRET = config('SLACK_CLIENT_SECRET', default='')
 SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET', default='')
 
-SLACK_DESTINATION_ADDR = 'https://slpnotify.scibizinformatics.com/slack/notify/'
+SLACK_DESTINATION_ADDR = 'https://watchtower.scibizinformatics.com/slack/notify/'
 SLACK_THEME_COLOR = '#82E0AA'
