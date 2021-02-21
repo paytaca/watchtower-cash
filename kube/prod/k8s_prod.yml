@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: watchtower
-          image: registry.digitalocean.com/spicetoken/watchtower:6a9423cb5b8f
+          image: registry.digitalocean.com/spicetoken/watchtower:3b0eaa6f0faf
           env:
             - name: POSTGRES_DB
               valueFrom:
@@ -111,3 +111,5 @@ spec:
                 secretKeyRef:
                   name: app-credentials
                   key: slacksigningsecret
+      nodeSelector:
+        doks.digitalocean.com/node-pool: pool-36b3x1p39
