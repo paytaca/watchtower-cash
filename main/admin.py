@@ -12,7 +12,7 @@ from main.models import (
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
 from main.tasks import first_blockheight_scanner, client_acknowledgement, checktransaction
-admin.site.site_header = 'SPLNotify'
+admin.site.site_header = 'WatchTower.Cash Admin'
 
 class TokenAdmin(admin.ModelAdmin):
     list_display = [

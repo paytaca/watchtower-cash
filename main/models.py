@@ -88,8 +88,8 @@ class Subscriber(models.Model):
     date_started = models.DateTimeField(default=timezone.now)
     telegram_user_details = JSONField(default=dict, blank=True)
 
-    slack_user_details = JSONField(default=dict, null=True, blank=True)
     # slack_user_details = {
     #   "id": string,
     #   "channel_id": string (DM channel ID for the bot to reply to)
     # }
+    slack_user_details = JSONField(default=dict, null=True, blank=True)
