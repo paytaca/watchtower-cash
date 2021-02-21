@@ -16,8 +16,8 @@ admin.site.site_header = 'WatchTower.Cash Admin'
 
 class TokenAdmin(admin.ModelAdmin):
     list_display = [
-        'name',
         'tokenid',
+        'name'
     ]
 
     def get_query(self, request): 
@@ -76,9 +76,10 @@ class BlockHeightAdmin(admin.ModelAdmin):
 class TransactionAdmin(admin.ModelAdmin):
     search_fields = ['token__name', 'source', 'txid']
 
-    actions = ['resend_unacknowledge_transactions']
+    actions = ['resend_unacknowledged_transactions']
 
     list_display = [
+        'id',
         '_txid',
         'spentIndex',
         'address',
@@ -86,7 +87,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'source',
         'blockheight_number',
         'token',
-        'acknowledge',
+        'acknowledged',
         'subscribed',
         'created_datetime',
         '_actions'
@@ -134,7 +135,7 @@ class TransactionAdmin(admin.ModelAdmin):
             return obj.blockheight.number
         return f'----'
 
-    def resend_unacknowledge_transactions(modeladmin, request, queryset):
+    def resend_unacknowledged_transactions(modeladmin, request, queryset):
         for tr in queryset:
             client_acknowledgement(tr.token.tokenid, tr.id)
             

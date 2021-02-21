@@ -5,14 +5,17 @@ from django.contrib.postgres.fields import JSONField
 
 class Token(models.Model):
     name = models.CharField(max_length=100, null=True)
-    tokenid = models.CharField(max_length=200, null=True, blank=True)
+    tokenid = models.CharField(max_length=200, null=True, blank=True, db_index=True)
     confirmation_limit = models.IntegerField(default=0)
 
     def __str__(self):
-        return str(self.name)
+        if self.name:
+            return str(self.name)
+        else:
+            return str(self.tokenid)[0:7]
 
 class BlockHeight(models.Model):
-    number = models.IntegerField(default=0, unique=True)
+    number = models.IntegerField(default=0, unique=True, db_index=True)
     transactions_count = models.IntegerField(default=0)
     created_datetime = models.DateTimeField(null=True, blank=True)
     updated_datetime = models.DateTimeField(null=True, blank=True)
@@ -26,12 +29,20 @@ class BlockHeight(models.Model):
             self.updated_datetime = timezone.now()
         super(BlockHeight,self).save(*args, **kwargs)
 
+    def __str__(self):
+        return str(self.number)
+
 class Transaction(models.Model):
-    txid = models.CharField(max_length=200)
-    address = models.CharField(max_length=500,null=True)
+    txid = models.CharField(max_length=200, db_index=True)
+    address = models.CharField(max_length=500,null=True, db_index=True)
     amount = models.FloatField(default=0)
-    acknowledge = models.BooleanField(default=False)
-    blockheight = models.ForeignKey(BlockHeight, on_delete=models.CASCADE, related_name='transactions', null=True)
+    acknowledged = models.BooleanField(default=False)
+    blockheight = models.ForeignKey(
+        BlockHeight,
+        on_delete=models.CASCADE,
+        related_name='transactions',
+        null=True
+    )
     source = models.CharField(max_length=200, null=True)
     created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(Token, on_delete=models.DO_NOTHING)
@@ -53,7 +64,7 @@ class SendTo(models.Model):
         verbose_name_plural = 'Send To'
 
 class SlpAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True)
+    address = models.CharField(max_length=200, unique=True, db_index=True)
     transactions = models.ManyToManyField(Transaction, related_name='slpaddress', blank=True)
 
     class Meta:
@@ -64,7 +75,7 @@ class SlpAddress(models.Model):
         return self.address
 
 class BchAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True)
+    address = models.CharField(max_length=200, unique=True, db_index=True)
     transactions = models.ManyToManyField(Transaction, related_name='bchaddress', blank=True)
     scanned = models.BooleanField(default=False)
     

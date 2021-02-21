@@ -25,79 +25,83 @@ import traceback, datetime
 from sseclient import SSEClient
 LOGGER = logging.getLogger(__name__)
 from django.db import transaction as trans
-from django.core.exceptions import ObjectDoesNotExist
 import base64
 import sseclient
 from django.db import OperationalError
 from psycopg2.extensions import TransactionRollbackError
-
+from django.db.utils import IntegrityError
 from django.utils import timezone
 from django.db.models import Q
 
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, token, transactionid):
-    trans = Transaction.objects.get(id=transactionid)
-    block = None
-    if trans.blockheight:
-        block = trans.blockheight.number
+    txn_check = Transaction.objects.filter(id=transactionid)
     retry = False
 
-    address = trans.address 
-    subscription = check_wallet_address_subscription(address)
+    if txn_check.exists():
+        txn = txn_check.first()
+        block = None
+        if txn.blockheight:
+            block = txn.blockheight.number
 
-    if subscription.exists():
-        trans.subscribed = True
-        subscription = subscription.first()
-        webhook_addresses = subscription.address.all()
+        address = txn.address 
+        subscription = check_wallet_address_subscription(address)
 
-        if webhook_addresses.count() == 0:
-            # If subscription found yet no webhook url found,
-            # We'll assign the webhook url for spicebot.
-            sendto_obj = SendTo.objects.first()
-            subscription.address.add(sendto_obj)
-            webhook_addresses = [sendto_obj]
-            
-        for webhook_address in webhook_addresses:
-            # check subscribed Token and Token from transaction if matched.
-            valid, token_obj = check_token_subscription(token, subscription.token.id)
-            if valid:
-                data = {
-                    'amount': trans.amount,
-                    'address': trans.address,
-                    'source': trans.source,
-                    'token': token_obj.tokenid,
-                    'txid': trans.txid,
-                    'block': block,
-                    'spent_index':trans.spentIndex
-                }
+        if subscription.exists():
+            txn.subscribed = True
+            subscription = subscription.first()
+            webhook_addresses = subscription.address.all()
 
-                #check if telegram/slack user
-                # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+            if webhook_addresses.count() == 0:
+                # If subscription found yet no webhook url found,
+                # We'll assign the webhook url for spicebot.
+                sendto_obj = SendTo.objects.first()
+                subscription.address.add(sendto_obj)
+                webhook_addresses = [sendto_obj]
                 
-                if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
-                    subscribers = subscription.subscriber.exclude(slack_user_details={})
-                    botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                    data['channel_id_list'] = json.dumps(botlist)
+            for webhook_address in webhook_addresses:
+                # check subscribed Token and Token from transaction if matched.
+                valid, token_obj = check_token_subscription(token, subscription.token.id)
+                if valid:
+                    data = {
+                        'amount': txn.amount,
+                        'address': txn.address,
+                        'source': txn.source,
+                        'token': token_obj.tokenid,
+                        'txid': txn.txid,
+                        'block': block,
+                        'spent_index': txn.spentIndex
+                    }
+
+                    #check if telegram/slack user
+                    # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
                     
-                if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                    subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                    botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                    data['chat_id_list'] = json.dumps(botlist)
-                
+                    if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
+                        subscribers = subscription.subscriber.exclude(slack_user_details={})
+                        botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                        data['channel_id_list'] = json.dumps(botlist)
+                        
+                    if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
+                        subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                        botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                        data['chat_id_list'] = json.dumps(botlist)
+                    
 
-                resp = requests.post(webhook_address.address,data=data)
-                if resp.status_code == 200:
-                    response_data = json.loads(resp.text)
-                    if response_data['success']:
-                        trans.acknowledge = True
-                        trans.queued = False
-                elif resp.status_code == 404:
-                    LOGGER.error(f'this is no longer valid > {webhook_address}')
-                else:
-                    retry = True
-                    trans.acknowledge = False
-        trans.save()
+                    resp = requests.post(webhook_address.address,data=data)
+                    if resp.status_code == 200:
+                        response_data = json.loads(resp.text)
+                        if response_data['success']:
+                            txn.acknowledged = True
+                            txn.queued = False
+                    elif resp.status_code == 404:
+                        LOGGER.error(f'this is no longer valid > {webhook_address}')
+                    else:
+                        retry = True
+                        txn.acknowledged = False
+            txn.save()
+        else:
+            retry = True
     if retry:
         self.retry(countdown=180)
     else:
@@ -130,7 +134,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
     with trans.atomic():
         try:
             token_obj = Token.objects.get(tokenid=token)
-        except ObjectDoesNotExist:
+        except Token.DoesNotExist:
             token_obj = Token.objects.get(name=token)
         msg += f'| TOKEN: {token_obj.name}'
         
@@ -159,21 +163,33 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
         try:
             transaction_obj.save()
-        except OperationalError as e:
+        except (OperationalError, IntegrityError) as e:
             if e.__cause__.__class__ == TransactionRollbackError:
                 save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
                 return f"Retried saving of transaction | {transactionid}"
             else:
                 raise
-        if transaction_obj.blockheight is not None:
-            msg += f'| BLOCKHEIGHT: {transaction_obj.blockheight.number}'
+        
+        try:
+            if transaction_obj.blockheight is not None:
+                msg += f'| BLOCKHEIGHT: {transaction_obj.blockheight.number}'
+        except BlockHeight.DoesNotExist:
+            pass
 
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
         else:
             address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
-        address_obj.transactions.add(transaction_obj)
-        address_obj.save()
+        
+        try:
+            address_obj.transactions.add(transaction_obj)
+            address_obj.save()
+        except OperationalError as exc:
+            if hasattr(exc, 'message'):
+                LOGGER.error(exc.message)
+            else:
+                LOGGER.error(exc)
+        
         if transaction_created:
             client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
         LOGGER.info(msg)
@@ -621,7 +637,6 @@ def bitdbquery(self):
 
 @shared_task(bind=True, queue='bitsocket', time_limit=600)
 def bitsocket(self):
-
     """
     A live stream of BCH transactions via bitsocket
     """

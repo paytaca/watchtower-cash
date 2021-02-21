@@ -8,7 +8,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             'txid',
             'address',
             'amount',
-            'acknowledge',
+            'acknowledged',
             'blockheight',
             'token'
         ]
