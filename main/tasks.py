@@ -605,14 +605,14 @@ def bitdbquery(self):
         "q": {
             "find": {
             },
-            "limit": 30000
+            "limit": 5000
         }
     }
     json_string = bytes(json.dumps(query), 'utf-8')
     url = base64.b64encode(json_string)
     resp = requests.get(BITDB_URL + url.decode('utf-8'))
     data = resp.json()
-    for row in data['u']: 
+    for row in data['u']:
         txn_id = row['tx']['h']
         counter = 1
         for out in row['out']: 
