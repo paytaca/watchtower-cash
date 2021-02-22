@@ -11,7 +11,7 @@ from main.models import (
 )
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
-from main.tasks import first_blockheight_scanner, client_acknowledgement, checktransaction
+# from main.tasks import first_blockheight_scanner, client_acknowledgement, checktransaction
 admin.site.site_header = 'WatchTower.Cash Admin'
 
 class TokenAdmin(admin.ModelAdmin):
@@ -44,9 +44,10 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
 
     def rescan_selected_blockheights(modeladmin, request, queryset):
-        for trans in queryset:
-            first_blockheight_scanner.delay(trans.id)
-            BlockHeight.objects.filter(id=trans.id).update(processed=False)
+        pass
+        # for trans in queryset:
+        #     first_blockheight_scanner.delay(trans.id)
+        #     BlockHeight.objects.filter(id=trans.id).update(processed=False)
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -106,7 +107,7 @@ class TransactionAdmin(admin.ModelAdmin):
     def changelist_view(self, request, extra_context=None):
         self.param = request.GET.get('rescan', None)
         if self.param:
-            checktransaction.delay(self.param)
+            # checktransaction.delay(self.param)
             Transaction.objects.filter(txid=self.param).update(scanning=True)
         return super(TransactionAdmin,self).changelist_view(request, extra_context=extra_context)
 
@@ -137,7 +138,8 @@ class TransactionAdmin(admin.ModelAdmin):
 
     def resend_unacknowledged_transactions(modeladmin, request, queryset):
         for tr in queryset:
-            client_acknowledgement(tr.token.tokenid, tr.id)
+            pass
+            # client_acknowledgement(tr.token.tokenid, tr.id)
             
 
 
