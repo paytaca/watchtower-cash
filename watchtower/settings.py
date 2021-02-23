@@ -173,18 +173,18 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 
 
 CELERY_BEAT_SCHEDULE = {
-    'get_latest_block': {
-        'task': 'main.tasks.get_latest_block',
-        'schedule': 10
-    },
-    'manage_block_transactions': {
-        'task': 'main.tasks.manage_block_transactions',
-        'schedule': 20
-    },
-    'get_block_transactions': {
-        'task': 'main.tasks.get_block_transactions',
-        'schedule': 60
-    },
+    # 'get_latest_block': {
+    #     'task': 'main.tasks.get_latest_block',
+    #     'schedule': 10
+    # },
+    # 'manage_block_transactions': {
+    #     'task': 'main.tasks.manage_block_transactions',
+    #     'schedule': 20
+    # },
+    # 'get_block_transactions': {
+    #     'task': 'main.tasks.get_block_transactions',
+    #     'schedule': 60
+    # },
     # 'first_blockheight_scanner': {
     #     'task': 'main.tasks.first_blockheight_scanner',
     #     'schedule': 120

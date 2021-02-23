@@ -9,7 +9,7 @@ class RestBitcoin(object):
     def get_transaction(self, txn_id, blockheightid, currentcount):
         response = {}
         args = ()
-        status = 'failed'
+        message = status = 'failed'
         transaction_url = f'{self.main_url}/slp/txDetails/{txn_id}'
         proceed = True
         try:

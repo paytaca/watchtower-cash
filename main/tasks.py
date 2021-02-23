@@ -192,7 +192,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 LOGGER.error(exc)
         
         if transaction_created:
-            LOGGER.info(f'FINISHED!!!!! {transaction_obj.id }')
+            LOGGER.info(f'CREATED TR: {transaction_obj.txid }')
             # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
         LOGGER.info(msg)
 
@@ -221,6 +221,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
         checktransaction.delay(txn_id)
     if total_transactions == currentcount:
         redis_storage.set('READY', 1)
+        redis_storage.set('ACTIVE-BLOCK', '')
     return f" {response['status']} : {txn_id}"
 
 # @shared_task(queue='slpdb_token_scanner')
@@ -310,13 +311,13 @@ def manage_block_transactions(self, max_retries=3):
     if len(blocks) == 0:
         return 'success'
 
-    block_height = blocks[0]
-    blockheight_instance = BlockHeight.objects.get(number=block_height)
-    blocks.remove(block_height)
-    data = json.dumps(blocks)
-    redis_storage.set('PENDING-BLOCKS', data)
-    if not redis_storage.get('ACTIVE_BLOCK'):
+    if not redis_storage.get('ACTIVE-BLOCK'):
+        block_height = blocks[0]
+        blockheight_instance = BlockHeight.objects.get(number=block_height)
+        blocks.remove(block_height)
+        data = json.dumps(blocks)
         redis_storage.set('ACTIVE-BLOCK', block_height)
+        redis_storage.set('PENDING-BLOCKS', data)
 
         # REST.BITCOIN.COM
         LOGGER.info(f'CHECKING BLOCK {block_height} via REST.BITCOIN.COM')
@@ -344,34 +345,35 @@ def manage_block_transactions(self, max_retries=3):
         else:
             self.retry(countdown=120)
 
-@shared_task(bind=True, queue='get_block_transactions')
+@shared_task( bind=True, queue='get_block_transactions')
 def get_block_transactions(self):
     redis_storage = settings.REDISKV
-    active_blocks_transactions = redis_storage.get('ACTIVE-BLOCK-TRANSACTIONS')
-    active_block = redis_storage.get('ACTIVE_BLOCK')
+    active_block_transactions = redis_storage.get('ACTIVE-BLOCK-TRANSACTIONS')
+    active_block = redis_storage.get('ACTIVE-BLOCK')
+    ready = int(redis_storage.get('READY'))
     
     if b'READY' not in redis_storage.keys():
         redis_storage.set('READY', 1)
 
-    ready = int(redis_storage.get('READY'))
-    if active_block and active_blocks_transactions and ready:
+    if active_block and active_block_transactions and ready:
         redis_storage.set('READY', 0)
+        active_block = int(active_block)
         block = BlockHeight.objects.get(number=active_block)
-        if not active_blocks_transactions:
+        if not active_block_transactions:
             return 'success'
-        transactions = json.loads(active_blocks_transactions)
+        transactions = json.loads(active_block_transactions)
         total_transactions = len(transactions)
         counter = 1
         for tr in transactions:
             deposit_filter.delay(
-                txn_id,
+                tr,
                 block.id,
                 counter,
                 total_transactions
             )   
             counter += 1
             LOGGER.info(f"  =======  PROCESSED BLOCK {active_block}   =======  ")
-    elif active_blocks_transactions:
+    elif active_block_transactions:
         LOGGER.info(f"  =======  PROCESSING BLOCK {active_block}   =======  ")
     else:
         LOGGER.info(f"  =======  NO BLOCKS FOUND   =======  ")
