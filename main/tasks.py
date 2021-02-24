@@ -34,83 +34,84 @@ from django.db.utils import IntegrityError
 from django.utils import timezone
 from django.db.models import Q
 
+REDIS_STORAGE = settings.REDISKV
 
-# @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
-# def client_acknowledgement(self, token, transactionid):
-#     txn_check = Transaction.objects.filter(id=transactionid)
-#     retry = False
+@shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
+def client_acknowledgement(self, token, transactionid):
+    txn_check = Transaction.objects.filter(id=transactionid)
+    retry = False
 
-#     if txn_check.exists():
-#         txn = txn_check.first()
-#         block = None
-#         if txn.blockheight:
-#             block = txn.blockheight.number
+    if txn_check.exists():
+        txn = txn_check.first()
+        block = None
+        if txn.blockheight:
+            block = txn.blockheight.number
 
-#         address = txn.address 
-#         subscription = check_wallet_address_subscription(address)
+        address = txn.address 
+        subscription = check_wallet_address_subscription(address)
 
-#         if subscription.exists():
-#             txn.subscribed = True
-#             subscription = subscription.first()
-#             webhook_addresses = subscription.address.all()
+        if subscription.exists():
+            txn.subscribed = True
+            subscription = subscription.first()
+            webhook_addresses = subscription.address.all()
 
-#             if webhook_addresses.count() == 0:
-#                 # If subscription found yet no webhook url found,
-#                 # We'll assign the webhook url for spicebot.
-#                 sendto_obj = SendTo.objects.first()
-#                 subscription.address.add(sendto_obj)
-#                 webhook_addresses = [sendto_obj]
+            if webhook_addresses.count() == 0:
+                # If subscription found yet no webhook url found,
+                # We'll assign the webhook url for spicebot.
+                sendto_obj = SendTo.objects.first()
+                subscription.address.add(sendto_obj)
+                webhook_addresses = [sendto_obj]
                 
-#             for webhook_address in webhook_addresses:
-#                 # check subscribed Token and Token from transaction if matched.
-#                 valid, token_obj = check_token_subscription(token, subscription.token.id)
-#                 if valid:
-#                     data = {
-#                         'amount': txn.amount,
-#                         'address': txn.address,
-#                         'source': txn.source,
-#                         'token': token_obj.tokenid,
-#                         'txid': txn.txid,
-#                         'block': block,
-#                         'spent_index': txn.spentIndex
-#                     }
+            for webhook_address in webhook_addresses:
+                # check subscribed Token and Token from transaction if matched.
+                valid, token_obj = check_token_subscription(token, subscription.token.id)
+                if valid:
+                    data = {
+                        'amount': txn.amount,
+                        'address': txn.address,
+                        'source': txn.source,
+                        'token': token_obj.tokenid,
+                        'txid': txn.txid,
+                        'block': block,
+                        'spent_index': txn.spentIndex
+                    }
 
-#                     #check if telegram/slack user
-#                     # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+                    #check if telegram/slack user
+                    # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
                     
-#                     if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
-#                         subscribers = subscription.subscriber.exclude(slack_user_details={})
-#                         botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-#                         data['channel_id_list'] = json.dumps(botlist)
+                    if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
+                        subscribers = subscription.subscriber.exclude(slack_user_details={})
+                        botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                        data['channel_id_list'] = json.dumps(botlist)
                         
-#                     if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-#                         subscribers = subscription.subscriber.exclude(telegram_user_details={})
-#                         botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-#                         data['chat_id_list'] = json.dumps(botlist)
+                    if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
+                        subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                        botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                        data['chat_id_list'] = json.dumps(botlist)
                     
 
-#                     resp = requests.post(webhook_address.address,data=data)
-#                     if resp.status_code == 200:
-#                         response_data = json.loads(resp.text)
-#                         if response_data['success']:
-#                             txn.acknowledged = True
-#                             txn.queued = False
-#                     elif resp.status_code == 404:
-#                         LOGGER.error(f'this is no longer valid > {webhook_address}')
-#                     else:
-#                         retry = True
-#                         txn.acknowledged = False
-#             txn.save()
-#         else:
-#             retry = True
-#     if retry:
-#         self.retry(countdown=180)
-#     else:
-#         return 'success'
+                    resp = requests.post(webhook_address.address,data=data)
+                    if resp.status_code == 200:
+                        response_data = json.loads(resp.text)
+                        if response_data['success']:
+                            txn.acknowledged = True
+                            txn.queued = False
+                    elif resp.status_code == 404:
+                        LOGGER.error(f'this is no longer valid > {webhook_address}')
+                    else:
+                        retry = True
+                        txn.acknowledged = False
+            txn.save()
+        else:
+            retry = True
+    if retry:
+        self.retry(countdown=180)
+    else:
+        return 'success'
 
 @shared_task(queue='save_record')
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
-    msg = f'| SAVE RECORD TASK : {transactionid}'
+    msg = f'| UPDATED TR : {transactionid}'
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -192,14 +193,14 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 LOGGER.error(exc)
         
         if transaction_created:
-            LOGGER.info(f'CREATED TR: {transaction_obj.txid }')
+            LOGGER.info(f'CREATED TR: {transaction_obj.txid } | SPENT_INDEX {spent_index} | SOURCE: {source} | BLOCKHEIGHT: {transaction_obj.blockheight.number}')
             # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
-        LOGGER.info(msg)
+        else:
+            LOGGER.info(msg)
 
 
 @shared_task(queue='deposit_filter')
 def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
-    redis_storage = settings.REDISKV
     obj = BlockHeight.objects.get(id=blockheightid)
     """
     Tracks every transactions that belongs to the registered token and blockheight.
@@ -213,57 +214,60 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             Transaction.objects.filter(txid=txn_id).update(scanning=False)
             BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)                
             return 'success'
-    obj = RestBitcoin()
-    response = obj.get_transaction(txn_id, blockheightid, currentcount)
+    rb = RestBitcoin()
+    response = rb.get_transaction(txn_id, blockheightid, currentcount)
     if response['status'] == 'success' and response['message'] == 'found':
         save_record.delay(*response['args'])
     if response['status'] == 'success' and response['message'] == 'no token':
         checktransaction.delay(txn_id)
     if total_transactions == currentcount:
-        redis_storage.set('READY', 1)
-        redis_storage.set('ACTIVE-BLOCK', '')
+        REDIS_STORAGE.set('READY', 1)
+        trasactions_count = obj.transactions.order_by('txid').distinct('txid').count()
+        if trasactions_count >= int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-COUNT')):
+            REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+            REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', 0)
     return f" {response['status']} : {txn_id}"
 
-# @shared_task(queue='slpdb_token_scanner')
-# def slpdb_token_scanner():
-    # tokens = Token.objects.all()
-    # for token in tokens:
-    #     obj = slpdb.SLPDB()
-    #     data = obj.process_api(**{'tokenid': token.tokenid})
-    #     if data['status'] == 'success':
-    #         for transaction in data['data']['c']:
-    #             if transaction['tokenDetails']['valid']:
-    #                 required_keys = transaction.keys()
-    #                 tx_exists = 'txid' in required_keys
-    #                 token_exists = 'tokenDetails' in required_keys
-    #                 blk_exists = 'blk' in required_keys
-    #                 if  tx_exists and token_exists and blk_exists:
-    #                     tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
-    #                     tokenqs = Token.objects.filter(tokenid=tokenid)
-    #                     if tokenqs.exists():
-    #                         # Block 625228 is the beginning...
-    #                         # if transaction['blk'] >= 625228:
-    #                         if transaction['blk'] >= 625190:    
-    #                             token_obj = tokenqs.first()
-    #                             block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
-    #                             if created:
-    #                                 first_blockheight_scanner.delay(block.id)
-    #                             transaction['tokenDetails']['detail']['outputs'].pop(-1)
-    #                             spent_index = 1
-    #                             for trans in transaction['tokenDetails']['detail']['outputs']:
-    #                                 amount = trans['amount']
-    #                                 slpaddress = trans['address']
-    #                                 args = (
-    #                                     token_obj.tokenid,
-    #                                     slpaddress,
-    #                                     transaction['txid'],
-    #                                     amount,
-    #                                     "slpdb_token_scanner",
-    #                                     block.id,
-    #                                     spent_index
-    #                                 )
-    #                                 save_record(*args)
-    #                                 spent_index += 1
+@shared_task(queue='slpdb_token_scanner')
+def slpdb_token_scanner():
+    tokens = Token.objects.all()
+    for token in tokens:
+        obj = slpdb.SLPDB()
+        data = obj.process_api(**{'tokenid': token.tokenid})
+        if data['status'] == 'success':
+            for transaction in data['data']['c']:
+                if transaction['tokenDetails']['valid']:
+                    required_keys = transaction.keys()
+                    tx_exists = 'txid' in required_keys
+                    token_exists = 'tokenDetails' in required_keys
+                    blk_exists = 'blk' in required_keys
+                    if  tx_exists and token_exists and blk_exists:
+                        tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
+                        tokenqs = Token.objects.filter(tokenid=tokenid)
+                        if tokenqs.exists():
+                            # Block 625228 is the beginning...
+                            # if transaction['blk'] >= 625228:
+                            if transaction['blk'] >= 625190:    
+                                token_obj = tokenqs.first()
+                                block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
+                                if created:
+                                    first_blockheight_scanner.delay(block.id)
+                                transaction['tokenDetails']['detail']['outputs'].pop(-1)
+                                spent_index = 1
+                                for trans in transaction['tokenDetails']['detail']['outputs']:
+                                    amount = trans['amount']
+                                    slpaddress = trans['address']
+                                    args = (
+                                        token_obj.tokenid,
+                                        slpaddress,
+                                        transaction['txid'],
+                                        amount,
+                                        "slpdb_token_scanner",
+                                        block.id,
+                                        spent_index
+                                    )
+                                    save_record(*args)
+                                    spent_index += 1
 
 
 
@@ -276,14 +280,16 @@ def get_latest_block():
         resp = requests.get(url)
     except Exception as exc:
         return LOGGER.error(exc)
-
+    if not 'blocks' in resp.text:
+        return f"===== INVALID RESPONSE FROM  {url} : {resp.text} ====="
     number = json.loads(resp.text)['blocks']
+
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created:
         LOGGER.info(f'===== NEW BLOCK { number } =====')
         # Block setter sets block in REDIS
         block_setter(number, new=True)
-        # bitcoincash_tracker.delay(obj.id)
+        bitcoincash_tracker.delay(obj.id)
     else:
         # If there's any missed/unprocessed block due to rest.bitcoin downtime,
         # There would be backward scanning of blocks.
@@ -295,38 +301,40 @@ def get_latest_block():
             event = 'unprocessed'
         if len(blocks):
             number = blocks[-1]
-            # Block setter sets block in REDIS
-            added = block_setter(number, new=False)
-            if added:
-                obj, created = BlockHeight.objects.get_or_create(number=number)
-                # bitcoincash_tracker.delay(obj.id)   
-                LOGGER.info(f'===== { event.upper() } BLOCK { number } =====')
+            if number != int(REDIS_STORAGE.get('ACTIVE-BLOCK')):
+                # Block setter sets block in REDIS
+                added = block_setter(number, new=False)
+                if added:
+                    obj, created = BlockHeight.objects.get_or_create(number=number)
+                    LOGGER.info(f'===== FOUND { event.upper() } BLOCK { number } =====')
+                    bitcoincash_tracker.delay(obj.id)   
     
 
 @shared_task(bind=True, queue='manage_block_transactions')
 def manage_block_transactions(self, max_retries=3):
-    redis_storage = settings.REDISKV
-    blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
+    blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
 
     if len(blocks) == 0:
         return 'success'
 
-    if not redis_storage.get('ACTIVE-BLOCK'):
+    if not REDIS_STORAGE.get('ACTIVE-BLOCK'): REDIS_STORAGE.set('ACTIVE-BLOCK', blocks[0])
+    if not REDIS_STORAGE.get('READY'): REDIS_STORAGE.set('READY', 1)
+
+    if REDIS_STORAGE.get('ACTIVE-BLOCK') and int(REDIS_STORAGE.get('READY')):
         block_height = blocks[0]
-        blockheight_instance = BlockHeight.objects.get(number=block_height)
         blocks.remove(block_height)
         data = json.dumps(blocks)
-        redis_storage.set('ACTIVE-BLOCK', block_height)
-        redis_storage.set('PENDING-BLOCKS', data)
+        REDIS_STORAGE.set('PENDING-BLOCKS', data)
 
         # REST.BITCOIN.COM
-        LOGGER.info(f'CHECKING BLOCK {block_height} via REST.BITCOIN.COM')
+        LOGGER.info(f'FETCHING DETAILS IN BLOCK {block_height} via REST.BITCOIN.COM')
         url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % block_height
         resp = requests.get(url)
         if resp.status_code == 200:
             data = json.loads(resp.text)
             if 'error' not in data.keys():
                 transactions = data['tx']
+                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', len(transactions))
                 target_transactions = []
                 done_scanning_block = True
                 for tr in transactions:
@@ -336,31 +344,33 @@ def manage_block_transactions(self, max_retries=3):
                         done_scanning_block = False
                 if not done_scanning_block:
                     transactions_to_process = target_transactions[0:settings.MAX_BLOCK_TRANSACTIONS]
-                    redis_storage.set("ACTIVE-BLOCK-TRANSACTIONS", json.dumps(transactions_to_process))
-                else:
-                    # done checking all transactions in a block
-                    redis_storage.set('ACTIVE-BLOCK', '')
+                    REDIS_STORAGE.set("ACTIVE-BLOCK-TRANSACTIONS", json.dumps(transactions_to_process))
+                else:                    
+                    REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+                    REDIS_STORAGE.set('READY', 1)
             else:
                 self.retry(countdown=120)
         else:
             self.retry(countdown=120)
+    return 'success'
 
 @shared_task( bind=True, queue='get_block_transactions')
 def get_block_transactions(self):
-    redis_storage = settings.REDISKV
-    active_block_transactions = redis_storage.get('ACTIVE-BLOCK-TRANSACTIONS')
-    active_block = redis_storage.get('ACTIVE-BLOCK')
-    ready = int(redis_storage.get('READY'))
+    active_block_transactions = REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS')
+    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
     
-    if b'READY' not in redis_storage.keys():
-        redis_storage.set('READY', 1)
+    if b'READY' not in REDIS_STORAGE.keys():
+        REDIS_STORAGE.set('READY', 1)
+
+    ready = int(REDIS_STORAGE.get('READY'))
 
     if active_block and active_block_transactions and ready:
-        redis_storage.set('READY', 0)
+        REDIS_STORAGE.set('READY', 0)
         active_block = int(active_block)
         block = BlockHeight.objects.get(number=active_block)
         if not active_block_transactions:
             return 'success'
+        
         transactions = json.loads(active_block_transactions)
         total_transactions = len(transactions)
         counter = 1
@@ -370,66 +380,63 @@ def get_block_transactions(self):
                 block.id,
                 counter,
                 total_transactions
-            )   
+            )
             counter += 1
-            LOGGER.info(f"  =======  PROCESSED BLOCK {active_block}   =======  ")
-    elif active_block_transactions:
-        LOGGER.info(f"  =======  PROCESSING BLOCK {active_block}   =======  ")
+            LOGGER.info(f"  =======  FETCHING TRANSACTION {tr} IN BLOCK {active_block}   =======  ")
+        REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps([]))
     else:
-        LOGGER.info(f"  =======  NO BLOCKS FOUND   =======  ")
+        return f"  =======  NO NEW BLOCK.   =======  "
 
 
-# @shared_task(bind=True, queue='slpdb', max_retries=10)
-# def slpdb(self, block_num=None):
-#     if block_num is None:
-#         redis_storage = settings.REDISKV
-#         blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
-#         if len(blocks) == 0:
-#             return 'success'
-#         number = blocks[0]
-#         block_instance = BlockHeight.objects.get(number=number)
-#         blocks.remove(number)
-#         data = json.dumps(blocks)
-#         redis_storage.set('PENDING-BLOCKS', data)
-#     else:
-#         block_instance = BlockHeight.objects.get(number=block_num)
+@shared_task(bind=True, queue='slpdb', max_retries=10)
+def slpdb(self, block_num=None):
+    if block_num is None:
+        blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+        if len(blocks) == 0:
+            return 'success'
+        number = blocks[0]
+        block_instance = BlockHeight.objects.get(number=number)
+        blocks.remove(number)
+        data = json.dumps(blocks)
+        REDIS_STORAGE.set('PENDING-BLOCKS', data)
+    else:
+        block_instance = BlockHeight.objects.get(number=block_num)
 
-#     block_height = block_instance.number
-#     block_instance.processed = False
-#     block_instance.save()
+    block_height = block_instance.number
+    block_instance.processed = False
+    block_instance.save()
 
-#     obj = slpdb.SLPDB()
-#     try:
-#         data = obj.process_api(**{'block': int(block_height)})
-#         proceed_slpdb_checking = True
-#     except Exception as exc:
-#         LOGGER.error(exc)
-#         proceed_slpdb_checking = False
+    obj = slpdb.SLPDB()
+    try:
+        data = obj.process_api(**{'block': int(block_height)})
+        proceed_slpdb_checking = True
+    except Exception as exc:
+        LOGGER.error(exc)
+        proceed_slpdb_checking = False
 
-#     # Checking of transactions using SLPDB
-#     if data['status'] == 'success' and proceed_slpdb_checking:
-#         LOGGER.info(f'CHECKING BLOCK {block_height} via SLPDB')
-#         redis_storage = settings.REDISKV
-#         transactions = data['data']['c']
-#         slpdb_total_transactions = len(transactions)
-#         for transaction in transactions:
-#             if transaction['tokenDetails']['valid']:
-#                 if transaction['tokenDetails']['detail']['transactionType'].lower() == 'send':
-#                     token_id = transaction['tokenDetails']['detail']['tokenIdHex']
-#                     token, _ = Token.objects.get_or_create(tokenid=token_id)
-#                     if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
-#                         spent_index = 1
-#                         for trans in transaction['tokenDetails']['detail']['outputs']:
-#                             save_record.delay(
-#                                 token.tokenid,
-#                                 trans['address'],
-#                                 transaction['txid'],
-#                                 trans['amount'],
-#                                 'SLPDB-block-scanner',
-#                                 blockheightid=block_instance.id,
-#                                 spent_index=spent_index
-#                             )
-#                             spent_index += 1
+    # Checking of transactions using SLPDB
+    if data['status'] == 'success' and proceed_slpdb_checking:
+        LOGGER.info(f'CHECKING BLOCK {block_height} via SLPDB')
+        transactions = data['data']['c']
+        slpdb_total_transactions = len(transactions)
+        for transaction in transactions:
+            if transaction['tokenDetails']['valid']:
+                if transaction['tokenDetails']['detail']['transactionType'].lower() == 'send':
+                    token_id = transaction['tokenDetails']['detail']['tokenIdHex']
+                    token, _ = Token.objects.get_or_create(tokenid=token_id)
+                    if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
+                        spent_index = 1
+                        for trans in transaction['tokenDetails']['detail']['outputs']:
+                            save_record.delay(
+                                token.tokenid,
+                                trans['address'],
+                                transaction['txid'],
+                                trans['amount'],
+                                'SLPDB-block-scanner',
+                                blockheightid=block_instance.id,
+                                spent_index=spent_index
+                            )
+                            spent_index += 1
 
            
 @shared_task(bind=True, queue='checktransaction', max_retries=20)
@@ -459,240 +466,238 @@ def checktransaction(self, txn_id):
                                         blockheightid=blockheight_obj.id,
                                         spent_index=out['spentIndex']
                                     )
-            LOGGER.info(f'CUSTOM CHECK FOR TRANSACTION {txn_id}')
+            # LOGGER.info(f'CHECKING BCH TRANSACTION:  {txn_id}')
             status = 'success'
     else:
         self.retry(countdown=60)
     return status
     
-# @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
-# def slpbitcoinsocket(self):
-#     """
-#     A live stream of SLP transactions via Bitcoin
-#     """
-#     url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
-#     resp = requests.get(url, stream=True)
-#     source = 'slpsocket.bitcoin.com'
-#     msg = 'Service not available!'
-#     LOGGER.info('socket ready in : %s' % source)
-#     redis_storage = settings.REDISKV
-#     if b'slpbitcoinsocket' not in redis_storage.keys():
-#         redis_storage.set('slpbitcoinsocket', 0)
-#     withsocket = int(redis_storage.get('slpbitcoinsocket'))
-#     if not withsocket:
-#         for content in resp.iter_content(chunk_size=1024*1024):
-#             redis_storage.set('slpbitcoinsocket', 1)
-#             decoded_text = content.decode('utf8')
-#             if 'heartbeat' not in decoded_text:
-#                 data = decoded_text.strip().split('data: ')[-1]
-#                 proceed = True
-#                 try:
-#                     readable_dict = json.loads(data)
-#                 except json.decoder.JSONDecodeError as exc:
-#                     msg = f'Its alright. This is an expected error. --> {exc}'
-#                     LOGGER.error(msg)
-#                     proceed = False
-#                 except Exception as exc:
-#                     msg = f'This is novel issue {exc}'
-#                     break
-#                 if proceed:
-#                     if len(readable_dict['data']) != 0:
-#                         token_id = readable_dict['data'][0]['slp']['detail']['tokenIdHex']
-#                         token_obj, _ =  Token.objects.get_or_create(tokenid=token_id)
-#                         # if token_query.exists():
-#                         if 'tx' in readable_dict['data'][0].keys():
-#                             if readable_dict['data'][0]['slp']['valid']:
-#                                 txn_id = readable_dict['data'][0]['tx']['h']
-#                                 for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
-#                                     slp_address = trans['address']
-#                                     amount = float(trans['amount'])
-#                                     spent_index = trans['spentIndex']
-#                                     args = (
-#                                         token_obj.tokenid,
-#                                         slp_address,
-#                                         txn_id,
-#                                         amount,
-#                                         source,
-#                                         None,
-#                                         spent_index
-#                                     )
-#                                     save_record(*args)
-#         LOGGER.error(msg)
-#         redis_storage.set('slpbitcoinsocket', 0)
-#     else:
-#         LOGGER.info('slpbitcoin is still running')
+@shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
+def slpbitcoinsocket(self):
+    """
+    A live stream of SLP transactions via Bitcoin
+    """
+    url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
+    resp = requests.get(url, stream=True)
+    source = 'slpsocket.bitcoin.com'
+    msg = 'Service not available!'
+    LOGGER.info('socket ready in : %s' % source)
+    if b'slpbitcoinsocket' not in REDIS_STORAGE.keys():
+        REDIS_STORAGE.set('slpbitcoinsocket', 0)
+    withsocket = int(REDIS_STORAGE.get('slpbitcoinsocket'))
+    if not withsocket:
+        for content in resp.iter_content(chunk_size=1024*1024):
+            REDIS_STORAGE.set('slpbitcoinsocket', 1)
+            decoded_text = content.decode('utf8')
+            if 'heartbeat' not in decoded_text:
+                data = decoded_text.strip().split('data: ')[-1]
+                proceed = True
+                try:
+                    readable_dict = json.loads(data)
+                except json.decoder.JSONDecodeError as exc:
+                    msg = f'Its alright. This is an expected error. --> {exc}'
+                    LOGGER.error(msg)
+                    proceed = False
+                except Exception as exc:
+                    msg = f'This is novel issue {exc}'
+                    break
+                if proceed:
+                    if len(readable_dict['data']) != 0:
+                        token_id = readable_dict['data'][0]['slp']['detail']['tokenIdHex']
+                        token_obj, _ =  Token.objects.get_or_create(tokenid=token_id)
+                        # if token_query.exists():
+                        if 'tx' in readable_dict['data'][0].keys():
+                            if readable_dict['data'][0]['slp']['valid']:
+                                txn_id = readable_dict['data'][0]['tx']['h']
+                                for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
+                                    slp_address = trans['address']
+                                    amount = float(trans['amount'])
+                                    spent_index = trans['spentIndex']
+                                    args = (
+                                        token_obj.tokenid,
+                                        slp_address,
+                                        txn_id,
+                                        amount,
+                                        source,
+                                        None,
+                                        spent_index
+                                    )
+                                    save_record(*args)
+        LOGGER.error(msg)
+        REDIS_STORAGE.set('slpbitcoinsocket', 0)
+    else:
+        LOGGER.info('slpbitcoin is still running')
 
-# @shared_task(bind=True, queue='bitdbquery')
-# def bitdbquery(self):
-#     BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
-#     source = 'bitdbquery'
-#     query = {
-#         "v": 3,
-#         "q": {
-#             "find": {
-#             },
-#             "limit": 5000
-#         }
-#     }
-#     json_string = bytes(json.dumps(query), 'utf-8')
-#     url = base64.b64encode(json_string)
-#     resp = requests.get(BITDB_URL + url.decode('utf-8'))
-#     data = resp.json()
-#     for row in data['u']:
-#         txn_id = row['tx']['h']
-#         counter = 1
-#         for out in row['out']: 
-#             args = tuple()
-#             amount = out['e']['v'] / 100000000
-#             spent_index = out['e']['i']
-#             if 'a' in out['e'].keys():
-#                 bchaddress = 'bitcoincash:' + str(out['e']['a'])
-#                 args = (
-#                     'bch',
-#                     bchaddress,
-#                     txn_id,
-#                     amount,
-#                     source,
-#                     None,
-#                     spent_index
-#                 )
-#                 # For intant recording of transaction, its better not to delay.
-#                 save_record(*args)
-#             counter += 1
+@shared_task(bind=True, queue='bitdbquery')
+def bitdbquery(self):
+    BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
+    source = 'bitdbquery'
+    query = {
+        "v": 3,
+        "q": {
+            "find": {
+            },
+            "limit": 5000
+        }
+    }
+    json_string = bytes(json.dumps(query), 'utf-8')
+    url = base64.b64encode(json_string)
+    resp = requests.get(BITDB_URL + url.decode('utf-8'))
+    data = resp.json()
+    for row in data['u']:
+        txn_id = row['tx']['h']
+        counter = 1
+        for out in row['out']: 
+            args = tuple()
+            amount = out['e']['v'] / 100000000
+            spent_index = out['e']['i']
+            if 'a' in out['e'].keys():
+                bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                args = (
+                    'bch',
+                    bchaddress,
+                    txn_id,
+                    amount,
+                    source,
+                    None,
+                    spent_index
+                )
+                # For intant recording of transaction, its better not to delay.
+                save_record(*args)
+            counter += 1
 
-# @shared_task(bind=True, queue='bitsocket', time_limit=600)
-# def bitsocket(self):
-#     """
-#     A live stream of BCH transactions via bitsocket
-#     """
-#     url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
-#     resp = requests.get(url, stream=True)
-#     source = 'bitsocket'
-#     msg = 'Service not available!'
-#     LOGGER.info('socket ready in : %s' % source)
-#     redis_storage = settings.REDISKV
-#     previous = ''
-#     if b'bitsocket' not in redis_storage.keys():
-#         redis_storage.set('bitsocket', 0)
-#     withsocket = int(redis_storage.get('bitsocket'))
-#     if not withsocket:
-#         for content in resp.iter_content(chunk_size=1024*1024):
-#             redis_storage.set('bitsocket', 1)
-#             loaded_data = None
-#             try:
-#                 content = content.decode('utf8')
-#                 if '"tx":{"h":"' in previous:
-#                     data = previous + content
-#                     data = data.strip().split('data: ')[-1]
-#                     loaded_data = json.loads(data)
+@shared_task(bind=True, queue='bitsocket', time_limit=600)
+def bitsocket(self):
+    """
+    A live stream of BCH transactions via bitsocket
+    """
+    url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
+    resp = requests.get(url, stream=True)
+    source = 'bitsocket'
+    msg = 'Service not available!'
+    LOGGER.info('socket ready in : %s' % source)
+    previous = ''
+    if b'bitsocket' not in REDIS_STORAGE.keys():
+        REDIS_STORAGE.set('bitsocket', 0)
+    withsocket = int(REDIS_STORAGE.get('bitsocket'))
+    if not withsocket:
+        for content in resp.iter_content(chunk_size=1024*1024):
+            REDIS_STORAGE.set('bitsocket', 1)
+            loaded_data = None
+            try:
+                content = content.decode('utf8')
+                if '"tx":{"h":"' in previous:
+                    data = previous + content
+                    data = data.strip().split('data: ')[-1]
+                    loaded_data = json.loads(data)
 
-#                     proceed = True
-#             except (ValueError, UnicodeDecodeError, TypeError) as exc:
-#                 msg = traceback.format_exc()
-#                 msg = f'Its alright. This is an expected error. --> {msg}'
-#                 # LOGGER.error(msg)
-#             except json.decoder.JSONDecodeError as exc:
-#                 msg = f'Its alright. This is an expected error. --> {exc}'
-#                 # LOGGER.error(msg)
-#             except Exception as exc:
-#                 msg = f'Novel exception found --> {exc}'
-#                 break
-#             previous = content
-#             if loaded_data is not None:
-#                 if len(loaded_data['data']) != 0:
-#                     txn_id = loaded_data['data'][0]['tx']['h']
-#                     for out in loaded_data['data'][0]['out']: 
-#                         amount = out['e']['v'] / 100000000
-#                         spent_index = out['e']['i']
-#                         if amount and 'a' in out['e'].keys():
-#                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
-#                             args = (
-#                                 'bch',
-#                                 bchaddress,
-#                                 txn_id,
-#                                 amount,
-#                                 source,
-#                                 None,
-#                                 spent_index
-#                             )
-#                             # For instant saving of transaction, its better not to delay task.
-#                             save_record(*args)
-#         LOGGER.error(msg)
-#         redis_storage.set('bitsocket', 0)
-#     else:
-#         LOGGER.info('bitsocket is still running')
+                    proceed = True
+            except (ValueError, UnicodeDecodeError, TypeError) as exc:
+                msg = traceback.format_exc()
+                msg = f'Its alright. This is an expected error. --> {msg}'
+                # LOGGER.error(msg)
+            except json.decoder.JSONDecodeError as exc:
+                msg = f'Its alright. This is an expected error. --> {exc}'
+                # LOGGER.error(msg)
+            except Exception as exc:
+                msg = f'Novel exception found --> {exc}'
+                break
+            previous = content
+            if loaded_data is not None:
+                if len(loaded_data['data']) != 0:
+                    txn_id = loaded_data['data'][0]['tx']['h']
+                    for out in loaded_data['data'][0]['out']: 
+                        amount = out['e']['v'] / 100000000
+                        spent_index = out['e']['i']
+                        if amount and 'a' in out['e'].keys():
+                            bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                            args = (
+                                'bch',
+                                bchaddress,
+                                txn_id,
+                                amount,
+                                source,
+                                None,
+                                spent_index
+                            )
+                            # For instant saving of transaction, its better not to delay task.
+                            save_record(*args)
+        LOGGER.error(msg)
+        REDIS_STORAGE.set('bitsocket', 0)
+    else:
+        LOGGER.info('bitsocket is still running')
 
-# @shared_task(bind=True, queue='bitcoincash_tracker')
-# def bitcoincash_tracker(self,id):
-#     blockheight_obj= BlockHeight.objects.get(id=id)
-#     url = f"https://rest.bitcoin.com/v2/block/detailsByHeight/{blockheight_obj.number}"
-#     resp = requests.get(url)
-#     data = json.loads(resp.text)
-#     if 'tx' in data.keys():
-#         for txn_id in data['tx']:
-#             trans = Transaction.objects.filter(txid=txn_id)
-#             if not trans.exists():
-#                 url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
-#                 response = requests.get(url)
-#                 if response.status_code == 200:
-#                     data = json.loads(response.text)
-#                     if 'vout' in data.keys():
-#                         for out in data['vout']:
-#                             if 'scriptPubKey' in out.keys():
-#                                 if 'cashAddrs' in out['scriptPubKey'].keys():
-#                                     for cashaddr in out['scriptPubKey']['cashAddrs']:
-#                                         if cashaddr.startswith('bitcoincash:'):
-#                                             args = (
-#                                                 'bch',
-#                                                 cashaddr,
-#                                                 txn_id,
-#                                                 out['value'],
-#                                                 "alt-bch-tracker",
-#                                                 blockheight_obj.id,
-#                                                 out['spentIndex']
-#                                             )
-#                                             # For instance saving of transaction, its better not to delay task
-#                                             save_record(*args)
+@shared_task(bind=True, queue='bitcoincash_tracker')
+def bitcoincash_tracker(self,id):
+    blockheight_obj= BlockHeight.objects.get(id=id)
+    url = f"https://rest.bitcoin.com/v2/block/detailsByHeight/{blockheight_obj.number}"
+    resp = requests.get(url)
+    data = json.loads(resp.text)
+    if 'tx' in data.keys():
+        for txn_id in data['tx']:
+            trans = Transaction.objects.filter(txid=txn_id)
+            if not trans.exists():
+                url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
+                response = requests.get(url)
+                if response.status_code == 200:
+                    data = json.loads(response.text)
+                    if 'vout' in data.keys():
+                        for out in data['vout']:
+                            if 'scriptPubKey' in out.keys():
+                                if 'cashAddrs' in out['scriptPubKey'].keys():
+                                    for cashaddr in out['scriptPubKey']['cashAddrs']:
+                                        if cashaddr.startswith('bitcoincash:'):
+                                            args = (
+                                                'bch',
+                                                cashaddr,
+                                                txn_id,
+                                                out['value'],
+                                                "alt-bch-tracker",
+                                                blockheight_obj.id,
+                                                out['spentIndex']
+                                            )
+                                            # For instance saving of transaction, its better not to delay task
+                                            save_record(*args)
 
-# @shared_task(bind=True, queue='bch_address_scanner')
-# def bch_address_scanner(self, bchaddress=None):
-#     addresses = [bchaddress]
-#     if bchaddress is None:
-#         addresses = BchAddress.objects.filter(scanned=False)
-#         if not addresses.exists(): 
-#             BchAddress.objects.update(scanned=True)
-#             addresses = BchAddress.objects.filter(scanned=False)
-#         addresses = list(addresses.values_list('address',flat=True)[0:10])
+@shared_task(bind=True, queue='bch_address_scanner')
+def bch_address_scanner(self, bchaddress=None):
+    addresses = [bchaddress]
+    if bchaddress is None:
+        addresses = BchAddress.objects.filter(scanned=False)
+        if not addresses.exists(): 
+            BchAddress.objects.update(scanned=True)
+            addresses = BchAddress.objects.filter(scanned=False)
+        addresses = list(addresses.values_list('address',flat=True)[0:10])
 
-#     source = 'bch-address-scanner'
-#     url = 'https://rest.bitcoin.com/v2/address/transactions'
-#     data = { "addresses": addresses}
-#     resp = requests.post(url, json=data)
-#     data = json.loads(resp.text)
-#     for row in data:
-#         for tr in row['txs']:
-#             blockheight, created = BlockHeight.objects.get_or_create(number=tr['blockheight'])
-#             for out in tr['vout']:
-#                 amount = out['value']
-#                 spent_index = tr['vout'][0]['spentIndex'] or 0
-#                 if 'addresses' in out['scriptPubKey'].keys():
-#                     for legacy in out['scriptPubKey']['addresses']:
-#                         address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
-#                         address_response = requests.get(address_url)
-#                         address_data = json.loads(address_response.text)
-#                         args = (
-#                             'bch',
-#                             address_data['cashAddress'],
-#                             tr['txid'],
-#                             out['value'],
-#                             source,
-#                             blockheight.id,
-#                             spent_index
-#                         )
-#                         LOGGER.info(f"{source} | txid : {tr['txid']} | amount : {out['value']}")
-#                         save_record.delay(*args)
+    source = 'bch-address-scanner'
+    url = 'https://rest.bitcoin.com/v2/address/transactions'
+    data = { "addresses": addresses}
+    resp = requests.post(url, json=data)
+    data = json.loads(resp.text)
+    for row in data:
+        for tr in row['txs']:
+            blockheight, created = BlockHeight.objects.get_or_create(number=tr['blockheight'])
+            for out in tr['vout']:
+                amount = out['value']
+                spent_index = tr['vout'][0]['spentIndex'] or 0
+                if 'addresses' in out['scriptPubKey'].keys():
+                    for legacy in out['scriptPubKey']['addresses']:
+                        address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
+                        address_response = requests.get(address_url)
+                        address_data = json.loads(address_response.text)
+                        args = (
+                            'bch',
+                            address_data['cashAddress'],
+                            tr['txid'],
+                            out['value'],
+                            source,
+                            blockheight.id,
+                            spent_index
+                        )
+                        LOGGER.info(f"{source} | txid : {tr['txid']} | amount : {out['value']}")
+                        save_record.delay(*args)
 
-#     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
+    BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
 def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
@@ -834,14 +839,14 @@ def register_user(user_details, platform):
         
     new_subscriber.save()
 
-# @shared_task(queue='updates')
-# def updates():
-#     start = timezone.now()- datetime.timedelta(days=7)
-#     ending = timezone.now() - datetime.timedelta(seconds=4800)
-#     qs = BlockHeight.objects.filter(
-#         Q(created_datetime__gte=start) & Q(created_datetime__lte=ending)
-#     )
-#     to_process_blocks = qs.filter(processed=False)
-#     for block in to_process_blocks:
-#         first_blockheight_scanner.delay(block.id)
-#     LOGGER.info('Updated blocks!')
+@shared_task(queue='updates')
+def updates():
+    start = timezone.now()- datetime.timedelta(days=7)
+    ending = timezone.now() - datetime.timedelta(seconds=4800)
+    qs = BlockHeight.objects.filter(
+        Q(created_datetime__gte=start) & Q(created_datetime__lte=ending)
+    )
+    to_process_blocks = qs.filter(processed=False)
+    for block in to_process_blocks:
+        first_blockheight_scanner.delay(block.id)
+    LOGGER.info('Updated blocks!')
