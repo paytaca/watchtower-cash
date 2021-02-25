@@ -9,8 +9,6 @@ def block_setter(number, new=False):
     if b'PENDING-BLOCKS' not in redis_storage.keys('*'):
         data = json.dumps([])
         redis_storage.set('PENDING-BLOCKS', data)
-    if b'ACTIVE-BLOCK' not in redis_storage.keys('*'):
-        redis_storage.set('ACTIVE-BLOCK', '')
     blocks = json.loads(redis_storage.get('PENDING-BLOCKS'))
     active_block = redis_storage.get('ACTIVE-BLOCK')
     if number not in blocks and f"\b{number}" != active_block:
@@ -23,3 +21,6 @@ def block_setter(number, new=False):
     data = json.dumps(blocks)
     redis_storage.set('PENDING-BLOCKS', data)
     return added
+
+
+    

@@ -206,7 +206,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
     Tracks every transactions that belongs to the registered token and blockheight.
     """
     # If txn_id is already in db, we'll just update its blockheight 
-    # To minimize send request on rest.bitcoin.com
+    # To minimize send request on refst.bitcoin.com
     qs = Transaction.objects.filter(txid=txn_id)
     if qs.exists():
         instance = qs.first()
@@ -215,18 +215,31 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)                
             return 'success'
     rb = RestBitcoin()
-    response = rb.get_transaction(txn_id, blockheightid, currentcount)
-    if response['status'] == 'success' and response['message'] == 'found':
-        save_record.delay(*response['args'])
-    if response['status'] == 'success' and response['message'] == 'no token':
-        checktransaction.delay(txn_id)
-    if total_transactions == currentcount:
+    try:
+        response = rb.get_transaction(txn_id, blockheightid, currentcount)
+        if response['status'] == 'success' and response['message'] == 'found':
+            save_record.delay(*response['args'])
+        if response['status'] == 'success' and response['message'] == 'no token':
+            checktransaction(txn_id)
+    except Exception as exc:
+        LOGGER.error(exc)
+    if int(total_transactions) == int(currentcount):
         REDIS_STORAGE.set('READY', 1)
-        trasactions_count = obj.transactions.order_by('txid').distinct('txid').count()
-        if trasactions_count >= int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-COUNT')):
-            REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-            REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', 0)
-    return f" {response['status']} : {txn_id}"
+        if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
+            REDIS_STORAGE.delete('ACTIVE-BLOCK')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-COUNT')
+            LOGGER.info(f"DONE CHECKING {blockheightid}.")
+        
+        elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
+            current_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
+            LOGGER.info(f"DONE CHECKING CHUNK {current_index}: {total_transactions} TXS")
+            current_index += 1
+            REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', current_index)
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
+    return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
 @shared_task(queue='slpdb_token_scanner')
 def slpdb_token_scanner():
@@ -272,7 +285,8 @@ def slpdb_token_scanner():
 
 
 @shared_task(queue='get_latest_block')
-def get_latest_block():    
+def get_latest_block():
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys('*'): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     # A task intended to check new blockheight every 5 seconds.
     proceed = False
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
@@ -281,111 +295,111 @@ def get_latest_block():
     except Exception as exc:
         return LOGGER.error(exc)
     if not 'blocks' in resp.text:
-        return f"===== INVALID RESPONSE FROM  {url} : {resp.text} ====="
+        return f"INVALID RESPONSE FROM  {url} : {resp.text}"
     number = json.loads(resp.text)['blocks']
 
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created:
-        LOGGER.info(f'===== NEW BLOCK { number } =====')
-        # Block setter sets block in REDIS
-        block_setter(number, new=True)
-        bitcoincash_tracker.delay(obj.id)
+        # Queue to "PENDING-BLOCKS"
+        added = block_setter(number, new=True)
+        if added:
+            bitcoincash_tracker.delay(obj.id)
+            return f'*** NEW BLOCK { number } ***'
     else:
         # If there's any missed/unprocessed block due to rest.bitcoin downtime,
         # There would be backward scanning of blocks.
         blocks = list(BlockHeight.objects.all().order_by('number').values_list('number',flat=True))
         blocks = list(missing_blocks(blocks,0,len(blocks)-1))
-        event = 'missed'
+        event = 'MISSED'
         if not len(blocks):
             blocks = list(BlockHeight.objects.filter(processed=False).order_by('-number').values_list('number', flat=True))
-            event = 'unprocessed'
+            event = 'UNPROCESSED'
         if len(blocks):
             number = blocks[-1]
-            if number != int(REDIS_STORAGE.get('ACTIVE-BLOCK')):
-                # Block setter sets block in REDIS
-                added = block_setter(number, new=False)
-                if added:
-                    obj, created = BlockHeight.objects.get_or_create(number=number)
-                    LOGGER.info(f'===== FOUND { event.upper() } BLOCK { number } =====')
-                    bitcoincash_tracker.delay(obj.id)   
+            active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
+            if active_block:
+                if number == int(active_block):
+                    return 'NO NEW BLOCK'
+            # Queue to "PENDING-BLOCKS"
+            added = block_setter(number, new=False)
+            if added:
+                obj, created = BlockHeight.objects.get_or_create(number=number)
+                bitcoincash_tracker.delay(obj.id)   
+                return f'FOUND { event } BLOCK { number }'
+            return 'NO NEW BLOCK'
     
 
 @shared_task(bind=True, queue='manage_block_transactions')
-def manage_block_transactions(self, max_retries=3):
-    blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
-
-    if len(blocks) == 0:
-        return 'success'
-
-    if not REDIS_STORAGE.get('ACTIVE-BLOCK'): REDIS_STORAGE.set('ACTIVE-BLOCK', blocks[0])
+def manage_block_transactions(self):
     if not REDIS_STORAGE.get('READY'): REDIS_STORAGE.set('READY', 1)
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+    if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', 0)
+    if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
 
-    if REDIS_STORAGE.get('ACTIVE-BLOCK') and int(REDIS_STORAGE.get('READY')):
-        block_height = blocks[0]
-        blocks.remove(block_height)
-        data = json.dumps(blocks)
-        REDIS_STORAGE.set('PENDING-BLOCKS', data)
+    pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
+    blocks = json.loads(pending_blocks)
+    if len(blocks) == 0 and not REDIS_STORAGE.get('ACTIVE-BLOCK'): return 'NO PENDING BLOCKS'
+    if not REDIS_STORAGE.get('ACTIVE-BLOCK'): REDIS_STORAGE.set('ACTIVE-BLOCK', blocks[0])
+    active_block = int(REDIS_STORAGE.get('ACTIVE-BLOCK'))
+    if active_block and int(REDIS_STORAGE.get('READY')):
+        if active_block in blocks:
+            blocks.remove(active_block)
+            pending_blocks = json.dumps(blocks)
 
         # REST.BITCOIN.COM
-        LOGGER.info(f'FETCHING DETAILS IN BLOCK {block_height} via REST.BITCOIN.COM')
-        url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % block_height
+        LOGGER.info(f'FETCHING DETAILS IN BLOCK {active_block} via REST.BITCOIN.COM')
+        url = 'https://rest.bitcoin.com/v2/block/detailsByHeight/%s' % active_block
         resp = requests.get(url)
         if resp.status_code == 200:
-            data = json.loads(resp.text)
-            if 'error' not in data.keys():
-                transactions = data['tx']
+            resp_data = json.loads(resp.text)
+            if 'error' not in resp_data.keys():
+                transactions = resp_data['tx']
+                REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
                 REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', len(transactions))
-                target_transactions = []
-                done_scanning_block = True
-                for tr in transactions:
-                    transaction_stored = Transaction.objects.filter(txid=tr)
-                    if not transaction_stored.exists():
-                        target_transactions.append(tr)
-                        done_scanning_block = False
-                if not done_scanning_block:
-                    transactions_to_process = target_transactions[0:settings.MAX_BLOCK_TRANSACTIONS]
-                    REDIS_STORAGE.set("ACTIVE-BLOCK-TRANSACTIONS", json.dumps(transactions_to_process))
-                else:                    
-                    REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-                    REDIS_STORAGE.set('READY', 1)
+                transaction_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
+                counter = 0
+                for i in range(0, len(transactions), settings.MAX_BLOCK_TRANSACTIONS): 
+                    chunk = transactions[i:i + settings.MAX_BLOCK_TRANSACTIONS]
+                    if counter == transaction_index:
+                        REDIS_STORAGE.set("ACTIVE-BLOCK-TRANSACTIONS", json.dumps(chunk))
+                    counter += 1
+                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT', counter-1)
+                return f'READY TO REVIEW TRANSACTIONS CHUNK'
             else:
-                self.retry(countdown=120)
+                return 'FAILED'
         else:
-            self.retry(countdown=120)
-    return 'success'
+            return f'{resp.text.upper()}'
+    return 'REDIS IS BUSY TO ACCEPT NEW TRANSACTIONS CHUNK'
 
 @shared_task( bind=True, queue='get_block_transactions')
 def get_block_transactions(self):
-    active_block_transactions = REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS')
-    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
+    if b'ACTIVE-BLOCK-TRANSACTIONS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps([]))
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+    if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
     
-    if b'READY' not in REDIS_STORAGE.keys():
-        REDIS_STORAGE.set('READY', 1)
-
+    active_block_transactions = REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS')
+    transactions = json.loads(active_block_transactions)
+    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
     ready = int(REDIS_STORAGE.get('READY'))
 
-    if active_block and active_block_transactions and ready:
+    if active_block and transactions and ready:
         REDIS_STORAGE.set('READY', 0)
         active_block = int(active_block)
         block = BlockHeight.objects.get(number=active_block)
-        if not active_block_transactions:
-            return 'success'
-        
-        transactions = json.loads(active_block_transactions)
-        total_transactions = len(transactions)
+        total_chunk_transactions = len(transactions)
         counter = 1
         for tr in transactions:
             deposit_filter.delay(
                 tr,
                 block.id,
                 counter,
-                total_transactions
+                total_chunk_transactions
             )
             counter += 1
-            LOGGER.info(f"  =======  FETCHING TRANSACTION {tr} IN BLOCK {active_block}   =======  ")
-        REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps([]))
+            LOGGER.info(f"FETCHING TRANSACTION {tr} IN BLOCK {active_block}")
+        return f"DEPLOYED {total_chunk_transactions} TRANSACTIONS OF BLOCK {active_block}."
     else:
-        return f"  =======  NO NEW BLOCK.   =======  "
+        return f"NO NEW BLOCK TRANSACTIONS."
 
 
 @shared_task(bind=True, queue='slpdb', max_retries=10)
