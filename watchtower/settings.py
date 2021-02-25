@@ -187,19 +187,19 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 10
     },
 
-    SLPDB QUERY
+    # SLPDB QUERY
     'slpdb_token_scanner': {
         'task': 'main.tasks.slpdb_token_scanner',
         'schedule': 600
     },
 
-    BITDB QUERY
+    # BITDB QUERY
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
         'schedule': 300
     },
 
-    WEBSOCKETS
+    # WEBSOCKETS
     'slpbitcoinsocketsocket': {
         'task': 'main.tasks.slpbitcoinsocket',
         'schedule': 21
@@ -209,7 +209,7 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 29
     },
 
-    OTHERS
+    # OTHERS
     'updates': {
         'task': 'main.tasks.updates',
         'schedule': 4800
