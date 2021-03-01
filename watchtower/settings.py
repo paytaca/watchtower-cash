@@ -170,27 +170,36 @@ CELERY_TASK_ACKS_LATE = True
 CELERYD_PREFETCH_MULTIPLIER = 1
 CELERYD_MAX_TASKS_PER_CHILD = 5
 
+
+
 CELERY_BEAT_SCHEDULE = {
-    'latest_blockheight_getter': {
-        'task': 'main.tasks.latest_blockheight_getter',
+    # REST.BITCOIN.COM
+    'get_latest_block': {
+        'task': 'main.tasks.get_latest_block',
         'schedule': 5
     },
-    'second_blockheight_scanner': {
-        'task': 'main.tasks.second_blockheight_scanner',
-        'schedule': 60
+    'manage_block_transactions': {
+        'task': 'main.tasks.manage_block_transactions',
+        'schedule': 7
     },
-    'first_blockheight_scanner': {
-        'task': 'main.tasks.first_blockheight_scanner',
-        'schedule': 120
+    'get_block_transactions': {
+        'task': 'main.tasks.get_block_transactions',
+        'schedule': 10
     },
+
+    # SLPDB QUERY
     'slpdb_token_scanner': {
         'task': 'main.tasks.slpdb_token_scanner',
         'schedule': 600
     },
-    'openfromredis': {
-        'task': 'main.tasks.openfromredis',
+
+    # BITDB QUERY
+    'bitdbquery': {
+        'task': 'main.tasks.bitdbquery',
         'schedule': 300
     },
+
+    # WEBSOCKETS
     'slpbitcoinsocketsocket': {
         'task': 'main.tasks.slpbitcoinsocket',
         'schedule': 21
@@ -199,10 +208,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.bitsocket',
         'schedule': 29
     },
-    'bitdbquery': {
-        'task': 'main.tasks.bitdbquery',
-        'schedule': 300
-    },
+
+    # OTHERS
     'updates': {
         'task': 'main.tasks.updates',
         'schedule': 4800
@@ -258,3 +265,6 @@ SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET', default='')
 
 SLACK_DESTINATION_ADDR = 'https://watchtower.scibizinformatics.com/slack/notify/'
 SLACK_THEME_COLOR = '#82E0AA'
+
+
+MAX_BLOCK_TRANSACTIONS = 500
