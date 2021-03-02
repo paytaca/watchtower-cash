@@ -26,7 +26,7 @@ class RestBitcoin(object):
                     if transaction_data['tokenInfo']:
                         if 'tokenIsValid' in transaction_data['tokenInfo'].keys():
                             if transaction_data['tokenInfo']['tokenIsValid']:
-                                if transaction_data['tokenInfo']['transactionType'].lower() == 'send':
+                                if transaction_data['tokenInfo']['transactionType'].lower() in ['send', 'mint', 'burn']:
                                     transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
                                     token_obj, _ = Token.objects.get_or_create(tokenid=transaction_token_id)
                                     
@@ -63,11 +63,14 @@ class RestBitcoin(object):
                                                         blockheightid,
                                                         spent_index
                                                     )
-                                                    
                                                     message = 'found'
                                                     status = 'success'
 
                                             spent_index += 1
+                                else:
+                                    message = transaction_data['tokenInfo']['transactionType'].lower()
+                                    status = 'success'
+
                         else:
                             LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
                     else:

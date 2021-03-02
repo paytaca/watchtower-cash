@@ -187,33 +187,33 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 10
     },
 
-    # SLPDB QUERY
-    'slpdb_token_scanner': {
-        'task': 'main.tasks.slpdb_token_scanner',
-        'schedule': 600
-    },
+    # # SLPDB QUERY
+    # 'slpdb_token_scanner': {
+    #     'task': 'main.tasks.slpdb_token_scanner',
+    #     'schedule': 600
+    # },
 
-    # BITDB QUERY
-    'bitdbquery': {
-        'task': 'main.tasks.bitdbquery',
-        'schedule': 300
-    },
+    # # BITDB QUERY
+    # 'bitdbquery': {
+    #     'task': 'main.tasks.bitdbquery',
+    #     'schedule': 300
+    # },
 
-    # WEBSOCKETS
-    'slpbitcoinsocketsocket': {
-        'task': 'main.tasks.slpbitcoinsocket',
-        'schedule': 21
-    },
-    'bitsocket': {
-        'task': 'main.tasks.bitsocket',
-        'schedule': 29
-    },
+    # # WEBSOCKETS
+    # 'slpbitcoinsocketsocket': {
+    #     'task': 'main.tasks.slpbitcoinsocket',
+    #     'schedule': 21
+    # },
+    # 'bitsocket': {
+    #     'task': 'main.tasks.bitsocket',
+    #     'schedule': 29
+    # },
 
-    # OTHERS
-    'updates': {
-        'task': 'main.tasks.updates',
-        'schedule': 4800
-    }
+    # # OTHERS
+    # 'updates': {
+    #     'task': 'main.tasks.updates',
+    #     'schedule': 4800
+    # }
 }
 
 CORS_ORIGIN_WHITELIST = [

@@ -37,7 +37,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
         'created_datetime',
         'updated_datetime',
         'transactions_count',
-        '_actions'
+        
     ]
 
     
@@ -49,22 +49,22 @@ class BlockHeightAdmin(admin.ModelAdmin):
         #     first_blockheight_scanner.delay(trans.id)
         #     BlockHeight.objects.filter(id=trans.id).update(processed=False)
 
-    def get_actions(self, request):
-        actions = super().get_actions(request)
-        if 'delete_selected' in actions:
-            del actions['delete_selected']
-        return actions
+    # def get_actions(self, request):
+    #     actions = super().get_actions(request)
+    #     if 'delete_selected' in actions:
+    #         del actions['delete_selected']
+    #     return actions
 
 
-    def _actions(self, obj):
-        if obj.processed:
-            return format_html(
-                    f"""<a class="button"
-                    href="/main/blockheight?rescan={obj.id}"
-                    style="background-color: transparent;padding:0px;"><img src='/static/admin/img/search.svg'></img></a>"""
-                )
-        else:
-            return format_html('<span style="color:blue"> Scanning...</span>')
+    # def _actions(self, obj):
+    #     if obj.processed:
+    #         return format_html(
+    #                 f"""<a class="button"
+    #                 href="/main/blockheight?rescan={obj.id}"
+    #                 style="background-color: transparent;padding:0px;"><img src='/static/admin/img/search.svg'></img></a>"""
+    #             )
+    #     else:
+    #         return format_html('<span style="color:blue"> Scanning...</span>')
     
     def changelist_view(self, request, extra_context=None):
         self.param = request.GET.get('rescan', None)
@@ -81,49 +81,17 @@ class TransactionAdmin(admin.ModelAdmin):
 
     list_display = [
         'id',
-        '_txid',
+        'txid',
         'spentIndex',
         'address',
         'amount',
         'source',
-        'blockheight_number',
+        'blockheight',
         'token',
         'acknowledged',
         'subscribed',
         'created_datetime',
-        '_actions'
     ]
-
-    def _actions(self, obj):
-        if not obj.scanning:
-            return format_html(
-                f"""<a class="button"
-                href="/main/transaction?rescan={obj.txid}"
-                style="background-color: transparent;padding:0px;"><img src='/static/admin/img/search.svg'></img></a>"""
-            )
-        else:
-            return format_html('<span style="color:blue"> Scanning...</span>')
-    
-    def changelist_view(self, request, extra_context=None):
-        self.param = request.GET.get('rescan', None)
-        if self.param:
-            # checktransaction.delay(self.param)
-            Transaction.objects.filter(txid=self.param).update(scanning=True)
-        return super(TransactionAdmin,self).changelist_view(request, extra_context=extra_context)
-
-
-    def _txid(self, obj):
-        url = f'https://explorer.bitcoin.com/bch/tx/{obj.txid}'
-        return format_html(
-            f"""<a class="button"
-            target="_blank" 
-            href="{url}"
-            style="background-color:transparent;
-            padding:0px;
-            color:#447e9b;
-            text-decoration:None;
-            font-weight:bold;">{obj.txid}</a>"""
-        )
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -131,17 +99,11 @@ class TransactionAdmin(admin.ModelAdmin):
             del actions['delete_selected']
         return actions
         
-    def blockheight_number(self, obj):
-        if obj.blockheight is not None:
-            return obj.blockheight.number
-        return f'----'
 
     def resend_unacknowledged_transactions(modeladmin, request, queryset):
         for tr in queryset:
-            pass
-            # client_acknowledgement(tr.token.tokenid, tr.id)
+            client_acknowledgement(tr.token.tokenid, tr.id)
             
-
 
     def get_queryset(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset

@@ -212,7 +212,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
         instance = qs.first()
         if not instance.amount or not instance.source:
             Transaction.objects.filter(txid=txn_id).update(scanning=False)
-            BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)                
+            # BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)                
             return 'success'
     rb = RestBitcoin()
     try:
@@ -221,8 +221,13 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             save_record.delay(*response['args'])
         if response['status'] == 'success' and response['message'] == 'no token':
             checktransaction(txn_id)
+        if response['status'] == 'success' and response['message'] == 'genesis':
+            with trans.atomic:
+                obj.genesis.append(txn_id)
+                obj.save()
     except Exception as exc:
         LOGGER.error(exc)
+
     if int(total_transactions) == int(currentcount):
         REDIS_STORAGE.set('READY', 1)
         if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
@@ -239,6 +244,7 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             current_index += 1
             REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', current_index)
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
+    
     return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
 @shared_task(queue='slpdb_token_scanner')
@@ -354,11 +360,17 @@ def manage_block_transactions(self):
             resp_data = json.loads(resp.text)
             if 'error' not in resp_data.keys():
                 transactions = resp_data['tx']
+                total_transactions = len(transactions)
+                BlockHeight.objects.filter(
+                    number=active_block
+                ).update(
+                    transactions_count=total_transactions
+                )
                 REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
-                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', len(transactions))
+                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', total_transactions)
                 transaction_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
                 counter = 0
-                for i in range(0, len(transactions), settings.MAX_BLOCK_TRANSACTIONS): 
+                for i in range(0, total_transactions, settings.MAX_BLOCK_TRANSACTIONS): 
                     chunk = transactions[i:i + settings.MAX_BLOCK_TRANSACTIONS]
                     if counter == transaction_index:
                         REDIS_STORAGE.set("ACTIVE-BLOCK-TRANSACTIONS", json.dumps(chunk))
@@ -453,6 +465,8 @@ def slpdb(self, block_num=None):
                             spent_index += 1
 
            
+
+    
 @shared_task(bind=True, queue='checktransaction', max_retries=20)
 def checktransaction(self, txn_id):
     status = 'failed'
@@ -864,3 +878,19 @@ def updates():
     for block in to_process_blocks:
         first_blockheight_scanner.delay(block.id)
     LOGGER.info('Updated blocks!')
+
+
+
+@shared_task(queue='blockbuilder')
+def blockbuilder():
+    pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
+    p_blocks = json.loads(pending_blocks)
+    block = 676158
+    current_block = BlockHeight.objects.last().number
+    if not p_blocks:
+        while block < current_block:
+            if not BlockHeight.objects.filter(number=starting).exists():
+                p_blocks.append(block)
+                REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(p_blocks))
+                break
+            block += 1

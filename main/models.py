@@ -21,7 +21,8 @@ class BlockHeight(models.Model):
     updated_datetime = models.DateTimeField(null=True, blank=True)
     processed = models.BooleanField(default=False)
     currentcount = models.IntegerField(default=0)
-    
+    genesis = JSONField(default=[])
+
     def save(self, *args, **kwargs):
         if not self.id:
             self.created_datetime = timezone.now()
@@ -50,9 +51,6 @@ class Transaction(models.Model):
     subscribed = models.BooleanField(default=False)
     spentIndex = models.IntegerField(default=0)
     
-    # class Meta:
-    #     unique_together = ('txid', 'address', 'spentIndex')
-
     def __str__(self):
         return self.txid
 
