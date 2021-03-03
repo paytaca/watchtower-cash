@@ -38,72 +38,73 @@ REDIS_STORAGE = settings.REDISKV
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, token, transactionid):
-    txn_check = Transaction.objects.filter(id=transactionid)
-    retry = False
+    with trans.atomic():
+        txn_check = Transaction.objects.filter(id=transactionid)
+        retry = False
 
-    if txn_check.exists():
-        txn = txn_check.first()
-        block = None
-        if txn.blockheight:
-            block = txn.blockheight.number
+        if txn_check.exists():
+            txn = txn_check.first()
+            block = None
+            if txn.blockheight:
+                block = txn.blockheight.number
 
-        address = txn.address 
-        subscription = check_wallet_address_subscription(address)
+            address = txn.address 
+            subscription = check_wallet_address_subscription(address)
 
-        if subscription.exists():
-            txn.subscribed = True
-            subscription = subscription.first()
-            webhook_addresses = subscription.address.all()
+            if subscription.exists():
+                txn.subscribed = True
+                subscription = subscription.first()
+                webhook_addresses = subscription.address.all()
 
-            if webhook_addresses.count() == 0:
-                # If subscription found yet no webhook url found,
-                # We'll assign the webhook url for spicebot.
-                sendto_obj = SendTo.objects.first()
-                subscription.address.add(sendto_obj)
-                webhook_addresses = [sendto_obj]
-                
-            for webhook_address in webhook_addresses:
-                # check subscribed Token and Token from transaction if matched.
-                valid, token_obj = check_token_subscription(token, subscription.token.id)
-                if valid:
-                    data = {
-                        'amount': txn.amount,
-                        'address': txn.address,
-                        'source': txn.source,
-                        'token': token_obj.tokenid,
-                        'txid': txn.txid,
-                        'block': block,
-                        'spent_index': txn.spentIndex
-                    }
-
-                    #check if telegram/slack user
-                    # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+                if webhook_addresses.count() == 0:
+                    # If subscription found yet no webhook url found,
+                    # We'll assign the webhook url for spicebot.
+                    sendto_obj = SendTo.objects.first()
+                    subscription.address.add(sendto_obj)
+                    webhook_addresses = [sendto_obj]
                     
-                    if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
-                        subscribers = subscription.subscriber.exclude(slack_user_details={})
-                        botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                        data['channel_id_list'] = json.dumps(botlist)
+                for webhook_address in webhook_addresses:
+                    # check subscribed Token and Token from transaction if matched.
+                    valid, token_obj = check_token_subscription(token, subscription.token.id)
+                    if valid:
+                        data = {
+                            'amount': txn.amount,
+                            'address': txn.address,
+                            'source': txn.source,
+                            'token': token_obj.tokenid,
+                            'txid': txn.txid,
+                            'block': block,
+                            'spent_index': txn.spentIndex
+                        }
+
+                        #check if telegram/slack user
+                        # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
                         
-                    if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                        subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                        botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                        data['chat_id_list'] = json.dumps(botlist)
-                    
+                        if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
+                            subscribers = subscription.subscriber.exclude(slack_user_details={})
+                            botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                            data['channel_id_list'] = json.dumps(botlist)
+                            
+                        if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
+                            subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                            botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                            data['chat_id_list'] = json.dumps(botlist)
+                        
 
-                    resp = requests.post(webhook_address.address,data=data)
-                    if resp.status_code == 200:
-                        response_data = json.loads(resp.text)
-                        if response_data['success']:
-                            txn.acknowledged = True
-                            txn.queued = False
-                    elif resp.status_code == 404:
-                        LOGGER.error(f'this is no longer valid > {webhook_address}')
-                    else:
-                        retry = True
-                        txn.acknowledged = False
-            txn.save()
-        else:
-            retry = True
+                        resp = requests.post(webhook_address.address,data=data)
+                        if resp.status_code == 200:
+                            response_data = json.loads(resp.text)
+                            if response_data['success']:
+                                txn.acknowledged = True
+                                txn.queued = False
+                        elif resp.status_code == 404:
+                            LOGGER.error(f'this is no longer valid > {webhook_address}')
+                        else:
+                            retry = True
+                            txn.acknowledged = False
+                txn.save()
+            else:
+                retry = True
     if retry:
         self.retry(countdown=180)
     else:
@@ -198,10 +199,15 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         else:
             LOGGER.info(msg)
 
-def add_to_redis_list(value, key):
-    redis_container = json.loads(REDIS_STORAGE.get(key.upper()))
-    redis_container.append(value)
-    REDIS_STORAGE.set(key.upper(), json.dumps(redis_container))
+@shared_task(bind=True, queue='redis_writer')
+def redis_writer(self, value, key, action):
+    if action == "append":
+        redis_container = json.loads(REDIS_STORAGE.get(key.upper()))
+        redis_container.append(value)
+        REDIS_STORAGE.set(key.upper(), json.dumps(redis_container))
+    elif action == "set":
+        REDIS_STORAGE.set(key.upper(), value)
+    return None
 
 
 @shared_task(bind=True, queue='deposit_filter', max_retries=2)
@@ -229,23 +235,24 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
         bch_checker(txn_id)
         
     if response['status'] == 'success' and response['message'] == 'genesis':
-        add_to_redis_list(txn_id, 'genesis')
+        redis_writer.delay(txn_id, 'genesis', "append")
 
     if response['status'] == 'failed':
-        try:
-            self.retry(countdown=20)
-        except MaxRetriesExceededError:
-            add_to_redis_list(txn_id, 'problematic')    
+        redis_writer.delay(txn_id, 'problematic', "append")    
         
 
     if int(total_transactions) == int(currentcount):
-        LOGGER.info(f"WE ARE AT THE ENDING >>>   INDEX {REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')}  out of  {REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')}")
         if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
             genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
             problematic = json.loads(REDIS_STORAGE.get('PROBLEMATIC'))
-            obj.genesis += genesis
-            obj.problematic += problematic
-            obj.save()
+            with trans.atomic():
+                new_genesis = obj.genesis + genesis
+                obj.genesis = list(set(new_genesis))
+
+                new_problematic = obj.problematic + problematic
+                obj.problematic = list(set(problematic))
+
+                obj.save()
 
             REDIS_STORAGE.delete('ACTIVE-BLOCK')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
@@ -262,11 +269,12 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
 
             current_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
             current_index += 1
-            REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', current_index)
+
+            redis_writer.delay(currentcount, 'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', "set")
 
             LOGGER.info(f"DONE CHECKING CHUNK INDEX {current_index}: {total_transactions} TXS")
+            redis_writer.delay(1, 'READY', "set")
 
-            REDIS_STORAGE.set('READY', 1)
     return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
 @shared_task(queue='slpdb_token_scanner')
@@ -314,7 +322,7 @@ def slpdb_token_scanner():
 
 @shared_task(queue='get_latest_block')
 def get_latest_block():
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys('*'): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys('*'): redis_writer.delay('', 'ACTIVE-BLOCK', "set")
     # A task intended to check new blockheight every 5 seconds.
     proceed = False
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
@@ -354,25 +362,26 @@ def review_problematic_transactions(self):
                 problematic_transactions.remove(txn_id)
 
             if response['status'] == 'success' and response['message'] == 'genesis':
-                add_to_redis_list(txn_id, 'genesis')
+                redis_writer.delay(txn_id, 'genesis', "append")
                 problematic_transactions.remove(txn_id)
-        block.problematic = problematic_transactions
-        block.save()
+        with trans.atomic():
+            block.problematic = problematic_transactions
+            block.save()
 
 @shared_task(bind=True, queue='manage_block_transactions')
 def manage_block_transactions(self):
-    if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-    if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', 0)
-    if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
-    if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
-    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PROBLEMATIC', json.dumps([]))
+    if b'READY' not in REDIS_STORAGE.keys(): redis_writer.delay(1, 'READY', "set")
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): redis_writer.delay('', 'ACTIVE-BLOCK', "set")
+    if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): redis_writer.delay(0, 'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', "set")
+    if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'PENDING-BLOCKS', "set")
+    if b'GENESIS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'GENESIS', "set")
+    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'PROBLEMATIC', "set")
     
 
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
     blocks = json.loads(pending_blocks)
     if len(blocks) == 0 and not REDIS_STORAGE.get('ACTIVE-BLOCK'): return 'NO PENDING BLOCKS'
-    if not REDIS_STORAGE.get('ACTIVE-BLOCK'): REDIS_STORAGE.set('ACTIVE-BLOCK', blocks[0])
+    if not REDIS_STORAGE.get('ACTIVE-BLOCK'): redis_writer.delay(blocks[0], 'ACTIVE-BLOCK', "set")
     active_block = int(REDIS_STORAGE.get('ACTIVE-BLOCK'))
 
     if active_block and int(REDIS_STORAGE.get('READY')):
@@ -394,16 +403,18 @@ def manage_block_transactions(self):
                 ).update(
                     transactions_count=total_transactions
                 )
-                REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
-                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', total_transactions)
+                redis_writer.delay(pending_blocks, 'PENDING-BLOCKS', "set")
+                redis_writer.delay(total_transactions, 'ACTIVE-BLOCK-TRANSACTIONS-COUNT', "set")
+
                 transaction_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
                 counter = 0
                 for i in range(0, total_transactions, settings.MAX_BLOCK_TRANSACTIONS): 
                     chunk = transactions[i:i + settings.MAX_BLOCK_TRANSACTIONS]
                     if counter == transaction_index:
-                        REDIS_STORAGE.set("ACTIVE-BLOCK-TRANSACTIONS", json.dumps(chunk))
+                        redis_writer.delay(chunk, 'ACTIVE-BLOCK-TRANSACTIONS', "set")
+
                     counter += 1
-                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT', counter-1)
+                redis_writer.delay(counter-1, 'ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT', "set")
                 get_block_transactions.delay()
                 return f'READY TO REVIEW TRANSACTIONS CHUNK'
             else:
@@ -414,11 +425,14 @@ def manage_block_transactions(self):
 
 @shared_task( bind=True, queue='get_block_transactions')
 def get_block_transactions(self):
-    if b'ACTIVE-BLOCK-TRANSACTIONS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps([]))
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-    if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
-    if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
-    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PROBLEMATIC', json.dumps([]))
+    if b'ACTIVE-BLOCK-TRANSACTIONS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'ACTIVE-BLOCK-TRANSACTIONS', "set")
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): redis_writer.delay('', 'ACTIVE-BLOCK', "set")
+
+    if b'READY' not in REDIS_STORAGE.keys(): redis_writer.delay(1, 'READY', "set")
+
+    if b'GENESIS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'GENESIS', "set")
+
+    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'PROBLEMATIC', "set")
     
     active_block_transactions = REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS')
     transactions = json.loads(active_block_transactions)
@@ -426,7 +440,7 @@ def get_block_transactions(self):
     ready = int(REDIS_STORAGE.get('READY'))
 
     if active_block and transactions and ready:
-        REDIS_STORAGE.set('READY', 0)
+        redis_writer.delay(0, 'READY', "set")
         active_block = int(active_block)
         block = BlockHeight.objects.get(number=active_block)
         total_chunk_transactions = len(transactions)
@@ -447,21 +461,22 @@ def get_block_transactions(self):
 
 @shared_task(bind=True, queue='slpdb', max_retries=10)
 def slpdb(self, block_num=None):
-    if block_num is None:
-        blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
-        if len(blocks) == 0:
-            return 'success'
-        number = blocks[0]
-        block_instance = BlockHeight.objects.get(number=number)
-        blocks.remove(number)
-        data = json.dumps(blocks)
-        REDIS_STORAGE.set('PENDING-BLOCKS', data)
-    else:
-        block_instance = BlockHeight.objects.get(number=block_num)
+    with trans.atomic()
+        if block_num is None:
+            blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            if len(blocks) == 0:
+                return 'success'
+            number = blocks[0]
+            block_instance = BlockHeight.objects.get(number=number)
+            blocks.remove(number)
+            data = json.dumps(blocks)
+            redis_writer.delay(data, 'PENDING-BLOCKS', "set")
+        else:
+            block_instance = BlockHeight.objects.get(number=block_num)
 
-    block_height = block_instance.number
-    block_instance.processed = False
-    block_instance.save()
+        block_height = block_instance.number
+        block_instance.processed = False
+        block_instance.save()
 
     obj = slpdb.SLPDB()
     try:
@@ -504,7 +519,7 @@ def bch_checker(txn_id):
         response = requests.get(url)
         if response.status_code == 200: proceed = True
     except Exception as exc:
-        add_to_redis_list(txn_id, 'problematic')
+        redis_writer.delay(txn_id, 'problematic', "append")
         return f"PROBLEMATIC TX: {txn_id}"
     if proceed:
         data = json.loads(response.text)
@@ -526,11 +541,11 @@ def bch_checker(txn_id):
                                         spent_index=out['spentIndex']
                                     )
                         else:
-                            add_to_redis_list(txn_id, 'problematic')
+                            redis_writer.delay(txn_id, 'problematic', "append")
                     else:
-                        add_to_redis_list(txn_id, 'problematic')
+                        redis_writer.delay(txn_id, 'problematic', "append")
             else:
-                add_to_redis_list(txn_id, 'problematic')
+                redis_writer.delay(txn_id, 'problematic', "append")
     return f"PROCESSED BCH TX: {txn_id}"
     
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
@@ -867,38 +882,40 @@ def save_subscription(token_address, token_id, subscriber_id, platform):
             destination_address = settings.SLACK_DESTINATION_ADDR
 
         if created:
-            sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+            with trans.atomic():
+                sendTo, created = SendTo.objects.get_or_create(address=destination_address)
 
-            subscription_obj.address.add(sendTo)
-            subscription_obj.token = token
-            subscription_obj.save()
-            
-            subscriber.subscription.add(subscription_obj)
+                subscription_obj.address.add(sendTo)
+                subscription_obj.token = token
+                subscription_obj.save()
+                
+                subscriber.subscription.add(subscription_obj)
             return True
 
     return False
 
 def register_user(user_details, platform):
-    platform = platform.lower()
-    user_id = user_details['id']
+    with trans.atomic():
+        platform = platform.lower()
+        user_id = user_details['id']
 
-    uname_pass = f"{platform}-{user_id}"
+        uname_pass = f"{platform}-{user_id}"
 
-    new_user, created = User.objects.get_or_create(
-        username=uname_pass,
-        password=uname_pass
-    )
+        new_user, created = User.objects.get_or_create(
+            username=uname_pass,
+            password=uname_pass
+        )
 
-    new_subscriber = Subscriber()
-    new_subscriber.user = new_user
-    new_subscriber.confirmed = True
+        new_subscriber = Subscriber()
+        new_subscriber.user = new_user
+        new_subscriber.confirmed = True
 
-    if platform == 'telegram':
-        new_subscriber.telegram_user_details = user_details
-    elif platform == 'slack':
-        new_subscriber.slack_user_details = user_details
-        
-    new_subscriber.save()
+        if platform == 'telegram':
+            new_subscriber.telegram_user_details = user_details
+        elif platform == 'slack':
+            new_subscriber.slack_user_details = user_details
+            
+        new_subscriber.save()
 
 @shared_task(queue='updates')
 def updates():
@@ -924,6 +941,7 @@ def blockbuilder():
         while block < current_block:
             if not BlockHeight.objects.filter(number=starting).exists():
                 p_blocks.append(block)
-                REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(p_blocks))
+                redis_writer.delay(p_blocks, 'PENDING-BLOCKS', "set")
+                
                 break
             block += 1
