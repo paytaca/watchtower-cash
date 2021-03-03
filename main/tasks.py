@@ -226,8 +226,7 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
         save_record.delay(*response['args'])
 
     if response['status'] == 'success' and response['message'] == 'no token':
-        if checktransaction(txn_id) == 'failed':
-            self.retry(countdown=20)
+        bch_checker(txn_id)
         
     if response['status'] == 'success' and response['message'] == 'genesis':
         add_to_redis_list(txn_id, 'genesis')
@@ -240,7 +239,7 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
         
 
     if int(total_transactions) == int(currentcount):
-        REDIS_STORAGE.set('READY', 1)
+        LOGGER.info(f"WE ARE AT THE ENDING >>>   INDEX {REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')}  out of  {REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')}")
         if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
             genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
             problematic = json.loads(REDIS_STORAGE.get('PROBLEMATIC'))
@@ -248,23 +247,26 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
             obj.problematic += problematic
             obj.save()
 
-            REDIS_STORAGE.delete('GENESIS')
-            REDIS_STORAGE.delete('PROBLEMATIC')
             REDIS_STORAGE.delete('ACTIVE-BLOCK')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-COUNT')
+            REDIS_STORAGE.delete('GENESIS')
+            REDIS_STORAGE.delete('PROBLEMATIC')
             
             LOGGER.info(f"DONE CHECKING {blockheightid}.")
-        
+            REDIS_STORAGE.delete('READY')
         elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
+
             current_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
-            LOGGER.info(f"DONE CHECKING CHUNK {current_index}: {total_transactions} TXS")
             current_index += 1
             REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', current_index)
-            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
-    
+
+            LOGGER.info(f"DONE CHECKING CHUNK INDEX {current_index}: {total_transactions} TXS")
+
+            REDIS_STORAGE.set('READY', 1)
     return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
 @shared_task(queue='slpdb_token_scanner')
@@ -332,43 +334,47 @@ def get_latest_block():
             bitcoincash_tracker.delay(obj.id)
             return f'*** NEW BLOCK { number } ***'
     else:
-        # If there's any missed/unprocessed block due to rest.bitcoin downtime,
-        # There would be backward scanning of blocks.
-        blocks = list(BlockHeight.objects.all().order_by('number').values_list('number',flat=True))
-        blocks = list(missing_blocks(blocks,0,len(blocks)-1))
-        event = 'MISSED'
-        if not len(blocks):
-            blocks = list(BlockHeight.objects.filter(processed=False).order_by('-number').values_list('number', flat=True))
-            event = 'UNPROCESSED'
-        if len(blocks):
-            number = blocks[-1]
-            active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
-            if active_block:
-                if number == int(active_block):
-                    return 'NO NEW BLOCK'
-            # Queue to "PENDING-BLOCKS"
-            added = block_setter(number, new=False)
-            if added:
-                obj, created = BlockHeight.objects.get_or_create(number=number)
-                bitcoincash_tracker.delay(obj.id)   
-                return f'FOUND { event } BLOCK { number }'
-            return 'NO NEW BLOCK'
+        return 'NO NEW BLOCK'
     
+@shared_task(bind=True, queue='problematic')
+def review_problematic_transactions(self):
+    blocks = BlockHeight.objects.exclude(problematic=[])
+    for block in blocks:
+        problematic_transactions = list(set(block.problematic))
+        for txn_id in problematic_transactions:
+            LOGGER.info(f"REVIEWING PROBLEMATIC TX: {txn_id}  BLK:{block.number}")
+            rb = RestBitcoin()
+            response = rb.get_transaction(txn_id, block.id, 0)
+            if response['status'] == 'success' and response['message'] == 'found':
+                save_record.delay(*response['args'])
+                problematic_transactions.remove(txn_id)
+
+            if response['status'] == 'success' and response['message'] == 'no token':
+                bch_checker(txn_id)                
+                problematic_transactions.remove(txn_id)
+
+            if response['status'] == 'success' and response['message'] == 'genesis':
+                add_to_redis_list(txn_id, 'genesis')
+                problematic_transactions.remove(txn_id)
+        block.problematic = problematic_transactions
+        block.save()
 
 @shared_task(bind=True, queue='manage_block_transactions')
 def manage_block_transactions(self):
-    if not REDIS_STORAGE.get('READY'): REDIS_STORAGE.set('READY', 1)
+    if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', 0)
     if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
     if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
     if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PROBLEMATIC', json.dumps([]))
+    
 
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
     blocks = json.loads(pending_blocks)
     if len(blocks) == 0 and not REDIS_STORAGE.get('ACTIVE-BLOCK'): return 'NO PENDING BLOCKS'
     if not REDIS_STORAGE.get('ACTIVE-BLOCK'): REDIS_STORAGE.set('ACTIVE-BLOCK', blocks[0])
     active_block = int(REDIS_STORAGE.get('ACTIVE-BLOCK'))
+
     if active_block and int(REDIS_STORAGE.get('READY')):
         if active_block in blocks:
             blocks.remove(active_block)
@@ -398,6 +404,7 @@ def manage_block_transactions(self):
                         REDIS_STORAGE.set("ACTIVE-BLOCK-TRANSACTIONS", json.dumps(chunk))
                     counter += 1
                 REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT', counter-1)
+                get_block_transactions.delay()
                 return f'READY TO REVIEW TRANSACTIONS CHUNK'
             else:
                 return 'FAILED'
@@ -489,14 +496,17 @@ def slpdb(self, block_num=None):
                             spent_index += 1
 
            
-def checktransaction(txn_id):
-    status = 'failed'
+def bch_checker(txn_id):
     url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
+    
+    proceed = False
     try:
         response = requests.get(url)
+        if response.status_code == 200: proceed = True
     except Exception as exc:
-        return status
-    if response.status_code == 200:
+        add_to_redis_list(txn_id, 'problematic')
+        return f"PROBLEMATIC TX: {txn_id}"
+    if proceed:
         data = json.loads(response.text)
         if 'blockheight' in data.keys():
             blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
@@ -515,10 +525,13 @@ def checktransaction(txn_id):
                                         blockheightid=blockheight_obj.id,
                                         spent_index=out['spentIndex']
                                     )
+                        else:
+                            add_to_redis_list(txn_id, 'problematic')
+                    else:
+                        add_to_redis_list(txn_id, 'problematic')
             else:
-                LOGGER.error(f'++++++++ +++++++++ +++++++++++ +++++++++++    no vout >> {txn_id}')
-            status = 'success'
-    return status
+                add_to_redis_list(txn_id, 'problematic')
+    return f"PROCESSED BCH TX: {txn_id}"
     
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
 def slpbitcoinsocket(self):

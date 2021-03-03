@@ -182,11 +182,6 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.manage_block_transactions',
         'schedule': 7
     },
-    'get_block_transactions': {
-        'task': 'main.tasks.get_block_transactions',
-        'schedule': 10
-    },
-
     # # SLPDB QUERY
     # 'slpdb_token_scanner': {
     #     'task': 'main.tasks.slpdb_token_scanner',
