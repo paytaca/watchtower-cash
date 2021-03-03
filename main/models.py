@@ -21,7 +21,9 @@ class BlockHeight(models.Model):
     updated_datetime = models.DateTimeField(null=True, blank=True)
     processed = models.BooleanField(default=False)
     currentcount = models.IntegerField(default=0)
-    genesis = JSONField(default=[])
+    genesis = JSONField(default=list)
+    problematic = JSONField(default=list)
+
 
     def save(self, *args, **kwargs):
         if not self.id:

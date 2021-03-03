@@ -16,7 +16,7 @@ from main.models import (
     Subscriber
 )
 from django.contrib.auth.models import User
-
+from celery.exceptions import MaxRetriesExceededError 
 import json, random
 from main.utils import slpdb, missing_blocks, block_setter, check_wallet_address_subscription, check_token_subscription
 from main.utils.spicebot_token_registration import SpicebotTokens
@@ -198,9 +198,14 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         else:
             LOGGER.info(msg)
 
+def add_to_redis_list(value, key):
+    redis_container = json.loads(REDIS_STORAGE.get(key.upper()))
+    redis_container.append(value)
+    REDIS_STORAGE.set(key.upper(), json.dumps(redis_container))
 
-@shared_task(queue='deposit_filter')
-def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
+
+@shared_task(bind=True, queue='deposit_filter', max_retries=2)
+def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions):
     obj = BlockHeight.objects.get(id=blockheightid)
     """
     Tracks every transactions that belongs to the registered token and blockheight.
@@ -215,27 +220,42 @@ def deposit_filter(txn_id, blockheightid, currentcount, total_transactions):
             # BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)                
             return 'success'
     rb = RestBitcoin()
-    try:
-        response = rb.get_transaction(txn_id, blockheightid, currentcount)
-        if response['status'] == 'success' and response['message'] == 'found':
-            save_record.delay(*response['args'])
-        if response['status'] == 'success' and response['message'] == 'no token':
-            checktransaction(txn_id)
-        if response['status'] == 'success' and response['message'] == 'genesis':
-            with trans.atomic:
-                obj.genesis.append(txn_id)
-                obj.save()
-    except Exception as exc:
-        LOGGER.error(exc)
+    response = rb.get_transaction(txn_id, blockheightid, currentcount)
+
+    if response['status'] == 'success' and response['message'] == 'found':
+        save_record.delay(*response['args'])
+
+    if response['status'] == 'success' and response['message'] == 'no token':
+        if checktransaction(txn_id) == 'failed':
+            self.retry(countdown=20)
+        
+    if response['status'] == 'success' and response['message'] == 'genesis':
+        add_to_redis_list(txn_id, 'genesis')
+
+    if response['status'] == 'failed':
+        try:
+            self.retry(countdown=20)
+        except MaxRetriesExceededError:
+            add_to_redis_list(txn_id, 'problematic')    
+        
 
     if int(total_transactions) == int(currentcount):
         REDIS_STORAGE.set('READY', 1)
         if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
+            genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
+            problematic = json.loads(REDIS_STORAGE.get('PROBLEMATIC'))
+            obj.genesis += genesis
+            obj.problematic += problematic
+            obj.save()
+
+            REDIS_STORAGE.delete('GENESIS')
+            REDIS_STORAGE.delete('PROBLEMATIC')
             REDIS_STORAGE.delete('ACTIVE-BLOCK')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-COUNT')
+            
             LOGGER.info(f"DONE CHECKING {blockheightid}.")
         
         elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
@@ -341,6 +361,8 @@ def manage_block_transactions(self):
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', 0)
     if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
+    if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
+    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PROBLEMATIC', json.dumps([]))
 
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
     blocks = json.loads(pending_blocks)
@@ -388,6 +410,8 @@ def get_block_transactions(self):
     if b'ACTIVE-BLOCK-TRANSACTIONS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps([]))
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
+    if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
+    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PROBLEMATIC', json.dumps([]))
     
     active_block_transactions = REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS')
     transactions = json.loads(active_block_transactions)
@@ -465,16 +489,13 @@ def slpdb(self, block_num=None):
                             spent_index += 1
 
            
-
-    
-@shared_task(bind=True, queue='checktransaction', max_retries=20)
-def checktransaction(self, txn_id):
+def checktransaction(txn_id):
     status = 'failed'
     url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
     try:
         response = requests.get(url)
     except Exception as exc:
-        self.retry(countdown=60)
+        return status
     if response.status_code == 200:
         data = json.loads(response.text)
         if 'blockheight' in data.keys():
@@ -494,10 +515,9 @@ def checktransaction(self, txn_id):
                                         blockheightid=blockheight_obj.id,
                                         spent_index=out['spentIndex']
                                     )
-            # LOGGER.info(f'CHECKING BCH TRANSACTION:  {txn_id}')
+            else:
+                LOGGER.error(f'++++++++ +++++++++ +++++++++++ +++++++++++    no vout >> {txn_id}')
             status = 'success'
-    else:
-        self.retry(countdown=60)
     return status
     
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
