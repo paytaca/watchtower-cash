@@ -173,11 +173,11 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             else:
                 raise
         
-        try:
-            if transaction_obj.blockheight is not None:
-                msg += f'| BLOCKHEIGHT: {transaction_obj.blockheight.number}'
-        except BlockHeight.DoesNotExist:
-            pass
+        # try:
+        #     if transaction_obj.blockheight is not None:
+        #         msg += f'| BLOCKHEIGHT: {transaction_obj.blockheight.number}'
+        # except BlockHeight.DoesNotExist:
+        #     pass
 
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
