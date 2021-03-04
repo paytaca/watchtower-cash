@@ -353,12 +353,20 @@ def get_latest_block():
     else:
         return 'NO NEW BLOCK'
     
-@shared_task(bind=True, queue='problematic')
-def review_problematic_transactions(self):
-    blocks = BlockHeight.objects.exclude(problematic=[])
-    for block in blocks:
-        problematic_transactions = list(set(block.problematic))
-        for txn_id in problematic_transactions:
+@shared_task(bind=True, queue='save_record')
+def problematic_transactions(self):    
+    time_threshold = timezone.now() - datetime.timedelta(hours=1)
+    blocks = BlockHeight.objects.exclude(
+        problematic=[]
+    ).filter(
+        created_datetime__lte=time_threshold,
+        processed=True
+    ).order_by('-number')
+    if blocks.exists():
+        block = blocks.first()
+        problematic_transactions = block.problematic
+        genesis_transactions = block.genesis
+        for txn_id in block.problematic:
             LOGGER.info(f"REVIEWING PROBLEMATIC TX: {txn_id}  BLK:{block.number}")
             rb = RestBitcoin()
             response = rb.get_transaction(txn_id, block.id, 0)
@@ -367,13 +375,13 @@ def review_problematic_transactions(self):
                 problematic_transactions.remove(txn_id)
 
             if response['status'] == 'success' and response['message'] == 'no token':
-                bch_checker(txn_id)                
-                problematic_transactions.remove(txn_id)
-
+                if 'PROCESSED VALID' in bch_checker(txn_id):
+                    problematic_transactions.remove(txn_id)    
             if response['status'] == 'success' and response['message'] == 'genesis':
-                redis_writer.delay(txn_id, 'genesis', "append")
+                genesis_transactions.append(txn_id)
                 problematic_transactions.remove(txn_id)
         with trans.atomic():
+            block.genesis = genesis_transactions
             block.problematic = problematic_transactions
             block.save()
 
@@ -546,6 +554,7 @@ def bch_checker(txn_id):
                                         blockheightid=blockheight_obj.id,
                                         spent_index=out['spentIndex']
                                     )
+                                    return f"PROCESSED VALID BCH TX: {txn_id}"
     return f"PROCESSED BCH TX: {txn_id}"
     
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
@@ -916,19 +925,6 @@ def register_user(user_details, platform):
             new_subscriber.slack_user_details = user_details
             
         new_subscriber.save()
-
-@shared_task(queue='updates')
-def updates():
-    start = timezone.now()- datetime.timedelta(days=7)
-    ending = timezone.now() - datetime.timedelta(seconds=4800)
-    qs = BlockHeight.objects.filter(
-        Q(created_datetime__gte=start) & Q(created_datetime__lte=ending)
-    )
-    to_process_blocks = qs.filter(processed=False)
-    for block in to_process_blocks:
-        first_blockheight_scanner.delay(block.id)
-    LOGGER.info('Updated blocks!')
-
 
 
 @shared_task(queue='blockbuilder')

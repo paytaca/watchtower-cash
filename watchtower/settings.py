@@ -182,6 +182,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.manage_block_transactions',
         'schedule': 7
     },
+    'problematic_transactions': {
+        'task': 'problematic_transactions',
+        'schedule': 20
+    }
     # # SLPDB QUERY
     # 'slpdb_token_scanner': {
     #     'task': 'main.tasks.slpdb_token_scanner',
@@ -202,12 +206,6 @@ CELERY_BEAT_SCHEDULE = {
     # 'bitsocket': {
     #     'task': 'main.tasks.bitsocket',
     #     'schedule': 29
-    # },
-
-    # # OTHERS
-    # 'updates': {
-    #     'task': 'main.tasks.updates',
-    #     'schedule': 4800
     # }
 }
 
