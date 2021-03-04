@@ -59,7 +59,7 @@ class RestBitcoin(object):
                                                         address_data['slpAddress'],
                                                         txn_id,
                                                         amount,
-                                                        "per-blockheight",
+                                                        "rest.bitcoin-per-block",
                                                         blockheightid,
                                                         spent_index
                                                     )

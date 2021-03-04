@@ -201,12 +201,26 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
 @shared_task(bind=True, queue='redis_writer')
 def redis_writer(self, value, key, action):
+    key = key.upper()
     if action == "append":
-        redis_container = json.loads(REDIS_STORAGE.get(key.upper()))
-        redis_container.append(value)
-        REDIS_STORAGE.set(key.upper(), json.dumps(redis_container))
-    elif action == "set":
-        REDIS_STORAGE.set(key.upper(), value)
+        container = REDIS_STORAGE.get(key)
+        if container:
+            redis_container = json.loads(container)
+            redis_container.append(value)
+            REDIS_STORAGE.set(key, json.dumps(redis_container))
+    return f"{key} TRANSACTION: {value}"
+
+@shared_task(bind=True, queue='save_record')
+def postgres_writer(self, blockheight_id,  genesis, problematic):
+    with trans.atomic():
+        obj = BlockHeight.objects.get(id=blockheight_id)
+        new_genesis = obj.genesis + genesis
+        obj.genesis = list(set(new_genesis))
+        all_transactions = obj.transactions.distinct('txid').values_list('txid', flat=True)
+        all_problematic = obj.problematic + problematic
+        obj.problematic = [tr for tr in list(set(all_problematic)) if tr not in all_transactions]
+        obj.problematic = [tr for tr in obj.problematic if tr not in obj.genesis]
+        obj.save()
     return None
 
 
@@ -236,44 +250,39 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
         
     if response['status'] == 'success' and response['message'] == 'genesis':
         redis_writer.delay(txn_id, 'genesis', "append")
-
-    if response['status'] == 'failed':
-        redis_writer.delay(txn_id, 'problematic', "append")    
         
 
     if int(total_transactions) == int(currentcount):
+        active_transactions = json.loads(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS'))
+        genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
+        missing = [tr for tr in active_transactions if not Transaction.objects.filter(txid=tr).exists()]
+        problematic = [tr for tr in missing if tr not in genesis]
+        postgres_writer.delay(obj.id, genesis, problematic)
+
         if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
-            genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
-            problematic = json.loads(REDIS_STORAGE.get('PROBLEMATIC'))
-            with trans.atomic():
-                new_genesis = obj.genesis + genesis
-                obj.genesis = list(set(new_genesis))
-
-                new_problematic = obj.problematic + problematic
-                obj.problematic = list(set(problematic))
-
-                obj.save()
-
             REDIS_STORAGE.delete('ACTIVE-BLOCK')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-COUNT')
             REDIS_STORAGE.delete('GENESIS')
-            REDIS_STORAGE.delete('PROBLEMATIC')
-            
-            LOGGER.info(f"DONE CHECKING {blockheightid}.")
             REDIS_STORAGE.delete('READY')
+
+            LOGGER.info(f"DONE CHECKING {blockheightid}.")
+
         elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
+    
+
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
+            REDIS_STORAGE.delete('GENESIS')
 
             current_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
             current_index += 1
 
-            redis_writer.delay(currentcount, 'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', "set")
+            REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', current_index)
+            REDIS_STORAGE.set('READY', 1)
 
             LOGGER.info(f"DONE CHECKING CHUNK INDEX {current_index}: {total_transactions} TXS")
-            redis_writer.delay(1, 'READY', "set")
 
     return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
@@ -322,7 +331,7 @@ def slpdb_token_scanner():
 
 @shared_task(queue='get_latest_block')
 def get_latest_block():
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys('*'): redis_writer.delay('', 'ACTIVE-BLOCK', "set")
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys('*'): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     # A task intended to check new blockheight every 5 seconds.
     proceed = False
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
@@ -370,18 +379,17 @@ def review_problematic_transactions(self):
 
 @shared_task(bind=True, queue='manage_block_transactions')
 def manage_block_transactions(self):
-    if b'READY' not in REDIS_STORAGE.keys(): redis_writer.delay(1, 'READY', "set")
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): redis_writer.delay('', 'ACTIVE-BLOCK', "set")
-    if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): redis_writer.delay(0, 'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', "set")
-    if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'PENDING-BLOCKS', "set")
-    if b'GENESIS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'GENESIS', "set")
-    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'PROBLEMATIC', "set")
+    if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+    if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', 0)
+    if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]),)
+    if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
     
 
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
     blocks = json.loads(pending_blocks)
     if len(blocks) == 0 and not REDIS_STORAGE.get('ACTIVE-BLOCK'): return 'NO PENDING BLOCKS'
-    if not REDIS_STORAGE.get('ACTIVE-BLOCK'): redis_writer.delay(blocks[0], 'ACTIVE-BLOCK', "set")
+    if not REDIS_STORAGE.get('ACTIVE-BLOCK'): REDIS_STORAGE.set('ACTIVE-BLOCK', blocks[0])
     active_block = int(REDIS_STORAGE.get('ACTIVE-BLOCK'))
 
     if active_block and int(REDIS_STORAGE.get('READY')):
@@ -403,36 +411,35 @@ def manage_block_transactions(self):
                 ).update(
                     transactions_count=total_transactions
                 )
-                redis_writer.delay(pending_blocks, 'PENDING-BLOCKS', "set")
-                redis_writer.delay(total_transactions, 'ACTIVE-BLOCK-TRANSACTIONS-COUNT', "set")
+                REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
+                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', total_transactions)
 
                 transaction_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
                 counter = 0
                 for i in range(0, total_transactions, settings.MAX_BLOCK_TRANSACTIONS): 
                     chunk = transactions[i:i + settings.MAX_BLOCK_TRANSACTIONS]
                     if counter == transaction_index:
-                        redis_writer.delay(chunk, 'ACTIVE-BLOCK-TRANSACTIONS', "set")
+                        REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps(chunk))
 
                     counter += 1
-                redis_writer.delay(counter-1, 'ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT', "set")
+                REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT', counter-1)
                 get_block_transactions.delay()
                 return f'READY TO REVIEW TRANSACTIONS CHUNK'
             else:
                 return 'FAILED'
         else:
             return f'{resp.text.upper()}'
-    return 'REDIS IS BUSY TO ACCEPT NEW TRANSACTIONS CHUNK'
+    return 'REDIS IS TOO BUSY TO ACCEPT NEW TRANSACTIONS CHUNK'
 
 @shared_task( bind=True, queue='get_block_transactions')
 def get_block_transactions(self):
-    if b'ACTIVE-BLOCK-TRANSACTIONS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'ACTIVE-BLOCK-TRANSACTIONS', "set")
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): redis_writer.delay('', 'ACTIVE-BLOCK', "set")
+    if b'ACTIVE-BLOCK-TRANSACTIONS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps([]))
+    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
 
-    if b'READY' not in REDIS_STORAGE.keys(): redis_writer.delay(1, 'READY', "set")
+    if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
 
-    if b'GENESIS' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'GENESIS', "set")
+    if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
 
-    if b'PROBLEMATIC' not in REDIS_STORAGE.keys(): redis_writer.delay([], 'PROBLEMATIC', "set")
     
     active_block_transactions = REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS')
     transactions = json.loads(active_block_transactions)
@@ -440,7 +447,7 @@ def get_block_transactions(self):
     ready = int(REDIS_STORAGE.get('READY'))
 
     if active_block and transactions and ready:
-        redis_writer.delay(0, 'READY', "set")
+        REDIS_STORAGE.set('READY', 0)
         active_block = int(active_block)
         block = BlockHeight.objects.get(number=active_block)
         total_chunk_transactions = len(transactions)
@@ -461,7 +468,7 @@ def get_block_transactions(self):
 
 @shared_task(bind=True, queue='slpdb', max_retries=10)
 def slpdb(self, block_num=None):
-    with trans.atomic()
+    with trans.atomic():
         if block_num is None:
             blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
             if len(blocks) == 0:
@@ -470,7 +477,7 @@ def slpdb(self, block_num=None):
             block_instance = BlockHeight.objects.get(number=number)
             blocks.remove(number)
             data = json.dumps(blocks)
-            redis_writer.delay(data, 'PENDING-BLOCKS', "set")
+            REDIS_STORAGE.set('PENDING-BLOCKS', data)
         else:
             block_instance = BlockHeight.objects.get(number=block_num)
 
@@ -519,7 +526,6 @@ def bch_checker(txn_id):
         response = requests.get(url)
         if response.status_code == 200: proceed = True
     except Exception as exc:
-        redis_writer.delay(txn_id, 'problematic', "append")
         return f"PROBLEMATIC TX: {txn_id}"
     if proceed:
         data = json.loads(response.text)
@@ -536,16 +542,10 @@ def bch_checker(txn_id):
                                         cashaddr,
                                         data['txid'],
                                         out['value'],
-                                        "per-bch-blockheight",
+                                        "bch_checker",
                                         blockheightid=blockheight_obj.id,
                                         spent_index=out['spentIndex']
                                     )
-                        else:
-                            redis_writer.delay(txn_id, 'problematic', "append")
-                    else:
-                        redis_writer.delay(txn_id, 'problematic', "append")
-            else:
-                redis_writer.delay(txn_id, 'problematic', "append")
     return f"PROCESSED BCH TX: {txn_id}"
     
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
@@ -728,7 +728,7 @@ def bitcoincash_tracker(self,id):
                                                 cashaddr,
                                                 txn_id,
                                                 out['value'],
-                                                "alt-bch-tracker",
+                                                "alternative-bch-tracker",
                                                 blockheight_obj.id,
                                                 out['spentIndex']
                                             )
@@ -941,7 +941,7 @@ def blockbuilder():
         while block < current_block:
             if not BlockHeight.objects.filter(number=starting).exists():
                 p_blocks.append(block)
-                redis_writer.delay(p_blocks, 'PENDING-BLOCKS', "set")
+                REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(p_blocks))
                 
                 break
             block += 1
