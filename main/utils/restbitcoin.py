@@ -31,9 +31,11 @@ class RestBitcoin(object):
                                     token_obj, _ = Token.objects.get_or_create(tokenid=transaction_token_id)
                                     
                                     send_outputs = transaction_data['tokenInfo']['sendOutputs']
-                                    # the last index is intended to sender's current balance so we'll going to remove it in send_ouputs.
-                                    send_outputs.pop(-1)
                                     spent_index = 1
+                                    if len(transaction_data['retData']['vout'][spent_index]['scriptPubKey']['addresses']) > 1:
+                                        # the last index is intended to sender's current balance so we'll going to remove it in send_ouputs.
+                                        send_outputs.pop(-1)
+
                                     for output in send_outputs:
                                             amount = float(output)
                                                                             

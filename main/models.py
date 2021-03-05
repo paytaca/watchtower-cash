@@ -38,20 +38,21 @@ class BlockHeight(models.Model):
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
     address = models.CharField(max_length=500,null=True, db_index=True)
-    amount = models.FloatField(default=0)
+    amount = models.FloatField(default=0, db_index=True)
     acknowledged = models.BooleanField(default=False)
     blockheight = models.ForeignKey(
         BlockHeight,
         on_delete=models.CASCADE,
         related_name='transactions',
-        null=True
+        null=True,
+        db_index=True
     )
-    source = models.CharField(max_length=200, null=True)
+    source = models.CharField(max_length=200, null=True, db_index=True)
     created_datetime = models.DateTimeField(default=timezone.now)
-    token = models.ForeignKey(Token, on_delete=models.DO_NOTHING)
+    token = models.ForeignKey(Token, on_delete=models.DO_NOTHING, db_index=True)
     scanning = models.BooleanField(default=False)
-    subscribed = models.BooleanField(default=False)
-    spentIndex = models.IntegerField(default=0)
+    subscribed = models.BooleanField(default=False, db_index=True)
+    spentIndex = models.IntegerField(default=0, db_index=True)
     
     def __str__(self):
         return self.txid

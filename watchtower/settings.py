@@ -183,30 +183,30 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 7
     },
     'problematic_transactions': {
-        'task': 'problematic_transactions',
-        'schedule': 20
-    }
-    # # SLPDB QUERY
+        'task': 'main.tasks.problematic_transactions',
+        'schedule': 10
+    },
+    # SLPDB QUERY
     # 'slpdb_token_scanner': {
     #     'task': 'main.tasks.slpdb_token_scanner',
     #     'schedule': 600
     # },
 
-    # # BITDB QUERY
+    # BITDB QUERY
     # 'bitdbquery': {
     #     'task': 'main.tasks.bitdbquery',
     #     'schedule': 300
     # },
 
-    # # WEBSOCKETS
-    # 'slpbitcoinsocketsocket': {
-    #     'task': 'main.tasks.slpbitcoinsocket',
-    #     'schedule': 21
-    # },
-    # 'bitsocket': {
-    #     'task': 'main.tasks.bitsocket',
-    #     'schedule': 29
-    # }
+    # WEBSOCKETS
+    'slpbitcoinsocketsocket': {
+        'task': 'main.tasks.slpbitcoinsocket',
+        'schedule': 21
+    },
+    'bitsocket': {
+        'task': 'main.tasks.bitsocket',
+        'schedule': 29
+    }
 }
 
 CORS_ORIGIN_WHITELIST = [
