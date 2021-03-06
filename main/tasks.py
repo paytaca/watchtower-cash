@@ -237,7 +237,6 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-COUNT')
             REDIS_STORAGE.delete('GENESIS')
             REDIS_STORAGE.delete('READY')
-
             LOGGER.info(f"DONE CHECKING {blockheightid}.")
 
         elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
@@ -321,6 +320,32 @@ def get_latest_block():
     else:
         return 'NO NEW BLOCK'
     
+@shared_task(queue='review_block')
+def review_block():
+    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
+    blocks = BlockHeight.objects.exclude(number=active_block).exclude(transactions_count=0).filter(processed=False)
+    block = blocks.first()
+    if block:
+        found_transactions = block.transactions.distinct('txid')
+        if block.transactions_count == len(block.genesis) + len(block.problematic) + found_transactions.count(): return 'ALL TRANSACTIONS ARE COMPLETE'
+        missing = []
+        db_transactions = found_transactions.values_list('txid', flat=True)
+        url = f'https://rest.bitcoin.com/v2/block/detailsByHeight/{block.number}'
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            resp_data = json.loads(resp.text)
+            if 'error' not in resp_data.keys():
+                transactions = resp_data['tx']
+                for tr in transactions:
+                    if tr not in db_transactions and tr not in block.genesis and tr not in block.problematic:
+                        missing.append(tr)
+                block.problematic += missing
+                block.save()
+                return 'ALL TRANSACTIONS ARE COMPLETE'
+
+            
+
+
 @shared_task(bind=True, queue='problematic_transactions')
 def problematic_transactions(self):  
     time_threshold = timezone.now() - datetime.timedelta(hours=2)
