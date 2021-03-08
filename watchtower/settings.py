@@ -190,18 +190,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.review_block',
         'schedule': 30
     },
-    # SLPDB QUERY
-    # 'slpdb_token_scanner': {
-    #     'task': 'main.tasks.slpdb_token_scanner',
-    #     'schedule': 60
-    # },
-
     # BITDB QUERY
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
         'schedule': 60
     },
-
+``
     # WEBSOCKETS
     'slpbitcoinsocketsocket': {
         'task': 'main.tasks.slpbitcoinsocket',

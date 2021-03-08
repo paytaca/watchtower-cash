@@ -159,7 +159,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address_obj.save()
             
             if transaction_created:
-                client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
+                pass
+                # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
                     
         except OperationalError as exc:
             save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
@@ -308,6 +309,7 @@ def get_latest_block():
         added = block_setter(number, new=True)
         if added:
             bitcoincash_tracker.delay(obj.id)
+            slpdb_tracker.delay(obj.number)
             return f'*** NEW BLOCK { number } ***'
     else:
         return 'NO NEW BLOCK'
@@ -463,26 +465,9 @@ def get_block_transactions(self):
         return f"NO NEW BLOCK TRANSACTIONS."
 
 
-@shared_task(bind=True, queue='slpdb', max_retries=10)
-def slpdb(self, block_num=None):
-    with trans.atomic():
-        if block_num is None:
-            blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
-            if len(blocks) == 0:
-                return 'success'
-            number = blocks[0]
-            block_instance = BlockHeight.objects.get(number=number)
-            blocks.remove(number)
-            data = json.dumps(blocks)
-            REDIS_STORAGE.set('PENDING-BLOCKS', data)
-        else:
-            block_instance = BlockHeight.objects.get(number=block_num)
-
-        block_height = block_instance.number
-        block_instance.processed = False
-        block_instance.save()
-
-    obj = slpdb.SLPDB()
+@shared_task(bind=True, queue='slpdb')
+def slpdb_tracker(self, block_height):
+    obj = slpdb_scanner.SLPDB()
     try:
         data = obj.process_api(**{'block': int(block_height)})
         proceed_slpdb_checking = True

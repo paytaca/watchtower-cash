@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: watchtower
-          image: registry.digitalocean.com/spicetoken/watchtower:e1dae927afb1
+          image: registry.digitalocean.com/spicetoken/watchtower:c95478a5756f
 
           env:
             - name: POSTGRES_DB
