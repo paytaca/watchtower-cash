@@ -193,7 +193,7 @@ CELERY_BEAT_SCHEDULE = {
     # SLPDB QUERY
     # 'slpdb_token_scanner': {
     #     'task': 'main.tasks.slpdb_token_scanner',
-    #     'schedule': 600
+    #     'schedule': 60
     # },
 
     # BITDB QUERY

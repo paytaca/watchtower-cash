@@ -158,11 +158,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address_obj.transactions.add(transaction_obj)
             address_obj.save()
             
-            # if transaction_created:
-                # return f'CREATED TR: {transaction_address }| SOURCE: {source}'
-                # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
-            # else:
-                # return f'UPDATED TR: {transaction_address }| SOURCE: {source}'
+            if transaction_created:
+                client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
                     
         except OperationalError as exc:
             save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
@@ -251,44 +248,43 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
 
     return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
-@shared_task(queue='slpdb_token_scanner')
-def slpdb_token_scanner():
-    tokens = Token.objects.all()
-    for token in tokens:
-        obj = slpdb_scanner.SLPDB()
-        data = obj.process_api(**{'tokenid': token.tokenid})
-        if data['status'] == 'success':
-            for transaction in data['data']['c']:
-                if transaction['tokenDetails']['valid']:
-                    required_keys = transaction.keys()
-                    tx_exists = 'txid' in required_keys
-                    token_exists = 'tokenDetails' in required_keys
-                    blk_exists = 'blk' in required_keys
-                    if  tx_exists and token_exists and blk_exists:
-                        tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
-                        tokenqs = Token.objects.filter(tokenid=tokenid)
-                        if tokenqs.exists():
-                            # Block 625228 is the beginning...
-                            # if transaction['blk'] >= 625228:
-                            if transaction['blk'] >= 677406:    
-                                token_obj = tokenqs.first()
-                                block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
-                                transaction['tokenDetails']['detail']['outputs'].pop(-1)
-                                spent_index = 1
-                                for trans in transaction['tokenDetails']['detail']['outputs']:
-                                    amount = trans['amount']
-                                    slpaddress = trans['address']
-                                    args = (
-                                        token_obj.tokenid,
-                                        slpaddress,
-                                        transaction['txid'],
-                                        amount,
-                                        "slpdb_token_scanner",
-                                        block.id,
-                                        spent_index
-                                    )
-                                    save_record(*args)
-                                    spent_index += 1
+# @shared_task(queue='slpdb_token_scanner')
+# def slpdb_token_scanner():
+#     tokens = Token.objects.all()
+#     for token in tokens:
+#         obj = slpdb_scanner.SLPDB()
+#         data = obj.process_api(**{'tokenid': token.tokenid})
+#         if data['status'] == 'success':
+#             for transaction in data['data']['c']:
+#                 if transaction['tokenDetails']['valid']:
+#                     given_keys = transaction.keys()
+#                     tx_exists = 'txid' in given_keys
+#                     token_exists = 'tokenDetails' in given_keys
+#                     blk_exists = 'blk' in given_keys
+#                     if  tx_exists and token_exists and blk_exists:
+#                         tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
+#                         tokenqs = Token.objects.filter(tokenid=tokenid)
+#                         if tokenqs.exists():
+#                             if transaction['blk'] >= 677818:    
+#                                 token_obj = tokenqs.first()
+#                                 block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
+#                                 if created:
+#                                     transaction['tokenDetails']['detail']['outputs'].pop(-1)
+#                                     spent_index = 1
+#                                     for trans in transaction['tokenDetails']['detail']['outputs']:
+#                                         amount = trans['amount']
+#                                         slpaddress = trans['address']
+#                                         args = (
+#                                             token_obj.tokenid,
+#                                             slpaddress,
+#                                             transaction['txid'],
+#                                             amount,
+#                                             "slpdb_token_scanner",
+#                                             block.id,
+#                                             spent_index
+#                                         )
+#                                         save_record.delay(*args)
+#                                         spent_index += 1
 
 
 
@@ -318,8 +314,10 @@ def get_latest_block():
     
 @shared_task(queue='review_block')
 def review_block():
+    blocks = BlockHeight.objects.exclude(transactions_count=0).filter(processed=False)
     active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
-    blocks = BlockHeight.objects.exclude(number=active_block).exclude(transactions_count=0).filter(processed=False)
+    if active_block:
+        blocks = blocks.exclude(number=active_block)
     for block in blocks:
         block = blocks.first()
         found_transactions = block.transactions.distinct('txid')
