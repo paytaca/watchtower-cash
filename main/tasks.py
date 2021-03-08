@@ -185,11 +185,12 @@ def postgres_writer(self, blockheight_id,  genesis, problematic):
     with trans.atomic():
         obj = BlockHeight.objects.get(id=blockheight_id)
         new_genesis = obj.genesis + genesis
-        obj.genesis = list(set(new_genesis))
-        all_transactions = obj.transactions.distinct('txid').values_list('txid', flat=True)
+        all_genesis = list(set(new_genesis))
         all_problematic = obj.problematic + problematic
+        all_transactions = obj.transactions.distinct('txid').values_list('txid', flat=True)
         obj.problematic = [tr for tr in list(set(all_problematic)) if tr not in all_transactions]
         obj.problematic = [tr for tr in obj.problematic if tr not in obj.genesis]
+        obj.genesis = [tr for tr in list(set(all_genesis)) if tr not in all_transactions]
         obj.save()
     return None
 
@@ -200,15 +201,7 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
     """
     Tracks every transactions that belongs to the registered token and blockheight.
     """
-    # If txn_id is already in db, we'll just update its blockheight 
-    # To minimize send request on refst.bitcoin.com
-    qs = Transaction.objects.filter(txid=txn_id)
-    if qs.exists():
-        instance = qs.first()
-        if not instance.amount or not instance.source:
-            Transaction.objects.filter(txid=txn_id).update(scanning=False)
-            # BlockHeight.objects.filter(id=blockheightid).update(currentcount=currentcount)                
-            return 'success'
+    
     rb = RestBitcoin()
     response = rb.get_transaction(txn_id, blockheightid, currentcount)
 
@@ -220,11 +213,13 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
         
     if response['status'] == 'success' and response['message'] == 'genesis':
         redis_writer.delay(txn_id, 'genesis', "append")
-        
 
+    
+    
     if int(total_transactions) == int(currentcount):
         active_transactions = json.loads(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS'))
         genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
+        
         missing = [tr for tr in active_transactions if not Transaction.objects.filter(txid=tr).exists()]
         problematic = [tr for tr in missing if tr not in genesis]
         postgres_writer.delay(obj.id, genesis, problematic)
@@ -240,7 +235,7 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
             LOGGER.info(f"DONE CHECKING {blockheightid}.")
 
         elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
-    
+        
 
             REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
             REDIS_STORAGE.delete('GENESIS')
@@ -252,6 +247,7 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
             REDIS_STORAGE.set('READY', 1)
 
             LOGGER.info(f"DONE CHECKING CHUNK INDEX {current_index}: {total_transactions} TXS")
+
 
     return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
@@ -383,6 +379,7 @@ def manage_block_transactions(self):
     if b'ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', 0)
     if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]),)
     if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
+    if b'ACTIVE-BLOCK-TRANSACTIONS-COUNT' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-COUNT', 0)
     
 
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
@@ -434,9 +431,7 @@ def manage_block_transactions(self):
 def get_block_transactions(self):
     if b'ACTIVE-BLOCK-TRANSACTIONS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS', json.dumps([]))
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-
     if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
-
     if b'GENESIS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('GENESIS', json.dumps([]))
 
     
