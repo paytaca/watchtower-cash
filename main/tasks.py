@@ -25,7 +25,6 @@ from main.utils.restbitcoin import RestBitcoin
 from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
-LOGGER = logging.getLogger(__name__)
 from django.db import transaction as trans
 import base64
 import sseclient
@@ -35,6 +34,7 @@ from django.utils import timezone
 from django.db.models import Q
 
 
+LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
@@ -166,7 +166,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
             return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
             
-
 @shared_task(bind=True, queue='redis_writer')
 def redis_writer(self, value, key, action):
     key = key.upper()
@@ -191,7 +190,6 @@ def postgres_writer(self, blockheight_id,  genesis, problematic):
         obj.genesis = [tr for tr in list(set(all_genesis)) if tr not in all_transactions]
         obj.save()
     return None
-
 
 @shared_task(bind=True, queue='deposit_filter', max_retries=2)
 def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions):
@@ -249,46 +247,6 @@ def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions
 
     return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
-# @shared_task(queue='slpdb_token_scanner')
-# def slpdb_token_scanner():
-#     tokens = Token.objects.all()
-#     for token in tokens:
-#         obj = slpdb_scanner.SLPDB()
-#         data = obj.process_api(**{'tokenid': token.tokenid})
-#         if data['status'] == 'success':
-#             for transaction in data['data']['c']:
-#                 if transaction['tokenDetails']['valid']:
-#                     given_keys = transaction.keys()
-#                     tx_exists = 'txid' in given_keys
-#                     token_exists = 'tokenDetails' in given_keys
-#                     blk_exists = 'blk' in given_keys
-#                     if  tx_exists and token_exists and blk_exists:
-#                         tokenid = transaction['tokenDetails']['detail']['tokenIdHex']
-#                         tokenqs = Token.objects.filter(tokenid=tokenid)
-#                         if tokenqs.exists():
-#                             if transaction['blk'] >= 677818:    
-#                                 token_obj = tokenqs.first()
-#                                 block, created = BlockHeight.objects.get_or_create(number=transaction['blk'])
-#                                 if created:
-#                                     transaction['tokenDetails']['detail']['outputs'].pop(-1)
-#                                     spent_index = 1
-#                                     for trans in transaction['tokenDetails']['detail']['outputs']:
-#                                         amount = trans['amount']
-#                                         slpaddress = trans['address']
-#                                         args = (
-#                                             token_obj.tokenid,
-#                                             slpaddress,
-#                                             transaction['txid'],
-#                                             amount,
-#                                             "slpdb_token_scanner",
-#                                             block.id,
-#                                             spent_index
-#                                         )
-#                                         save_record.delay(*args)
-#                                         spent_index += 1
-
-
-
 @shared_task(queue='get_latest_block')
 def get_latest_block():
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys('*'): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
@@ -343,9 +301,6 @@ def review_block():
                 block.save()
                 return 'ALL TRANSACTIONS HAVE BEEN COMPLETED'
     return 'ALL BLOCKS ARE UPDATED.'
-
-            
-
 
 @shared_task(bind=True, queue='problematic_transactions')
 def problematic_transactions(self):  
@@ -464,7 +419,6 @@ def get_block_transactions(self):
     else:
         return f"NO NEW BLOCK TRANSACTIONS."
 
-
 @shared_task(bind=True, queue='slpdb')
 def slpdb_tracker(self, block_height):
     obj = slpdb_scanner.SLPDB()
@@ -499,7 +453,6 @@ def slpdb_tracker(self, block_height):
                             )
                             spent_index += 1
 
-           
 def bch_checker(txn_id):
     url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
     
@@ -796,12 +749,6 @@ def send_slack_message(message, channel, attachments=None):
     )
     return f"send notification to {channel}"
 
-# @shared_task(queue='spicebot_subscription')
-# def spicebot_subscription(tokenid, tokenname):
-#     obj = SpicebotTokens()
-#     obj.register(tokenid, tokename)
-#     obj.subscribe()
-
 def remove_subscription(token_address, token_id, subscriber_id, platform):
     token = Token.objects.get(id=token_id)
     platform = platform.lower()
@@ -900,19 +847,3 @@ def register_user(user_details, platform):
             new_subscriber.slack_user_details = user_details
             
         new_subscriber.save()
-
-
-@shared_task(queue='blockbuilder')
-def blockbuilder():
-    pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
-    p_blocks = json.loads(pending_blocks)
-    block = 676158
-    current_block = BlockHeight.objects.last().number
-    if not p_blocks:
-        while block < current_block:
-            if not BlockHeight.objects.filter(number=starting).exists():
-                p_blocks.append(block)
-                REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(p_blocks))
-                
-                break
-            block += 1
