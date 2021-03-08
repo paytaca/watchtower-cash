@@ -268,8 +268,11 @@ def get_latest_block():
         if added:
             bitcoincash_tracker.delay(obj.id)
             slpdb_tracker.delay(obj.number)
+            limit = obj.number - settings.MAX_BLOCK_AWAY
+            BlockHeight.objects.filter(number__lte=limit).delete()
             return f'*** NEW BLOCK { number } ***'
     else:
+
         return 'NO NEW BLOCK'
     
 @shared_task(queue='review_block')
