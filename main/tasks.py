@@ -320,24 +320,29 @@ def get_latest_block():
 def review_block():
     active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
     blocks = BlockHeight.objects.exclude(number=active_block).exclude(transactions_count=0).filter(processed=False)
-    block = blocks.first()
-    if block:
+    for block in blocks:
+        block = blocks.first()
         found_transactions = block.transactions.distinct('txid')
-        if block.transactions_count == len(block.genesis) + len(block.problematic) + found_transactions.count(): return 'ALL TRANSACTIONS ARE COMPLETE'
+        if block.transactions_count == len(block.genesis) + len(block.problematic) + found_transactions.count():
+            block.save()
+            return 'ALL TRANSACTIONS ARE ALREADY COMPLETE'
         missing = []
         db_transactions = found_transactions.values_list('txid', flat=True)
         url = f'https://rest.bitcoin.com/v2/block/detailsByHeight/{block.number}'
         resp = requests.get(url)
         if resp.status_code == 200:
             resp_data = json.loads(resp.text)
+            problematic_trx = (block.problematic)
             if 'error' not in resp_data.keys():
                 transactions = resp_data['tx']
                 for tr in transactions:
                     if tr not in db_transactions and tr not in block.genesis and tr not in block.problematic:
                         missing.append(tr)
-                block.problematic += missing
+                problematic_trx += missing
+                block.problematic = list(set(problematic_trx))
                 block.save()
-                return 'ALL TRANSACTIONS ARE COMPLETE'
+                return 'ALL TRANSACTIONS HAVE BEEN COMPLETED'
+    return 'ALL BLOCKS ARE UPDATED.'
 
             
 
