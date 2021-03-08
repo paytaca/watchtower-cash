@@ -197,10 +197,10 @@ CELERY_BEAT_SCHEDULE = {
     # },
 
     # BITDB QUERY
-    # 'bitdbquery': {
-    #     'task': 'main.tasks.bitdbquery',
-    #     'schedule': 300
-    # },
+    'bitdbquery': {
+        'task': 'main.tasks.bitdbquery',
+        'schedule': 60
+    },
 
     # WEBSOCKETS
     'slpbitcoinsocketsocket': {

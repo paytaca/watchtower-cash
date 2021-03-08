@@ -618,7 +618,7 @@ def bitdbquery(self):
         "q": {
             "find": {
             },
-            "limit": 5000
+            "limit": 500
         }
     }
     json_string = bytes(json.dumps(query), 'utf-8')
@@ -644,7 +644,7 @@ def bitdbquery(self):
                     spent_index
                 )
                 # For intant recording of transaction, its better not to delay.
-                save_record(*args)
+                save_record.delay(*args)
             counter += 1
 
 @shared_task(bind=True, queue='bitsocket', time_limit=600)
