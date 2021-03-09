@@ -502,12 +502,12 @@ def slpdb_tracker(self, block_height):
                             spent_index += 1
 
 # WEBSOCKETS
-@shared_task(bind=True, queue='slpbitcoinsocket',soft_time_limit=500, time_limit=600)
+@shared_task(bind=True, queue='slpbitcoinsocket',soft_time_limit=580, time_limit=600)
 def slpbitcoinsocket(self):
+    """
+    A live stream of SLP transactions via Bitcoin
+    """
     try:
-        """
-        A live stream of SLP transactions via Bitcoin
-        """
         url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
         resp = requests.get(url, stream=True)
         source = 'slpsocket.bitcoin.com'
@@ -550,64 +550,66 @@ def slpbitcoinsocket(self):
                                             spent_index
                                         )
                                         save_record(*args)
-            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 0)
     except SoftTimeLimitExceeded as exc:
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 0)
 
-@shared_task(bind=True, queue='bitsocket', time_limit=600)
+@shared_task(bind=True, queue='bitsocket', soft_time_limit=580, time_limit=600)
 def bitsocket(self):
     """
     A live stream of BCH transactions via bitsocket
     """
-    url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
-    resp = requests.get(url, stream=True)
-    source = 'bitsocket'
-    previous = ''
-    if b'BITSOCKET' not in REDIS_STORAGE.keys():
-        REDIS_STORAGE.set('BITSOCKET', 0)
-    withsocket = int(REDIS_STORAGE.get('BITSOCKET'))
-    if not withsocket:
-        for content in resp.iter_content(chunk_size=1024*1024):
-            REDIS_STORAGE.set('BITSOCKET', 1)
-            loaded_data = None
-            try:
-                content = content.decode('utf8')
-                if '"tx":{"h":"' in previous:
-                    data = previous + content
-                    data = data.strip().split('data: ')[-1]
-                    loaded_data = json.loads(data)
+    try:
+        url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
+        resp = requests.get(url, stream=True)
+        source = 'bitsocket'
+        previous = ''
+        if b'BITSOCKET' not in REDIS_STORAGE.keys():
+            REDIS_STORAGE.set('BITSOCKET', 0)
+        withsocket = int(REDIS_STORAGE.get('BITSOCKET'))
+        if withsocket: return f"{source.upper()} IS RUNNING."
+        if not withsocket:
+            LOGGER.info(f"{source.upper()} WILL SERVE DATA SHORTLY...")
+            for content in resp.iter_content(chunk_size=1024*1024):
+                REDIS_STORAGE.set('BITSOCKET', 1)
+                loaded_data = None
+                try:
+                    content = content.decode('utf8')
+                    if '"tx":{"h":"' in previous:
+                        data = previous + content
+                        data = data.strip().split('data: ')[-1]
+                        loaded_data = json.loads(data)
 
-                    proceed = True
-            except (ValueError, UnicodeDecodeError, TypeError) as exc:
-                continue
-            except json.decoder.JSONDecodeError as exc:
-                continue
-            except Exception as exc:
-                break
-            previous = content
-            if loaded_data is not None:
-                if len(loaded_data['data']) != 0:
-                    txn_id = loaded_data['data'][0]['tx']['h']
-                    for out in loaded_data['data'][0]['out']: 
-                        if 'e' in out.keys():
-                            amount = out['e']['v'] / 100000000
-                            spent_index = out['e']['i']
-                            if amount and 'a' in out['e'].keys():
-                                bchaddress = 'bitcoincash:' + str(out['e']['a'])
-                                args = (
-                                    'bch',
-                                    bchaddress,
-                                    txn_id,
-                                    amount,
-                                    source,
-                                    None,
-                                    spent_index
-                                )
-                                # For instant saving of transaction, its better not to delay task.
-                                if not Transaction.objects.filter(txid=txn_id).exists():
-                                    save_record.delay(*args)
-        
-        REDIS_STORAGE.set('BITSOCKET', 0)
+                        proceed = True
+                except (ValueError, UnicodeDecodeError, TypeError) as exc:
+                    continue
+                except json.decoder.JSONDecodeError as exc:
+                    continue
+                except Exception as exc:
+                    break
+                previous = content
+                if loaded_data is not None:
+                    if len(loaded_data['data']) != 0:
+                        txn_id = loaded_data['data'][0]['tx']['h']
+                        for out in loaded_data['data'][0]['out']: 
+                            if 'e' in out.keys():
+                                amount = out['e']['v'] / 100000000
+                                spent_index = out['e']['i']
+                                if amount and 'a' in out['e'].keys():
+                                    bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                                    args = (
+                                        'bch',
+                                        bchaddress,
+                                        txn_id,
+                                        amount,
+                                        source,
+                                        None,
+                                        spent_index
+                                    )
+                                    # For instant saving of transaction, its better not to delay task.
+                                    if not Transaction.objects.filter(txid=txn_id).exists():
+                                        save_record.delay(*args)
+    except SoftTimeLimitExceeded as exc:
+        REDIS_STORAGE.set('BITSOCKET', 1)
 
 
 
