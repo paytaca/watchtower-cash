@@ -34,9 +34,10 @@ spec:
     spec:
       containers:
         - name: watchtower
-          image: registry.digitalocean.com/spicetoken/watchtower:92ef063e1b8b
-
+          image: registry.digitalocean.com/spicetoken/watchtower:4ce5d58b697b
           env:
+            - name: DEPLOYMENT_INSTANCE
+              value: prod
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:

@@ -29,6 +29,8 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
+DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
+
 ALLOWED_HOSTS = [
     'watchtower.scibizinformatics.com',
     'localhost',
@@ -133,9 +135,10 @@ USE_L10N = True
 
 USE_TZ = True
 
+DB_NUM = [0,1,2]
+if DEPLOYMENT_INSTANCE == 'staging':
+    DB_NUM = [3,4,5]
 
-
-DB_NUM = [0,1,3]
 REDIS_HOST = config('REDIS_HOST', default='localhost')
 REDIS_PASSWORD = config('REDIS_PASSWORD', default='')
 REDIS_PORT = config('REDIS_PORT', default=6379)
@@ -154,10 +157,10 @@ else:
     CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
     CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
-    host=REDIS_HOST,
-    port=6379,
-    db=DB_NUM[2]
-)
+        host=REDIS_HOST,
+        port=6379,
+        db=DB_NUM[2]
+    )
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.0/howto/static-files/

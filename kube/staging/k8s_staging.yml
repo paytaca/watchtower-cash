@@ -36,6 +36,8 @@ spec:
         - name: watchtower
           image: registry.digitalocean.com/spicetoken/watchtower:9d453a309b3b
           env:
+            - name: DEPLOYMENT_INSTANCE
+              value: staging
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
