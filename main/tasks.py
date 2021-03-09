@@ -424,40 +424,6 @@ def get_block_transactions(self):
     else:
         return f"NO NEW BLOCK TRANSACTIONS."
 
-@shared_task(bind=True, queue='slpdb')
-def slpdb_tracker(self, block_height):
-    obj = slpdb_scanner.SLPDB()
-    try:
-        data = obj.process_api(**{'block': int(block_height)})
-        proceed_slpdb_checking = True
-    except Exception as exc:
-        LOGGER.error(exc)
-        proceed_slpdb_checking = False
-
-    # Checking of transactions using SLPDB
-    if data['status'] == 'success' and proceed_slpdb_checking:
-        LOGGER.info(f'CHECKING BLOCK {block_height} via SLPDB')
-        transactions = data['data']['c']
-        slpdb_total_transactions = len(transactions)
-        for transaction in transactions:
-            if transaction['tokenDetails']['valid']:
-                if transaction['tokenDetails']['detail']['transactionType'].lower() == 'send':
-                    token_id = transaction['tokenDetails']['detail']['tokenIdHex']
-                    token, _ = Token.objects.get_or_create(tokenid=token_id)
-                    if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
-                        spent_index = 1
-                        for trans in transaction['tokenDetails']['detail']['outputs']:
-                            if not Transaction.objects.filter(txid=transaction['txid']).exists():
-                                save_record.delay(
-                                    token.tokenid,
-                                    trans['address'],
-                                    transaction['txid'],
-                                    trans['amount'],
-                                    'SLPDB-block-scanner',
-                                    blockheightid=block_instance.id,
-                                    spent_index=spent_index
-                                )
-                            spent_index += 1
 
 def bch_checker(txn_id):
     url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
@@ -502,7 +468,83 @@ def bch_checker(txn_id):
                             return f"PROCESSED VALID BCH TX: {txn_id}"
 
     return f"PROCESSED BCH TX: {txn_id}"
-    
+
+
+@shared_task(bind=True, queue='bitdbquery')
+def bitdbquery(self): 
+    BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
+    source = 'bitdb.fountainhead'
+    query = {
+        "v": 3,
+        "q": {
+            "find": {
+            },
+            "limit": 500
+        }
+    }
+    json_string = bytes(json.dumps(query), 'utf-8')
+    url = base64.b64encode(json_string)
+    resp = requests.get(BITDB_URL + url.decode('utf-8'))
+    data = resp.json()
+    for row in data['u']:
+        txn_id = row['tx']['h']
+        counter = 1
+        for out in row['out']: 
+            args = tuple()
+            amount = out['e']['v'] / 100000000
+            spent_index = out['e']['i']
+            if 'a' in out['e'].keys():
+                bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                args = (
+                    'bch',
+                    bchaddress,
+                    txn_id,
+                    amount,
+                    source,
+                    None,
+                    spent_index
+                )
+                # For intant recording of transaction, its better not to delay.
+                if not Transaction.objects.filter(txid=txn_id).exists():
+                    save_record.delay(*args)
+            counter += 1
+
+@shared_task(bind=True, queue='slpdb')
+def slpdb_tracker(self, block_height):
+    obj = slpdb_scanner.SLPDB()
+    try:
+        data = obj.process_api(**{'block': int(block_height)})
+        proceed_slpdb_checking = True
+    except Exception as exc:
+        LOGGER.error(exc)
+        proceed_slpdb_checking = False
+
+    # Checking of transactions using SLPDB
+    if data['status'] == 'success' and proceed_slpdb_checking:
+        LOGGER.info(f'CHECKING BLOCK {block_height} via SLPDB')
+        transactions = data['data']['c']
+        slpdb_total_transactions = len(transactions)
+        for transaction in transactions:
+            if transaction['tokenDetails']['valid']:
+                if transaction['tokenDetails']['detail']['transactionType'].lower() == 'send':
+                    token_id = transaction['tokenDetails']['detail']['tokenIdHex']
+                    token, _ = Token.objects.get_or_create(tokenid=token_id)
+                    if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
+                        spent_index = 1
+                        for trans in transaction['tokenDetails']['detail']['outputs']:
+                            if not Transaction.objects.filter(txid=transaction['txid']).exists():
+                                save_record.delay(
+                                    token.tokenid,
+                                    trans['address'],
+                                    transaction['txid'],
+                                    trans['amount'],
+                                    'SLPDB-block-scanner',
+                                    blockheightid=block_instance.id,
+                                    spent_index=spent_index
+                                )
+                            spent_index += 1
+
+
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
 def slpbitcoinsocket(self):
     """
@@ -550,45 +592,6 @@ def slpbitcoinsocket(self):
                                     )
                                     save_record(*args)
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 0)
-
-@shared_task(bind=True, queue='bitdbquery')
-def bitdbquery(self):
-    BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
-    source = 'bitdb.fountainhead'
-    query = {
-        "v": 3,
-        "q": {
-            "find": {
-            },
-            "limit": 500
-        }
-    }
-    json_string = bytes(json.dumps(query), 'utf-8')
-    url = base64.b64encode(json_string)
-    resp = requests.get(BITDB_URL + url.decode('utf-8'))
-    data = resp.json()
-    for row in data['u']:
-        txn_id = row['tx']['h']
-        counter = 1
-        for out in row['out']: 
-            args = tuple()
-            amount = out['e']['v'] / 100000000
-            spent_index = out['e']['i']
-            if 'a' in out['e'].keys():
-                bchaddress = 'bitcoincash:' + str(out['e']['a'])
-                args = (
-                    'bch',
-                    bchaddress,
-                    txn_id,
-                    amount,
-                    source,
-                    None,
-                    spent_index
-                )
-                # For intant recording of transaction, its better not to delay.
-                if not Transaction.objects.filter(txid=txn_id).exists():
-                    save_record.delay(*args)
-            counter += 1
 
 @shared_task(bind=True, queue='bitsocket', time_limit=600)
 def bitsocket(self):
