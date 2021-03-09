@@ -255,7 +255,11 @@ def get_latest_block():
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
     try:
         resp = requests.get(url)
+        REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
     except Exception as exc:
+        if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
+        retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES')) + 1
+        REDIS_STORAGE.set('REST-BITCOIN-RETRIES', retry)
         return LOGGER.error(exc)
     if not 'blocks' in resp.text:
         return f"INVALID RESPONSE FROM  {url} : {resp.text}"
@@ -266,13 +270,11 @@ def get_latest_block():
         # Queue to "PENDING-BLOCKS"
         added = block_setter(number, new=True)
         if added:
-            bitcoincash_tracker.delay(obj.id)
             slpdb_tracker.delay(obj.number)
             limit = obj.number - settings.MAX_BLOCK_AWAY
             BlockHeight.objects.filter(number__lte=limit).delete()
             return f'*** NEW BLOCK { number } ***'
     else:
-
         return 'NO NEW BLOCK'
     
 @shared_task(queue='review_block')
@@ -643,46 +645,6 @@ def bitsocket(self):
         
         REDIS_STORAGE.set('bitsocket', 0)
 
-@shared_task(bind=True, queue='bch_address_scanner')
-def bch_address_scanner(self, bchaddress=None):
-    addresses = [bchaddress]
-    if bchaddress is None:
-        addresses = BchAddress.objects.filter(scanned=False)
-        if not addresses.exists(): 
-            BchAddress.objects.update(scanned=True)
-            addresses = BchAddress.objects.filter(scanned=False)
-        addresses = list(addresses.values_list('address',flat=True)[0:10])
-
-    source = 'bch-address-scanner'
-    url = 'https://rest.bitcoin.com/v2/address/transactions'
-    data = { "addresses": addresses}
-    resp = requests.post(url, json=data)
-    data = json.loads(resp.text)
-    for row in data:
-        for tr in row['txs']:
-            blockheight, created = BlockHeight.objects.get_or_create(number=tr['blockheight'])
-            for out in tr['vout']:
-                amount = out['value']
-                spent_index = tr['vout'][0]['spentIndex'] or 0
-                if 'addresses' in out['scriptPubKey'].keys():
-                    for legacy in out['scriptPubKey']['addresses']:
-                        address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
-                        address_response = requests.get(address_url)
-                        address_data = json.loads(address_response.text)
-                        args = (
-                            'bch',
-                            address_data['cashAddress'],
-                            tr['txid'],
-                            out['value'],
-                            source,
-                            blockheight.id,
-                            spent_index
-                        )
-                        LOGGER.info(f"{source} | txid : {tr['txid']} | amount : {out['value']}")
-                        if not Transaction.objects.filter(txid=tr['txid']).exists():
-                            save_record.delay(*args)
-
-    BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
 def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
