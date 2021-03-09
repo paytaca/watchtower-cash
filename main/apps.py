@@ -4,10 +4,8 @@ class MainConfig(AppConfig):
     name = 'main'
     
     def ready(self):
-        from django.conf import settings
+        # from django.conf import settings
         import main.signals
-        redis = settings.REDISKV
-        redis.set('slpfountainheadsocket', 0)
-        redis.set('slpbitcoinsocket', 0)
-        redis.set('slpstreamfountainheadsocket', 0)
-        redis.set('bitsocket', 0)
+        # redis = settings.REDISKV
+        # redis.set('SLP-BITCOIN-SOCKET-STATUS', 0)
+        # redis.set('BITSOCKET', 0)

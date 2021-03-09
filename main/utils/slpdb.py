@@ -3,13 +3,55 @@ from base64 import b64encode,  b64decode
 import json
 import requests
 
+
+
+
 class SLPDB(object):
 
     def __init__(self):
         self.reference = 'eyJ2IjogMywicSI6IHsiZGIiOiBbImMiLCAidSJdLCJmaW5kIjp7IiRxdWVyeSI6eyJzbHAuZGV0YWlsLnRva2VuSWRIZXgiOiAiIiwiYmxrLmkiOiAiIn19LCJsaW1pdCI6IDEwMH0sInIiOiB7ImYiOiAiWy5bXSB8IHsgdHhpZDogLnR4LmgsIHRva2VuRGV0YWlsczogLnNscCwgYmxrOiAuYmxrLmkgfSBdIn19'
         self.base_url = 'https://slpdb.fountainhead.cash/q/'
 
-    def generate_query(self, **kw):
+    def get_recent_slp_transactions(self):
+        payload = {
+            'v': 3,
+            'q': {
+                'db': ['c', 'u'],
+                'aggregate': [
+                {
+                    '$match': {
+                    'slp.valid': True,
+                    'slp.detail.transactionType': 'SEND',
+                    },
+                },
+                {
+                    '$sort': {
+                    '_id': -1,
+                    },
+                },
+                {
+                    '$skip': 0,
+                },
+                {
+                    '$limit': 500,
+                },
+                {
+                    '$lookup': {
+                    'from': 'tokens',
+                    'localField': 'slp.detail.tokenIdHex',
+                    'foreignField': 'tokenDetails.tokenIdHex',
+                    'as': 'token',
+                    },
+                },
+                ],
+                'limit': 500,
+            },
+        }
+        raw = json.dumps(payload)
+        raw = raw.replace(", ", ",")
+        return str(b64encode(raw.encode()).decode())
+
+    def get_slp_transactions_from_block(self, **kw):
         """
         block : Integer (Optional)
         tokenid : String (Optional)
@@ -32,9 +74,9 @@ class SLPDB(object):
         raw = raw.replace(", ", ",")
         return str(b64encode(raw.encode()).decode())
     
-    def process_api(self, **kw):
+    def process_api(self):
         data = {'status': 'success'}
-        query = self.generate_query(**kw)
+        query = self.get_recent_slp_transactions()
         output = requests.get(f'{self.base_url}{query}')
         if output.status_code == 200:
             data['data'] = json.loads(output.text)

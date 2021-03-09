@@ -173,7 +173,7 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 
 
 CELERY_BEAT_SCHEDULE = {
-    # REST.BITCOIN.COM
+    # MAIN SOURCES OF BCH/SLP TRANSACTIONS
     'get_latest_block': {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
@@ -190,20 +190,25 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.review_block',
         'schedule': 30
     },
-    # BITDB QUERY
+    
+    # ALTERNATIVE SOURCES OF BCH/SLP TRANSACTIONS
     'bitdbquery': {
         'task': 'main.tasks.bitdbquery',
         'schedule': 60
+    },
+    'slpdb_tracker': {
+        'task': 'main.tasks.slpdb_tracker',
+        'schedule': 30
     },
 
     # WEBSOCKETS
     'slpbitcoinsocketsocket': {
         'task': 'main.tasks.slpbitcoinsocket',
-        'schedule': 21
+        'schedule': 60
     },
     'bitsocket': {
         'task': 'main.tasks.bitsocket',
-        'schedule': 29
+        'schedule': 60
     }
 }
 
