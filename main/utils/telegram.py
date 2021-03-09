@@ -1,4 +1,5 @@
-from main.tasks import send_telegram_message, save_subscription, register_user, remove_subscription
+from .subscription import save_subscription, register_user, remove_subscription
+from main.tasks import send_telegram_message
 from main.models import Token, Subscription, Subscriber
 from main.utils.telegram_responses import get_message
 import logging

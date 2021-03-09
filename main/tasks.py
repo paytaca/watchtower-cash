@@ -37,215 +37,7 @@ from django.db.models import Q
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
-@shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
-def client_acknowledgement(self, token, transactionid):
-    with trans.atomic():
-        txn_check = Transaction.objects.filter(id=transactionid)
-        retry = False
-
-        if txn_check.exists():
-            txn = txn_check.first()
-            block = None
-            if txn.blockheight:
-                block = txn.blockheight.number
-
-            address = txn.address 
-            subscription = check_wallet_address_subscription(address)
-
-            if subscription.exists():
-                txn.subscribed = True
-                subscription = subscription.first()
-                webhook_addresses = subscription.address.all()
-
-                if webhook_addresses.count() == 0:
-                    # If subscription found yet no webhook url found,
-                    # We'll assign the webhook url for spicebot.
-                    sendto_obj = SendTo.objects.first()
-                    subscription.address.add(sendto_obj)
-                    webhook_addresses = [sendto_obj]
-                    
-                for webhook_address in webhook_addresses:
-                    # check subscribed Token and Token from transaction if matched.
-                    valid, token_obj = check_token_subscription(token, subscription.token.id)
-                    if valid:
-                        data = {
-                            'amount': txn.amount,
-                            'address': txn.address,
-                            'source': txn.source,
-                            'token': token_obj.tokenid,
-                            'txid': txn.txid,
-                            'block': block,
-                            'spent_index': txn.spentIndex
-                        }
-
-                        #check if telegram/slack user
-                        # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
-                        
-                        if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
-                            subscribers = subscription.subscriber.exclude(slack_user_details={})
-                            botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                            data['channel_id_list'] = json.dumps(botlist)
-                            
-                        if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                            subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                            botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                            data['chat_id_list'] = json.dumps(botlist)
-                        
-
-                        resp = requests.post(webhook_address.address,data=data)
-                        if resp.status_code == 200:
-                            response_data = json.loads(resp.text)
-                            if response_data['success']:
-                                txn.acknowledged = True
-                                txn.queued = False
-                        elif resp.status_code == 404:
-                            LOGGER.error(f'this is no longer valid > {webhook_address}')
-                        else:
-                            retry = True
-                            txn.acknowledged = False
-                txn.save()
-            else:
-                retry = True
-    if retry:
-        self.retry(countdown=180)
-    else:
-        return 'success'
-
-@shared_task(queue='save_record')
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
-    """
-        token                : can be tokenid (slp token) or token name (bch)
-        transaction_address  : the destination address where token had been deposited.
-        transactionid        : transaction id generated over blockchain.
-        amount               : the amount being transacted.
-        source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
-        blockheight          : an optional argument indicating the block height number of a transaction.
-        spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
-    """
-
-    try:
-        spent_index = int(spent_index)
-    except TypeError as exc:
-        spent_index = 0
-
-    with trans.atomic():
-        try:
-            try:
-                token_obj = Token.objects.get(tokenid=token)
-            except Token.DoesNotExist:
-                token_obj = Token.objects.get(name=token)
-            transaction_obj, transaction_created = Transaction.objects.get_or_create(
-                txid=transactionid,
-                address=transaction_address,
-                token=token_obj,
-                amount=amount,
-                spentIndex=spent_index,
-                source=source
-            )
-
-            if blockheightid is not None:
-                transaction_obj.blockheight_id = blockheightid
-                transaction_obj.save()
-
-                # Automatically update all transactions with block height.
-                Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
-
-            if token == 'bch':
-                address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
-            else:
-                address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
-            
-            address_obj.transactions.add(transaction_obj)
-            address_obj.save()
-            
-            if transaction_created:
-                pass
-                # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
-                    
-        except OperationalError as exc:
-            save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
-            return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
-            
-@shared_task(bind=True, queue='redis_writer')
-def redis_writer(self, value, key, action):
-    key = key.upper()
-    if action == "append":
-        container = REDIS_STORAGE.get(key)
-        if container:
-            redis_container = json.loads(container)
-            redis_container.append(value)
-            REDIS_STORAGE.set(key, json.dumps(redis_container))
-    return f"{key} TRANSACTION: {value}"
-
-@shared_task(bind=True, queue='save_record')
-def postgres_writer(self, blockheight_id,  genesis, problematic):
-    with trans.atomic():
-        obj = BlockHeight.objects.get(id=blockheight_id)
-        new_genesis = obj.genesis + genesis
-        all_genesis = list(set(new_genesis))
-        all_problematic = obj.problematic + problematic
-        all_transactions = obj.transactions.distinct('txid').values_list('txid', flat=True)
-        obj.problematic = [tr for tr in list(set(all_problematic)) if tr not in all_transactions]
-        obj.problematic = [tr for tr in obj.problematic if tr not in obj.genesis]
-        obj.genesis = [tr for tr in list(set(all_genesis)) if tr not in all_transactions]
-        obj.save()
-    return None
-
-@shared_task(bind=True, queue='deposit_filter', max_retries=2)
-def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions):
-    obj = BlockHeight.objects.get(id=blockheightid)
-    """
-    Tracks every transactions that belongs to the registered token and blockheight.
-    """
-    
-    rb = RestBitcoin()
-    response = rb.get_transaction(txn_id, blockheightid, currentcount)
-
-    if response['status'] == 'success' and response['message'] == 'found':
-        save_record.delay(*response['args'])
-
-    if response['status'] == 'success' and response['message'] == 'no token':
-        bch_checker(txn_id)
-        
-    if response['status'] == 'success' and response['message'] == 'genesis':
-        redis_writer.delay(txn_id, 'genesis', "append")
-
-    
-    
-    if int(total_transactions) == int(currentcount):
-        active_transactions = json.loads(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS'))
-        genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
-        
-        missing = [tr for tr in active_transactions if not Transaction.objects.filter(txid=tr).exists()]
-        problematic = [tr for tr in missing if tr not in genesis]
-        postgres_writer.delay(obj.id, genesis, problematic)
-
-        if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
-            REDIS_STORAGE.delete('ACTIVE-BLOCK')
-            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
-            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')
-            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')
-            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-COUNT')
-            REDIS_STORAGE.delete('GENESIS')
-            REDIS_STORAGE.delete('READY')
-            LOGGER.info(f"DONE CHECKING {blockheightid}.")
-
-        elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
-        
-
-            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
-            REDIS_STORAGE.delete('GENESIS')
-
-            current_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
-            current_index += 1
-
-            REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', current_index)
-            REDIS_STORAGE.set('READY', 1)
-
-            LOGGER.info(f"DONE CHECKING CHUNK INDEX {current_index}: {total_transactions} TXS")
-
-
-    return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
+# MAIN SOURCES OF BCH/SLP TRANSACTIONS
 
 @shared_task(queue='get_latest_block')
 def get_latest_block():
@@ -277,66 +69,6 @@ def get_latest_block():
     else:
         return 'NO NEW BLOCK'
     
-@shared_task(queue='review_block')
-def review_block():
-    blocks = BlockHeight.objects.exclude(transactions_count=0).filter(processed=False)
-    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
-    if active_block:
-        blocks = blocks.exclude(number=active_block)
-    for block in blocks:
-        block = blocks.first()
-        found_transactions = block.transactions.distinct('txid')
-        if block.transactions_count == len(block.genesis) + len(block.problematic) + found_transactions.count():
-            block.save()
-            return 'ALL TRANSACTIONS ARE ALREADY COMPLETE'
-        missing = []
-        db_transactions = found_transactions.values_list('txid', flat=True)
-        url = f'https://rest.bitcoin.com/v2/block/detailsByHeight/{block.number}'
-        resp = requests.get(url)
-        if resp.status_code == 200:
-            resp_data = json.loads(resp.text)
-            problematic_trx = (block.problematic)
-            if 'error' not in resp_data.keys():
-                transactions = resp_data['tx']
-                for tr in transactions:
-                    if tr not in db_transactions and tr not in block.genesis and tr not in block.problematic:
-                        missing.append(tr)
-                problematic_trx += missing
-                block.problematic = list(set(problematic_trx))
-                block.save()
-                return 'ALL TRANSACTIONS HAVE BEEN COMPLETED'
-    return 'ALL BLOCKS ARE UPDATED.'
-
-@shared_task(bind=True, queue='problematic_transactions')
-def problematic_transactions(self):  
-    time_threshold = timezone.now() - datetime.timedelta(hours=2)
-    blocks = BlockHeight.objects.exclude(
-        problematic=[]
-    ).filter(
-        created_datetime__gte=time_threshold        
-    ).order_by('-number')
-    if blocks.exists():
-        blocks = list(blocks.values('id','problematic'))
-        block = blocks[0]
-        problematic_transactions = block['problematic']
-        txn_id = problematic_transactions[0]
-        if not Transaction.objects.filter(txid=txn_id).exists():
-            rb = RestBitcoin()
-            response = rb.get_transaction(txn_id, block['id'], 0)
-
-            if response['status'] == 'success' and response['message'] == 'found':
-                save_record.delay(*response['args'])
-                problematic_transactions.remove(txn_id)
-            if response['status'] == 'success' and response['message'] == 'no token':
-                msg = bch_checker(txn_id)
-                if 'PROCESSED VALID' in msg: problematic_transactions.remove(txn_id)    
-        else:
-            problematic_transactions.remove(txn_id)
-
-        BlockHeight.objects.filter(id=block['id']).update(problematic=problematic_transactions)
-        return f'FIXING PROBLEMATIC TX: {txn_id}'
-    return 'NO PROBLEMATIC TRANSACTIONS AS OF YET'
-
 @shared_task(bind=True, queue='manage_block_transactions')
 def manage_block_transactions(self):
     if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
@@ -424,6 +156,91 @@ def get_block_transactions(self):
     else:
         return f"NO NEW BLOCK TRANSACTIONS."
 
+@shared_task(bind=True, queue='problematic_transactions')
+def problematic_transactions(self):  
+    time_threshold = timezone.now() - datetime.timedelta(hours=2)
+    blocks = BlockHeight.objects.exclude(
+        problematic=[]
+    ).filter(
+        created_datetime__gte=time_threshold        
+    ).order_by('-number')
+    if blocks.exists():
+        blocks = list(blocks.values('id','problematic'))
+        block = blocks[0]
+        problematic_transactions = block['problematic']
+        txn_id = problematic_transactions[0]
+        if not Transaction.objects.filter(txid=txn_id).exists():
+            rb = RestBitcoin()
+            response = rb.get_transaction(txn_id, block['id'], 0)
+
+            if response['status'] == 'success' and response['message'] == 'found':
+                save_record.delay(*response['args'])
+                problematic_transactions.remove(txn_id)
+            if response['status'] == 'success' and response['message'] == 'no token':
+                msg = bch_checker(txn_id)
+                if 'PROCESSED VALID' in msg: problematic_transactions.remove(txn_id)    
+        else:
+            problematic_transactions.remove(txn_id)
+
+        BlockHeight.objects.filter(id=block['id']).update(problematic=problematic_transactions)
+        return f'FIXING PROBLEMATIC TX: {txn_id}'
+    return 'NO PROBLEMATIC TRANSACTIONS AS OF YET'
+
+@shared_task(bind=True, queue='deposit_filter', max_retries=2)
+def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions):
+    obj = BlockHeight.objects.get(id=blockheightid)
+    """
+    Tracks every transactions that belongs to the registered token and blockheight.
+    """
+    
+    rb = RestBitcoin()
+    response = rb.get_transaction(txn_id, blockheightid, currentcount)
+
+    if response['status'] == 'success' and response['message'] == 'found':
+        save_record.delay(*response['args'])
+
+    if response['status'] == 'success' and response['message'] == 'no token':
+        bch_checker(txn_id)
+        
+    if response['status'] == 'success' and response['message'] == 'genesis':
+        redis_writer.delay(txn_id, 'genesis', "append")
+
+    
+    
+    if int(total_transactions) == int(currentcount):
+        active_transactions = json.loads(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS'))
+        genesis = json.loads(REDIS_STORAGE.get('GENESIS'))
+        
+        missing = [tr for tr in active_transactions if not Transaction.objects.filter(txid=tr).exists()]
+        problematic = [tr for tr in missing if tr not in genesis]
+        postgres_writer.delay(obj.id, genesis, problematic)
+
+        if int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) == int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
+            REDIS_STORAGE.delete('ACTIVE-BLOCK')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS-COUNT')
+            REDIS_STORAGE.delete('GENESIS')
+            REDIS_STORAGE.delete('READY')
+            LOGGER.info(f"DONE CHECKING {blockheightid}.")
+
+        elif int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-INDEX-LIMIT')) > int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX')):
+        
+
+            REDIS_STORAGE.delete('ACTIVE-BLOCK-TRANSACTIONS')
+            REDIS_STORAGE.delete('GENESIS')
+
+            current_index = int(REDIS_STORAGE.get('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX'))
+            current_index += 1
+
+            REDIS_STORAGE.set('ACTIVE-BLOCK-TRANSACTIONS-CURRENT-INDEX', current_index)
+            REDIS_STORAGE.set('READY', 1)
+
+            LOGGER.info(f"DONE CHECKING CHUNK INDEX {current_index}: {total_transactions} TXS")
+
+
+    return f"{currentcount} out of {total_transactions} : {response['status']} : {txn_id}"
 
 def bch_checker(txn_id):
     url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
@@ -469,7 +286,193 @@ def bch_checker(txn_id):
 
     return f"PROCESSED BCH TX: {txn_id}"
 
+@shared_task(bind=True, queue='redis_writer')
+def redis_writer(self, value, key, action):
+    key = key.upper()
+    if action == "append":
+        container = REDIS_STORAGE.get(key)
+        if container:
+            redis_container = json.loads(container)
+            redis_container.append(value)
+            REDIS_STORAGE.set(key, json.dumps(redis_container))
+    return f"{key} TRANSACTION: {value}"
 
+@shared_task(bind=True, queue='save_record')
+def postgres_writer(self, blockheight_id,  genesis, problematic):
+    with trans.atomic():
+        obj = BlockHeight.objects.get(id=blockheight_id)
+        new_genesis = obj.genesis + genesis
+        all_genesis = list(set(new_genesis))
+        all_problematic = obj.problematic + problematic
+        all_transactions = obj.transactions.distinct('txid').values_list('txid', flat=True)
+        obj.problematic = [tr for tr in list(set(all_problematic)) if tr not in all_transactions]
+        obj.problematic = [tr for tr in obj.problematic if tr not in obj.genesis]
+        obj.genesis = [tr for tr in list(set(all_genesis)) if tr not in all_transactions]
+        obj.save()
+    return None
+
+@shared_task(queue='save_record')
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
+    """
+        token                : can be tokenid (slp token) or token name (bch)
+        transaction_address  : the destination address where token had been deposited.
+        transactionid        : transaction id generated over blockchain.
+        amount               : the amount being transacted.
+        source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
+        blockheight          : an optional argument indicating the block height number of a transaction.
+        spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
+    """
+
+    try:
+        spent_index = int(spent_index)
+    except TypeError as exc:
+        spent_index = 0
+
+    with trans.atomic():
+        try:
+            try:
+                token_obj = Token.objects.get(tokenid=token)
+            except Token.DoesNotExist:
+                token_obj = Token.objects.get(name=token)
+            transaction_obj, transaction_created = Transaction.objects.get_or_create(
+                txid=transactionid,
+                address=transaction_address,
+                token=token_obj,
+                amount=amount,
+                spentIndex=spent_index,
+                source=source
+            )
+
+            if blockheightid is not None:
+                transaction_obj.blockheight_id = blockheightid
+                transaction_obj.save()
+
+                # Automatically update all transactions with block height.
+                Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
+
+            if token == 'bch':
+                address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
+            else:
+                address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
+            
+            address_obj.transactions.add(transaction_obj)
+            address_obj.save()
+            
+            if transaction_created:
+                pass
+                # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
+                    
+        except OperationalError as exc:
+            save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
+            return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
+
+@shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
+def client_acknowledgement(self, token, transactionid):
+    with trans.atomic():
+        txn_check = Transaction.objects.filter(id=transactionid)
+        retry = False
+
+        if txn_check.exists():
+            txn = txn_check.first()
+            block = None
+            if txn.blockheight:
+                block = txn.blockheight.number
+
+            address = txn.address 
+            subscription = check_wallet_address_subscription(address)
+
+            if subscription.exists():
+                txn.subscribed = True
+                subscription = subscription.first()
+                webhook_addresses = subscription.address.all()
+
+                if webhook_addresses.count() == 0:
+                    # If subscription found yet no webhook url found,
+                    # We'll assign the webhook url for spicebot.
+                    sendto_obj = SendTo.objects.first()
+                    subscription.address.add(sendto_obj)
+                    webhook_addresses = [sendto_obj]
+                    
+                for webhook_address in webhook_addresses:
+                    # check subscribed Token and Token from transaction if matched.
+                    valid, token_obj = check_token_subscription(token, subscription.token.id)
+                    if valid:
+                        data = {
+                            'amount': txn.amount,
+                            'address': txn.address,
+                            'source': txn.source,
+                            'token': token_obj.tokenid,
+                            'txid': txn.txid,
+                            'block': block,
+                            'spent_index': txn.spentIndex
+                        }
+
+                        #check if telegram/slack user
+                        # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+                        
+                        if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
+                            subscribers = subscription.subscriber.exclude(slack_user_details={})
+                            botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                            data['channel_id_list'] = json.dumps(botlist)
+                            
+                        if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
+                            subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                            botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                            data['chat_id_list'] = json.dumps(botlist)
+                        
+
+                        resp = requests.post(webhook_address.address,data=data)
+                        if resp.status_code == 200:
+                            response_data = json.loads(resp.text)
+                            if response_data['success']:
+                                txn.acknowledged = True
+                                txn.queued = False
+                        elif resp.status_code == 404:
+                            LOGGER.error(f'this is no longer valid > {webhook_address}')
+                        else:
+                            retry = True
+                            txn.acknowledged = False
+                txn.save()
+            else:
+                retry = True
+    if retry:
+        self.retry(countdown=180)
+    else:
+        return 'success'
+
+@shared_task(queue='review_block')
+def review_block():
+    blocks = BlockHeight.objects.exclude(transactions_count=0).filter(processed=False)
+    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
+    if active_block:
+        blocks = blocks.exclude(number=active_block)
+    for block in blocks:
+        block = blocks.first()
+        found_transactions = block.transactions.distinct('txid')
+        if block.transactions_count == len(block.genesis) + len(block.problematic) + found_transactions.count():
+            block.save()
+            return 'ALL TRANSACTIONS ARE ALREADY COMPLETE'
+        missing = []
+        db_transactions = found_transactions.values_list('txid', flat=True)
+        url = f'https://rest.bitcoin.com/v2/block/detailsByHeight/{block.number}'
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            resp_data = json.loads(resp.text)
+            problematic_trx = (block.problematic)
+            if 'error' not in resp_data.keys():
+                transactions = resp_data['tx']
+                for tr in transactions:
+                    if tr not in db_transactions and tr not in block.genesis and tr not in block.problematic:
+                        missing.append(tr)
+                problematic_trx += missing
+                block.problematic = list(set(problematic_trx))
+                block.save()
+                return 'ALL TRANSACTIONS HAVE BEEN COMPLETED'
+    return 'ALL BLOCKS ARE UPDATED.'
+
+
+
+# ALTERNATIVE SOURCES OF BCH/SLP TRANSACTIONS
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self): 
     BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
@@ -545,6 +548,7 @@ def slpdb_tracker(self, block_height):
                             spent_index += 1
 
 
+# FRONTLINERS
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
 def slpbitcoinsocket(self):
     """
@@ -648,7 +652,9 @@ def bitsocket(self):
         
         REDIS_STORAGE.set('bitsocket', 0)
 
-    
+
+
+# NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
 def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
     LOGGER.info(f'SENDING TO {chat_id}')
@@ -685,102 +691,3 @@ def send_slack_message(message, channel, attachments=None):
         data=data
     )
     return f"send notification to {channel}"
-
-def remove_subscription(token_address, token_id, subscriber_id, platform):
-    token = Token.objects.get(id=token_id)
-    platform = platform.lower()
-    subscriber = None
-
-    if platform == 'telegram':
-        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
-    elif platform == 'slack':
-        subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
-    
-    if token and subscriber:
-        if token_address.startswith('bitcoincash'):
-            address_obj = BchAddress.objects.get(address=token_address)
-            subscription = Subscription.objects.filter(
-                bch=address_obj,
-                token=token
-            )
-        else:
-            address_obj = SlpAddress.objects.get(address=token_address)
-            subscription = Subscription.objects.filter(
-                slp=address_obj,
-                token=token
-            ) 
-        
-        if subscription.exists():
-            subscription.delete()
-            return True
-    
-    return False
-
-def save_subscription(token_address, token_id, subscriber_id, platform):
-    # note: subscriber_id: unique identifier of telegram/slack user
-    token = Token.objects.get(id=token_id)
-    platform = platform.lower()
-    subscriber = None
-
-    # check telegram & slack user fields in subscriber
-    if platform == 'telegram':
-        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
-    elif platform == 'slack':
-        subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
-
-    if token and subscriber:
-        destination_address = None
-
-        if token_address.startswith('bitcoincash'):
-            address_obj, created = BchAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(
-                bch=address_obj,
-                token=token
-            )
-        else:
-            address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(
-                slp=address_obj,
-                token=token
-            ) 
-
-        if platform == 'telegram':
-            destination_address = settings.TELEGRAM_DESTINATION_ADDR
-        elif platform == 'slack':
-            destination_address = settings.SLACK_DESTINATION_ADDR
-
-        if created:
-            with trans.atomic():
-                sendTo, created = SendTo.objects.get_or_create(address=destination_address)
-
-                subscription_obj.address.add(sendTo)
-                subscription_obj.token = token
-                subscription_obj.save()
-                
-                subscriber.subscription.add(subscription_obj)
-            return True
-
-    return False
-
-def register_user(user_details, platform):
-    with trans.atomic():
-        platform = platform.lower()
-        user_id = user_details['id']
-
-        uname_pass = f"{platform}-{user_id}"
-
-        new_user, created = User.objects.get_or_create(
-            username=uname_pass,
-            password=uname_pass
-        )
-
-        new_subscriber = Subscriber()
-        new_subscriber.user = new_user
-        new_subscriber.confirmed = True
-
-        if platform == 'telegram':
-            new_subscriber.telegram_user_details = user_details
-        elif platform == 'slack':
-            new_subscriber.slack_user_details = user_details
-            
-        new_subscriber.save()

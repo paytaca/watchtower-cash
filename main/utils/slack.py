@@ -1,5 +1,9 @@
 from django.conf import settings
-
+from .subscription import (
+    save_subscription,
+    register_user,
+    remove_subscription
+)
 from main.models import (
     Subscriber,
     Subscription,
@@ -11,9 +15,6 @@ from main.utils.slack_responses import (
 )
 from main.tasks import (
     send_slack_message,
-    save_subscription,
-    remove_subscription,
-    register_user
 )
 
 import requests, logging
