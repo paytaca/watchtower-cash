@@ -445,15 +445,16 @@ def slpdb_tracker(self, block_height):
                     if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
                         spent_index = 1
                         for trans in transaction['tokenDetails']['detail']['outputs']:
-                            save_record.delay(
-                                token.tokenid,
-                                trans['address'],
-                                transaction['txid'],
-                                trans['amount'],
-                                'SLPDB-block-scanner',
-                                blockheightid=block_instance.id,
-                                spent_index=spent_index
-                            )
+                            if not Transaction.objects.filter(txid=transaction['txid']).exists():
+                                save_record.delay(
+                                    token.tokenid,
+                                    trans['address'],
+                                    transaction['txid'],
+                                    trans['amount'],
+                                    'SLPDB-block-scanner',
+                                    blockheightid=block_instance.id,
+                                    spent_index=spent_index
+                                )
                             spent_index += 1
 
 def bch_checker(txn_id):
@@ -508,13 +509,13 @@ def slpbitcoinsocket(self):
     url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
     resp = requests.get(url, stream=True)
     source = 'slpsocket.bitcoin.com'
-    if b'slpbitcoinsocket' not in REDIS_STORAGE.keys():
-        REDIS_STORAGE.set('slpbitcoinsocket', 0)
-    withsocket = int(REDIS_STORAGE.get('slpbitcoinsocket'))
+    if b'SLP-BITCOIN-SOCKET-STATUS' not in REDIS_STORAGE.keys():
+        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 0)
+    withsocket = int(REDIS_STORAGE.get('SLP-BITCOIN-SOCKET-STATUS'))
     if not withsocket:
         LOGGER.info('socket ready in : %s' % source)
         for content in resp.iter_content(chunk_size=1024*1024):
-            REDIS_STORAGE.set('slpbitcoinsocket', 1)
+            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 1)
             decoded_text = content.decode('utf8')
             if 'heartbeat' not in decoded_text:
                 data = decoded_text.strip().split('data: ')[-1]
@@ -546,12 +547,12 @@ def slpbitcoinsocket(self):
                                         spent_index
                                     )
                                     save_record(*args)
-        REDIS_STORAGE.set('slpbitcoinsocket', 0)
+        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 0)
 
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self):
     BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
-    source = 'bitdbquery'
+    source = 'bitdb.fountainhead'
     query = {
         "v": 3,
         "q": {
@@ -583,7 +584,8 @@ def bitdbquery(self):
                     spent_index
                 )
                 # For intant recording of transaction, its better not to delay.
-                save_record.delay(*args)
+                if not Transaction.objects.filter(txid=txn_id).exists():
+                    save_record.delay(*args)
             counter += 1
 
 @shared_task(bind=True, queue='bitsocket', time_limit=600)
@@ -636,44 +638,10 @@ def bitsocket(self):
                                     spent_index
                                 )
                                 # For instant saving of transaction, its better not to delay task.
-                                save_record(*args)
+                                if not Transaction.objects.filter(txid=txn_id).exists():
+                                    save_record.delay(*args)
         
         REDIS_STORAGE.set('bitsocket', 0)
-
-@shared_task(bind=True, queue='bitcoincash_tracker', max_retries=3)
-def bitcoincash_tracker(self,id):
-    blockheight_obj= BlockHeight.objects.get(id=id)
-    url = f"https://rest.bitcoin.com/v2/block/detailsByHeight/{blockheight_obj.number}"
-    try:
-        resp = requests.get(url)
-        data = json.loads(resp.text)
-    except (ConnectionError, json.decoder.JSONDecodeError) as exc:
-        return self.retry(countdown=5)
-    if 'tx' in data.keys():
-        for txn_id in data['tx']:
-            trans = Transaction.objects.filter(txid=txn_id)
-            if not trans.exists():
-                url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
-                response = requests.get(url)
-                if response.status_code == 200:
-                    data = json.loads(response.text)
-                    if 'vout' in data.keys():
-                        for out in data['vout']:
-                            if 'scriptPubKey' in out.keys():
-                                if 'cashAddrs' in out['scriptPubKey'].keys():
-                                    for cashaddr in out['scriptPubKey']['cashAddrs']:
-                                        if cashaddr.startswith('bitcoincash:'):
-                                            args = (
-                                                'bch',
-                                                cashaddr,
-                                                txn_id,
-                                                out['value'],
-                                                "alternative-bch-tracker",
-                                                blockheight_obj.id,
-                                                out['spentIndex']
-                                            )
-                                            # For instance saving of transaction, its better not to delay task
-                                            save_record(*args)
 
 @shared_task(bind=True, queue='bch_address_scanner')
 def bch_address_scanner(self, bchaddress=None):
@@ -711,7 +679,8 @@ def bch_address_scanner(self, bchaddress=None):
                             spent_index
                         )
                         LOGGER.info(f"{source} | txid : {tr['txid']} | amount : {out['value']}")
-                        save_record.delay(*args)
+                        if not Transaction.objects.filter(txid=tr['txid']).exists():
+                            save_record.delay(*args)
 
     BchAddress.objects.filter(address__in=addresses).update(scanned=True)
     

@@ -184,7 +184,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'problematic_transactions': {
         'task': 'main.tasks.problematic_transactions',
-        'schedule': 10
+        'schedule': 3
     },
     'review_block': {
         'task': 'main.tasks.review_block',
