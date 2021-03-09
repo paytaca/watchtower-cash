@@ -119,8 +119,6 @@ def problematic_transactions(self):
     time_threshold = timezone.now() - datetime.timedelta(hours=2)
     blocks = BlockHeight.objects.exclude(
         problematic=[]
-    ).filter(
-        created_datetime__gte=time_threshold        
     ).order_by('-number')
     if blocks.exists():
         blocks = list(blocks.values('id','problematic'))
@@ -221,8 +219,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address_obj.transactions.add(transaction_obj)
             address_obj.save()
             
-            if transaction_created:
-                pass
+            # if transaction_created:
+            #     pass
+                
                 # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
                     
         except OperationalError as exc:
@@ -298,8 +297,8 @@ def bch_checker(txn_id):
 
     return f"PROCESSED BCH TX: {txn_id}"
 
-@shared_task(bind=True, queue='deposit_filter', max_retries=2)
-def deposit_filter(self, txn_id, blockheightid, currentcount, total_transactions):
+@shared_task(bind=True, queue='transaction_filter', max_retries=2)
+def transaction_filter(self, txn_id, blockheightid, currentcount, total_transactions):
     obj = BlockHeight.objects.get(id=blockheightid)
     """
     Tracks every transactions that belongs to the registered token and blockheight.
@@ -374,7 +373,7 @@ def get_block_transactions(self):
         total_chunk_transactions = len(transactions)
         counter = 1
         for tr in transactions:
-            deposit_filter.delay(
+            transaction_filter.delay(
                 tr,
                 block.id,
                 counter,
@@ -444,6 +443,7 @@ def manage_block_transactions(self):
 @shared_task(queue='get_latest_block')
 def get_latest_block():
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys('*'): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+    if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
     # A task intended to check new blockheight every 5 seconds.
     proceed = False
     url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
@@ -451,11 +451,13 @@ def get_latest_block():
         resp = requests.get(url)
         REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
     except Exception as exc:
-        if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
         retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES')) + 1
         REDIS_STORAGE.set('REST-BITCOIN-RETRIES', retry)
         return LOGGER.error(exc)
+    
     if not 'blocks' in resp.text:
+        retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES')) + 1
+        REDIS_STORAGE.set('REST-BITCOIN-RETRIES', retry)
         return f"INVALID RESPONSE FROM  {url} : {resp.text}"
     number = json.loads(resp.text)['blocks']
 
@@ -562,17 +564,20 @@ def slpbitcoinsocket(self):
     A live stream of SLP transactions via Bitcoin
     """
     try:
+        source = 'slpsocket.bitcoin.com'
         url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
         resp = requests.get(url, stream=True)
-        source = 'slpsocket.bitcoin.com'
-        if b'SLP-BITCOIN-SOCKET-STATUS' not in REDIS_STORAGE.keys():
-            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 0)
-        withsocket = int(REDIS_STORAGE.get('SLP-BITCOIN-SOCKET-STATUS'))
+        if resp.status_code != 200:
+            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
+            return f'{source.upper()} IS NOT AVAILABLE.'
+        if b'SLP-BITCOIN-SOCKET' not in REDIS_STORAGE.keys():
+            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
+        withsocket = int(REDIS_STORAGE.get('SLP-BITCOIN-SOCKET'))
         if withsocket: return f"{source.upper()} IS RUNNING."
         if not withsocket: 
             LOGGER.info(f"{source.upper()} WILL SERVE DATA SHORTLY...")
             for content in resp.iter_content(chunk_size=1024*1024):
-                REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 1)
+                REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 1)
                 decoded_text = content.decode('utf8')
                 if 'heartbeat' not in decoded_text:
                     data = decoded_text.strip().split('data: ')[-1]
@@ -582,6 +587,7 @@ def slpbitcoinsocket(self):
                     except json.decoder.JSONDecodeError as exc:
                         continue
                     except Exception as exc:
+                        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
                         break
                     if proceed:
                         if len(readable_dict['data']) != 0:
@@ -603,9 +609,13 @@ def slpbitcoinsocket(self):
                                             None,
                                             spent_index
                                         )
-                                        save_record(*args)
+                                        if not Transaction.objects.filter(txid=txn_id).exists():
+                                            save_record.delay(*args)
+                                        LOGGER.info(f"{txn_id} : {source.upper()}")
+
     except SoftTimeLimitExceeded as exc:
-        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-STATUS', 0)
+        LOGGER.info(f"SOFT TIME LIMIT EXCEEDED: {source.upper()}")
+        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
 
 @shared_task(bind=True, queue='bitsocket', soft_time_limit=580, time_limit=600)
 def bitsocket(self):
@@ -613,9 +623,12 @@ def bitsocket(self):
     A live stream of BCH transactions via bitsocket
     """
     try:
+        source = 'bitsocket'
         url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
         resp = requests.get(url, stream=True)
-        source = 'bitsocket'
+        if resp.status_code != 200:
+            REDIS_STORAGE.set('BITSOCKET', 0)
+            return f'{source.upper()} IS NOT AVAILABLE.'
         previous = ''
         if b'BITSOCKET' not in REDIS_STORAGE.keys():
             REDIS_STORAGE.set('BITSOCKET', 0)
@@ -639,6 +652,7 @@ def bitsocket(self):
                 except json.decoder.JSONDecodeError as exc:
                     continue
                 except Exception as exc:
+                    REDIS_STORAGE.set('BITSOCKET', 0)
                     break
                 previous = content
                 if loaded_data is not None:
@@ -659,10 +673,11 @@ def bitsocket(self):
                                         None,
                                         spent_index
                                     )
-                                    # For instant saving of transaction, its better not to delay task.
                                     if not Transaction.objects.filter(txid=txn_id).exists():
                                         save_record.delay(*args)
+                                    LOGGER.info(f"{txn_id} : {source.upper()}")
     except SoftTimeLimitExceeded as exc:
+        LOGGER.info(f"SOFT TIME LIMIT EXCEEDED: {source.upper()}")
         REDIS_STORAGE.set('BITSOCKET', 1)
 
 
