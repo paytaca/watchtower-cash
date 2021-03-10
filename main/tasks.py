@@ -507,7 +507,6 @@ def slpdb_tracker(self):
     retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
     if retry <= settings.MAX_RESTB_RETRIES: return 'NO NEED FOR SLPDB_TRACKER.'
     
-    
     obj = slpdb_scanner.SLPDB()
     try:
         data = obj.process_api()
@@ -542,115 +541,67 @@ def slpdb_tracker(self):
                             spent_index += 1
 
 # WEBSOCKETS
-@shared_task(bind=True, queue='slpbitcoinsocket',soft_time_limit=580, time_limit=600)
+@shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
 def slpbitcoinsocket(self):
     """
     A live stream of SLP transactions via Bitcoin
     """
-    try:
-        source = 'slpsocket.bitcoin.com'
-        url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
-        resp = requests.get(url, stream=True)
-        if resp.status_code != 200:
-            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
-            return f'{source.upper()} IS NOT AVAILABLE.'
-        if b'SLP-BITCOIN-SOCKET' not in REDIS_STORAGE.keys():
-            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
-        withsocket = int(REDIS_STORAGE.get('SLP-BITCOIN-SOCKET'))
-        if withsocket: return f"{source.upper()} IS RUNNING."
-        if not withsocket: 
-            LOGGER.info(f"{source.upper()} WILL SERVE DATA SHORTLY...")
-            for content in resp.iter_content(chunk_size=1024*1024):
-                REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 1)
-                decoded_text = content.decode('utf8')
-                if 'heartbeat' not in decoded_text:
-                    data = decoded_text.strip().split('data: ')[-1]
-                    proceed = True
-                    try:
-                        readable_dict = json.loads(data)
-                    except json.decoder.JSONDecodeError as exc:
-                        continue
-                    except Exception as exc:
-                        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
-                        break
-                    if proceed:
-                        if len(readable_dict['data']) != 0:
-                            token_id = readable_dict['data'][0]['slp']['detail']['tokenIdHex']
-                            token_obj, _ =  Token.objects.get_or_create(tokenid=token_id)
-                            if 'tx' in readable_dict['data'][0].keys():
-                                if readable_dict['data'][0]['slp']['valid']:
-                                    txn_id = readable_dict['data'][0]['tx']['h']
-                                    for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
-                                        slp_address = trans['address']
-                                        amount = float(trans['amount'])
-                                        spent_index = trans['spentIndex']
-                                        args = (
-                                            token_obj.tokenid,
-                                            slp_address,
-                                            txn_id,
-                                            amount,
-                                            source,
-                                            None,
-                                            spent_index
-                                        )
-                                        if not Transaction.objects.filter(txid=txn_id).exists():
-                                            save_record.delay(*args)
-                                        LOGGER.info(f"{txn_id} : {source.upper()}")
+    if b'SLP-BITCOIN-SOCKET' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
+    if b'SLP-BITCOIN-SOCKET-DURATION' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', 0)
 
-    except SoftTimeLimitExceeded as exc:
-        LOGGER.info(f"SOFT TIME LIMIT EXCEEDED: {source.upper()}")
+    source = 'slpsocket.bitcoin.com'
+    duration = REDIS_STORAGE.get('SLP-BITCOIN-SOCKET-DURATION')
+    busy = int(REDIS_STORAGE.get('SLP-BITCOIN-SOCKET'))
+
+    url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
+    resp = requests.get(url, stream=True)
+
+    if resp.status_code != 200:
+        duration += 1
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
+        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', duration)
+        return f'{source.upper()} IS NOT AVAILABLE.'
 
-@shared_task(bind=True, queue='bitsocket', soft_time_limit=580, time_limit=600)
-def bitsocket(self):
-    """
-    A live stream of BCH transactions via bitsocket
-    """
-    try:
-        source = 'bitsocket'
-        url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
-        resp = requests.get(url, stream=True)
-        if resp.status_code != 200:
-            REDIS_STORAGE.set('BITSOCKET', 0)
-            return f'{source.upper()} IS NOT AVAILABLE.'
-        previous = ''
-        if b'BITSOCKET' not in REDIS_STORAGE.keys():
-            REDIS_STORAGE.set('BITSOCKET', 0)
-        withsocket = int(REDIS_STORAGE.get('BITSOCKET'))
-        if withsocket: return f"{source.upper()} IS RUNNING."
-        if not withsocket:
-            LOGGER.info(f"{source.upper()} WILL SERVE DATA SHORTLY...")
-            for content in resp.iter_content(chunk_size=1024*1024):
-                REDIS_STORAGE.set('BITSOCKET', 1)
-                loaded_data = None
+    if busy:
+        if duration >= 10:
+            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
+            REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', 0)
+            return f"WILL DO FORCE RESET IN {source.upper()}."
+        duration += 1
+        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', duration)
+        return f"{source.upper()} IS BUSY."
+
+    if not busy: 
+        LOGGER.info(f"{source.upper()} WILL SERVE DATA SHORTLY...")
+        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 1)
+        REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', 0)
+
+        for content in resp.iter_content(chunk_size=1024*1024):
+            decoded_text = content.decode('utf8')
+            if 'heartbeat' not in decoded_text:
+                data = decoded_text.strip().split('data: ')[-1]
+                proceed = True
                 try:
-                    content = content.decode('utf8')
-                    if '"tx":{"h":"' in previous:
-                        data = previous + content
-                        data = data.strip().split('data: ')[-1]
-                        loaded_data = json.loads(data)
-
-                        proceed = True
-                except (ValueError, UnicodeDecodeError, TypeError) as exc:
-                    continue
+                    readable_dict = json.loads(data)
                 except json.decoder.JSONDecodeError as exc:
                     continue
                 except Exception as exc:
-                    REDIS_STORAGE.set('BITSOCKET', 0)
-                    break
-                previous = content
-                if loaded_data is not None:
-                    if len(loaded_data['data']) != 0:
-                        txn_id = loaded_data['data'][0]['tx']['h']
-                        for out in loaded_data['data'][0]['out']: 
-                            if 'e' in out.keys():
-                                amount = out['e']['v'] / 100000000
-                                spent_index = out['e']['i']
-                                if amount and 'a' in out['e'].keys():
-                                    bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                    REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
+                    return f"UNEXPECTED ERROR FOUND IN {source.upper()}"
+                if proceed:
+                    if len(readable_dict['data']) != 0:
+                        token_id = readable_dict['data'][0]['slp']['detail']['tokenIdHex']
+                        token_obj, _ =  Token.objects.get_or_create(tokenid=token_id)
+                        if 'tx' in readable_dict['data'][0].keys():
+                            if readable_dict['data'][0]['slp']['valid']:
+                                txn_id = readable_dict['data'][0]['tx']['h']
+                                for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
+                                    slp_address = trans['address']
+                                    amount = float(trans['amount'])
+                                    spent_index = trans['spentIndex']
                                     args = (
-                                        'bch',
-                                        bchaddress,
+                                        token_obj.tokenid,
+                                        slp_address,
                                         txn_id,
                                         amount,
                                         source,
@@ -660,11 +611,83 @@ def bitsocket(self):
                                     if not Transaction.objects.filter(txid=txn_id).exists():
                                         save_record.delay(*args)
                                     LOGGER.info(f"{txn_id} : {source.upper()}")
-    except SoftTimeLimitExceeded as exc:
-        LOGGER.info(f"SOFT TIME LIMIT EXCEEDED: {source.upper()}")
+
+@shared_task(bind=True, queue='bitsocket', time_limit=600)
+def bitsocket(self):
+    """
+    A live stream of BCH transactions via bitsocket
+    """
+    if b'BITSOCKET' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('BITSOCKET', 0)
+    if b'BITSOCKET-DURATION' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('BITSOCKET-DURATION', 0)
+
+    source = 'bitsocket'
+    duration = REDIS_STORAGE.get('BITSOCKET-DURATION')
+    busy = int(REDIS_STORAGE.get('BITSOCKET'))
+
+    url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
+    resp = requests.get(url, stream=True)
+
+    if resp.status_code != 200:
+        duration += 1
+        REDIS_STORAGE.set('BITSOCKET', 0)
+        REDIS_STORAGE.set('BITSOCKET-DURATION', duration)
+        return f'{source.upper()} IS NOT AVAILABLE.'
+
+    if busy:
+        if duration >= 10:
+            REDIS_STORAGE.set('BITSOCKET', 0)
+            REDIS_STORAGE.set('BITSOCKET-DURATION', 0)
+            return f"WILL DO FORCE RESET IN {source.upper()}."
+        duration += 1
+        REDIS_STORAGE.set('BITSOCKET-DURATION', duration)
+        return f"{source.upper()} IS BUSY."
+    
+    if not busy:
+        LOGGER.info(f"{source.upper()} WILL SERVE DATA SHORTLY...")
+        REDIS_STORAGE.set('BITSOCKET-DURATION', 0)
         REDIS_STORAGE.set('BITSOCKET', 1)
+        previous = ''
 
+        for content in resp.iter_content(chunk_size=1024*1024):
+            loaded_data = None
+            try:
+                content = content.decode('utf8')
+                if '"tx":{"h":"' in previous:
+                    data = previous + content
+                    data = data.strip().split('data: ')[-1]
+                    loaded_data = json.loads(data)
 
+                    proceed = True
+            except (ValueError, UnicodeDecodeError, TypeError) as exc:
+                continue
+            except json.decoder.JSONDecodeError as exc:
+                continue
+            except Exception as exc:
+                REDIS_STORAGE.set('BITSOCKET', 0)
+                return f"UNEXPECTED ERROR FOUND IN {source.upper()}"
+            previous = content
+            if loaded_data is not None:
+                if len(loaded_data['data']) != 0:
+                    txn_id = loaded_data['data'][0]['tx']['h']
+                    for out in loaded_data['data'][0]['out']: 
+                        if 'e' in out.keys():
+                            amount = out['e']['v'] / 100000000
+                            spent_index = out['e']['i']
+                            if amount and 'a' in out['e'].keys():
+                                bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                                args = (
+                                    'bch',
+                                    bchaddress,
+                                    txn_id,
+                                    amount,
+                                    source,
+                                    None,
+                                    spent_index
+                                )
+                                if not Transaction.objects.filter(txid=txn_id).exists():
+                                    save_record.delay(*args)
+                                LOGGER.info(f"{txn_id} : {source.upper()}")
+    
 
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')

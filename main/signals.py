@@ -20,5 +20,4 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
 
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
-    if created:
-        client_acknowledgement.delay(instance.id)
+    client_acknowledgement.delay(instance.id)
