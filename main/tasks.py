@@ -212,10 +212,11 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
     with trans.atomic():
         try:
-            try:
-                token_obj = Token.objects.get(tokenid=token)
-            except Token.DoesNotExist:
+            if token.lower() == 'bch':
                 token_obj = Token.objects.get(name=token)
+            else:
+                token_obj = Token.objects.get(tokenid=token)
+            
             transaction_obj, transaction_created = Transaction.objects.get_or_create(
                 txid=transactionid,
                 address=transaction_address,
@@ -495,10 +496,10 @@ def bitdbquery(self, support=False):
     if not support:
         if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
         retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
-        if retry <= settings.MAX_RESTB_RETRIES: return 'NO NEED FOR BITDBQUERY'
+        if retry <= settings.MAX_RESTB_RETRIES: return 'REST.BITCOIN.COM DOES NOT NEED BITDBQUERY THIS TIME.'
 
+    source = 'bitdb-query'
     BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
-    source = 'bitdb.fountainhead'
     query = {
         "v": 3,
         "q": {
@@ -534,12 +535,12 @@ def bitdbquery(self, support=False):
                     save_record.delay(*args)
             counter += 1
 
-@shared_task(bind=True, queue='slpdb')
-def slpdb_tracker(self, support=False):
+@shared_task(bind=True, queue='slpdbquery')
+def slpdbquery(self, support=False):
     if not support:
         if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
         rb_retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
-        if rb_retry <= settings.MAX_RESTB_RETRIES : return 'NO NEED FOR SLPDB_TRACKER.'
+        if rb_retry <= settings.MAX_RESTB_RETRIES : return 'REST.BITCOIN.COM DOES NOT NEED SLPDBQUERY THIS TIME.'
 
     obj = slpdb_scanner.SLPDB()
     try:
@@ -549,29 +550,32 @@ def slpdb_tracker(self, support=False):
         LOGGER.error(exc)
         proceed_slpdb_checking = False
 
-    # Checking of transactions using SLPDB
     if data['status'] == 'success' and proceed_slpdb_checking:
-        LOGGER.info(f'CHECKING BLOCK {block_height} via SLPDB')
+        source = 'slpdb-query'
+        LOGGER.info(f'LOOKING FOR RECENT SLP TRANSACTIONS THROUGH SLPDB')
         transactions = data['data']['c']
-        slpdb_total_transactions = len(transactions)
+
         for transaction in transactions:
-            if transaction['tokenDetails']['valid']:
-                if transaction['tokenDetails']['detail']['transactionType'].lower() == 'send':
-                    token_id = transaction['tokenDetails']['detail']['tokenIdHex']
+            blocknumber = transaction['blk']['i']
+            block_obj, created = BlockHeight.objects.get_or_create(number=blocknumber)
+            if transaction['slp']['valid']:
+                if transaction['slp']['detail']['transactionType'].lower() == 'send':
+                    token_id = transaction['slp']['detail']['tokenIdHex']
                     token, _ = Token.objects.get_or_create(tokenid=token_id)
-                    if transaction['tokenDetails']['detail']['outputs'][0]['address'] is not None:
+                    if transaction['slp']['detail']['outputs'][0]['address'] is not None:
                         spent_index = 1
-                        for trans in transaction['tokenDetails']['detail']['outputs']:
-                            if not Transaction.objects.filter(txid=transaction['txid']).exists():
+                        for trans in transaction['slp']['detail']['outputs']:
+                            if not Transaction.objects.filter(txid=transaction['tx']['h']).exists():
                                 save_record.delay(
                                     token.tokenid,
                                     trans['address'],
-                                    transaction['txid'],
+                                    transaction['tx']['h'],
                                     trans['amount'],
-                                    'SLPDB-block-scanner',
-                                    blockheightid=block_instance.id,
+                                    source,
+                                    blockheightid=block_obj.id,
                                     spent_index=spent_index
                                 )
+                                LOGGER.info(f"{transaction['tx']['h']} : {source.upper()}")
                             spent_index += 1
 
 
@@ -595,7 +599,7 @@ def slpbitcoinsocket(self):
         duration += 1
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', duration)
-        slpdb_tracker.delay(support=True)
+        slpdbquery.delay(support=True)
         return f'{source.upper()} IS NOT AVAILABLE.'
 
     if busy:

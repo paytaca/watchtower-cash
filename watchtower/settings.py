@@ -199,8 +199,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.bitdbquery',
         'schedule': 60
     },
-    'slpdb_tracker': {
-        'task': 'main.tasks.slpdb_tracker',
+    'slpdbquery': {
+        'task': 'main.tasks.slpdbquery',
         'schedule': 30
     },
 

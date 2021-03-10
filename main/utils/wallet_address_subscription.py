@@ -7,7 +7,6 @@ def check_wallet_address_subscription(address):
         )
     else:
         subscription = Subscription.objects.filter(
-            slp__address=address, 
-            token=token_obj
+            slp__address=address
         )
     return subscription
