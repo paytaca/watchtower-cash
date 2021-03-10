@@ -492,11 +492,10 @@ def get_latest_block():
 
 # ALTERNATIVE SOURCES OF BCH/SLP TRANSACTIONS
 @shared_task(bind=True, queue='bitdbquery')
-def bitdbquery(self, support=False): 
-    if not support:
-        if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
-        retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
-        if retry <= settings.MAX_RESTB_RETRIES: return 'REST.BITCOIN.COM DOES NOT NEED BITDBQUERY THIS TIME.'
+def bitdbquery(self): 
+    if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
+    retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
+    if retry <= settings.MAX_RESTB_RETRIES: return 'REST.BITCOIN.COM DOES NOT NEED BITDBQUERY THIS TIME.'
 
     source = 'bitdb-query'
     BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
@@ -536,11 +535,10 @@ def bitdbquery(self, support=False):
             counter += 1
 
 @shared_task(bind=True, queue='slpdbquery')
-def slpdbquery(self, support=False):
-    if not support:
-        if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
-        rb_retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
-        if rb_retry <= settings.MAX_RESTB_RETRIES : return 'REST.BITCOIN.COM DOES NOT NEED SLPDBQUERY THIS TIME.'
+def slpdbquery(self):
+    if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
+    rb_retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
+    if rb_retry <= settings.MAX_RESTB_RETRIES : return 'REST.BITCOIN.COM DOES NOT NEED SLPDBQUERY THIS TIME.'
 
     obj = slpdb_scanner.SLPDB()
     try:
@@ -557,7 +555,8 @@ def slpdbquery(self, support=False):
 
         for transaction in transactions:
             blocknumber = transaction['blk']['i']
-            block_obj, created = BlockHeight.objects.get_or_create(number=blocknumber)
+            block = BlockHeight.objects.first()
+            if block.number > blocknumber: return f'{source.upper()} : OLD BLOCK : {blocknumber}'
             if transaction['slp']['valid']:
                 if transaction['slp']['detail']['transactionType'].lower() == 'send':
                     token_id = transaction['slp']['detail']['tokenIdHex']
@@ -599,7 +598,6 @@ def slpbitcoinsocket(self):
         duration += 1
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', duration)
-        slpdbquery.delay(support=True)
         return f'{source.upper()} IS NOT AVAILABLE.'
 
     if busy:
@@ -671,7 +669,6 @@ def bitsocket(self):
         duration += 1
         REDIS_STORAGE.set('BITSOCKET', 0)
         REDIS_STORAGE.set('BITSOCKET-DURATION', duration)
-        bitdbquery.delay(support=True)
         return f'{source.upper()} IS NOT AVAILABLE.'
 
     if busy:
