@@ -79,7 +79,6 @@ def send_slack_message(message, channel, attachments=None):
 def client_acknowledgement(self, txid):
     with trans.atomic():
         this_transaction = Transaction.objects.filter(id=txid)
-        retry = False
 
         if this_transaction.exists():
             transaction = this_transaction.first()
@@ -129,15 +128,10 @@ def client_acknowledgement(self, txid):
                         elif resp.status_code == 404:
                             LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
                         else:
-                            retry = True
-                            transaction.acknowledged = False
+                            self.retry(countdown=3)
                 transaction.save()
-            else:
-                retry = True
-    if retry:
-        self.retry(countdown=180)
-    else:
-        return 'success'
+                return f'ACKNOWLEDGEMENT SENT FOR : {txid}'
+    return
 
 
 # MAIN SOURCES OF BCH/SLP TRANSACTIONS
