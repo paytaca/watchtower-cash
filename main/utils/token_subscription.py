@@ -9,14 +9,9 @@ def spicebot_token_subscription(token_obj):
     subscriber = Subscriber.objects.get(user=user)
     return subscriber.subscription.filter(token=token_obj).exists()
     
-def check_token_subscription(transaction_token, subscribed_token_id):
-    subscribed_token = Token.objects.get(id=subscribed_token_id)
-    try:
-        token_obj = Token.objects.get(tokenid=transaction_token)
-    except ObjectDoesNotExist:
-        token_obj = Token.objects.get(name=transaction_token)
-    if token_obj != subscribed_token:
-        valid = spicebot_token_subscription(token_obj)
-    else:
-        valid = True
-    return valid, token_obj
+def check_token_subscription(token_id, subscription_id):
+    subscription = subscription.objects.get(id=subscription_id)
+    if subscription.token:
+        if subscription.token.token_id != token_id:
+            return False
+    return True

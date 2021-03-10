@@ -50,7 +50,6 @@ class Transaction(models.Model):
     source = models.CharField(max_length=200, null=True, db_index=True)
     created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(Token, on_delete=models.DO_NOTHING, db_index=True)
-    scanning = models.BooleanField(default=False)
     subscribed = models.BooleanField(default=False, db_index=True)
     spentIndex = models.IntegerField(default=0, db_index=True)
     
@@ -95,11 +94,10 @@ class Subscription(models.Model):
 
 class Subscriber(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscriber')
-    subscription = models.ManyToManyField(Subscription, related_name='subscriber')
+    subscriptions = models.ManyToManyField(Subscription, related_name='subscriber')
     confirmed = models.BooleanField(default=False)
     date_started = models.DateTimeField(default=timezone.now)
     telegram_user_details = JSONField(default=dict, blank=True)
-
     # slack_user_details = {
     #   "id": string,
     #   "channel_id": string (DM channel ID for the bot to reply to)

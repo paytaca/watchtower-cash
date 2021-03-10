@@ -40,47 +40,37 @@ REDIS_STORAGE = settings.REDISKV
 # MAIN SOURCES OF BCH/SLP TRANSACTIONS
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
-def client_acknowledgement(self, token, transactionid):
+def client_acknowledgement(self, txid):
     with trans.atomic():
-        txn_check = Transaction.objects.filter(id=transactionid)
+        this_transaction = Transaction.objects.filter(id=txid)
         retry = False
 
-        if txn_check.exists():
-            txn = txn_check.first()
+        if this_transaction.exists():
+            transaction = this_transaction.first()
             block = None
-            if txn.blockheight:
-                block = txn.blockheight.number
+            if transaction.blockheight:
+                block = transaction.blockheight.number
 
-            address = txn.address 
+            address = transaction.address 
             subscription = check_wallet_address_subscription(address)
 
             if subscription.exists():
-                txn.subscribed = True
+                transaction.subscribed = True
                 subscription = subscription.first()
                 webhook_addresses = subscription.address.all()
-
-                if webhook_addresses.count() == 0:
-                    # If subscription found yet no webhook url found,
-                    # We'll assign the webhook url for spicebot.
-                    sendto_obj = SendTo.objects.first()
-                    subscription.address.add(sendto_obj)
-                    webhook_addresses = [sendto_obj]
-                    
                 for webhook_address in webhook_addresses:
-                    # check subscribed Token and Token from transaction if matched.
-                    valid, token_obj = check_token_subscription(token, subscription.token.id)
-                    if valid:
+                    can_be_send = check_token_subscription(transaction.token.tokenid, subscription.id)
+                    if can_be_send:
                         data = {
-                            'amount': txn.amount,
-                            'address': txn.address,
-      
-                            'source': txn.source,
-                            'token': token_obj.tokenid,
-                            'txid': txn.txid,
+                            'amount': transaction.amount,
+                            'address': transaction.address,
+                            'source': transaction.source,
+                            'token': transaction.token.tokenid,
+                            'txid': transaction.txid,
                             'block': block,
-                            'spent_index': txn.spentIndex
+                            'spent_index': transaction.spentIndex
                         }
-
+                        
                         #check if telegram/slack user
                         # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
                         
@@ -99,14 +89,13 @@ def client_acknowledgement(self, token, transactionid):
                         if resp.status_code == 200:
                             response_data = json.loads(resp.text)
                             if response_data['success']:
-                                txn.acknowledged = True
-                                txn.queued = False
+                                transaction.acknowledged = True
                         elif resp.status_code == 404:
-                            LOGGER.error(f'this is no longer valid > {webhook_address}')
+                            LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
                         else:
                             retry = True
-                            txn.acknowledged = False
-                txn.save()
+                            transaction.acknowledged = False
+                transaction.save()
             else:
                 retry = True
     if retry:
@@ -218,11 +207,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             
             address_obj.transactions.add(transaction_obj)
             address_obj.save()
-            
-            # if transaction_created:
-            #     pass
-                
-                # client_acknowledgement.delay(transaction_obj.token.tokenid, transaction_obj.id)
                     
         except OperationalError as exc:
             save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
