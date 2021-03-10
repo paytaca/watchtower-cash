@@ -37,7 +37,43 @@ from django.db.models import Q
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
-# MAIN SOURCES OF BCH/SLP TRANSACTIONS
+# NOTIFICATIONS
+@shared_task(rate_limit='20/s', queue='send_telegram_message')
+def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
+    LOGGER.info(f'SENDING TO {chat_id}')
+    data = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+
+    if reply_markup:
+        data['reply_markup'] = json.dumps(reply_markup, separators=(',', ':'))
+
+    url = 'https://api.telegram.org/bot'
+    response = requests.post(
+        f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
+    )
+    return f"send notification to {chat_id}"
+    
+@shared_task(rate_limit='20/s', queue='send_slack_message')
+def send_slack_message(message, channel, attachments=None):
+    LOGGER.info(f'SENDING TO {channel}')
+    data = {
+        "token": settings.SLACK_BOT_USER_TOKEN,
+        "channel": channel,
+        "text": message
+    }
+
+    if type(attachments) is list:
+        data['attachments'] = json.dumps(attachments)
+
+    response = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        data=data
+    )
+    return f"send notification to {channel}"
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, txid):
@@ -103,6 +139,8 @@ def client_acknowledgement(self, txid):
     else:
         return 'success'
 
+
+# MAIN SOURCES OF BCH/SLP TRANSACTIONS
 @shared_task(bind=True, queue='problematic_transactions')
 def problematic_transactions(self):  
     time_threshold = timezone.now() - datetime.timedelta(hours=2)
@@ -459,10 +497,11 @@ def get_latest_block():
 
 # ALTERNATIVE SOURCES OF BCH/SLP TRANSACTIONS
 @shared_task(bind=True, queue='bitdbquery')
-def bitdbquery(self): 
-    if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
-    retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
-    if retry <= settings.MAX_RESTB_RETRIES: return 'NO NEED FOR BITDBQUERY'
+def bitdbquery(self, support=False): 
+    if not support:
+        if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
+        retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
+        if retry <= settings.MAX_RESTB_RETRIES: return 'NO NEED FOR BITDBQUERY'
 
     BITDB_URL = 'https://bitdb.fountainhead.cash/q/'
     source = 'bitdb.fountainhead'
@@ -502,11 +541,12 @@ def bitdbquery(self):
             counter += 1
 
 @shared_task(bind=True, queue='slpdb')
-def slpdb_tracker(self):
-    if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
-    retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
-    if retry <= settings.MAX_RESTB_RETRIES: return 'NO NEED FOR SLPDB_TRACKER.'
-    
+def slpdb_tracker(self, support=False):
+    if not support:
+        if b'REST-BITCOIN-RETRIES' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('REST-BITCOIN-RETRIES', 0)
+        rb_retry = int(REDIS_STORAGE.get('REST-BITCOIN-RETRIES'))
+        if rb_retry <= settings.MAX_RESTB_RETRIES : return 'NO NEED FOR SLPDB_TRACKER.'
+
     obj = slpdb_scanner.SLPDB()
     try:
         data = obj.process_api()
@@ -540,6 +580,7 @@ def slpdb_tracker(self):
                                 )
                             spent_index += 1
 
+
 # WEBSOCKETS
 @shared_task(bind=True, queue='slpbitcoinsocket', time_limit=600)
 def slpbitcoinsocket(self):
@@ -550,7 +591,7 @@ def slpbitcoinsocket(self):
     if b'SLP-BITCOIN-SOCKET-DURATION' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', 0)
 
     source = 'slpsocket.bitcoin.com'
-    duration = REDIS_STORAGE.get('SLP-BITCOIN-SOCKET-DURATION')
+    duration = int(REDIS_STORAGE.get('SLP-BITCOIN-SOCKET-DURATION'))
     busy = int(REDIS_STORAGE.get('SLP-BITCOIN-SOCKET'))
 
     url = "https://slpsocket.bitcoin.com/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
@@ -560,6 +601,7 @@ def slpbitcoinsocket(self):
         duration += 1
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET', 0)
         REDIS_STORAGE.set('SLP-BITCOIN-SOCKET-DURATION', duration)
+        slpdb_tracker.delay(support=True)
         return f'{source.upper()} IS NOT AVAILABLE.'
 
     if busy:
@@ -621,7 +663,7 @@ def bitsocket(self):
     if b'BITSOCKET-DURATION' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('BITSOCKET-DURATION', 0)
 
     source = 'bitsocket'
-    duration = REDIS_STORAGE.get('BITSOCKET-DURATION')
+    duration = int(REDIS_STORAGE.get('BITSOCKET-DURATION'))
     busy = int(REDIS_STORAGE.get('BITSOCKET'))
 
     url = "https://bitsocket.bch.sx/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
@@ -631,6 +673,7 @@ def bitsocket(self):
         duration += 1
         REDIS_STORAGE.set('BITSOCKET', 0)
         REDIS_STORAGE.set('BITSOCKET-DURATION', duration)
+        bitdbquery.delay(support=True)
         return f'{source.upper()} IS NOT AVAILABLE.'
 
     if busy:
@@ -688,41 +731,3 @@ def bitsocket(self):
                                     save_record.delay(*args)
                                 LOGGER.info(f"{txn_id} : {source.upper()}")
     
-
-# NOTIFICATIONS
-@shared_task(rate_limit='20/s', queue='send_telegram_message')
-def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
-    LOGGER.info(f'SENDING TO {chat_id}')
-    data = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True
-    }
-
-    if reply_markup:
-        data['reply_markup'] = json.dumps(reply_markup, separators=(',', ':'))
-
-    url = 'https://api.telegram.org/bot'
-    response = requests.post(
-        f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
-    )
-    return f"send notification to {chat_id}"
-    
-@shared_task(rate_limit='20/s', queue='send_slack_message')
-def send_slack_message(message, channel, attachments=None):
-    LOGGER.info(f'SENDING TO {channel}')
-    data = {
-        "token": settings.SLACK_BOT_USER_TOKEN,
-        "channel": channel,
-        "text": message
-    }
-
-    if type(attachments) is list:
-        data['attachments'] = json.dumps(attachments)
-
-    response = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        data=data
-    )
-    return f"send notification to {channel}"
