@@ -37,28 +37,26 @@ def run():
                         if 'detail' in info['slp'].keys():
                             if 'tokenIdHex' in info['slp']['detail'].keys():
                                 token_id = info['slp']['detail']['tokenIdHex']
-                                token_query =  Token.objects.filter(tokenid=token_id)
-                                if token_query.exists():
-                                    spent_index = 1
-                                    for trans in info['slp']['detail']['outputs']:
-                                        amount = float(trans['amount'])
-                                        slp_address = trans['address']
-                                        if 'tx' in info.keys():
-                                            txn_id = info['tx']['h']
-                                            token_obj = token_query.first()
-                                            args = (
-                                                token_id,
-                                                slp_address,
-                                                txn_id,
-                                                amount,
-                                                source,
-                                                None,
-                                                spent_index
-                                            )
-                                            save_record(*args)
-                                            msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
-                                            LOGGER.info(msg)
-                                        spent_index += 1
+                                token, _ = Token.objects.get_or_create(tokenid=token_id)
+                                spent_index = 1
+                                for trans in info['slp']['detail']['outputs']:
+                                    amount = float(trans['amount'])
+                                    slp_address = trans['address']
+                                    if 'tx' in info.keys():
+                                        txn_id = info['tx']['h']
+                                        args = (
+                                            token.tokenid,
+                                            slp_address,
+                                            txn_id,
+                                            amount,
+                                            source,
+                                            None,
+                                            spent_index
+                                        )
+                                        save_record(*args)
+                                        msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
+                                        LOGGER.info(msg)
+                                    spent_index += 1
     LOGGER.error(msg)
 
 
