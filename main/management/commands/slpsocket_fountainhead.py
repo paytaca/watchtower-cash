@@ -11,31 +11,24 @@ LOGGER = logging.getLogger(__name__)
 
 
 def run():
-    url = "https://slpsocket.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjogewogICAgfQogIH0KfQ=="
+    url = "https://slpsocket.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
     resp = requests.get(url, stream=True)
-    source = 'slpsocket.fountainhead.cash'
+    source = 'slpsocket_fountainhead'
     LOGGER.info('socket ready in : %s' % source)
-    previous = ''
+    data = ''
     msg = 'Service not available!'
     for content in resp.iter_content(chunk_size=1024*1024):
         loaded_data = None
-        try:
-            content = content.decode('utf8')
-            if '"tx":{"h":"' in previous:
-                data = previous + content
-                data = data.strip().split('data: ')[-1]
-                loaded_data = json.loads(data)
-        except (ValueError, UnicodeDecodeError, TypeError) as exc:
-            msg = traceback.format_exc()
-            msg = f'Its alright. This is an expected error. --> {msg}'
-            LOGGER.error(msg)
-        except json.decoder.JSONDecodeError as exc:
-            msg = f'Its alright. This is an expected error. --> {exc}'
-            LOGGER.error(msg)
-        except Exception as exc:
-            msg = f'Novel exception found --> {exc}'
-            break
-        previous = content
+        if content:
+            content = content.decode()
+            if not content.startswith(':heartbeat'):
+                if content.startswith('data:'):
+                    data = content
+                else:
+                    data += content
+                if data.startswith('data:') and data.endswith('\n\n'):
+                    clean_data = data.lstrip('data: ').strip()
+                    loaded_data = json.loads(clean_data, strict=False)
         if loaded_data is not None:
             if len(loaded_data['data']) > 0:
                 info = loaded_data['data'][0]
