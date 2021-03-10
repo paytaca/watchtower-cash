@@ -49,8 +49,10 @@ def run():
                             token, _ = Token.objects.get_or_create(tokenid=token_id)
                             spent_index = 0
                             for output in info['slp']['detail']['outputs']:
-                                amount = float(output['amount'])
                                 slp_address = output['address']
+                                # TODO: This amount should be expressed according to the
+                                # decimals set for the token during genesis
+                                amount = float(output['amount'])
                                 with transaction.atomic():
                                     txn_id = info['tx']['h']
                                     txn_qs = Transaction.objects.filter(

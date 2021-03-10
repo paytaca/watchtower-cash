@@ -49,7 +49,9 @@ def run():
                             spent_index = 0
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
-                                amount = float(output['amount']) / 100000000
+                                # TODO: This amount should be expressed according to the
+                                # decimals set for the token during genesis
+                                amount = float(output['amount'])
                                 with transaction.atomic():
                                     txn_id = info['tx']['h']
                                     txn_qs = Transaction.objects.filter(
