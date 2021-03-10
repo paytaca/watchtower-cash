@@ -35,7 +35,7 @@ class TRT(object):
                             if not Transaction.objects.filter(txid=tr['txid']).exists():
                                 save_record(*args)
 
-    def recover_bch_tx(self, txid, block=None):
+    def recover_bch_tx(self, txn_id, block=None):
         url = f'https://rest.bitcoin.com/v2/transaction/details/{txn_id}'
         response = requests.get(url)
         if response.status_code == 200:

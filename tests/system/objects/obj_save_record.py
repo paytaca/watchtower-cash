@@ -14,7 +14,7 @@ class SaveRecordTest(object):
 		tasks.save_record(*args)
 
 		# Counter Checking
-		transaction = Transaction.objects.get(txid=args[2],address=args[1], spentIndex=args[6])
+		transaction = Transaction.objects.get(txid=args[2],address=args[1], spent_index=args[6])
 		assert transaction
 		if args[5] is not None:
 			blockheight = BlockHeight.objects.get(id=args[5])
@@ -26,7 +26,7 @@ class SaveRecordTest(object):
 		assert address
 		self.txid = transaction.txid
 		self.address = address.address
-		self.spent_index = transaction.spentIndex
+		self.spent_index = transaction.spent_index
 		self.amount = transaction.amount
 		self.source = transaction.source
 	

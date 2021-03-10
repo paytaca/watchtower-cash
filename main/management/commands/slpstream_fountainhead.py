@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from main.models import Token, Transaction
 from main.tasks import save_record
 from django.conf import settings
@@ -12,41 +13,53 @@ LOGGER = logging.getLogger(__name__)
 def run():
     url = "https://slpstream.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
     resp = requests.get(url, stream=True)
-    source = 'slpstreamfountainhead'
-    msg = 'Service not available!'
+    source = 'slpstream_fountainhead'
+    if resp.status_code != 200:
+        msg = f"{source} is not available"
+        LOGGER.error(msg)
+        raise Exception(msg)
     LOGGER.info('socket ready in : %s' % source)
+    data = ''  # data container
     for content in resp.iter_content(chunk_size=1024*1024):
-        decoded_text = content.decode('utf8')
-        if 'heartbeat' not in decoded_text:
-            data = decoded_text.strip().split('data: ')[-1]
-            proceed = True
-            try:
-                readable_dict = json.loads(data)
-            except json.decoder.JSONDecodeError as exc:
-                msg = f'Its alright. This is an expected error. --> {exc}'
-                LOGGER.error(msg)
-                proceed = False
-            except Exception as exc:
-                msg = f'This is a novel issue {exc}'
-                LOGGER.error(msg)
-                break
-            if proceed:
-                if len(readable_dict['data']) != 0:
-                    try:
-                        token_id = readable_dict['data'][0]['slp']['detail']['tokenIdHex']
-                        token_query =  Token.objects.filter(tokenid=token_id)
-                        if token_query.exists():
-                            if 'tx' in readable_dict['data'][0].keys():
-                                if readable_dict['data'][0]['slp']['valid']:
-                                    txn_id = readable_dict['data'][0]['tx']['h']
-                                    for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
-                                        slp_address = trans['address']
-                                        amount = float(trans['amount']) / 100000000
-                                        spent_index = trans['spentIndex']
-                                        token_obj = token_query.first()
-                                        tr_qs = Transaction.objects.filter(address=slp_address, txid=txn_id)
+        loaded_data = None
+        if content:
+            content = content.decode()
+            if not content.startswith(':heartbeat'):
+                if content.startswith('data:'):
+                    if data:
+                        # Data cointainer is ready for parsing
+                        clean_data = data.lstrip('data: ').strip()
+                        loaded_data = json.loads(clean_data, strict=False)
+                    # Reset the data container
+                    data = content
+                else:
+                    data += content
+        if loaded_data is not None:
+            if len(loaded_data['data']) > 0:
+                info = loaded_data['data'][0]
+                if 'slp' in info.keys():
+                    if info['slp']['valid']:
+                        if 'detail' in info['slp'].keys():
+                            slp_detail = info['slp']['detail']
+                            if slp_detail['transactionType'] == 'GENESIS':
+                                token_id = info['tx']['h']
+                            else:
+                                token_id = slp_detail['tokenIdHex']
+                            token, _ = Token.objects.get_or_create(tokenid=token_id)
+                            spent_index = 0
+                            for output in slp_detail['outputs']:
+                                slp_address = output['address']
+                                amount = float(output['amount']) / 100000000
+                                with transaction.atomic():
+                                    txn_id = info['tx']['h']
+                                    txn_qs = Transaction.objects.filter(
+                                        address=slp_address,
+                                        txid=txn_id,
+                                        spent_index=spent_index
+                                    )
+                                    if not txn_qs.exists():
                                         args = (
-                                            token_obj.tokenid,
+                                            token.tokenid,
                                             slp_address,
                                             txn_id,
                                             amount,
@@ -55,9 +68,9 @@ def run():
                                             spent_index
                                         )
                                         save_record(*args)
-                    except (KeyError, UnicodeEncodeError):
-                        pass
-        LOGGER.error(msg)
+                                        msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
+                                        LOGGER.info(msg)
+                                spent_index += 1
 
 
 class Command(BaseCommand):

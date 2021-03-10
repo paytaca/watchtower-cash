@@ -103,7 +103,7 @@ def client_acknowledgement(self, txid):
                             'token': transaction.token.tokenid,
                             'txid': transaction.txid,
                             'block': block,
-                            'spent_index': transaction.spentIndex
+                            'spent_index': transaction.spent_index
                         }
                         
                         #check if telegram/slack user
@@ -222,7 +222,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 address=transaction_address,
                 token=token_obj,
                 amount=amount,
-                spentIndex=spent_index,
+                spent_index=spent_index,
                 source=source
             )
 
@@ -562,16 +562,16 @@ def slpdbquery(self):
                     token_id = transaction['slp']['detail']['tokenIdHex']
                     token, _ = Token.objects.get_or_create(tokenid=token_id)
                     if transaction['slp']['detail']['outputs'][0]['address'] is not None:
-                        spent_index = 1
-                        for trans in transaction['slp']['detail']['outputs']:
+                        spent_index = 0
+                        for output in transaction['slp']['detail']['outputs']:
                             if not Transaction.objects.filter(txid=transaction['tx']['h']).exists():
                                 save_record.delay(
                                     token.tokenid,
-                                    trans['address'],
+                                    output['address'],
                                     transaction['tx']['h'],
-                                    trans['amount'],
+                                    output['amount'],
                                     source,
-                                    blockheightid=block_obj.id,
+                                    blockheightid=block.id,
                                     spent_index=spent_index
                                 )
                                 LOGGER.info(f"{transaction['tx']['h']} : {source.upper()}")
@@ -633,10 +633,10 @@ def slpbitcoinsocket(self):
                         if 'tx' in readable_dict['data'][0].keys():
                             if readable_dict['data'][0]['slp']['valid']:
                                 txn_id = readable_dict['data'][0]['tx']['h']
-                                for trans in readable_dict['data'][0]['slp']['detail']['outputs']:
-                                    slp_address = trans['address']
-                                    amount = float(trans['amount'])
-                                    spent_index = trans['spentIndex']
+                                for output in readable_dict['data'][0]['slp']['detail']['outputs']:
+                                    slp_address = output['address']
+                                    amount = float(output['amount'])
+                                    spent_index = output['spentIndex']
                                     args = (
                                         token_obj.tokenid,
                                         slp_address,
