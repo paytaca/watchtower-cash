@@ -44,12 +44,14 @@ class Transaction(models.Model):
         BlockHeight,
         on_delete=models.CASCADE,
         related_name='transactions',
-        null=True,
-        db_index=True
+        null=True
     )
     source = models.CharField(max_length=200, null=True, db_index=True)
     created_datetime = models.DateTimeField(default=timezone.now)
-    token = models.ForeignKey(Token, on_delete=models.DO_NOTHING, db_index=True)
+    token = models.ForeignKey(
+        Token,
+        on_delete=models.CASCADE
+    )
     subscribed = models.BooleanField(default=False, db_index=True)
     spentIndex = models.IntegerField(default=0, db_index=True)
     
@@ -65,7 +67,11 @@ class SendTo(models.Model):
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True, db_index=True)
-    transactions = models.ManyToManyField(Transaction, related_name='slpaddress', blank=True)
+    transactions = models.ManyToManyField(
+        Transaction,
+        related_name='slpaddress',
+        blank=True
+    )
 
     class Meta:
         verbose_name = 'SLP Address'
@@ -76,7 +82,11 @@ class SlpAddress(models.Model):
 
 class BchAddress(models.Model):
     address = models.CharField(max_length=200, unique=True, db_index=True)
-    transactions = models.ManyToManyField(Transaction, related_name='bchaddress', blank=True)
+    transactions = models.ManyToManyField(
+        Transaction,
+        related_name='bchaddress',
+        blank=True
+    )
     scanned = models.BooleanField(default=False)
     
     class Meta:
@@ -87,14 +97,39 @@ class BchAddress(models.Model):
         return self.address
 
 class Subscription(models.Model):
-    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='subscription', null=True)
-    address = models.ManyToManyField(SendTo, related_name='subscription')
-    slp = models.ForeignKey(SlpAddress, on_delete=models.CASCADE, related_name='subscription', null=True)
-    bch = models.ForeignKey(BchAddress, on_delete=models.CASCADE, related_name='subscription', null=True)
+    token = models.ForeignKey(
+        Token,
+        on_delete=models.CASCADE,
+        related_name='subscription',
+        null=True
+    )
+    address = models.ManyToManyField(
+        SendTo,
+        related_name='subscription'
+    )
+    slp = models.ForeignKey(
+        SlpAddress,
+        on_delete=models.CASCADE,
+        related_name='subscription',
+        null=True
+    )
+    bch = models.ForeignKey(
+        BchAddress,
+        on_delete=models.CASCADE,
+        related_name='subscription',
+        null=True
+    )
 
 class Subscriber(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscriber')
-    subscriptions = models.ManyToManyField(Subscription, related_name='subscriber')
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='subscriber'
+    )
+    subscriptions = models.ManyToManyField(
+        Subscription,
+        related_name='subscriber'
+    )
     confirmed = models.BooleanField(default=False)
     date_started = models.DateTimeField(default=timezone.now)
     telegram_user_details = JSONField(default=dict, blank=True)
