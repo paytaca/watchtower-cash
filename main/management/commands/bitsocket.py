@@ -53,16 +53,21 @@ def run():
                         spent_index = out['e']['i']
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
-                            args = (
-                                'bch',
-                                bchaddress,
-                                txn_id,
-                                amount,
-                                source,
-                                None,
-                                spent_index
+                            txn_qs = Transaction.objects.filter(
+                                address=bchaddress,
+                                txid=txn_id,
+                                spent_index=spent_index
                             )
-                            if not Transaction.objects.filter(txid=txn_id).exists():
+                            if not txn_qs.exists():
+                                args = (
+                                    'bch',
+                                    bchaddress,
+                                    txn_id,
+                                    amount,
+                                    source,
+                                    None,
+                                    spent_index
+                                )
                                 save_record(*args)
                             msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
                             LOGGER.info(msg)
