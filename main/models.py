@@ -3,16 +3,25 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
 
+
 class Token(models.Model):
     name = models.CharField(max_length=100, null=True)
     tokenid = models.CharField(max_length=200, null=True, blank=True, db_index=True)
     confirmation_limit = models.IntegerField(default=0)
+    decimals = models.IntegerField(default=0)
 
     def __str__(self):
         if self.name:
             return str(self.name)
         else:
             return str(self.tokenid)[0:7]
+    
+    def save(self, *args, **kwargs):
+        if not self.id and not self.decimals:
+            mod = __import__('main.utils', fromlist=['utils'])
+            obj = mod.slptoken.SLPToken(self.tokenId)
+            self.decimals = obj.get_decimals()
+        super(Token, self).save(*args, **kwargs)
 
 class BlockHeight(models.Model):
     number = models.IntegerField(default=0, unique=True, db_index=True)

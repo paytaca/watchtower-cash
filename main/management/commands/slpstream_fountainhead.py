@@ -49,9 +49,8 @@ def run():
                             spent_index = 0
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
-                                # TODO: This amount should be expressed according to the
-                                # decimals set for the token during genesis
-                                amount = float(output['amount'])
+                                amount_value = float(output['amount'])
+                                amount = round(amount_value, token.decimals)
                                 txn_id = info['tx']['h']
                                 txn_qs = Transaction.objects.filter(
                                     address=slp_address,

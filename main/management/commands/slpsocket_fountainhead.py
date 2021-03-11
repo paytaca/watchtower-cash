@@ -42,6 +42,7 @@ def run():
                     if info['slp']['valid']:
                         if 'detail' in info['slp'].keys():
                             slp_detail = info['slp']['detail']
+                            
                             if slp_detail['transactionType'] == 'GENESIS':
                                 token_id = info['tx']['h']
                             else:
@@ -50,9 +51,8 @@ def run():
                             spent_index = 0
                             for output in info['slp']['detail']['outputs']:
                                 slp_address = output['address']
-                                # TODO: This amount should be expressed according to the
-                                # decimals set for the token during genesis
-                                amount = float(output['amount'])
+                                amount_value = float(output['amount'])
+                                amount = round(amount_value, token.decimals)
                                 txn_id = info['tx']['h']
                                 txn_qs = Transaction.objects.filter(
                                     address=slp_address,

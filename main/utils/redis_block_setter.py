@@ -1,6 +1,6 @@
 from django.conf import settings
 import json
-from main.models import BlockHeight
+# from main.models import BlockHeight
 
 redis_storage = settings.REDISKV
 
