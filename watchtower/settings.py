@@ -202,16 +202,6 @@ CELERY_BEAT_SCHEDULE = {
     'slpdbquery': {
         'task': 'main.tasks.slpdbquery',
         'schedule': 30
-    },
-
-    # WEBSOCKETS
-    'slpbitcoinsocketsocket': {
-        'task': 'main.tasks.slpbitcoinsocket',
-        'schedule': 60
-    },
-    'bitsocket': {
-        'task': 'main.tasks.bitsocket',
-        'schedule': 60
     }
 }
 
