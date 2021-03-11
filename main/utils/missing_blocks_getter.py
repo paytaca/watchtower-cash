@@ -12,4 +12,4 @@ def missing_blocks(L, start, end):
     # is the upper part consecutive? 
     consecutive_high =  L[index] == L[end] - (end - index) 
     if not consecutive_high: 
-        yield from missing_blocks(L, index, end) 
+        yield from missing_blocks(L, index, end)

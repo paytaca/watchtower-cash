@@ -10,6 +10,10 @@ class Token(models.Model):
     confirmation_limit = models.IntegerField(default=0)
     decimals = models.IntegerField(default=0)
 
+
+    class Meta:
+        unique_together = ('name', 'tokenid',)
+
     def __str__(self):
         if self.name:
             return str(self.name)
@@ -19,8 +23,8 @@ class Token(models.Model):
     def save(self, *args, **kwargs):
 
         if not self.id and self.name != 'bch':
-            mod = __import__('main.utils', fromlist=['utils'])
-            obj = mod.slptoken.SLPToken(self.tokenId)
+            mod = __import__('main.utils', fromlist=['slptoken'])
+            obj = mod.slptoken.SLPToken(self.tokenid)
             self.decimals = obj.get_decimals()
             self.name = obj.get_name()
         super(Token, self).save(*args, **kwargs)

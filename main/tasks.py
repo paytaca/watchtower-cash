@@ -18,7 +18,7 @@ from main.models import (
 from django.contrib.auth.models import User
 from celery.exceptions import MaxRetriesExceededError 
 import json, random
-from main.utils import missing_blocks, block_setter, check_wallet_address_subscription, check_token_subscription
+from main.utils import block_setter, check_wallet_address_subscription, check_token_subscription
 from main.utils import slpdb as slpdb_scanner
 from main.utils.spicebot_token_registration import SpicebotTokens
 from main.utils.restbitcoin import RestBitcoin
@@ -481,10 +481,12 @@ def get_latest_block():
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created or obj.transactions_count == 0:
         # Queue to "PENDING-BLOCKS"
-        added = block_setter(number, new=True)
+        added, neglected = block_setter(number, new=True)
         if added:
             limit = obj.number - settings.MAX_BLOCK_AWAY
             BlockHeight.objects.filter(number__lte=limit).delete()
+            if neglected > 0:
+                review_block.delay()
             return f'*** NEW BLOCK { number } ***'
     else:
         return 'NO NEW BLOCK'
