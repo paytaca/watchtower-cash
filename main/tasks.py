@@ -213,9 +213,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
     with trans.atomic():
         try:
             if token.lower() == 'bch':
-                token_obj = Token.objects.get(name=token)
+                token_obj, _ = Token.objects.get_or_create(name=token)
             else:
-                token_obj = Token.objects.get(tokenid=token)
+                token_obj, _ = Token.objects.get_or_create(tokenid=token)
             
             transaction_obj, transaction_created = Transaction.objects.get_or_create(
                 txid=transactionid,

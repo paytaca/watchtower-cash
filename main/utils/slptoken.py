@@ -11,3 +11,8 @@ class SLPToken(object):
         if 'decimals' in self.data.keys():
             return self.data['decimals']
         return 0
+    
+    def get_name(self):
+        if 'name' in self.data.keys():
+            return self.data['name']
+        return ''
