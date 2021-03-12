@@ -6,6 +6,7 @@ redis_storage = settings.REDISKV
 
 def block_setter(number, new=False):
     added = False
+    neglected_blocks = []
     if b'PENDING-BLOCKS' not in redis_storage.keys('*'):
         data = json.dumps([])
         redis_storage.set('PENDING-BLOCKS', data)
@@ -15,15 +16,17 @@ def block_setter(number, new=False):
         if new or len(blocks) == 0:
             blocks.append(number)
             added = True
-    allblocks = list(BlockHeight.objects.values_list('number', flat=True))
-    neglected_blocks = list(missing_blocks(allblocks,0,len(allblocks)-1))
-    for number in neglected_blocks:
-        BlockHeight.objects.get_or_create(number=number)
-        blocks.append(number)
-    blocks = list(set(blocks))
-    blocks.sort()
-    data = json.dumps(blocks)
-    redis_storage.set('PENDING-BLOCKS', data)
+    
+        allblocks = list(BlockHeight.objects.values_list('number', flat=True))
+        if len(allblocks) > 1:
+            neglected_blocks = list(missing_blocks(allblocks,0,len(allblocks)-1))
+            for number in neglected_blocks:
+                BlockHeight.objects.get_or_create(number=number)
+                blocks.append(number)
+    _blocks = list(set(blocks))
+    _blocks.sort()
+    _data = json.dumps(_blocks)
+    redis_storage.set('PENDING-BLOCKS', _data)
     return added, len(neglected_blocks)
 
 

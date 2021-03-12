@@ -170,11 +170,13 @@ def review_block():
     if active_block:
         blocks = blocks.exclude(number=active_block)
     for block in blocks:
-        block = blocks.first()
         found_transactions = block.transactions.distinct('txid')
+        new_genesis = block.genesis
+        new_problematic = block.problematic
         if block.transactions_count == len(block.genesis) + len(block.problematic) + found_transactions.count():
             block.save()
             return 'ALL TRANSACTIONS ARE ALREADY COMPLETE'
+            
         missing = []
         db_transactions = found_transactions.values_list('txid', flat=True)
         url = f'https://rest.bitcoin.com/v2/block/detailsByHeight/{block.number}'
@@ -189,6 +191,11 @@ def review_block():
                         missing.append(tr)
                 problematic_trx += missing
                 block.problematic = list(set(problematic_trx))
+
+                for tr in block.genesis:
+                    if found_transactions.filter(txid=tr).exists():
+                        new_genesis.remove(tr)
+                block.genesis = new_genesis
                 block.save()
                 return 'ALL TRANSACTIONS HAVE BEEN COMPLETED'
     return 'ALL BLOCKS ARE UPDATED.'
