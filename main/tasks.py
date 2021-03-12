@@ -148,9 +148,8 @@ def problematic_transactions(self):
         problematic_transactions = block['problematic']
         txn_id = problematic_transactions[0]
         if not Transaction.objects.filter(txid=txn_id).exists():
-            # REST.BITCOIN.COM
             rb = RestBitcoin()
-            response = rb.get_transaction(txn_id, block['id'], 0)
+            response = rb.get_transaction(txn_id, block['id'])
 
             if response['status'] == 'success' and response['message'] == 'found':
                 save_record.delay(*response['args'])
@@ -188,7 +187,7 @@ def review_block():
         
 
         rb = RestBitcoin()
-        resp_data = rb.transactions_count(block.number)
+        resp_data = rb.get_block(block.number)
         
         if 'error' not in resp_data.keys():
             transactions = resp_data['tx']

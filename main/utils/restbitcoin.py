@@ -7,147 +7,115 @@ class RestBitcoin(object):
     def __init__(self):
         self.main_url = 'https://rest.bitcoin.com/v2'
 
-    def transactions_count(block):
-        url = f'{self.main_url}/block/detailsByHeight/{block}'
+    def get_data(self, url):
         resp = requests.get(url)
         if resp.status_code == 200:
             resp_data = json.loads(resp.text)
             return resp_data
         return {}
 
+    def get_block(block):
+        path = f"/block/detailsByHeight/{block}"
+        url = f'{self.main_url}{path}'
+        return self.get_data(url)
+
     def bch_checker(txn_id):
-        url = f'{self.main_url}/transaction/details/{txn_id}'
-        proceed = False
-        try:
-            response = requests.get(url)
-            if response.status_code == 200: proceed = True
-        except Exception as exc:
-            return f"PROBLEMATIC TX: {txn_id}"
-        if proceed:
-            data = json.loads(response.text)
-            if 'blockheight' in data.keys():
-                blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
-                if 'vout' in data.keys():
-                    for out in data['vout']:
-                        if 'scriptPubKey' in out.keys():
-                            if 'cashAddrs' in out['scriptPubKey'].keys():
-                                for cashaddr in out['scriptPubKey']['cashAddrs']:
-                                    if cashaddr.startswith('bitcoincash:'):
-                                        save_record.delay(
-                                            'bch',
-                                            cashaddr,
-                                            data['txid'],
-                                            out['value'],
-                                            "bch_checker",
-                                            blockheightid=blockheight_obj.id,
-                                            spent_index=out['spentIndex']
-                                        )
-                                        return f"PROCESSED VALID BCH TX: {txn_id}"
-                            else:
-                                # A transaction has no cash address:
-                                save_record.delay(
-                                    'bch',
-                                    'unparsed',
-                                    data['txid'],
-                                    out['value'],
-                                    "bch_checker",
-                                    blockheightid=blockheight_obj.id,
-                                    spent_index=out['spentIndex']
-                                )
-                                return f"PROCESSED VALID BCH TX: {txn_id}"
+        path = "/transaction/details/{txn_id}"
+        url = f'{self.main_url}{path}'
+        data = self.get_data(url)
+        if 'blockheight' in data.keys():
+            blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
+            if 'vout' in data.keys():
+                for out in data['vout']:
+                    if 'scriptPubKey' in out.keys():
+                        if 'cashAddrs' in out['scriptPubKey'].keys():
+                            for cashaddr in out['scriptPubKey']['cashAddrs']:
+                                if cashaddr.startswith('bitcoincash:'):
+                                    save_record.delay(
+                                        'bch',
+                                        cashaddr,
+                                        data['txid'],
+                                        out['value'],
+                                        "bch_checker",
+                                        blockheightid=blockheight_obj.id,
+                                        spent_index=out['spentIndex']
+                                    )
+                                    return f"PROCESSED VALID BCH TX: {txn_id}"
+                        else:
+                            # A transaction has no cash address:
+                            save_record.delay(
+                                'bch',
+                                'unparsed',
+                                data['txid'],
+                                out['value'],
+                                "bch_checker",
+                                blockheightid=blockheight_obj.id,
+                                spent_index=out['spentIndex']
+                            )
+                            return f"PROCESSED VALID BCH TX: {txn_id}"
 
         return f"PROCESSED BCH TX: {txn_id}"
 
-    def get_transaction(self, txn_id, blockheightid, currentcount):
+    def get_transaction(self, txn_id, blockheightid):
         response = {}
         args = ()
         message = status = 'failed'
-        transaction_url = f'{self.main_url}/slp/txDetails/{txn_id}'
-        proceed = True
-        try:
-            transaction_response = requests.get(transaction_url)
-        except Exception as exc:
-            proceed = False
-        if proceed == True:
-            if transaction_response.status_code == 200:
-                try:
-                    transaction_data = json.loads(transaction_response.text)
-                except Exception as exc:
-                    transaction_data = {}
-                if 'tokenInfo' in transaction_data.keys():
-                    if transaction_data['tokenInfo']:
-                        if 'tokenIsValid' in transaction_data['tokenInfo'].keys():
-                            if transaction_data['tokenInfo']['tokenIsValid']:
-                                if transaction_data['tokenInfo']['transactionType'].lower() in ['send', 'mint', 'burn']:
-                                    transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
-                                    token_obj, _ = Token.objects.get_or_create(tokenid=transaction_token_id)
-                                    
-                                    send_outputs = transaction_data['tokenInfo']['sendOutputs']
-                                    spent_index = 1
-                                    if len(transaction_data['retData']['vout'][spent_index]['scriptPubKey']['addresses']) > 1:
-                                        # the last index is intended to sender's current balance so we'll going to remove it in send_ouputs.
-                                        send_outputs.pop(-1)
-
-                                    for output in send_outputs:
-                                            amount = float(output)
-                                                                            
-                                            for legacy in transaction_data['retData']['vout'][spent_index]['scriptPubKey']['addresses']:
-                                                """ 
-                                                    Since there's no specification for slp addresses, we'll use legacy address that was 
-                                                    mapped in every send ouputs.
-                                                """
-                                                try:
-                                                    address_url = '{self.main_url}/address/details/%s' % legacy
-                                                    address_response = requests.get(address_url)
-                                                    address_data = json.loads(address_response.text)
-                                                except Exception as exc:
-                                                    # Once fail in sending request, we'll store given params to
-                                                    # redis temporarily and retry after 30 minutes cooldown.
-                                                    # msg = f'---> FOUND this error {exc} --> Now Delaying...'
-                                                    # LOGGER.error(msg)
-                                                    proceed = False
-
-                                                if (not 'error' in address_data.keys()) and proceed == True:
-                                                    args = (
-                                                        token_obj.tokenid,
-                                                        address_data['slpAddress'],
-                                                        txn_id,
-                                                        amount,
-                                                        "rest.bitcoin-per-block",
-                                                        blockheightid,
-                                                        spent_index
-                                                    )
-                                                    message = 'found'
-                                                    status = 'success'
-
-                                            spent_index += 1
-                                else:
-                                    message = transaction_data['tokenInfo']['transactionType'].lower()
-                                    status = 'success'
-
-                        else:
-                            LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
-                    else:
-                        # Transaction with no token is a BCH transaction and have to be scanned.
-                        status = 'success'
-                        message = 'no token'
-
-            elif transaction_response.status_code == 404:
-                message = 'not found'
-                status = 'success'
+        path = "/slp/txDetails/{txn_id}"
+        transaction_url = f'{self.main_url}{path}'
+        transaction_data = self.get_data(transaction_url)
+        if 'tokenInfo' in transaction_data.keys():
+            if transaction_data['tokenInfo']:
+                if 'tokenIsValid' in transaction_data['tokenInfo'].keys():
+                    if transaction_data['tokenInfo']['tokenIsValid']:
+                        if transaction_data['tokenInfo']['transactionType'].lower() in ['send', 'mint', 'burn']:
+                            transaction_token_id = transaction_data['tokenInfo']['tokenIdHex']
+                            token_obj, _ = Token.objects.get_or_create(tokenid=transaction_token_id)
                             
-        # if currentcount == total_transactions:
-            
-        #     obj = BlockHeight.objects.get(id=blockheightid)
-        #     obj.processed=True
-        #     obj.save()
-        if status == 'failed':
-            pass
-            # Once error found, we'll saved its params to
-            # redis temporarily and resume it after 2 minutes cooldown.
-            # msg = f'!!! Error found !!! Suspending to redis...'
-            # LOGGER.error(msg)
-            # suspendtoredis.delay(txn_id, blockheightid, currentcount, total_transactions)
+                            send_outputs = transaction_data['tokenInfo']['sendOutputs']
+                            spent_index = 1
+                            if len(transaction_data['retData']['vout'][spent_index]['scriptPubKey']['addresses']) > 1:
+                                # the last index is intended to sender's current balance so we'll going to remove it in send_ouputs.
+                                send_outputs.pop(-1)
+
+                            for output in send_outputs:
+                                    amount = float(output)
+                                                                    
+                                    for legacy in transaction_data['retData']['vout'][spent_index]['scriptPubKey']['addresses']:
+                                        """ 
+                                            Since there's no specification for slp addresses, we'll use legacy address that was 
+                                            mapped in every send ouputs.
+                                        """
+                                        try:
+                                            address_url = '{self.main_url}/address/details/%s' % legacy
+                                            address_response = requests.get(address_url)
+                                            address_data = json.loads(address_response.text)
+                                        except Exception as exc:
+                                            proceed = False
+
+                                        if (not 'error' in address_data.keys()) and proceed == True:
+                                            args = (
+                                                token_obj.tokenid,
+                                                address_data['slpAddress'],
+                                                txn_id,
+                                                amount,
+                                                "rest.bitcoin-per-block",
+                                                blockheightid,
+                                                spent_index
+                                            )
+                                            message = 'found'
+                                            status = 'success'
+
+                                    spent_index += 1
+                        else:
+                            message = transaction_data['tokenInfo']['transactionType'].lower()
+                            status = 'success'
+
+                else:
+                    LOGGER.error(f'Transaction {txn_id} was invalidated at rest.bitcoin.com')
+            else:
+                status = 'success'
+                message = 'no token'
+
         response = {
             'status': status,
             'args': args,
