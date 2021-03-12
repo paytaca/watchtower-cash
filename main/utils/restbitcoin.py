@@ -1,10 +1,62 @@
 import requests, json
-from main.models import Token
+from main.models import Token, BlockHeight
+from main.tasks import save_record
 
 class RestBitcoin(object):
 
     def __init__(self):
         self.main_url = 'https://rest.bitcoin.com/v2'
+
+    def transactions_count(block):
+        url = f'{self.main_url}/block/detailsByHeight/{block}'
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            resp_data = json.loads(resp.text)
+            return resp_data
+        return {}
+
+    def bch_checker(txn_id):
+        url = f'{self.main_url}/transaction/details/{txn_id}'
+        proceed = False
+        try:
+            response = requests.get(url)
+            if response.status_code == 200: proceed = True
+        except Exception as exc:
+            return f"PROBLEMATIC TX: {txn_id}"
+        if proceed:
+            data = json.loads(response.text)
+            if 'blockheight' in data.keys():
+                blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
+                if 'vout' in data.keys():
+                    for out in data['vout']:
+                        if 'scriptPubKey' in out.keys():
+                            if 'cashAddrs' in out['scriptPubKey'].keys():
+                                for cashaddr in out['scriptPubKey']['cashAddrs']:
+                                    if cashaddr.startswith('bitcoincash:'):
+                                        save_record.delay(
+                                            'bch',
+                                            cashaddr,
+                                            data['txid'],
+                                            out['value'],
+                                            "bch_checker",
+                                            blockheightid=blockheight_obj.id,
+                                            spent_index=out['spentIndex']
+                                        )
+                                        return f"PROCESSED VALID BCH TX: {txn_id}"
+                            else:
+                                # A transaction has no cash address:
+                                save_record.delay(
+                                    'bch',
+                                    'unparsed',
+                                    data['txid'],
+                                    out['value'],
+                                    "bch_checker",
+                                    blockheightid=blockheight_obj.id,
+                                    spent_index=out['spentIndex']
+                                )
+                                return f"PROCESSED VALID BCH TX: {txn_id}"
+
+        return f"PROCESSED BCH TX: {txn_id}"
 
     def get_transaction(self, txn_id, blockheightid, currentcount):
         response = {}
@@ -45,7 +97,7 @@ class RestBitcoin(object):
                                                     mapped in every send ouputs.
                                                 """
                                                 try:
-                                                    address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
+                                                    address_url = '{self.main_url}/address/details/%s' % legacy
                                                     address_response = requests.get(address_url)
                                                     address_data = json.loads(address_response.text)
                                                 except Exception as exc:
