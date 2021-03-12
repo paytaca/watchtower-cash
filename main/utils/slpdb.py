@@ -14,6 +14,7 @@ class SLPDB(object):
         data = resp.json()
         return data['c']
 
+
     def get_transactions_by_blk(self, block):
         payload = {
             'v': 3,
@@ -27,40 +28,6 @@ class SLPDB(object):
         }
         return self.get_data(payload)
 
-    def get_recent_slp_transactions(self):
-        payload = {
-            'v': 3,
-            'q': {
-                'db': ['c', 'u'],
-                'aggregate': [
-                {
-                    '$match': {
-                    'slp.valid': True,
-                    'slp.detail.transactionType': 'SEND',
-                    },
-                },
-                {
-                    '$sort': {
-                    '_id': -1,
-                    },
-                },
-                {
-                    '$skip': 0,
-                },
-                {
-                    '$limit': 500,
-                },
-                {
-                    '$lookup': {
-                    'from': 'tokens',
-                    'localField': 'slp.detail.tokenIdHex',
-                    'foreignField': 'tokenDetails.tokenIdHex',
-                    'as': 'token',
-                    },
-                },
-                ],
-                'limit': 500,
-            },
-        }
-        return self.get_data(payload)
+    
+
     

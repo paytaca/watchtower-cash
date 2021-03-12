@@ -11,8 +11,9 @@ from main.models import (
 )
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
-# from main.tasks import first_blockheight_scanner, client_acknowledgement, checktransaction
+from django.conf import settings
 admin.site.site_header = 'WatchTower.Cash Admin'
+REDIS_STORAGE = settings.REDISKV
 
 class TokenAdmin(admin.ModelAdmin):
     list_display = [
@@ -28,7 +29,7 @@ class TokenAdmin(admin.ModelAdmin):
         return qs.filter(subscriber__user=request.user)
 
 class BlockHeightAdmin(admin.ModelAdmin):
-    actions = ['rescan_selected_blockheights']
+    actions = ['add_to_pending', 'remove_from_pending']
     ordering = ('-number',)
 
     list_display = [
@@ -41,37 +42,24 @@ class BlockHeightAdmin(admin.ModelAdmin):
     ]
 
     
+    def add_to_pending(modeladmin, request, queryset):
+        for trans in queryset:
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks.append(trans.number)
+            REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
 
+    def remove_from_pending(modeladmin, request, queryset):
+        for trans in queryset:
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks.remove(trans.number)
+            REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
 
-    def rescan_selected_blockheights(modeladmin, request, queryset):
-        pass
-        # for trans in queryset:
-        #     first_blockheight_scanner.delay(trans.id)
-        #     BlockHeight.objects.filter(id=trans.id).update(processed=False)
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
 
-    # def get_actions(self, request):
-    #     actions = super().get_actions(request)
-    #     if 'delete_selected' in actions:
-    #         del actions['delete_selected']
-    #     return actions
-
-
-    # def _actions(self, obj):
-    #     if obj.processed:
-    #         return format_html(
-    #                 f"""<a class="button"
-    #                 href="/main/blockheight?rescan={obj.id}"
-    #                 style="background-color: transparent;padding:0px;"><img src='/static/admin/img/search.svg'></img></a>"""
-    #             )
-    #     else:
-    #         return format_html('<span style="color:blue"> Scanning...</span>')
-    
-    def changelist_view(self, request, extra_context=None):
-        self.param = request.GET.get('rescan', None)
-        if self.param:
-            first_blockheight_scanner.delay(self.param)
-            BlockHeight.objects.filter(id=self.param).update(processed=False)
-        return super(BlockHeightAdmin,self).changelist_view(request, extra_context=extra_context)
 
 
 class TransactionAdmin(admin.ModelAdmin):
@@ -102,7 +90,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
     def resend_unacknowledged_transactions(modeladmin, request, queryset):
         for tr in queryset:
-            client_acknowledgement(tr.token.tokenid, tr.id)
+            client_acknowledgement(tr.token.tokenid, r.id)
             
 
     def get_queryset(self, request): 

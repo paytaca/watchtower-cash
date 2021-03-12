@@ -352,36 +352,26 @@ def manage_block_transactions(self):
         if active_block in blocks:
             blocks.remove(active_block)
             pending_blocks = json.dumps(blocks)
+            REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
         block = BlockHeight.objects.get(number=active_block)
         slpdbquery.delay(block.id)
-        REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
 
     return 'REDIS IS TOO BUSY TO PROCESS NEW BLOCK'
 
-@shared_task(queue='get_latest_block')
-def get_latest_block():
+@shared_task(bind=True, queue='get_latest_block')
+def get_latest_block(self):
     # This task is intended to check new blockheight every 5 seconds through REST.BITCOIN.COM.
-    if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-    proceed = False
-    url = 'https://rest.bitcoin.com/v2/blockchain/getBlockchainInfo'
-    try:
-        resp = requests.get(url)
-    except Exception as exc:
-        return LOGGER.error(exc)
-    
-    if not 'blocks' in resp.text: return f"INVALID RESPONSE FROM  {url} : {resp.text}"
-    number = json.loads(resp.text)['blocks']
-
+    obj = bitdb_scanner.BitDB()
+    number = obj.get_latest_block()    
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created:
         # Queue to "PENDING-BLOCKS"
-        added, neglected = block_setter(number, new=True)
+        added = block_setter(obj.number)
         if added:
             limit = obj.number - settings.MAX_BLOCK_AWAY
             BlockHeight.objects.filter(number__lte=limit).delete()
-            if neglected:
-                review_block.delay()
-            return f'*** NEW BLOCK { number } ***'
+        return f'*** NEW BLOCK { obj.number } ***'
+        
     else:
         return 'NO NEW BLOCK'
 
