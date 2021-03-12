@@ -20,6 +20,7 @@ def block_setter(number, new=False):
     for number in neglected_blocks:
         BlockHeight.objects.get_or_create(number=number)
         blocks.append(number)
+    blocks = list(set(blocks))
     blocks.sort()
     data = json.dumps(blocks)
     redis_storage.set('PENDING-BLOCKS', data)
