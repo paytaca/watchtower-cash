@@ -176,7 +176,6 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 
 
 CELERY_BEAT_SCHEDULE = {
-    # MAIN SOURCES OF BCH/SLP TRANSACTIONS
     'get_latest_block': {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
@@ -188,20 +187,6 @@ CELERY_BEAT_SCHEDULE = {
     'problematic_transactions': {
         'task': 'main.tasks.problematic_transactions',
         'schedule': 3
-    },
-    'review_block': {
-        'task': 'main.tasks.review_block',
-        'schedule': 30
-    },
-    
-    # ALTERNATIVE SOURCES OF BCH/SLP TRANSACTIONS
-    'bitdbquery': {
-        'task': 'main.tasks.bitdbquery',
-        'schedule': 60
-    },
-    'slpdbquery': {
-        'task': 'main.tasks.slpdbquery',
-        'schedule': 30
     }
 }
 

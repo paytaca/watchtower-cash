@@ -1,6 +1,5 @@
 import requests, json
 from main.models import Token, BlockHeight
-from main.tasks import save_record
 
 class RestBitcoin(object):
 
@@ -14,7 +13,7 @@ class RestBitcoin(object):
             return resp_data
         return {}
 
-    def get_block(block):
+    def get_block(self, block):
         path = f"/block/detailsByHeight/{block}"
         url = f'{self.main_url}{path}'
         return self.get_data(url)
@@ -23,6 +22,7 @@ class RestBitcoin(object):
         path = "/transaction/details/{txn_id}"
         url = f'{self.main_url}{path}'
         data = self.get_data(url)
+        outs = []
         if 'blockheight' in data.keys():
             blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
             if 'vout' in data.keys():
@@ -31,7 +31,7 @@ class RestBitcoin(object):
                         if 'cashAddrs' in out['scriptPubKey'].keys():
                             for cashaddr in out['scriptPubKey']['cashAddrs']:
                                 if cashaddr.startswith('bitcoincash:'):
-                                    save_record.delay(
+                                    outs.append(
                                         'bch',
                                         cashaddr,
                                         data['txid'],
@@ -43,7 +43,7 @@ class RestBitcoin(object):
                                     return f"PROCESSED VALID BCH TX: {txn_id}"
                         else:
                             # A transaction has no cash address:
-                            save_record.delay(
+                            outs.append(
                                 'bch',
                                 'unparsed',
                                 data['txid'],
@@ -53,8 +53,7 @@ class RestBitcoin(object):
                                 spent_index=out['spentIndex']
                             )
                             return f"PROCESSED VALID BCH TX: {txn_id}"
-
-        return f"PROCESSED BCH TX: {txn_id}"
+        return outs
 
     def get_transaction(self, txn_id, blockheightid):
         response = {}

@@ -14,7 +14,7 @@ def create_auth_token(sender, instance=None, created=False, **kwargs):
 @receiver(post_save, sender=BlockHeight)
 def blockheight_post_save(sender, instance=None, created=False, **kwargs):
     if not created:
-        all_transactions  = len(instance.genesis) + instance.transactions.distinct('txid').count() + len(instance.problematic)
+        all_transactions  = instance.transactions.distinct('txid').count() + len(instance.problematic)
         if all_transactions == instance.transactions_count:
             BlockHeight.objects.filter(id=instance.id).update(processed=True, updated_datetime=timezone.now())
 

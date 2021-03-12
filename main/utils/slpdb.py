@@ -1,16 +1,16 @@
 
-from base64 import b64encode,  b64decode
-import json
-import requests
+import json,requests,base64
 
 class SLPDB(object):
 
     def __init__(self):
         self.base_url = 'https://slpdb.fountainhead.cash/q/'
 
-    def get_data(self, json_string):
-        url = base64.b64encode(json_string)
-        resp = requests.get(f"{self.base_url}{url.decode('utf-8')}")
+    def get_data(self, payload):
+        raw = json.dumps(payload)
+        raw = raw.replace(", ", ",")
+        json_query = str(base64.b64encode(raw.encode()).decode())
+        resp = requests.get(f"{self.base_url}{json_query}")
         data = resp.json()
         return data['c']
 
@@ -25,10 +25,7 @@ class SLPDB(object):
                 "limit": 100000
             }
         }
-        raw = json.dumps(payload)
-        raw = raw.replace(", ", ",")
-        json_string = str(b64encode(raw.encode()).decode())
-        self.get_data(json_string)
+        return self.get_data(payload)
 
     def get_recent_slp_transactions(self):
         payload = {
@@ -65,8 +62,5 @@ class SLPDB(object):
                 'limit': 500,
             },
         }
-        raw = json.dumps(payload)
-        raw = raw.replace(", ", ",")
-        json_query = str(b64encode(raw.encode()).decode())
-        self.get_data(json_query)
+        return self.get_data(payload)
     

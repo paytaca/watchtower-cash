@@ -1,3 +1,5 @@
+import json,requests,base64
+
 class BitDB(object):
 
     def __init__(self):
@@ -15,7 +17,7 @@ class BitDB(object):
             "q": {
                 "db": ["c"],
                 "find": {
-                    "blk.i": 678375
+                    "blk.i": blk
                 },
                 "limit": 100000
             }
