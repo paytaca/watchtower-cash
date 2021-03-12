@@ -142,9 +142,10 @@ def problematic_transactions(self):
         problematic=[]
     ).order_by('-number')
     if blocks.exists():
-        blocks = list(blocks.values('id','problematic'))
+        blocks = list(blocks.values('id','problematic', 'unparsed'))
         block = blocks[0]
         problematic_transactions = block['problematic']
+        unparsed_transactions = block['unparsed']
         txn_id = problematic_transactions[0]
         if not Transaction.objects.filter(txid=txn_id).exists():
             rb = RestBitcoin()
@@ -155,12 +156,22 @@ def problematic_transactions(self):
                 problematic_transactions.remove(txn_id)
             if response['status'] == 'success' and response['message'] == 'no token':
                 rb = RestBitcoin()
-                msg = rb.bch_checker(txn_id)
-                if 'PROCESSED VALID' in msg: problematic_transactions.remove(txn_id)    
+                args = rb.bch_checker(txn_id)
+                if args:
+                    if args[1] == 'unparsed':
+                        unparsed_transactions.append(args[2])
+                    else:
+                        save_record(*args)
+                    problematic_transactions.remove(txn_id)
+                        
         else:
             problematic_transactions.remove(txn_id)
 
-        BlockHeight.objects.filter(id=block['id']).update(problematic=problematic_transactions)
+        
+        BlockHeight.objects.filter(id=block['id']).update(
+            problematic=problematic_transactions,
+            unparsed=unparsed_transactions
+        )
         return f'FIXING PROBLEMATIC TX: {txn_id}'
     return 'NO PROBLEMATIC TRANSACTIONS AS OF YET'
 

@@ -18,11 +18,10 @@ class RestBitcoin(object):
         url = f'{self.main_url}{path}'
         return self.get_data(url)
 
-    def bch_checker(txn_id):
-        path = "/transaction/details/{txn_id}"
+    def bch_checker(self, txn_id):
+        path = f"/transaction/details/{txn_id}"
         url = f'{self.main_url}{path}'
         data = self.get_data(url)
-        outs = []
         if 'blockheight' in data.keys():
             blockheight_obj, created = BlockHeight.objects.get_or_create(number=data['blockheight'])
             if 'vout' in data.keys():
@@ -31,35 +30,34 @@ class RestBitcoin(object):
                         if 'cashAddrs' in out['scriptPubKey'].keys():
                             for cashaddr in out['scriptPubKey']['cashAddrs']:
                                 if cashaddr.startswith('bitcoincash:'):
-                                    outs.append(
+                                    return (
                                         'bch',
                                         cashaddr,
                                         data['txid'],
                                         out['value'],
                                         "bch_checker",
-                                        blockheightid=blockheight_obj.id,
-                                        spent_index=out['spentIndex']
+                                        blockheight_obj.id,
+                                        out['spentIndex'],
                                     )
-                                    return f"PROCESSED VALID BCH TX: {txn_id}"
+                                    
                         else:
                             # A transaction has no cash address:
-                            outs.append(
+                            return (
                                 'bch',
                                 'unparsed',
                                 data['txid'],
                                 out['value'],
                                 "bch_checker",
-                                blockheightid=blockheight_obj.id,
-                                spent_index=out['spentIndex']
+                                blockheight_obj.id,
+                                out['spentIndex']
                             )
-                            return f"PROCESSED VALID BCH TX: {txn_id}"
-        return outs
+        return None
 
     def get_transaction(self, txn_id, blockheightid):
         response = {}
         args = ()
         message = status = 'failed'
-        path = "/slp/txDetails/{txn_id}"
+        path = f"/slp/txDetails/{txn_id}"
         transaction_url = f'{self.main_url}{path}'
         transaction_data = self.get_data(transaction_url)
         if 'tokenInfo' in transaction_data.keys():

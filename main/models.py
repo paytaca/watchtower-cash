@@ -37,7 +37,7 @@ class BlockHeight(models.Model):
     processed = models.BooleanField(default=False)
     currentcount = models.IntegerField(default=0)
     problematic = JSONField(default=list)
-    
+    unparsed = JSONField(default=list)
 
 
     def save(self, *args, **kwargs):
