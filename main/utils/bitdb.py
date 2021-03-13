@@ -20,7 +20,7 @@ class BitDB(object):
                 "find": {
                     "blk.i": blk
                 },
-                "limit": 100000
+                "limit": 999999
             }
         }
         return self.get_data(query)

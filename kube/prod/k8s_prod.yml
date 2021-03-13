@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: watchtower
-          image: registry.digitalocean.com/spicetoken/watchtower:ce86969ff5b8
+          image: registry.digitalocean.com/spicetoken/watchtower:d276630c4823
           env:
             - name: DEPLOYMENT_INSTANCE
               value: prod

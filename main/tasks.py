@@ -17,7 +17,7 @@ from main.models import (
 )
 from django.contrib.auth.models import User
 from celery.exceptions import MaxRetriesExceededError 
-import json, random
+import json, random, time
 from main.utils import block_setter, check_wallet_address_subscription, check_token_subscription
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
@@ -137,16 +137,31 @@ def client_acknowledgement(self, txid):
 # SECOND LAYER
 @shared_task(bind=True, queue='problematic_transactions')
 def problematic_transactions(self):  
+    if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
     time_threshold = timezone.now() - datetime.timedelta(hours=2)
     blocks = BlockHeight.objects.exclude(
         problematic=[]
     ).order_by('-number')
     if blocks.exists():
-        blocks = list(blocks.values('id','problematic', 'unparsed'))
-        block = blocks[0]
+        list_blocks = list(blocks.values('id','problematic', 'unparsed', 'number'))
+        block = list_blocks[0]
         problematic_transactions = block['problematic']
+        pending = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+        if not pending:
+            pending.append(block['number'])
+            REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending))
+            BlockHeight.objects.filter(id=block['id']).update(
+                problematic=[],
+                unparsed=[]
+            )                
+            return f'BLOCK {block["number"]} WILL RERUN IMMEDIATELY TO PROCESS {length} PROBLEMATIC TRANSACTIONS.'
         unparsed_transactions = block['unparsed']
-        txn_id = problematic_transactions[0]
+        
+        for txn_id in block['problematic']:
+            if Transaction.objects.filter(txid=txn_id).exists():
+                problematic_transactions.remove(txn_id)
+            else:
+                break
         if not Transaction.objects.filter(txid=txn_id).exists():
             rb = RestBitcoin()
             response = rb.get_transaction(txn_id, block['id'])
@@ -164,8 +179,7 @@ def problematic_transactions(self):
                         save_record(*args)
                     problematic_transactions.remove(txn_id)
                         
-        else:
-            problematic_transactions.remove(txn_id)
+        
 
         
         BlockHeight.objects.filter(id=block['id']).update(
@@ -183,7 +197,7 @@ def review_block():
     for block in blocks:
         found_transactions = block.transactions.distinct('txid')
     
-        if block.transactions_count == len(block.problematic) + found_transactions.count():
+        if block.transactions_count == len(block.problematic) + found_transactions.count() + len(block.unparsed):
             block.save()
             LOGGER.info(f'ALL TRANSACTIONS IN BLOCK {block.number} WERE COMPLETED.')
             continue
@@ -201,6 +215,7 @@ def review_block():
                 if tr not in db_transactions and tr not in block.problematic:
                     missing.append(tr)
             block.problematic = list(set(missing))
+
             block.save()
             LOGGER.info(f'ALL TRANSACTIONS IN BLOCK {block.number} HAVE BEEN COMPLETED')
 
@@ -261,7 +276,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
 
 @shared_task(bind=True, queue='bitdbquery')
-def bitdbquery(self, block_id): 
+def bitdbquery(self, block_id):
     divider = "\n\n##########################################\n\n"
     source = 'bitdb-query'
     LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider}")
@@ -269,14 +284,10 @@ def bitdbquery(self, block_id):
     obj = bitdb_scanner.BitDB()
     data = obj.get_transactions_by_blk(int(block.number))
     total = len(data)
-    block.transactions_count = total
-    block.save()
     LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
-    tx_count = 1
+    tx_count = 0
     for transaction in data:
         txn_id = transaction['tx']['h']
-        LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | {tx_count} OUT OF {total}')
-        counter = 1
         for out in transaction['out']: 
             args = tuple()
             amount = out['e']['v'] / 100000000
@@ -293,14 +304,18 @@ def bitdbquery(self, block_id):
                     spent_index
                 )
                 save_record(*args)
-            counter += 1
         tx_count += 1
+        LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | {tx_count} OUT OF {total}')
+    block.transactions_count = tx_count
+    block.save()
     REDIS_STORAGE.set('READY', 1)
     REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     review_block.delay()
 
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
+    time.sleep(30)
+    # Sleeping is necessary to set an interval to gather great deal of transactions
     divider = "\n\n##########################################\n\n"
     source = 'slpdb-query'    
     LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider}")
@@ -360,9 +375,9 @@ def manage_block_transactions(self):
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
-    # This task is intended to check new blockheight every 5 seconds through REST.BITCOIN.COM.
+    # This task is intended to check new blockheight every 5 seconds through BitDB Query
     obj = bitdb_scanner.BitDB()
-    number = obj.get_latest_block()    
+    number = obj.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created:
         # Queue to "PENDING-BLOCKS"
