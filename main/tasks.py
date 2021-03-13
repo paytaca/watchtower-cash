@@ -100,14 +100,14 @@ def client_acknowledgement(self, txid):
                         data = {
                             'amount': transaction.amount,
                             'address': transaction.address,
-                            'source': transaction.source,
+                            'source': 'WatchTower',
                             'token': transaction.token.tokenid,
                             'txid': transaction.txid,
                             'block': block,
                             'spent_index': transaction.spent_index
                         }
                         
-                        #check if telegram/slack user
+                        #check if telegram/slack 3user
                         # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
                         
                         if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
@@ -315,11 +315,11 @@ def bitdbquery(self, block_id):
 
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
-    time.sleep(30)
-    # Sleeping is necessary to set an interval to gather great deal of transactions
     divider = "\n\n##########################################\n\n"
     source = 'slpdb-query'    
     LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider}")
+    time.sleep(30)
+    # Sleeping is necessary to set an interval to gather great deal of transactions
     block = BlockHeight.objects.get(id=block_id)
     obj = slpdb_scanner.SLPDB()
     data = obj.get_transactions_by_blk(int(block.number))
