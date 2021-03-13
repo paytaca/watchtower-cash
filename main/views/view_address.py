@@ -40,12 +40,13 @@ class SetAddressView(APIView):
         tokenname = request.data.get('tokenname', None)
         reason = 'Invalid params.'
         status = 'failed'
-        if tokenaddress and destinationAddress and tokenid and tokenname:
+        if tokenaddress and destinationAddress:
             subscriber_qs = Subscriber.objects.filter(user=request.user)
             reason = 'Not yet subscribed.'
             if subscriber_qs.exists():
                 subscriber = subscriber_qs.first()
                 sendto_obj, created = SendTo.objects.get_or_create(address=destinationAddress)
+
                 if 'bitcoincash' in tokenaddress:
                     address_obj, created = BchAddress.objects.get_or_create(address=tokenaddress)
                     subscription_obj, created = Subscription.objects.get_or_create(bch=address_obj)
@@ -54,10 +55,13 @@ class SetAddressView(APIView):
                     address_obj, created = SlpAddress.objects.get_or_create(address=tokenaddress)
                     subscription_obj, created = Subscription.objects.get_or_create(slp=address_obj)
                     reason = 'SLP added.'
+
+                
                 if tokenid is not None:
                     token_obj, created =  MyToken.objects.get_or_create(tokenid=tokenid)
                     token_obj.name = tokenname.lower()
                     subscription_obj.token = token_obj
+
                 subscription_obj.save()
                 subscription_obj.address.add(sendto_obj)
                 subscriber.subscriptions.add(subscription_obj)
