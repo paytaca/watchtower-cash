@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from main.models import Subscriber, Token
+from main.models import Subscriber, Token, Subscription
 User = get_user_model()
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -10,8 +10,8 @@ def spicebot_token_subscription(token_obj):
     return subscriber.subscription.filter(token=token_obj).exists()
     
 def check_token_subscription(token_id, subscription_id):
-    subscription = subscription.objects.get(id=subscription_id)
+    subscription = Subscription.objects.get(id=subscription_id)
     if subscription.token:
-        if subscription.token.token_id != token_id:
+        if subscription.token.tokenid != token_id:
             return False
     return True

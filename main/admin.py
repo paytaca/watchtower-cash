@@ -142,7 +142,7 @@ class SubscriberAdmin(admin.ModelAdmin):
         'user',
         'confirmed'
     ]
-    exclude = ('subscription',)
+    exclude = ('subscriptions',)
 
     # [{"token_id": 0,"target_addresses":[],"confirmation":0}]
     

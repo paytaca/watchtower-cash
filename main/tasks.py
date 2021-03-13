@@ -94,7 +94,8 @@ def client_acknowledgement(self, txid):
                 subscription = subscription.first()
                 webhook_addresses = subscription.address.all()
                 for webhook_address in webhook_addresses:
-                    can_be_send = check_token_subscription(transaction.token.tokenid, subscription.id)
+                    # can_be_send = check_token_subscription(transaction.token.tokenid, subscription.id)
+                    can_be_send = True
                     if can_be_send:
                         data = {
                             'amount': transaction.amount,
