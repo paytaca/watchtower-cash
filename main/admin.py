@@ -47,6 +47,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
         for trans in queryset:
             pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
             pending_blocks.append(trans.number)
+            pending_blocks = list(set(pending_blocks))
             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
 
     def remove_from_pending(modeladmin, request, queryset):
