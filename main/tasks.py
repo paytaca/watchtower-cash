@@ -371,8 +371,12 @@ def manage_block_transactions(self):
             REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
         block = BlockHeight.objects.get(number=active_block)
         slpdbquery.delay(block.id)
-
-    return 'REDIS IS TOO BUSY TO PROCESS NEW BLOCK'
+    
+    active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
+    if active_block:
+        return f'REDIS IS TOO BUSY FOR BLOCK {active_block}.'
+    else:
+        return 'REDIS IS WAITING FOR AN ACTIVE BLOCK. THERE HAS TO BE AN ACTIVE BLOCK RUNNING.'
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
