@@ -278,10 +278,10 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self, block_id):
+    block = BlockHeight.objects.get(id=block_id)
     divider = "\n\n##########################################\n\n"
     source = 'bitdb-query'
-    LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider}")
-    block = BlockHeight.objects.get(id=block_id)
+    LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider} | BLOCK: {block.number}")
     obj = bitdb_scanner.BitDB()
     data = obj.get_transactions_by_blk(int(block.number))
     total = len(data)
@@ -317,7 +317,7 @@ def bitdbquery(self, block_id):
 def slpdbquery(self, block_id):
     divider = "\n\n##########################################\n\n"
     source = 'slpdb-query'    
-    LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider}")
+    LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider} | BLOCK: {block.number}")
     time.sleep(30)
     # Sleeping is necessary to set an interval to gather great deal of transactions
     block = BlockHeight.objects.get(id=block_id)
