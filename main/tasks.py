@@ -281,7 +281,7 @@ def bitdbquery(self, block_id):
     block = BlockHeight.objects.get(id=block_id)
     divider = "\n\n##########################################\n\n"
     source = 'bitdb-query'
-    LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider} | BLOCK: {block.number}")
+    LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
     obj = bitdb_scanner.BitDB()
     data = obj.get_transactions_by_blk(int(block.number))
     total = len(data)
@@ -315,12 +315,12 @@ def bitdbquery(self, block_id):
 
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
+    block = BlockHeight.objects.get(id=block_id)
     divider = "\n\n##########################################\n\n"
     source = 'slpdb-query'    
-    LOGGER.info(f"{divider}REQUESTING TO {source.upper()}{divider} | BLOCK: {block.number}")
+    LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
     time.sleep(30)
     # Sleeping is necessary to set an interval to gather great deal of transactions
-    block = BlockHeight.objects.get(id=block_id)
     obj = slpdb_scanner.SLPDB()
     data = obj.get_transactions_by_blk(int(block.number))
     total = len(data)
