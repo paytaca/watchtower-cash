@@ -6,6 +6,7 @@ from rest_framework.authtoken.models import Token
 from main.models import BlockHeight, Transaction
 from django.utils import timezone
 from main.utils import block_setter
+from main.utils import check_wallet_address_subscription
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_auth_token(sender, instance=None, created=False, **kwargs):
@@ -27,5 +28,6 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
 
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
-    if instance.subscribed:
+    subscription = check_wallet_address_subscription(instance.address)
+    if subscription.exists() and not instance.acknowledged:
         client_acknowledgement.delay(instance.id)

@@ -131,7 +131,7 @@ def client_acknowledgement(self, txid):
                         else:
                             self.retry(countdown=3)
                 transaction.save()
-                return f'ACKNOWLEDGEMENT SENT FOR : {txid}'
+                return f'ACKNOWLEDGEMENT SENT FOR : {transaction.txid}'
     return
 
 
@@ -305,8 +305,8 @@ def bitdbquery(self, block_id):
                     spent_index
                 )
                 save_record(*args)
+            LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
         tx_count += 1
-        LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | {tx_count} OUT OF {total}')
     block.transactions_count = tx_count
     block.save()
     REDIS_STORAGE.set('READY', 1)
@@ -327,7 +327,6 @@ def slpdbquery(self, block_id):
     LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} SLP TRANSACTIONS {divider}")
     tx_count = 1
     for transaction in data:
-        LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | {tx_count} OUT OF {total}")
         if transaction['slp']['valid']:
             spent_index = 0
             if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
@@ -345,7 +344,7 @@ def slpdbquery(self, block_id):
                             blockheightid=block_id,
                             spent_index=spent_index
                         )
-                        LOGGER.info(f"{transaction['tx']['h']} : {source.upper()}")
+                        LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
                         spent_index += 1
         tx_count += 1
     bitdbquery.delay(block_id)
