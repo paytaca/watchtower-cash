@@ -18,7 +18,7 @@ from main.models import (
 from django.contrib.auth.models import User
 from celery.exceptions import MaxRetriesExceededError 
 import json, random, time
-from main.utils import block_setter, check_wallet_address_subscription, check_token_subscription
+from main.utils import check_wallet_address_subscription, check_token_subscription
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
 from main.utils.restbitcoin import RestBitcoin
@@ -381,11 +381,6 @@ def get_latest_block(self):
     number = obj.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created:
-        # Queue to "PENDING-BLOCKS"
-        added = block_setter(obj.number)
-        if added:
-            limit = obj.number - settings.MAX_BLOCK_AWAY
-            BlockHeight.objects.filter(number__lte=limit).delete()
         return f'*** NEW BLOCK { obj.number } ***'
         
     else:
