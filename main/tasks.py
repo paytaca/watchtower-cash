@@ -123,9 +123,7 @@ def client_acknowledgement(self, txid):
 
                         resp = requests.post(webhook_address.address,data=data)
                         if resp.status_code == 200:
-                            response_data = json.loads(resp.text)
-                            if response_data['success']:
-                                transaction.acknowledged = True
+                            transaction.acknowledged = True
                         elif resp.status_code == 404:
                             LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
                         else:
@@ -305,7 +303,7 @@ def bitdbquery(self, block_id):
                     spent_index
                 )
                 save_record(*args)
-            LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
+                LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
         tx_count += 1
     block.transactions_count = tx_count
     block.save()
