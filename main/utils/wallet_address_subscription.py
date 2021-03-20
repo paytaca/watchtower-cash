@@ -1,4 +1,4 @@
-from main.models import Token, Subscription
+from main.models import Subscription
 
 def check_wallet_address_subscription(address):
     if 'bitcoincash' in address:
