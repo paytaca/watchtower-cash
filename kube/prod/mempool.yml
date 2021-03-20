@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: watchtower
+  name: watchtower-mempool
   namespace: prod
   labels:
     app: watchtower-mempool
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: watchtower-mempool
-          image: registry.digitalocean.com/spicetoken/watchtower:baea3aec7051
+          image: registry.digitalocean.com/spicetoken/watchtower:240e07d41d05
           command: [ "supervisord", "-c", "/code/supervisor/mempool.conf", "--nodaemon" ]
           env:
             - name: DEPLOYMENT_INSTANCE

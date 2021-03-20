@@ -246,3 +246,42 @@ MAX_BLOCK_AWAY = 4000
 MAX_RESTB_RETRIES = 14
 MAX_SLPBITCOIN_SOCKET_DURATION = 10
 MAX_BITSOCKET_DURATION = 10
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'console': {
+            'format': '[%(asctime)s %(name)s] %(levelname)s [%(pathname)s:%(lineno)d] - %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'console'
+        },
+    },
+    'loggers': {
+        '': {
+            'level': 'WARNING',
+            'handlers': ['console'],
+            'propagate': False
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False
+        },
+        'main': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False
+        },
+        'django.template': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False
+        }
+    },
+}
