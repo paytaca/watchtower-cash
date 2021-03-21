@@ -1,40 +1,24 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: watchtower
-  namespace: prod
-  labels:
-    app: watchtower
-spec:
-  selector:
-    app: watchtower
-  type: NodePort
-  ports:
-    - name: backend
-      port: 8000
-      targetPort: 8000
-      protocol: TCP
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: watchtower
+  name: watchtower-mempool
   namespace: prod
   labels:
-    app: watchtower
+    app: watchtower-mempool
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: watchtower
+      app: watchtower-mempool
   template:
     metadata:
       labels:
-        app: watchtower
+        app: watchtower-mempool
     spec:
       containers:
-        - name: watchtower
-          image: registry.digitalocean.com/spicetoken/watchtower:1af4686153cc
+        - name: watchtower-mempool
+          image: registry.digitalocean.com/spicetoken/watchtower:79ea206b1dad
+          command: [ "supervisord", "-c", "/code/supervisor/mempool.conf", "--nodaemon" ]
           env:
             - name: DEPLOYMENT_INSTANCE
               value: prod
@@ -113,5 +97,3 @@ spec:
                 secretKeyRef:
                   name: app-credentials
                   key: slacksigningsecret
-      nodeSelector:
-        doks.digitalocean.com/node-pool: pool-36b3x1p39

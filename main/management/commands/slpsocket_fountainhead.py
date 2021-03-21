@@ -51,8 +51,7 @@ def run():
                             spent_index = 0
                             for output in info['slp']['detail']['outputs']:
                                 slp_address = output['address']
-                                amount_value = float(output['amount'])
-                                amount = round(amount_value, token.decimals)
+                                amount = float(output['amount'])
                                 txn_id = info['tx']['h']
                                 txn_qs = Transaction.objects.filter(
                                     address=slp_address,

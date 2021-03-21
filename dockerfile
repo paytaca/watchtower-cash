@@ -18,4 +18,4 @@ COPY . /code
 WORKDIR /code
 
 ENTRYPOINT [ "wait-for-it.sh", "postgres:5432", "--", "sh", "entrypoint.sh" ]
-CMD [ "wait-for-it.sh", "postgres:5432", "--", "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
+# CMD [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]

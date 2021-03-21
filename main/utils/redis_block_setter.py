@@ -32,6 +32,4 @@ def block_setter(number):
     _data = json.dumps(_blocks)
     redis_storage.set('PENDING-BLOCKS', _data)
     return added
-
-
-    
+ 
