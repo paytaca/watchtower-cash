@@ -373,10 +373,15 @@ def manage_block_transactions(self):
         REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
         if active_block in blocks:
             blocks.remove(active_block)
+            blocks = list(set(blocks))  # Uniquify the list
             pending_blocks = json.dumps(blocks)
             REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
         block = BlockHeight.objects.get(number=active_block)
-        slpdbquery.delay(block.id)
+        if block.processed:
+            REDIS_STORAGE.set('READY', 1)
+            REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+        else:
+            slpdbquery.delay(block.id)
     
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
     if active_block:

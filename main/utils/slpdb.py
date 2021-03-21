@@ -2,6 +2,7 @@
 import json
 import requests
 import base64
+import random
 
 
 class SLPDBHttpExcetion(Exception):
@@ -10,7 +11,11 @@ class SLPDBHttpExcetion(Exception):
 class SLPDB(object):
 
     def __init__(self):
-        self.base_url = 'https://slpdb.fountainhead.cash/q/'
+        urls = [
+            'https://slpdb.fountainhead.cash/q/',
+            'https://slpdb.bitcoin.com/q/'
+        ]
+        self.base_url = random.choice(urls)
 
     def get_data(self, payload):
         raw = json.dumps(payload)

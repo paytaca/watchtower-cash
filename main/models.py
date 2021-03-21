@@ -41,8 +41,8 @@ class BlockHeight(models.Model):
     updated_datetime = models.DateTimeField(null=True, blank=True)
     processed = models.BooleanField(default=False)
     currentcount = models.IntegerField(default=0)
-    problematic = JSONField(default=list)
-    unparsed = JSONField(default=list)
+    problematic = JSONField(default=list, blank=True)
+    unparsed = JSONField(default=list, blank=True)
 
 
     def save(self, *args, **kwargs):
