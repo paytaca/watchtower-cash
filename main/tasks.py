@@ -374,6 +374,7 @@ def manage_block_transactions(self):
         if active_block in blocks:
             blocks.remove(active_block)
             blocks = list(set(blocks))  # Uniquify the list
+            blocks.sort()  # Then sort, ascending
             pending_blocks = json.dumps(blocks)
             REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
         block = BlockHeight.objects.get(number=active_block)

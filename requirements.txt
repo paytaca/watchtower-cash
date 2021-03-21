@@ -77,3 +77,5 @@ whitenoise==5.0.1
 zipp==3.0.0
 zope.event==4.4
 zope.interface==5.1.0
+grpcio==1.34.0
+grpcio-tools==1.34.0
