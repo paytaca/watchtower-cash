@@ -1,5 +1,11 @@
 
-import json,requests,base64
+import json
+import requests
+import base64
+
+
+class SLPDBHttpExcetion(Exception):
+    pass
 
 class SLPDB(object):
 
@@ -11,8 +17,11 @@ class SLPDB(object):
         raw = raw.replace(", ", ",")
         json_query = str(base64.b64encode(raw.encode()).decode())
         resp = requests.get(f"{self.base_url}{json_query}")
-        data = resp.json()
-        return data['c']
+        if resp.status_code == 200:
+            data = resp.json()
+            return data['c']
+        else:
+            raise SLPDBHttpExcetion('Non-200 status error')
 
 
     def get_transactions_by_blk(self, block):

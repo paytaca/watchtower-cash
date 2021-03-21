@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: watchtower-webserver
-          image: registry.digitalocean.com/spicetoken/watchtower:240e07d41d05
+          image: registry.digitalocean.com/spicetoken/watchtower:60a71afdbeb8
           command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
           env:
             - name: DEPLOYMENT_INSTANCE
