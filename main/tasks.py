@@ -279,6 +279,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 def bitdbquery(self, block_id, max_retries=20):
     try:
         block = BlockHeight.objects.get(id=block_id)
+        if block.processed: return  # Terminate here if processed already
+
         divider = "\n\n##########################################\n\n"
         source = 'bitdb-query'
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
@@ -320,6 +322,8 @@ def bitdbquery(self, block_id, max_retries=20):
 def slpdbquery(self, block_id):
     try:
         block = BlockHeight.objects.get(id=block_id)
+        if block.processed: return  # Terminate here if processed already
+        
         divider = "\n\n##########################################\n\n"
         source = 'slpdb-query'    
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
