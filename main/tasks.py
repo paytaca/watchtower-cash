@@ -32,10 +32,13 @@ from psycopg2.extensions import TransactionRollbackError
 from django.db.utils import IntegrityError, OperationalError
 from django.utils import timezone
 from django.db.models import Q
+from celery import Celery
 
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
+
+app = Celery('configs')
 
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
@@ -277,13 +280,14 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
 
 
-@shared_task(queue='bitdbquery_transactions')
-def bitdbquery_transactions(data):
+@app.task(bind=True, queue='bitdbquery_transactions')
+def bitdbquery_transactions(self, data):
     source = 'bitdb-query'
     block_id = REDIS_STORAGE.get('BLOCK_ID')
     total = int(REDIS_STORAGE.get('BITDBQUERY_TOTAL'))
 
     for transaction in data:
+        tx_count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
         txn_id = transaction['tx']['h']
         for out in transaction['out']: 
             args = tuple()
@@ -303,11 +307,9 @@ def bitdbquery_transactions(data):
                 save_record(*args)
                 LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
         tx_count += 1
-        count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
-        count += 1
-        REDIS_STORAGE.set('BITDBQUERY_COUNT', count)
+        REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
     
-    if (total == count):
+    if (total == tx_count):
         block = BlockHeight.objects.get(id=block_id)
         block.save()
         REDIS_STORAGE.set('READY', 1)
@@ -328,41 +330,40 @@ def bitdbquery(self, block_id, max_retries=20):
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
         REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
-        bitdbquery_transactions.chunks(data, 1000)
+        bitdbquery_transactions.chunks(data, 1000).apply_async(queue='bitdbquery_transactions')
     except bitdb_scanner.BitDBHttpException:
         self.retry(countdown=3)
 
-@shared_task(queue='slpdbquery_transactions')
-def slpdbquery_transactions(data):
+@app.task(bind=True)
+def slpdbquery_transactions(self, data):
     source = 'slpdb-query'
     block_id = REDIS_STORAGE.get('BLOCK_ID')
     total = int(REDIS_STORAGE.get('SLPDBQUERY_TOTAL'))
     for transaction in data:
+        tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
         if transaction['slp']['valid']:
-        spent_index = 0
-        if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
-            token_id = transaction['slp']['detail']['tokenIdHex']
-            token, _ = Token.objects.get_or_create(tokenid=token_id)
-            
-            if transaction['slp']['detail']['outputs'][0]['address'] is not None:
-                for output in transaction['slp']['detail']['outputs']:
-                    save_record(
-                        token.tokenid,
-                        output['address'],
-                        transaction['tx']['h'],
-                        output['amount'],
-                        source,
-                        blockheightid=block_id,
-                        spent_index=spent_index
-                    )
-                    LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
-                    spent_index += 1
-        
-        count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
-        count += 1
-        REDIS_STORAGE.set('SLPDBQUERY_COUNT', count)
+            spent_index = 0
+            if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
+                token_id = transaction['slp']['detail']['tokenIdHex']
+                token, _ = Token.objects.get_or_create(tokenid=token_id)
+                
+                if transaction['slp']['detail']['outputs'][0]['address'] is not None:
+                    for output in transaction['slp']['detail']['outputs']:
+                        save_record(
+                            token.tokenid,
+                            output['address'],
+                            transaction['tx']['h'],
+                            output['amount'],
+                            source,
+                            blockheightid=block_id,
+                            spent_index=spent_index
+                        )
+                        LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
+                        spent_index += 1
+        tx_count += 1
+        REDIS_STORAGE.set('SLPDBQUERY_COUNT', tx_count)
 
-    if (total == count):
+    if (total == tx_count):
         bitdbquery.delay(block_id)
 
 
@@ -384,7 +385,7 @@ def slpdbquery(self, block_id):
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} SLP TRANSACTIONS {divider}")
         REDIS_STORAGE.set('SLPDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('SLPDBQUERY_COUNT', 0)
-        slpdbquery_transactions.chunks(data, 500)
+        slpdbquery_transactions.chunks(data, 500)(queue='slpdbquery_transactions')
         
     except slpdb_scanner.SLPDBHttpExcetion:
         self.retry(countdown=3)
