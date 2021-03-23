@@ -24,7 +24,8 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
         added = block_setter(instance.number)
         if added:
             limit = instance.number - settings.MAX_BLOCK_AWAY
-            BlockHeight.objects.filter(number__lte=limit).delete()
+            trans = Transaction.objects.filter(blockheight__number=limit)
+            trans.delete()
 
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
