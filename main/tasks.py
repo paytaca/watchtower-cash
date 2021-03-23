@@ -290,8 +290,13 @@ def bitdbquery(self, block_id, max_retries=20):
         data = obj.get_transactions_by_blk(int(block.number))
         total = len(data)
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
-        tx_count = 0
+        tx_count = 1
         for transaction in data:
+            # Check every hundred tx if block has been processed
+            if tx_count % 100 == 0:
+                block = BlockHeight.objects.get(id=block_id)
+                if block.processed: return
+
             txn_id = transaction['tx']['h']
             for out in transaction['out']: 
                 args = tuple()
@@ -337,6 +342,11 @@ def slpdbquery(self, block_id):
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} SLP TRANSACTIONS {divider}")
         tx_count = 1
         for transaction in data:
+            # Check every hundred tx if block has been processed
+            if tx_count % 100 == 0:
+                block = BlockHeight.objects.get(id=block_id)
+                if block.processed: return
+            
             if transaction['slp']['valid']:
                 spent_index = 0
                 if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
