@@ -1,16 +1,31 @@
-import json,requests,base64
+import json
+import requests
+import base64
+import random
+
+
+class BitDBHttpException(Exception):
+    pass
 
 class BitDB(object):
 
     def __init__(self):
-        self.base_url = 'https://bitdb.fountainhead.cash/q/'
+        urls = [
+            'https://bitdb.fountainhead.cash/q/',
+            'https://bitdb2.fountainhead.cash/q/'
+        ]
+        self.base_url = random.choice(urls)
 
     def get_data(self, query):
         json_string = bytes(json.dumps(query), 'utf-8')
         url = base64.b64encode(json_string)
         resp = requests.get(f"{self.base_url}{url.decode('utf-8')}")
-        data = resp.json()
-        return data['c']
+        if resp.status_code == 200:
+            data = resp.json()
+            return data['c']
+        else:
+            raise BitDBHttpException('Non-200 status')
+
 
     def get_transactions_by_blk(self, blk):
         query = {

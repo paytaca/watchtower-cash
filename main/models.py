@@ -6,19 +6,24 @@ from django.contrib.postgres.fields import JSONField
 
 class Token(models.Model):
     name = models.CharField(max_length=100, null=True)
-    tokenid = models.CharField(max_length=200, null=True, blank=True, db_index=True)
+    tokenid = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True
+    )
     confirmation_limit = models.IntegerField(default=0)
     decimals = models.IntegerField(default=0)
-
 
     class Meta:
         unique_together = ('name', 'tokenid',)
 
     def __str__(self):
-        if self.name:
-            return str(self.name)
+        if self.tokenid:
+            return f"{self.name} | {self.tokenid[0:7]}"
         else:
-            return str(self.tokenid)[0:7]
+            return str(self.name)
     
     def save(self, *args, **kwargs):
 
@@ -36,8 +41,8 @@ class BlockHeight(models.Model):
     updated_datetime = models.DateTimeField(null=True, blank=True)
     processed = models.BooleanField(default=False)
     currentcount = models.IntegerField(default=0)
-    problematic = JSONField(default=list)
-    unparsed = JSONField(default=list)
+    problematic = JSONField(default=list, blank=True)
+    unparsed = JSONField(default=list, blank=True)
 
 
     def save(self, *args, **kwargs):
