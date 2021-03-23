@@ -277,12 +277,48 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
 
 
+@shared_task(queue='bitdbquery_transactions')
+def bitdbquery_transactions(data):
+    source = 'bitdb-query'
+    block_id = REDIS_STORAGE.get('BLOCK_ID')
+    total = int(REDIS_STORAGE.get('BITDBQUERY_TOTAL'))
+
+    for transaction in data:
+        txn_id = transaction['tx']['h']
+        for out in transaction['out']: 
+            args = tuple()
+            amount = out['e']['v'] / 100000000
+            spent_index = out['e']['i']
+            if 'a' in out['e'].keys():
+                bchaddress = 'bitcoincash:' + str(out['e']['a'])
+                args = (
+                    'bch',
+                    bchaddress,
+                    txn_id,
+                    amount,
+                    source,
+                    block_id,
+                    spent_index
+                )
+                save_record(*args)
+                LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
+        tx_count += 1
+        count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
+        count += 1
+        REDIS_STORAGE.set('BITDBQUERY_COUNT', count)
+    
+    if (total == count):
+        block = BlockHeight.objects.get(id=block_id)
+        block.save()
+        REDIS_STORAGE.set('READY', 1)
+        REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+        review_block.delay()
+
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self, block_id, max_retries=20):
     try:
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
-
         divider = "\n\n##########################################\n\n"
         source = 'bitdb-query'
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
@@ -290,38 +326,49 @@ def bitdbquery(self, block_id, max_retries=20):
         data = obj.get_transactions_by_blk(int(block.number))
         total = len(data)
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
-        tx_count = 0
-        for transaction in data:
-            txn_id = transaction['tx']['h']
-            for out in transaction['out']: 
-                args = tuple()
-                amount = out['e']['v'] / 100000000
-                spent_index = out['e']['i']
-                if 'a' in out['e'].keys():
-                    bchaddress = 'bitcoincash:' + str(out['e']['a'])
-                    args = (
-                        'bch',
-                        bchaddress,
-                        txn_id,
-                        amount,
-                        source,
-                        block_id,
-                        spent_index
-                    )
-                    save_record(*args)
-                    LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
-            tx_count += 1
-        block.transactions_count = tx_count
-        block.save()
-        REDIS_STORAGE.set('READY', 1)
-        REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-        review_block.delay()
+        REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
+        REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
+        bitdbquery_transactions.chunks(data, 1000)
     except bitdb_scanner.BitDBHttpException:
         self.retry(countdown=3)
+
+@shared_task(queue='slpdbquery_transactions')
+def slpdbquery_transactions(data):
+    source = 'slpdb-query'
+    block_id = REDIS_STORAGE.get('BLOCK_ID')
+    total = int(REDIS_STORAGE.get('SLPDBQUERY_TOTAL'))
+    for transaction in data:
+        if transaction['slp']['valid']:
+        spent_index = 0
+        if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
+            token_id = transaction['slp']['detail']['tokenIdHex']
+            token, _ = Token.objects.get_or_create(tokenid=token_id)
+            
+            if transaction['slp']['detail']['outputs'][0]['address'] is not None:
+                for output in transaction['slp']['detail']['outputs']:
+                    save_record(
+                        token.tokenid,
+                        output['address'],
+                        transaction['tx']['h'],
+                        output['amount'],
+                        source,
+                        blockheightid=block_id,
+                        spent_index=spent_index
+                    )
+                    LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
+                    spent_index += 1
+        
+        count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
+        count += 1
+        REDIS_STORAGE.set('SLPDBQUERY_COUNT', count)
+
+    if (total == count):
+        bitdbquery.delay(block_id)
 
 
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
+    REDIS_STORAGE.set('BLOCK_ID', block_id)
     try:
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
@@ -330,34 +377,15 @@ def slpdbquery(self, block_id):
         source = 'slpdb-query'    
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
         time.sleep(30)
-        # Sleeping is necessary to set an interval to gather great deal of transactions
+        # Sleeping is necessary to set an interval to get the complete number of transactions
         obj = slpdb_scanner.SLPDB()
         data = obj.get_transactions_by_blk(int(block.number))
         total = len(data)
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} SLP TRANSACTIONS {divider}")
-        tx_count = 1
-        for transaction in data:
-            if transaction['slp']['valid']:
-                spent_index = 0
-                if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
-                    token_id = transaction['slp']['detail']['tokenIdHex']
-                    token, _ = Token.objects.get_or_create(tokenid=token_id)
-                    
-                    if transaction['slp']['detail']['outputs'][0]['address'] is not None:
-                        for output in transaction['slp']['detail']['outputs']:
-                            save_record(
-                                token.tokenid,
-                                output['address'],
-                                transaction['tx']['h'],
-                                output['amount'],
-                                source,
-                                blockheightid=block_id,
-                                spent_index=spent_index
-                            )
-                            LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
-                            spent_index += 1
-            tx_count += 1
-        bitdbquery.delay(block_id)
+        REDIS_STORAGE.set('SLPDBQUERY_TOTAL', total)
+        REDIS_STORAGE.set('SLPDBQUERY_COUNT', 0)
+        slpdbquery_transactions.chunks(data, 500)
+        
     except slpdb_scanner.SLPDBHttpExcetion:
         self.retry(countdown=3)
 
