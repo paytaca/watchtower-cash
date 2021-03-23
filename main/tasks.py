@@ -224,6 +224,8 @@ def review_block():
 # FIRST LAYER
 @shared_task(queue='save_record')
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
+    subscription = check_wallet_address_subscription(transaction_address)
+    if not subscription.exists(): return 
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
