@@ -213,18 +213,17 @@ def bitdbquery_transaction(self, transaction):
             LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
 
             # Disregard bch address that are not subscribed.
-            if not subscription.exists():continue
-
-            args = (
-                'bch',
-                bchaddress,
-                txn_id,
-                amount,
-                source,
-                block_id,
-                spent_index
-            )
-            save_record.delay(*args)
+            if subscription.exists():
+                args = (
+                    'bch',
+                    bchaddress,
+                    txn_id,
+                    amount,
+                    source,
+                    block_id,
+                    spent_index
+                )
+                save_record.delay(*args)
 
     if (total == tx_count):
         block = BlockHeight.objects.get(id=block_id)
@@ -287,17 +286,16 @@ def slpdbquery_transaction(self, transaction):
                     LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
                     
                     # Disregard slp address that are not subscribed.
-                    if not subscription.exists():continue
-
-                    save_record.delay(
-                        token.tokenid,
-                        output['address'],
-                        transaction['tx']['h'],
-                        output['amount'],
-                        source,
-                        blockheightid=block_id,
-                        spent_index=spent_index
-                    )
+                    if subscription.exists():
+                        save_record.delay(
+                            token.tokenid,
+                            output['address'],
+                            transaction['tx']['h'],
+                            output['amount'],
+                            source,
+                            blockheightid=block_id,
+                            spent_index=spent_index
+                        )
                     spent_index += 1
 
     if (total == tx_count):
