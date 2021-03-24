@@ -225,14 +225,7 @@ def bitdbquery_transaction(self, transaction):
                 )
                 save_record.delay(*args)
 
-    if (total == tx_count):
-        block = BlockHeight.objects.get(id=block_id)
-        block.currentcount = tx_count
-        block.save()
-        REDIS_STORAGE.set('READY', 1)
-        REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-
-
+    
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self, block_id, max_retries=20):
     try:
@@ -260,7 +253,12 @@ def bitdbquery(self, block_id, max_retries=20):
                 tx_count += 1
                 REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
                 bitdbquery_transaction.delay(transaction)
-            time.sleep(15)
+            time.sleep(10)
+
+        block.currentcount = tx_count
+        block.save()
+        REDIS_STORAGE.set('READY', 1)
+        REDIS_STORAGE.set('ACTIVE-BLOCK', '')
 
     except bitdb_scanner.BitDBHttpException:
         self.retry(countdown=3)
@@ -298,9 +296,8 @@ def slpdbquery_transaction(self, transaction):
                         )
                     spent_index += 1
 
-    if (total == tx_count):
-        bitdbquery.delay(block_id)
-
+    
+    
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
     REDIS_STORAGE.set('BLOCK_ID', block_id)
@@ -312,7 +309,7 @@ def slpdbquery(self, block_id):
         source = 'slpdb-query'    
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
         time.sleep(30)
-        # Sleeping is necessary to set an interval to get the complete number of transactions
+        # Sleeping is necessary to set an interval to get the complete number of transactions from mongodb
         obj = slpdb_scanner.SLPDB()
         data = obj.get_transactions_by_blk(int(block.number))
         total = len(data)
@@ -326,9 +323,9 @@ def slpdbquery(self, block_id):
                 tx_count += 1
                 REDIS_STORAGE.set('SLPDBQUERY_COUNT', tx_count)
                 slpdbquery_transaction.delay(transaction)
-            time.sleep(15)
+            time.sleep(10)
 
-        if len(data) == 0:
+        if len(data) == 0 or (total == tx_count):
             bitdbquery.delay(block_id)
             
     except slpdb_scanner.SLPDBHttpExcetion:
@@ -356,12 +353,8 @@ def manage_block_transactions(self):
             blocks.sort()  # Then sort, ascending
             pending_blocks = json.dumps(blocks)
             REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
-        block = BlockHeight.objects.get(number=active_block)
-        if block.processed:
-            REDIS_STORAGE.set('READY', 1)
-            REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-        else:
-            slpdbquery.delay(block.id)
+        block = BlockHeight.objects.get(number=active_block)        
+        slpdbquery.delay(block.id)
     
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
     if active_block:
