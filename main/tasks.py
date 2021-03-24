@@ -255,7 +255,7 @@ def bitdbquery(self, block_id, max_retries=20):
         REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
 
-        for chunk in list(chunks(data, 1000)):
+        for chunk in chunks(data, 1000):
             for transaction in chunk:
                 tx_count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
                 tx_count += 1
@@ -322,7 +322,7 @@ def slpdbquery(self, block_id):
         REDIS_STORAGE.set('SLPDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('SLPDBQUERY_COUNT', 0)
         
-        for chunk in list(chunks(data, 1000)):
+        for chunk in chunks(data, 1000):
             for transaction in chunk:
                 tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
                 tx_count += 1

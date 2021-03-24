@@ -57,26 +57,26 @@ def run():
 
                             subscription = check_wallet_address_subscription(bchaddress)
                             # Disregard bch address that are not subscribed.
-                            if not subscription.exists():continue
+                            if subscription.exists():
                             
-                            txn_qs = Transaction.objects.filter(
-                                address=bchaddress,
-                                txid=txn_id,
-                                spent_index=spent_index
-                            )
-                            if not txn_qs.exists():
-                                args = (
-                                    'bch',
-                                    bchaddress,
-                                    txn_id,
-                                    amount,
-                                    source,
-                                    None,
-                                    spent_index
+                                txn_qs = Transaction.objects.filter(
+                                    address=bchaddress,
+                                    txid=txn_id,
+                                    spent_index=spent_index
                                 )
-                                save_record(*args)
-                            msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
-                            LOGGER.info(msg)
+                                if not txn_qs.exists():
+                                    args = (
+                                        'bch',
+                                        bchaddress,
+                                        txn_id,
+                                        amount,
+                                        source,
+                                        None,
+                                        spent_index
+                                    )
+                                    save_record(*args)
+                                msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
+                                LOGGER.info(msg)
 
 class Command(BaseCommand):
     help = "Run the tracker of bitsocket"

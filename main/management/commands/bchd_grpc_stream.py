@@ -37,29 +37,27 @@ def run():
 
                 subscription = check_wallet_address_subscription(bchaddress)
                 # Disregard bch address that are not subscribed.
-                if not subscription.exists():continue
+                if subscription.exists():
+                    amount = output.value / (10 ** 8)
 
-
-                amount = output.value / (10 ** 8)
-
-                txn_qs = Transaction.objects.filter(
-                    address=bchaddress,
-                    txid=tx_hash,
-                    spent_index=output.index
-                )
-                if not txn_qs.exists():
-                    args = (
-                        'bch',
-                        bchaddress,
-                        tx_hash,
-                        amount,
-                        source,
-                        None,
-                        output.index
+                    txn_qs = Transaction.objects.filter(
+                        address=bchaddress,
+                        txid=tx_hash,
+                        spent_index=output.index
                     )
-                    save_record(*args)
-                msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
-                LOGGER.info(msg)
+                    if not txn_qs.exists():
+                        args = (
+                            'bch',
+                            bchaddress,
+                            tx_hash,
+                            amount,
+                            source,
+                            None,
+                            output.index
+                        )
+                        save_record(*args)
+                    msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
+                    LOGGER.info(msg)
 
                 if output.script_class == 'datacarrier':
                     has_op_return_data = True

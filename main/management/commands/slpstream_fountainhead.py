@@ -53,31 +53,30 @@ def run():
 
                                 subscription = check_wallet_address_subscription(slp_address)
                                 # Disregard bch address that are not subscribed.
-                                if not subscription.exists():continue
-                                
-                                amount = float(output['amount'])
-                                # The amount given here is raw, it needs to be converted
-                                if token.decimals:
-                                    amount = amount / (10 ** token.decimals)
-                                txn_id = info['tx']['h']
-                                txn_qs = Transaction.objects.filter(
-                                    address=slp_address,
-                                    txid=txn_id,
-                                    spent_index=spent_index
-                                )
-                                if not txn_qs.exists():
-                                    args = (
-                                        token.tokenid,
-                                        slp_address,
-                                        txn_id,
-                                        amount,
-                                        source,
-                                        None,
-                                        spent_index
+                                if subscription.exists():
+                                    amount = float(output['amount'])
+                                    # The amount given here is raw, it needs to be converted
+                                    if token.decimals:
+                                        amount = amount / (10 ** token.decimals)
+                                    txn_id = info['tx']['h']
+                                    txn_qs = Transaction.objects.filter(
+                                        address=slp_address,
+                                        txid=txn_id,
+                                        spent_index=spent_index
                                     )
-                                    save_record(*args)
-                                msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
-                                LOGGER.info(msg)
+                                    if not txn_qs.exists():
+                                        args = (
+                                            token.tokenid,
+                                            slp_address,
+                                            txn_id,
+                                            amount,
+                                            source,
+                                            None,
+                                            spent_index
+                                        )
+                                        save_record(*args)
+                                    msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
+                                    LOGGER.info(msg)
                                 spent_index += 1
 
 
