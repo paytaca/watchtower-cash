@@ -2,6 +2,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from main.models import Token, Transaction
+from main.utils import check_wallet_address_subscription
 from main.tasks import save_record
 from django.conf import settings
 import logging
@@ -53,6 +54,11 @@ def run():
                         spent_index = out['e']['i']
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
+
+                            subscription = check_wallet_address_subscription(bchaddress)
+                            # Disregard bch address that are not subscribed.
+                            if not subscription.exists():continue
+                            
                             txn_qs = Transaction.objects.filter(
                                 address=bchaddress,
                                 txid=txn_id,

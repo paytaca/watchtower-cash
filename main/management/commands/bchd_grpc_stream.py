@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
+from main.utils import check_wallet_address_subscription
 from main.models import Token, Transaction
 from main.tasks import save_record
 import grpc
@@ -33,6 +34,12 @@ def run():
 
             for output in tx.outputs:
                 bchaddress = 'bitcoincash:' + output.address
+
+                subscription = check_wallet_address_subscription(bchaddress)
+                # Disregard bch address that are not subscribed.
+                if not subscription.exists():continue
+
+
                 amount = output.value / (10 ** 8)
 
                 txn_qs = Transaction.objects.filter(

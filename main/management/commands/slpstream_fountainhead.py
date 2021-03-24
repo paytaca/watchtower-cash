@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from main.utils import check_wallet_address_subscription
 from django.db import transaction
 from main.models import Token, Transaction
 from main.tasks import save_record
@@ -49,6 +50,11 @@ def run():
                             spent_index = 0
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
+
+                                subscription = check_wallet_address_subscription(slp_address)
+                                # Disregard bch address that are not subscribed.
+                                if not subscription.exists():continue
+                                
                                 amount = float(output['amount'])
                                 # The amount given here is raw, it needs to be converted
                                 if token.decimals:
