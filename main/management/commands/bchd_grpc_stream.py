@@ -34,12 +34,12 @@ def run():
 
             for output in tx.outputs:
                 bchaddress = 'bitcoincash:' + output.address
+                amount = output.value / (10 ** 8)
 
                 subscription = check_wallet_address_subscription(bchaddress)
                 # Disregard bch address that are not subscribed.
                 if subscription.exists():
-                    amount = output.value / (10 ** 8)
-
+    
                     txn_qs = Transaction.objects.filter(
                         address=bchaddress,
                         txid=tx_hash,
@@ -56,8 +56,8 @@ def run():
                             output.index
                         )
                         save_record(*args)
-                    msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
-                    LOGGER.info(msg)
+                msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
+                LOGGER.info(msg)
 
                 if output.script_class == 'datacarrier':
                     has_op_return_data = True
@@ -68,7 +68,7 @@ def run():
                         amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
                         slp_address = 'simpleledger:' + output.slp_token.address
 
-                         subscription = check_wallet_address_subscription(slp_address)
+                        subscription = check_wallet_address_subscription(slp_address)
                         # Disregard bch address that are not subscribed.
                         if subscription.exists():
                             token, _ = Token.objects.get_or_create(tokenid=token_id)
@@ -88,8 +88,8 @@ def run():
                                     output.index
                                 )
                                 save_record(*args)
-                            msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
-                            LOGGER.info(msg)
+                        msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
+                        LOGGER.info(msg)
 
 
 class Command(BaseCommand):

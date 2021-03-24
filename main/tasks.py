@@ -308,7 +308,7 @@ def slpdbquery(self, block_id):
         divider = "\n\n##########################################\n\n"
         source = 'slpdb-query'    
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
-        time.sleep(30)
+        time.sleep(60)
         # Sleeping is necessary to set an interval to get the complete number of transactions from mongodb
         obj = slpdb_scanner.SLPDB()
         data = obj.get_transactions_by_blk(int(block.number))
@@ -346,6 +346,13 @@ def manage_block_transactions(self):
     if int(REDIS_STORAGE.get('READY')):
         active_block = blocks[0]
         REDIS_STORAGE.set('READY', 0)
+
+        block = BlockHeight.objects.get(number=active_block)
+        prev = BlockHeight.objects.get(number=active_block-1)
+        time_diff = prev.created_datetime - block.created_datetime
+        if time_diff.seconds > 1800:
+            time.sleep(120)
+
         REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
         if active_block in blocks:
             blocks.remove(active_block)
