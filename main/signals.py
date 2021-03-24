@@ -16,16 +16,12 @@ def create_auth_token(sender, instance=None, created=False, **kwargs):
 @receiver(post_save, sender=BlockHeight)
 def blockheight_post_save(sender, instance=None, created=False, **kwargs):
     if not created:
-        all_transactions  = instance.transactions.distinct('txid').count() + len(instance.problematic) + len(instance.unparsed)
-        if all_transactions == instance.transactions_count:
-            BlockHeight.objects.filter(id=instance.id).update(processed=True, updated_datetime=timezone.now())
+        if instance.transactions_count:
+            if instance.currentcount == instance.transactions_count:
+                BlockHeight.objects.filter(id=instance.id).update(processed=True, updated_datetime=timezone.now())
     if created:
         # Queue to "PENDING-BLOCKS"
-        added = block_setter(instance.number)
-        if added:
-            limit = instance.number - settings.MAX_BLOCK_AWAY
-            trans = Transaction.objects.filter(blockheight__number=limit)
-            trans.delete()
+        block_setter(instance.number)
 
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
