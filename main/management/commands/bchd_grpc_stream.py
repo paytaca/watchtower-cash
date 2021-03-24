@@ -67,25 +67,29 @@ def run():
                         token_id = bytearray(output.slp_token.token_id).hex() 
                         amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
                         slp_address = 'simpleledger:' + output.slp_token.address
-                        token, _ = Token.objects.get_or_create(tokenid=token_id)
-                        txn_qs = Transaction.objects.filter(
-                            address=slp_address,
-                            txid=tx_hash,
-                            spent_index=output.index
-                        )
-                        if not txn_qs.exists():
-                            args = (
-                                token.tokenid,
-                                slp_address,
-                                tx_hash,
-                                amount,
-                                source,
-                                None,
-                                output.index
+
+                         subscription = check_wallet_address_subscription(slp_address)
+                        # Disregard bch address that are not subscribed.
+                        if subscription.exists():
+                            token, _ = Token.objects.get_or_create(tokenid=token_id)
+                            txn_qs = Transaction.objects.filter(
+                                address=slp_address,
+                                txid=tx_hash,
+                                spent_index=output.index
                             )
-                            save_record(*args)
-                        msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
-                        LOGGER.info(msg)
+                            if not txn_qs.exists():
+                                args = (
+                                    token.tokenid,
+                                    slp_address,
+                                    tx_hash,
+                                    amount,
+                                    source,
+                                    None,
+                                    output.index
+                                )
+                                save_record(*args)
+                            msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
+                            LOGGER.info(msg)
 
 
 class Command(BaseCommand):
