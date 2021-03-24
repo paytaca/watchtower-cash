@@ -30,66 +30,64 @@ def run():
         for notification in stub.SubscribeTransactions(req):
             tx = notification.unconfirmed_transaction.transaction
             tx_hash = bytearray(tx.hash[::-1]).hex()
-            has_op_return_data = False
 
             for output in tx.outputs:
-                bchaddress = 'bitcoincash:' + output.address
-                amount = output.value / (10 ** 8)
+                if output.address:
+                    bchaddress = 'bitcoincash:' + output.address
+                    amount = output.value / (10 ** 8)
 
-                subscription = check_wallet_address_subscription(bchaddress)
-                # Disregard bch address that are not subscribed.
-                if subscription.exists():
-    
-                    txn_qs = Transaction.objects.filter(
-                        address=bchaddress,
-                        txid=tx_hash,
-                        spent_index=output.index
-                    )
-                    if not txn_qs.exists():
-                        args = (
-                            'bch',
-                            bchaddress,
-                            tx_hash,
-                            amount,
-                            source,
-                            None,
-                            output.index
+                    subscription = check_wallet_address_subscription(bchaddress)
+                    # Disregard bch address that are not subscribed.
+                    if subscription.exists():
+
+                        txn_qs = Transaction.objects.filter(
+                            address=bchaddress,
+                            txid=tx_hash,
+                            spent_index=output.index
                         )
-                        save_record(*args)
-                msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
-                LOGGER.info(msg)
-
-                if output.script_class == 'datacarrier':
-                    has_op_return_data = True
-                
-                if has_op_return_data:
-                    if output.slp_token.token_id:
-                        token_id = bytearray(output.slp_token.token_id).hex() 
-                        amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
-                        slp_address = 'simpleledger:' + output.slp_token.address
-
-                        subscription = check_wallet_address_subscription(slp_address)
-                        # Disregard bch address that are not subscribed.
-                        if subscription.exists():
-                            token, _ = Token.objects.get_or_create(tokenid=token_id)
-                            txn_qs = Transaction.objects.filter(
-                                address=slp_address,
-                                txid=tx_hash,
-                                spent_index=output.index
+                        if not txn_qs.exists():
+                            args = (
+                                'bch',
+                                bchaddress,
+                                tx_hash,
+                                amount,
+                                source,
+                                None,
+                                output.index
                             )
-                            if not txn_qs.exists():
-                                args = (
-                                    token.tokenid,
-                                    slp_address,
-                                    tx_hash,
-                                    amount,
-                                    source,
-                                    None,
-                                    output.index
-                                )
-                                save_record(*args)
-                        msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
-                        LOGGER.info(msg)
+                            save_record(*args)
+                    
+                    msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
+                    LOGGER.info(msg)
+
+                if output.slp_token.token_id:
+                    token_id = bytearray(output.slp_token.token_id).hex() 
+                    amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                    slp_address = 'simpleledger:' + output.slp_token.address
+
+                    subscription = check_wallet_address_subscription(slp_address)
+                    # Disregard slp address that are not subscribed.
+                    if subscription.exists():
+                        token, _ = Token.objects.get_or_create(tokenid=token_id)
+                        txn_qs = Transaction.objects.filter(
+                            address=slp_address,
+                            txid=tx_hash,
+                            spent_index=output.index
+                        )
+                        if not txn_qs.exists():
+                            args = (
+                                token.tokenid,
+                                slp_address,
+                                tx_hash,
+                                amount,
+                                source,
+                                None,
+                                output.index
+                            )
+                            save_record(*args)
+                    
+                    msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
+                    LOGGER.info(msg)
 
 
 class Command(BaseCommand):

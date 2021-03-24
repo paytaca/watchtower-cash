@@ -155,39 +155,39 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         spent_index = 0
 
     with trans.atomic():
-        try:
-            if token.lower() == 'bch':
-                token_obj, _ = Token.objects.get_or_create(name=token)
-            else:
-                token_obj, _ = Token.objects.get_or_create(tokenid=token)
-            
-            transaction_obj, transaction_created = Transaction.objects.get_or_create(
-                txid=transactionid,
-                address=transaction_address,
-                token=token_obj,
-                amount=amount,
-                spent_index=spent_index,
-                source=source
-            )
+        # try:
+        if token.lower() == 'bch':
+            token_obj, _ = Token.objects.get_or_create(name=token)
+        else:
+            token_obj, _ = Token.objects.get_or_create(tokenid=token)
+        
+        transaction_obj, transaction_created = Transaction.objects.get_or_create(
+            txid=transactionid,
+            address=transaction_address,
+            token=token_obj,
+            amount=amount,
+            spent_index=spent_index,
+            source=source
+        )
 
-            if blockheightid is not None:
-                transaction_obj.blockheight_id = blockheightid
-                transaction_obj.save()
+        if blockheightid is not None:
+            transaction_obj.blockheight_id = blockheightid
+            transaction_obj.save()
 
-                # Automatically update all transactions with block height.
-                Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
+            # Automatically update all transactions with block height.
+            Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
 
-            if token == 'bch':
-                address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
-            else:
-                address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
-            
-            address_obj.transactions.add(transaction_obj)
-            address_obj.save()
+        if token == 'bch':
+            address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
+        else:
+            address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
+        
+        address_obj.transactions.add(transaction_obj)
+        address_obj.save()
                     
-        except OperationalError as exc:
-            save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
-            return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
+        # except OperationalError as exc:
+        #     save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
+        #     return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
 
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
@@ -273,7 +273,7 @@ def slpdbquery_transaction(self, transaction):
     tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
     
     if transaction['slp']['valid']:
-        spent_index = 0
+        spent_index = 1
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
             token_id = transaction['slp']['detail']['tokenIdHex']
             token, _ = Token.objects.get_or_create(tokenid=token_id)
