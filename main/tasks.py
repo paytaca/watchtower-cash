@@ -310,15 +310,19 @@ def slpdbquery(self, block_id):
         prev = prev.first()
         time_diff = block.created_datetime - prev.created_datetime
         # If the time difference of the currently processing block
-        # took more than 30 minutes to generate, There's a chance that the
+        # took more than 20 minutes to generate, There's a chance that the
         # block size is big. Hence, creating pause is an alternative
         # approach to load the complete set of transactions.
-        if time_diff.seconds > 1800:
+        if time_diff.seconds > 1200:
             LOGGER.info(f"{divider}PAUSE 2 MINUTES TO LOAD ALL TRANSACTIONS | BLOCK: {block.number}{divider}")
             time.sleep(120)
+            # However, the worker seems lost after sleep :(
 
     try:
-        if block.processed: return  # Terminate here if processed already
+        if block.processed:
+            REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+            REDIS_STORAGE.set('READY', 1)
+            return  # Terminate here if processed already
         
         source = 'slpdb-query'    
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
