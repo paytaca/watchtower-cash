@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from main.models import Token, Transaction
 from main.utils import check_wallet_address_subscription
-from main.tasks import save_record
+from main.tasks import save_record, client_acknowledgement
 from django.conf import settings
 import logging
 import traceback
@@ -74,7 +74,10 @@ def run():
                                         None,
                                         spent_index
                                     )
-                                    save_record(*args)
+                                    obj_id, created = save_record(*args)
+                                    if created:
+                                        client_acknowledgement(obj_id)
+
                                 msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
                                 LOGGER.info(msg)
 

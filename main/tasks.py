@@ -81,59 +81,64 @@ def send_slack_message(message, channel, attachments=None):
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, txid):
-    with trans.atomic():
-        this_transaction = Transaction.objects.filter(id=txid)
 
-        if this_transaction.exists():
-            transaction = this_transaction.first()
-            block = None
-            if transaction.blockheight:
-                block = transaction.blockheight.number
+    this_transaction = Transaction.objects.filter(id=txid)
+    
+    if this_transaction.exists():
+        transaction = this_transaction.first()
+        block = None
+        if transaction.blockheight:
+            block = transaction.blockheight.number
+        
+        address = transaction.address 
+        subscription = check_wallet_address_subscription(address)
 
-            address = transaction.address 
-            subscription = check_wallet_address_subscription(address)
-
-            if subscription.exists():
-                transaction.subscribed = True
-                subscription = subscription.first()
-                webhook_addresses = subscription.address.all()
-                for webhook_address in webhook_addresses:
-                    # can_be_send = check_token_subscription(transaction.token.tokenid, subscription.id)
-                    can_be_send = True
-                    if can_be_send:
-                        data = {
-                            'amount': transaction.amount,
-                            'address': transaction.address,
-                            'source': 'WatchTower',
-                            'token': transaction.token.tokenid,
-                            'txid': transaction.txid,
-                            'block': block,
-                            'spent_index': transaction.spent_index
-                        }
+        if subscription.exists():
+            
+            subscription = subscription.first()
+            webhook_addresses = subscription.address.all()
+            for webhook_address in webhook_addresses:
+                # can_be_send = check_token_subscription(transaction.token.tokenid, subscription.id)
+                can_be_send = True
+                
+                if can_be_send:
+                    data = {
+                        'amount': transaction.amount,
+                        'address': transaction.address,
+                        'source': 'WatchTower',
+                        'token': transaction.token.tokenid,
+                        'txid': transaction.txid,
+                        'block': block,
+                        'spent_index': transaction.spent_index
+                    }
+                    
+                    # check if telegram/slack user
+                    # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+                    
+                    if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
+                        subscribers = subscription.subscriber.exclude(slack_user_details={})
+                        botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
+                        data['channel_id_list'] = json.dumps(botlist)
+                    
+                    if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
+                        subscribers = subscription.subscriber.exclude(telegram_user_details={})
+                        botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
+                        data['chat_id_list'] = json.dumps(botlist)
+                    
+                    
+                    resp = requests.post(webhook_address.address,data=data)
+                    if resp.status_code == 200:
                         
-                        #check if telegram/slack 3user
-                        # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
+                        transaction.acknowledged = True
+                    elif resp.status_code == 404 or resp.status_code == 522:
                         
-                        if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
-                            subscribers = subscription.subscriber.exclude(slack_user_details={})
-                            botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                            data['channel_id_list'] = json.dumps(botlist)
-                            
-                        if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                            subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                            botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                            data['chat_id_list'] = json.dumps(botlist)
+                        LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
+                    else:
                         
-
-                        resp = requests.post(webhook_address.address,data=data)
-                        if resp.status_code == 200:
-                            transaction.acknowledged = True
-                        elif resp.status_code == 404:
-                            LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
-                        else:
-                            self.retry(countdown=3)
-                transaction.save()
-                return f'ACKNOWLEDGEMENT SENT FOR : {transaction.txid}'
+                        LOGGER.error(resp)
+                        self.retry(countdown=3)
+            
+            return f'ACKNOWLEDGEMENT SENT FOR : {transaction.txid}'
     return
 
 
@@ -148,27 +153,59 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         blockheight          : an optional argument indicating the block height number of a transaction.
         spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
     """
+    subscription = check_wallet_address_subscription(transaction_address)
+    if not subscription.exists(): return None, None
 
+    
+    
     try:
         spent_index = int(spent_index)
     except TypeError as exc:
         spent_index = 0
+    
 
     with trans.atomic():
-        # try:
+        
+        transaction_created = False
+
         if token.lower() == 'bch':
             token_obj, _ = Token.objects.get_or_create(name=token)
         else:
             token_obj, _ = Token.objects.get_or_create(tokenid=token)
         
-        transaction_obj, transaction_created = Transaction.objects.get_or_create(
+
+        #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
+        tr = Transaction.objects.filter(
             txid=transactionid,
             address=transaction_address,
             token=token_obj,
             amount=amount,
             spent_index=spent_index,
-            source=source
         )
+        
+        if not tr.exists():
+
+            transaction_data = {
+                'txid':transactionid,
+                'address':transaction_address,
+                'token':token_obj,
+                'amount':amount,
+                'spent_index':spent_index,
+                'source':source
+            }
+            transaction_list = [Transaction(**transaction_data)]
+            Transaction.objects.bulk_create(transaction_list)
+            transaction_created = True
+
+        
+        transaction_obj = Transaction.objects.get(
+            txid=transactionid,
+            address=transaction_address,
+            token=token_obj,
+            amount=amount,
+            spent_index=spent_index
+        )
+
 
         if blockheightid is not None:
             transaction_obj.blockheight_id = blockheightid
@@ -176,7 +213,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
             # Automatically update all transactions with block height.
             Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
-
+        
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
         else:
@@ -184,10 +221,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-                    
-        # except OperationalError as exc:
-        #     save_record.delay(token, transaction_address, transactionid, amount, source, blockheightid, spent_index)
-        #     return f"RETRIED SAVING/UPDATING OF TRANSACTION | {transactionid}"
+
+        
+        return transaction_obj.id, transaction_created
 
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
@@ -223,7 +259,9 @@ def bitdbquery_transaction(self, transaction):
                     block_id,
                     spent_index
                 )
-                save_record.delay(*args)
+                obj_id, created = save_record(*args)
+                if created:
+                    client_acknowledgement.delay(obj_id)
 
     
 @shared_task(bind=True, queue='bitdbquery')
@@ -285,7 +323,7 @@ def slpdbquery_transaction(self, transaction):
                     
                     # Disregard slp address that are not subscribed.
                     if subscription.exists():
-                        save_record.delay(
+                        obj_id, created = save_record(
                             token.tokenid,
                             output['address'],
                             transaction['tx']['h'],
@@ -294,6 +332,8 @@ def slpdbquery_transaction(self, transaction):
                             blockheightid=block_id,
                             spent_index=spent_index
                         )
+                        if created:
+                            client_acknowledgement.delay(obj_id)
                     spent_index += 1
 
     
@@ -306,23 +346,14 @@ def slpdbquery(self, block_id):
     block = BlockHeight.objects.get(id=block_id)
     prev = BlockHeight.objects.filter(number=block.number-1)
 
-    if prev.exists():
-        prev = prev.first()
-        time_diff = block.created_datetime - prev.created_datetime
-        # If the time difference of the currently processing block
-        # took more than 20 minutes to generate, There's a chance that the
-        # block size is big. Hence, creating pause is an alternative
-        # approach to load the complete set of transactions.
-        if time_diff.seconds > 1200:
-            LOGGER.info(f"{divider}PAUSE 2 MINUTES TO LOAD ALL TRANSACTIONS | BLOCK: {block.number}{divider}")
-            time.sleep(120)
-            # However, the worker seems lost after sleep :(
+    if block.processed:
+        REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+        REDIS_STORAGE.set('READY', 1)
+        return  # Terminate here if processed already
+
+    
 
     try:
-        if block.processed:
-            REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-            REDIS_STORAGE.set('READY', 1)
-            return  # Terminate here if processed already
         
         source = 'slpdb-query'    
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")

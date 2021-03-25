@@ -31,9 +31,4 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
                 obj, created = BlockHeight.objects.get_or_create(number=i)
                                 
         block_setter(instance.number)
-
-@receiver(post_save, sender=Transaction)
-def transaction_post_save(sender, instance=None, created=False, **kwargs):
-    subscription = check_wallet_address_subscription(instance.address)
-    if subscription.exists() and not instance.acknowledged:
-        client_acknowledgement.delay(instance.id)
+        
