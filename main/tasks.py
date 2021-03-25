@@ -301,15 +301,29 @@ def slpdbquery_transaction(self, transaction):
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
     REDIS_STORAGE.set('BLOCK_ID', block_id)
+    divider = "\n\n##########################################\n\n"
+
+    block = BlockHeight.objects.get(id=block_id)
+    prev = BlockHeight.objects.filter(number=block.number-1)
+
+    if prev.exists():
+        prev = prev.first()
+        time_diff = block.created_datetime - prev.created_datetime
+        # If the time difference of the currently processing block
+        # took more than 30 minutes to generate, There's a chance that the
+        # block size is big. Hence, creating pause is an alternative
+        # approach to load the complete set of transactions.
+        if time_diff.seconds > 1800:
+            LOGGER.info(f"{divider}WAITING TO LOAD ALL TRANSACTIONS | BLOCK: {block.number}{divider}")
+            time.sleep(120)
+
     try:
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
         
-        divider = "\n\n##########################################\n\n"
         source = 'slpdb-query'    
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
-        time.sleep(60)
-        # Sleeping is necessary to set an interval to get the complete number of transactions from mongodb
+        
         obj = slpdb_scanner.SLPDB()
         data = obj.get_transactions_by_blk(int(block.number))
         total = len(data)
@@ -341,33 +355,27 @@ def manage_block_transactions(self):
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
     blocks = json.loads(pending_blocks)
 
+    if int(REDIS_STORAGE.get('READY')): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
     if not blocks: return 'NO PENDING BLOCKS'
-
+    
     if int(REDIS_STORAGE.get('READY')):
         active_block = blocks[0]
-        REDIS_STORAGE.set('READY', 0)
-
-        block = BlockHeight.objects.get(number=active_block)
-        prev = BlockHeight.objects.get(number=active_block-1)
-        time_diff = prev.created_datetime - block.created_datetime
-        if time_diff.seconds > 1800:
-            time.sleep(120)
 
         REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
+        REDIS_STORAGE.set('READY', 0)
+
+        block = BlockHeight.objects.get(number=active_block)        
+        slpdbquery.delay(block.id)
+
         if active_block in blocks:
             blocks.remove(active_block)
             blocks = list(set(blocks))  # Uniquify the list
             blocks.sort()  # Then sort, ascending
             pending_blocks = json.dumps(blocks)
             REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
-        block = BlockHeight.objects.get(number=active_block)        
-        slpdbquery.delay(block.id)
     
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
-    if active_block:
-        return f'REDIS IS TOO BUSY FOR BLOCK {active_block}.'
-    else:
-        return 'REDIS IS WAITING FOR AN ACTIVE BLOCK. THERE HAS TO BE AN ACTIVE BLOCK RUNNING.'
+    if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
@@ -375,9 +383,5 @@ def get_latest_block(self):
     obj = bitdb_scanner.BitDB()
     number = obj.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
-    if created:
-        return f'*** NEW BLOCK { obj.number } ***'
-        
-    else:
-        return 'NO NEW BLOCK'
+    if created: return f'*** NEW BLOCK { obj.number } ***'
 
