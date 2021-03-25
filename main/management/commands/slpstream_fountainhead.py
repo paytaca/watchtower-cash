@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from main.utils import check_wallet_address_subscription
 from django.db import transaction
 from main.models import Token, Transaction
@@ -10,6 +11,9 @@ import json
 
 LOGGER = logging.getLogger(__name__)
 
+REDIS_STORAGE = settings.REDISKV
+
+if 'SLPSTREAM' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('SLPSTREAM', json.dumps([]))
 
 def run():
     url = "https://slpstream.fountainhead.cash/s/ewogICJ2IjogMywKICAicSI6IHsKICAgICJmaW5kIjoge30KICB9Cn0="
@@ -74,7 +78,12 @@ def run():
                                             None,
                                             spent_index
                                         )
-                                        save_record(*args)
+                                        # save_record(*args)
+
+                                        slpstream = json.loads(REDIS_STORAGE.get('SLPSTREAM'))
+                                        slpstream.append(args)
+                                        REDIS_STORAGE.set('SLPSTREAM', json.dumps(slpstream))
+                                        
                                     msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
                                     LOGGER.info(msg)
                                 spent_index += 1

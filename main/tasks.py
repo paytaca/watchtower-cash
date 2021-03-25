@@ -314,11 +314,10 @@ def slpdbquery(self, block_id):
         # block size is big. Hence, creating pause is an alternative
         # approach to load the complete set of transactions.
         if time_diff.seconds > 1800:
-            LOGGER.info(f"{divider}WAITING TO LOAD ALL TRANSACTIONS | BLOCK: {block.number}{divider}")
+            LOGGER.info(f"{divider}PAUSE 2 MINUTES TO LOAD ALL TRANSACTIONS | BLOCK: {block.number}{divider}")
             time.sleep(120)
 
     try:
-        block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
         
         source = 'slpdb-query'    

@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
 from main.utils import check_wallet_address_subscription
@@ -7,9 +8,13 @@ from main.tasks import save_record
 import grpc
 import time
 import logging
+import json
+
+REDIS_STORAGE = settings.REDISKV
 
 LOGGER = logging.getLogger(__name__)
 
+if 'BCHD' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('BCHD', json.dumps([]))
 
 def run():
     source = 'bchd_grpc_stream'
@@ -55,7 +60,11 @@ def run():
                                 None,
                                 output.index
                             )
-                            save_record(*args)
+                            # save_record(*args)
+                            
+                            bchd = json.loads(REDIS_STORAGE.get('BCHD'))
+                            bchd.append(args)
+                            REDIS_STORAGE.set('BCHD', json.dumps(bchd))
                     
                     msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
                     LOGGER.info(msg)
@@ -84,7 +93,10 @@ def run():
                                 None,
                                 output.index
                             )
-                            save_record(*args)
+                            # save_record(*args)
+                            bchd = json.loads(REDIS_STORAGE.get('BCHD'))
+                            bchd.append(args)
+                            REDIS_STORAGE.set('BCHD', json.dumps(bchd))
                     
                     msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
                     LOGGER.info(msg)
