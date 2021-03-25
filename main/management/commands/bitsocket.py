@@ -1,7 +1,6 @@
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.conf import settings
 from main.models import Token, Transaction
 from main.utils import check_wallet_address_subscription
 from main.tasks import save_record
@@ -13,9 +12,6 @@ import json
 
 LOGGER = logging.getLogger(__name__)
 
-REDIS_STORAGE = settings.REDISKV
-
-if 'BITSOCKET' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('BITSOCKET', json.dumps([]))
 
 def run():
     """
@@ -78,12 +74,7 @@ def run():
                                         None,
                                         spent_index
                                     )
-                                    # save_record(*args)
-
-                                    bitsocket = json.loads(REDIS_STORAGE.get('BITSOCKET'))
-                                    bitsocket.append(args)
-                                    REDIS_STORAGE.set('BITSOCKET', json.dumps(bitsocket))
-                                    
+                                    save_record(*args)
                                 msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
                                 LOGGER.info(msg)
 
