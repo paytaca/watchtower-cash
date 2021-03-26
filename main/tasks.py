@@ -263,8 +263,27 @@ def bitdbquery_transaction(self, transaction):
                 )
                 obj_id, created = save_record(*args)
                 if created:
-                    client_acknowledgement.delay(obj_id)
+                    client_acknowledgement.delay(obj_id)3
+    
+    obj = bitdb_scanner.BitDB()
 
+    for _in in transaction['in']:
+        index = _in['e']['i']
+        txid = _in['e']['h']
+        address = _in['e']['a']
+        blocknumber = obj.get_block_by_txid(txid)
+        
+        tr = Transaction.objects.filter(
+            txid=txid,
+            index=index,
+            blockheight__number=blocknumber,
+            address=address
+        )
+        if tr.exists():
+            tr.update(
+                spent=True,
+                spend_block_height_id=block_id
+            )
     
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self, block_id, max_retries=20):
@@ -314,13 +333,13 @@ def slpdbquery_transaction(self, transaction):
     tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
     
     if transaction['slp']['valid']:
-        index = 1
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
             token_id = transaction['slp']['detail']['tokenIdHex']
             token, _ = Token.objects.get_or_create(tokenid=token_id)
             if transaction['slp']['detail']['outputs'][0]['address'] is not None:
+                
+                index = 1
                 for output in transaction['slp']['detail']['outputs']:
-
                     subscription = check_wallet_address_subscription(output['address'])
                     LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
                     
@@ -338,9 +357,28 @@ def slpdbquery_transaction(self, transaction):
                         if created:
                             client_acknowledgement.delay(obj_id)
                     index += 1
+                
+                obj = slpdb_scanner.SLPDB()
 
+                for _in in transaction['in']:
+                    slpaddress = _in['e']['a']
+                    txid = _in['e']['h']
+                    index= _in['e']['i']   
+                    blocknumber = obj.get_block_by_txid(txid)
+
+                    tr = Transaction.objects.filter(
+                        txid=txid,
+                        index=index,
+                        blockheight__number=blocknumber,
+                        address=address
+                    )
+                    if tr.exists():
+                        tr.update(
+                            spent=True,
+                            spend_block_height_id=block_id
+                        )
     
-    
+        
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
     REDIS_STORAGE.set('BLOCK_ID', block_id)

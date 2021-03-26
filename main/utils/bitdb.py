@@ -27,7 +27,20 @@ class BitDB(object):
         else:
             raise BitDBHttpException('Non-200 status')
 
-
+    def get_block_by_txid(self, txid):
+        query = {
+            "v": 3,
+            "q": {
+                "db": ["c"],
+                "find": {
+                    "tx.h": txid
+                },
+                "limit": 1
+            }
+        }
+        data = self.get_data(query)
+        return data['c'][0]['blk']['i']
+        
     def get_transactions_by_blk(self, blk):
         query = {
             "v": 3,
