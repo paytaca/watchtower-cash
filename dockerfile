@@ -17,5 +17,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /code
 WORKDIR /code
 
-ENTRYPOINT [ "wait-for-it.sh", "postgres:5432", "--", "sh", "entrypoint.sh" ]
+ENTRYPOINT [ "sh", "entrypoint.sh" ]
 # CMD [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]

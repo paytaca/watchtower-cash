@@ -1,13 +1,15 @@
 from django.core.management.base import BaseCommand
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
+from main.utils import check_wallet_address_subscription
 from main.models import Token, Transaction
-from main.tasks import save_record
 import grpc
 import time
 import logging
+from main.tasks import save_record, client_acknowledgement
 
 LOGGER = logging.getLogger(__name__)
+
 
 
 def run():
@@ -29,18 +31,11 @@ def run():
         for notification in stub.SubscribeTransactions(req):
             tx = notification.unconfirmed_transaction.transaction
             tx_hash = bytearray(tx.hash[::-1]).hex()
-            has_op_return_data = False
 
             for output in tx.outputs:
-                bchaddress = 'bitcoincash:' + output.address
-                amount = output.value / (10 ** 8)
-
-                txn_qs = Transaction.objects.filter(
-                    address=bchaddress,
-                    txid=tx_hash,
-                    spent_index=output.index
-                )
-                if not txn_qs.exists():
+                if output.address:
+                    bchaddress = 'bitcoincash:' + output.address
+                    amount = output.value / (10 ** 8)
                     args = (
                         'bch',
                         bchaddress,
@@ -50,37 +45,31 @@ def run():
                         None,
                         output.index
                     )
-                    save_record(*args)
-                msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
-                LOGGER.info(msg)
+                    obj_id, created = save_record(*args)
+                    if created:
+                        client_acknowledgement(obj_id)
 
-                if output.script_class == 'datacarrier':
-                    has_op_return_data = True
-                
-                if has_op_return_data:
-                    if output.slp_token.token_id:
-                        token_id = bytearray(output.slp_token.token_id).hex() 
-                        amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
-                        slp_address = 'simpleledger:' + output.slp_token.address
-                        token, _ = Token.objects.get_or_create(tokenid=token_id)
-                        txn_qs = Transaction.objects.filter(
-                            address=slp_address,
-                            txid=tx_hash,
-                            spent_index=output.index
-                        )
-                        if not txn_qs.exists():
-                            args = (
-                                token.tokenid,
-                                slp_address,
-                                tx_hash,
-                                amount,
-                                source,
-                                None,
-                                output.index
-                            )
-                            save_record(*args)
-                        msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
-                        LOGGER.info(msg)
+                    msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
+                    LOGGER.info(msg)
+
+                if output.slp_token.token_id:
+                    token_id = bytearray(output.slp_token.token_id).hex() 
+                    amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                    slp_address = 'simpleledger:' + output.slp_token.address
+                    args = (
+                        token_id,
+                        slp_address,
+                        tx_hash,
+                        amount,
+                        source,
+                        None,
+                        output.index
+                    )
+                    obj_id, created = save_record(*args)
+                    if created:
+                        client_acknowledgement(obj_id)
+                    msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
+                    LOGGER.info(msg)
 
 
 class Command(BaseCommand):

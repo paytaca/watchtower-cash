@@ -3,7 +3,7 @@ import json
 import requests
 import base64
 import random
-
+import time
 
 class SLPDBHttpExcetion(Exception):
     pass
@@ -40,7 +40,17 @@ class SLPDB(object):
                 "limit": 100000
             }
         }
+
+        base_count = len(self.get_data(payload))
+        while True:
+            time.sleep(3)
+            count = len(self.get_data(payload))
+            if count == base_count:
+                break
+            else:
+                base_count = count
         return self.get_data(payload)
+        
 
     
 

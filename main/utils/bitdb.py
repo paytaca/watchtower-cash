@@ -2,6 +2,7 @@ import json
 import requests
 import base64
 import random
+import time
 
 
 class BitDBHttpException(Exception):
@@ -38,6 +39,15 @@ class BitDB(object):
                 "limit": 999999
             }
         }
+
+        base_count = len(self.get_data(query))
+        while True:
+            time.sleep(3)
+            count = len(self.get_data(query))
+            if count == base_count:
+                break
+            else:
+                base_count = count
         return self.get_data(query)
 
     def get_latest_block(self):
