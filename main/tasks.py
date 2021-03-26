@@ -283,6 +283,7 @@ def bitdbquery(self, block_id, max_retries=20):
         block.save()
 
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
+
         
         REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
