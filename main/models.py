@@ -78,7 +78,8 @@ class Transaction(models.Model):
         BlockHeight,
         related_name='spent_transactions',
         null=True,
-        blank=True
+        blank=True,
+        on_delete=models.DO_NOTHING
     )
 
     def __str__(self):

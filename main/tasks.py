@@ -228,7 +228,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         return transaction_obj.id, transaction_created
 
 
-@shared_task(bind=True, queue='input_scanner'):
+@shared_task(bind=True, queue='input_scanner')
 def input_scanner(self, transaction):
     address = transaction['e']['a']
     txid = transaction['e']['h']
@@ -284,7 +284,7 @@ def bitdbquery_transaction(self, transaction):
                 )
                 obj_id, created = save_record(*args)
                 if created:
-                    client_acknowledgement.delay(obj_id)3
+                    client_acknowledgement.delay(obj_id)
     
     obj = bitdb_scanner.BitDB()
 
