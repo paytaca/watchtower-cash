@@ -228,6 +228,27 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         return transaction_obj.id, transaction_created
 
 
+@shared_task(bind=True, queue='input_scanner'):
+def input_scanner(self, transaction):
+    address = transaction['e']['a']
+    txid = transaction['e']['h']
+    index= transaction['e']['i']   
+
+    obj = bitdb_scanner.BitDB()
+    blocknumber = obj.get_block_by_txid(txid)
+
+    tr = Transaction.objects.filter(
+        txid=txid,
+        index=index,
+        blockheight__number=blocknumber,
+        address=address
+    )
+    if tr.exists():
+        tr.update(
+            spent=True,
+            spend_block_height_id=block_id
+        )
+
 @shared_task(bind=True, queue='bitdbquery_transactions')
 def bitdbquery_transaction(self, transaction):
     source = 'bitdb-query'
@@ -268,22 +289,7 @@ def bitdbquery_transaction(self, transaction):
     obj = bitdb_scanner.BitDB()
 
     for _in in transaction['in']:
-        index = _in['e']['i']
-        txid = _in['e']['h']
-        address = _in['e']['a']
-        blocknumber = obj.get_block_by_txid(txid)
-        
-        tr = Transaction.objects.filter(
-            txid=txid,
-            index=index,
-            blockheight__number=blocknumber,
-            address=address
-        )
-        if tr.exists():
-            tr.update(
-                spent=True,
-                spend_block_height_id=block_id
-            )
+        input_scanner.delay(_in)
     
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self, block_id, max_retries=20):
@@ -358,25 +364,9 @@ def slpdbquery_transaction(self, transaction):
                             client_acknowledgement.delay(obj_id)
                     index += 1
                 
-                obj = slpdb_scanner.SLPDB()
 
                 for _in in transaction['in']:
-                    slpaddress = _in['e']['a']
-                    txid = _in['e']['h']
-                    index= _in['e']['i']   
-                    blocknumber = obj.get_block_by_txid(txid)
-
-                    tr = Transaction.objects.filter(
-                        txid=txid,
-                        index=index,
-                        blockheight__number=blocknumber,
-                        address=address
-                    )
-                    if tr.exists():
-                        tr.update(
-                            spent=True,
-                            spend_block_height_id=block_id
-                        )
+                    input_scanner.delay(_in)
     
         
 @shared_task(bind=True, queue='slpdbquery')
