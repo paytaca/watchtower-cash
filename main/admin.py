@@ -75,6 +75,8 @@ class TransactionAdmin(admin.ModelAdmin):
         'token',
         'acknowledged',
         'created_datetime',
+        'spent',
+        'spend_block_height'
     ]
 
     def get_actions(self, request):
