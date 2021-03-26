@@ -109,7 +109,7 @@ def client_acknowledgement(self, txid):
                         'token': transaction.token.tokenid,
                         'txid': transaction.txid,
                         'block': block,
-                        'spent_index': transaction.spent_index
+                        'index': transaction.index
                     }
                     
                     # check if telegram/slack user
@@ -145,7 +145,7 @@ def client_acknowledgement(self, txid):
 
 
 @shared_task(queue='save_record')
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -153,7 +153,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         amount               : the amount being transacted.
         source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
         blockheight          : an optional argument indicating the block height number of a transaction.
-        spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
+        index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
     """
     subscription = check_wallet_address_subscription(transaction_address)
     if not subscription.exists(): return None, None
@@ -161,9 +161,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
     
     
     try:
-        spent_index = int(spent_index)
+        index = int(index)
     except TypeError as exc:
-        spent_index = 0
+        index = 0
     
 
     with trans.atomic():
@@ -182,7 +182,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address=transaction_address,
             token=token_obj,
             amount=amount,
-            spent_index=spent_index,
+            index=index,
         )
         
         if not tr.exists():
@@ -192,7 +192,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 'address':transaction_address,
                 'token':token_obj,
                 'amount':amount,
-                'spent_index':spent_index,
+                'index':index,
                 'source':source
             }
             transaction_list = [Transaction(**transaction_data)]
@@ -205,7 +205,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address=transaction_address,
             token=token_obj,
             amount=amount,
-            spent_index=spent_index
+            index=index
         )
 
 
@@ -228,6 +228,21 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         return transaction_obj.id, transaction_created
 
 
+@shared_task(bind=True, queue='input_scanner')
+def input_scanner(self, txid, index, block_id=None):
+    tr = Transaction.objects.filter(
+        txid=txid,
+        index=index
+    )
+    if tr.exists():
+        if block_id:
+            tr.update(
+                spent=True,
+                spend_block_height_id=block_id
+            )
+        else:
+            tr.update(spent=True)
+
 @shared_task(bind=True, queue='bitdbquery_transactions')
 def bitdbquery_transaction(self, transaction):
     source = 'bitdb-query'
@@ -243,7 +258,7 @@ def bitdbquery_transaction(self, transaction):
     for out in transaction['out']: 
         args = tuple()
         amount = out['e']['v'] / 100000000
-        spent_index = out['e']['i']
+        index = out['e']['i']
         if 'a' in out['e'].keys():
             bchaddress = 'bitcoincash:' + str(out['e']['a'])
 
@@ -259,11 +274,16 @@ def bitdbquery_transaction(self, transaction):
                     amount,
                     source,
                     block_id,
-                    spent_index
+                    index
                 )
                 obj_id, created = save_record(*args)
                 if created:
                     client_acknowledgement.delay(obj_id)
+
+    for _in in transaction['in']:
+        txid = _in['e']['h']
+        index= _in['e']['i']
+        input_scanner(txid, index, block_id=block_id)
 
     
 @shared_task(bind=True, queue='bitdbquery')
@@ -283,7 +303,6 @@ def bitdbquery(self, block_id, max_retries=20):
         block.save()
 
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
-
         
         REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
@@ -301,6 +320,7 @@ def bitdbquery(self, block_id, max_retries=20):
         REDIS_STORAGE.set('READY', 1)
         REDIS_STORAGE.set('ACTIVE-BLOCK', '')
 
+
     except bitdb_scanner.BitDBHttpException:
         self.retry(countdown=3)
 
@@ -314,13 +334,13 @@ def slpdbquery_transaction(self, transaction):
     tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
     
     if transaction['slp']['valid']:
-        spent_index = 1
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
             token_id = transaction['slp']['detail']['tokenIdHex']
             token, _ = Token.objects.get_or_create(tokenid=token_id)
             if transaction['slp']['detail']['outputs'][0]['address'] is not None:
+                
+                index = 1
                 for output in transaction['slp']['detail']['outputs']:
-
                     subscription = check_wallet_address_subscription(output['address'])
                     LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
                     
@@ -333,14 +353,19 @@ def slpdbquery_transaction(self, transaction):
                             output['amount'],
                             source,
                             blockheightid=block_id,
-                            spent_index=spent_index
+                            index=index
                         )
                         if created:
                             client_acknowledgement.delay(obj_id)
-                    spent_index += 1
+                    index += 1
+                
 
+                for _in in transaction['in']:
+                    txid = _in['e']['h']
+                    index= _in['e']['i']
+                    input_scanner(txid, index, block_id=block_id)
     
-    
+        
 @shared_task(bind=True, queue='slpdbquery')
 def slpdbquery(self, block_id):
     REDIS_STORAGE.set('BLOCK_ID', block_id)
@@ -354,8 +379,6 @@ def slpdbquery(self, block_id):
         REDIS_STORAGE.set('READY', 1)
         return  # Terminate here if processed already
 
-    
-
     try:
         
         source = 'slpdb-query'    
@@ -365,6 +388,7 @@ def slpdbquery(self, block_id):
         data = obj.get_transactions_by_blk(int(block.number))
         total = len(data)
         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} SLP TRANSACTIONS {divider}")
+
         REDIS_STORAGE.set('SLPDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('SLPDBQUERY_COUNT', 0)
         

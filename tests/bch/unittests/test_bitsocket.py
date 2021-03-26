@@ -23,4 +23,4 @@ def test_bitsocket_transaction(requests_mock, capsys):
             assert saving.txid == args[2]
             assert saving.amount == args[3]
             assert saving.source == args[4] == source
-            assert saving.spent_index == args[6]
+            assert saving.index == args[6]

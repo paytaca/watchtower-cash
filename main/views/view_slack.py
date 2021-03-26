@@ -58,14 +58,14 @@ class SlackNotificationView(View):
         # source = data['source'][0]
         # token = data['token'][0]
         # txid = data['txid'][0]
-        # spent_index = int(data['spent_index'][0])
+        # index = int(data['index'][0])
 
         amount = request.POST.get('amount', 0)
         address = request.POST.get('address', None)
         source = request.POST.get('source', None)
         token = request.POST.get('token', None)
         txid = request.POST.get('txid', None)
-        spent_index = request.POST.get('spent_index', None)
+        index = request.POST.get('index', None)
         block = request.POST.get('block', None)
         channel_id_list = request.POST.get('channel_id_list', "[]")
 
@@ -78,7 +78,7 @@ class SlackNotificationView(View):
         # token = data.get('token', None)
         # txid = data.get('txid', None)
         # block = data.get('block', None)
-        # spent_index = data.get('spent_index', 0)
+        # index = data.get('index', 0)
         # channel_id_list = data.get('channel_id_list', None)
         channel_id_list = json.loads(channel_id_list)
         if amount and address and source and token and txid:

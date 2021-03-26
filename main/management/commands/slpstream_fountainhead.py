@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from main.utils import check_wallet_address_subscription
 from django.db import transaction
 from main.models import Token, Transaction
-from main.tasks import save_record, client_acknowledgement
+from main.tasks import save_record, client_acknowledgement, input_scanner
 from django.conf import settings
 import logging
 import requests
@@ -38,6 +38,12 @@ def run():
         if loaded_data is not None:
             if len(loaded_data['data']) > 0:
                 info = loaded_data['data'][0]
+                
+                for _in in info['in']:
+                    txid = _in['e']['h']
+                    index = _in['e']['i']
+                    input_scanner(txid, index)
+                    
                 if 'slp' in info.keys():
                     if info['slp']['valid']:
                         if 'detail' in info['slp'].keys():
@@ -47,7 +53,7 @@ def run():
                             else:
                                 token_id = slp_detail['tokenIdHex']
                             token, _ = Token.objects.get_or_create(tokenid=token_id)
-                            spent_index = 1
+                            index = 1
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
 
@@ -62,7 +68,7 @@ def run():
                                     txn_qs = Transaction.objects.filter(
                                         address=slp_address,
                                         txid=txn_id,
-                                        spent_index=spent_index
+                                        index=index
                                     )
                                     if not txn_qs.exists():
                                         args = (
@@ -72,7 +78,7 @@ def run():
                                             amount,
                                             source,
                                             None,
-                                            spent_index
+                                            index
                                         )
                                         obj_id, created = save_record(*args)
                                         if created:
@@ -80,7 +86,9 @@ def run():
 
                                     msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
                                     LOGGER.info(msg)
-                                spent_index += 1
+                                index += 1
+                            
+                            
 
 
 class Command(BaseCommand):

@@ -29,6 +29,20 @@ class SLPDB(object):
             raise SLPDBHttpExcetion('Non-200 status error')
 
 
+    def get_block_by_txid(self, txid):
+        query = {
+            "v": 3,
+            "q": {
+                "db": ["c"],
+                "find": {
+                    "tx.h": txid
+                },
+                "limit": 1
+            }
+        }
+        data = self.get_data(query)
+        return data[0]['blk']['i']
+        
     def get_transactions_by_blk(self, block):
         payload = {
             'v': 3,

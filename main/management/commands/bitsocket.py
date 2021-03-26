@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from main.models import Token, Transaction
 from main.utils import check_wallet_address_subscription
-from main.tasks import save_record, client_acknowledgement
+from main.tasks import save_record, client_acknowledgement, input_scanner
 from django.conf import settings
 import logging
 import traceback
@@ -48,10 +48,16 @@ def run():
         if loaded_data is not None:
             if len(loaded_data['data']) != 0:
                 txn_id = loaded_data['data'][0]['tx']['h']
+                
+                for _in in loaded_data['data'][0]['in']:
+                    txid = _in['e']['h']
+                    index = _in['e']['i']
+                    input_scanner(txid, index)
+
                 for out in loaded_data['data'][0]['out']: 
                     if 'e' in out.keys():
                         amount = out['e']['v'] / 100000000
-                        spent_index = out['e']['i']
+                        index = out['e']['i']
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
 
@@ -62,7 +68,7 @@ def run():
                                 txn_qs = Transaction.objects.filter(
                                     address=bchaddress,
                                     txid=txn_id,
-                                    spent_index=spent_index
+                                    index=index
                                 )
                                 if not txn_qs.exists():
                                     args = (
@@ -72,7 +78,7 @@ def run():
                                         amount,
                                         source,
                                         None,
-                                        spent_index
+                                        index
                                     )
                                     obj_id, created = save_record(*args)
                                     if created:

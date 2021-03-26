@@ -6,7 +6,7 @@ from main.models import Token, Transaction
 import grpc
 import time
 import logging
-from main.tasks import save_record, client_acknowledgement
+from main.tasks import save_record, client_acknowledgement, input_scanner
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +31,12 @@ def run():
         for notification in stub.SubscribeTransactions(req):
             tx = notification.unconfirmed_transaction.transaction
             tx_hash = bytearray(tx.hash[::-1]).hex()
+
+            for _input in tx.inputs:
+                
+                txid = _input.outpoint.hash.hex()
+                index = _input.outpoint.index
+                input_scanner(txid, index)
 
             for output in tx.outputs:
                 if output.address:
