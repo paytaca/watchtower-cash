@@ -234,20 +234,21 @@ def input_scanner(self, transaction):
     txid = transaction['e']['h']
     index= transaction['e']['i']   
 
-    obj = bitdb_scanner.BitDB()
-    blocknumber = obj.get_block_by_txid(txid)
+    trs = Transaction.objects.filter(txid=txid)
+    if trs.exists():
 
-    tr = Transaction.objects.filter(
-        txid=txid,
-        index=index,
-        blockheight__number=blocknumber,
-        address=address
-    )
-    if tr.exists():
-        tr.update(
-            spent=True,
-            spend_block_height_id=block_id
+        blocknumber = trs.first().blockheight.number
+        tr = trs.filter(
+            txid=txid,
+            index=index,
+            blockheight__number=blocknumber,
+            address=address
         )
+        if tr.exists():
+            tr.update(
+                spent=True,
+                spend_block_height_id=block_id
+            )
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
 def bitdbquery_transaction(self, transaction):

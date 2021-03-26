@@ -41,7 +41,7 @@ class SLPDB(object):
             }
         }
         data = self.get_data(query)
-        return data['c'][0]['blk']['i']
+        return data[0]['blk']['i']
         
     def get_transactions_by_blk(self, block):
         payload = {
