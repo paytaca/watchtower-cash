@@ -89,18 +89,19 @@ class RestBitcoin(object):
                                         except Exception as exc:
                                             proceed = False
 
-                                        if (not 'error' in address_data.keys()) and proceed == True:
-                                            args = (
-                                                token_obj.tokenid,
-                                                address_data['slpAddress'],
-                                                txn_id,
-                                                amount,
-                                                "rest.bitcoin-per-block",
-                                                blockheightid,
-                                                spent_index
-                                            )
-                                            message = 'found'
-                                            status = 'success'
+                                        if proceed:
+                                            if (not 'error' in address_data.keys()):
+                                                args = (
+                                                    token_obj.tokenid,
+                                                    address_data['slpAddress'],
+                                                    txn_id,
+                                                    amount,
+                                                    "rest.bitcoin-per-block",
+                                                    blockheightid,
+                                                    spent_index
+                                                )
+                                                message = 'found'
+                                                status = 'success'
 
                                     spent_index += 1
                         else:

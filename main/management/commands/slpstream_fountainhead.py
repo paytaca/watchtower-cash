@@ -1,7 +1,8 @@
 from django.core.management.base import BaseCommand
+from main.utils import check_wallet_address_subscription
 from django.db import transaction
 from main.models import Token, Transaction
-from main.tasks import save_record
+from main.tasks import save_record, client_acknowledgement
 from django.conf import settings
 import logging
 import requests
@@ -46,32 +47,39 @@ def run():
                             else:
                                 token_id = slp_detail['tokenIdHex']
                             token, _ = Token.objects.get_or_create(tokenid=token_id)
-                            spent_index = 0
+                            spent_index = 1
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
-                                amount = float(output['amount'])
-                                # The amount given here is raw, it needs to be converted
-                                if token.decimals:
-                                    amount = amount / (10 ** token.decimals)
-                                txn_id = info['tx']['h']
-                                txn_qs = Transaction.objects.filter(
-                                    address=slp_address,
-                                    txid=txn_id,
-                                    spent_index=spent_index
-                                )
-                                if not txn_qs.exists():
-                                    args = (
-                                        token.tokenid,
-                                        slp_address,
-                                        txn_id,
-                                        amount,
-                                        source,
-                                        None,
-                                        spent_index
+
+                                subscription = check_wallet_address_subscription(slp_address)
+                                # Disregard bch address that are not subscribed.
+                                if subscription.exists():
+                                    amount = float(output['amount'])
+                                    # The amount given here is raw, it needs to be converted
+                                    if token.decimals:
+                                        amount = amount / (10 ** token.decimals)
+                                    txn_id = info['tx']['h']
+                                    txn_qs = Transaction.objects.filter(
+                                        address=slp_address,
+                                        txid=txn_id,
+                                        spent_index=spent_index
                                     )
-                                    save_record(*args)
-                                msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
-                                LOGGER.info(msg)
+                                    if not txn_qs.exists():
+                                        args = (
+                                            token.tokenid,
+                                            slp_address,
+                                            txn_id,
+                                            amount,
+                                            source,
+                                            None,
+                                            spent_index
+                                        )
+                                        obj_id, created = save_record(*args)
+                                        if created:
+                                            client_acknowledgement(obj_id)
+
+                                    msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
+                                    LOGGER.info(msg)
                                 spent_index += 1
 
 

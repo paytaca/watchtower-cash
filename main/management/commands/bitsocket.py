@@ -2,7 +2,8 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from main.models import Token, Transaction
-from main.tasks import save_record
+from main.utils import check_wallet_address_subscription
+from main.tasks import save_record, client_acknowledgement
 from django.conf import settings
 import logging
 import traceback
@@ -53,24 +54,32 @@ def run():
                         spent_index = out['e']['i']
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
-                            txn_qs = Transaction.objects.filter(
-                                address=bchaddress,
-                                txid=txn_id,
-                                spent_index=spent_index
-                            )
-                            if not txn_qs.exists():
-                                args = (
-                                    'bch',
-                                    bchaddress,
-                                    txn_id,
-                                    amount,
-                                    source,
-                                    None,
-                                    spent_index
+
+                            subscription = check_wallet_address_subscription(bchaddress)
+                            # Disregard bch address that are not subscribed.
+                            if subscription.exists():
+                            
+                                txn_qs = Transaction.objects.filter(
+                                    address=bchaddress,
+                                    txid=txn_id,
+                                    spent_index=spent_index
                                 )
-                                save_record(*args)
-                            msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
-                            LOGGER.info(msg)
+                                if not txn_qs.exists():
+                                    args = (
+                                        'bch',
+                                        bchaddress,
+                                        txn_id,
+                                        amount,
+                                        source,
+                                        None,
+                                        spent_index
+                                    )
+                                    obj_id, created = save_record(*args)
+                                    if created:
+                                        client_acknowledgement(obj_id)
+
+                                msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
+                                LOGGER.info(msg)
 
 class Command(BaseCommand):
     help = "Run the tracker of bitsocket"
