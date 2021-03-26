@@ -1,6 +1,6 @@
 from .subscription import save_subscription, register_user, remove_subscription
 from main.tasks import send_telegram_message
-from main.models import Token, Subscription, Subscriber
+from main.models import Token, Subscription
 from main.utils.telegram_responses import get_message
 import logging
 import re
@@ -102,47 +102,48 @@ class TelegramBotHandler(object):
 
                 #check if private message
                 if self.data['message']['chat']['type'] == 'private':
+                    pass
                     #check if account exists
-                    subscriber = Subscriber.objects.filter(telegram_user_details__id=chat_id).first()
+                    # subscriber = Subscriber.objects.filter(telegram_user_details__id=chat_id).first()
 
-                    if subscriber and subscriber.confirmed:                    
-                        default_response = True
-                        self.text = self.text.replace('/', '')
-                        #help message
+                    # if subscriber and subscriber.confirmed:                    
+                    #     default_response = True
+                    #     self.text = self.text.replace('/', '')
+                    #     #help message
 
-                        if self.text.lower() == 'help':
-                            self.message = get_message('help')
-                            default_response = False
+                    #     if self.text.lower() == 'help':
+                    #         self.message = get_message('help')
+                    #         default_response = False
                         
-                        #check subscription message
-                        proceed = False
-                        if re.findall(self.subscribe_regex, self.text.lower()):                            
-                            default_response = self.scan_request('subscribe', chat_id)
+                    #     #check subscription message
+                    #     proceed = False
+                    #     if re.findall(self.subscribe_regex, self.text.lower()):                            
+                    #         default_response = self.scan_request('subscribe', chat_id)
                         
-                        #check unsubscription message
-                        elif re.findall(self.unsubscribe_regex, self.text.lower()):
-                            default_response = self.scan_request('unsubscribe', chat_id)
+                    #     #check unsubscription message
+                    #     elif re.findall(self.unsubscribe_regex, self.text.lower()):
+                    #         default_response = self.scan_request('unsubscribe', chat_id)
                             
-                        if default_response:
-                            #Default Message
-                            self.message = get_message('default')
-                            address, token_name = self.get_info()
-                            proceed = self.verify_address(token_name, address)
-                            #verify token
-                            token  = Token.objects.filter(name=token_name).first()
+                    #     if default_response:
+                    #         #Default Message
+                    #         self.message = get_message('default')
+                    #         address, token_name = self.get_info()
+                    #         proceed = self.verify_address(token_name, address)
+                    #         #verify token
+                    #         token  = Token.objects.filter(name=token_name).first()
                         
 
-                    elif subscriber and not subscriber.confirmed:
-                            self.message = "<b>Account not yet confirmed</b>"
+                    # elif subscriber and not subscriber.confirmed:
+                    #         self.message = "<b>Account not yet confirmed</b>"
 
-                    #not subscribed
-                    else:
-                        #Register user
-                        register_user(self.data['message']['from'], 'telegram')
-                        self.message = get_message('default')
+                    # #not subscribed
+                    # else:
+                    #     #Register user
+                    #     register_user(self.data['message']['from'], 'telegram')
+                    #     self.message = get_message('default')
                     
 
-                    send_telegram_message(self.message, chat_id, update_id)
+                    # send_telegram_message(self.message, chat_id, update_id)
 
 
 

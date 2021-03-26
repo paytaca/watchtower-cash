@@ -5,7 +5,6 @@ from .subscription import (
     remove_subscription
 )
 from main.models import (
-    Subscriber,
     Subscription,
     Token
 )
@@ -122,8 +121,9 @@ class SlackBotHandler(object):
 
     # checks if a Slack user has connected its account to SLP Notify
     def user_is_registered(self, user_id):
-        subscriber = Subscriber.objects.filter(slack_user_details__id=user_id)
-        return subscriber.exists()
+        # subscriber = Subscriber.objects.filter(slack_user_details__id=user_id)
+        # return subscriber.exists()
+        return False
         
 
 ######### PROCESSING FUNCTIONS ###########

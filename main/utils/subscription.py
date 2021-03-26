@@ -1,4 +1,4 @@
-from main.models import Token, Subscriber,BchAddress, Subscription, SlpAddress, SendTo
+from main.models import Token,BchAddress, Subscription, SlpAddress, Recipient
 from django.conf import settings
 from django.db import transaction as trans
 
@@ -7,28 +7,28 @@ def remove_subscription(token_address, token_id, subscriber_id, platform):
     platform = platform.lower()
     subscriber = None
 
-    if platform == 'telegram':
-        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
-    elif platform == 'slack':
-        subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
+    # if platform == 'telegram':
+    #     subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
+    # elif platform == 'slack':
+    #     subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
     
-    if token and subscriber:
-        if token_address.startswith('bitcoincash'):
-            address_obj = BchAddress.objects.get(address=token_address)
-            subscription = Subscription.objects.filter(
-                bch=address_obj,
-                token=token
-            )
-        else:
-            address_obj = SlpAddress.objects.get(address=token_address)
-            subscription = Subscription.objects.filter(
-                slp=address_obj,
-                token=token
-            ) 
+    # if token and subscriber:
+    #     if token_address.startswith('bitcoincash'):
+    #         address_obj = BchAddress.objects.get(address=token_address)
+    #         subscription = Subscription.objects.filter(
+    #             bch=address_obj,
+    #             token=token
+    #         )
+    #     else:
+    #         address_obj = SlpAddress.objects.get(address=token_address)
+    #         subscription = Subscription.objects.filter(
+    #             slp=address_obj,
+    #             token=token
+    #         ) 
         
-        if subscription.exists():
-            subscription.delete()
-            return True
+    #     if subscription.exists():
+    #         subscription.delete()
+    #         return True
     
     return False
 

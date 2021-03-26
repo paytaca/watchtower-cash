@@ -11,18 +11,15 @@ from main.models import (
     Transaction,
     SlpAddress, 
     Subscription, 
-    BchAddress,
-    SendTo,
-    Subscriber
+    BchAddress
 )
 from django.contrib.auth.models import User
 from celery.exceptions import MaxRetriesExceededError 
 import json, random, time
-from main.utils import check_wallet_address_subscription, check_token_subscription
+from main.utils import check_wallet_address_subscription
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
 from main.utils.restbitcoin import RestBitcoin
-from main.utils.spicebot_token_registration import SpicebotTokens
 from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
