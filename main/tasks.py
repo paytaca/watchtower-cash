@@ -229,26 +229,19 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
 
 @shared_task(bind=True, queue='input_scanner')
-def input_scanner(self, transaction):
-    address = transaction['e']['a']
-    txid = transaction['e']['h']
-    index= transaction['e']['i']   
-
-    trs = Transaction.objects.filter(txid=txid)
-    if trs.exists():
-
-        blocknumber = trs.first().blockheight.number
-        tr = trs.filter(
-            txid=txid,
-            index=index,
-            blockheight__number=blocknumber,
-            address=address
-        )
-        if tr.exists():
+def input_scanner(self, txid, index, block_id=None):
+    tr = Transaction.objects.filter(
+        txid=txid,
+        index=index
+    )
+    if tr.exists():
+        if block_id:
             tr.update(
                 spent=True,
                 spend_block_height_id=block_id
             )
+        else:
+            tr.update(spent=True)
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
 def bitdbquery_transaction(self, transaction):
@@ -286,11 +279,12 @@ def bitdbquery_transaction(self, transaction):
                 obj_id, created = save_record(*args)
                 if created:
                     client_acknowledgement.delay(obj_id)
-    
-    obj = bitdb_scanner.BitDB()
 
     for _in in transaction['in']:
-        input_scanner.delay(_in)
+        txid = _in['e']['h']
+        index= _in['e']['i']
+        input_scanner(txid, index, block_id=block_id)
+
     
 @shared_task(bind=True, queue='bitdbquery')
 def bitdbquery(self, block_id, max_retries=20):
@@ -367,7 +361,9 @@ def slpdbquery_transaction(self, transaction):
                 
 
                 for _in in transaction['in']:
-                    input_scanner.delay(_in)
+                    txid = _in['e']['h']
+                    index= _in['e']['i']
+                    input_scanner(txid, index, block_id=block_id)
     
         
 @shared_task(bind=True, queue='slpdbquery')
