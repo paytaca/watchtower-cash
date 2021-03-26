@@ -51,7 +51,7 @@ def run():
                 for out in loaded_data['data'][0]['out']: 
                     if 'e' in out.keys():
                         amount = out['e']['v'] / 100000000
-                        spent_index = out['e']['i']
+                        index = out['e']['i']
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
 
@@ -62,7 +62,7 @@ def run():
                                 txn_qs = Transaction.objects.filter(
                                     address=bchaddress,
                                     txid=txn_id,
-                                    spent_index=spent_index
+                                    index=index
                                 )
                                 if not txn_qs.exists():
                                     args = (
@@ -72,7 +72,7 @@ def run():
                                         amount,
                                         source,
                                         None,
-                                        spent_index
+                                        index
                                     )
                                     obj_id, created = save_record(*args)
                                     if created:

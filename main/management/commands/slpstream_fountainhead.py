@@ -47,7 +47,7 @@ def run():
                             else:
                                 token_id = slp_detail['tokenIdHex']
                             token, _ = Token.objects.get_or_create(tokenid=token_id)
-                            spent_index = 1
+                            index = 1
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
 
@@ -62,7 +62,7 @@ def run():
                                     txn_qs = Transaction.objects.filter(
                                         address=slp_address,
                                         txid=txn_id,
-                                        spent_index=spent_index
+                                        index=index
                                     )
                                     if not txn_qs.exists():
                                         args = (
@@ -72,7 +72,7 @@ def run():
                                             amount,
                                             source,
                                             None,
-                                            spent_index
+                                            index
                                         )
                                         obj_id, created = save_record(*args)
                                         if created:
@@ -80,7 +80,7 @@ def run():
 
                                     msg = f"{source}: {txn_id} | {slp_address} | {amount} | {token_id}"
                                     LOGGER.info(msg)
-                                spent_index += 1
+                                index += 1
 
 
 class Command(BaseCommand):

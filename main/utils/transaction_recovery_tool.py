@@ -17,7 +17,7 @@ class TRT(object):
                 blockheight, created = BlockHeight.objects.get_or_create(number=tr['blockheight'])
                 for out in tr['vout']:
                     amount = out['value']
-                    spent_index = tr['vout'][0]['spentIndex'] or 0
+                    index = tr['vout'][0]['spentIndex'] or 0
                     if 'addresses' in out['scriptPubKey'].keys():
                         for legacy in out['scriptPubKey']['addresses']:
                             address_url = 'https://rest.bitcoin.com/v2/address/details/%s' % legacy
@@ -30,7 +30,7 @@ class TRT(object):
                                 out['value'],
                                 source,
                                 blockheight.id,
-                                spent_index
+                                index
                             )
                             if not Transaction.objects.filter(txid=tr['txid']).exists():
                                 save_record(*args)

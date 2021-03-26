@@ -109,7 +109,7 @@ def client_acknowledgement(self, txid):
                         'token': transaction.token.tokenid,
                         'txid': transaction.txid,
                         'block': block,
-                        'spent_index': transaction.spent_index
+                        'index': transaction.index
                     }
                     
                     # check if telegram/slack user
@@ -145,7 +145,7 @@ def client_acknowledgement(self, txid):
 
 
 @shared_task(queue='save_record')
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, spent_index=0):
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -153,7 +153,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         amount               : the amount being transacted.
         source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
         blockheight          : an optional argument indicating the block height number of a transaction.
-        spent_index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
+        index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
     """
     subscription = check_wallet_address_subscription(transaction_address)
     if not subscription.exists(): return None, None
@@ -161,9 +161,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
     
     
     try:
-        spent_index = int(spent_index)
+        index = int(index)
     except TypeError as exc:
-        spent_index = 0
+        index = 0
     
 
     with trans.atomic():
@@ -182,7 +182,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address=transaction_address,
             token=token_obj,
             amount=amount,
-            spent_index=spent_index,
+            index=index,
         )
         
         if not tr.exists():
@@ -192,7 +192,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 'address':transaction_address,
                 'token':token_obj,
                 'amount':amount,
-                'spent_index':spent_index,
+                'index':index,
                 'source':source
             }
             transaction_list = [Transaction(**transaction_data)]
@@ -205,7 +205,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             address=transaction_address,
             token=token_obj,
             amount=amount,
-            spent_index=spent_index
+            index=index
         )
 
 
@@ -243,7 +243,7 @@ def bitdbquery_transaction(self, transaction):
     for out in transaction['out']: 
         args = tuple()
         amount = out['e']['v'] / 100000000
-        spent_index = out['e']['i']
+        index = out['e']['i']
         if 'a' in out['e'].keys():
             bchaddress = 'bitcoincash:' + str(out['e']['a'])
 
@@ -259,7 +259,7 @@ def bitdbquery_transaction(self, transaction):
                     amount,
                     source,
                     block_id,
-                    spent_index
+                    index
                 )
                 obj_id, created = save_record(*args)
                 if created:
@@ -314,7 +314,7 @@ def slpdbquery_transaction(self, transaction):
     tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
     
     if transaction['slp']['valid']:
-        spent_index = 1
+        index = 1
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
             token_id = transaction['slp']['detail']['tokenIdHex']
             token, _ = Token.objects.get_or_create(tokenid=token_id)
@@ -333,11 +333,11 @@ def slpdbquery_transaction(self, transaction):
                             output['amount'],
                             source,
                             blockheightid=block_id,
-                            spent_index=spent_index
+                            index=index
                         )
                         if created:
                             client_acknowledgement.delay(obj_id)
-                    spent_index += 1
+                    index += 1
 
     
     

@@ -72,8 +72,10 @@ class Transaction(models.Model):
         Token,
         on_delete=models.CASCADE
     )
-    spent_index = models.IntegerField(default=0, db_index=True)
-    
+    index = models.IntegerField(default=0, db_index=True)
+    spent = models.BooleanField(default=False)
+    spend_block_height = models.ForeignKey(BlockHeight, related_name='spent_transactions')
+
     def __str__(self):
         return self.txid
 

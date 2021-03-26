@@ -25,4 +25,4 @@ def test_slpdbtokenscanner_transaction(requests_mock, monkeypatch, capsys):
             assert saving.txid == args[2]
             assert saving.amount == args[3]
             assert saving.source == args[4] == source
-            assert saving.spent_index == args[6]
+            assert saving.index == args[6]
