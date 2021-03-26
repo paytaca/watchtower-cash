@@ -128,8 +128,8 @@ def client_acknowledgement(self, txid):
                     
                     resp = requests.post(webhook_address.address,data=data)
                     if resp.status_code == 200:
-                        
-                        transaction.acknowledged = True
+                        this_transaction.update(acknowledged=True)
+
                     elif resp.status_code == 404 or resp.status_code == 522:
                         
                         LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
@@ -137,6 +137,8 @@ def client_acknowledgement(self, txid):
                         
                         LOGGER.error(resp)
                         self.retry(countdown=3)
+
+            
             
             return f'ACKNOWLEDGEMENT SENT FOR : {transaction.txid}'
     return

@@ -10,7 +10,7 @@ services:
       - ../postgres-watchtower-data:/var/lib/postgresql/data
   backend:
     build: .
-    command: [ "supervisord", "-c", "/code/supervisor/mempool.conf", "--nodaemon" ]
+    command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
     ports:
       - "8000:8000"
     env_file:

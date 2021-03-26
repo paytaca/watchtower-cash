@@ -72,7 +72,6 @@ class Transaction(models.Model):
         Token,
         on_delete=models.CASCADE
     )
-    subscribed = models.BooleanField(default=False, db_index=True)
     spent_index = models.IntegerField(default=0, db_index=True)
     
     def __str__(self):
