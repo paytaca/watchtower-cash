@@ -40,10 +40,7 @@ app = Celery('configs')
 
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
-def send_telegram_message(txid, chat_id):
-    message=f"""<b>WatchTower Notification</b> ℹ️
-    \nhttps://explorer.bitcoin.com/bch/tx/{request.POST.get('txid')}
-    """
+def send_telegram_message(message, chat_id):
     data = {
         "chat_id": chat_id,
         "text": message,
@@ -60,6 +57,7 @@ def send_telegram_message(txid, chat_id):
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, txid):
     this_transaction = Transaction.objects.filter(id=txid)
+    third_parties = []
     if this_transaction.exists():
         transaction = this_transaction.first()
         block = None
@@ -74,7 +72,7 @@ def client_acknowledgement(self, txid):
             for subscription in subscriptions:
 
                 recipient = subscription.recipient
-                recipient.web_url
+                
 
                 data = {
                     'amount': transaction.amount,
@@ -86,20 +84,25 @@ def client_acknowledgement(self, txid):
                     'index': transaction.index
                 }
                 
-                if recipient.telegram_id:
-                    send_telegram_message.delay(txid, recipient.telegram_id)
                 
                 if recipient.web_url:
                     resp = requests.post(recipient.web_url,data=data)
                     if resp.status_code == 200:
                         this_transaction.update(acknowledged=True)
-                        return f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url}'
-                    elif resp.status_code == 404 or resp.status_code == 522:
-                        return f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}"
+                        LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url}')
+                    elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
+                        LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
                     else:
                         LOGGER.error(resp)
                         self.retry(countdown=3)
-    return
+
+                if recipient.telegram_id:
+                    message=f"""<b>WatchTower Notification</b> ℹ️
+                        \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
+                    """
+                    args = ('telegram' , message, recipient.telegram_id)
+                    third_parties.append(args)
+    return third_parties
 
 
 @shared_task(queue='save_record')
@@ -236,7 +239,13 @@ def bitdbquery_transaction(self, transaction):
                 )
                 obj_id, created = save_record(*args)
                 if created:
-                    client_acknowledgement.delay(obj_id)
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)
+                            
 
     for _in in transaction['in']:
         txid = _in['e']['h']
@@ -320,7 +329,7 @@ def slpdbquery_transaction(self, transaction):
                             index=index
                         )
                         if created:
-                            client_acknowledgement.delay(obj_id)
+                            client_acknowledgement(obj_id)
                     index += 1
                 
 

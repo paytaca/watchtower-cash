@@ -26,36 +26,31 @@ from rest_framework import status
 from rest_framework import authentication, permissions
 from rest_framework.decorators import action
 
+
 class SubscribeViewSet(APIView):
     
     def get(self, request, format=None):
         address = request.GET.get('address', None)
+        web_url = request.GET.get('web_url', None)
         response_status = status.HTTP_409_CONFLICT
-        if address:
-            address = address.lower()
-            if address.startswith('bch') or address.startswith('slp'):
-                web_url = request.GET.get('web_url')
-                telegram = request.GET.get('telegram_user_details')
-                slack = request.GET.get('slack_user_details')
-                
-                recipient = Recipient()
-                recipient.web_url = web_url
-                recipient.telegram = telegram
-                recipient.slack = slack
-                recipient.save()
+        if address and web_url:
+            if web_url.lower().startswith('http'):
+                address = address.lower()
+                if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
                     
-                if address.startswith('simpleledger'):
-                    slp, _ = SlpAddress.objects.get_or_create(address=address)
+                    recipient, _ = Recipient.objects.get_or_create(web_url=web_url)
+                        
                     bch = None
-                elif address.startswith('bitcoincash'):
-                    bch, _ = BchAddress.objects.get_or_create(address=address)
                     slp = None
 
+                    if address.startswith('simpleledger'):
+                        slp, _ = SlpAddress.objects.get_or_create(address=address)
+                    elif address.startswith('bitcoincash'):
+                        bch, _ = BchAddress.objects.get_or_create(address=address)
+                    
 
-                subscription = Subscription()
-                subscription.recipient = recipient
-                subscription.slp = slp
-                subscription.bch = bch
-                subscription.save()
-                response_status = status.HTTP_200_OK
+                    subscription, created = Subscription.objects.get_or_create(recipient=recipient,slp=slp,bch=bch)
+                    if created:
+
+                        response_status = status.HTTP_200_OK
         return Response(status=response_status)

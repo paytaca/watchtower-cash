@@ -1,4 +1,4 @@
-from .subscription import save_subscription, register_user, remove_subscription
+from .subscription import save_subscription, remove_subscription
 from main.tasks import send_telegram_message
 from main.models import Token, Subscription
 from main.utils.telegram_responses import get_message
@@ -13,20 +13,8 @@ class TelegramBotHandler(object):
         self.data = data
         self.message = ""
         self.text = ''
-        self.subscribe_regex = f"(^subscribe\s+(simpleledger:.*|bitcoincash:.*)\s+{self.generate_token_regex()})$"
-        self.unsubscribe_regex = f"(^unsubscribe\s+(simpleledger:.*|bitcoincash:.*)\s+{self.generate_token_regex()})$"
-
-    def generate_token_regex(self):
-        tokens = Token.objects.all()
-        token_names = [t.name.lower() for t in tokens if t.name]
-        regex = f"(bch"
-
-        for token in token_names:
-            if token != token_names[0]:
-                regex += f"|{token}"
-
-        return f"{regex})"    
-
+        self.subscribe_regex = f"(^subscribe\s+(simpleledger:.*|bitcoincash:.*))$"
+        self.unsubscribe_regex = f"(^unsubscribe\s+(simpleledger:.*|bitcoincash:.*))$"        
 
     def verify_address(self, token_name, address):
         #verify address
@@ -62,8 +50,7 @@ class TelegramBotHandler(object):
         default_response = False
         address = self.get_info()
         if address:                                
-            #save sucscription
-            logger.error('saving subscription')
+            #save subcscription
             if action == 'subscribe':
                 new_sub = save_subscription(address, chat_id)
                 if new_sub:
@@ -71,7 +58,7 @@ class TelegramBotHandler(object):
                 else:
                     self.message = "You already subscribed this address"
             elif action == 'unsubscribe':
-                old_sub = remove_subscription(address, chat_id, 'telegram')
+                old_sub = remove_subscription(address, chat_id)
                 if old_sub:
                     self.message = "Your address has been successfully removed!"
                 else:
@@ -117,16 +104,7 @@ class TelegramBotHandler(object):
                     if default_response:
                         #Default Message
                         self.message = get_message('default')
-                        address, token_name = self.get_info()
-                        proceed = self.verify_address(token_name, address)
-                        #verify token
-                        token  = Token.objects.filter(name=token_name).first()
                         
-
-                    
-                    #Register user
-                    register_user(self.data['message']['from'], 'telegram')
-                    self.message = get_message('default')
                 
 
-                    send_telegram_message(self.message, chat_id, update_id)
+                    send_telegram_message(self.message, chat_id)
