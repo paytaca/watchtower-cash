@@ -1,6 +1,6 @@
-## What is WatchTower.Cash? What does it intend to achieve?
+## What is WatchTower.Cash?
 
-- Instant and reliable infrastructure connecting you to the BitcoinCash Blockchain
+- Instant and reliable infrastructure connecting you to the BitcoinCash blockchain
 - Redundant data sources (nodes and indexers) running on an elastic infrastructure
 - The goal is to achieve and guarantee 99.99% uptime and reliability
 
