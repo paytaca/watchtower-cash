@@ -283,8 +283,8 @@ def bitdbquery_transaction(self, transaction):
         input_scanner(txid, index, block_id=block_id)
 
     
-@shared_task(bind=True, queue='bitdbquery')
-def bitdbquery(self, block_id, max_retries=20):
+@shared_task(bind=True, queue='bitdbquery', max_retries=20)
+def bitdbquery(self, block_id):
     try:
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
@@ -319,7 +319,13 @@ def bitdbquery(self, block_id, max_retries=20):
 
 
     except bitdb_scanner.BitDBHttpException:
-        self.retry(countdown=3)
+        try:
+            self.retry(countdown=10)
+        except MaxRetriesExceededError:
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks.append(block.number)
+            REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
+            REDIS_STORAGE.set('READY', 1)
 
 @shared_task(bind=True, queue='slpdbquery_transactions')
 def slpdbquery_transaction(self, transaction):
@@ -363,7 +369,7 @@ def slpdbquery_transaction(self, transaction):
                     input_scanner(txid, index, block_id=block_id)
     
         
-@shared_task(bind=True, queue='slpdbquery')
+@shared_task(bind=True, queue='slpdbquery', max_retries=20)
 def slpdbquery(self, block_id):
     REDIS_STORAGE.set('BLOCK_ID', block_id)
     divider = "\n\n##########################################\n\n"
@@ -401,7 +407,13 @@ def slpdbquery(self, block_id):
             bitdbquery.delay(block_id)
             
     except slpdb_scanner.SLPDBHttpExcetion:
-        self.retry(countdown=3)
+        try:
+            self.retry(countdown=10)
+        except MaxRetriesExceededError:
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks.append(block.number)
+            REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
+            REDIS_STORAGE.set('READY', 1)
 
 
 @shared_task(bind=True, queue='manage_block_transactions')
@@ -438,6 +450,7 @@ def manage_block_transactions(self):
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
     # This task is intended to check new blockheight every 5 seconds through BitDB Query
+    LOGGER.info('CHECKING THE LATEST BLOCK')
     obj = bitdb_scanner.BitDB()
     number = obj.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
