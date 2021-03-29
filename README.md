@@ -6,7 +6,7 @@
 
 ## Webhook Subscription
 
-To subscribe to webhook notifications, send a POST request to `https://watchtower.cash/api/webhook/subscribe` with the BCH or SLP address and the URL where the webhook calls will be sent. A sample CURL command show below:
+To subscribe to webhook notifications, send a POST request to `https://watchtower.cash/api/webhook/subscribe` with the BCH or SLP address and the URL where the webhook calls will be sent to. A sample request using `curl` is shown below:
 ```bash
 curl -i -X POST 
     -H "Content-Type: application/json" 
