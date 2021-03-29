@@ -11,18 +11,15 @@ from main.models import (
     Transaction,
     SlpAddress, 
     Subscription, 
-    BchAddress,
-    SendTo,
-    Subscriber
+    BchAddress
 )
 from django.contrib.auth.models import User
 from celery.exceptions import MaxRetriesExceededError 
 import json, random, time
-from main.utils import check_wallet_address_subscription, check_token_subscription
+from main.utils import check_wallet_address_subscription
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
 from main.utils.restbitcoin import RestBitcoin
-from main.utils.spicebot_token_registration import SpicebotTokens
 from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
@@ -43,8 +40,7 @@ app = Celery('configs')
 
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
-def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
-    LOGGER.info(f'SENDING TO {chat_id}')
+def send_telegram_message(message, chat_id):
     data = {
         "chat_id": chat_id,
         "text": message,
@@ -52,38 +48,16 @@ def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
         "disable_web_page_preview": True
     }
 
-    if reply_markup:
-        data['reply_markup'] = json.dumps(reply_markup, separators=(',', ':'))
-
     url = 'https://api.telegram.org/bot'
     response = requests.post(
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
     return f"send notification to {chat_id}"
     
-@shared_task(rate_limit='20/s', queue='send_slack_message')
-def send_slack_message(message, channel, attachments=None):
-    LOGGER.info(f'SENDING TO {channel}')
-    data = {
-        "token": settings.SLACK_BOT_USER_TOKEN,
-        "channel": channel,
-        "text": message
-    }
-
-    if type(attachments) is list:
-        data['attachments'] = json.dumps(attachments)
-
-    response = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        data=data
-    )
-    return f"send notification to {channel}"
-
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, txid):
-
     this_transaction = Transaction.objects.filter(id=txid)
-    
+    third_parties = []
     if this_transaction.exists():
         transaction = this_transaction.first()
         block = None
@@ -91,57 +65,44 @@ def client_acknowledgement(self, txid):
             block = transaction.blockheight.number
         
         address = transaction.address 
-        subscription = check_wallet_address_subscription(address)
+        subscriptions = check_wallet_address_subscription(address)
 
-        if subscription.exists():
+        if subscriptions.exists():
             
-            subscription = subscription.first()
-            webhook_addresses = subscription.address.all()
-            for webhook_address in webhook_addresses:
-                # can_be_send = check_token_subscription(transaction.token.tokenid, subscription.id)
-                can_be_send = True
+            for subscription in subscriptions:
+
+                recipient = subscription.recipient
                 
-                if can_be_send:
-                    data = {
-                        'amount': transaction.amount,
-                        'address': transaction.address,
-                        'source': 'WatchTower',
-                        'token': transaction.token.tokenid,
-                        'txid': transaction.txid,
-                        'block': block,
-                        'index': transaction.index
-                    }
-                    
-                    # check if telegram/slack user
-                    # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
-                    
-                    if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
-                        subscribers = subscription.subscriber.exclude(slack_user_details={})
-                        botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                        data['channel_id_list'] = json.dumps(botlist)
-                    
-                    if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                        subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                        botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                        data['chat_id_list'] = json.dumps(botlist)
-                    
-                    
-                    resp = requests.post(webhook_address.address,data=data)
+
+                data = {
+                    'amount': transaction.amount,
+                    'address': transaction.address,
+                    'source': 'WatchTower',
+                    'token': transaction.token.tokenid,
+                    'txid': transaction.txid,
+                    'block': block,
+                    'index': transaction.index
+                }
+                
+                
+                if recipient.web_url:
+                    resp = requests.post(recipient.web_url,data=data)
                     if resp.status_code == 200:
                         this_transaction.update(acknowledged=True)
-
-                    elif resp.status_code == 404 or resp.status_code == 522:
-                        
-                        LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
+                        LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url}')
+                    elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
+                        LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
                     else:
-                        
                         LOGGER.error(resp)
                         self.retry(countdown=3)
 
-            
-            
-            return f'ACKNOWLEDGEMENT SENT FOR : {transaction.txid}'
-    return
+                if recipient.telegram_id:
+                    message=f"""<b>WatchTower Notification</b> ℹ️
+                        \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
+                    """
+                    args = ('telegram' , message, recipient.telegram_id)
+                    third_parties.append(args)
+    return third_parties
 
 
 @shared_task(queue='save_record')
@@ -278,7 +239,13 @@ def bitdbquery_transaction(self, transaction):
                 )
                 obj_id, created = save_record(*args)
                 if created:
-                    client_acknowledgement.delay(obj_id)
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)
+                            
 
     for _in in transaction['in']:
         txid = _in['e']['h']
@@ -286,8 +253,8 @@ def bitdbquery_transaction(self, transaction):
         input_scanner(txid, index, block_id=block_id)
 
     
-@shared_task(bind=True, queue='bitdbquery')
-def bitdbquery(self, block_id, max_retries=20):
+@shared_task(bind=True, queue='bitdbquery', max_retries=20)
+def bitdbquery(self, block_id):
     try:
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
@@ -322,7 +289,13 @@ def bitdbquery(self, block_id, max_retries=20):
 
 
     except bitdb_scanner.BitDBHttpException:
-        self.retry(countdown=3)
+        try:
+            self.retry(countdown=10)
+        except MaxRetriesExceededError:
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks.append(block.number)
+            REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
+            REDIS_STORAGE.set('READY', 1)
 
 @shared_task(bind=True, queue='slpdbquery_transactions')
 def slpdbquery_transaction(self, transaction):
@@ -356,7 +329,7 @@ def slpdbquery_transaction(self, transaction):
                             index=index
                         )
                         if created:
-                            client_acknowledgement.delay(obj_id)
+                            client_acknowledgement(obj_id)
                     index += 1
                 
 
@@ -366,7 +339,7 @@ def slpdbquery_transaction(self, transaction):
                     input_scanner(txid, index, block_id=block_id)
     
         
-@shared_task(bind=True, queue='slpdbquery')
+@shared_task(bind=True, queue='slpdbquery', max_retries=20)
 def slpdbquery(self, block_id):
     REDIS_STORAGE.set('BLOCK_ID', block_id)
     divider = "\n\n##########################################\n\n"
@@ -404,7 +377,13 @@ def slpdbquery(self, block_id):
             bitdbquery.delay(block_id)
             
     except slpdb_scanner.SLPDBHttpExcetion:
-        self.retry(countdown=3)
+        try:
+            self.retry(countdown=10)
+        except MaxRetriesExceededError:
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks.append(block.number)
+            REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
+            REDIS_STORAGE.set('READY', 1)
 
 
 @shared_task(bind=True, queue='manage_block_transactions')
@@ -441,6 +420,7 @@ def manage_block_transactions(self):
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
     # This task is intended to check new blockheight every 5 seconds through BitDB Query
+    LOGGER.info('CHECKING THE LATEST BLOCK')
     obj = bitdb_scanner.BitDB()
     number = obj.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)

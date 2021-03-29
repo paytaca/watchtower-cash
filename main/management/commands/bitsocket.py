@@ -82,7 +82,12 @@ def run():
                                     )
                                     obj_id, created = save_record(*args)
                                     if created:
-                                        client_acknowledgement(obj_id)
+                                        third_parties = client_acknowledgement(obj_id)
+                                        for platform in third_parties:
+                                            if 'telegram' in platform:
+                                                message = platform[1]
+                                                chat_id = platform[2]
+                                                send_telegram_message(message, chat_id)
 
                                 msg = f"{source}: {txn_id} | {bchaddress} | {amount} "
                                 LOGGER.info(msg)

@@ -85,12 +85,9 @@ class Transaction(models.Model):
     def __str__(self):
         return self.txid
 
-class SendTo(models.Model):
-    address = models.CharField(max_length=500)
-
-    class Meta:
-        verbose_name = 'Send To'
-        verbose_name_plural = 'Send To'
+class Recipient(models.Model):
+    web_url = models.CharField(max_length=500,null=True, blank=True)
+    telegram_id = models.CharField(max_length=100,null=True, blank=True)
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True, db_index=True)
@@ -124,44 +121,21 @@ class BchAddress(models.Model):
         return self.address
 
 class Subscription(models.Model):
-    token = models.ForeignKey(
-        Token,
+    recipient = models.ForeignKey(
+        Recipient,
         on_delete=models.CASCADE,
-        related_name='subscription',
-        null=True
-    )
-    address = models.ManyToManyField(
-        SendTo,
-        related_name='subscription'
+        null=True,
+        related_name='subscriptions'
     )
     slp = models.ForeignKey(
         SlpAddress,
-        on_delete=models.CASCADE,
-        related_name='subscription',
+        on_delete=models.DO_NOTHING,
+        related_name='subscriptions',
         null=True
     )
     bch = models.ForeignKey(
         BchAddress,
-        on_delete=models.CASCADE,
-        related_name='subscription',
+        on_delete=models.DO_NOTHING,
+        related_name='subscriptions',
         null=True
     )
-
-class Subscriber(models.Model):
-    user = models.OneToOneField(
-        User,
-        on_delete=models.CASCADE,
-        related_name='subscriber'
-    )
-    subscriptions = models.ManyToManyField(
-        Subscription,
-        related_name='subscriber'
-    )
-    confirmed = models.BooleanField(default=False)
-    date_started = models.DateTimeField(default=timezone.now)
-    telegram_user_details = JSONField(default=dict, blank=True)
-    # slack_user_details = {
-    #   "id": string,
-    #   "channel_id": string (DM channel ID for the bot to reply to)
-    # }
-    slack_user_details = JSONField(default=dict, null=True, blank=True)

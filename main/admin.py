@@ -5,9 +5,8 @@ from main.models import (
     SlpAddress,
     BchAddress,
     BlockHeight,
-    Subscriber,
     Subscription,
-    SendTo
+    Recipient
 )
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
@@ -122,33 +121,29 @@ class BchAddressAdmin(admin.ModelAdmin):
         'transactions',
     ]
 
-class SendToAdmin(admin.ModelAdmin):
+class RecipientAdmin(admin.ModelAdmin):
     list_display = [
-        'address',
+        'web_url',
+        'telegram_id',
     ]
 
 class SubscriptionAdmin(admin.ModelAdmin):
     list_display = [
-        'token'
+        'recipient',
+        'slp',        
+        'bch',
     ]
 
 
-class SubscriberAdmin(admin.ModelAdmin):
-    list_display = [
-        'user',
-        'confirmed'
-    ]
-    exclude = ('subscriptions',)
 
-    # [{"token_id": 0,"target_addresses":[],"confirmation":0}]
     
-# admin.site.register(User)
-# admin.site.register(Group)
+admin.site.unregister(User)
+admin.site.unregister(Group)
+
 admin.site.register(Token, TokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
 admin.site.register(BchAddress, BchAddressAdmin)
 admin.site.register(BlockHeight, BlockHeightAdmin)
-admin.site.register(Subscriber, SubscriberAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)
-admin.site.register(SendTo, SendToAdmin)
+admin.site.register(Recipient, RecipientAdmin)

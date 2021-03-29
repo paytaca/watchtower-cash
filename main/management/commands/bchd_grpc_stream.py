@@ -6,7 +6,7 @@ from main.models import Token, Transaction
 import grpc
 import time
 import logging
-from main.tasks import save_record, client_acknowledgement, input_scanner
+from main.tasks import save_record, client_acknowledgement, input_scanner, send_telegram_message
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,8 +53,12 @@ def run():
                     )
                     obj_id, created = save_record(*args)
                     if created:
-                        client_acknowledgement(obj_id)
-
+                        third_parties = client_acknowledgement(obj_id)
+                        for platform in third_parties:
+                            if 'telegram' in platform:
+                                message = platform[1]
+                                chat_id = platform[2]
+                                send_telegram_message(message, chat_id)
                     msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
                     LOGGER.info(msg)
 
@@ -73,7 +77,12 @@ def run():
                     )
                     obj_id, created = save_record(*args)
                     if created:
-                        client_acknowledgement(obj_id)
+                        third_parties = client_acknowledgement(obj_id)
+                        for platform in third_parties:
+                            if 'telegram' in platform:
+                                message = platform[1]
+                                chat_id = platform[2]
+                                send_telegram_message(message, chat_id)
                     msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
                     LOGGER.info(msg)
 

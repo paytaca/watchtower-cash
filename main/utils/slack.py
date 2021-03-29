@@ -5,7 +5,6 @@ from .subscription import (
     remove_subscription
 )
 from main.models import (
-    Subscriber,
     Subscription,
     Token
 )
@@ -13,9 +12,7 @@ from main.utils.slack_responses import (
     get_message,
     get_attachment
 )
-from main.tasks import (
-    send_slack_message,
-)
+
 
 import requests, logging
 import random, re
@@ -107,7 +104,7 @@ class SlackBotHandler(object):
                     message = get_message('default')
                     attachment = get_attachment('default')
 
-                send_slack_message.delay(message, channel, attachment)
+                # send_slack_message.delay(message, channel, attachment)
 
 
 ######### VALIDATION FUNCTIONS ##########
@@ -122,8 +119,9 @@ class SlackBotHandler(object):
 
     # checks if a Slack user has connected its account to SLP Notify
     def user_is_registered(self, user_id):
-        subscriber = Subscriber.objects.filter(slack_user_details__id=user_id)
-        return subscriber.exists()
+        # subscriber = Subscriber.objects.filter(slack_user_details__id=user_id)
+        # return subscriber.exists()
+        return False
         
 
 ######### PROCESSING FUNCTIONS ###########

@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from main.models import Subscriber
+
 
 def get_and_authenticate_user(username, password):
     user = authenticate(username=username, password=password)
@@ -17,8 +17,8 @@ def create_user_account(email, password, username, first_name="", last_name="", 
         first_name=first_name,
         last_name=last_name,
         **extra_fields)
-    subscriber = Subscriber()
-    subscriber.user = user
-    subscriber.confirmed = True
-    subscriber.save()
+    # subscriber = Subscriber()
+    # subscriber.user = user
+    # subscriber.confirmed = True
+    # subscriber.save()
     return user
