@@ -53,36 +53,30 @@ class TelegramBotHandler(object):
         return proceed
 
     def get_info(self):
-        if len(self.text.split()) > 2:
-            return self.text.split()[1].strip() , self.text.split()[-1].lower().strip()
+        if len(self.text.split()) > 1:
+            return self.text.split()[1].strip()
         else:
-            return '' , self.text.split()[-1].lower().strip()
+            return '' 
 
     def scan_request(self, action, chat_id):
         default_response = False
-        address, token_name = self.get_info()
-        proceed = self.verify_address(token_name, address)
-
-        #verify token
-        token  = Token.objects.filter(name=token_name).first()
-
-        if token and proceed:                                
+        address = self.get_info()
+        if address:                                
             #save sucscription
             logger.error('saving subscription')
             if action == 'subscribe':
-                new_sub = save_subscription(address, token.id, chat_id, 'telegram')
+                new_sub = save_subscription(address, chat_id)
                 if new_sub:
                     self.message = "Your address has been successfully saved!"
                 else:
                     self.message = "You already subscribed this address"
             elif action == 'unsubscribe':
-                old_sub = remove_subscription(address, token.id, chat_id, 'telegram')
+                old_sub = remove_subscription(address, chat_id, 'telegram')
                 if old_sub:
                     self.message = "Your address has been successfully removed!"
                 else:
                     self.message = "Sorry, address can't be removed."
-        elif not token:                                
-            self.message = "Sorry, the token you've input is not yet supported."
+
         elif self.message == '':
             self.message = "Invalid input, please try again."
         return default_response
@@ -102,48 +96,37 @@ class TelegramBotHandler(object):
 
                 #check if private message
                 if self.data['message']['chat']['type'] == 'private':
-                    pass
-                    #check if account exists
-                    # subscriber = Subscriber.objects.filter(telegram_user_details__id=chat_id).first()
-
-                    # if subscriber and subscriber.confirmed:                    
-                    #     default_response = True
-                    #     self.text = self.text.replace('/', '')
-                    #     #help message
-
-                    #     if self.text.lower() == 'help':
-                    #         self.message = get_message('help')
-                    #         default_response = False
-                        
-                    #     #check subscription message
-                    #     proceed = False
-                    #     if re.findall(self.subscribe_regex, self.text.lower()):                            
-                    #         default_response = self.scan_request('subscribe', chat_id)
-                        
-                    #     #check unsubscription message
-                    #     elif re.findall(self.unsubscribe_regex, self.text.lower()):
-                    #         default_response = self.scan_request('unsubscribe', chat_id)
-                            
-                    #     if default_response:
-                    #         #Default Message
-                    #         self.message = get_message('default')
-                    #         address, token_name = self.get_info()
-                    #         proceed = self.verify_address(token_name, address)
-                    #         #verify token
-                    #         token  = Token.objects.filter(name=token_name).first()
-                        
-
-                    # elif subscriber and not subscriber.confirmed:
-                    #         self.message = "<b>Account not yet confirmed</b>"
-
-                    # #not subscribed
-                    # else:
-                    #     #Register user
-                    #     register_user(self.data['message']['from'], 'telegram')
-                    #     self.message = get_message('default')
                     
+                    default_response = True
+                    self.text = self.text.replace('/', '')
+                    #help message
 
-                    # send_telegram_message(self.message, chat_id, update_id)
+                    if self.text.lower() == 'help':
+                        self.message = get_message('help')
+                        default_response = False
+                    
+                    #check subscription message
+                    proceed = False
+                    if re.findall(self.subscribe_regex, self.text.lower()):                            
+                        default_response = self.scan_request('subscribe', chat_id)
+                    
+                    #check unsubscription message
+                    elif re.findall(self.unsubscribe_regex, self.text.lower()):
+                        default_response = self.scan_request('unsubscribe', chat_id)
+                        
+                    if default_response:
+                        #Default Message
+                        self.message = get_message('default')
+                        address, token_name = self.get_info()
+                        proceed = self.verify_address(token_name, address)
+                        #verify token
+                        token  = Token.objects.filter(name=token_name).first()
+                        
 
+                    
+                    #Register user
+                    register_user(self.data['message']['from'], 'telegram')
+                    self.message = get_message('default')
+                
 
-
+                    send_telegram_message(self.message, chat_id, update_id)

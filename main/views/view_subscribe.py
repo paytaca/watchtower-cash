@@ -44,10 +44,10 @@ class SubscribeViewSet(APIView):
                 recipient.slack = slack
                 recipient.save()
                     
-                if address.startswith('slp'):
+                if address.startswith('simpleledger'):
                     slp, _ = SlpAddress.objects.get_or_create(address=address)
                     bch = None
-                elif address.startswith('bch'):
+                elif address.startswith('bitcoincash'):
                     bch, _ = BchAddress.objects.get_or_create(address=address)
                     slp = None
 

@@ -2,79 +2,42 @@ from main.models import Token,BchAddress, Subscription, SlpAddress, Recipient
 from django.conf import settings
 from django.db import transaction as trans
 
-def remove_subscription(token_address, token_id, subscriber_id, platform):
-    token = Token.objects.get(id=token_id)
-    platform = platform.lower()
-    subscriber = None
+def remove_subscription(address, subscriber_id,):
+    Subscription.objects.filter(
+        slp=address
+    ).filter(
+        bch=address
+    ).filter(
+        telegram_id = subscriber_id
+    ).delete()
 
-    # if platform == 'telegram':
-    #     subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
-    # elif platform == 'slack':
-    #     subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
-    
-    # if token and subscriber:
-    #     if token_address.startswith('bitcoincash'):
-    #         address_obj = BchAddress.objects.get(address=token_address)
-    #         subscription = Subscription.objects.filter(
-    #             bch=address_obj,
-    #             token=token
-    #         )
-    #     else:
-    #         address_obj = SlpAddress.objects.get(address=token_address)
-    #         subscription = Subscription.objects.filter(
-    #             slp=address_obj,
-    #             token=token
-    #         ) 
-        
-    #     if subscription.exists():
-    #         subscription.delete()
-    #         return True
-    
     return False
 
-def save_subscription(token_address, token_id, subscriber_id, platform):
-    # note: subscriber_id: unique identifier of telegram/slack user
-    token = Token.objects.get(id=token_id)
-    platform = platform.lower()
+def save_subscription(address, subscriber_id):
+    
     subscriber = None
 
-    # check telegram & slack user fields in subscriber
-    if platform == 'telegram':
-        subscriber = Subscriber.objects.get(telegram_user_details__id=subscriber_id)
-    elif platform == 'slack':
-        subscriber = Subscriber.objects.get(slack_user_details__id=subscriber_id)
+    destination_address = None
 
-    if token and subscriber:
-        destination_address = None
+    if token_address.startswith('bitcoincash'):
+        bch, created = BchAddress.objects.get_or_create(address=token_address)
+        
+    
+    if token_address.startswith('simpleledger'):
+        slp, created = SlpAddress.objects.get_or_create(address=token_address)
 
-        if token_address.startswith('bitcoincash'):
-            address_obj, created = BchAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(
-                bch=address_obj,
-                token=token
-            )
-        else:
-            address_obj, created = SlpAddress.objects.get_or_create(address=token_address)
-            subscription_obj, created = Subscription.objects.get_or_create(
-                slp=address_obj,
-                token=token
-            ) 
+    recipient = Recipient()
+    recipient.telegram = subscriber_id
+    recipient.save()
+        
 
-        if platform == 'telegram':
-            destination_address = settings.TELEGRAM_DESTINATION_ADDR
-        elif platform == 'slack':
-            destination_address = settings.SLACK_DESTINATION_ADDR
 
-        if created:
-            with trans.atomic():
-                sendTo, created = SendTo.objects.get_or_create(address=destination_address)
+    subscription = Subscription()
+    subscription.recipient = recipient
+    subscription.slp = slp
+    subscription.bch = bch
+    subscription.save()
 
-                subscription_obj.address.add(sendTo)
-                subscription_obj.token = token
-                subscription_obj.save()
-                
-                subscriber.subscription.add(subscription_obj)
-            return True
 
     return False
 

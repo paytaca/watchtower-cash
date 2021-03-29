@@ -40,8 +40,10 @@ app = Celery('configs')
 
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
-def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
-    LOGGER.info(f'SENDING TO {chat_id}')
+def send_telegram_message(txid, chat_id):
+    message=f"""<b>WatchTower Notification</b> ℹ️
+    \nhttps://explorer.bitcoin.com/bch/tx/{request.POST.get('txid')}
+    """
     data = {
         "chat_id": chat_id,
         "text": message,
@@ -49,38 +51,15 @@ def send_telegram_message(message, chat_id, update_id=None, reply_markup=None):
         "disable_web_page_preview": True
     }
 
-    if reply_markup:
-        data['reply_markup'] = json.dumps(reply_markup, separators=(',', ':'))
-
     url = 'https://api.telegram.org/bot'
     response = requests.post(
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
     return f"send notification to {chat_id}"
     
-@shared_task(rate_limit='20/s', queue='send_slack_message')
-def send_slack_message(message, channel, attachments=None):
-    LOGGER.info(f'SENDING TO {channel}')
-    data = {
-        "token": settings.SLACK_BOT_USER_TOKEN,
-        "channel": channel,
-        "text": message
-    }
-
-    if type(attachments) is list:
-        data['attachments'] = json.dumps(attachments)
-
-    response = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        data=data
-    )
-    return f"send notification to {channel}"
-
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, txid):
-
     this_transaction = Transaction.objects.filter(id=txid)
-    
     if this_transaction.exists():
         transaction = this_transaction.first()
         block = None
@@ -88,56 +67,38 @@ def client_acknowledgement(self, txid):
             block = transaction.blockheight.number
         
         address = transaction.address 
-        subscription = check_wallet_address_subscription(address)
+        subscriptions = check_wallet_address_subscription(address)
 
-        if subscription.exists():
+        if subscriptions.exists():
             
-            subscription = subscription.first()
-            webhook_addresses = subscription.address.all()
-            for webhook_address in webhook_addresses:
-                # can_be_send = check_token_subscription(transaction.token.tokenid, subscription.id)
-                can_be_send = True
+            for subscription in subscriptions:
+
+                recipient = subscription.recipient
+                recipient.web_url
+
+                data = {
+                    'amount': transaction.amount,
+                    'address': transaction.address,
+                    'source': 'WatchTower',
+                    'token': transaction.token.tokenid,
+                    'txid': transaction.txid,
+                    'block': block,
+                    'index': transaction.index
+                }
                 
-                if can_be_send:
-                    data = {
-                        'amount': transaction.amount,
-                        'address': transaction.address,
-                        'source': 'WatchTower',
-                        'token': transaction.token.tokenid,
-                        'txid': transaction.txid,
-                        'block': block,
-                        'index': transaction.index
-                    }
-                    
-                    # check if telegram/slack user
-                    # retrieve subscribers' channel_id to be added to payload as a list (for Slack)
-                    
-                    if webhook_address.address == settings.SLACK_DESTINATION_ADDR:
-                        subscribers = subscription.subscriber.exclude(slack_user_details={})
-                        botlist = list(subscribers.values_list('slack_user_details__channel_id', flat=True))
-                        data['channel_id_list'] = json.dumps(botlist)
-                    
-                    if webhook_address.address == settings.TELEGRAM_DESTINATION_ADDR:
-                        subscribers = subscription.subscriber.exclude(telegram_user_details={})
-                        botlist = list(subscribers.values_list('telegram_user_details__id', flat=True))
-                        data['chat_id_list'] = json.dumps(botlist)
-                    
-                    
-                    resp = requests.post(webhook_address.address,data=data)
+                if recipient.telegram_id:
+                    send_telegram_message.delay(txid, recipient.telegram_id)
+                
+                if recipient.web_url:
+                    resp = requests.post(recipient.web_url,data=data)
                     if resp.status_code == 200:
                         this_transaction.update(acknowledged=True)
-
+                        return f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url}'
                     elif resp.status_code == 404 or resp.status_code == 522:
-                        
-                        LOGGER.error(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {webhook_address.address}")
+                        return f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}"
                     else:
-                        
                         LOGGER.error(resp)
                         self.retry(countdown=3)
-
-            
-            
-            return f'ACKNOWLEDGEMENT SENT FOR : {transaction.txid}'
     return
 
 

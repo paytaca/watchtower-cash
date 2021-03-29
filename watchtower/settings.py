@@ -224,7 +224,8 @@ SWAGGER_SETTINGS = {
 }
 
 #Telegram bot settings
-TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
+# TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
+TELEGRAM_BOT_TOKEN = "1764241013:AAGA5L8vuZf8CBJH3iHkFsp84pRbFzSGwrc"
 TELEGRAM_BOT_USER = config('TELEGRAM_BOT_USER', default='')
 TELEGRAM_DESTINATION_ADDR = 'https://watchtower.scibizinformatics.com/telegram/notify/'
 

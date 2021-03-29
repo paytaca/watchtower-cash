@@ -124,8 +124,7 @@ class BchAddressAdmin(admin.ModelAdmin):
 class RecipientAdmin(admin.ModelAdmin):
     list_display = [
         'web_url',
-        'telegram_user_details',
-        'slack_user_details'
+        'telegram_id',
     ]
 
 class SubscriptionAdmin(admin.ModelAdmin):

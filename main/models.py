@@ -87,19 +87,7 @@ class Transaction(models.Model):
 
 class Recipient(models.Model):
     web_url = models.CharField(max_length=500,null=True, blank=True)
-    telegram_user_details = JSONField(default=dict, blank=True)
-    slack_user_details = JSONField(default=dict, null=True, blank=True)
-    """
-    slack_user_details = {
-      "id": string,
-      "channel_id": string (DM channel ID for the bot to reply to)
-    }
-    """
-
-
-    class Meta:
-        verbose_name = 'Send To'
-        verbose_name_plural = 'Send To'
+    telegram_id = JSONField(default=dict, blank=True)
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True, db_index=True)
@@ -135,7 +123,7 @@ class BchAddress(models.Model):
 class Subscription(models.Model):
     recipient = models.ForeignKey(
         Recipient,
-        on_delete=models.DO_NOTHING,
+        on_delete=models.CASCADE,
         null=True,
         related_name='subscriptions'
     )

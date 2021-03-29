@@ -12,9 +12,7 @@ from main.utils.slack_responses import (
     get_message,
     get_attachment
 )
-from main.tasks import (
-    send_slack_message,
-)
+
 
 import requests, logging
 import random, re
@@ -106,7 +104,7 @@ class SlackBotHandler(object):
                     message = get_message('default')
                     attachment = get_attachment('default')
 
-                send_slack_message.delay(message, channel, attachment)
+                # send_slack_message.delay(message, channel, attachment)
 
 
 ######### VALIDATION FUNCTIONS ##########

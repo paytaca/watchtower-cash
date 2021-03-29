@@ -29,10 +29,7 @@ from drf_yasg import openapi
 from main.urls import urlpatterns as main_urls
 
 from main.views import ( 
-    SlackDirectMessageView,
-    SlackNotificationView,
-    TelegramBotView, 
-    TelegramSendtoView
+    TelegramBotView
 )
 
 schema_view = get_schema_view(
@@ -51,9 +48,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
-    path('telegram/notify/', csrf_exempt(TelegramSendtoView.as_view()), name="telegram-notify"),
-    path('slack/dm/', csrf_exempt(SlackDirectMessageView.as_view()), name='slack-dm'),
-    path('slack/notify/', csrf_exempt(SlackNotificationView.as_view()), name='slack-notify'),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui')
