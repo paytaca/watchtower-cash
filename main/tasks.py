@@ -97,15 +97,28 @@ def client_acknowledgement(self, txid):
                         self.retry(countdown=3)
 
                 if recipient.telegram_id:
-                    message=f"""<b>WatchTower Notification</b> ℹ️
-                        \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
-                    """
+
+                    if transaction.token.name != 'bch':
+                        message=f"""<b>WatchTower Notification</b> ℹ️
+                            \n Address: {transaction.address}
+                            \n Token: {transaction.token.name}
+                            \n Token ID: {transaction.token.tokenid}
+                            \n Amount: {transaction.amount}
+                            \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
+                        """
+                    else:
+                        message=f"""<b>WatchTower Notification</b> ℹ️
+                            \n Address: {transaction.address}
+                            \n Amount: {transaction.amount} BCH
+                            \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
+                        """
+
                     args = ('telegram' , message, recipient.telegram_id)
                     third_parties.append(args)
     return third_parties
 
 
-@shared_task(queue='save_record')
+@shared_task(queue='save_record')   
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0):
     """
         token                : can be tokenid (slp token) or token name (bch)
