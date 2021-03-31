@@ -9,6 +9,7 @@ from main.models import (
     Recipient
 )
 from django.contrib.auth.models import User, Group
+from main.tasks import client_acknowledgement, send_telegram_message
 from django.utils.html import format_html
 from django.conf import settings
 import json
@@ -78,6 +79,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'spend_block_height'
     ]
 
+
     def get_actions(self, request):
         actions = super().get_actions(request)
         if 'delete_selected' in actions:
@@ -87,7 +89,12 @@ class TransactionAdmin(admin.ModelAdmin):
 
     def resend_unacknowledged_transactions(modeladmin, request, queryset):
         for tr in queryset:
-            client_acknowledgement(tr.token.tokenid, r.id)
+            third_parties = client_acknowledgement(tr.id)
+            for platform in third_parties:
+                if 'telegram' in platform:
+                    message = platform[1]
+                    chat_id = platform[2]
+                    send_telegram_message(message, chat_id)
             
 
     def get_queryset(self, request): 
@@ -125,6 +132,7 @@ class RecipientAdmin(admin.ModelAdmin):
     list_display = [
         'web_url',
         'telegram_id',
+        'valid'
     ]
 
 class SubscriptionAdmin(admin.ModelAdmin):

@@ -21,8 +21,11 @@ class SubscribeViewSet(APIView):
                 address = address.lower()
                 if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
                     
-                    recipient, _ = Recipient.objects.get_or_create(web_url=web_url)
-                        
+                    recipient, created = Recipient.objects.get_or_create(web_url=web_url)
+                    if not created:
+                        # Renewed web_url validity.
+                        recipient.valid = True
+                        recipient.save()
                     bch = None
                     slp = None
 

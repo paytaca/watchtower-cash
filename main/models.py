@@ -88,6 +88,15 @@ class Transaction(models.Model):
 class Recipient(models.Model):
     web_url = models.CharField(max_length=500,null=True, blank=True)
     telegram_id = models.CharField(max_length=100,null=True, blank=True)
+    valid = models.BooleanField(default=True)
+
+    def __str__(self):
+        if self.web_url:
+            return self.web_url
+        elif self.telegram_id:
+            return self.telegram_id
+        else:
+            return 'N/A'
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True, db_index=True)
