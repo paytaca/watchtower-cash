@@ -11,7 +11,8 @@ from main.models import (
     Transaction,
     SlpAddress, 
     Subscription, 
-    BchAddress
+    BchAddress,
+    Recipient
 )
 from django.contrib.auth.models import User
 from celery.exceptions import MaxRetriesExceededError 
@@ -84,28 +85,43 @@ def client_acknowledgement(self, txid):
                     'index': transaction.index
                 }
                 
-                
-                if recipient.web_url:
-                    resp = requests.post(recipient.web_url,data=data)
-                    if resp.status_code == 200:
-                        this_transaction.update(acknowledged=True)
-                        LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url}')
-                    elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
-                        LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
-                    else:
-                        LOGGER.error(resp)
-                        self.retry(countdown=3)
+                if recipient.valid:
+                    if recipient.web_url:
+                        resp = requests.post(recipient.web_url,data=data)
+                        if resp.status_code == 200:
+                            this_transaction.update(acknowledged=True)
+                            LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url}')
+                        elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
+                            Recipient.objects.filter(id=recipient.id).update(valid=False)
+                            LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
+                        else:
+                            LOGGER.error(resp)
+                            self.retry(countdown=3)
 
-                if recipient.telegram_id:
-                    message=f"""<b>WatchTower Notification</b> ℹ️
-                        \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
-                    """
-                    args = ('telegram' , message, recipient.telegram_id)
-                    third_parties.append(args)
+                    if recipient.telegram_id:
+
+                        if transaction.token.name != 'bch':
+                            message=f"""<b>WatchTower Notification</b> ℹ️
+                                \n Address: {transaction.address}
+                                \n Token: {transaction.token.name}
+                                \n Token ID: {transaction.token.tokenid}
+                                \n Amount: {transaction.amount}
+                                \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
+                            """
+                        else:
+                            message=f"""<b>WatchTower Notification</b> ℹ️
+                                \n Address: {transaction.address}
+                                \n Amount: {transaction.amount} BCH
+                                \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
+                            """
+
+                        args = ('telegram' , message, recipient.telegram_id)
+                        third_parties.append(args)
+                        this_transaction.update(acknowledged=True)
     return third_parties
 
 
-@shared_task(queue='save_record')
+@shared_task(queue='save_record')   
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0):
     """
         token                : can be tokenid (slp token) or token name (bch)
