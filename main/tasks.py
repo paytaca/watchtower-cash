@@ -278,31 +278,37 @@ def bitdbquery(self, block_id):
         source = 'bitdb-query'
         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
         
-        obj = bitdb_scanner.BitDB()
-        data = obj.get_transactions_by_blk(int(block.number))
-        
         total = len(data)
         block.transactions_count = total
         block.save()
+        skip = 0
+        complete = False
+        while not complete:
+            obj = bitdb_scanner.BitDB()
+            last, data = obj.get_transactions_by_blk(int(block.number), skip, settings.BITDB_QUERY_LIMIT)
+            
+            LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
+            
+            REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
+            REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
 
-        LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
-        
-        REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
-        REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
+            for chunk in chunks(data, 1000):
+                for transaction in chunk:
+                    tx_count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
+                    tx_count += 1
+                    REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
+                    bitdbquery_transaction.delay(transaction)
+                time.sleep(10)
 
-        for chunk in chunks(data, 1000):
-            for transaction in chunk:
-                tx_count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
-                tx_count += 1
-                REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
-                bitdbquery_transaction.delay(transaction)
-            time.sleep(10)
-
-        block.currentcount = tx_count
-        block.save()
-        REDIS_STORAGE.set('READY', 1)
-        REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-
+            block.currentcount = tx_count
+            block.save()
+            if last:
+                REDIS_STORAGE.set('READY', 1)
+                REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+                complete = True
+            else:
+                skip += settings.BITDB_QUERY_LIMIT
+                time.sleep(3)
 
     except bitdb_scanner.BitDBHttpException:
         try:

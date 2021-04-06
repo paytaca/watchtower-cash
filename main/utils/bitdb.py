@@ -4,7 +4,6 @@ import base64
 import random
 import time
 
-
 class BitDBHttpException(Exception):
     pass
 
@@ -41,7 +40,8 @@ class BitDB(object):
         data = self.get_data(query)
         return data[0]['blk']['i']
         
-    def get_transactions_by_blk(self, blk):
+    def get_transactions_by_blk(self, blk, skip, limit):
+        complete = False
         query = {
             "v": 3,
             "q": {
@@ -49,7 +49,8 @@ class BitDB(object):
                 "find": {
                     "blk.i": blk
                 },
-                "limit": 999999
+                "skip": skip,
+                "limit": limit
             }
         }
 
@@ -61,7 +62,9 @@ class BitDB(object):
                 break
             else:
                 base_count = count
-        return self.get_data(query)
+        if base_count < limit:
+            complete = True
+        return complete, self.get_data(query)
 
     def get_latest_block(self):
         query = {
