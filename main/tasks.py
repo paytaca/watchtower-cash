@@ -25,13 +25,14 @@ from django.conf import settings
 import traceback, datetime
 from sseclient import SSEClient
 from django.db import transaction as trans
-import sseclient
+import sseclient, math
 from psycopg2.extensions import TransactionRollbackError
 from django.db.utils import IntegrityError, OperationalError
 from django.utils import timezone
 from django.db.models import Q
 from celery import Celery
 from main.utils.chunk import chunks
+from main.utils.queries import bchd as bchd_scanner
 
 
 LOGGER = logging.getLogger(__name__)
@@ -221,12 +222,11 @@ def input_scanner(self, txid, index, block_id=None):
             tr.update(spent=True)
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
-def bitdbquery_transaction(self, transaction):
+def bitdbquery_transaction(self, transaction, tx_count, total):
     source = 'bitdb-query'
 
     block_id = REDIS_STORAGE.get('BLOCK_ID')
-    total = int(REDIS_STORAGE.get('BITDBQUERY_TOTAL'))
-    tx_count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
+    
 
     block = BlockHeight.objects.get(id=block_id)
 
@@ -275,34 +275,46 @@ def bitdbquery(self, block_id):
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
         divider = "\n\n##########################################\n\n"
-        source = 'bitdb-query'
-        LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
+        source = 'bchd-query'
+        LOGGER.info(f"{divider}REQUESTING TRANSACTIONS COUNT TO {source.upper()} | BLOCK: {block.number}{divider}")
         
-        obj = bitdb_scanner.BitDB()
-        data = obj.get_transactions_by_blk(int(block.number))
-        
-        total = len(data)
+        bchd_obj = bchd_scanner.BCHDQuery()
+        total = bchd_obj.get_transactions_count(block.number)
         block.transactions_count = total
         block.save()
-
-        LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} BCH TRANSACTIONS {divider}")
-        
         REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
 
-        for chunk in chunks(data, 1000):
-            for transaction in chunk:
-                tx_count = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
-                tx_count += 1
-                REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
-                bitdbquery_transaction.delay(transaction)
-            time.sleep(10)
+        LOGGER.info(f"{divider}{source.upper()} FOUND {total} TRANSACTIONS {divider}")
 
-        block.currentcount = tx_count
-        block.save()
-        REDIS_STORAGE.set('READY', 1)
-        REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+        skip = 0
+        complete = False
+        page = 1
+        while not complete:
+            obj = bitdb_scanner.BitDB()
+            source = 'bitdb-query'
+            total_page = math.ceil(total/settings.BITDB_QUERY_LIMIT_PER_PAGE)
+            
+            LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}\nPAGE {int(page)} of {int(total_page)}{divider}")
 
+            last, data = obj.get_transactions_by_blk(int(block.number), skip, settings.BITDB_QUERY_LIMIT_PER_PAGE)
+            
+            tx_count = 0
+            for chunk in chunks(data, 1000):
+                for transaction in chunk:
+                    tx_count += 1
+                    REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
+                    bitdbquery_transaction.delay(transaction, tx_count, total)
+
+            block.currentcount += tx_count
+            block.save()
+            if last:
+                REDIS_STORAGE.set('READY', 1)
+                REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+                complete = True
+            else:
+                page += 1
+                skip += settings.BITDB_QUERY_LIMIT_PER_PAGE
 
     except bitdb_scanner.BitDBHttpException:
         try:
@@ -314,13 +326,11 @@ def bitdbquery(self, block_id):
             REDIS_STORAGE.set('READY', 1)
 
 @shared_task(bind=True, queue='slpdbquery_transactions')
-def slpdbquery_transaction(self, transaction):
+def slpdbquery_transaction(self, transaction, tx_count, total):
     source = 'slpdb-query'
 
     block_id = int(REDIS_STORAGE.get('BLOCK_ID'))
     block = BlockHeight.objects.get(id=block_id)
-    total = int(REDIS_STORAGE.get('SLPDBQUERY_TOTAL'))
-    tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
     
     if transaction['slp']['valid']:
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
@@ -381,13 +391,12 @@ def slpdbquery(self, block_id):
         REDIS_STORAGE.set('SLPDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('SLPDBQUERY_COUNT', 0)
         
+        tx_count = 0
         for chunk in chunks(data, 1000):
             for transaction in chunk:
-                tx_count = int(REDIS_STORAGE.get('SLPDBQUERY_COUNT'))
                 tx_count += 1
                 REDIS_STORAGE.set('SLPDBQUERY_COUNT', tx_count)
-                slpdbquery_transaction.delay(transaction)
-            time.sleep(10)
+                slpdbquery_transaction.delay(transaction, tx_count, total)
 
         if len(data) == 0 or (total == tx_count):
             bitdbquery.delay(block_id)

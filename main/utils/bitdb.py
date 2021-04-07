@@ -4,7 +4,6 @@ import base64
 import random
 import time
 
-
 class BitDBHttpException(Exception):
     pass
 
@@ -20,7 +19,11 @@ class BitDB(object):
     def get_data(self, query):
         json_string = bytes(json.dumps(query), 'utf-8')
         url = base64.b64encode(json_string)
-        resp = requests.get(f"{self.base_url}{url.decode('utf-8')}")
+        try:
+            resp = requests.get(f"{self.base_url}{url.decode('utf-8')}")
+        except ConnectionResetError:
+            raise BitDBHttpException('Non-200 status')
+            
         if resp.status_code == 200:
             data = resp.json()
             return data['c']
@@ -41,7 +44,8 @@ class BitDB(object):
         data = self.get_data(query)
         return data[0]['blk']['i']
         
-    def get_transactions_by_blk(self, blk):
+    def get_transactions_by_blk(self, blk, skip, limit):
+        complete = False
         query = {
             "v": 3,
             "q": {
@@ -49,7 +53,8 @@ class BitDB(object):
                 "find": {
                     "blk.i": blk
                 },
-                "limit": 999999
+                "skip": skip,
+                "limit": limit
             }
         }
 
@@ -61,7 +66,9 @@ class BitDB(object):
                 break
             else:
                 base_count = count
-        return self.get_data(query)
+        if base_count < limit:
+            complete = True
+        return complete, self.get_data(query)
 
     def get_latest_block(self):
         query = {
