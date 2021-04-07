@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: watchtower-mempool
-          image: registry.digitalocean.com/spicetoken/watchtower:b56ccd26f3f5
+          image: registry.digitalocean.com/spicetoken/watchtower:c28463458c52
           args: [ "supervisord", "-c", "/code/supervisor/mempool.conf", "--nodaemon" ]
           env:
             - name: DEPLOYMENT_INSTANCE

@@ -19,7 +19,11 @@ class BitDB(object):
     def get_data(self, query):
         json_string = bytes(json.dumps(query), 'utf-8')
         url = base64.b64encode(json_string)
-        resp = requests.get(f"{self.base_url}{url.decode('utf-8')}")
+        try:
+            resp = requests.get(f"{self.base_url}{url.decode('utf-8')}")
+        except ConnectionResetError:
+            raise BitDBHttpException('Non-200 status')
+            
         if resp.status_code == 200:
             data = resp.json()
             return data['c']
