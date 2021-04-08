@@ -30,6 +30,32 @@ class BitDB(object):
         else:
             raise BitDBHttpException('Non-200 status')
 
+    def get_transactions_count(self, blk):
+        query = {
+            "v": 3,
+            "q": {
+                "db": ["c"],
+                "find": {
+                    "blk.i": blk
+                },
+                "limit": 999999
+            },
+            "r": {
+                "f": "[.[] | { id : ._id} ]"
+            }
+        }
+
+        base_count = len(self.get_data(query))
+        while True:
+            time.sleep(2)
+            count = len(self.get_data(query))
+            if count == base_count:
+                break
+            else:
+                base_count = count
+        return base_count
+
+
     def get_block_by_txid(self, txid):
         query = {
             "v": 3,

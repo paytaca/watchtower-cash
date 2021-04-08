@@ -269,25 +269,23 @@ def bitdbquery_transaction(self, transaction, tx_count, total):
         input_scanner(txid, index, block_id=block_id)
 
     
-@shared_task(bind=True, queue='bitdbquery', max_retries=20)
+@shared_task(bind=True, queue='bitdbquery', max_retries=30)
 def bitdbquery(self, block_id):
     try:
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
         divider = "\n\n##########################################\n\n"
-        source = 'bchd-query'
+        source = 'bitdb-query'
         LOGGER.info(f"{divider}REQUESTING TRANSACTIONS COUNT TO {source.upper()} | BLOCK: {block.number}{divider}")
         
-        try:
-            bchd_obj = bchd_scanner.BCHDQuery()
-            total = bchd_obj.get_transactions_count(block.number)
-            block.transactions_count = total
-            block.currentcount = 0
-            block.save()
-            REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
-            REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
-        except Exception as exc:
-            self.retry(countdown=5)
+        obj = bitdb_scanner.BitDB()
+        total = obj.get_transactions_count(block.number)
+        block.transactions_count = total
+        block.currentcount = 0
+        block.save()
+        REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
+        REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
+        
 
         LOGGER.info(f"{divider}{source.upper()} FOUND {total} TRANSACTIONS {divider}")
 
