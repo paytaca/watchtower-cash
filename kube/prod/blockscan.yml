@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: watchtower-blockscan
-          image: registry.digitalocean.com/spicetoken/watchtower:5798835f5045
+          image: registry.digitalocean.com/spicetoken/watchtower:fa98cf1d7957
           args: [ "supervisord", "-c", "/code/supervisor/blockscan.conf", "--nodaemon" ]
           env:
             - name: DEPLOYMENT_INSTANCE

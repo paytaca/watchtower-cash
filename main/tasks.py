@@ -278,18 +278,23 @@ def bitdbquery(self, block_id):
         source = 'bchd-query'
         LOGGER.info(f"{divider}REQUESTING TRANSACTIONS COUNT TO {source.upper()} | BLOCK: {block.number}{divider}")
         
-        bchd_obj = bchd_scanner.BCHDQuery()
-        total = bchd_obj.get_transactions_count(block.number)
-        block.transactions_count = total
-        block.save()
-        REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
-        REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
+        try:
+            bchd_obj = bchd_scanner.BCHDQuery()
+            total = bchd_obj.get_transactions_count(block.number)
+            block.transactions_count = total
+            block.currentcount = 0
+            block.save()
+            REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
+            REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
+        except Exception as exc:
+            self.retry(countdown=5)
 
         LOGGER.info(f"{divider}{source.upper()} FOUND {total} TRANSACTIONS {divider}")
 
         skip = 0
         complete = False
         page = 1
+        tx_count = 0
         while not complete:
             obj = bitdb_scanner.BitDB()
             source = 'bitdb-query'
@@ -299,14 +304,13 @@ def bitdbquery(self, block_id):
 
             last, data = obj.get_transactions_by_blk(int(block.number), skip, settings.BITDB_QUERY_LIMIT_PER_PAGE)
             
-            tx_count = 0
-            for chunk in chunks(data, 1000):
-                for transaction in chunk:
-                    tx_count += 1
-                    REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
-                    bitdbquery_transaction.delay(transaction, tx_count, total)
+            
+            for transaction in data:
+                tx_count += 1
+                REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
+                bitdbquery_transaction.delay(transaction, tx_count, total)
 
-            block.currentcount += tx_count
+            block.currentcount = tx_count
             block.save()
             if last:
                 REDIS_STORAGE.set('READY', 1)
