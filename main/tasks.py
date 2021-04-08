@@ -222,14 +222,9 @@ def input_scanner(self, txid, index, block_id=None):
             tr.update(spent=True)
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
-def bitdbquery_transaction(self, transaction, tx_count, total):
+def bitdbquery_transaction(self, transaction, tx_count, total, block_number, block_id):
     source = 'bitdb-query'
-
-    block_id = REDIS_STORAGE.get('BLOCK_ID')
     
-
-    block = BlockHeight.objects.get(id=block_id)
-
     txn_id = transaction['tx']['h']
     
     for out in transaction['out']: 
@@ -240,7 +235,7 @@ def bitdbquery_transaction(self, transaction, tx_count, total):
             bchaddress = 'bitcoincash:' + str(out['e']['a'])
 
             subscription = check_wallet_address_subscription(bchaddress)
-            LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
+            LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block_number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
 
             # Disregard bch address that are not subscribed.
             if subscription.exists():
@@ -306,7 +301,7 @@ def bitdbquery(self, block_id):
             for transaction in data:
                 tx_count += 1
                 REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
-                bitdbquery_transaction.delay(transaction, tx_count, total)
+                bitdbquery_transaction.delay(transaction, tx_count, total, block.number, block_id)
 
             block.currentcount = tx_count
             block.save()
