@@ -222,14 +222,9 @@ def input_scanner(self, txid, index, block_id=None):
             tr.update(spent=True)
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
-def bitdbquery_transaction(self, transaction, tx_count, total):
+def bitdbquery_transaction(self, transaction, tx_count, total, block_number, block_id):
     source = 'bitdb-query'
-
-    block_id = REDIS_STORAGE.get('BLOCK_ID')
     
-
-    block = BlockHeight.objects.get(id=block_id)
-
     txn_id = transaction['tx']['h']
     
     for out in transaction['out']: 
@@ -240,7 +235,7 @@ def bitdbquery_transaction(self, transaction, tx_count, total):
             bchaddress = 'bitcoincash:' + str(out['e']['a'])
 
             subscription = check_wallet_address_subscription(bchaddress)
-            LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
+            LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block_number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
 
             # Disregard bch address that are not subscribed.
             if subscription.exists():
@@ -269,25 +264,23 @@ def bitdbquery_transaction(self, transaction, tx_count, total):
         input_scanner(txid, index, block_id=block_id)
 
     
-@shared_task(bind=True, queue='bitdbquery', max_retries=20)
+@shared_task(bind=True, queue='bitdbquery', max_retries=30)
 def bitdbquery(self, block_id):
     try:
         block = BlockHeight.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
         divider = "\n\n##########################################\n\n"
-        source = 'bchd-query'
+        source = 'bitdb-query'
         LOGGER.info(f"{divider}REQUESTING TRANSACTIONS COUNT TO {source.upper()} | BLOCK: {block.number}{divider}")
         
-        try:
-            bchd_obj = bchd_scanner.BCHDQuery()
-            total = bchd_obj.get_transactions_count(block.number)
-            block.transactions_count = total
-            block.currentcount = 0
-            block.save()
-            REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
-            REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
-        except Exception as exc:
-            self.retry(countdown=5)
+        obj = bitdb_scanner.BitDB()
+        total = obj.get_transactions_count(block.number)
+        block.transactions_count = total
+        block.currentcount = 0
+        block.save()
+        REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
+        REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
+        
 
         LOGGER.info(f"{divider}{source.upper()} FOUND {total} TRANSACTIONS {divider}")
 
@@ -308,7 +301,7 @@ def bitdbquery(self, block_id):
             for transaction in data:
                 tx_count += 1
                 REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
-                bitdbquery_transaction.delay(transaction, tx_count, total)
+                bitdbquery_transaction.delay(transaction, tx_count, total, block.number, block_id)
 
             block.currentcount = tx_count
             block.save()
