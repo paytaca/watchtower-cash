@@ -31,6 +31,7 @@ from django.db.utils import IntegrityError, OperationalError
 from django.utils import timezone
 from django.db.models import Q
 from celery import Celery
+from celery.result import AsyncResult
 from main.utils.chunk import chunks
 from main.utils.queries import bchd as bchd_scanner
 
@@ -39,6 +40,8 @@ LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
 app = Celery('configs')
+
+
 
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
@@ -222,7 +225,10 @@ def input_scanner(self, txid, index, block_id=None):
             tr.update(spent=True)
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
-def bitdbquery_transaction(self, transaction, tx_count, total, block_number, block_id):
+def bitdbquery_transaction(self, transaction, total, block_number, block_id):
+    
+    tx_count = int(REDIS_STORAGE.incr('BITDBQUERY_COUNT'))
+
     source = 'bitdb-query'
     
     txn_id = transaction['tx']['h']
@@ -256,13 +262,15 @@ def bitdbquery_transaction(self, transaction, tx_count, total, block_number, blo
                             message = platform[1]
                             chat_id = platform[2]
                             send_telegram_message(message, chat_id)
-                            
+           
+    
 
     for _in in transaction['in']:
         txid = _in['e']['h']
         index= _in['e']['i']
         input_scanner(txid, index, block_id=block_id)
 
+    
     
 @shared_task(bind=True, queue='bitdbquery', max_retries=30)
 def bitdbquery(self, block_id):
@@ -281,13 +289,12 @@ def bitdbquery(self, block_id):
         REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
         REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
         
-
         LOGGER.info(f"{divider}{source.upper()} FOUND {total} TRANSACTIONS {divider}")
 
         skip = 0
         complete = False
         page = 1
-        tx_count = 0
+        
         while not complete:
             obj = bitdb_scanner.BitDB()
             source = 'bitdb-query'
@@ -299,19 +306,28 @@ def bitdbquery(self, block_id):
             
             
             for transaction in data:
-                tx_count += 1
-                REDIS_STORAGE.set('BITDBQUERY_COUNT', tx_count)
-                bitdbquery_transaction.delay(transaction, tx_count, total, block.number, block_id)
-
-            block.currentcount = tx_count
-            block.save()
+                res = bitdbquery_transaction.delay(transaction, total, block.number, block_id)
+            
             if last:
-                REDIS_STORAGE.set('READY', 1)
-                REDIS_STORAGE.set('ACTIVE-BLOCK', '')
                 complete = True
             else:
                 page += 1
                 skip += settings.BITDB_QUERY_LIMIT_PER_PAGE
+        
+        
+        processed_all = False
+        while not processed_all:
+            currentcount  = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
+            LOGGER.info(f"THERE ARE {currentcount} SUCCEEDED OUT OF {total} TASKS.")
+            if currentcount == total:
+                block = BlockHeight.objects.get(id=block_id)
+                block.currentcount = currentcount
+                block.save()
+                REDIS_STORAGE.set('READY', 1)
+                REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+                processed_all = True
+            time.sleep(1)
+        
 
     except bitdb_scanner.BitDBHttpException:
         try:
