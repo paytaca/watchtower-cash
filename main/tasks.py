@@ -1,10 +1,5 @@
-"""
-Dedicated to all celery tasks for watchtower Only
-"""
-from __future__ import absolute_import, unicode_literals
-import logging
+import math, logging, json, time, requests
 from celery import shared_task
-import requests
 from main.models import (
     BlockHeight, 
     Token, 
@@ -14,26 +9,14 @@ from main.models import (
     BchAddress,
     Recipient
 )
-from django.contrib.auth.models import User
 from celery.exceptions import MaxRetriesExceededError 
-import json, random, time
 from main.utils import check_wallet_address_subscription
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
-from main.utils.restbitcoin import RestBitcoin
 from django.conf import settings
-import traceback, datetime
-from sseclient import SSEClient
 from django.db import transaction as trans
-import sseclient, math
-from psycopg2.extensions import TransactionRollbackError
-from django.db.utils import IntegrityError, OperationalError
-from django.utils import timezone
-from django.db.models import Q
 from celery import Celery
-from celery.result import AsyncResult
 from main.utils.chunk import chunks
-from main.utils.queries import bchd as bchd_scanner
 
 
 LOGGER = logging.getLogger(__name__)

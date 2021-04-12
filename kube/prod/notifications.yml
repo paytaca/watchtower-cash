@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: watchtower-notifications
-          image: registry.digitalocean.com/spicetoken/watchtower:8c7bd4f5d1ca
+          image: registry.digitalocean.com/spicetoken/watchtower:368c0b7edccc
           args: [ "supervisord", "-c", "/code/supervisor/notifications.conf", "--nodaemon" ]
           env:
             - name: DEPLOYMENT_INSTANCE
