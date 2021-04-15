@@ -47,7 +47,7 @@ class BitDB(object):
 
         base_count = len(self.get_data(query))
         while True:
-            time.sleep(10)
+            time.sleep(30)
             count = len(self.get_data(query))
             if count == base_count:
                 break
