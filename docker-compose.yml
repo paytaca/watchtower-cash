@@ -8,9 +8,9 @@ services:
       - compose/.env_prod
   backend:
     build: .
-    command: [ "supervisord", "-c", "/code/supervisor/blockscan.conf", "--nodaemon" ]
+    command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
     ports:
-      - "8000:8000"
+      - "80:8000"
     env_file:
       - compose/.env_prod
     depends_on:
