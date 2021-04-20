@@ -5,16 +5,14 @@ services:
     expose:
       - "5432"
     env_file:
-      - .env_template
-    volumes:
-      - ../postgres-watchtower-data:/var/lib/postgresql/data
+      - compose/.env_prod
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/blockscan.conf", "--nodaemon" ]
     ports:
       - "8000:8000"
     env_file:
-      - .env_template
+      - compose/.env_prod
     depends_on:
       - postgres
     volumes:
