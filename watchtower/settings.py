@@ -15,10 +15,13 @@ from decouple import config
 import redis
 import psycopg2
 from datetime import timedelta
+import base64
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+def decipher(value):
+    return base64.b64decode(value.encode()).decode()
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
@@ -89,14 +92,20 @@ WSGI_APPLICATION = 'watchtower.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
+POSTGRES_DB = decipher(config('POSTGRES_DB', default='watchtower'))
+POSTGRES_HOST = decipher(config('POSTGRES_HOST', default='localhost'))
+POSTGRES_PORT = decipher(config('POSTGRES_PORT', default=5432))
+POSTGRES_USER = decipher(config('POSTGRES_USER', default='postgres'))
+POSTGRES_PASSWORD = decipher(config('POSTGRES_PASSWORD', default='badpassword'))
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': config('POSTGRES_DB', default='watchtower'),
-        'HOST': config('POSTGRES_HOST', default='localhost'),
-        'PORT': config('POSTGRES_PORT', default=5432, cast=int),
-        'USER': config('POSTGRES_USER', default='postgres'),
-        'PASSWORD': config('POSTGRES_PASSWORD', default='badpassword'),
+        'NAME': POSTGRES_DB,
+        'HOST': POSTGRES_HOST,
+        'PORT': POSTGRES_PORT,
+        'USER': POSTGRES_USER,
+        'PASSWORD': POSTGRES_PASSWORD,
         # 'OPTIONS': {
         #     'isolation_level': psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE,
         # }
@@ -139,9 +148,9 @@ DB_NUM = [0,1,2]
 if DEPLOYMENT_INSTANCE == 'staging':
     DB_NUM = [3,4,5]
 
-REDIS_HOST = config('REDIS_HOST', default='localhost')
-REDIS_PASSWORD = config('REDIS_PASSWORD', default='')
-REDIS_PORT = config('REDIS_PORT', default=6379)
+REDIS_HOST = decipher(config('REDIS_HOST', default='localhost'))
+REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', default=''))
+REDIS_PORT = decipher(config('REDIS_PORT', default=6379))
 CELERY_IMPORTS = ('main.tasks',)
 
 if REDIS_PASSWORD:
@@ -226,8 +235,8 @@ SWAGGER_SETTINGS = {
 #Telegram bot settings
 # TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
 TELEGRAM_BOT_TOKEN = "1764241013:AAGA5L8vuZf8CBJH3iHkFsp84pRbFzSGwrc"
-TELEGRAM_BOT_USER = config('TELEGRAM_BOT_USER', default='')
-TELEGRAM_DESTINATION_ADDR = 'https://watchtower.scibizinformatics.com/telegram/notify/'
+TELEGRAM_BOT_USER = decipher(config('TELEGRAM_BOT_USER', default=''))
+TELEGRAM_DESTINATION_ADDR = decipher(config('TELEGRAM_DESTINATION_ADDR', default=''))
 
 
 # Slack credentials and configurations
