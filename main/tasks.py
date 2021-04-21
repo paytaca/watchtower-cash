@@ -17,6 +17,8 @@ from django.conf import settings
 from django.db import transaction as trans
 from celery import Celery
 from main.utils.chunk import chunks
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 
 LOGGER = logging.getLogger(__name__)
@@ -105,6 +107,18 @@ def client_acknowledgement(self, txid):
                         args = ('telegram' , message, recipient.telegram_id)
                         third_parties.append(args)
                         this_transaction.update(acknowledged=True)
+                    
+                    # This lines can send data through websocket
+                    
+                    # channel_layer = get_channel_layer()
+                    # async_to_sync(channel_layer.group_send)(
+                    #     f"{settings.MAIN_ROOM}_{user_id}", 
+                    #     {
+                    #         "type": "send_update",
+                    #         "data": data
+                    #     }
+                    # )
+                    
     return third_parties
 
 

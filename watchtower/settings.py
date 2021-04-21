@@ -51,6 +51,7 @@ INSTALLED_APPS=[
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
+    'channels',
     'main',
     'django.contrib.admin',
     'drf_yasg'
@@ -296,3 +297,19 @@ LOGGING = {
         }
     },
 }
+
+REDIS_CHANNEL_DB = [0, 1][DEPLOYMENT_INSTANCE == 'prod']
+REDIS_CHANNEL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_CHANNEL_DB}"
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [REDIS_CHANNEL]
+        },
+        'ROUTING': 'watchtower.routing.channel_routing',
+    }
+}
+
+
+# websocket vars
+WATCH_ROOM = 'watch_room'
