@@ -12,12 +12,13 @@
   const protocol = window.location.protocol.replace("http", "ws");
 
   const chatSocket = new WebSocket(
-    protocol + "//" + window.location.host + "/ws/socket/" + "simpleledger:qq79r3vha4ls450encfqp3hn342pttmpvvnpg4n6d8" + "/"
+    protocol + "//" + window.location.host + "/ws/socket/" + "{{address}}" + "/"
   );
 
   chatSocket.onmessage = function (e) {
     const data = JSON.parse(e.data);
-    document.querySelector("#txs-log").value += data.type;
+    var message = data.txid + " | " + data.token + " | " + data.txid + " | " + data.amount;
+    document.querySelector("#txs-log").value += message;
   };
 
   chatSocket.onclose = function (e) {

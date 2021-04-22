@@ -140,6 +140,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
         'recipient',
         'slp',        
         'bch',
+        'websocket'
     ]
 
 
