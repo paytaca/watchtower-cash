@@ -148,3 +148,4 @@ class Subscription(models.Model):
         related_name='subscriptions',
         null=True
     )
+    websocket=models.BooleanField(default=False)
