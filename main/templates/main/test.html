@@ -1,0 +1,28 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+<div>
+  <textarea id="txs-log" cols="100" rows="20"></textarea><br />
+</div>
+{% endblock content %}
+
+{% block script %}
+<script>
+  
+  const protocol = window.location.protocol.replace("http", "ws");
+
+  const chatSocket = new WebSocket(
+    protocol + "//" + window.location.host + "/ws/socket/" + "simpleledger:qq79r3vha4ls450encfqp3hn342pttmpvvnpg4n6d8" + "/"
+  );
+
+  chatSocket.onmessage = function (e) {
+    const data = JSON.parse(e.data);
+    document.querySelector("#txs-log").value += data.type;
+  };
+
+  chatSocket.onclose = function (e) {
+    console.error("Chat socket closed unexpectedly");
+  };
+
+</script>
+{% endblock script %}

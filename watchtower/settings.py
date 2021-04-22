@@ -51,10 +51,10 @@ INSTALLED_APPS=[
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
+    'django.contrib.admin',
+    'drf_yasg',
     'channels',
     'main',
-    'django.contrib.admin',
-    'drf_yasg'
 ]
 
 MIDDLEWARE=[
@@ -88,7 +88,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'watchtower.wsgi.application'
-
+ASGI_APPLICATION = 'watchtower.asgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
@@ -300,13 +300,13 @@ LOGGING = {
 
 REDIS_CHANNEL_DB = [0, 1][DEPLOYMENT_INSTANCE == 'prod']
 REDIS_CHANNEL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_CHANNEL_DB}"
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
             'hosts': [REDIS_CHANNEL]
-        },
-        'ROUTING': 'watchtower.routing.channel_routing',
+        }
     }
 }
 

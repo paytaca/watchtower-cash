@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 class Consumer(WebsocketConsumer):
 
     def connect(self):
+        logger.info(f"NICE!")
         self.address = self.scope['url_route']['kwargs']['address']
-        logger.info(f"USER {self.address} CONNECTED!")
+        logger.info(f"ADDRESS {self.address} CONNECTED!")
         self.room_name = f"{settings.WATCH_ROOM}_{self.address}"
 
         async_to_sync(self.channel_layer.group_add)(
@@ -30,13 +31,14 @@ class Consumer(WebsocketConsumer):
 
         self.accept()
 
+
     def disconnect(self, close_code):
-        logger.info(f"USER {self.address} DISCONNECTED!")
+        logger.info(f"ADDRESS {self.address} DISCONNECTED!")
         async_to_sync(self.channel_layer.group_discard)(
             self.room_name,
             self.channel_name
         )
         
     def send_update(self, data):
-        def data['type']
+        del data["type"]
         self.send(text_data=json.dumps(data))

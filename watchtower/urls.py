@@ -25,11 +25,11 @@ from rest_framework.authtoken import views
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
-
 from main.urls import urlpatterns as main_urls
 
 from main.views import ( 
-    TelegramBotView
+    TelegramBotView,
+    test
 )
 
 schema_view = get_schema_view(
@@ -45,6 +45,7 @@ schema_view = get_schema_view(
 
 
 urlpatterns = [
+    url(r'^$', test, name='test'),
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
