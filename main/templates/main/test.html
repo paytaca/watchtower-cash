@@ -2,6 +2,7 @@
 
 {% block content %}
 <div>
+  <p>Watching {{ address }}</p>
   <textarea id="txs-log" cols="100" rows="20"></textarea><br />
 </div>
 {% endblock content %}
@@ -17,7 +18,7 @@
 
   chatSocket.onmessage = function (e) {
     const data = JSON.parse(e.data);
-    var message = data.txid + " | " + data.token + " | " + data.txid + " | " + data.amount;
+    var message = "\nTXID:"+ data.txid + "\n TOKEN:" + data.token + "\n AMOUNT:" + data.amount;
     document.querySelector("#txs-log").value += message;
   };
 

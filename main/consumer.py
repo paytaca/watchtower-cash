@@ -42,4 +42,5 @@ class Consumer(WebsocketConsumer):
     def send_update(self, data):
         logging.info(f'FOUND {data}')
         del data["type"]
+        data = data['data']
         self.send(text_data=json.dumps(data))
