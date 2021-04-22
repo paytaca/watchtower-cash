@@ -1,7 +1,7 @@
 amqp==2.5.2
 appdirs==1.4.4
 appnope==0.1.0
-asgiref==3.2.3
+asgiref==3.2.10
 atomicwrites==1.4.0
 attrs==20.1.0
 backcall==0.1.0
@@ -12,6 +12,7 @@ chardet==3.0.4
 coreapi==2.3.3
 coreschema==0.0.4
 coverage==5.2.1
+daphne==3.0.1
 decorator==4.4.1
 distlib==0.3.1
 Django==3.0.7
@@ -79,3 +80,5 @@ zope.event==4.4
 zope.interface==5.1.0
 grpcio==1.34.0
 grpcio-tools==1.34.0
+channels-redis==3.2.0
+channels==3.0.2

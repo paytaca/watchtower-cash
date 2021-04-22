@@ -1,0 +1,30 @@
+{% extends 'main/base.html' %}
+
+{% block content %}
+<div>
+  <p>Watching {{ address }}</p>
+  <textarea id="txs-log" cols="100" rows="20"></textarea><br />
+</div>
+{% endblock content %}
+
+{% block script %}
+<script>
+  
+  const protocol = window.location.protocol.replace("http", "ws");
+
+  const chatSocket = new WebSocket(
+    protocol + "//" + window.location.host + "/ws/socket/" + "{{address}}" + "/"
+  );
+
+  chatSocket.onmessage = function (e) {
+    const data = JSON.parse(e.data);
+    var message = "\nTXID:"+ data.txid + "\n TOKEN:" + data.token + "\n AMOUNT:" + data.amount;
+    document.querySelector("#txs-log").value += message;
+  };
+
+  chatSocket.onclose = function (e) {
+    console.error("Chat socket closed unexpectedly");
+  };
+
+</script>
+{% endblock script %}

@@ -17,6 +17,8 @@ from django.conf import settings
 from django.db import transaction as trans
 from celery import Celery
 from main.utils.chunk import chunks
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 
 LOGGER = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ def client_acknowledgement(self, txid):
             for subscription in subscriptions:
 
                 recipient = subscription.recipient
-                
+                websocket = subscription.websocket
 
                 data = {
                     'amount': transaction.amount,
@@ -105,6 +107,17 @@ def client_acknowledgement(self, txid):
                         args = ('telegram' , message, recipient.telegram_id)
                         third_parties.append(args)
                         this_transaction.update(acknowledged=True)
+
+                if websocket:
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f"{transaction.address.replace(':','_')}", 
+                        {
+                            "type": "send_update",
+                            "data": data
+                        }
+                    )
+                    
     return third_parties
 
 
