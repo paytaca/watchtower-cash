@@ -108,15 +108,15 @@ def client_acknowledgement(self, txid):
                         third_parties.append(args)
                         this_transaction.update(acknowledged=True)
 
-                    if websocket:
-                        channel_layer = get_channel_layer()
-                        async_to_sync(channel_layer.group_send)(
-                            f"{settings.WATCH_ROOM}_{transaction.address}", 
-                            {
-                                "type": "send_update",
-                                "data": data
-                            }
-                        )
+                if websocket:
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f"{transaction.address.replace(':','_')}", 
+                        {
+                            "type": "send_update",
+                            "data": data
+                        }
+                    )
                     
     return third_parties
 

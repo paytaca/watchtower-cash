@@ -29,7 +29,7 @@ from main.urls import urlpatterns as main_urls
 
 from main.views import ( 
     TelegramBotView,
-    test
+    Test
 )
 
 schema_view = get_schema_view(
@@ -45,9 +45,9 @@ schema_view = get_schema_view(
 
 
 urlpatterns = [
-    url(r'^$', test, name='test'),
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
+    url(r'^test/(?P<address>[\w+:]+)/$', Test.as_view(),name='test'),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
