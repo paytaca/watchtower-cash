@@ -5,6 +5,7 @@ from main.utils import check_wallet_address_subscription
 from main.models import Token, Transaction
 import grpc
 import time
+import random
 import logging
 from main.tasks import save_record, client_acknowledgement, input_scanner, send_telegram_message
 
@@ -15,7 +16,15 @@ LOGGER = logging.getLogger(__name__)
 def run():
     source = 'bchd_grpc_stream'
     creds = grpc.ssl_channel_credentials()
-    with grpc.secure_channel('bchd.ny1.simpleledger.io', creds) as channel:
+    sources = [
+        'bchd.imaginary.cash:8335',
+        'bchd.greyh.at:8335',
+        'bchd-testnet.greyh.at:18335',
+        'bchd.ny1.simpleledger.io:8335'
+    ]
+    source = random.choice(sources)
+
+    with grpc.secure_channel(source, creds) as channel:
         stub = bchrpc.bchrpcStub(channel)
 
         req = pb.GetBlockchainInfoRequest()

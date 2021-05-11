@@ -50,3 +50,9 @@ def deploy(c):
     build(c)
     down(c)
     up(c)
+
+
+@task(hosts=hosts)
+def logs(c):
+    with c.cd(f'/root/code'):
+        c.run(f'docker-compose -p code -f compose/prod.yml logs  -f web')
