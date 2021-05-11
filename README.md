@@ -1,10 +1,13 @@
 ## What is WatchTower.Cash?
 
 - Instant and reliable infrastructure connecting you to the BitcoinCash blockchain
-- Redundant data sources (nodes and indexers) running on an elastic infrastructure
+- UTXO database for subscribed addresses
+- Notifications sent thru webhooks and websockets
+- Data is obtained from redundant sources (i.e. multiple nodes / indexers)
+- Running on an elastic infrastructure that scales according to demand
 - The goal is to achieve and guarantee 99.99% uptime and reliability
 
-## Webhook Subscription
+## Webhook Notifications
 
 To subscribe to webhook notifications, send a POST request to `https://watchtower.cash/api/webhook/subscribe` with the BCH or SLP address and the URL where the webhook calls will be sent to. A sample request using `curl` is shown below:
 ```bash
