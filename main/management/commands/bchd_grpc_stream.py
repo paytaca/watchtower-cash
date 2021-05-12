@@ -16,15 +16,14 @@ LOGGER = logging.getLogger(__name__)
 def run():
     source = 'bchd_grpc_stream'
     creds = grpc.ssl_channel_credentials()
-    sources = [
+    nodes = [
+        'bchd.ny1.simpleledger.io:8335',
         'bchd.imaginary.cash:8335',
-        'bchd.greyh.at:8335',
-        'bchd-testnet.greyh.at:18335',
-        'bchd.ny1.simpleledger.io:8335'
+        'bchd.greyh.at:8335'
     ]
-    source = random.choice(sources)
+    bchd_node = random.choice(nodes)
 
-    with grpc.secure_channel(source, creds) as channel:
+    with grpc.secure_channel(bchd_node, creds) as channel:
         stub = bchrpc.bchrpcStub(channel)
 
         req = pb.GetBlockchainInfoRequest()
