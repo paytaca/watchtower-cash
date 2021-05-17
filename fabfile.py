@@ -1,8 +1,9 @@
 from patchwork.transfers import rsync
 from fabric import task
+import os
 
 hosts = [
-    'root@95.217.29.212'
+    'root@' + os.environ['WATCHTOWER_SERVER_IP']
 ]
 
 
