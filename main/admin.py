@@ -65,18 +65,14 @@ class TransactionAdmin(admin.ModelAdmin):
     actions = ['resend_unacknowledged_transactions']
 
     list_display = [
-        'id',
         'txid',
-        'index',
-        'address',
-        'amount',
-        'source',
+        'version',
         'block',
-        'token',
-        'acknowledged',
-        'created_datetime',
-        'spent',
-        'spend_block_height'
+        'confirmed_datetime',
+        'first_seen',
+        'source',
+        'lock_time',
+        'acknowledged_by_subscriber'        
     ]
 
 
@@ -97,19 +93,8 @@ class TransactionAdmin(admin.ModelAdmin):
                     send_telegram_message(message, chat_id)
             
 
-    def get_queryset(self, request): 
-        # For Django < 1.6, override queryset instead of get_queryset
-        qs = super(TransactionAdmin, self).get_queryset(request) 
-        if request.user.is_superuser:
-            return qs
-        subscriber = Subscriber.objects.filter(user=request.user)
-        if subscriber.exists():
-            obj = subscriber.first()
-            token_ids = obj.token.values_list('id',flat=True).distinct()
-            return Transaction.objects.filter(token__id__in=token_ids)
-        else:
-            return qs.filter(id=0)
 
+    
 class SlpAddressAdmin(admin.ModelAdmin):
     list_display = [
         'address',

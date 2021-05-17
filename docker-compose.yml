@@ -4,8 +4,6 @@ services:
     image: "postgres:11.1-alpine"
     expose:
       - "5432"
-    env_file:
-      - .env_dev
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/blockscan.conf", "--nodaemon" ]

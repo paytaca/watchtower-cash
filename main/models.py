@@ -57,8 +57,7 @@ class Block(models.Model):
 
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
-    address = models.CharField(max_length=500,null=True, db_index=True)
-    amount = models.FloatField(default=0, db_index=True)
+    version = models.CharField(max_length=100)
     acknowledged = models.BooleanField(default=False)
     block = models.ForeignKey(
         Block,
@@ -66,21 +65,16 @@ class Transaction(models.Model):
         related_name='transactions',
         null=True
     )
+    confirmed_datetime = models.DateTimeField(null=True)
+    first_seen = models.DateTimeField(default=timezone.now)
     source = models.CharField(max_length=200, null=True, db_index=True)
-    created_datetime = models.DateTimeField(default=timezone.now)
-    token = models.ForeignKey(
-        SLPToken,
-        on_delete=models.CASCADE
-    )
-    index = models.IntegerField(default=0, db_index=True)
-    spent = models.BooleanField(default=False)
-    spend_block_height = models.ForeignKey(
-        Block,
-        related_name='spent_transactions',
-        null=True,
-        blank=True,
-        on_delete=models.DO_NOTHING
-    )
+    lock_time = models.DateTimeField(null=True, blank=True)
+    acknowledged_by_subscriber = models.BooleanField(default=False)
+
+    @property
+    def confirmations(self):
+        latest_block = Block.objects.last().number
+        return latest_block - self.block.number
 
     def __str__(self):
         return self.txid
