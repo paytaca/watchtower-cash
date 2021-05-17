@@ -203,3 +203,4 @@ dump.rdb
 node_modules
 /spiceslp/slp-sdk/
 supervisord.pid
+.env_prod
