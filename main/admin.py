@@ -1,6 +1,6 @@
 from django.contrib import admin
 from main.models import (
-    Token,
+    SLPToken,
     Transaction,
     SlpAddress,
     BchAddress,
@@ -16,7 +16,7 @@ import json
 admin.site.site_header = 'WatchTower.Cash Admin'
 REDIS_STORAGE = settings.REDISKV
 
-class TokenAdmin(admin.ModelAdmin):
+class SLPTokenAdmin(admin.ModelAdmin):
     list_display = [
         'tokenid',
         'name'
@@ -24,7 +24,7 @@ class TokenAdmin(admin.ModelAdmin):
 
     def get_query(self, request): 
         # For Django < 1.6, override queryset instead of get_queryset
-        qs = super(TokenAdmin, self).get_queryset(request) 
+        qs = super(SLPTokenAdmin, self).get_queryset(request) 
         if request.user.is_superuser:
             return qs
         return qs.filter(subscriber__user=request.user)
@@ -149,7 +149,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
 admin.site.unregister(User)
 admin.site.unregister(Group)
 
-admin.site.register(Token, TokenAdmin)
+admin.site.register(SLPToken, SLPTokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
 admin.site.register(BchAddress, BchAddressAdmin)

@@ -1,7 +1,7 @@
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from main.models import Token, Transaction
+from main.models import Transaction
 from main.utils import check_wallet_address_subscription
 from main.tasks import save_record, client_acknowledgement, input_scanner
 from django.conf import settings

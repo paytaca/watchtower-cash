@@ -1,9 +1,9 @@
-from main.models import Token
+from main.models import SLPToken
 from rest_framework import serializers, exceptions
 
-class TokenSerializer(serializers.ModelSerializer):
+class SLPTokenSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Token
+        model = SLPToken
         fields = [
             'name',
             'tokenid',

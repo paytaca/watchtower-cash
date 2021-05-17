@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
 
 
-class Token(models.Model):
+class SLPToken(models.Model):
     name = models.CharField(max_length=100, null=True)
     tokenid = models.CharField(
         max_length=200,
@@ -12,7 +12,7 @@ class Token(models.Model):
         blank=True,
         unique=True,
         db_index=True
-    )
+    )    
     confirmation_limit = models.IntegerField(default=0)
     decimals = models.IntegerField(default=0)
 
@@ -32,7 +32,7 @@ class Token(models.Model):
             obj = mod.slptoken.SLPToken(self.tokenid)
             self.decimals = obj.get_decimals()
             self.name = obj.get_name()
-        super(Token, self).save(*args, **kwargs)
+        super(SLPToken, self).save(*args, **kwargs)
 
 class Block(models.Model):
     number = models.IntegerField(default=0, unique=True, db_index=True)
@@ -69,7 +69,7 @@ class Transaction(models.Model):
     source = models.CharField(max_length=200, null=True, db_index=True)
     created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(
-        Token,
+        SLPToken,
         on_delete=models.CASCADE
     )
     index = models.IntegerField(default=0, db_index=True)

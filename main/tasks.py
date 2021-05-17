@@ -2,7 +2,7 @@ import math, logging, json, time, requests
 from celery import shared_task
 from main.models import (
     Block, 
-    Token, 
+    SLPToken, 
     Transaction,
     SlpAddress, 
     Subscription, 
@@ -148,9 +148,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         transaction_created = False
 
         if token.lower() == 'bch':
-            token_obj, _ = Token.objects.get_or_create(name=token)
+            token_obj, _ = SLPToken.objects.get_or_create(name=token)
         else:
-            token_obj, _ = Token.objects.get_or_create(tokenid=token)
+            token_obj, _ = SLPToken.objects.get_or_create(tokenid=token)
         
 
         #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
@@ -344,7 +344,7 @@ def slpdbquery_transaction(self, transaction, tx_count, total):
     if transaction['slp']['valid']:
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
             token_id = transaction['slp']['detail']['tokenIdHex']
-            token, _ = Token.objects.get_or_create(tokenid=token_id)
+            token, _ = SLPToken.objects.get_or_create(tokenid=token_id)
             if transaction['slp']['detail']['outputs'][0]['address'] is not None:
                 
                 index = 1

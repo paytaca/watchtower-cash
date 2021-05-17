@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from main.utils import check_wallet_address_subscription
 from django.db import transaction
-from main.models import Token, Transaction
+from main.models import SLPToken, Transaction
 from main.tasks import save_record, client_acknowledgement, input_scanner
 from django.conf import settings
 import logging
@@ -52,7 +52,7 @@ def run():
                                 token_id = info['tx']['h']
                             else:
                                 token_id = slp_detail['tokenIdHex']
-                            token, _ = Token.objects.get_or_create(tokenid=token_id)
+                            token, _ = SLPToken.objects.get_or_create(tokenid=token_id)
                             index = 1
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']

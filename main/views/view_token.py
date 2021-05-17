@@ -2,12 +2,9 @@ from rest_framework.viewsets import ViewSet
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.contrib.auth import authenticate
-from main.models import (
-    Token as MyToken,
-    Subscription,
-)
 from django.contrib.auth.models import User 
 import json
+from main.models import SLPToken
 from operator import or_
 from django.db.models import Q
 
@@ -62,17 +59,17 @@ class SetupToken(ViewSet):
 
 # Token Model ViewSet
 
-from main.models import Token
+from main.models import SLPToken
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from main.serializers import TokenSerializer
+from main.serializers import SLPTokenSerializer
 
 class TokenViewSet(viewsets.ModelViewSet):
     """
     A viewset that provides the standard actions
     """
-    queryset = Token.objects.all()
-    serializer_class = TokenSerializer
+    queryset = SLPToken.objects.all()
+    serializer_class = SLPTokenSerializer
     http_method_names = ['get', 'post', 'head']
 

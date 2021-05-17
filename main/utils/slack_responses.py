@@ -1,5 +1,5 @@
 from django.conf import settings
-from main.models import Token
+from main.models import SLPToken
 
 ################## MESSAGES ##################
 
@@ -79,7 +79,7 @@ ATTACHMENTS['unsubscribe'] = [
 
 
 def get_tokens_list():
-    tokens = Token.objects.exclude(name__iexact='bch').order_by('name')
+    tokens = SLPToken.objects.exclude(name__iexact='bch').order_by('name')
     text = ''
     count = 1
 

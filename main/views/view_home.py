@@ -4,7 +4,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views import View
 from django.contrib.auth import authenticate, login, logout
 from main.models import (
-    Token as MyToken,
+    SLPToken as MyToken,
     Transaction,
     Subscription,    
     SlpAddress,

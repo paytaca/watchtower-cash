@@ -1,6 +1,6 @@
 
 from django.contrib.auth import get_user_model
-from main.models import Subscription, SlpAddress, BchAddress, Recipient, Token
+from main.models import Subscription, SlpAddress, BchAddress, Recipient, SLPToken
 User = get_user_model()
 
 def subscribe_to_address(user_id, token_address, destination_address, tokenid, tokenname):

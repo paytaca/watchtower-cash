@@ -6,7 +6,7 @@ from .subscription import (
 )
 from main.models import (
     Subscription,
-    Token
+    SLPToken
 )
 from main.utils.slack_responses import (
     get_message,
@@ -76,7 +76,7 @@ class SlackBotHandler(object):
                         if address.startswith(self.simpleledger):
                             token = splitted_text[2].lower()
 
-                        token_id = Token.objects.get(name__iexact=token).id
+                        token_id = SLPToken.objects.get(name__iexactSLP=token).id
                         token = token.upper()
 
                         if command == 'subscribe':
@@ -129,7 +129,7 @@ class SlackBotHandler(object):
     def get_token_regex(self):
         regex = ''
 
-        for token in Token.objects.exclude(name__iexact='bch'):
+        for token in SLPToken.objects.exclude(name__iexact='bch'):
             regex += f'{token.name.lower()}|'
         
         regex = regex[0 : len(regex) - 1]
