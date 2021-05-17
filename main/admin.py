@@ -4,7 +4,7 @@ from main.models import (
     Transaction,
     SlpAddress,
     BchAddress,
-    BlockHeight,
+    Block,
     Subscription,
     Recipient
 )
@@ -29,7 +29,7 @@ class TokenAdmin(admin.ModelAdmin):
             return qs
         return qs.filter(subscriber__user=request.user)
 
-class BlockHeightAdmin(admin.ModelAdmin):
+class BlockAdmin(admin.ModelAdmin):
     actions = ['process']
     ordering = ('-number',)
 
@@ -48,7 +48,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
             pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
             pending_blocks.append(trans.number)
             pending_blocks = list(set(pending_blocks))
-            BlockHeight.objects.filter(number=trans.number).update(processed=False)
+            Block.objects.filter(number=trans.number).update(processed=False)
             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
 
     def get_actions(self, request):
@@ -71,7 +71,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'address',
         'amount',
         'source',
-        'blockheight',
+        'block',
         'token',
         'acknowledged',
         'created_datetime',
@@ -153,6 +153,6 @@ admin.site.register(Token, TokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(SlpAddress, SlpAddressAdmin)
 admin.site.register(BchAddress, BchAddressAdmin)
-admin.site.register(BlockHeight, BlockHeightAdmin)
+admin.site.register(Block, BlockAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)
 admin.site.register(Recipient, RecipientAdmin)

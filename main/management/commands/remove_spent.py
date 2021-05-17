@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
-from main.models import Transaction, BlockHeight
+from main.models import Transaction, Block
 
 
 class Command(BaseCommand):
@@ -13,9 +13,9 @@ class Command(BaseCommand):
 
         if conf > 1:
             conf -= 1
-            latest = BlockHeight.objects.order_by('-number').first()
+            latest = Block.objects.order_by('-number').first()
             allowed_block = latest.number - conf
-            transactions = Transaction.objects.filter(blockheight__number__lte=allowed_block).filter(spent=True)
+            transactions = Transaction.objects.filter(block__number__lte=allowed_block).filter(spent=True)
             
             if transactions.count():
                 delete_records = input(f'You are going to delete {transactions.count()} spent transactions. Are you sure? (Y/n)')

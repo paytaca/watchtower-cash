@@ -5,14 +5,14 @@ services:
     expose:
       - "5432"
     env_file:
-      - compose/.env_prod
+      - .env_dev
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/blockscan.conf", "--nodaemon" ]
     ports:
       - "80:8000"
     env_file:
-      - compose/.env_prod
+      - .env_dev
     depends_on:
       - postgres
     volumes:

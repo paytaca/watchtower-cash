@@ -34,7 +34,7 @@ class Token(models.Model):
             self.name = obj.get_name()
         super(Token, self).save(*args, **kwargs)
 
-class BlockHeight(models.Model):
+class Block(models.Model):
     number = models.IntegerField(default=0, unique=True, db_index=True)
     transactions_count = models.IntegerField(default=0)
     created_datetime = models.DateTimeField(null=True, blank=True)
@@ -50,7 +50,7 @@ class BlockHeight(models.Model):
             self.created_datetime = timezone.now()
         if self.processed:
             self.updated_datetime = timezone.now()
-        super(BlockHeight,self).save(*args, **kwargs)
+        super(Block,self).save(*args, **kwargs)
 
     def __str__(self):
         return str(self.number)
@@ -60,8 +60,8 @@ class Transaction(models.Model):
     address = models.CharField(max_length=500,null=True, db_index=True)
     amount = models.FloatField(default=0, db_index=True)
     acknowledged = models.BooleanField(default=False)
-    blockheight = models.ForeignKey(
-        BlockHeight,
+    block = models.ForeignKey(
+        Block,
         on_delete=models.CASCADE,
         related_name='transactions',
         null=True
@@ -75,7 +75,7 @@ class Transaction(models.Model):
     index = models.IntegerField(default=0, db_index=True)
     spent = models.BooleanField(default=False)
     spend_block_height = models.ForeignKey(
-        BlockHeight,
+        Block,
         related_name='spent_transactions',
         null=True,
         blank=True,

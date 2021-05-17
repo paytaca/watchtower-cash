@@ -1,6 +1,5 @@
 from django.conf import settings
 import json
-from main.models import BlockHeight
 redis_storage = settings.REDISKV
 
 
@@ -21,4 +20,3 @@ def block_setter(number):
     _data = json.dumps(_blocks)
     redis_storage.set('PENDING-BLOCKS', _data)
     return added
- 

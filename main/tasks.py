@@ -1,7 +1,7 @@
 import math, logging, json, time, requests
 from celery import shared_task
 from main.models import (
-    BlockHeight, 
+    Block, 
     Token, 
     Transaction,
     SlpAddress, 
@@ -51,8 +51,8 @@ def client_acknowledgement(self, txid):
     if this_transaction.exists():
         transaction = this_transaction.first()
         block = None
-        if transaction.blockheight:
-            block = transaction.blockheight.number
+        if transaction.block:
+            block = transaction.block.number
         
         address = transaction.address 
         subscriptions = check_wallet_address_subscription(address)
@@ -122,7 +122,7 @@ def client_acknowledgement(self, txid):
 
 
 @shared_task(queue='save_record')   
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0):
+def save_record(token, transaction_address, transactionid, amount, source, blockid=None, index=0):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -186,12 +186,12 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         )
 
 
-        if blockheightid is not None:
-            transaction_obj.blockheight_id = blockheightid
+        if blockid is not None:
+            transaction_obj.block_id = blockid
             transaction_obj.save()
 
             # Automatically update all transactions with block height.
-            Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
+            Transaction.objects.filter(txid=transactionid).update(block_id=blockid)
         
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
@@ -271,7 +271,7 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id):
 @shared_task(bind=True, queue='bitdbquery', max_retries=30)
 def bitdbquery(self, block_id):
     try:
-        block = BlockHeight.objects.get(id=block_id)
+        block = Block.objects.get(id=block_id)
         if block.processed: return  # Terminate here if processed already
         divider = "\n\n##########################################\n\n"
         source = 'bitdb-query'
@@ -316,7 +316,7 @@ def bitdbquery(self, block_id):
             currentcount  = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
             LOGGER.info(f"THERE ARE {currentcount} SUCCEEDED OUT OF {total} TASKS.")
             if currentcount == total:
-                block = BlockHeight.objects.get(id=block_id)
+                block = Block.objects.get(id=block_id)
                 block.currentcount = currentcount
                 block.save()
                 REDIS_STORAGE.set('READY', 1)
@@ -339,7 +339,7 @@ def slpdbquery_transaction(self, transaction, tx_count, total):
     source = 'slpdb-query'
 
     block_id = int(REDIS_STORAGE.get('BLOCK_ID'))
-    block = BlockHeight.objects.get(id=block_id)
+    block = Block.objects.get(id=block_id)
     
     if transaction['slp']['valid']:
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
@@ -360,7 +360,7 @@ def slpdbquery_transaction(self, transaction, tx_count, total):
                             transaction['tx']['h'],
                             output['amount'],
                             source,
-                            blockheightid=block_id,
+                            blockid=block_id,
                             index=index
                         )
                         if created:
@@ -379,8 +379,8 @@ def slpdbquery(self, block_id):
     REDIS_STORAGE.set('BLOCK_ID', block_id)
     divider = "\n\n##########################################\n\n"
 
-    block = BlockHeight.objects.get(id=block_id)
-    prev = BlockHeight.objects.filter(number=block.number-1)
+    block = Block.objects.get(id=block_id)
+    prev = Block.objects.filter(number=block.number-1)
 
     if block.processed:
         REDIS_STORAGE.set('ACTIVE-BLOCK', '')
@@ -438,7 +438,7 @@ def manage_block_transactions(self):
         REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
         REDIS_STORAGE.set('READY', 0)
 
-        block = BlockHeight.objects.get(number=active_block)        
+        block = Block.objects.get(number=active_block)        
         slpdbquery.delay(block.id)
 
         if active_block in blocks:
@@ -457,6 +457,6 @@ def get_latest_block(self):
     LOGGER.info('CHECKING THE LATEST BLOCK')
     obj = bitdb_scanner.BitDB()
     number = obj.get_latest_block()
-    obj, created = BlockHeight.objects.get_or_create(number=number)
+    obj, created = Block.objects.get_or_create(number=number)
     if created: return f'*** NEW BLOCK { obj.number } ***'
 

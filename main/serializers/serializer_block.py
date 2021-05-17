@@ -1,9 +1,9 @@
-from main.models import BlockHeight
+from main.models import Block
 from rest_framework import serializers, exceptions
 
-class BlockHeightSerializer(serializers.ModelSerializer):
+class BlockSerializer(serializers.ModelSerializer):
     class Meta:
-        model = BlockHeight
+        model = Block
         fields = [
             'number',
             'transactions_count',
