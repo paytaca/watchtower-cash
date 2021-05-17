@@ -79,6 +79,22 @@ class Transaction(models.Model):
     def __str__(self):
         return self.txid
 
+class Input(models.Model):
+    transaction = models.ForeignKey(Transaction, related_name='inputs', on_delete=models.CASCADE)
+    parent_output = models.OneToOneField('main.Output', null=True, related_name='input', on_delete=models.CASCADE)
+    unlock_script = models.TextField()
+    
+class Output(models.Model):
+    transaction = models.ForeignKey(Transaction, related_name='outputs', on_delete=models.CASCADE)
+    address = models.CharField(max_length=500,null=True, db_index=True)
+    amount = models.FloatField(default=0, db_index=True)
+    slp_token = models.ForeignKey(
+        SLPToken,
+        on_delete=models.CASCADE
+    )
+    index = models.IntegerField(default=0, db_index=True)
+    lock_script = models.TextField()
+    
 class Recipient(models.Model):
     web_url = models.CharField(max_length=500,null=True, blank=True)
     telegram_id = models.CharField(max_length=100,null=True, blank=True)
