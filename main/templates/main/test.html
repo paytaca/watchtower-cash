@@ -13,7 +13,7 @@
   const protocol = window.location.protocol.replace("http", "ws");
 
   const chatSocket = new WebSocket(
-    protocol + "//" + window.location.host + "/ws/socket/" + "{{address}}" + "/"
+    protocol + "//" + window.location.host + "/api/subscription/" + "{{address}}" + "/"
   );
 
   chatSocket.onmessage = function (e) {
