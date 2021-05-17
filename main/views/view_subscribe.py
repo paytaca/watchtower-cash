@@ -4,8 +4,7 @@ from rest_framework import status
 from main.models import (
     Subscription,
     Recipient,
-    SlpAddress,
-    BchAddress
+    Address
 )
 
 
@@ -30,9 +29,9 @@ class SubscribeViewSet(APIView):
                     slp = None
 
                     if address.startswith('simpleledger'):
-                        slp, _ = SlpAddress.objects.get_or_create(address=address)
+                        slp, _ = Address.objects.get_or_create(address=address)
                     elif address.startswith('bitcoincash'):
-                        bch, _ = BchAddress.objects.get_or_create(address=address)
+                        bch, _ = Address.objects.get_or_create(address=address)
                     
                     subscription, created = Subscription.objects.get_or_create(
                         recipient=recipient,

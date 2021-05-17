@@ -95,6 +95,23 @@ class Output(models.Model):
     index = models.IntegerField(default=0, db_index=True)
     lock_script = models.TextField()
     
+
+class Address(models.Model):
+    legacy_address = models.CharField(max_length=200, unique=True, db_index=True)
+    bch_address = models.CharField(max_length=200, unique=True, db_index=True)
+    slp_address = models.CharField(max_length=200, unique=True, db_index=True)
+    public_key = models.CharField(max_length=200, unique=True, db_index=True)
+    txs = models.ForeignKey(
+        Output,
+        related_name='addresses',
+        blank=True,
+        on_delete=models.CASCADE
+    )
+
+    @property
+    def get_utxos(self):
+        return self.txs.filter(input=None)
+
 class Recipient(models.Model):
     web_url = models.CharField(max_length=500,null=True, blank=True)
     telegram_id = models.CharField(max_length=100,null=True, blank=True)
@@ -108,37 +125,6 @@ class Recipient(models.Model):
         else:
             return 'N/A'
 
-class SlpAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True, db_index=True)
-    transactions = models.ManyToManyField(
-        Transaction,
-        related_name='slpaddress',
-        blank=True
-    )
-
-    class Meta:
-        verbose_name = 'SLP Address'
-        verbose_name_plural = 'SLP Addresses'
-        
-    def __str__(self):
-        return self.address
-
-class BchAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True, db_index=True)
-    transactions = models.ManyToManyField(
-        Transaction,
-        related_name='bchaddress',
-        blank=True
-    )
-    scanned = models.BooleanField(default=False)
-    
-    class Meta:
-        verbose_name = 'BCH Address'
-        verbose_name_plural = 'BCH Addresses'
-        
-    def __str__(self):
-        return self.address
-
 class Subscription(models.Model):
     recipient = models.ForeignKey(
         Recipient,
@@ -146,16 +132,5 @@ class Subscription(models.Model):
         null=True,
         related_name='subscriptions'
     )
-    slp = models.ForeignKey(
-        SlpAddress,
-        on_delete=models.DO_NOTHING,
-        related_name='subscriptions',
-        null=True
-    )
-    bch = models.ForeignKey(
-        BchAddress,
-        on_delete=models.DO_NOTHING,
-        related_name='subscriptions',
-        null=True
-    )
+    address = models.ForeignKey(Address, related_name='subscription', on_delete=models.CASCADE)
     websocket=models.BooleanField(default=False)

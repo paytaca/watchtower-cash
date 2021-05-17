@@ -1,9 +1,8 @@
 from django.contrib import admin
 from main.models import (
+    Address,
     SLPToken,
     Transaction,
-    SlpAddress,
-    BchAddress,
     Block,
     Subscription,
     Recipient
@@ -93,24 +92,17 @@ class TransactionAdmin(admin.ModelAdmin):
                     send_telegram_message(message, chat_id)
             
 
-
     
-class SlpAddressAdmin(admin.ModelAdmin):
+class AddressAdmin(admin.ModelAdmin):
     list_display = [
-        'address',
+        'legacy_address',
+        'bch_address',    
+        'slp_address',
+        'public_key',
     ]
 
     exclude = [
-        'transactions',
-    ]
-    
-class BchAddressAdmin(admin.ModelAdmin):
-    list_display = [
-        'address',
-    ]
-
-    exclude = [
-        'transactions',
+        'outputs',
     ]
 
 class RecipientAdmin(admin.ModelAdmin):
@@ -123,8 +115,7 @@ class RecipientAdmin(admin.ModelAdmin):
 class SubscriptionAdmin(admin.ModelAdmin):
     list_display = [
         'recipient',
-        'slp',        
-        'bch',
+        'address',        
         'websocket'
     ]
 
@@ -136,8 +127,7 @@ admin.site.unregister(Group)
 
 admin.site.register(SLPToken, SLPTokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
-admin.site.register(SlpAddress, SlpAddressAdmin)
-admin.site.register(BchAddress, BchAddressAdmin)
+admin.site.register(Address, AddressAdmin)
 admin.site.register(Block, BlockAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)
 admin.site.register(Recipient, RecipientAdmin)

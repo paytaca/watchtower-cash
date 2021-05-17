@@ -6,9 +6,7 @@ from django.contrib.auth import authenticate, login, logout
 from main.models import (
     SLPToken as MyToken,
     Transaction,
-    Subscription,    
-    SlpAddress,
-    BchAddress
+    Subscription,
 )
 from django.contrib.auth.models import User 
 from django.urls import reverse

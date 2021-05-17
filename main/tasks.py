@@ -4,9 +4,8 @@ from main.models import (
     Block, 
     SLPToken, 
     Transaction,
-    SlpAddress, 
+    Address, 
     Subscription, 
-    BchAddress,
     Recipient
 )
 from celery.exceptions import MaxRetriesExceededError 
@@ -194,9 +193,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             Transaction.objects.filter(txid=transactionid).update(block_id=blockid)
         
         if token == 'bch':
-            address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
+            address_obj, created = Address.objects.get_or_create(address=transaction_address)
         else:
-            address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
+            address_obj, created = Address.objects.get_or_create(address=transaction_address)
         
         address_obj.transactions.add(transaction_obj)
         address_obj.save()

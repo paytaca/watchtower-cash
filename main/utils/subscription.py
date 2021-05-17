@@ -1,4 +1,4 @@
-from main.models import BchAddress, Subscription, SlpAddress, Recipient
+from main.models import Subscription, Address, Recipient
 from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q
@@ -20,12 +20,12 @@ def save_subscription(address, subscriber_id):
     destination_address = None
 
     if address.startswith('bitcoincash'):
-        bch, created = BchAddress.objects.get_or_create(address=address)
+        bch, created = Address.objects.get_or_create(address=address)
         slp = None
         
     
     if address.startswith('simpleledger'):
-        slp, created = SlpAddress.objects.get_or_create(address=address)
+        slp, created = Address.objects.get_or_create(address=address)
         bch = None
 
     recipient, _ = Recipient.objects.get_or_create(telegram_id=subscriber_id)

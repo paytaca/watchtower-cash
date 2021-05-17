@@ -1,15 +1,7 @@
 from django.shortcuts import render
-
-
-
-
 from django.views import View
 from django.shortcuts import render
 from django.http import JsonResponse
-from main.models import (
-    Subscription,
-    SlpAddress
-)
 from operator import or_
 
 

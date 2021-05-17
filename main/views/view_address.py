@@ -3,7 +3,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from main.models import (
     Subscription,
-    SlpAddress
+    Address
 )
 from operator import or_
 
@@ -62,16 +62,16 @@ class SetupSLPAddress(ViewSet):
 
 # SLPAddress Model ViewSet
 
-from main.models import SlpAddress
+from main.models import Address
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from main.serializers import SlpAddressSerializer
+from main.serializers import AddressSerializer
 
-class SlpAddressViewSet(viewsets.ModelViewSet):
+class AddressViewSet(viewsets.ModelViewSet):
     """
     A viewset that provides the standard actions
     """
-    queryset = SlpAddress.objects.all()
-    serializer_class = SlpAddressSerializer
+    queryset = Address.objects.all()
+    serializer_class = AddressSerializer
     http_method_names = ['get', 'post', 'head']
