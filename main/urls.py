@@ -16,5 +16,5 @@ router = routers.DefaultRouter()
 urlpatterns = router.urls
 
 urlpatterns = [
-    path(r"webhook/subscribe/", views.SubscribeViewSet.as_view(), name='subscribe')
+    path(r"subscription/", views.SubscribeViewSet.as_view(), name='subscription')
 ]
