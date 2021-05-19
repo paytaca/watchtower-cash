@@ -10,8 +10,8 @@ class BCHDQuery(object):
 
     def __init__(self):
         nodes = [
-        'bchd.ny1.simpleledger.io:8335',
         'bchd.imaginary.cash:8335',
+        'bchd.ny1.simpleledger.io:8335',
         'bchd.greyh.at:8335'
         ]
         self.base_url = random.choice(nodes)
