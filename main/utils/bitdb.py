@@ -72,6 +72,7 @@ class BitDB(object):
             _round -= 1
         
         unspent = [out for out in outputs if out not in spent]
+        
         return list(set(unspent))
         
 
