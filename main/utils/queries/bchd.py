@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import grpc
+import grpc, random
 import logging
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
@@ -9,7 +9,13 @@ LOGGER = logging.getLogger(__name__)
 class BCHDQuery(object):
 
     def __init__(self):
-        self.base_url = 'bchd.ny1.simpleledger.io'
+        nodes = [
+        'bchd.ny1.simpleledger.io:8335',
+        'bchd.imaginary.cash:8335',
+        'bchd.greyh.at:8335'
+        ]
+        self.base_url = random.choice(nodes)
+        
 
 
     def get_latest_block(self):
@@ -42,6 +48,16 @@ class BCHDQuery(object):
             return resp.transaction
 
 
+    def get_utxos(self, address):
+        creds = grpc.ssl_channel_credentials()
+
+        with grpc.secure_channel(self.base_url, creds) as channel:
+            stub = bchrpc.bchrpcStub(channel)
+
+            req = pb.GetAddressUnspentOutputsRequest()
+            req.address = address
+            resp = stub.GetAddressUnspentOutputs(req)
+            return resp.outputs
 
     def get_transactions_count(self, blockheight):
         creds = grpc.ssl_channel_credentials()
