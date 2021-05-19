@@ -29,6 +29,64 @@ class SLPDB(object):
             raise SLPDBHttpExcetion('Non-200 status error')
 
 
+    def get_utxos(self, slp_address):
+        outputs = [x['tx'] for x in self.get_out(slp_address)]
+
+        chunk = 50
+        start = 0
+        end = 50
+        _round = round(len(outputs)/chunk)
+        
+        spent = []
+        while _round >= 0:
+            query = {
+                "v": 3,
+                "q": {
+                    "find": {
+                        "in.e.h": { 
+                            "$in": outputs[start:end]
+                        },
+                        "in.e.a": slp_address
+                    },
+                    "limit": 9999999
+                },
+                "r": {
+                    "f": "[.[] | { in : .in} ]"
+                }
+            }
+            data = self.get_data(query)
+            
+            for x in data:
+                for i in x['in']:
+                    address = i['e']['h']
+                    if address in outputs:
+                        spent.append(address)
+
+            
+            start += chunk    
+            end += chunk
+            _round -= 1
+        
+        unspent = [out for out in outputs if out not in spent]
+        
+        return list(set(unspent))
+    
+    def get_out(self, slp_address):
+        query = {
+            "v": 3,
+            "q": {
+                "find": {
+                    "out.e.a": slp_address
+                },
+                "limit": 999999
+            },
+            "r": {
+                "f": "[.[] | { tx : .tx.h} ]"
+            }
+        }
+        data = self.get_data(query)
+        return data
+
     def get_block_by_txid(self, txid):
         query = {
             "v": 3,

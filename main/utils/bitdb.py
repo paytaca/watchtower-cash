@@ -42,7 +42,7 @@ class BitDB(object):
         end = 50
         _round = round(len(outputs)/chunk)
         utxos = []
-
+        spent = []
         while _round >= 0:
             query = {
                 "v": 3,
@@ -60,20 +60,19 @@ class BitDB(object):
                 }
             }
             data = self.get_data(query)
-            spent = []
+            
             for x in data:
                 for i in x['in']:
                     address = i['e']['h']
                     if address in outputs:
                         spent.append(address)
 
-            unspent = [out for out in outputs if out not in spent]
-            utxos += unspent
             start += chunk    
             end += chunk
             _round -= 1
         
-        return list(set(utxos))
+        unspent = [out for out in outputs if out not in spent]
+        return list(set(unspent))
         
 
     def get_out(self, bch_address):
