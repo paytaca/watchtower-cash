@@ -302,7 +302,7 @@ def bitdbquery(self, block_id):
             
             
             for transaction in data:
-                res = bitdbquery_transaction.delay(transaction, total, block.number, block_id)
+                bitdbquery_transaction.delay(transaction, total, block.number, block_id)
             
             if last:
                 complete = True
@@ -364,7 +364,8 @@ def slpdbquery_transaction(self, transaction, tx_count, total):
                             index=index
                         )
                         if created:
-                            client_acknowledgement(obj_id)
+                            if tx_count and total:
+                                client_acknowledgement(obj_id)
                     index += 1
                 
 

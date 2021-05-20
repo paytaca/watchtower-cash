@@ -1,6 +1,7 @@
+from main.utils.bchd.bchrpc_pb2 import Transaction
 from django.conf import settings
 from django.db.models.signals import post_save
-from main.tasks import save_record
+from main.tasks import save_record, slpdbquery_transaction, bitdbquery_transaction
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from main.models import BlockHeight, BchAddress, SlpAddress
@@ -8,6 +9,7 @@ from main.utils.queries.bchd import BCHDQuery
 from main.utils.bitdb import BitDB
 from main.utils.slpdb import SLPDB
 from django.utils import timezone
+
 from main.utils import block_setter
 from main.utils import check_wallet_address_subscription
 import base64
@@ -44,16 +46,19 @@ def bchaddress_post_save(sender, instance=None, created=False, **kwargs):
                     block.id,
                     index
                 )
-                save_record(*args)            
+                trid, created = save_record(*args)            
+                if created:
+                    Transaction.objects.filter(id=trid).update(processed=True)
         except Exception as exc:
             obj = BitDB()
             data = obj.get_utxos(address)
-            for tr in data:
-                pass
+            for tr_id in data:
+                data_tr = obj.get_transaction(tr_id)
+                bitdbquery_transaction.delay(data_tr[0], 0, 0)
 
 
 @receiver(post_save, sender=SlpAddress)
-def slpaddress_post_save(lsender, instance=None, created=False, **kwargs):
+def slpaddress_post_save(sender, instance=None, created=False, **kwargs):
     if created:
         address = instance.address
         try:
@@ -79,13 +84,16 @@ def slpaddress_post_save(lsender, instance=None, created=False, **kwargs):
                         block.id,
                         index
                     )
-                    save_record(*args)
+                    trid, created = save_record(*args)
+                    if created:
+                        Transaction.objects.filter(id=trid).update(processed=True)
             
-        except Exception as exc:
+        except Exception:
             obj = SLPDB()
             data = obj.get_utxos(address)
-            for tr in data:
-                pass
+            for tr_id in data:
+                data_tr = obj.get_transaction(tr_id)
+                slpdbquery_transaction.delay(data_tr[0], 0, 0)
 
 
 @receiver(post_save, sender=BlockHeight)
