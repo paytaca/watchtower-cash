@@ -72,9 +72,21 @@ class BitDB(object):
             _round -= 1
         
         unspent = [out for out in outputs if out not in spent]
-        
         return list(set(unspent))
         
+
+    def get_transaction(self, tr):
+        query = {
+            "v": 3,
+            "q": {
+                "find": {
+                        "tx.h": tr
+                    },
+                "limit": 1
+            }
+        }
+        data = self.get_data(query)
+        return data
 
     def get_out(self, bch_address):
         query = {
