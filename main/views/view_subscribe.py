@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from main.tasks import get_slp_utxos, get_bch_utxos
 from main.utils.recipient import Recipient as RecipientScript
 from main.models import (
     Subscription,
@@ -46,7 +47,15 @@ class SubscribeViewSet(APIView):
                     slp=slp,
                     bch=bch
                 )
+                if bch:
+                    address = bch.address.split('bitcoincash:')[-1]
+                    get_bch_utxos.delay(address)
+                
+                if slp:
+                    address = slp.address
+                    get_slp_utxos.delay(address)
                 if created:
+                    
                     response['success'] = True
                     response_status = status.HTTP_200_OK
                 else:
