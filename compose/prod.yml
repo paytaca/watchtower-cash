@@ -1,34 +1,10 @@
-version: "3"
+version: "3.7"
 services:
-  docker-host:
-    container_name: spicebot_docker_host
-    image: qoomon/docker-host
-    cap_add: [ 'NET_ADMIN', 'NET_RAW' ]
-    mem_limit: 8M
-    restart: on-failure
-    networks:
-      - spicebot_network
-  redis:
-    container_name: spicebot_redis
-    image: "redis:alpine"
-    networks:
-      - spicebot_network
   web:
-    container_name: spicebot_web
-    build: /root/spicebot
-    image: spicebot_web
+    container_name: watchtower_web
+    build: /root/code
+    image: watchtower_web
+    command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
+    env_file: /root/code/compose/.env_prod
     ports:
-      - "8000:8000"
-    env_file:
-      - /root/spicebot/compose/.env_prod
-    depends_on:
-      - docker-host
-      - redis
-    volumes:
-      - /root/spicebot:/code
-    networks:
-      - spicebot_network
-
-networks:
-  spicebot_network:
-    external: false
+      - 8000:8000

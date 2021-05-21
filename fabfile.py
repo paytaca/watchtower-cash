@@ -3,7 +3,8 @@ from fabric import task
 import os
 
 hosts = [
-    'root@' + os.environ['WATCHTOWER_SERVER_IP']
+    #'root@' + os.environ['WATCHTOWER_SERVER_IP']
+    'root@95.217.29.212'
 ]
 
 
