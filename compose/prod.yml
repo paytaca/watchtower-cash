@@ -2,9 +2,9 @@ version: "3.7"
 services:
   web:
     container_name: watchtower_web
-    build: /root/code
+    build: /root/watchtower
     image: watchtower_web
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
-    env_file: /root/code/compose/.env_prod
+    env_file: /root/watchtower/compose/.env_prod
     ports:
       - 8000:8000
