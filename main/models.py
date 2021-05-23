@@ -51,7 +51,7 @@ class BlockHeight(models.Model):
         if self.processed:
             self.updated_datetime = timezone.now()
         super(BlockHeight,self).save(*args, **kwargs)
-
+    
     def __str__(self):
         return str(self.number)
 
