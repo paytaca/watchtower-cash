@@ -109,14 +109,32 @@ def client_acknowledgement(self, txid):
                         this_transaction.update(acknowledged=True)
 
                 if websocket:
+                    
+                    tokenid = ''
+                    room_name = transaction.address.replace(':','_')
+                    room_name += f'_{tokenid}'
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
-                        f"{transaction.address.replace(':','_')}", 
+                        f"{room_name}", 
                         {
                             "type": "send_update",
                             "data": data
                         }
                     )
+                    if transaction.address.startswith('simpleledger:'):
+                        tokenid = transaction.token.tokenid
+                        room_name += f'_{tokenid}'
+                        channel_layer = get_channel_layer()
+                        async_to_sync(channel_layer.group_send)(
+                            f"{room_name}", 
+                            {
+                                "type": "send_update",
+                                "data": data
+                            }
+                        )
+                        
+                    
+
                     
     return third_parties
 

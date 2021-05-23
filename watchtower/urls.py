@@ -25,12 +25,9 @@ from rest_framework.authtoken import views
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
-from main.urls import urlpatterns as main_urls
+from main.urls import main_urls, test_urls
 
-from main.views import ( 
-    TelegramBotView,
-    Test
-)
+from main.views import TelegramBotView
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -47,7 +44,7 @@ schema_view = get_schema_view(
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
-    url(r'^test/(?P<address>[\w+:]+)/$', Test.as_view(),name='test'),
+    path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

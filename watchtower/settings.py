@@ -93,11 +93,11 @@ ASGI_APPLICATION = 'watchtower.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
-POSTGRES_DB = decipher(config('POSTGRES_DB', default='watchtower'))
-POSTGRES_HOST = decipher(config('POSTGRES_HOST', default='localhost'))
-POSTGRES_PORT = decipher(config('POSTGRES_PORT', default=5432))
-POSTGRES_USER = decipher(config('POSTGRES_USER', default='postgres'))
-POSTGRES_PASSWORD = decipher(config('POSTGRES_PASSWORD', default='badpassword'))
+POSTGRES_DB = decipher(config('POSTGRES_DB'))
+POSTGRES_HOST = decipher(config('POSTGRES_HOST'))
+POSTGRES_PORT = decipher(config('POSTGRES_PORT'))
+POSTGRES_USER = decipher(config('POSTGRES_USER'))
+POSTGRES_PASSWORD = decipher(config('POSTGRES_PASSWORD'))
 
 DATABASES = {
     'default': {
