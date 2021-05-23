@@ -93,11 +93,11 @@ ASGI_APPLICATION = 'watchtower.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
-POSTGRES_DB = decipher(config('POSTGRES_DB', default='watchtower'))
-POSTGRES_HOST = decipher(config('POSTGRES_HOST', default='localhost'))
-POSTGRES_PORT = decipher(config('POSTGRES_PORT', default=5432))
-POSTGRES_USER = decipher(config('POSTGRES_USER', default='postgres'))
-POSTGRES_PASSWORD = decipher(config('POSTGRES_PASSWORD', default='badpassword'))
+POSTGRES_DB = decipher(config('POSTGRES_DB'))
+POSTGRES_HOST = decipher(config('POSTGRES_HOST'))
+POSTGRES_PORT = decipher(config('POSTGRES_PORT'))
+POSTGRES_USER = decipher(config('POSTGRES_USER'))
+POSTGRES_PASSWORD = decipher(config('POSTGRES_PASSWORD'))
 
 DATABASES = {
     'default': {
@@ -149,9 +149,9 @@ DB_NUM = [0,1,2]
 if DEPLOYMENT_INSTANCE == 'staging':
     DB_NUM = [3,4,5]
 
-REDIS_HOST = decipher(config('REDIS_HOST', default='localhost'))
-REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', default=''))
-REDIS_PORT = decipher(config('REDIS_PORT', default=6379))
+REDIS_HOST = decipher(config('REDIS_HOST'))
+REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
+REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = ('main.tasks',)
 
 if REDIS_PASSWORD:
@@ -236,17 +236,17 @@ SWAGGER_SETTINGS = {
 #Telegram bot settings
 # TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
 TELEGRAM_BOT_TOKEN = "1764241013:AAGA5L8vuZf8CBJH3iHkFsp84pRbFzSGwrc"
-TELEGRAM_BOT_USER = decipher(config('TELEGRAM_BOT_USER', default=''))
-TELEGRAM_DESTINATION_ADDR = decipher(config('TELEGRAM_DESTINATION_ADDR', default=''))
+TELEGRAM_BOT_USER = decipher(config('TELEGRAM_BOT_USER'))
+TELEGRAM_DESTINATION_ADDR = decipher(config('TELEGRAM_DESTINATION_ADDR'))
 
 
 # Slack credentials and configurations
 
-SLACK_BOT_USER_TOKEN = config('SLACK_BOT_USER_TOKEN', default='')
-SLACK_VERIFICATION_TOKEN = config('SLACK_VERIFICATION_TOKEN', default='')
-SLACK_CLIENT_ID = config('SLACK_CLIENT_ID', default='')
-SLACK_CLIENT_SECRET = config('SLACK_CLIENT_SECRET', default='')
-SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET', default='')
+SLACK_BOT_USER_TOKEN = config('SLACK_BOT_USER_TOKEN')
+SLACK_VERIFICATION_TOKEN = config('SLACK_VERIFICATION_TOKEN')
+SLACK_CLIENT_ID = config('SLACK_CLIENT_ID')
+SLACK_CLIENT_SECRET = config('SLACK_CLIENT_SECRET')
+SLACK_SIGNING_SECRET = config('SLACK_SIGNING_SECRET')
 
 SLACK_DESTINATION_ADDR = 'https://watchtower.scibizinformatics.com/slack/notify/'
 SLACK_THEME_COLOR = '#82E0AA'
@@ -313,3 +313,5 @@ CHANNEL_LAYERS = {
 
 # websocket vars
 WATCH_ROOM = 'watch_room'
+
+ENDBLOCK = int(decipher(config('ENDBLOCK')))

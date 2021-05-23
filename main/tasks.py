@@ -126,7 +126,7 @@ def client_acknowledgement(self, txid):
 
 
 @shared_task(queue='save_record')   
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0):
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0, new_subscription=False):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -192,6 +192,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
         if blockheightid is not None:
             transaction_obj.blockheight_id = blockheightid
+            if new_subscription:
+                transaction_obj.acknowledged = True
             transaction_obj.save()
 
             # Automatically update all transactions with block height.
@@ -467,7 +469,7 @@ def get_latest_block(self):
     if created: return f'*** NEW BLOCK { obj.number } ***'
 
 
-@shared_task(bind=True, queue='get_utxos', max_retries=3)
+@shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_bch_utxos(self, address):
     try:
         obj = BCHDQuery()
@@ -480,6 +482,7 @@ def get_bch_utxos(self, address):
             tx_hash = bytearray(hash[::-1]).hex()
             bchaddress = 'bitcoincash:' + address
             amount = output.value / (10 ** 8)
+            if block < settings.ENDBLOCK: block = 000000
             block, created = BlockHeight.objects.get_or_create(number=block)
             args = (
                 'bch',
@@ -488,24 +491,22 @@ def get_bch_utxos(self, address):
                 amount,
                 source,
                 block.id,
-                index
+                index,
+                True
             )
-            _, created = save_record(*args)            
+            _, created = save_record(*args)       
             if created:
-                BlockHeight.objects.filter(id=block.id).update(processed=True)
+                qs = BlockHeight.objects.filter(id=block.id)
+                count = qs.first().transactions.count()
+                qs.update(processed=True, transactions_count=count)
     except Exception as exc:
         try:
+            LOGGER.error(exc)
             self.retry(countdown=4)
         except MaxRetriesExceededError:
-            obj = bitdb_scanner.BitDB()
-            data = obj.get_utxos(address)
-            for tr_id in data:
-                block = 123
-                block, _ = BlockHeight.objects.get_or_create(number=block)
-                data_tr = obj.get_transaction(tr_id)
-                bitdbquery_transaction.delay(data_tr[0], 0, block.number, block.id, alert=False)
+            LOGGER.error(f"CAN'T EXTRACT UTXOs OF {address} THIS TIME. THIS NEEDS PROPER FALLBACK.")
 
-@shared_task(bind=True, queue='get_utxos', max_retries=3)
+@shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_slp_utxos(self, address):
     try:
         obj = BCHDQuery()
@@ -520,6 +521,7 @@ def get_slp_utxos(self, address):
                 amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
                 slp_address = 'simpleledger:' + output.slp_token.address
                 block = output.block_height
+                if block < settings.ENDBLOCK: block = 000000
                 block, _ = BlockHeight.objects.get_or_create(number=block)
                 args = (
                     token_id,
@@ -528,18 +530,18 @@ def get_slp_utxos(self, address):
                     amount,
                     source,
                     block.id,
-                    index
+                    index,
+                    True
                 )
                 _, created = save_record(*args)
                 if created:
-                    BlockHeight.objects.filter(id=block.id).update(processed=True)
+                    qs = BlockHeight.objects.filter(id=block.id)
+                    count = qs.first().transactions.count()
+                    qs.update(processed=True, transactions_count=count)
         
-    except Exception:
+    except Exception as exc:
         try:
+            LOGGER.error(exc)
             self.retry(countdown=4)
         except MaxRetriesExceededError:
-            obj = slpdb_scanner.SLPDB()
-            data = obj.get_utxos(address)
-            for tr_id in data:
-                data_tr = obj.get_transaction(tr_id)
-                slpdbquery_transaction.delay(data_tr[0], 0, 0, alert=False)
+            LOGGER.error(f"CAN'T EXTRACT UTXOs OF {address} THIS TIME. THIS NEEDS PROPER FALLBACK.")
