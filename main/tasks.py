@@ -1,4 +1,5 @@
 import math, logging, json, time, requests
+from watchtower.settings import MAX_RESTB_RETRIES
 from celery import shared_task
 from main.models import (
     BlockHeight, 
@@ -19,6 +20,9 @@ from celery import Celery
 from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from main.utils.queries.bchd import BCHDQuery
+
+
 
 
 LOGGER = logging.getLogger(__name__)
@@ -221,7 +225,7 @@ def input_scanner(self, txid, index, block_id=None):
             tr.update(spent=True)
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
-def bitdbquery_transaction(self, transaction, total, block_number, block_id):
+def bitdbquery_transaction(self, transaction, total, block_number, block_id, alert=True):
     
     tx_count = int(REDIS_STORAGE.incr('BITDBQUERY_COUNT'))
 
@@ -252,12 +256,13 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id):
                 )
                 obj_id, created = save_record(*args)
                 if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+                    if alert:
+                        third_parties = client_acknowledgement(obj_id)
+                        for platform in third_parties:
+                            if 'telegram' in platform:
+                                message = platform[1]
+                                chat_id = platform[2]
+                                send_telegram_message(message, chat_id)
            
     
 
@@ -335,7 +340,7 @@ def bitdbquery(self, block_id):
             REDIS_STORAGE.set('READY', 1)
 
 @shared_task(bind=True, queue='slpdbquery_transactions')
-def slpdbquery_transaction(self, transaction, tx_count, total):
+def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
     source = 'slpdb-query'
 
     block_id = int(REDIS_STORAGE.get('BLOCK_ID'))
@@ -364,7 +369,7 @@ def slpdbquery_transaction(self, transaction, tx_count, total):
                             index=index
                         )
                         if created:
-                            if tx_count and total:
+                            if alert:
                                 client_acknowledgement(obj_id)
                     index += 1
                 
@@ -461,3 +466,80 @@ def get_latest_block(self):
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created: return f'*** NEW BLOCK { obj.number } ***'
 
+
+@shared_task(bind=True, queue='get_utxos', max_retries=3)
+def get_bch_utxos(self, address):
+    try:
+        obj = BCHDQuery()
+        outputs = obj.get_utxos(address)
+        source = 'bchd-query'
+        for output in outputs:
+            hash = output.outpoint.hash 
+            index = output.outpoint.index
+            block = output.block_height
+            tx_hash = bytearray(hash[::-1]).hex()
+            bchaddress = 'bitcoincash:' + address
+            amount = output.value / (10 ** 8)
+            block, created = BlockHeight.objects.get_or_create(number=block)
+            args = (
+                'bch',
+                bchaddress,
+                tx_hash,
+                amount,
+                source,
+                block.id,
+                index
+            )
+            _, created = save_record(*args)            
+            if created:
+                BlockHeight.objects.filter(id=block.id).update(processed=True)
+    except Exception as exc:
+        try:
+            self.retry(countdown=4)
+        except MaxRetriesExceededError:
+            obj = bitdb_scanner.BitDB()
+            data = obj.get_utxos(address)
+            for tr_id in data:
+                block = 123
+                block, _ = BlockHeight.objects.get_or_create(number=block)
+                data_tr = obj.get_transaction(tr_id)
+                bitdbquery_transaction.delay(data_tr[0], 0, block.number, block.id, alert=False)
+
+@shared_task(bind=True, queue='get_utxos', max_retries=3)
+def get_slp_utxos(self, address):
+    try:
+        obj = BCHDQuery()
+        outputs = obj.get_utxos(address)
+        source = 'bchd-query'
+        for output in outputs:
+            if output.slp_token.token_id:
+                hash = output.outpoint.hash 
+                tx_hash = bytearray(hash[::-1]).hex()
+                index = output.outpoint.index
+                token_id = bytearray(output.slp_token.token_id).hex() 
+                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                slp_address = 'simpleledger:' + output.slp_token.address
+                block = output.block_height
+                block, _ = BlockHeight.objects.get_or_create(number=block)
+                args = (
+                    token_id,
+                    slp_address,
+                    tx_hash,
+                    amount,
+                    source,
+                    block.id,
+                    index
+                )
+                _, created = save_record(*args)
+                if created:
+                    BlockHeight.objects.filter(id=block.id).update(processed=True)
+        
+    except Exception:
+        try:
+            self.retry(countdown=4)
+        except MaxRetriesExceededError:
+            obj = slpdb_scanner.SLPDB()
+            data = obj.get_utxos(address)
+            for tr_id in data:
+                data_tr = obj.get_transaction(tr_id)
+                slpdbquery_transaction.delay(data_tr[0], 0, 0, alert=False)
