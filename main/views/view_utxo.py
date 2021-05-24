@@ -1,21 +1,20 @@
+from rest_framework.views import APIView
 from main.models import Transaction
-from django.db.models import Q, Sum, F
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.views import APIView
-from main import serializers
+from django.db.models import Q, F
 
-class Balance(APIView):
-    
+class UTXO(APIView):
+
     def get(self, request, *args, **kwargs):
+
         slpaddress = kwargs.get('slpaddress', '')
         bchaddress = kwargs.get('bchaddress', '')
         tokenid = kwargs.get('tokenid', '')
 
         data = { 'valid': False }
-        balance = 0
         qs = None
-
+    
         if slpaddress.startswith('simpleledger:'):
             data['address'] = slpaddress
             if tokenid:
@@ -24,20 +23,19 @@ class Balance(APIView):
                 query =  Q(address=data['address']) & Q(spent=False)
                 
             qs = Transaction.objects.filter(query)
-            qs_balance = qs.annotate(
-                tokenid=F('token__tokenid'),
-                token_name=F('token__name')
-            ).values('tokenid','token_name').order_by('tokenid').annotate(balance=Sum('amount'))
-            data['balance'] = list(qs_balance)
-            data['valid'] = True        
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
             qs = Transaction.objects.filter(Q(address=data['address']) & Q(spent=False))
-            qs_balance = qs.aggregate(balance=Sum('amount'))
-            balance = qs_balance['balance']
-            data['balance'] = balance
+                   
+        if qs:
+            utxos_values = qs.annotate(
+                token_name=F('token__name'),
+                block=F('blockheight__number'),
+                unspent_index=F('index'),
+                tokenid=F('token__tokenid')
+            ).values('txid', 'amount', 'tokenid', 'token_name', 'unspent_index', 'block')
+
+            data['utxos'] = list(utxos_values)
             data['valid'] = True        
-        
         return Response(data=data, status=status.HTTP_200_OK)
-        
