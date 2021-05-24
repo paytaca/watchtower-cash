@@ -16,6 +16,7 @@ router = routers.DefaultRouter()
 
 main_urls = router.urls
 
+
 main_urls += [
     path(r"subscription/", views.SubscribeViewSet.as_view(), name='subscribe')
 ]

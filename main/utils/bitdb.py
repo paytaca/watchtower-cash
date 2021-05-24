@@ -3,6 +3,9 @@ import requests
 import base64
 import random
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BitDBHttpException(Exception):
     pass
@@ -29,6 +32,101 @@ class BitDB(object):
             return data['c']
         else:
             raise BitDBHttpException('Non-200 status')
+
+
+    def get_utxos(self, bch_address):
+        outputs = [x['tx'] for x in self.get_out(bch_address)]
+
+        chunk = 50
+        start = 0
+        end = 50
+        _round = round(len(outputs)/chunk)
+        utxos = []
+        spent = []
+        while _round >= 0:
+            query = {
+                "v": 3,
+                "q": {
+                    "find": {
+                        "in.e.h": { 
+                            "$in": outputs[start:end]
+                        },
+                        "in.e.a": bch_address
+                    },
+                    "limit": 9999999
+                },
+                "r": {
+                    "f": "[.[] | { in : .in} ]"
+                }
+            }
+            data = self.get_data(query)
+            
+            for x in data:
+                for i in x['in']:
+                    address = i['e']['h']
+                    if address in outputs:
+                        spent.append(address)
+
+            start += chunk    
+            end += chunk
+            _round -= 1
+        
+        unspent = [out for out in outputs if out not in spent]
+        return list(set(unspent))
+        
+
+    def get_transaction(self, tr):
+        query = {
+            "v": 3,
+            "q": {
+                "find": {
+                        "tx.h": tr
+                    },
+                "limit": 1
+            }
+        }
+        data = self.get_data(query)
+        return data
+
+    def get_out(self, bch_address):
+        query = {
+            "v": 3,
+            "q": {
+                "find": {
+                
+                "out.e.a": bch_address
+                },
+                "limit": 999999
+            },
+            "r": {
+                "f": "[.[] | { tx : .tx.h} ]"
+            }
+        }
+        data = self.get_data(query)
+        return data
+
+    def get_balance(self, utxos, address):
+        value = 0
+        for txid in utxos:
+            query = {
+                "v": 3,
+                "q": {
+                    "db": ["c"],
+                    "find": {
+                        "tx.h": txid
+                    },
+                    "limit": 1
+                }
+            }
+            data = self.get_data(query)
+            logger.error(data[0]['out'])
+            logger.error("========")
+            # for out in data[0]['out']:
+            #     print(out['e'])
+            #     if 'a' in out['e'].keys():
+            #         if out['e']['a'] == address:
+            #             value += out['e']['v'] / (10 ** 8)
+        return value
 
     def get_transactions_count(self, blk):
         query = {
@@ -69,7 +167,9 @@ class BitDB(object):
         }
         data = self.get_data(query)
         return data[0]['blk']['i']
-        
+    
+    
+
     def get_transactions_by_blk(self, blk, skip, limit):
         complete = False
         query = {
