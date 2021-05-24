@@ -29,19 +29,19 @@ def sync(c):
 @task(hosts=hosts)
 def build(c):
     with c.cd(f'/root/{project}'):
-        c.run('docker-compose -f compose/staging/setup.yml build')
+        c.run('docker-compose -f compose/prod.yml build')
 
 
 @task(hosts=hosts)
 def up(c):
     with c.cd(f'/root/{project}'):
-        c.run('docker-compose -f compose/staging/setup.yml up -d')
+        c.run('docker-compose -f compose/prod.yml up -d')
 
 
 @task(hosts=hosts)
 def down(c):
     with c.cd(f'/root/{project}'):
-        c.run('docker-compose -f compose/staging/setup.yml down')
+        c.run('docker-compose -f compose/prod.yml down')
 
 
 @task(hosts=hosts)
@@ -71,4 +71,4 @@ def nginx(c):
 @task(hosts=hosts)
 def logs(c):
     with c.cd(f'/root/{project}'):
-        c.run(f'docker-compose -p {project} -f compose/staging/setup.yml logs  -f backend')
+        c.run(f'docker-compose -p {project} -f compose/prod.yml logs  -f backend')
