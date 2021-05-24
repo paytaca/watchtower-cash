@@ -7,17 +7,19 @@
 - Running on an elastic infrastructure that scales according to demand
 - The goal is to achieve and guarantee 99.99% uptime and reliability
 
-## Webhook Notifications
+## Subscription
 
-To subscribe to webhook notifications, send a POST request to `https://watchtower.cash/api/webhook/subscribe` with the BCH or SLP address and the URL where the webhook calls will be sent to. A sample request using `curl` is shown below:
+Watchtower will only "watch" addresses that are subscribed to by the users.
+
+To subscribe an address, send a POST request to `https://watchtower.cash/api/subscription/` with the BCH or SLP address and the URL where the webhook calls will be sent to (optional). A sample request using `curl` is shown below:
 ```bash
 curl -i -X POST 
     -H "Content-Type: application/json" 
     -d '{"address":"simpleledger:qr89dn8th7zj4n74vrqyce4vld522spunv3wkdqd5z", "web_url": "https://0f27bf32c670.ngrok.io"}' 
-    https://watchtower.cash/api/webhook/subscribe
+    https://watchtower.cash/api/subscription/
 ```
 
-A POST request notification is sent to the URL if a new transcation is detected. A sample notification is shown below:
+If the `web_url` is given, a POST request notification is sent to the URL whenever a new transcation is detected. A sample notification is shown below:
 ```python
 {
     'source': 'WatchTower',
@@ -28,3 +30,5 @@ A POST request notification is sent to the URL if a new transcation is detected.
     'amount': 321.0
 }
 ```
+
+(More docs to follow...)
