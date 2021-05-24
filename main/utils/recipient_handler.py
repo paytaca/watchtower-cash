@@ -1,7 +1,7 @@
 from main.models import Recipient
 from django.db.models import Q
 
-class Recipient(object):
+class RecipientHandler(object):
 
     def __init__(self, web_url=None, telegram_id=None):
         self.web_url = web_url

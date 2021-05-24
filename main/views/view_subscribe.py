@@ -2,10 +2,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from main.tasks import get_slp_utxos, get_bch_utxos
-from main.utils.recipient import Recipient as RecipientScript
+from main.utils.recipient_handler import RecipientHandler
 from main.models import (
     Subscription,
-    Recipient,
     SlpAddress,
     BchAddress
 )
@@ -22,7 +21,7 @@ class SubscribeViewSet(APIView):
         if address is not None:
             address = address.lower()
             if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
-                obj_recipient = RecipientScript(
+                obj_recipient = RecipientHandler(
                     web_url=web_url,
                     telegram_id=telegram_id
                 )
