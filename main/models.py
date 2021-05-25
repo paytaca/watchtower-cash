@@ -52,7 +52,7 @@ class BlockHeight(models.Model):
             self.created_datetime = timezone.now()
         if self.processed:
             self.updated_datetime = timezone.now()
-        if self.number < settings.ENDBLOCK:
+        if self.number < settings.START_BLOCK:
             self.requires_full_scan = False
         super(BlockHeight,self).save(*args, **kwargs)
     
