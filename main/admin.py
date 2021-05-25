@@ -39,6 +39,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
         'created_datetime',
         'updated_datetime',
         'transactions_count',
+        'requires_full_scan'
         
     ]
 

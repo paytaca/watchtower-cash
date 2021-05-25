@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
+from django.conf import settings
 
 
 class Token(models.Model):
@@ -43,6 +44,7 @@ class BlockHeight(models.Model):
     currentcount = models.IntegerField(default=0)
     problematic = JSONField(default=list, blank=True)
     unparsed = JSONField(default=list, blank=True)
+    requires_full_scan = models.BooleanField(default=True)
 
 
     def save(self, *args, **kwargs):
@@ -50,6 +52,8 @@ class BlockHeight(models.Model):
             self.created_datetime = timezone.now()
         if self.processed:
             self.updated_datetime = timezone.now()
+        if self.number < settings.START_BLOCK:
+            self.requires_full_scan = False
         super(BlockHeight,self).save(*args, **kwargs)
     
     def __str__(self):

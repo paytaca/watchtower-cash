@@ -500,23 +500,30 @@ def get_bch_utxos(self, address):
             tx_hash = bytearray(hash[::-1]).hex()
             bchaddress = 'bitcoincash:' + address
             amount = output.value / (10 ** 8)
-            if block < settings.ENDBLOCK: block = 000000
+            
             block, created = BlockHeight.objects.get_or_create(number=block)
-            args = (
-                'bch',
-                bchaddress,
-                tx_hash,
-                amount,
-                source,
-                block.id,
-                index,
-                True
+            transaction_obj = Transaction.objects.filter(
+                txid=tx_hash,
+                address=bchaddress,
+                amount=amount,
+                index=index
             )
-            _, created = save_record(*args)       
-            if created:
-                qs = BlockHeight.objects.filter(id=block.id)
-                count = qs.first().transactions.count()
-                qs.update(processed=True, transactions_count=count)
+            if not transaction_obj.exists():
+                args = (
+                    'bch',
+                    bchaddress,
+                    tx_hash,
+                    amount,
+                    source,
+                    block.id,
+                    index,
+                    True
+                )
+                _, created = save_record(*args)       
+                if created:
+                    qs = BlockHeight.objects.filter(id=block.id)
+                    count = qs.first().transactions.count()
+                    qs.update(processed=True, transactions_count=count)
     except Exception as exc:
         try:
             LOGGER.error(exc)
@@ -539,23 +546,34 @@ def get_slp_utxos(self, address):
                 amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
                 slp_address = 'simpleledger:' + output.slp_token.address
                 block = output.block_height
-                if block < settings.ENDBLOCK: block = 000000
+                
                 block, _ = BlockHeight.objects.get_or_create(number=block)
-                args = (
-                    token_id,
-                    slp_address,
-                    tx_hash,
-                    amount,
-                    source,
-                    block.id,
-                    index,
-                    True
+
+                token_obj, _ = Token.objects.get_or_create(tokenid=token_id)
+
+                transaction_obj = Transaction.objects.filter(
+                    txid=tx_hash,
+                    address=slp_address,
+                    token=token_obj,
+                    amount=amount,
+                    index=index
                 )
-                _, created = save_record(*args)
-                if created:
-                    qs = BlockHeight.objects.filter(id=block.id)
-                    count = qs.first().transactions.count()
-                    qs.update(processed=True, transactions_count=count)
+                if not transaction_obj.exists():
+                    args = (
+                        token_id,
+                        slp_address,
+                        tx_hash,
+                        amount,
+                        source,
+                        block.id,
+                        index,
+                        True
+                    )
+                    _, created = save_record(*args)
+                    if created:
+                        qs = BlockHeight.objects.filter(id=block.id)
+                        count = qs.first().transactions.count()
+                        qs.update(processed=True, transactions_count=count)
         
     except Exception as exc:
         try:

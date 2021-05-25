@@ -314,4 +314,4 @@ CHANNEL_LAYERS = {
 # websocket vars
 WATCH_ROOM = 'watch_room'
 
-ENDBLOCK = int(decipher(config('ENDBLOCK')))
+START_BLOCK = int(decipher(config('START_BLOCK')))

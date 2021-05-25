@@ -11,12 +11,15 @@ class RecipientHandler(object):
         if self.web_url and self.telegram_id:
             qs = Recipient.objects.filter(Q(web_url=self.web_url) & Q(telegram_id=self.telegram_id))
             if not qs.exists(): return 'create'
+            return qs.first()
         if self.web_url:
             qs = Recipient.objects.filter(web_url=self.web_url)
             if not qs.exists(): return 'create'
+            return qs.first()
         if self.telegram_id:
             qs = Recipient.objects.filter(telegram_id=self.telegram_id)
             if not qs.exists(): return 'create'
+            return qs.first()
         return None
     
     def get_or_create(self):
@@ -27,4 +30,6 @@ class RecipientHandler(object):
             recipient.telegram_id = self.telegram_id
             recipient.save()
             return recipient, True
+        if status is not None:
+            return status, False
         return status, False
