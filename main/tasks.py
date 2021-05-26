@@ -21,7 +21,7 @@ from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.queries.bchd import BCHDQuery
-
+import base64
 
 
 
@@ -172,8 +172,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         if token.lower() == 'bch':
             token_obj, _ = Token.objects.get_or_create(name=token)
         else:
-            token_obj, _ = Token.objects.get_or_create(tokenid=token)
-        
+            token_obj, created = Token.objects.get_or_create(tokenid=token)
+            if created: get_token_meta_data.delay(token_obj.tokenid)
 
         #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
         tr = Transaction.objects.filter(
@@ -581,3 +581,42 @@ def get_slp_utxos(self, address):
             self.retry(countdown=4)
         except MaxRetriesExceededError:
             LOGGER.error(f"CAN'T EXTRACT UTXOs OF {address} THIS TIME. THIS NEEDS PROPER FALLBACK.")
+
+@shared_task(bind=True, queue='token_metadata', max_retries=10)
+def get_token_meta_data(self, token_id):
+    tokenBytes = bytes.fromhex(token_id) #Tokenid
+    tokenHash = base64.b64encode(tokenBytes[::-1]).decode()
+
+    response = requests.post("https://bchd.fountainhead.cash/v1/GetTransaction", json={ 
+        "hash": tokenHash, 
+        "include_token_metadata": True 
+    })
+    if response.status_code == 200:
+        data = response.json()
+        metadata = data.get('token_metadata', None)
+        if metadata:
+            tokenType = metadata['token_type']
+            group = None
+            if tokenType == 1:
+                # type 1
+                token_ticker = metadata['type1'].get('token_ticker','')
+                
+            elif tokenType == 129:
+                # nft parent
+                token_ticker = metadata['nft1_group'].get('token_ticker','')
+                
+            elif tokenType == 65:
+                # nft child
+                token_ticker = metadata['nft1_child'].get('token_ticker', '')
+                group_id = metadata['nft1_child']['group_id']
+                qs_token = Token.objects.filter(tokenid=group_id)
+                if qs_token.exists(): group = qs_token.first()
+
+            token_ticker = base64.b64decode(token_ticker).decode()
+            Token.objects.filter(tokenid=token_id).update(
+                token_ticker=token_ticker,
+                token_type=tokenType,
+                nft_token_group=group
+            )
+    else:
+        self.retry(countdown=5)
