@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls import url
 from django.urls import path, include
 from django.views.decorators.csrf import csrf_exempt
+from django.views.generic import TemplateView
 
 from rest_framework.authtoken import views
 from rest_framework import permissions
@@ -42,6 +43,7 @@ schema_view = get_schema_view(
 
 
 urlpatterns = [
+    path('', TemplateView.as_view(template_name="main/index.html")),
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
     path(r'test/', include(test_urls)),
