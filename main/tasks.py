@@ -212,6 +212,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             transaction_obj.blockheight_id = blockheightid
             if new_subscription:
                 transaction_obj.acknowledged = True
+
             transaction_obj.save()
 
             # Automatically update all transactions with block height.
@@ -521,9 +522,10 @@ def get_bch_utxos(self, address):
                 )
                 _, created = save_record(*args)       
                 if created:
-                    qs = BlockHeight.objects.filter(id=block.id)
-                    count = qs.first().transactions.count()
-                    qs.update(processed=True, transactions_count=count)
+                    if not block.requires_full_scan:
+                        qs = BlockHeight.objects.filter(id=block.id)
+                        count = qs.first().transactions.count()
+                        qs.update(processed=True, transactions_count=count)
     except Exception as exc:
         try:
             LOGGER.error(exc)
@@ -571,9 +573,10 @@ def get_slp_utxos(self, address):
                     )
                     _, created = save_record(*args)
                     if created:
-                        qs = BlockHeight.objects.filter(id=block.id)
-                        count = qs.first().transactions.count()
-                        qs.update(processed=True, transactions_count=count)
+                        if not block.requires_full_scan:
+                            qs = BlockHeight.objects.filter(id=block.id)
+                            count = qs.first().transactions.count()
+                            qs.update(processed=True, transactions_count=count)
         
     except Exception as exc:
         try:
