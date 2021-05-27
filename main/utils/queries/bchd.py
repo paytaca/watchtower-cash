@@ -56,6 +56,7 @@ class BCHDQuery(object):
 
             req = pb.GetAddressUnspentOutputsRequest()
             req.address = address
+            req.include_mempool = True
             resp = stub.GetAddressUnspentOutputs(req)
             return resp.outputs
 
