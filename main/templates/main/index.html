@@ -32,10 +32,10 @@
         <b-navbar toggleable="lg" type="dark" variant="dark">
             <b-navbar-brand href="#">
                 <img src="/static/watchtower_logo.png" width="50" alt="Watchtower">
-                <span style="font-size: 35px; vertical-align: middle; color: rgb(91, 186, 116)">
+                <span style="font-size: 28px; vertical-align: middle; color: rgb(91, 186, 116)">
                     Watchtower
                 </span>
-                <span style="color: darkgray; font-size: 14px;">BETA</span>
+                <span style="color: darkgray; font-size: 12px;">BETA</span>
             </b-navbar-brand>
         
             <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
@@ -48,7 +48,14 @@
                 </b-navbar-nav>
             </b-collapse>
         </b-navbar>
-        <b-jumbotron style="text-align: center;" header="Watchtower" lead="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain">
+        <b-jumbotron style="text-align: center;">
+            <template #header>
+                <span style="font-size: 58px;">Watchtower</span>
+            </template>
+
+            <template #lead>
+                Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain
+            </template>
             <!-- <b-button variant="dark" href="#">Try It Now</b-button> -->
         </b-jumbotron>
         <b-container fluid>
@@ -86,7 +93,7 @@
                     <p>
                         No matter how robust the BCH blockchain is, your app's performance is just as good as the bridge. Watchtower serves as your app's reliable bridge to the BCH blockchain.
                     </p>
-                    <img src="/static/watchtower_diagram.png" />
+                    <b-img src="/static/watchtower_diagram.png" fluid></b-img>
                 </b-col>
                 <b-col class="cards" xs="12" sm="12" md="6">
                     <h4>Learn More</h4>
