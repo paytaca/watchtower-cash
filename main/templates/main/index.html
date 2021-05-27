@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WatchTower</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://watchtower.cash">
+    <meta property="og:site_name" content="WatchTower.Cash">
+    <meta property="og:title" content="WatchTower.Cash">
+    <meta property="og:description" content="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain">
+
+    <!-- Load required Bootstrap and BootstrapVue CSS -->
+    <link type="text/css" rel="stylesheet" href="//unpkg.com/bootstrap@4.5.3/dist/css/bootstrap.min.css" />
+    <link type="text/css" rel="stylesheet" href="//unpkg.com/bootstrap-vue@2.21.2/dist/bootstrap-vue.min.css" />
+
+    <!-- Load Vue followed by BootstrapVue -->
+    <script src="//unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
+    <script src="//unpkg.com/bootstrap-vue@2.21.2/dist/bootstrap-vue.min.js"></script>
+    <script src="//unpkg.com/bootstrap-vue@2.21.2/dist/bootstrap-vue-icons.min.js"></script>
+
+    <script src="https://unpkg.com/axios@0.21.1/dist/axios.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <b-navbar type="dark" variant="dark">
+            <b-navbar-brand href="#">
+                <img src="/static/watchtower_logo.png" width="50" alt="Watchtower">
+                <span style="font-size: 35px; vertical-align: middle; color: rgb(91, 186, 116)">
+                    Watchtower
+                </span>
+                <span style="color: darkgray; font-size: 14px;">BETA</span>
+            </b-navbar-brand>
+      
+            <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
+      
+            <b-collapse id="nav-collapse" is-nav>
+                <b-navbar-nav class="ml-auto">
+                    <b-nav-item @click="alert('Under construction!')">Documentation</b-nav-item>
+                    <b-nav-item href="https://watchtower.cash/api/docs/" target="_blank">API Browser</b-nav-item>
+                    <b-nav-item href="https://github.com/paytaca/watchtower-cash" target="_blank">Source Code</b-nav-item>
+                </b-navbar-nav>
+          </b-collapse>
+        </b-navbar>
+        <b-jumbotron style="text-align: center;" header="Watchtower" lead="Instant and reliable network infrastructure for Bitcoin Cash blockchain">
+            <!-- <b-button variant="dark" href="#">Try It Now</b-button> -->
+        </b-jumbotron>
+        <b-container fluid>
+            <b-row>
+                <b-col class="cards">
+                    <h4>Designed for Reliability at Scale</h4>
+                    <p>
+                        Watchtower is built to guaratee 99.99% uptime and reliability regardless of scale.
+                    </p>
+                    <ul>
+                        <li>Watches only subscribed addresses preventing unnecessary waste of resources</li>
+                        <li>Uses multiple failover nodes / indexers as data sources</li>
+                        <li>Powered by a distributed parallel background task queue for scanning of blocks and sending of notifications</li>
+                        <li>Deployable to a Kubernetes cluster configured to be highly available and with automated horizontal scaling capability</li>
+                    </ul>
+                </b-col>
+                <b-col class="cards">
+                    <h4>Targeted Use Case</h4>
+                    <p>Watchtower is specifically built for the purpose of creating a reliable backend to typical applications that integrate with BCH blockchain.</p>
+                    <ul>
+                        <li>Highly available UTXO database</li>
+                        <li>Webhook notification system</li>
+                        <li>Two-way communication through websockets</li>
+                        <li>HD wallet addresseses tracking</li>
+                    </ul>
+                </b-col>
+            </b-row>
+            <hr>
+            <b-row>
+                <b-col class="cards">
+                    <h4>Bridge to the BCH Blockchain</h4>
+                    <p>
+                        No matter how robust the BCH blockchain is, your app's performance is just as good as the bridge. Watchtower serves as your app's reliable bridge to the BCH blockchain.
+                    </p>
+                    <img src="/static/watchtower_diagram.png" />
+                </b-col>
+                <b-col>
+                    <h4>Learn More</h4>
+                    <p>
+                        Learning resources and support
+                    </p>
+                    <ul>
+                        <li>
+                            <a href="#" @click="alert('Under construction!')">Documentation</a>
+                        </li>
+                        <li>
+                            <a href="https://watchtower.cash/api/docs/" target="_blank">API Browser</a>
+                        </li>
+                        <li>
+                            <a href="https://github.com/paytaca/watchtower-cash" target="_blank">Source Code @ Github</a>
+                        </li>
+                        <li>
+                            <a href="https://t.me/joinchat/3eqcsafODEIwOTA1" target="_blank">
+                                Telegram Support Group
+                            </a>
+                        </li>
+                    </ul>
+                </b-col>
+            </b-row>
+            <hr>
+            <b-row style="text-align: right; color: gray; font-size: 12px;">
+                <b-col>
+                    <p>
+                        Built with &#10084;&#65039; by 
+                        <span style="color: black;" @click="window.open('https://www.paytaca.com')">Paytaca</span>
+                    </p>
+                </b-col>
+            </b-row>
+        </b-container>
+      </div>
+    </div>
+    <script>
+        axios.defaults.xsrfCookieName = "csrftoken"
+        axios.defaults.xsrfHeaderName = "X-CSRFTOKEN"
+
+        new Vue({
+            el: '#app',
+            delimiters: ['{[', ']}']
+        })
+    </script>
+    <style>
+        .cards {
+            padding: 20px 30px;
+        }
+    </style>
+</body>
+</html>
