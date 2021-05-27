@@ -621,7 +621,7 @@ def get_token_meta_data(self, token_id):
                 token_type=tokenType,
                 nft_token_group=group
             )
-    elif response.status_code == 500:
-        pass
+    elif response.status_code == 500 or response.status_code == 404:
+        pass    
     else:
         self.retry(countdown=5)

@@ -1,5 +1,6 @@
 from rest_framework.response import Response
 from rest_framework import status
+
 from main.utils.subscription import new_subscription
 from rest_framework.permissions import AllowAny
 from rest_framework import generics
@@ -16,7 +17,7 @@ class SubscribeViewSet(generics.GenericAPIView):
         if serializer.is_valid():
             response = new_subscription(**serializer.data)
             if response['success']:
-                return Response(response, status=status.HTTP_200_CREATED)
+                return Response(response, status=status.HTTP_200_OK)
             else:
                 return Response(response, status=status.HTTP_409_CONFLICT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
