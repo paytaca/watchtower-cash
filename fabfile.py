@@ -15,7 +15,7 @@ def sync(c):
         exclude=[
             '.venv',
             '.git',
-            'static',
+            '/static',
             '.DS_Store',
             '.env',
             '__pycache__',
