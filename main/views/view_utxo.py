@@ -31,10 +31,21 @@ class UTXO(APIView):
         if qs:
             utxos_values = qs.annotate(
                 token_name=F('token__name'),
+                token_ticker=F('token__token_ticker'),
+                token_type=F('token__token_type'),
                 block=F('blockheight__number'),
                 unspent_index=F('index'),
                 tokenid=F('token__tokenid')
-            ).values('txid', 'amount', 'tokenid', 'token_name', 'unspent_index', 'block')
+            ).values(
+                'txid',
+                'amount',
+                'tokenid',
+                'token_name',
+                'unspent_index',
+                'block',
+                'token_type',
+                'token_ticker'
+            )
 
             data['utxos'] = list(utxos_values)
             data['valid'] = True        

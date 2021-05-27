@@ -19,7 +19,9 @@ REDIS_STORAGE = settings.REDISKV
 class TokenAdmin(admin.ModelAdmin):
     list_display = [
         'tokenid',
-        'name'
+        'name',
+        'token_ticker',
+        'token_type'
     ]
 
     def get_query(self, request): 

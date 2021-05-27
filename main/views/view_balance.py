@@ -26,8 +26,10 @@ class Balance(APIView):
             qs = Transaction.objects.filter(query)
             qs_balance = qs.annotate(
                 tokenid=F('token__tokenid'),
-                token_name=F('token__name')
-            ).values('tokenid','token_name').order_by('tokenid').annotate(balance=Sum('amount'))
+                token_name=F('token__name'),
+                token_ticker=F('token__token_ticker'),
+                token_type=F('token__token_type')
+            ).values('tokenid','token_name','token_ticker', 'token_type').order_by('tokenid').annotate(balance=Sum('amount'))
             data['balance'] = list(qs_balance)
             data['valid'] = True        
         
