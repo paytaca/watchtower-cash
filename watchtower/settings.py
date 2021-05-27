@@ -217,21 +217,12 @@ REST_FRAMEWORK = {
     ],
 }
 
-ACCESS_TOKEN_LIFETIME = int(config("ACCESS_TOKEN_LIFETIME", "0"))
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=ACCESS_TOKEN_LIFETIME or 1)
+SWAGGER_SETTINGS = {
+    "SECURITY_SETTINGS": {},
+    "SECURITY_DEFINITIONS": {}
 }
 
-SWAGGER_SETTINGS = {
-    "SECURITY_DEFINITIONS": {
-        "JWT": {
-            "description": 'Input as "Bearer <token_here>"',
-            "type": "apiKey",
-            "in": "header",
-            "name": "Authorization",
-        }
-    },
-}
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 #Telegram bot settings
 # TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')

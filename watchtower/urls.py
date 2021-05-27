@@ -34,8 +34,9 @@ schema_view = get_schema_view(
    openapi.Info(
       title="watchtower",
       default_version='v1',
-      description="Reliable SLP transaction notifications",
-      contact=openapi.Contact(name="Support",url="https://t.me/watchtower")
+      url='https://watchtower.cash/',
+      description="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain",
+      contact=openapi.Contact(name="Support",url="https://t.me/joinchat/3eqcsafODEIwOTA1")
    ),
    public=True,
    permission_classes=(permissions.AllowAny,),
