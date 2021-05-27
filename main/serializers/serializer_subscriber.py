@@ -1,11 +1,6 @@
-# from main.models import Subscriber
-# from rest_framework import serializers, exceptions
+from rest_framework import serializers, exceptions
 
-# class SubscriberSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Subscriber
-#         fields = [
-#             'user',
-#             'subscription',
-#             'date_started',
-#         ]
+class SubscriberSerializer(serializers.Serializer):
+    address = serializers.CharField(max_length=200)
+    web_url = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    telegram_id = serializers.CharField(max_length=200, required=False, allow_blank=True)

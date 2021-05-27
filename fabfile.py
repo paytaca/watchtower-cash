@@ -71,4 +71,4 @@ def nginx(c):
 @task(hosts=hosts)
 def logs(c):
     with c.cd(f'/root/{project}'):
-        c.run(f'docker-compose -p {project} -f compose/prod.yml logs  -f backend')
+        c.run(f'docker-compose -p {project} -f compose/prod.yml logs  -f web')
