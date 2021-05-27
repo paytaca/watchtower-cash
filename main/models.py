@@ -22,7 +22,7 @@ class Token(models.Model):
     nft_token_group = models.ForeignKey(
         "main.Token",
         on_delete=models.CASCADE,
-        related_name='transactions',
+        related_name='children',
         null=True
     )
 
