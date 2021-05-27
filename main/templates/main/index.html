@@ -29,7 +29,7 @@
 </head>
 <body>
     <div id="app">
-        <b-navbar type="dark" variant="dark">
+        <b-navbar toggleable="lg" type="dark" variant="dark">
             <b-navbar-brand href="#">
                 <img src="/static/watchtower_logo.png" width="50" alt="Watchtower">
                 <span style="font-size: 35px; vertical-align: middle; color: rgb(91, 186, 116)">
@@ -37,26 +37,26 @@
                 </span>
                 <span style="color: darkgray; font-size: 14px;">BETA</span>
             </b-navbar-brand>
-      
+        
             <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
-      
+        
             <b-collapse id="nav-collapse" is-nav>
                 <b-navbar-nav class="ml-auto">
                     <b-nav-item @click="alert('Under construction!')">Documentation</b-nav-item>
                     <b-nav-item href="https://watchtower.cash/api/docs/" target="_blank">API Browser</b-nav-item>
                     <b-nav-item href="https://github.com/paytaca/watchtower-cash" target="_blank">Source Code</b-nav-item>
                 </b-navbar-nav>
-          </b-collapse>
+            </b-collapse>
         </b-navbar>
         <b-jumbotron style="text-align: center;" header="Watchtower" lead="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain">
             <!-- <b-button variant="dark" href="#">Try It Now</b-button> -->
         </b-jumbotron>
         <b-container fluid>
             <b-row>
-                <b-col class="cards">
+                <b-col class="cards" xs="12" sm="12" md="6">
                     <h4>Designed for Reliability at Scale</h4>
                     <p>
-                        Watchtower is built to guaratee 99.99% uptime and reliability regardless of scale.
+                        Watchtower is built to guarantee 99.99% uptime and reliability regardless of scale.
                     </p>
                     <ul>
                         <li>Watches only subscribed addresses preventing unnecessary waste of resources</li>
@@ -65,9 +65,12 @@
                         <li>Deployable to a Kubernetes cluster configured to be highly available and with automated horizontal scaling capability</li>
                     </ul>
                 </b-col>
-                <b-col class="cards">
+                <b-col class="cards" xs="12" sm="12" md="6">
                     <h4>Targeted Use Case</h4>
-                    <p>Watchtower is specifically built for the purpose of creating a reliable backend to typical applications that integrate with BCH blockchain.</p>
+                    <p>
+                        Watchtower is specifically built for the purpose of creating a reliable backend to typical applications that integrate with BCH blockchain. 
+                        It is designed on purpose to limit itself to the following features:
+                    </p>
                     <ul>
                         <li>Highly available UTXO database</li>
                         <li>Webhook notification system</li>
@@ -78,14 +81,14 @@
             </b-row>
             <hr>
             <b-row>
-                <b-col class="cards">
+                <b-col class="cards" xs="12" sm="12" md="6">
                     <h4>Bridge to the BCH Blockchain</h4>
                     <p>
                         No matter how robust the BCH blockchain is, your app's performance is just as good as the bridge. Watchtower serves as your app's reliable bridge to the BCH blockchain.
                     </p>
                     <img src="/static/watchtower_diagram.png" />
                 </b-col>
-                <b-col>
+                <b-col class="cards" xs="12" sm="12" md="6">
                     <h4>Learn More</h4>
                     <p>
                         Learning resources and support
