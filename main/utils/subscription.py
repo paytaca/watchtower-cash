@@ -46,7 +46,7 @@ def save_subscription(address, subscriber_id):
 def new_subscription(**kwargs):
     response_template = {'success': False}
     address = kwargs.get('address', None)
-    web_url = kwargs.get('web_url', None)
+    web_url = kwargs.get('webhook_url', None)
     telegram_id = kwargs.get('telegram_id', None)
     if address is not None:
         address = address.lower()
