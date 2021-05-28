@@ -45,6 +45,9 @@
                     <b-nav-item @click="alert('Under construction!')">Documentation</b-nav-item>
                     <b-nav-item href="https://watchtower.cash/api/docs/" target="_blank">API Browser</b-nav-item>
                     <b-nav-item href="https://github.com/paytaca/watchtower-cash" target="_blank">Source Code</b-nav-item>
+                    <b-nav-item href="//watchtower-cash.statuspal.io">
+                        <a class="sp-status">Status</a>
+                    </b-nav-item>
                 </b-navbar-nav>
             </b-collapse>
         </b-navbar>
@@ -102,18 +105,27 @@
                     </p>
                     <ul>
                         <li>
-                            <a href="#" @click="alert('Under construction!')">Documentation</a>
+                            <a href="#" @click="alert('Under construction!')">
+                                Documentation
+                            </a>
                         </li>
                         <li>
-                            <a href="https://watchtower.cash/api/docs/" target="_blank">API Browser</a>
+                            <a href="https://watchtower.cash/api/docs/" target="_blank">
+                                API Browser
+                            </a>
                         </li>
                         <li>
-                            <a href="https://github.com/paytaca/watchtower-cash" target="_blank">Source Code @ Github</a>
+                            <a href="https://github.com/paytaca/watchtower-cash" target="_blank">
+                                Source Code @ Github
+                            </a>
                         </li>
                         <li>
                             <a href="https://t.me/WatchTowerCash" target="_blank">
                                 Telegram Support Group
                             </a>
+                        </li>
+                        <li>
+                            <a class="sp-status" href="//watchtower-cash.statuspal.io">Status</a>
                         </li>
                     </ul>
                 </b-col>
@@ -144,5 +156,14 @@
             padding: 20px 30px;
         }
     </style>
+    <script>
+        window.statuspalWidget = {
+        subdomain: 'watchtower-cash',
+        selector: '.sp-status', // Optional
+        position: 'bottom', // Optional [top | bottom | left | right] - defaults to top.
+        // serviceId: 1, // Optional - Display the status of only one service
+        }
+    </script>
+    <script src="https://statuspal.io/js/widget.js"></script>
 </body>
 </html>
