@@ -29,24 +29,34 @@ class UTXO(APIView):
             qs = Transaction.objects.filter(Q(address=data['address']) & Q(spent=False))
                    
         if qs:
-            utxos_values = qs.annotate(
-                token_name=F('token__name'),
-                token_ticker=F('token__token_ticker'),
-                token_type=F('token__token_type'),
-                block=F('blockheight__number'),
-                unspent_index=F('index'),
-                tokenid=F('token__tokenid')
-            ).values(
-                'txid',
-                'amount',
-                'tokenid',
-                'token_name',
-                'unspent_index',
-                'block',
-                'token_type',
-                'token_ticker'
-            )
+            if bchaddress:
+                utxos_values = qs.annotate(
+                    value=F('amount') * (10 ** 8),
+                    vout=F('index'),
+                    block=F('blockheight__number'),
+                ).values(
+                    'txid',
+                    'vout',
+                    'value',
+                    'block'
+                )
+            
+            if slpaddress:
+                utxos_values = qs.annotate(
+                    vout=F('index'),
+                    token_id=F('token__tokenid'),
+                    block=F('blockheight__number'),
+                ).values(
+                    'txid',
+                    'vout',
+                    'token_id',
+                    'amount',
+                    'token_name',
+                    'token_ticker',
+                    'block',
+                    'token_type'
+                )
 
             data['utxos'] = list(utxos_values)
-            data['valid'] = True        
+            data['valid'] = True  
         return Response(data=data, status=status.HTTP_200_OK)
