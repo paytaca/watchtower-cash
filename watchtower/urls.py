@@ -36,7 +36,7 @@ schema_view = get_schema_view(
       default_version='v1',
       url='https://watchtower.cash/',
       description="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain",
-      contact=openapi.Contact(name="Support",url="https://t.me/joinchat/3eqcsafODEIwOTA1")
+      contact=openapi.Contact(name="Support",url="https://t.me/WatchTowerCash")
    ),
    public=True,
    permission_classes=(permissions.AllowAny,),
