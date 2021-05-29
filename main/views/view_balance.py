@@ -35,7 +35,11 @@ class Balance(APIView):
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
-            qs = Transaction.objects.filter(Q(address=data['address']) & Q(spent=False))
+            # Exclude dust amounts as they're likely to be SLP transactions
+            # TODO: Needs another more sure way to exclude SLP transactions
+            dust = 546 / (10 ** 8)
+            query = Q(address=data['address']) & Q(spent=False) & Q(amount__gt=dust)
+            qs = Transaction.objects.filter(query)
             qs_balance = qs.aggregate(balance=Sum('amount'))
             balance = qs_balance['balance']
             data['balance'] = balance

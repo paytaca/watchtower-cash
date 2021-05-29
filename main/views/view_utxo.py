@@ -14,7 +14,25 @@ class UTXO(APIView):
 
         data = { 'valid': False }
         qs = None
-    
+        
+        if bchaddress.startswith('bitcoincash:'):
+            data['address'] = bchaddress
+            # Exclude dust amounts as they're likely to be SLP transactions
+            # TODO: Needs another more sure way to exclude SLP transactions
+            dust = 546 / (10 ** 8)
+            query = Q(address=data['address']) & Q(spent=False) & Q(amount__gt=dust)
+            qs = Transaction.objects.filter(query)
+            utxos_values = qs.annotate(
+                value=F('amount') * (10 ** 8),
+                vout=F('index'),
+                block=F('blockheight__number'),
+            ).values(
+                'txid',
+                'vout',
+                'value',
+                'block'
+            )
+        
         if slpaddress.startswith('simpleledger:'):
             data['address'] = slpaddress
             if tokenid:
@@ -23,30 +41,21 @@ class UTXO(APIView):
                 query =  Q(address=data['address']) & Q(spent=False)
                 
             qs = Transaction.objects.filter(query)
-        
-        if bchaddress.startswith('bitcoincash:'):
-            data['address'] = bchaddress
-            qs = Transaction.objects.filter(Q(address=data['address']) & Q(spent=False))
-                   
-        if qs:
             utxos_values = qs.annotate(
-                token_name=F('token__name'),
-                token_ticker=F('token__token_ticker'),
-                token_type=F('token__token_type'),
+                vout=F('index'),
+                token_id=F('token__tokenid'),
                 block=F('blockheight__number'),
-                unspent_index=F('index'),
-                tokenid=F('token__tokenid')
             ).values(
                 'txid',
+                'vout',
+                'token_id',
                 'amount',
-                'tokenid',
                 'token_name',
-                'unspent_index',
+                'token_ticker',
                 'block',
-                'token_type',
-                'token_ticker'
+                'token_type'
             )
 
-            data['utxos'] = list(utxos_values)
-            data['valid'] = True        
+        data['utxos'] = list(utxos_values)
+        data['valid'] = True  
         return Response(data=data, status=status.HTTP_200_OK)
