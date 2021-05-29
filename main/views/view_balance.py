@@ -1,5 +1,6 @@
 from main.models import Transaction
 from django.db.models import Q, Sum, F
+from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
@@ -29,7 +30,16 @@ class Balance(APIView):
                 token_name=F('token__name'),
                 token_ticker=F('token__token_ticker'),
                 token_type=F('token__token_type')
-            ).values('tokenid','token_name','token_ticker', 'token_type').order_by('tokenid').annotate(balance=Sum('amount'))
+            ).values(
+                'tokenid',
+                'token_name',
+                'token_ticker',
+                'token_type'
+            ).order_by(
+                'tokenid'
+            ).annotate(
+                balance=Coalesce(Sum('amount'), 0)
+            )
             data['balance'] = list(qs_balance)
             data['valid'] = True        
         
@@ -40,7 +50,9 @@ class Balance(APIView):
             dust = 546 / (10 ** 8)
             query = Q(address=data['address']) & Q(spent=False) & Q(amount__gt=dust)
             qs = Transaction.objects.filter(query)
-            qs_balance = qs.aggregate(balance=Sum('amount'))
+            qs_balance = qs.aggregate(
+                balance=Coalesce(Sum('amount'), 0)
+            )
             balance = qs_balance['balance']
             data['balance'] = balance
             data['valid'] = True        
