@@ -16,9 +16,6 @@ router = routers.DefaultRouter()
 
 main_urls = router.urls
 
-
-
-
 main_urls += [
     re_path(r"^subscription/$", views.SubscribeViewSet.as_view(), name='subscribe'),
     re_path(r"^balance/bch/(?P<bchaddress>[\w+:]+)/$", views.Balance.as_view(),name='bch-balance'),
@@ -26,9 +23,9 @@ main_urls += [
     re_path(r"^balance/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)", views.Balance.as_view(),name='slp-token-balance'),
     re_path(r"^utxo/bch/(?P<bchaddress>[\w+:]+)/$", views.UTXO.as_view(),name='bch-utxo'),
     re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/$", views.UTXO.as_view(),name='slp-utxo'),
-    re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)", views.UTXO.as_view(),name='slp-token-utxo')
+    re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)", views.UTXO.as_view(),name='slp-token-utxo'),
+    path('broadcast', views.BroadcastViewSet.as_view(), name="broadcast-transaction")
 ]
-
 
 test_urls = [
     re_path(r"^(?P<address>[\w+:]+)/$", views.TestSocket.as_view(),name='testbch'),
