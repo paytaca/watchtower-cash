@@ -43,17 +43,20 @@ class UTXO(APIView):
             qs = Transaction.objects.filter(query)
             utxos_values = qs.annotate(
                 vout=F('index'),
-                token_id=F('token__tokenid'),
+                tokenid=F('token__tokenid'),
+                token_name=F('token__name'),
+                token_ticker=F('token__token_ticker'),
+                token_type=F('token__token_type'),
                 block=F('blockheight__number'),
             ).values(
                 'txid',
                 'vout',
-                'token_id',
                 'amount',
+                'tokenid',
                 'token_name',
                 'token_ticker',
-                'block',
-                'token_type'
+                'token_type',
+                'block'
             )
 
         data['utxos'] = list(utxos_values)
