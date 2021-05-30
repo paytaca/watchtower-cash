@@ -625,3 +625,13 @@ def get_token_meta_data(self, token_id):
         pass    
     else:
         self.retry(countdown=5)
+
+
+@shared_task(bind=True, queue='broadcast', max_retries=5)
+def broadcast_transaction(self, transaction):
+    try:
+        obj = BCHDQuery()
+        txid = obj.broadcast_transaction(transaction)
+        return txid
+    except AttributeError:
+        self.retry(countdown=1)

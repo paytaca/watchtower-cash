@@ -1,9 +1,9 @@
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from main.utils.queries.bchd import BCHDQuery
 from rest_framework import generics
-from main import serializers
 from rest_framework import status
+from main import serializers
+from main.tasks import broadcast_transaction
 
 class BroadcastViewSet(generics.GenericAPIView):
     serializer_class = serializers.BroadcastSerializer
@@ -13,9 +13,8 @@ class BroadcastViewSet(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         response = {'success': False}
         if serializer.is_valid():
-            obj = BCHDQuery()
-            txid = obj.broadcast_transaction(**serializer.data)
-            response['txid'] = txid
+            job = broadcast_transaction.delay(serializer.data['transaction'])
+            response['txid'] = job.get()
             response['success'] = True
             if response['success']:
                 return Response(response, status=status.HTTP_200_OK)
