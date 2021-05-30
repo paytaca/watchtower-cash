@@ -2,7 +2,6 @@
 import grpc
 import random
 import logging
-import base64
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
 
@@ -17,8 +16,6 @@ class BCHDQuery(object):
             'bchd.greyh.at:8335'
         ]
         self.base_url = random.choice(nodes)
-        
-
 
     def get_latest_block(self):
         creds = grpc.ssl_channel_credentials()
@@ -49,7 +46,6 @@ class BCHDQuery(object):
             resp = stub.GetTransaction(req)
             return resp.transaction
 
-
     def get_utxos(self, address):
         creds = grpc.ssl_channel_credentials()
 
@@ -73,20 +69,18 @@ class BCHDQuery(object):
             req.full_transactions = False
             resp = stub.GetBlock(req)
 
-            trs =  resp.block.transaction_data
+            trs = resp.block.transaction_data
             return len(trs)
 
-    def broadcast_transcation(self, txn_hex):
-        txn_bytes = bytes.fromhex(txn_hex)
-        txn_b64 = base64.b64encode(txn_bytes)
+    def broadcast_transaction(self, transaction):
+        txn_bytes = bytes.fromhex(transaction)
         creds = grpc.ssl_channel_credentials()
 
         with grpc.secure_channel(self.base_url, creds) as channel:
             stub = bchrpc.bchrpcStub(channel)
 
-            req = pb.SubmitTransaction()
-            req.transaction = txn_b64
-            req.skip_slp_validity_check = True
+            req = pb.SubmitTransactionRequest()
+            req.transaction = txn_bytes
             resp = stub.SubmitTransaction(req)
 
             tx_hash = bytearray(resp.hash[::-1]).hex()
