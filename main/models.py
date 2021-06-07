@@ -34,15 +34,6 @@ class Token(models.Model):
             return f"{self.name} | {self.tokenid[0:7]}"
         else:
             return str(self.name)
-    
-    def save(self, *args, **kwargs):
-
-        if not self.id and self.name != 'bch':
-            mod = __import__('main.utils', fromlist=['slptoken'])
-            obj = mod.slptoken.SLPToken(self.tokenid)
-            self.decimals = obj.get_decimals()
-            self.name = obj.get_name()
-        super(Token, self).save(*args, **kwargs)
 
 class BlockHeight(models.Model):
     number = models.IntegerField(default=0, unique=True, db_index=True)
