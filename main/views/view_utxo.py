@@ -45,6 +45,7 @@ class UTXO(APIView):
                 vout=F('index'),
                 tokenid=F('token__tokenid'),
                 token_name=F('token__name'),
+                decimals=F('token__decimals'),
                 token_ticker=F('token__token_ticker'),
                 token_type=F('token__token_type'),
                 block=F('blockheight__number'),
@@ -55,6 +56,7 @@ class UTXO(APIView):
                 'tokenid',
                 'token_name',
                 'token_ticker',
+                'decimals',
                 'token_type',
                 'block'
             )
