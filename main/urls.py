@@ -18,6 +18,7 @@ main_urls = router.urls
 
 main_urls += [
     re_path(r"^subscription/$", views.SubscribeViewSet.as_view(), name='subscribe'),
+    re_path(r"^blockheight/latest/$", views.BlockHeightViewSet.as_view(), name='blockheight'),
     re_path(r"^balance/bch/(?P<bchaddress>[\w+:]+)/$", views.Balance.as_view(),name='bch-balance'),
     re_path(r"^balance/slp/(?P<slpaddress>[\w+:]+)/$", views.Balance.as_view(),name='slp-balance'),
     re_path(r"^balance/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)", views.Balance.as_view(),name='slp-token-balance'),
