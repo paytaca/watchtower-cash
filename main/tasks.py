@@ -635,7 +635,11 @@ def get_token_meta_data(self, token_id):
 def broadcast_transaction(self, transaction):
     try:
         obj = BCHDQuery()
-        txid = obj.broadcast_transaction(transaction)
-        return txid
+        try:
+            txid = obj.broadcast_transaction(transaction)
+            return True, txid
+        except Exception as exc:
+            error = exc.details()
+            return False, error
     except AttributeError:
         self.retry(countdown=1)

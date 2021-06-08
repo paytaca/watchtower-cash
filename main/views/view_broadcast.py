@@ -14,10 +14,12 @@ class BroadcastViewSet(generics.GenericAPIView):
         response = {'success': False}
         if serializer.is_valid():
             job = broadcast_transaction.delay(serializer.data['transaction'])
-            response['txid'] = job.get()
-            response['success'] = True
-            if response['success']:
+            success, result = job.get()
+            if success:
+                response['txid'] = result
+                response['success'] = True
                 return Response(response, status=status.HTTP_200_OK)
             else:
+                response['error'] = result
                 return Response(response, status=status.HTTP_409_CONFLICT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
