@@ -67,3 +67,11 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                     slp_tx['index']
                 )
                 save_record(*args)
+
+                # Mark inputs as spent
+                for tx_input in slp_tx['inputs']:
+                    txn_check = Transaction.objects.filter(
+                        txid=tx_input['txid'],
+                        index=tx_input['spent_index']
+                    )
+                    txn_check.update(spent=True)
