@@ -71,9 +71,15 @@ class BCHDQuery(object):
             }
             if slp_action in genesis_map.keys():
                 genesis_info = eval('txn.slp_transaction_info.' + genesis_map[slp_action])
+                token_type = txn.outputs[1].slp_token.token_type
+                parent_group = None
+                if token_type == 65:
+                    parent_group = genesis_info.group_token_id.hex()
                 transaction['token_info'] = {
                     'name': genesis_info.name.decode(),
+                    'type': token_type,
                     'ticker': genesis_info.ticker.decode(),
+                    'nft_token_group': parent_group,
                     'decimals': genesis_info.decimals or 0
                 }
 

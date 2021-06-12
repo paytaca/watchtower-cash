@@ -614,47 +614,24 @@ def get_slp_utxos(self, address):
 
 @shared_task(bind=True, queue='token_metadata', max_retries=10)
 def get_token_meta_data(self, token_id):
-    tokenBytes = bytes.fromhex(token_id) #Tokenid
-    tokenHash = base64.b64encode(tokenBytes[::-1]).decode()
-
-    response = requests.post("https://bchd.fountainhead.cash/v1/GetTransaction", json={ 
-        "hash": tokenHash, 
-        "include_token_metadata": True 
-    })
-    if response.status_code == 200:
-        data = response.json()
-        metadata = data.get('token_metadata', None)
-        if metadata:
-            tokenType = metadata['token_type']
-            group = None
-            if tokenType == 1:
-                # type 1
-                token_ticker = metadata['type1'].get('token_ticker','')
-                decimals = metadata['type1'].get('decimals', 0)
-                
-            elif tokenType == 129:
-                # nft parent
-                token_ticker = metadata['nft1_group'].get('token_ticker','')
-                decimals = metadata['type1'].get('decimals', 0)
-                
-            elif tokenType == 65:
-                # nft child
-                token_ticker = metadata['nft1_child'].get('token_ticker', '')
-                decimals = metadata['type1'].get('decimals', 0)
-                group_id = metadata['nft1_child']['group_id']
-                qs_token = Token.objects.filter(tokenid=group_id)
-                if qs_token.exists(): group = qs_token.first()
-
-            token_ticker = base64.b64decode(token_ticker).decode()
-            Token.objects.filter(tokenid=token_id).update(
-                token_ticker=token_ticker,
-                token_type=tokenType,
-                nft_token_group=group,
-                decimals=decimals
-            )
-    elif response.status_code == 500 or response.status_code == 404:
-        pass    
-    else:
+    try:
+        bchd = BCHDQuery()
+        txn = bchd.get_transaction(token_id, parse_slp=True)
+        info = txn['token_info']
+        group_check = Token.objects.filter(tokenid=info['nft_token_group'])
+        if group_check.exists():
+            group = group_check.first()
+        else:
+            group = Token(tokenid=info['nft_token_group'])
+            group.save()
+        Token.objects.filter(tokenid=token_id).update(
+            name=info['name'],
+            token_ticker=info['ticker'],
+            token_type=info['type'],
+            nft_token_group=group,
+            decimals=info['decimals']
+        )
+    except Exception:
         self.retry(countdown=5)
 
 
