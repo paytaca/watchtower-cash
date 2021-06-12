@@ -60,7 +60,22 @@ class BCHDQuery(object):
             is_valid = bool(txn.slp_transaction_info.validity_judgement)
             transaction['valid'] = is_valid
             transaction['token_id'] = txn.slp_transaction_info.token_id.hex()
-            transaction['slp_action'] = self._slp_action[txn.slp_transaction_info.slp_action]
+            slp_action = txn.slp_transaction_info.slp_action
+            transaction['slp_action'] = self._slp_action[slp_action]
+
+            # If genesis tx, give more token metadata
+            genesis_map = {
+                4: 'v1_genesis',
+                7: 'v1_genesis',
+                10: 'nft1_child_genesis'
+            }
+            if slp_action in genesis_map.keys():
+                genesis_info = eval('txn.slp_transaction_info.' + genesis_map[slp_action])
+                transaction['token_info'] = {
+                    'name': genesis_info.name.decode(),
+                    'ticker': genesis_info.ticker.decode(),
+                    'decimals': genesis_info.decimals or 0
+                }
 
             if is_valid:
                 transaction['token_id'] = txn.slp_transaction_info.token_id.hex()
