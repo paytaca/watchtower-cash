@@ -77,12 +77,11 @@ def new_subscription(**kwargs):
                 bch=bch
             )
             if bch:
-                address = bch.address.split('bitcoincash:')[-1]
                 get_bch_utxos.delay(address)
             
             if slp:
-                address = slp.address
                 get_slp_utxos.delay(address)
+
             if created:
                 response_template['success'] = True
             else:
