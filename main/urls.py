@@ -25,7 +25,7 @@ main_urls += [
     re_path(r"^utxo/bch/(?P<bchaddress>[\w+:]+)/$", views.UTXO.as_view(),name='bch-utxo'),
     re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/$", views.UTXO.as_view(),name='slp-utxo'),
     re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)", views.UTXO.as_view(),name='slp-token-utxo'),
-    path('broadcast', views.BroadcastViewSet.as_view(), name="broadcast-transaction")
+    path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction")
 ]
 
 test_urls = [

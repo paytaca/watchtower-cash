@@ -482,25 +482,25 @@ def get_bch_utxos(self, address):
         obj = BCHDQuery()
         outputs = obj.get_utxos(address)
         source = 'bchd-query'
+        saved_utxo_ids = []
         for output in outputs:
             hash = output.outpoint.hash 
             index = output.outpoint.index
             block = output.block_height
             tx_hash = bytearray(hash[::-1]).hex()
-            bchaddress = 'bitcoincash:' + address
             amount = output.value / (10 ** 8)
             
             block, created = BlockHeight.objects.get_or_create(number=block)
             transaction_obj = Transaction.objects.filter(
                 txid=tx_hash,
-                address=bchaddress,
+                address=address,
                 amount=amount,
                 index=index
             )
             if not transaction_obj.exists():
                 args = (
                     'bch',
-                    bchaddress,
+                    address,
                     tx_hash,
                     amount,
                     source,
@@ -508,12 +508,31 @@ def get_bch_utxos(self, address):
                     index,
                     True
                 )
-                _, created = save_record(*args)       
+                txn_id, created = save_record(*args)
+                transaction_obj = Transaction.objects.filter(id=txn_id)
+
                 if created:
                     if not block.requires_full_scan:
                         qs = BlockHeight.objects.filter(id=block.id)
                         count = qs.first().transactions.count()
                         qs.update(processed=True, transactions_count=count)
+            
+            if transaction_obj.exists():
+                # Mark as unspent, just in case it's already marked spent
+                transaction_obj.update(spent=False)
+                for obj in transaction_obj:
+                    saved_utxo_ids.append(obj.id)
+
+        # Mark other transactions of the same address as spent
+        txn_check = Transaction.objects.filter(
+            address=address,
+            spent=False
+        ).exclude(
+            id__in=saved_utxo_ids
+        ).update(
+            spent=True
+        )
+
     except Exception as exc:
         try:
             LOGGER.error(exc)
@@ -521,12 +540,14 @@ def get_bch_utxos(self, address):
         except MaxRetriesExceededError:
             LOGGER.error(f"CAN'T EXTRACT UTXOs OF {address} THIS TIME. THIS NEEDS PROPER FALLBACK.")
 
+
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_slp_utxos(self, address):
     try:
         obj = BCHDQuery()
         outputs = obj.get_utxos(address)
         source = 'bchd-query'
+        saved_utxo_ids = []
         for output in outputs:
             if output.slp_token.token_id:
                 hash = output.outpoint.hash 
@@ -534,7 +555,6 @@ def get_slp_utxos(self, address):
                 index = output.outpoint.index
                 token_id = bytearray(output.slp_token.token_id).hex() 
                 amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
-                slp_address = 'simpleledger:' + output.slp_token.address
                 block = output.block_height
                 
                 block, _ = BlockHeight.objects.get_or_create(number=block)
@@ -543,7 +563,7 @@ def get_slp_utxos(self, address):
 
                 transaction_obj = Transaction.objects.filter(
                     txid=tx_hash,
-                    address=slp_address,
+                    address=address,
                     token=token_obj,
                     amount=amount,
                     index=index
@@ -551,7 +571,7 @@ def get_slp_utxos(self, address):
                 if not transaction_obj.exists():
                     args = (
                         token_id,
-                        slp_address,
+                        address,
                         tx_hash,
                         amount,
                         source,
@@ -559,19 +579,38 @@ def get_slp_utxos(self, address):
                         index,
                         True
                     )
-                    _, created = save_record(*args)
+                    txn_id, created = save_record(*args)
+                    transaction_obj = Transaction.objects.filter(id=txn_id)
+                    
                     if created:
                         if not block.requires_full_scan:
                             qs = BlockHeight.objects.filter(id=block.id)
                             count = qs.first().transactions.count()
                             qs.update(processed=True, transactions_count=count)
+                
+                if transaction_obj.exists():
+                    # Mark as unspent, just in case it's already marked spent
+                    transaction_obj.update(spent=False)
+                    for obj in transaction_obj:
+                        saved_utxo_ids.append(obj.id)
         
+        # Mark other transactions of the same address as spent
+        txn_check = Transaction.objects.filter(
+            address=address,
+            spent=False
+        ).exclude(
+            id__in=saved_utxo_ids
+        ).update(
+            spent=True
+        )
+
     except Exception as exc:
         try:
             LOGGER.error(exc)
             self.retry(countdown=4)
         except MaxRetriesExceededError:
             LOGGER.error(f"CAN'T EXTRACT UTXOs OF {address} THIS TIME. THIS NEEDS PROPER FALLBACK.")
+
 
 @shared_task(bind=True, queue='token_metadata', max_retries=10)
 def get_token_meta_data(self, token_id):
