@@ -50,7 +50,48 @@ class BCHDQuery(object):
 
             return latest_block, resp.block.transaction_data
 
-    def get_transaction(self, transaction_hash):
+    def _parse_transaction(self, txn, parse_slp=False):
+        tx_hash = bytearray(txn.hash[::-1]).hex()
+        transaction = {
+            'txid': tx_hash,
+            'valid': True
+        }
+        if parse_slp:
+            is_valid = bool(txn.slp_transaction_info.validity_judgement)
+            transaction['valid'] = is_valid
+            transaction['token_id'] = txn.slp_transaction_info.token_id.hex()
+            transaction['slp_action'] = self._slp_action[txn.slp_transaction_info.slp_action]
+
+            if is_valid:
+                transaction['token_id'] = txn.slp_transaction_info.token_id.hex()
+                transaction['inputs'] = []
+                for tx_input in txn.inputs:
+                    if tx_input.slp_token.token_id:
+                        input_txid = tx_input.outpoint.hash[::-1].hex()
+                        decimals = tx_input.slp_token.decimals or 0
+                        amount = tx_input.slp_token.amount / (10 ** decimals)
+                        data = {
+                            'txid': input_txid,
+                            'spent_index': tx_input.outpoint.index,
+                            'amount': amount,
+                        }
+                        transaction['inputs'].append(data)
+                transaction['outputs'] = []
+                output_index = 0
+                for tx_output in txn.outputs:
+                    if tx_output.slp_token.token_id:
+                        decimals = tx_output.slp_token.decimals or 0
+                        amount = tx_output.slp_token.amount / (10 ** decimals)
+                        data = {
+                            'address': 'simpleledger:' + tx_output.slp_token.address,
+                            'amount': amount,
+                            'index': output_index
+                        }
+                        transaction['outputs'].append(data)
+                    output_index += 1
+        return transaction
+
+    def get_transaction(self, transaction_hash, parse_slp=False):
         creds = grpc.ssl_channel_credentials()
 
         with grpc.secure_channel(self.base_url, creds) as channel:
@@ -63,16 +104,7 @@ class BCHDQuery(object):
 
             resp = stub.GetTransaction(req)
             txn = resp.transaction
-            return txn
-            # data = {}
-
-            # if txn.slp_transaction_info.slp_action > 0:
-            #     data['slp_metadata'] = {
-            #         'token_id': txn.slp_transaction_info.token_id.hex(),
-            #         'slp_action': self._slp_action[txn.slp_transaction_info.slp_action],
-            #         'valid': bool(txn.slp_transaction_info.validity_judgement)
-            #     }
-            # return data
+            return self._parse_transaction(txn, parse_slp=parse_slp)
 
     def get_utxos(self, address):
         creds = grpc.ssl_channel_credentials()

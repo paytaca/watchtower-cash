@@ -24,12 +24,10 @@ from main.utils.queries.bchd import BCHDQuery
 import base64
 
 
-
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
 app = Celery('configs')
-
 
 
 # NOTIFICATIONS
@@ -136,10 +134,6 @@ def client_acknowledgement(self, txid):
                                 "data": data
                             }
                         )
-                        
-                    
-
-                    
     return third_parties
 
 
@@ -157,13 +151,10 @@ def save_record(token, transaction_address, transactionid, amount, source, block
     subscription = check_wallet_address_subscription(transaction_address)
     if not subscription.exists(): return None, None
 
-    
-    
     try:
         index = int(index)
     except TypeError as exc:
         index = 0
-    
 
     with trans.atomic():
         
@@ -198,7 +189,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             Transaction.objects.bulk_create(transaction_list)
             transaction_created = True
 
-        
         transaction_obj = Transaction.objects.get(
             txid=transactionid,
             address=transaction_address,
@@ -206,7 +196,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             amount=amount,
             index=index
         )
-
 
         if blockheightid is not None:
             transaction_obj.blockheight_id = blockheightid
@@ -225,7 +214,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         
         address_obj.transactions.add(transaction_obj)
         address_obj.save()
-
         
         return transaction_obj.id, transaction_created
 

@@ -6,6 +6,7 @@ from rest_framework.authtoken.models import Token
 from django.utils import timezone
 from main.utils import block_setter
 from main.utils.queries.bchd import BCHDQuery
+from main.utils.converter import convert_bch_to_slp_address
 from main.models import BlockHeight, Transaction
 
 
@@ -40,10 +41,29 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
     if instance.address.startswith('bitcoincash:'):
-        bchd = BCHDQuery()
-        result = bchd.get_transaction(instance.txid)
-        if 'slp_metadata' in result.keys():
-            if result['slp_metadata']['valid']:
-                # Check if txid + slp address already exists in DB
-                # If not, create a record for this
-                pass
+        # Make sure that any SLP transaction related to this tx is saved
+        slp_address = convert_bch_to_slp_address(instance.address)
+        slp_txn_check = Transaction.objects.filter(
+            txid=instance.txid,
+            address=slp_address
+        )
+        if not slp_txn_check.exists():
+            bchd = BCHDQuery()
+            slp_tx = bchd.get_transaction(instance.txid, parse_slp=True)
+            if slp_tx['valid']:
+                output = None
+                for tx_output in slp_tx['outputs']:
+                    if tx_output['address'] == slp_address:
+                        output = tx_output
+                if instance.blockheight:
+                    blockheight_id = instance.blockheight.id
+                args = (
+                    slp_tx['token_id'],
+                    slp_address,
+                    slp_tx['txid'],
+                    output['amount'],
+                    'bchd-query',
+                    blockheight_id,
+                    slp_tx['index']
+                )
+                save_record(*args)

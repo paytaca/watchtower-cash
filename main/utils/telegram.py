@@ -104,7 +104,4 @@ class TelegramBotHandler(object):
                     if default_response:
                         #Default Message
                         self.message = get_message('default')
-                        
-                
-
                     send_telegram_message(self.message, chat_id)
