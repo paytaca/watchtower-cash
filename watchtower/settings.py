@@ -56,6 +56,7 @@ INSTALLED_APPS=[
     'rest_framework.authtoken',
     'corsheaders',
     'django.contrib.admin',
+    'dynamic_raw_id',
     'drf_yasg',
     'channels',
     'main',

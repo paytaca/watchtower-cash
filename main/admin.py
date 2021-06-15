@@ -10,6 +10,7 @@ from main.models import (
 )
 from django.contrib.auth.models import User, Group
 from main.tasks import client_acknowledgement, send_telegram_message
+from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
 from django.conf import settings
 import json
@@ -46,7 +47,7 @@ class BlockHeightAdmin(admin.ModelAdmin):
     ]
 
     
-    def process(modeladmin, request, queryset):
+    def process(self, request, queryset):
         for trans in queryset:
             pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
             pending_blocks.append(trans.number)
@@ -62,8 +63,14 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
 
 
-class TransactionAdmin(admin.ModelAdmin):
+class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = ['token__name', 'source', 'txid']
+    
+    dynamic_raw_id_fields = [
+        'blockheight',
+        'token',
+        'spend_block_height'
+    ]
 
     actions = ['resend_unacknowledged_transactions']
 
@@ -83,6 +90,7 @@ class TransactionAdmin(admin.ModelAdmin):
     ]
 
 
+
     def get_actions(self, request):
         actions = super().get_actions(request)
         if 'delete_selected' in actions:
@@ -90,7 +98,7 @@ class TransactionAdmin(admin.ModelAdmin):
         return actions
         
 
-    def resend_unacknowledged_transactions(modeladmin, request, queryset):
+    def resend_unacknowledged_transactions(self, request, queryset):
         for tr in queryset:
             third_parties = client_acknowledgement(tr.id)
             for platform in third_parties:
@@ -100,18 +108,18 @@ class TransactionAdmin(admin.ModelAdmin):
                     send_telegram_message(message, chat_id)
             
 
-    def get_queryset(self, request): 
-        # For Django < 1.6, override queryset instead of get_queryset
-        qs = super(TransactionAdmin, self).get_queryset(request) 
-        if request.user.is_superuser:
-            return qs
-        subscriber = Subscriber.objects.filter(user=request.user)
-        if subscriber.exists():
-            obj = subscriber.first()
-            token_ids = obj.token.values_list('id',flat=True).distinct()
-            return Transaction.objects.filter(token__id__in=token_ids)
-        else:
-            return qs.filter(id=0)
+    # def get_queryset(self, request): 
+    #     # For Django < 1.6, override queryset instead of get_queryset
+    #     qs = super(TransactionAdmin, self).get_queryset(request) 
+    #     if request.user.is_superuser:
+    #         return qs
+    #     subscriber = Subscription.objects.filter(recipient=request.user)
+    #     if subscriber.exists():
+    #         obj = subscriber.first()
+    #         token_ids = obj.token.values_list('id',flat=True).distinct()
+    #         return Transaction.objects.filter(token__id__in=token_ids)
+    #     else:
+    #         return qs.filter(id=0)
 
 class SlpAddressAdmin(admin.ModelAdmin):
     list_display = [

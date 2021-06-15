@@ -21,6 +21,7 @@ django-jinja==2.6.0
 django-rest-hooks==1.5.0
 djangorestframework==3.11.0
 djangorestframework-simplejwt==4.4.0
+django-dynamic-raw-id==2.8
 drf-yasg==1.17.1
 filelock==3.0.12
 gevent==20.6.2

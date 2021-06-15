@@ -84,6 +84,7 @@ def run():
                         output.index
                     )
                     obj_id, created = save_record(*args)
+
                     if created:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -96,7 +97,7 @@ def run():
 
 
 class Command(BaseCommand):
-    help = "Run the tracker of bchd.ny1.simpleledger.io"
+    help = "Run the mempool tracker using BCHD GRPC stream"
 
     def handle(self, *args, **options):
         run()
