@@ -21,7 +21,11 @@ import base64
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def decipher(value):
-    return base64.b64decode(value.encode()).decode()
+    try:
+        return base64.b64decode(value.encode()).decode()
+    except Exception as exc:
+        if str(exc) == 'Incorrect padding':
+            return value
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/

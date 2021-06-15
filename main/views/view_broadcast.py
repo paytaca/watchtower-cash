@@ -15,8 +15,10 @@ class BroadcastViewSet(generics.GenericAPIView):
         if serializer.is_valid():
             job = broadcast_transaction.delay(serializer.data['transaction'])
             success, result = job.get()
+            if 'already have transaction' in result:
+                success = True
             if success:
-                response['txid'] = result
+                response['txid'] = result.split(' ')[-1]
                 response['success'] = True
                 return Response(response, status=status.HTTP_200_OK)
             else:

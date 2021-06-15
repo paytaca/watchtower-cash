@@ -75,33 +75,38 @@ class TelegramBotHandler(object):
             #process message
             if 'message' in self.data.keys():
             
-                #get user data
-                chat_id=self.data['message']['chat']['id']
-                update_id=self.data['update_id']
-                username=self.data['message']['from']['username'] or self.data['message']['from']['first_name'] 
-                self.text = self.data['message']['text']
+                try:
+                    #get user data
+                    chat_id=self.data['message']['chat']['id']
+                    update_id=self.data['update_id']
+                    username=self.data['message']['from']['username'] or self.data['message']['from']['first_name'] 
+                    self.text = self.data['message']['text']
 
-                #check if private message
-                if self.data['message']['chat']['type'] == 'private':
-                    
-                    default_response = True
-                    self.text = self.text.replace('/', '')
-                    #help message
-
-                    if self.text.lower() == 'help':
-                        self.message = get_message('help')
-                        default_response = False
-                    
-                    #check subscription message
-                    proceed = False
-                    if re.findall(self.subscribe_regex, self.text.lower()):                            
-                        default_response = self.scan_request('subscribe', chat_id)
-                    
-                    #check unsubscription message
-                    elif re.findall(self.unsubscribe_regex, self.text.lower()):
-                        default_response = self.scan_request('unsubscribe', chat_id)
+                    #check if private message
+                    if self.data['message']['chat']['type'] == 'private':
                         
-                    if default_response:
-                        #Default Message
-                        self.message = get_message('default')
-                    send_telegram_message(self.message, chat_id)
+                        default_response = True
+                        self.text = self.text.replace('/', '')
+                        #help message
+
+                        if self.text.lower() == 'help':
+                            self.message = get_message('help')
+                            default_response = False
+                        
+                        #check subscription message
+                        proceed = False
+                        if re.findall(self.subscribe_regex, self.text.lower()):                            
+                            default_response = self.scan_request('subscribe', chat_id)
+                        
+                        #check unsubscription message
+                        elif re.findall(self.unsubscribe_regex, self.text.lower()):
+                            default_response = self.scan_request('unsubscribe', chat_id)
+                            
+                        if default_response:
+                            #Default Message
+                            self.message = get_message('default')
+                        send_telegram_message(self.message, chat_id)
+
+                except Exception as exc:
+                    # TODO: Needs better exception handling
+                    logger.info(str(exc))
