@@ -110,6 +110,28 @@ class BCHDQuery(object):
                         }
                         transaction['outputs'].append(data)
                     output_index += 1
+        else:
+            transaction['inputs'] = []
+            for tx_input in txn.inputs:
+                input_txid = tx_input.outpoint.hash[::-1].hex()
+                data = {
+                    'txid': input_txid,
+                    'spent_index': tx_input.outpoint.index,
+                    'value': tx_input.value,
+                }
+                transaction['inputs'].append(data)
+            transaction['outputs'] = []
+            output_index = 0
+            for tx_output in txn.outputs:
+                if tx_output.address and tx_output.value:
+                    data = {
+                        'address': 'bitcoincash:' + tx_output.address,
+                        'value': tx_output.value,
+                        'index': output_index
+                    }
+                    transaction['outputs'].append(data)
+                output_index += 1
+
         return transaction
 
     def get_transaction(self, transaction_hash, parse_slp=False):

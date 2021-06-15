@@ -1,12 +1,19 @@
 from django.conf import settings
 from django.db.models.signals import post_save
-from main.tasks import save_record, slpdbquery_transaction, bitdbquery_transaction
+from main.tasks import (
+    save_record,
+    slpdbquery_transaction,
+    bitdbquery_transaction
+)
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
 from main.utils import block_setter
 from main.utils.queries.bchd import BCHDQuery
-from main.utils.converter import convert_bch_to_slp_address
+from main.utils.converter import (
+    convert_bch_to_slp_address,
+    convert_slp_to_bch_address
+)
 from main.models import BlockHeight, Transaction
 
 
@@ -51,22 +58,24 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
             bchd = BCHDQuery()
             slp_tx = bchd.get_transaction(instance.txid, parse_slp=True)
             if slp_tx['valid']:
-                output = None
+                matched_output = None
                 for tx_output in slp_tx['outputs']:
                     if tx_output['address'] == slp_address:
-                        output = tx_output
-                if instance.blockheight:
-                    blockheight_id = instance.blockheight.id
-                args = (
-                    slp_tx['token_id'],
-                    slp_address,
-                    slp_tx['txid'],
-                    output['amount'],
-                    'bchd-query',
-                    blockheight_id,
-                    slp_tx['index']
-                )
-                save_record(*args)
+                        matched_output = tx_output
+                
+                if matched_output:
+                    if instance.blockheight:
+                        blockheight_id = instance.blockheight.id
+                    args = (
+                        slp_tx['token_id'],
+                        slp_address,
+                        slp_tx['txid'],
+                        matched_output['amount'],
+                        'bchd-query',
+                        blockheight_id,
+                        matched_output['index']
+                    )
+                    save_record(*args)
 
                 # Mark inputs as spent
                 for tx_input in slp_tx['inputs']:
@@ -75,3 +84,41 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                         index=tx_input['spent_index']
                     )
                     txn_check.update(spent=True)
+
+    elif instance.address.startswith('simpleledger:'):
+        # Make sure that any corresponding BCH transaction is saved
+        bch_address = convert_slp_to_bch_address(instance.address)
+        bch_txn_check = Transaction.objects.filter(
+            txid=instance.txid,
+            address=bch_address
+        )
+        if not bch_txn_check.exists():
+            bchd = BCHDQuery()
+            txn = bchd.get_transaction(instance.txid)
+            matched_output = None
+            for tx_output in txn['outputs']:
+                if tx_output['address'] == slp_address:
+                    matched_output = tx_output
+            
+            if matched_output:
+                if instance.blockheight:
+                    blockheight_id = instance.blockheight.id
+                value = matched_output['value'] / 10 ** 8
+                args = (
+                    'bch',
+                    bch_address,
+                    txn['txid'],
+                    value,
+                    'bchd-query',
+                    blockheight_id,
+                    matched_output['index']
+                )
+                save_record(*args)
+
+            # Mark inputs as spent
+            for tx_input in txn['inputs']:
+                txn_check = Transaction.objects.filter(
+                    txid=tx_input['txid'],
+                    index=tx_input['spent_index']
+                )
+                txn_check.update(spent=True)
