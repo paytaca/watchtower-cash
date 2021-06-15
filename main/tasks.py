@@ -641,7 +641,10 @@ def broadcast_transaction(self, transaction):
         obj = BCHDQuery()
         try:
             txid = obj.broadcast_transaction(transaction)
-            return True, txid
+            if txid:
+                return True, txid
+            else:
+                self.retry(countdown=1)
         except Exception as exc:
             error = exc.details()
             return False, error
