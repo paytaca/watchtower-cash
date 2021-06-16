@@ -166,6 +166,7 @@ class Subscription(models.Model):
         Address,
         on_delete=models.CASCADE,
         related_name='subscriptions',
+        db_index=True
     )
     recipient = models.ForeignKey(
         Recipient,

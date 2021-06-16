@@ -1,5 +1,4 @@
 import logging
-from main.models import Subscription
 
 logger = logging.getLogger(__name__)
 

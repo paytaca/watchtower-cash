@@ -1,6 +1,6 @@
 from .subscription import save_subscription, remove_subscription
 from main.tasks import send_telegram_message
-from main.models import Token, Subscription
+from main.models import Token
 from main.utils.telegram_responses import get_message
 import logging
 import re

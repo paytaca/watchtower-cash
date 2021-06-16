@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand
-from main.utils import check_wallet_address_subscription
 from django.db import transaction
-from main.models import Token, Transaction
+from main.models import Token, Transaction, Subscription
 from main.tasks import save_record, client_acknowledgement, input_scanner, send_telegram_message
 from django.conf import settings
 import logging
@@ -57,7 +56,10 @@ def run():
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
 
-                                subscription = check_wallet_address_subscription(slp_address)
+                                subscription = Subscription.objects.filter(
+                                    address__address=slp_address
+                                )
+
                                 # Disregard bch address that are not subscribed.
                                 if subscription.exists():
                                     amount = float(output['amount'])

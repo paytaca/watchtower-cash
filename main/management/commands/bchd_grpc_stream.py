@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
-from main.utils import check_wallet_address_subscription
 from main.models import Token, Transaction
 import grpc
 import time
