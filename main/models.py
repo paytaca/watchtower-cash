@@ -68,7 +68,8 @@ class Transaction(models.Model):
         BlockHeight,
         on_delete=models.CASCADE,
         related_name='transactions',
-        null=True
+        null=True,
+        blank=True
     )
     source = models.CharField(max_length=200, null=True, db_index=True)
     created_datetime = models.DateTimeField(default=timezone.now)
@@ -138,18 +139,21 @@ class Subscription(models.Model):
         Recipient,
         on_delete=models.CASCADE,
         null=True,
+        blank=True,
         related_name='subscriptions'
     )
     slp = models.ForeignKey(
         SlpAddress,
         on_delete=models.DO_NOTHING,
         related_name='subscriptions',
-        null=True
+        null=True,
+        blank=True
     )
     bch = models.ForeignKey(
         BchAddress,
         on_delete=models.DO_NOTHING,
         related_name='subscriptions',
-        null=True
+        null=True,
+        blank=True
     )
     websocket=models.BooleanField(default=False)

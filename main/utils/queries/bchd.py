@@ -82,10 +82,10 @@ class BCHDQuery(object):
                     'nft_token_group': parent_group,
                     'decimals': genesis_info.decimals or 0
                 }
-
+            
+            transaction['inputs'] = []
             if is_valid:
                 transaction['token_id'] = txn.slp_transaction_info.token_id.hex()
-                transaction['inputs'] = []
                 for tx_input in txn.inputs:
                     if tx_input.slp_token.token_id:
                         input_txid = tx_input.outpoint.hash[::-1].hex()
@@ -110,6 +110,16 @@ class BCHDQuery(object):
                         }
                         transaction['outputs'].append(data)
                     output_index += 1
+            else:
+                # If invalid, parse the inputs for marking of spent UTXOs
+                for tx_input in txn.inputs:
+                    input_txid = tx_input.outpoint.hash[::-1].hex()
+                    data = {
+                        'txid': input_txid,
+                        'spent_index': tx_input.outpoint.index,
+                        'value': tx_input.value,
+                    }
+                    transaction['inputs'].append(data)
         else:
             transaction['inputs'] = []
             for tx_input in txn.inputs:

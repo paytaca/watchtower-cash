@@ -54,9 +54,18 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
             txid=instance.txid,
             address=slp_address
         )
+        bchd = BCHDQuery()
+        slp_tx = bchd.get_transaction(instance.txid, parse_slp=True)
+
+        # Mark inputs as spent
+        for tx_input in slp_tx['inputs']:
+            txn_check = Transaction.objects.filter(
+                txid=tx_input['txid'],
+                index=tx_input['spent_index']
+            )
+            txn_check.update(spent=True)
+
         if not slp_txn_check.exists():
-            bchd = BCHDQuery()
-            slp_tx = bchd.get_transaction(instance.txid, parse_slp=True)
             if slp_tx['valid']:
                 matched_output = None
                 for tx_output in slp_tx['outputs']:
@@ -77,27 +86,28 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                     )
                     save_record(*args)
 
-                # Mark inputs as spent
-                for tx_input in slp_tx['inputs']:
-                    txn_check = Transaction.objects.filter(
-                        txid=tx_input['txid'],
-                        index=tx_input['spent_index']
-                    )
-                    txn_check.update(spent=True)
-
     elif instance.address.startswith('simpleledger:'):
         # Make sure that any corresponding BCH transaction is saved
         bch_address = convert_slp_to_bch_address(instance.address)
         bch_txn_check = Transaction.objects.filter(
-            txid=instance.txid,
-            address=bch_address
+            txid=instance.txid
         )
+
+        bchd = BCHDQuery()
+        txn = bchd.get_transaction(instance.txid)
+        
+        # Mark inputs as spent
+        for tx_input in txn['inputs']:
+            txn_check = Transaction.objects.filter(
+                txid=tx_input['txid'],
+                index=tx_input['spent_index']
+            )
+            txn_check.update(spent=True)
+
         if not bch_txn_check.exists():
-            bchd = BCHDQuery()
-            txn = bchd.get_transaction(instance.txid)
             matched_output = None
             for tx_output in txn['outputs']:
-                if tx_output['address'] == slp_address:
+                if tx_output['address'] == bch_address:
                     matched_output = tx_output
             
             if matched_output:
@@ -114,11 +124,3 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                     matched_output['index']
                 )
                 save_record(*args)
-
-            # Mark inputs as spent
-            for tx_input in txn['inputs']:
-                txn_check = Transaction.objects.filter(
-                    txid=tx_input['txid'],
-                    index=tx_input['spent_index']
-                )
-                txn_check.update(spent=True)
