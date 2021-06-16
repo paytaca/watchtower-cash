@@ -46,7 +46,6 @@ class BlockHeight(models.Model):
     unparsed = JSONField(default=list, blank=True)
     requires_full_scan = models.BooleanField(default=True)
 
-
     def save(self, *args, **kwargs):
         if not self.id:
             self.created_datetime = timezone.now()
@@ -58,6 +57,7 @@ class BlockHeight(models.Model):
     
     def __str__(self):
         return str(self.number)
+
 
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
@@ -103,8 +103,9 @@ class Recipient(models.Model):
         else:
             return 'N/A'
 
+
 class SlpAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True, db_index=True)
+    address = models.CharField(max_length=70, unique=True, db_index=True)
     transactions = models.ManyToManyField(
         Transaction,
         related_name='slpaddress',
@@ -118,15 +119,15 @@ class SlpAddress(models.Model):
     def __str__(self):
         return self.address
 
+
 class BchAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True, db_index=True)
+    address = models.CharField(max_length=70, unique=True, db_index=True)
     transactions = models.ManyToManyField(
         Transaction,
         related_name='bchaddress',
         blank=True
     )
-    scanned = models.BooleanField(default=False)
-    
+
     class Meta:
         verbose_name = 'BCH Address'
         verbose_name_plural = 'BCH Addresses'
@@ -134,7 +135,38 @@ class BchAddress(models.Model):
     def __str__(self):
         return self.address
 
+
+class Wallet(models.Model):
+    wallet_hash = models.CharField(
+        max_length=200,
+        db_index=True
+    )
+    derivation_path = models.CharField(
+        max_length=100
+    )
+
+
+class Address(models.Model):
+    address = models.CharField(max_length=70, unique=True, db_index=True) 
+    wallet = models.ForeignKey(
+        Wallet,
+        related_name='addresses',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    wallet_index = models.IntegerField(
+        null=True,
+        blank=True
+    )
+
+
 class Subscription(models.Model):
+    address = models.ForeignKey(
+        Address,
+        on_delete=models.CASCADE,
+        related_name='subscriptions',
+    )
     recipient = models.ForeignKey(
         Recipient,
         on_delete=models.CASCADE,
