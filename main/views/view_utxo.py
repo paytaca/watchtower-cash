@@ -2,7 +2,13 @@ from rest_framework.views import APIView
 from main.models import Transaction
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Q, F
+from django.db.models import Q, F, Func
+
+
+class Round(Func):
+    function = "ROUND"
+    template = "%(function)s(%(expressions)s::numeric, 0)"
+
 
 class UTXO(APIView):
 
@@ -23,7 +29,7 @@ class UTXO(APIView):
             query = Q(address=data['address']) & Q(spent=False) & Q(amount__gt=dust)
             qs = Transaction.objects.filter(query)
             utxos_values = qs.annotate(
-                value=F('amount') * (10 ** 8),
+                value=Round(F('amount') * (10 ** 8)),
                 vout=F('index'),
                 block=F('blockheight__number'),
             ).values(

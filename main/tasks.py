@@ -30,6 +30,11 @@ REDIS_STORAGE = settings.REDISKV
 app = Celery('configs')
 
 
+@shared_task()
+def add(x, y):
+    return x + y
+
+
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
 def send_telegram_message(message, chat_id):
