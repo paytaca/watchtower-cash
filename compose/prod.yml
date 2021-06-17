@@ -8,3 +8,10 @@ services:
     env_file: /root/watchtower/compose/.env_prod
     ports:
       - 8000:8000
+  rabbitmq:
+    container_name: rabbitmq
+    hostname: rabbitmq
+    image: rabbitmq:latest
+    ports:
+      - "5672:5672"
+    restart: on-failure
