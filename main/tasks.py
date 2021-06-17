@@ -206,6 +206,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
             # Automatically update all transactions with block height.
             Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
+        else:
+            # Trigger post save signals
+            transaction_obj.save()
         
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)

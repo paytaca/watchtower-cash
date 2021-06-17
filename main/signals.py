@@ -14,7 +14,10 @@ from main.utils.converter import (
     convert_bch_to_slp_address,
     convert_slp_to_bch_address
 )
-from main.models import BlockHeight, Transaction
+from main.models import (
+    BlockHeight,
+    Transaction
+)
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -48,12 +51,7 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
     if instance.address.startswith('bitcoincash:'):
-        # Make sure that any SLP transaction related to this tx is saved
-        slp_address = convert_bch_to_slp_address(instance.address)
-        slp_txn_check = Transaction.objects.filter(
-            txid=instance.txid,
-            address=slp_address
-        )
+        # Make sure that any corresponding SLP transaction is saved
         bchd = BCHDQuery()
         slp_tx = bchd.get_transaction(instance.txid, parse_slp=True)
 
@@ -65,34 +63,30 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
             )
             txn_check.update(spent=True)
 
-        if not slp_txn_check.exists():
-            if slp_tx['valid']:
-                matched_output = None
-                for tx_output in slp_tx['outputs']:
-                    if tx_output['address'] == slp_address:
-                        matched_output = tx_output
-                
-                if matched_output:
+        if slp_tx['valid']:
+            for tx_output in slp_tx['outputs']:
+                txn_check = Transaction.objects.filter(
+                    txid=slp_tx['txid'],
+                    address=tx_output['address'],
+                    index=tx_output['index']
+                )
+                if not txn_check.exists():
+                    blockheight_id = None
                     if instance.blockheight:
                         blockheight_id = instance.blockheight.id
                     args = (
                         slp_tx['token_id'],
-                        slp_address,
+                        tx_output['address'],
                         slp_tx['txid'],
-                        matched_output['amount'],
+                        tx_output['amount'],
                         'bchd-query',
                         blockheight_id,
-                        matched_output['index']
+                        tx_output['index']
                     )
                     save_record(*args)
 
     elif instance.address.startswith('simpleledger:'):
         # Make sure that any corresponding BCH transaction is saved
-        bch_address = convert_slp_to_bch_address(instance.address)
-        bch_txn_check = Transaction.objects.filter(
-            txid=instance.txid
-        )
-
         bchd = BCHDQuery()
         txn = bchd.get_transaction(instance.txid)
         
@@ -104,23 +98,24 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
             )
             txn_check.update(spent=True)
 
-        if not bch_txn_check.exists():
-            matched_output = None
-            for tx_output in txn['outputs']:
-                if tx_output['address'] == bch_address:
-                    matched_output = tx_output
-            
-            if matched_output:
+        for tx_output in txn['outputs']:
+            txn_check = Transaction.objects.filter(
+                txid=txn['txid'],
+                address=tx_output['address'],
+                index=tx_output['index']
+            )
+            if not txn_check.exists():
+                blockheight_id = None
                 if instance.blockheight:
                     blockheight_id = instance.blockheight.id
-                value = matched_output['value'] / 10 ** 8
+                value = tx_output['value'] / 10 ** 8
                 args = (
                     'bch',
-                    bch_address,
+                    tx_output['address'],
                     txn['txid'],
                     value,
                     'bchd-query',
                     blockheight_id,
-                    matched_output['index']
+                    tx_output['index']
                 )
                 save_record(*args)
