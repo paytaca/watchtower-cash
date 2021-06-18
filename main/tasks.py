@@ -288,8 +288,7 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id, ale
         index= _in['e']['i']
         input_scanner(txid, index, block_id=block_id)
 
-    
-    
+
 @shared_task(bind=True, queue='bitdbquery', max_retries=30)
 def bitdbquery(self, block_id):
     try:
@@ -355,6 +354,7 @@ def bitdbquery(self, block_id):
             pending_blocks.append(block.number)
             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
             REDIS_STORAGE.set('READY', 1)
+
 
 @shared_task(bind=True, queue='slpdbquery_transactions')
 def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
@@ -473,6 +473,7 @@ def manage_block_transactions(self):
     
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
+
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):

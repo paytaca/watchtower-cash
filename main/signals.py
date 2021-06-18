@@ -3,7 +3,9 @@ from django.db.models.signals import post_save
 from main.tasks import (
     save_record,
     slpdbquery_transaction,
-    bitdbquery_transaction
+    bitdbquery_transaction,
+    client_acknowledgement,
+    send_telegram_message
 )
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
@@ -83,7 +85,14 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                         blockheight_id,
                         tx_output['index']
                     )
-                    save_record(*args)
+                    obj_id, created = save_record(*args)
+                    if created:
+                        third_parties = client_acknowledgement(obj_id)
+                        for platform in third_parties:
+                            if 'telegram' in platform:
+                                message = platform[1]
+                                chat_id = platform[2]
+                                send_telegram_message(message, chat_id)
 
     elif instance.address.startswith('simpleledger:'):
         # Make sure that any corresponding BCH transaction is saved
@@ -118,4 +127,11 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                     blockheight_id,
                     tx_output['index']
                 )
-                save_record(*args)
+                obj_id, created = save_record(*args)
+                if created:
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)

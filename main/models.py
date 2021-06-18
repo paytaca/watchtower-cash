@@ -35,6 +35,7 @@ class Token(models.Model):
         else:
             return str(self.name)
 
+
 class BlockHeight(models.Model):
     number = models.IntegerField(default=0, unique=True, db_index=True)
     transactions_count = models.IntegerField(default=0)
@@ -58,6 +59,7 @@ class BlockHeight(models.Model):
     
     def __str__(self):
         return str(self.number)
+
 
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
@@ -90,6 +92,7 @@ class Transaction(models.Model):
     def __str__(self):
         return self.txid
 
+
 class Recipient(models.Model):
     web_url = models.CharField(max_length=500,null=True, blank=True)
     telegram_id = models.CharField(max_length=100,null=True, blank=True)
@@ -102,6 +105,7 @@ class Recipient(models.Model):
             return self.telegram_id
         else:
             return 'N/A'
+
 
 class SlpAddress(models.Model):
     address = models.CharField(max_length=200, unique=True, db_index=True)
@@ -118,6 +122,7 @@ class SlpAddress(models.Model):
     def __str__(self):
         return self.address
 
+
 class BchAddress(models.Model):
     address = models.CharField(max_length=200, unique=True, db_index=True)
     transactions = models.ManyToManyField(
@@ -133,6 +138,7 @@ class BchAddress(models.Model):
         
     def __str__(self):
         return self.address
+
 
 class Subscription(models.Model):
     recipient = models.ForeignKey(
