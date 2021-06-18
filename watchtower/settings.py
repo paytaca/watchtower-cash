@@ -159,9 +159,12 @@ REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
 REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = ('main.tasks',)
 
+CELERY_BROKER_URL = 'pyamqp://rabbitmq:5672'
+CELERY_RESULT_BACKEND = 'rpc://'
+
 if REDIS_PASSWORD:
-    CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    # CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    # CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
@@ -169,8 +172,8 @@ if REDIS_PASSWORD:
         db=DB_NUM[2]
     )
 else:
-    CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    # CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    # CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         port=6379,
@@ -198,10 +201,6 @@ CELERY_BEAT_SCHEDULE = {
     'manage_block_transactions': {
         'task': 'main.tasks.manage_block_transactions',
         'schedule': 7
-    },
-    'problematic_transactions': {
-        'task': 'main.tasks.problematic_transactions',
-        'schedule': 3
     }
 }
 

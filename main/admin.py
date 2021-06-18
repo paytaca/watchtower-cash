@@ -89,14 +89,11 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'spend_block_height'
     ]
 
-
-
     def get_actions(self, request):
         actions = super().get_actions(request)
         if 'delete_selected' in actions:
             del actions['delete_selected']
         return actions
-        
 
     def resend_unacknowledged_transactions(self, request, queryset):
         for tr in queryset:
@@ -106,7 +103,6 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                     message = platform[1]
                     chat_id = platform[2]
                     send_telegram_message(message, chat_id)
-            
 
     # def get_queryset(self, request): 
     #     # For Django < 1.6, override queryset instead of get_queryset

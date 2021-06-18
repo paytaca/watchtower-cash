@@ -17,3 +17,10 @@ services:
       - ./:/code
   redis:
     image: "redis:alpine"
+  rabbitmq:
+    container_name: rabbitmq
+    hostname: rabbitmq
+    image: rabbitmq:latest
+    ports:
+      - "5672:5672"
+    restart: on-failure

@@ -11,7 +11,6 @@ from main.models import (
     Subscription
 )
 from celery.exceptions import MaxRetriesExceededError 
-from main.utils import 
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
 from django.conf import settings
@@ -28,6 +27,11 @@ LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
 app = Celery('configs')
+
+
+@shared_task()
+def add(x, y):
+    return x + y
 
 
 # NOTIFICATIONS
@@ -210,6 +214,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
             # Automatically update all transactions with block height.
             Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
+        else:
+            # Trigger post save signals
+            transaction_obj.save()
         
         if token == 'bch':
             address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
@@ -284,8 +291,7 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id, ale
         index= _in['e']['i']
         input_scanner(txid, index, block_id=block_id)
 
-    
-    
+
 @shared_task(bind=True, queue='bitdbquery', max_retries=30)
 def bitdbquery(self, block_id):
     try:
@@ -351,6 +357,7 @@ def bitdbquery(self, block_id):
             pending_blocks.append(block.number)
             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
             REDIS_STORAGE.set('READY', 1)
+
 
 @shared_task(bind=True, queue='slpdbquery_transactions')
 def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
@@ -471,6 +478,7 @@ def manage_block_transactions(self):
     
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
+
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):

@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
 from django.conf import settings
+import uuid
 
 
 class Token(models.Model):
@@ -34,6 +35,7 @@ class Token(models.Model):
             return f"{self.name} | {self.tokenid[0:7]}"
         else:
             return str(self.name)
+
 
 class BlockHeight(models.Model):
     number = models.IntegerField(default=0, unique=True, db_index=True)
@@ -90,6 +92,7 @@ class Transaction(models.Model):
     def __str__(self):
         return self.txid
 
+
 class Recipient(models.Model):
     web_url = models.CharField(max_length=500,null=True, blank=True)
     telegram_id = models.CharField(max_length=100,null=True, blank=True)
@@ -136,14 +139,18 @@ class BchAddress(models.Model):
         return self.address
 
 
+class Project(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, blank=True)
+    date_created = models.DateTimeField(default=timezone.now)
+
+
 class Wallet(models.Model):
     wallet_hash = models.CharField(
         max_length=200,
         db_index=True
     )
-    derivation_path = models.CharField(
-        max_length=100
-    )
+    date_created = models.DateTimeField(default=timezone.now)
 
 
 class Address(models.Model):
@@ -159,6 +166,7 @@ class Address(models.Model):
         null=True,
         blank=True
     )
+    date_created = models.DateTimeField(default=timezone.now)
 
 
 class Subscription(models.Model):
