@@ -204,14 +204,7 @@ CELERY_BEAT_SCHEDULE = {
     }
 }
 
-CORS_ORIGIN_WHITELIST = [
-    "https://tokensale-staging.scibizinformatics.com",
-    "https://tokensale.scibizinformatics.com"
-]
-
-if DEBUG:
-    CORS_ORIGIN_WHITELIST += ['http://localhost:8000']
-
+CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
