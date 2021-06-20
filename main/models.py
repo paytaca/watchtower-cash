@@ -150,11 +150,25 @@ class Wallet(models.Model):
         max_length=200,
         db_index=True
     )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='wallets',
+        null=True,
+        blank=True
+    )
     date_created = models.DateTimeField(default=timezone.now)
 
 
 class Address(models.Model):
-    address = models.CharField(max_length=70, unique=True, db_index=True) 
+    address = models.CharField(max_length=70, unique=True, db_index=True)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='addresses',
+        null=True,
+        blank=True
+    )
     wallet = models.ForeignKey(
         Wallet,
         related_name='addresses',
