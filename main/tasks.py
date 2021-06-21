@@ -261,7 +261,7 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id, ale
         if 'a' in out['e'].keys():
             bchaddress = 'bitcoincash:' + str(out['e']['a'])
 
-            subscription = (bchaddress)
+            subscription = Subscription.objects.filter(address=bchaddress)
             LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block_number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
 
             # Disregard bch address that are not subscribed.

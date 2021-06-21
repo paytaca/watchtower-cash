@@ -15,7 +15,7 @@ To subscribe an address, send a POST request to `https://watchtower.cash/api/sub
 ```bash
 curl -i -X POST 
     -H "Content-Type: application/json" 
-    -d '{"address":"simpleledger:qr89dn8th7zj4n74vrqyce4vld522spunv3wkdqd5z", "web_url": "https://0f27bf32c670.ngrok.io"}' 
+    -d '{"address":"simpleledger:qr89dn8th7zj4n74vrqyce4vld522spunv3wkdqd5z", "webhook_url": "https://0f27bf32c670.ngrok.io"}' 
     https://watchtower.cash/api/subscription/
 ```
 

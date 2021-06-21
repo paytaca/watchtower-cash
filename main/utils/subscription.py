@@ -78,7 +78,7 @@ def new_subscription(**kwargs):
 
                 _, created = Subscription.objects.get_or_create(
                     recipient=recipient,
-                    adrress=address_obj
+                    address=address_obj
                 )
 
                 if address.startswith('simpleledger'):
