@@ -88,7 +88,7 @@ class Wallet(models.Model):
 
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
-    address = models.CharField(max_length=500,null=True, db_index=True)
+    address = models.CharField(max_length=500, null=True, db_index=True)
     amount = models.FloatField(default=0, db_index=True)
     acknowledged = models.BooleanField(default=False)
     blockheight = models.ForeignKey(
@@ -210,7 +210,8 @@ class Subscription(models.Model):
         Address,
         on_delete=models.CASCADE,
         related_name='subscriptions',
-        db_index=True
+        db_index=True,
+        null=True
     )
     recipient = models.ForeignKey(
         Recipient,

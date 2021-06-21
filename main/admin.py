@@ -1,12 +1,15 @@
 from django.contrib import admin
 from main.models import (
     Token,
+    Address,
     Transaction,
     SlpAddress,
     BchAddress,
     BlockHeight,
     Subscription,
-    Recipient
+    Recipient,
+    Project,
+    Wallet
 )
 from django.contrib.auth.models import User, Group
 from main.tasks import client_acknowledgement, send_telegram_message
@@ -14,6 +17,8 @@ from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
 from django.conf import settings
 import json
+
+
 admin.site.site_header = 'WatchTower.Cash Admin'
 REDIS_STORAGE = settings.REDISKV
 
@@ -151,6 +156,38 @@ class SubscriptionAdmin(admin.ModelAdmin):
     ]
 
 
+class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    list_display = [
+        'address',
+        'wallet',
+        'wallet_index',
+        'project'
+    ]
+
+    dynamic_raw_id_fields = [
+        'wallet',
+        'project'
+    ]
+
+
+class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    list_display = [
+        'wallet_hash',
+        'wallet_type',
+        'project'
+    ]
+
+    dynamic_raw_id_fields = [
+        'project'
+    ]
+
+
+
+class ProjectAdmin(admin.ModelAdmin):
+    list_display = [
+        'name',
+        'date_created'
+    ]
 
     
 admin.site.unregister(User)
@@ -163,3 +200,6 @@ admin.site.register(BchAddress, BchAddressAdmin)
 admin.site.register(BlockHeight, BlockHeightAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)
 admin.site.register(Recipient, RecipientAdmin)
+admin.site.register(Address, AddressAdmin)
+admin.site.register(Wallet, WalletAdmin)
+admin.site.register(Project, ProjectAdmin)

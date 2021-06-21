@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='subscription',
             name='address',
-            field=models.ForeignKey(default='', on_delete=django.db.models.deletion.CASCADE, related_name='subscriptions', to='main.Address'),
+            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='subscriptions', to='main.Address'),
             preserve_default=False,
         ),
     ]
