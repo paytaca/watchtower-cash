@@ -61,6 +61,31 @@ class BlockHeight(models.Model):
         return str(self.number)
 
 
+class Project(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, blank=True)
+    date_created = models.DateTimeField(default=timezone.now)
+
+
+class Wallet(models.Model):
+    wallet_hash = models.CharField(
+        max_length=200,
+        db_index=True
+    )
+    wallet_type = models.CharField(
+        max_length=5,
+        db_index=True
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='wallets',
+        null=True,
+        blank=True
+    )
+    date_created = models.DateTimeField(default=timezone.now)
+
+
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
     address = models.CharField(max_length=500,null=True, db_index=True)
@@ -87,6 +112,13 @@ class Transaction(models.Model):
         null=True,
         blank=True,
         on_delete=models.DO_NOTHING
+    )
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.SET_NULL,
+        related_name='transactions',
+        null=True,
+        blank=True
     )
 
     def __str__(self):
@@ -139,27 +171,6 @@ class BchAddress(models.Model):
         return self.address
 
 
-class Project(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100, blank=True)
-    date_created = models.DateTimeField(default=timezone.now)
-
-
-class Wallet(models.Model):
-    wallet_hash = models.CharField(
-        max_length=200,
-        db_index=True
-    )
-    project = models.ForeignKey(
-        Project,
-        on_delete=models.CASCADE,
-        related_name='wallets',
-        null=True,
-        blank=True
-    )
-    date_created = models.DateTimeField(default=timezone.now)
-
-
 class Address(models.Model):
     address = models.CharField(max_length=70, unique=True, db_index=True)
     project = models.ForeignKey(
@@ -181,6 +192,17 @@ class Address(models.Model):
         blank=True
     )
     date_created = models.DateTimeField(default=timezone.now)
+
+
+    def save(self, *args, **kwargs):
+        if self.wallet and not self.wallet_type:
+            wallet = self.wallet
+            if self.address.startswith('simpleledger:'):
+                wallet.wallet_type = 'slp'
+            elif self.address.startswith('bitcoincash:'):
+                wallet.wallet_type = 'bch'
+            wallet.save()
+        super(Address, self).save(*args, **kwargs)
 
 
 class Subscription(models.Model):
