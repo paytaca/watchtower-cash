@@ -90,7 +90,7 @@ class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
     address = models.CharField(max_length=500, null=True, db_index=True)
     amount = models.FloatField(default=0, db_index=True)
-    acknowledged = models.BooleanField(default=False)
+    acknowledged = models.BooleanField(null=True, default=None)
     blockheight = models.ForeignKey(
         BlockHeight,
         on_delete=models.CASCADE,
