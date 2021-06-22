@@ -115,12 +115,16 @@ class RecipientAdmin(admin.ModelAdmin):
         'valid'
     ]
 
-class SubscriptionAdmin(admin.ModelAdmin):
+class SubscriptionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
+        'address'
         'recipient',
-        'slp',        
-        'bch',
         'websocket'
+    ]
+
+    dynamic_raw_id_fields = [
+        'address',
+        'recipient'
     ]
 
 

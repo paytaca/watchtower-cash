@@ -5,7 +5,6 @@ from main.models import (
     BlockHeight, 
     Token, 
     Transaction,
-    SlpAddress,
     Recipient,
     Subscription
 )
