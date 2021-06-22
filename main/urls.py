@@ -8,11 +8,6 @@ app_name = "main"
 
 
 router = routers.DefaultRouter()
-# router.register(r"slp_address", views.SlpAddressViewSet)
-# router.register(r"token", views.TokenViewSet)
-# router.register(r"transaction", views.TransactionViewSet)
-# router.register(r"auth", views.AuthViewSet,basename='auth')
-# path('set-address/', SetAddressView.as_view(), name='setaddress'),
 
 main_urls = router.urls
 

@@ -1,4 +1,4 @@
-from main.models import Token,BchAddress, Subscription, SlpAddress, Recipient
+from main.models import Token, Subscription, Recipient
 from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q

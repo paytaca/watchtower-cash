@@ -139,38 +139,6 @@ class Recipient(models.Model):
             return 'N/A'
 
 
-class SlpAddress(models.Model):
-    address = models.CharField(max_length=70, unique=True, db_index=True)
-    transactions = models.ManyToManyField(
-        Transaction,
-        related_name='slpaddress',
-        blank=True
-    )
-
-    class Meta:
-        verbose_name = 'SLP Address'
-        verbose_name_plural = 'SLP Addresses'
-        
-    def __str__(self):
-        return self.address
-
-
-class BchAddress(models.Model):
-    address = models.CharField(max_length=70, unique=True, db_index=True)
-    transactions = models.ManyToManyField(
-        Transaction,
-        related_name='bchaddress',
-        blank=True
-    )
-
-    class Meta:
-        verbose_name = 'BCH Address'
-        verbose_name_plural = 'BCH Addresses'
-        
-    def __str__(self):
-        return self.address
-
-
 class Address(models.Model):
     address = models.CharField(max_length=70, unique=True, db_index=True)
     project = models.ForeignKey(
@@ -193,6 +161,8 @@ class Address(models.Model):
     )
     date_created = models.DateTimeField(default=timezone.now)
 
+    class Meta:
+        verbose_name_plural = 'Addresses'
 
     def save(self, *args, **kwargs):
         if self.wallet and not self.wallet_type:
@@ -219,19 +189,5 @@ class Subscription(models.Model):
         null=True,
         blank=True,
         related_name='subscriptions'
-    )
-    slp = models.ForeignKey(
-        SlpAddress,
-        on_delete=models.DO_NOTHING,
-        related_name='subscriptions',
-        null=True,
-        blank=True
-    )
-    bch = models.ForeignKey(
-        BchAddress,
-        on_delete=models.DO_NOTHING,
-        related_name='subscriptions',
-        null=True,
-        blank=True
     )
     websocket=models.BooleanField(default=False)

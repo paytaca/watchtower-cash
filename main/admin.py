@@ -3,8 +3,6 @@ from main.models import (
     Token,
     Address,
     Transaction,
-    SlpAddress,
-    BchAddress,
     BlockHeight,
     Subscription,
     Recipient,
@@ -109,36 +107,6 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                     chat_id = platform[2]
                     send_telegram_message(message, chat_id)
 
-    # def get_queryset(self, request): 
-    #     # For Django < 1.6, override queryset instead of get_queryset
-    #     qs = super(TransactionAdmin, self).get_queryset(request) 
-    #     if request.user.is_superuser:
-    #         return qs
-    #     subscriber = Subscription.objects.filter(recipient=request.user)
-    #     if subscriber.exists():
-    #         obj = subscriber.first()
-    #         token_ids = obj.token.values_list('id',flat=True).distinct()
-    #         return Transaction.objects.filter(token__id__in=token_ids)
-    #     else:
-    #         return qs.filter(id=0)
-
-class SlpAddressAdmin(admin.ModelAdmin):
-    list_display = [
-        'address',
-    ]
-
-    exclude = [
-        'transactions',
-    ]
-    
-class BchAddressAdmin(admin.ModelAdmin):
-    list_display = [
-        'address',
-    ]
-
-    exclude = [
-        'transactions',
-    ]
 
 class RecipientAdmin(admin.ModelAdmin):
     list_display = [
@@ -195,8 +163,6 @@ admin.site.unregister(Group)
 
 admin.site.register(Token, TokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)
-admin.site.register(SlpAddress, SlpAddressAdmin)
-admin.site.register(BchAddress, BchAddressAdmin)
 admin.site.register(BlockHeight, BlockHeightAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)
 admin.site.register(Recipient, RecipientAdmin)

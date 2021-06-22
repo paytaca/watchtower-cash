@@ -6,7 +6,6 @@ from main.models import (
     Token, 
     Transaction,
     SlpAddress,
-    BchAddress,
     Recipient,
     Subscription
 )
@@ -218,14 +217,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         else:
             # Trigger post save signals
             transaction_obj.save()
-        
-        if token == 'bch':
-            address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
-        else:
-            address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
-        
-        address_obj.transactions.add(transaction_obj)
-        address_obj.save()
         
         return transaction_obj.id, transaction_created
 

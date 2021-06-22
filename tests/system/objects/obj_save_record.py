@@ -1,6 +1,6 @@
 from main import tasks
 import json
-from main.models import BlockHeight, Token, Transaction, SlpAddress, Subscription, BchAddress, SendTo
+from main.models import BlockHeight, Token, Transaction, Address, Subscription, SendTo
 
 class SaveRecordTest(object):
 	txid = None
@@ -19,10 +19,7 @@ class SaveRecordTest(object):
 		if args[5] is not None:
 			blockheight = BlockHeight.objects.get(id=args[5])
 			assert blockheight
-		if args[0] == 'bch':
-			address = BchAddress.objects.get(address=args[1])
-		else:
-			address = SlpAddress.object.get(address=args[1])
+		address = Address.objects.get(address=args[1])
 		assert address
 		self.txid = transaction.txid
 		self.address = address.address
