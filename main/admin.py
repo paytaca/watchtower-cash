@@ -117,7 +117,7 @@ class RecipientAdmin(admin.ModelAdmin):
 
 class SubscriptionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
-        'address'
+        'address',
         'recipient',
         'websocket'
     ]
