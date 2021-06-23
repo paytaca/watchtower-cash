@@ -1,9 +1,13 @@
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from main.models import Token, Transaction
-from main.utils import check_wallet_address_subscription
-from main.tasks import save_record, client_acknowledgement, input_scanner, send_telegram_message
+from main.models import Token, Transaction, Subscription
+from main.tasks import (
+    save_record,
+    client_acknowledgement,
+    input_scanner,
+    send_telegram_message
+)
 from django.conf import settings
 import logging
 import traceback
@@ -42,7 +46,7 @@ def run():
         except json.decoder.JSONDecodeError as exc:
             continue
         except Exception as exc:
-            REDIS_STORAGE.set('BITSOCKET', 0)
+            settings.REDISKV.set('BITSOCKET', 0)
             return f"UNEXPECTED ERROR FOUND IN {source.upper()}"
         previous = content
         if loaded_data is not None:
@@ -60,8 +64,9 @@ def run():
                         index = out['e']['i']
                         if amount and 'a' in out['e'].keys():
                             bchaddress = 'bitcoincash:' + str(out['e']['a'])
-
-                            subscription = check_wallet_address_subscription(bchaddress)
+                            subscription = Subscription.objects.filter(
+                                address__address=bchaddress       
+                            )
                             # Disregard bch address that are not subscribed.
                             if subscription.exists():
                             

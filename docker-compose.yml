@@ -21,8 +21,6 @@ services:
     container_name: rabbitmq
     hostname: rabbitmq
     image: rabbitmq:latest
-    networks:
-      - main
     ports:
       - "5672:5672"
     restart: on-failure

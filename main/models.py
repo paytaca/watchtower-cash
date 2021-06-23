@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
 from django.conf import settings
+import uuid
 
 
 class Token(models.Model):
@@ -47,7 +48,6 @@ class BlockHeight(models.Model):
     unparsed = JSONField(default=list, blank=True)
     requires_full_scan = models.BooleanField(default=True)
 
-
     def save(self, *args, **kwargs):
         if not self.id:
             self.created_datetime = timezone.now()
@@ -61,11 +61,45 @@ class BlockHeight(models.Model):
         return str(self.number)
 
 
+class Project(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, blank=True)
+    date_created = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        if self.name:
+            return self.name
+        else:
+            return str(self.id)
+
+
+class Wallet(models.Model):
+    wallet_hash = models.CharField(
+        max_length=200,
+        db_index=True
+    )
+    wallet_type = models.CharField(
+        max_length=5,
+        db_index=True
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='wallets',
+        null=True,
+        blank=True
+    )
+    date_created = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.wallet_hash
+
+
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
-    address = models.CharField(max_length=500,null=True, db_index=True)
+    address = models.CharField(max_length=500, null=True, db_index=True)
     amount = models.FloatField(default=0, db_index=True)
-    acknowledged = models.BooleanField(default=False)
+    acknowledged = models.BooleanField(null=True, default=None)
     blockheight = models.ForeignKey(
         BlockHeight,
         on_delete=models.CASCADE,
@@ -88,6 +122,13 @@ class Transaction(models.Model):
         blank=True,
         on_delete=models.DO_NOTHING
     )
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.SET_NULL,
+        related_name='transactions',
+        null=True,
+        blank=True
+    )
 
     def __str__(self):
         return self.txid
@@ -107,59 +148,58 @@ class Recipient(models.Model):
             return 'N/A'
 
 
-class SlpAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True, db_index=True)
-    transactions = models.ManyToManyField(
-        Transaction,
-        related_name='slpaddress',
+class Address(models.Model):
+    address = models.CharField(max_length=70, unique=True, db_index=True)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='addresses',
+        null=True,
         blank=True
     )
+    wallet = models.ForeignKey(
+        Wallet,
+        related_name='addresses',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    wallet_index = models.IntegerField(
+        null=True,
+        blank=True
+    )
+    date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        verbose_name = 'SLP Address'
-        verbose_name_plural = 'SLP Addresses'
-        
+        verbose_name_plural = 'Addresses'
+
     def __str__(self):
         return self.address
 
-
-class BchAddress(models.Model):
-    address = models.CharField(max_length=200, unique=True, db_index=True)
-    transactions = models.ManyToManyField(
-        Transaction,
-        related_name='bchaddress',
-        blank=True
-    )
-    scanned = models.BooleanField(default=False)
-    
-    class Meta:
-        verbose_name = 'BCH Address'
-        verbose_name_plural = 'BCH Addresses'
-        
-    def __str__(self):
-        return self.address
+    def save(self, *args, **kwargs):
+        wallet = self.wallet
+        if wallet and not wallet.wallet_type:
+            if self.address.startswith('simpleledger:'):
+                wallet.wallet_type = 'slp'
+            elif self.address.startswith('bitcoincash:'):
+                wallet.wallet_type = 'bch'
+            wallet.save()
+        super(Address, self).save(*args, **kwargs)
 
 
 class Subscription(models.Model):
+    address = models.ForeignKey(
+        Address,
+        on_delete=models.CASCADE,
+        related_name='subscriptions',
+        db_index=True,
+        null=True
+    )
     recipient = models.ForeignKey(
         Recipient,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name='subscriptions'
-    )
-    slp = models.ForeignKey(
-        SlpAddress,
-        on_delete=models.DO_NOTHING,
-        related_name='subscriptions',
-        null=True,
-        blank=True
-    )
-    bch = models.ForeignKey(
-        BchAddress,
-        on_delete=models.DO_NOTHING,
-        related_name='subscriptions',
-        null=True,
-        blank=True
     )
     websocket=models.BooleanField(default=False)

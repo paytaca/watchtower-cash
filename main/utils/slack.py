@@ -4,10 +4,7 @@ from .subscription import (
     register_user,
     remove_subscription
 )
-from main.models import (
-    Subscription,
-    Token
-)
+from main.models import Token
 from main.utils.slack_responses import (
     get_message,
     get_attachment

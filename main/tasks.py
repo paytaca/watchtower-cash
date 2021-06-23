@@ -5,13 +5,10 @@ from main.models import (
     BlockHeight, 
     Token, 
     Transaction,
-    SlpAddress, 
-    Subscription, 
-    BchAddress,
-    Recipient
+    Recipient,
+    Subscription
 )
 from celery.exceptions import MaxRetriesExceededError 
-from main.utils import check_wallet_address_subscription
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
 from django.conf import settings
@@ -62,7 +59,9 @@ def client_acknowledgement(self, txid):
             block = transaction.blockheight.number
         
         address = transaction.address 
-        subscriptions = check_wallet_address_subscription(address)
+        subscriptions = Subscription.objects.filter(
+            address__address=address             
+        )
 
         if subscriptions.exists():
             
@@ -154,7 +153,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         blockheight          : an optional argument indicating the block height number of a transaction.
         index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
     """
-    subscription = check_wallet_address_subscription(transaction_address)
+    subscription = Subscription.objects.filter(
+        address__address=transaction_address             
+    )
     if not subscription.exists(): return None, None
 
     try:
@@ -216,14 +217,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             # Trigger post save signals
             transaction_obj.save()
         
-        if token == 'bch':
-            address_obj, created = BchAddress.objects.get_or_create(address=transaction_address)
-        else:
-            address_obj, created = SlpAddress.objects.get_or_create(address=transaction_address)
-        
-        address_obj.transactions.add(transaction_obj)
-        address_obj.save()
-        
         return transaction_obj.id, transaction_created
 
 
@@ -257,8 +250,7 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id, ale
         index = out['e']['i']
         if 'a' in out['e'].keys():
             bchaddress = 'bitcoincash:' + str(out['e']['a'])
-
-            subscription = check_wallet_address_subscription(bchaddress)
+            subscription = Subscription.objects.filter(address__address=bchaddress)
             LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block_number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
 
             # Disregard bch address that are not subscribed.
@@ -372,7 +364,9 @@ def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
                 
                 index = 1
                 for output in transaction['slp']['detail']['outputs']:
-                    subscription = check_wallet_address_subscription(output['address'])
+                    subscription = Subscription.objects.filter(
+                        address__address=output['address']
+                    )
                     LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
                     
                     # Disregard slp address that are not subscribed.
@@ -452,6 +446,14 @@ def manage_block_transactions(self):
     
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
     blocks = json.loads(pending_blocks)
+
+    if len(blocks) == 0:
+        unscanned_blocks = BlockHeight.objects.filter(
+            processed=False,
+            requires_full_scan=True
+        ).values_list('number', flat=True)
+        REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(list(unscanned_blocks)))
+
 
     if int(REDIS_STORAGE.get('READY')): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
     if not blocks: return 'NO PENDING BLOCKS'

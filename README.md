@@ -7,28 +7,8 @@
 - Running on an elastic infrastructure that scales according to demand
 - The goal is to achieve and guarantee 99.99% uptime and reliability
 
-## Subscription
+## Docs and Libraries
 
-Watchtower will only "watch" addresses that are subscribed to by the users.
-
-To subscribe an address, send a POST request to `https://watchtower.cash/api/subscription/` with the BCH or SLP address and the URL where the webhook calls will be sent to (optional). A sample request using `curl` is shown below:
-```bash
-curl -i -X POST 
-    -H "Content-Type: application/json" 
-    -d '{"address":"simpleledger:qr89dn8th7zj4n74vrqyce4vld522spunv3wkdqd5z", "web_url": "https://0f27bf32c670.ngrok.io"}' 
-    https://watchtower.cash/api/subscription/
-```
-
-If the `web_url` is given, a POST request notification is sent to the URL whenever a new transcation is detected. A sample notification is shown below:
-```python
-{
-    'source': 'WatchTower',
-    'address': 'simpleledger:qr89dn8th7zj4n74vrqyce4vld522spunv3wkdqd5z',
-    'txid': '2cb0b57c9a8cad95d08f9b408b77802961d473abf71f0ec30669f9c2272f3d82',
-    'token': '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1',
-    'index': 1,
-    'amount': 321.0
-}
-```
-
-(More docs to follow...)
+- [API Docs and Browser](https://watchtower.cash/api/docs/)
+- [Javascript/NodeJS Package](https://github.com/paytaca/watchtower-cash-js)
+- [Python Package](https://github.com/paytaca/watchtower-cash-py)
