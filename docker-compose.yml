@@ -2,8 +2,21 @@ version: "3"
 services:
   postgres:
     image: "postgres:11.1-alpine"
+    env_file:
+      - .env_dev
     expose:
       - "5432"
+  redis:
+    image: "redis:alpine"
+    env_file:
+      - .env_dev
+  rabbitmq:
+    container_name: rabbitmq
+    hostname: rabbitmq
+    image: rabbitmq:latest
+    ports:
+      - "5672:5672"
+    restart: on-failure
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
@@ -13,14 +26,7 @@ services:
       - .env_dev
     depends_on:
       - postgres
+      - redis
+      - rabbitmq
     volumes:
       - ./:/code
-  redis:
-    image: "redis:alpine"
-  rabbitmq:
-    container_name: rabbitmq
-    hostname: rabbitmq
-    image: rabbitmq:latest
-    ports:
-      - "5672:5672"
-    restart: on-failure

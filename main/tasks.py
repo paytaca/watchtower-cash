@@ -6,7 +6,8 @@ from main.models import (
     Token, 
     Transaction,
     Recipient,
-    Subscription
+    Subscription,
+    Address
 )
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils import slpdb as slpdb_scanner
@@ -142,7 +143,7 @@ def client_acknowledgement(self, txid):
     return third_parties
 
 
-@shared_task(queue='save_record')   
+@shared_task(queue='save_record')
 def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0, new_subscription=False):
     """
         token                : can be tokenid (slp token) or token name (bch)
@@ -185,12 +186,12 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         if not tr.exists():
 
             transaction_data = {
-                'txid':transactionid,
-                'address':transaction_address,
-                'token':token_obj,
-                'amount':amount,
-                'index':index,
-                'source':source
+                'txid': transactionid,
+                'address': transaction_address,
+                'token': token_obj,
+                'amount': amount,
+                'index': index,
+                'source': source
             }
             transaction_list = [Transaction(**transaction_data)]
             Transaction.objects.bulk_create(transaction_list)
@@ -209,13 +210,16 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             if new_subscription:
                 transaction_obj.acknowledged = True
 
-            transaction_obj.save()
-
             # Automatically update all transactions with block height.
             Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
-        else:
-            # Trigger post save signals
-            transaction_obj.save()
+
+        # Check if address belongs to a wallet
+        address_obj = Address.objects.get(address=transaction_address)
+        if address_obj.wallet:
+            transaction_obj.wallet = address_obj.wallet
+
+        # Save updates and trigger post-save signals
+        transaction_obj.save()
         
         return transaction_obj.id, transaction_created
 

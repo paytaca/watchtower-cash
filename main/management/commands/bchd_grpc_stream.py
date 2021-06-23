@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def run():
-    source = 'bchd_grpc_stream'
+    source = 'bchd-grpc-stream'
     creds = grpc.ssl_channel_credentials()
     nodes = [
         'bchd.fountainhead.cash:443',

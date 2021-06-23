@@ -81,7 +81,8 @@ class Balance(APIView):
                 data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
-                query = Q(address=data['address']) & Q(spent=False)
+                query = Q(wallet=wallet) & Q(spent=False)
+                qs_balance = _get_bch_balance(query)
                 data['balance'] = qs_balance['balance']
                 data['valid'] = True
 
