@@ -66,6 +66,12 @@ class Project(models.Model):
     name = models.CharField(max_length=100, blank=True)
     date_created = models.DateTimeField(default=timezone.now)
 
+    def __str__(self):
+        if self.name:
+            return self.name
+        else:
+            return str(self.id)
+
 
 class Wallet(models.Model):
     wallet_hash = models.CharField(
@@ -84,6 +90,9 @@ class Wallet(models.Model):
         blank=True
     )
     date_created = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.wallet_hash
 
 
 class Transaction(models.Model):
@@ -164,9 +173,12 @@ class Address(models.Model):
     class Meta:
         verbose_name_plural = 'Addresses'
 
+    def __str__(self):
+        return self.address
+
     def save(self, *args, **kwargs):
-        if self.wallet and not self.wallet_type:
-            wallet = self.wallet
+        wallet = self.wallet
+        if wallet and not wallet.wallet_type:
             if self.address.startswith('simpleledger:'):
                 wallet.wallet_type = 'slp'
             elif self.address.startswith('bitcoincash:'):

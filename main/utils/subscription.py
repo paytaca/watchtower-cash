@@ -49,8 +49,8 @@ def new_subscription(**kwargs):
                 project_check = Project.objects.filter(id=project_id)
                 if project_check.exists():
                     project = project_check.first()
+                    proceed = True
                 else:
-                    proceed = False
                     response['error'] = 'project_does_not_exist'
             else:
                 proceed = True
@@ -68,12 +68,14 @@ def new_subscription(**kwargs):
                     recipient.save()
                         
                 address_obj, _ = Address.objects.get_or_create(address=address)
-                if wallet_hash and wallet_index:
+                if wallet_hash is not None and wallet_index is not None:
                     wallet, _ = Wallet.objects.get_or_create(
                         wallet_hash=wallet_hash,
                         project=project
                     )
+                    address_obj.wallet = wallet
                     address_obj.wallet_index = wallet_index
+                    address_obj.project = project
                     address_obj.save()
 
                 _, created = Subscription.objects.get_or_create(
