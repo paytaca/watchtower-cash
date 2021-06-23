@@ -447,6 +447,14 @@ def manage_block_transactions(self):
     pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
     blocks = json.loads(pending_blocks)
 
+    if len(blocks) == 0:
+        unscanned_blocks = BlockHeight.objects.filter(
+            processed=False,
+            requires_full_scan=True
+        ).values_list('number', flat=True)
+        REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(list(unscanned_blocks)))
+
+
     if int(REDIS_STORAGE.get('READY')): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
     if not blocks: return 'NO PENDING BLOCKS'
     
