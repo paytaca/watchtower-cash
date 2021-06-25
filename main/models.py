@@ -95,66 +95,6 @@ class Wallet(models.Model):
         return self.wallet_hash
 
 
-class Transaction(models.Model):
-    txid = models.CharField(max_length=200, db_index=True)
-    address = models.CharField(max_length=500, null=True, db_index=True)
-    amount = models.FloatField(default=0, db_index=True)
-    acknowledged = models.BooleanField(null=True, default=None)
-    blockheight = models.ForeignKey(
-        BlockHeight,
-        on_delete=models.CASCADE,
-        related_name='transactions',
-        null=True,
-        blank=True
-    )
-    source = models.CharField(max_length=200, null=True, db_index=True)
-    created_datetime = models.DateTimeField(default=timezone.now)
-    token = models.ForeignKey(
-        Token,
-        on_delete=models.CASCADE
-    )
-    index = models.IntegerField(default=0, db_index=True)
-    spent = models.BooleanField(default=False)
-    spend_block_height = models.ForeignKey(
-        BlockHeight,
-        related_name='spent_transactions',
-        null=True,
-        blank=True,
-        on_delete=models.DO_NOTHING
-    )
-    wallet = models.ForeignKey(
-        Wallet,
-        on_delete=models.SET_NULL,
-        related_name='transactions',
-        null=True,
-        blank=True
-    )
-
-    class Meta:
-        unique_together = [
-            'txid',
-            'address',
-            'index'
-        ]
-
-    def __str__(self):
-        return self.txid
-
-
-class Recipient(models.Model):
-    web_url = models.CharField(max_length=500,null=True, blank=True)
-    telegram_id = models.CharField(max_length=100,null=True, blank=True)
-    valid = models.BooleanField(default=True)
-
-    def __str__(self):
-        if self.web_url:
-            return self.web_url
-        elif self.telegram_id:
-            return self.telegram_id
-        else:
-            return 'N/A'
-
-
 class Address(models.Model):
     address = models.CharField(max_length=70, unique=True, db_index=True)
     project = models.ForeignKey(
@@ -192,6 +132,72 @@ class Address(models.Model):
                 wallet.wallet_type = 'bch'
             wallet.save()
         super(Address, self).save(*args, **kwargs)
+
+
+class Transaction(models.Model):
+    txid = models.CharField(max_length=200, db_index=True)
+    address = models.ForeignKey(
+        Address,
+        related_name='transactions',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    amount = models.FloatField(default=0, db_index=True)
+    acknowledged = models.BooleanField(null=True, default=None)
+    blockheight = models.ForeignKey(
+        BlockHeight,
+        on_delete=models.CASCADE,
+        related_name='transactions',
+        null=True,
+        blank=True
+    )
+    source = models.CharField(max_length=200, null=True, db_index=True)
+    created_datetime = models.DateTimeField(default=timezone.now)
+    token = models.ForeignKey(
+        Token,
+        on_delete=models.CASCADE
+    )
+    index = models.IntegerField(default=0, db_index=True)
+    spent = models.BooleanField(default=False)
+    spend_block_height = models.ForeignKey(
+        BlockHeight,
+        related_name='spent_transactions',
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING
+    )
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.SET_NULL,
+        related_name='transactions',
+        null=True,
+        blank=True
+    )
+
+    # class Meta:
+    #     unique_together = [
+    #         'txid',
+    #         'address',
+    #         'index'
+    #     ]
+
+    def __str__(self):
+        return self.txid
+
+
+class Recipient(models.Model):
+    web_url = models.CharField(max_length=500,null=True, blank=True)
+    telegram_id = models.CharField(max_length=100,null=True, blank=True)
+    valid = models.BooleanField(default=True)
+
+    def __str__(self):
+        if self.web_url:
+            return self.web_url
+        elif self.telegram_id:
+            return self.telegram_id
+        else:
+            return 'N/A'
 
 
 class Subscription(models.Model):

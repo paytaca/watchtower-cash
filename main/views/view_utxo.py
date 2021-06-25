@@ -67,15 +67,15 @@ class UTXO(APIView):
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
-            query = Q(address=data['address']) & Q(spent=False)
+            query = Q(address__address=data['address']) & Q(spent=False)
             utxos_values = _get_bch_utxos(query)
         
         if slpaddress.startswith('simpleledger:'):
             data['address'] = slpaddress
             if tokenid:
-                query = Q(address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
+                query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
-                query =  Q(address=data['address']) & Q(spent=False)
+                query =  Q(address__address=data['address']) & Q(spent=False)
             utxos_values = _get_slp_utxos(query)
 
         if wallet_hash:
@@ -84,9 +84,9 @@ class UTXO(APIView):
             
             if wallet.wallet_type == 'slp':
                 if tokenid:
-                    query = Q(address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
+                    query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
                 else:
-                    query =  Q(address=data['address']) & Q(spent=False)
+                    query =  Q(address__address=data['address']) & Q(spent=False)
                 utxos_values = _get_slp_utxos(query)
 
             elif wallet.wallet_type == 'bch':

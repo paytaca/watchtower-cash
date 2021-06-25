@@ -159,6 +159,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
     )
     if not subscription.exists(): return None, None
 
+    address_obj = Address.objects.get(address=transaction_address)
+
     try:
         index = int(index)
     except TypeError as exc:
@@ -187,7 +189,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
             transaction_data = {
                 'txid': transactionid,
-                'address': transaction_address,
+                'address': address_obj,
                 'token': token_obj,
                 'amount': amount,
                 'index': index,
