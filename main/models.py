@@ -95,9 +95,54 @@ class Wallet(models.Model):
         return self.wallet_hash
 
 
+class Address(models.Model):
+    address = models.CharField(max_length=70, unique=True, db_index=True)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='addresses',
+        null=True,
+        blank=True
+    )
+    wallet = models.ForeignKey(
+        Wallet,
+        related_name='addresses',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    wallet_index = models.IntegerField(
+        null=True,
+        blank=True
+    )
+    date_created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name_plural = 'Addresses'
+
+    def __str__(self):
+        return self.address
+
+    def save(self, *args, **kwargs):
+        wallet = self.wallet
+        if wallet and not wallet.wallet_type:
+            if self.address.startswith('simpleledger:'):
+                wallet.wallet_type = 'slp'
+            elif self.address.startswith('bitcoincash:'):
+                wallet.wallet_type = 'bch'
+            wallet.save()
+        super(Address, self).save(*args, **kwargs)
+
+
 class Transaction(models.Model):
     txid = models.CharField(max_length=200, db_index=True)
-    address = models.CharField(max_length=500, null=True, db_index=True)
+    address = models.ForeignKey(
+        Address,
+        related_name='transactions',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
     amount = models.FloatField(default=0, db_index=True)
     acknowledged = models.BooleanField(null=True, default=None)
     blockheight = models.ForeignKey(
@@ -153,45 +198,6 @@ class Recipient(models.Model):
             return self.telegram_id
         else:
             return 'N/A'
-
-
-class Address(models.Model):
-    address = models.CharField(max_length=70, unique=True, db_index=True)
-    project = models.ForeignKey(
-        Project,
-        on_delete=models.CASCADE,
-        related_name='addresses',
-        null=True,
-        blank=True
-    )
-    wallet = models.ForeignKey(
-        Wallet,
-        related_name='addresses',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True
-    )
-    wallet_index = models.IntegerField(
-        null=True,
-        blank=True
-    )
-    date_created = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        verbose_name_plural = 'Addresses'
-
-    def __str__(self):
-        return self.address
-
-    def save(self, *args, **kwargs):
-        wallet = self.wallet
-        if wallet and not wallet.wallet_type:
-            if self.address.startswith('simpleledger:'):
-                wallet.wallet_type = 'slp'
-            elif self.address.startswith('bitcoincash:'):
-                wallet.wallet_type = 'bch'
-            wallet.save()
-        super(Address, self).save(*args, **kwargs)
 
 
 class Subscription(models.Model):

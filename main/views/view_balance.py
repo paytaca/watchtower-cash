@@ -53,16 +53,16 @@ class Balance(APIView):
         if slpaddress.startswith('simpleledger:'):
             data['address'] = slpaddress
             if tokenid:
-                query = Q(address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
+                query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
-                query =  Q(address=data['address']) & Q(spent=False)
+                query =  Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_slp_balance(query)
             data['balance'] = list(qs_balance)
             data['valid'] = True
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
-            query = Q(address=data['address']) & Q(spent=False)
+            query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_bch_balance(query)
             data['balance'] = qs_balance['balance']
             data['valid'] = True

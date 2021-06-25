@@ -52,7 +52,8 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
 
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
-    if instance.address.startswith('bitcoincash:'):
+    address = instance.address.address
+    if address.startswith('bitcoincash:'):
         # Make sure that any corresponding SLP transaction is saved
         bchd = BCHDQuery()
         slp_tx = bchd.get_transaction(instance.txid, parse_slp=True)
@@ -94,7 +95,7 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
 
-    elif instance.address.startswith('simpleledger:'):
+    elif address.startswith('simpleledger:'):
         # Make sure that any corresponding BCH transaction is saved
         bchd = BCHDQuery()
         txn = bchd.get_transaction(instance.txid)

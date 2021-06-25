@@ -71,6 +71,7 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     
     dynamic_raw_id_fields = [
         'blockheight',
+        'address',
         'token',
         'spend_block_height'
     ]
