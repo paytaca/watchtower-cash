@@ -59,9 +59,9 @@ def client_acknowledgement(self, txid):
         if transaction.blockheight:
             block = transaction.blockheight.number
         
-        address = transaction.address 
+        address = transaction.address
         subscriptions = Subscription.objects.filter(
-            address__address=address             
+            address=address             
         )
 
         if subscriptions.exists():
@@ -74,7 +74,7 @@ def client_acknowledgement(self, txid):
                 if recipient:
                     data = {
                         'amount': transaction.amount,
-                        'address': transaction.address,
+                        'address': transaction.address.address,
                         'source': 'WatchTower',
                         'token': transaction.token.tokenid,
                         'txid': transaction.txid,
@@ -99,7 +99,7 @@ def client_acknowledgement(self, txid):
 
                             if transaction.token.name != 'bch':
                                 message=f"""<b>WatchTower Notification</b> ℹ️
-                                    \n Address: {transaction.address}
+                                    \n Address: {transaction.address.address}
                                     \n Token: {transaction.token.name}
                                     \n Token ID: {transaction.token.tokenid}
                                     \n Amount: {transaction.amount}
@@ -107,7 +107,7 @@ def client_acknowledgement(self, txid):
                                 """
                             else:
                                 message=f"""<b>WatchTower Notification</b> ℹ️
-                                    \n Address: {transaction.address}
+                                    \n Address: {transaction.address.address}
                                     \n Amount: {transaction.amount} BCH
                                     \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
                                 """
@@ -119,7 +119,7 @@ def client_acknowledgement(self, txid):
                 if websocket:
                     
                     tokenid = ''
-                    room_name = transaction.address.replace(':','_')
+                    room_name = transaction.address.address.replace(':','_')
                     room_name += f'_{tokenid}'
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
@@ -129,7 +129,7 @@ def client_acknowledgement(self, txid):
                             "data": data
                         }
                     )
-                    if transaction.address.startswith('simpleledger:'):
+                    if transaction.address.address.startswith('simpleledger:'):
                         tokenid = transaction.token.tokenid
                         room_name += f'_{tokenid}'
                         channel_layer = get_channel_layer()
@@ -179,7 +179,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
         tr = Transaction.objects.filter(
             txid=transactionid,
-            address=transaction_address,
+            address=address_obj,
             token=token_obj,
             amount=amount,
             index=index,
@@ -201,7 +201,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
         transaction_obj = Transaction.objects.get(
             txid=transactionid,
-            address=transaction_address,
+            address=address_obj,
             token=token_obj,
             amount=amount,
             index=index
@@ -216,7 +216,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
 
         # Check if address belongs to a wallet
-        address_obj = Address.objects.get(address=transaction_address)
         if address_obj.wallet:
             transaction_obj.wallet = address_obj.wallet
 

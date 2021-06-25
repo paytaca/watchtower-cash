@@ -70,7 +70,7 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
             for tx_output in slp_tx['outputs']:
                 txn_check = Transaction.objects.filter(
                     txid=slp_tx['txid'],
-                    address=tx_output['address'],
+                    address__address=tx_output['address'],
                     index=tx_output['index']
                 )
                 if not txn_check.exists():
@@ -111,7 +111,7 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
         for tx_output in txn['outputs']:
             txn_check = Transaction.objects.filter(
                 txid=txn['txid'],
-                address=tx_output['address'],
+                address__address=tx_output['address'],
                 index=tx_output['index']
             )
             if not txn_check.exists():
