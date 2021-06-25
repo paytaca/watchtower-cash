@@ -175,12 +175,12 @@ class Transaction(models.Model):
         blank=True
     )
 
-    # class Meta:
-    #     unique_together = [
-    #         'txid',
-    #         'address',
-    #         'index'
-    #     ]
+    class Meta:
+        unique_together = [
+            'txid',
+            'address',
+            'index'
+        ]
 
     def __str__(self):
         return self.txid
