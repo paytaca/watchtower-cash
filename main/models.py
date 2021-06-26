@@ -160,13 +160,6 @@ class Transaction(models.Model):
     index = models.IntegerField(default=0, db_index=True)
     spent = models.BooleanField(default=False)
     spending_txid = models.CharField(max_length=70, blank=True, db_index=True)
-    spend_block_height = models.ForeignKey(
-        BlockHeight,
-        related_name='spent_transactions',
-        null=True,
-        blank=True,
-        on_delete=models.DO_NOTHING
-    )
     wallet = models.ForeignKey(
         Wallet,
         on_delete=models.SET_NULL,

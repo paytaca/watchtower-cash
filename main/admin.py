@@ -72,8 +72,7 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     dynamic_raw_id_fields = [
         'blockheight',
         'address',
-        'token',
-        'spend_block_height'
+        'token'
     ]
 
     actions = ['resend_unacknowledged_transactions']
@@ -89,8 +88,7 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'token',
         'acknowledged',
         'created_datetime',
-        'spent',
-        'spend_block_height'
+        'spent'
     ]
 
     def get_actions(self, request):
