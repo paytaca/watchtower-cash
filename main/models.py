@@ -7,10 +7,9 @@ import uuid
 
 
 class Token(models.Model):
-    name = models.CharField(max_length=100, null=True)
+    name = models.CharField(max_length=50, blank=True)
     tokenid = models.CharField(
         max_length=200,
-        null=True,
         blank=True,
         unique=True,
         db_index=True
@@ -18,7 +17,7 @@ class Token(models.Model):
     confirmation_limit = models.IntegerField(default=0)
     decimals = models.IntegerField(default=0)
 
-    token_ticker = models.CharField(max_length=200)
+    token_ticker = models.CharField(max_length=50)
     token_type = models.IntegerField(default=1)
     nft_token_group = models.ForeignKey(
         "main.Token",
@@ -75,7 +74,7 @@ class Project(models.Model):
 
 class Wallet(models.Model):
     wallet_hash = models.CharField(
-        max_length=200,
+        max_length=70,
         db_index=True
     )
     wallet_type = models.CharField(
@@ -135,7 +134,7 @@ class Address(models.Model):
 
 
 class Transaction(models.Model):
-    txid = models.CharField(max_length=200, db_index=True)
+    txid = models.CharField(max_length=70, db_index=True)
     address = models.ForeignKey(
         Address,
         related_name='transactions',
@@ -152,7 +151,7 @@ class Transaction(models.Model):
         null=True,
         blank=True
     )
-    source = models.CharField(max_length=200, null=True, db_index=True)
+    source = models.CharField(max_length=50, db_index=True)
     created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(
         Token,
@@ -160,6 +159,7 @@ class Transaction(models.Model):
     )
     index = models.IntegerField(default=0, db_index=True)
     spent = models.BooleanField(default=False)
+    spending_txid = models.CharField(max_length=70, blank=True, db_index=True)
     spend_block_height = models.ForeignKey(
         BlockHeight,
         related_name='spent_transactions',
@@ -187,8 +187,8 @@ class Transaction(models.Model):
 
 
 class Recipient(models.Model):
-    web_url = models.CharField(max_length=500,null=True, blank=True)
-    telegram_id = models.CharField(max_length=100,null=True, blank=True)
+    web_url = models.CharField(max_length=300, blank=True)
+    telegram_id = models.CharField(max_length=50, blank=True)
     valid = models.BooleanField(default=True)
 
     def __str__(self):
@@ -216,3 +216,7 @@ class Subscription(models.Model):
         related_name='subscriptions'
     )
     websocket=models.BooleanField(default=False)
+
+
+class WalletHistory(models.Model):
+    pass
