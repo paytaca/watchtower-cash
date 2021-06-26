@@ -219,4 +219,32 @@ class Subscription(models.Model):
 
 
 class WalletHistory(models.Model):
-    pass
+    INCOMING = 'incoming'
+    OUTGOING = 'outgoing'
+    RECORD_TYPE_OPTIONS = [
+        (INCOMING, 'Incoming'),
+        (OUTGOING, 'Outgoing')
+    ]
+
+    txid = models.CharField(
+        max_length=70,
+        unique=True,
+        db_index=True
+    )
+    record_type = models.CharField(
+        max_length=10,
+        blank=True,
+        choices=RECORD_TYPE_OPTIONS
+    )
+    amount = models.FloatField(default=0)
+    token = models.ForeignKey(
+        Token,
+        related_name='wallet_records',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    date_created = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.txid
