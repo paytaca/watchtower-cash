@@ -64,7 +64,10 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                 txid=tx_input['txid'],
                 index=tx_input['spent_index']
             )
-            txn_check.update(spent=True)
+            txn_check.update(
+                spent=True,
+                spending_txid=instance.txid
+            )
 
         if slp_tx['valid']:
             for tx_output in slp_tx['outputs']:
@@ -106,7 +109,10 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
                 txid=tx_input['txid'],
                 index=tx_input['spent_index']
             )
-            txn_check.update(spent=True)
+            txn_check.update(
+                spent=True,
+                spending_txid=instance.txid
+            )
 
         for tx_output in txn['outputs']:
             txn_check = Transaction.objects.filter(

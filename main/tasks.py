@@ -226,21 +226,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         return transaction_obj.id, transaction_created
 
 
-@shared_task(bind=True, queue='input_scanner')
-def input_scanner(self, txid, index, block_id=None):
-    tr = Transaction.objects.filter(
-        txid=txid,
-        index=index
-    )
-    if tr.exists():
-        if block_id:
-            tr.update(
-                spent=True,
-                spend_block_height_id=block_id
-            )
-        else:
-            tr.update(spent=True)
-
 @shared_task(bind=True, queue='bitdbquery_transactions')
 def bitdbquery_transaction(self, transaction, total, block_number, block_id, alert=True):
     
@@ -279,13 +264,6 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id, ale
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
-           
-    
-
-    for _in in transaction['in']:
-        txid = _in['e']['h']
-        index= _in['e']['i']
-        input_scanner(txid, index, block_id=block_id)
 
 
 @shared_task(bind=True, queue='bitdbquery', max_retries=30)
@@ -390,12 +368,6 @@ def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
                             if alert:
                                 client_acknowledgement(obj_id)
                     index += 1
-                
-
-                for _in in transaction['in']:
-                    txid = _in['e']['h']
-                    index= _in['e']['i']
-                    input_scanner(txid, index, block_id=block_id)
     
         
 @shared_task(bind=True, queue='slpdbquery', max_retries=20)
