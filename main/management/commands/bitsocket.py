@@ -71,7 +71,7 @@ def run():
                             if subscription.exists():
                             
                                 txn_qs = Transaction.objects.filter(
-                                    address=bchaddress,
+                                    address__address=bchaddress,
                                     txid=txn_id,
                                     index=index
                                 )

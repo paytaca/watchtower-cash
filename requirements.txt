@@ -6,6 +6,7 @@ atomicwrites==1.4.0
 attrs==20.1.0
 backcall==0.1.0
 billiard==3.6.2.0
+BitCash==0.6.4
 celery==4.4.0
 certifi==2019.11.28
 chardet==3.0.4

@@ -68,7 +68,7 @@ def run():
                                         amount = amount / (10 ** token.decimals)
                                     txn_id = info['tx']['h']
                                     txn_qs = Transaction.objects.filter(
-                                        address=slp_address,
+                                        address__address=slp_address,
                                         txid=txn_id,
                                         index=index
                                     )

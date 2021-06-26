@@ -1,5 +1,6 @@
 import math, logging, json, time, requests
 from watchtower.settings import MAX_RESTB_RETRIES
+from bitcash.transaction import calc_txid
 from celery import shared_task
 from main.models import (
     BlockHeight, 
@@ -510,7 +511,7 @@ def get_bch_utxos(self, address):
             block, created = BlockHeight.objects.get_or_create(number=block)
             transaction_obj = Transaction.objects.filter(
                 txid=tx_hash,
-                address=address,
+                address__address=address,
                 amount=amount,
                 index=index
             )
@@ -542,7 +543,7 @@ def get_bch_utxos(self, address):
 
         # Mark other transactions of the same address as spent
         txn_check = Transaction.objects.filter(
-            address=address,
+            address__address=address,
             spent=False
         ).exclude(
             id__in=saved_utxo_ids
@@ -580,7 +581,7 @@ def get_slp_utxos(self, address):
 
                 transaction_obj = Transaction.objects.filter(
                     txid=tx_hash,
-                    address=address,
+                    address__address=address,
                     token=token_obj,
                     amount=amount,
                     index=index
@@ -613,7 +614,7 @@ def get_slp_utxos(self, address):
         
         # Mark other transactions of the same address as spent
         txn_check = Transaction.objects.filter(
-            address=address,
+            address__address=address,
             spent=False
         ).exclude(
             id__in=saved_utxo_ids
@@ -652,18 +653,23 @@ def get_token_meta_data(self, token_id):
         self.retry(countdown=5)
 
 
-@shared_task(bind=True, queue='broadcast', max_retries=5)
+@shared_task(bind=True, queue='broadcast', max_retries=10)
 def broadcast_transaction(self, transaction):
-    try:
-        obj = BCHDQuery()
+    txid = calc_txid(transaction)
+    txn_check = Transaction.objects.filter(txid=txid)
+    if txn_check.exists():
+        return True, txid
+    else:
         try:
-            txid = obj.broadcast_transaction(transaction)
-            if txid:
-                return True, txid
-            else:
-                self.retry(countdown=1)
-        except Exception as exc:
-            error = exc.details()
-            return False, error
-    except AttributeError:
-        self.retry(countdown=1)
+            obj = BCHDQuery()
+            try:
+                txid = obj.broadcast_transaction(transaction)
+                if txid:
+                    return True, txid
+                else:
+                    self.retry(countdown=1)
+            except Exception as exc:
+                error = exc.details()
+                return False, error
+        except AttributeError:
+            self.retry(countdown=1)

@@ -5,6 +5,7 @@ from rest_framework import status
 from main import serializers
 from main.tasks import broadcast_transaction
 
+
 class BroadcastViewSet(generics.GenericAPIView):
     serializer_class = serializers.BroadcastSerializer
     permission_classes = [AllowAny,]
