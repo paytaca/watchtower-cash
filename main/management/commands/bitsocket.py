@@ -5,7 +5,6 @@ from main.models import Token, Transaction, Subscription
 from main.tasks import (
     save_record,
     client_acknowledgement,
-    input_scanner,
     send_telegram_message
 )
 from django.conf import settings
@@ -56,7 +55,6 @@ def run():
                 for _in in loaded_data['data'][0]['in']:
                     txid = _in['e']['h']
                     index = _in['e']['i']
-                    input_scanner(txid, index)
 
                 for out in loaded_data['data'][0]['out']: 
                     if 'e' in out.keys():

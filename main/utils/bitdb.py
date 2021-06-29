@@ -14,7 +14,7 @@ class BitDB(object):
 
     def __init__(self):
         urls = [
-            'https://bitdb.fountainhead.cash/q/',
+            'https://bitdb.bch.sx/q/',
             'https://bitdb2.fountainhead.cash/q/'
         ]
         self.base_url = random.choice(urls)
@@ -23,7 +23,7 @@ class BitDB(object):
         json_string = bytes(json.dumps(query), 'utf-8')
         url = base64.b64encode(json_string)
         try:
-            resp = requests.get(f"{self.base_url}{url.decode('utf-8')}")
+            resp = requests.get(f"{self.base_url}{url.decode('utf-8')}", timeout=300)
         except ConnectionResetError:
             raise BitDBHttpException('Non-200 status')
             

@@ -36,18 +36,18 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='token',
             name='name',
-            field=models.CharField(blank=True, default='', max_length=50),
+            field=models.CharField(blank=True, default='', max_length=200),
             preserve_default=False,
         ),
         migrations.AlterField(
             model_name='token',
             name='token_ticker',
-            field=models.CharField(max_length=50),
+            field=models.CharField(max_length=200),
         ),
         migrations.AlterField(
             model_name='token',
             name='tokenid',
-            field=models.CharField(blank=True, db_index=True, default='', max_length=200, unique=True),
+            field=models.CharField(blank=True, db_index=True, default='', max_length=70),
             preserve_default=False,
         ),
         migrations.AlterField(

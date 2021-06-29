@@ -6,7 +6,7 @@ import grpc
 import time
 import random
 import logging
-from main.tasks import save_record, client_acknowledgement, input_scanner, send_telegram_message
+from main.tasks import save_record, client_acknowledgement, send_telegram_message
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,7 +43,6 @@ def run():
                 
                 txid = _input.outpoint.hash.hex()
                 index = _input.outpoint.index
-                input_scanner(txid, index)
 
             for output in tx.outputs:
                 if output.address:

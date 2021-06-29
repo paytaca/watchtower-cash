@@ -7,9 +7,9 @@ import uuid
 
 
 class Token(models.Model):
-    name = models.CharField(max_length=50, blank=True)
+    name = models.CharField(max_length=200, blank=True)
     tokenid = models.CharField(
-        max_length=200,
+        max_length=70,
         blank=True,
         unique=True,
         db_index=True
@@ -17,7 +17,7 @@ class Token(models.Model):
     confirmation_limit = models.IntegerField(default=0)
     decimals = models.IntegerField(default=0)
 
-    token_ticker = models.CharField(max_length=50)
+    token_ticker = models.CharField(max_length=200)
     token_type = models.IntegerField(default=1)
     nft_token_group = models.ForeignKey(
         "main.Token",
@@ -151,7 +151,7 @@ class Transaction(models.Model):
         null=True,
         blank=True
     )
-    source = models.CharField(max_length=50, db_index=True)
+    source = models.CharField(max_length=100, db_index=True)
     created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(
         Token,
