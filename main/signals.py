@@ -20,6 +20,7 @@ from main.models import (
     BlockHeight,
     Transaction
 )
+from main.tasks import transaction_post_save_task
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -53,92 +54,7 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
 @receiver(post_save, sender=Transaction)
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
     address = instance.address.address
-    if address.startswith('bitcoincash:'):
-        # Make sure that any corresponding SLP transaction is saved
-        bchd = BCHDQuery()
-        slp_tx = bchd.get_transaction(instance.txid, parse_slp=True)
-
-        # Mark inputs as spent
-        for tx_input in slp_tx['inputs']:
-            txn_check = Transaction.objects.filter(
-                txid=tx_input['txid'],
-                index=tx_input['spent_index']
-            )
-            txn_check.update(
-                spent=True,
-                spending_txid=instance.txid
-            )
-
-        if slp_tx['valid']:
-            for tx_output in slp_tx['outputs']:
-                txn_check = Transaction.objects.filter(
-                    txid=slp_tx['txid'],
-                    address__address=tx_output['address'],
-                    index=tx_output['index']
-                )
-                if not txn_check.exists():
-                    blockheight_id = None
-                    if instance.blockheight:
-                        blockheight_id = instance.blockheight.id
-                    args = (
-                        slp_tx['token_id'],
-                        tx_output['address'],
-                        slp_tx['txid'],
-                        tx_output['amount'],
-                        'bchd-query',
-                        blockheight_id,
-                        tx_output['index']
-                    )
-                    obj_id, created = save_record(*args)
-                    if created:
-                        third_parties = client_acknowledgement(obj_id)
-                        for platform in third_parties:
-                            if 'telegram' in platform:
-                                message = platform[1]
-                                chat_id = platform[2]
-                                send_telegram_message(message, chat_id)
-
-    elif address.startswith('simpleledger:'):
-        # Make sure that any corresponding BCH transaction is saved
-        bchd = BCHDQuery()
-        txn = bchd.get_transaction(instance.txid)
-        
-        # Mark inputs as spent
-        for tx_input in txn['inputs']:
-            txn_check = Transaction.objects.filter(
-                txid=tx_input['txid'],
-                index=tx_input['spent_index']
-            )
-            txn_check.update(
-                spent=True,
-                spending_txid=instance.txid
-            )
-
-        for tx_output in txn['outputs']:
-            txn_check = Transaction.objects.filter(
-                txid=txn['txid'],
-                address__address=tx_output['address'],
-                index=tx_output['index']
-            )
-            if not txn_check.exists():
-                blockheight_id = None
-                if instance.blockheight:
-                    blockheight_id = instance.blockheight.id
-                value = tx_output['value'] / 10 ** 8
-                args = (
-                    'bch',
-                    tx_output['address'],
-                    txn['txid'],
-                    value,
-                    'bchd-query',
-                    blockheight_id,
-                    tx_output['index']
-                )
-                obj_id, created = save_record(*args)
-                if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+    blockheight_id = None
+    if instance.blockheight:
+        blockheight_id = instance.blockheight.id
+    transaction_post_save_task.delay(address, instance.txid, blockheight_id)
