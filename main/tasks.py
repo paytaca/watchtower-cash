@@ -13,6 +13,7 @@ from main.models import (
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
+from django.db.utils import IntegrityError
 from django.conf import settings
 from django.db import transaction as trans
 from celery import Celery
@@ -177,26 +178,30 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             token_obj, created = Token.objects.get_or_create(tokenid=token)
             if created: get_token_meta_data.delay(token_obj.tokenid)
 
-        #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
-        tr = Transaction.objects.filter(
-            txid=transactionid,
-            address=address_obj,
-            index=index,
-        )
-        
-        if not tr.exists():
+        try:
 
-            transaction_data = {
-                'txid': transactionid,
-                'address': address_obj,
-                'token': token_obj,
-                'amount': amount,
-                'index': index,
-                'source': source
-            }
-            transaction_list = [Transaction(**transaction_data)]
-            Transaction.objects.bulk_create(transaction_list)
-            transaction_created = True
+            #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
+            tr = Transaction.objects.filter(
+                txid=transactionid,
+                address=address_obj,
+                index=index,
+            )
+            
+            if not tr.exists():
+
+                transaction_data = {
+                    'txid': transactionid,
+                    'address': address_obj,
+                    'token': token_obj,
+                    'amount': amount,
+                    'index': index,
+                    'source': source
+                }
+                transaction_list = [Transaction(**transaction_data)]
+                Transaction.objects.bulk_create(transaction_list)
+                transaction_created = True
+        except IntegrityError:
+            return None, None
 
         transaction_obj = Transaction.objects.get(
             txid=transactionid,
@@ -647,7 +652,7 @@ def broadcast_transaction(self, transaction):
             self.retry(countdown=1)
 
 
-@shared_task(bind=True, queue='save_record', max_retries=10)
+@shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, txid, blockheight_id=None):
     blockheight = None
     if blockheight_id:

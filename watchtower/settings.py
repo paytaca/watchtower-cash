@@ -159,7 +159,7 @@ REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
 REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = ('main.tasks',)
 
-CELERY_BROKER_URL = 'pyamqp://rabbitmq:5672'
+CELERY_BROKER_URL = 'amqp://rabbitmq:5672//'
 CELERY_RESULT_BACKEND = 'rpc://'
 
 if REDIS_PASSWORD:
