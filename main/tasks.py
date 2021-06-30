@@ -181,8 +181,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         tr = Transaction.objects.filter(
             txid=transactionid,
             address=address_obj,
-            token=token_obj,
-            amount=amount,
             index=index,
         )
         
@@ -628,6 +626,7 @@ def get_token_meta_data(self, token_id):
 @shared_task(bind=True, queue='broadcast', max_retries=10)
 def broadcast_transaction(self, transaction):
     txid = calc_txid(transaction)
+    LOGGER.info(f'Broadcasting {txid}:  {transaction}')
     txn_check = Transaction.objects.filter(txid=txid)
     if txn_check.exists():
         return True, txid
@@ -642,6 +641,7 @@ def broadcast_transaction(self, transaction):
                     self.retry(countdown=1)
             except Exception as exc:
                 error = exc.details()
+                LOGGER.error(error)
                 return False, error
         except AttributeError:
             self.retry(countdown=1)
