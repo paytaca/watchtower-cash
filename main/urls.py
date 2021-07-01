@@ -23,6 +23,7 @@ main_urls += [
     re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)", views.UTXO.as_view(),name='slp-token-utxo'),
     re_path(r"^utxo/wallet/(?P<wallethash>[\w+:]+)/$", views.UTXO.as_view(),name='wallet-utxo'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/$", views.WalletHistoryView.as_view(),name='wallet-history'),
+    re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/(?P<tokenid>[\w+]+)$", views.WalletHistoryView.as_view(),name='token-wallet-history'),
     path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction")
 ]
 
