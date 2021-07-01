@@ -117,6 +117,7 @@ class Address(models.Model):
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
+        verbose_name = 'Address'
         verbose_name_plural = 'Addresses'
 
     def __str__(self):
@@ -244,6 +245,15 @@ class WalletHistory(models.Model):
         blank=True
     )
     date_created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Wallet history'
+        verbose_name_plural = 'Wallet histories'
+
+        unique_together = [
+            'wallet',
+            'txid'
+        ]
 
     def __str__(self):
         return self.txid

@@ -7,7 +7,8 @@ from main.models import (
     Subscription,
     Recipient,
     Project,
-    Wallet
+    Wallet,
+    WalletHistory
 )
 from django.contrib.auth.models import User, Group
 from main.tasks import client_acknowledgement, send_telegram_message
@@ -140,6 +141,10 @@ class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'project'
     ]
 
+    search_fields = [
+        'wallet__wallet_hash'
+    ]
+
 
 class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
@@ -160,7 +165,27 @@ class ProjectAdmin(admin.ModelAdmin):
         'date_created'
     ]
 
-    
+
+class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    list_display = [
+        'txid',
+        'wallet',
+        'record_type',
+        'amount',
+        'token',
+        'date_created'
+    ]
+
+    dynamic_raw_id_fields = [
+        'wallet',
+        'token'
+    ]
+
+    search_fields = [
+        'wallet__wallet_hash'
+    ]
+
+
 admin.site.unregister(User)
 admin.site.unregister(Group)
 
@@ -172,3 +197,4 @@ admin.site.register(Recipient, RecipientAdmin)
 admin.site.register(Address, AddressAdmin)
 admin.site.register(Wallet, WalletAdmin)
 admin.site.register(Project, ProjectAdmin)
+admin.site.register(WalletHistory, WalletHistoryAdmin)
