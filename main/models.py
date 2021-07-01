@@ -219,6 +219,12 @@ class WalletHistory(models.Model):
         (OUTGOING, 'Outgoing')
     ]
 
+    wallet = models.ForeignKey(
+        Wallet,
+        related_name='history',
+        on_delete=models.CASCADE,
+        null=True
+    )
     txid = models.CharField(
         max_length=70,
         unique=True,
@@ -232,7 +238,7 @@ class WalletHistory(models.Model):
     amount = models.FloatField(default=0)
     token = models.ForeignKey(
         Token,
-        related_name='wallet_records',
+        related_name='wallet_history_records',
         on_delete=models.CASCADE,
         null=True,
         blank=True
