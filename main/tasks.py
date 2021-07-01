@@ -437,21 +437,25 @@ def manage_block_transactions(self):
     if int(REDIS_STORAGE.get('READY')): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
     if not blocks: return 'NO PENDING BLOCKS'
     
+    discard_block = False
     if int(REDIS_STORAGE.get('READY')):
-        active_block = blocks[0]
-
-        REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
-        REDIS_STORAGE.set('READY', 0)
-
-        block = BlockHeight.objects.get(number=active_block)        
-        slpdbquery.delay(block.id)
-
+        try:
+            active_block = blocks[0]
+            block = BlockHeight.objects.get(number=active_block)
+        except BlockHeight.DoesNotExist:
+            discard_block = True   
+    
         if active_block in blocks:
             blocks.remove(active_block)
             blocks = list(set(blocks))  # Uniquify the list
             blocks.sort()  # Then sort, ascending
             pending_blocks = json.dumps(blocks)
             REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
+
+        if not discard_block:
+            REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
+            REDIS_STORAGE.set('READY', 0)
+            slpdbquery.delay(block.id)     
     
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
