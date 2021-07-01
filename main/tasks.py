@@ -27,8 +27,6 @@ import base64
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
-app = Celery('configs')
-
 
 @shared_task()
 def add(x, y):
