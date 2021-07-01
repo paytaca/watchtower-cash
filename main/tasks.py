@@ -8,11 +8,13 @@ from main.models import (
     Transaction,
     Recipient,
     Subscription,
-    Address
+    Address,
+    WalletHistory
 )
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
+from main.utils.wallet import HistoryParser
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.db import transaction as trans
@@ -654,11 +656,28 @@ def broadcast_transaction(self, transaction):
             self.retry(countdown=1)
 
 
+@shared_task(bind=True, queue='post_save_record')
+def parse_wallet_history(self, txid, wallet_hash):
+    parser = HistoryParser(txid, wallet_hash)
+    record_type, amount = parser.parse()
+    txn = Transaction.objects.get(txid=txid)
+    history = WalletHistory(
+        wallet__wallet_hash=wallet_hash,
+        txid=txid,
+        record_type=record_type,
+        amount=amount,
+        token=txn.token
+    )
+    history.save()
+
+
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, txid, blockheight_id=None):
     blockheight = None
     if blockheight_id:
         blockheight = BlockHeight.objects.get(id=blockheight_id)
+
+    wallets = []
 
     if address.startswith('bitcoincash:'):
         # Make sure that any corresponding SLP transaction is saved
@@ -667,6 +686,9 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
 
         # Mark inputs as spent
         for tx_input in slp_tx['inputs']:
+            address = Address.objects.get(address=tx_input['address'])
+            if address.wallet:
+                wallets.append(address.wallet.wallet_hash)
             txn_check = Transaction.objects.filter(
                 txid=tx_input['txid'],
                 index=tx_input['spent_index']
@@ -678,6 +700,9 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
 
         if slp_tx['valid']:
             for tx_output in slp_tx['outputs']:
+                address = Address.objects.get(address=tx_output['address'])
+                if address.wallet:
+                    wallets.append(address.wallet.wallet_hash)
                 txn_check = Transaction.objects.filter(
                     txid=slp_tx['txid'],
                     address__address=tx_output['address'],
@@ -712,6 +737,9 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
         
         # Mark inputs as spent
         for tx_input in txn['inputs']:
+            address = Address.objects.get(address=tx_input['address'])
+            if address.wallet:
+                wallets.append(address.wallet.wallet_hash)
             txn_check = Transaction.objects.filter(
                 txid=tx_input['txid'],
                 index=tx_input['spent_index']
@@ -722,6 +750,9 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
             )
 
         for tx_output in txn['outputs']:
+            address = Address.objects.get(address=tx_output['address'])
+            if address.wallet:
+                wallets.append(address.wallet.wallet_hash)
             txn_check = Transaction.objects.filter(
                 txid=txn['txid'],
                 address__address=tx_output['address'],
@@ -749,3 +780,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                             message = platform[1]
                             chat_id = platform[2]
                             send_telegram_message(message, chat_id)
+
+    # Call task to parse wallet history
+    for wallet in wallets:
+        parse_wallet_history.delay(txid, wallet)

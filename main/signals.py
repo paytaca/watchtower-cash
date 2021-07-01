@@ -57,4 +57,6 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
     blockheight_id = None
     if instance.blockheight:
         blockheight_id = instance.blockheight.id
+
+    # Trigger the transaction post-save task
     transaction_post_save_task.delay(address, instance.txid, blockheight_id)
