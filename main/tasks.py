@@ -8,11 +8,15 @@ from main.models import (
     Transaction,
     Recipient,
     Subscription,
-    Address
+    Address,
+    Wallet,
+    WalletHistory
 )
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils import slpdb as slpdb_scanner
 from main.utils import bitdb as bitdb_scanner
+from main.utils.wallet import HistoryParser
+from django.db.utils import IntegrityError
 from django.conf import settings
 from django.db import transaction as trans
 from celery import Celery
@@ -25,8 +29,6 @@ import base64
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
-
-app = Celery('configs')
 
 
 @shared_task()
@@ -177,28 +179,30 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             token_obj, created = Token.objects.get_or_create(tokenid=token)
             if created: get_token_meta_data.delay(token_obj.tokenid)
 
-        #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
-        tr = Transaction.objects.filter(
-            txid=transactionid,
-            address=address_obj,
-            token=token_obj,
-            amount=amount,
-            index=index,
-        )
-        
-        if not tr.exists():
+        try:
 
-            transaction_data = {
-                'txid': transactionid,
-                'address': address_obj,
-                'token': token_obj,
-                'amount': amount,
-                'index': index,
-                'source': source
-            }
-            transaction_list = [Transaction(**transaction_data)]
-            Transaction.objects.bulk_create(transaction_list)
-            transaction_created = True
+            #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
+            tr = Transaction.objects.filter(
+                txid=transactionid,
+                address=address_obj,
+                index=index,
+            )
+            
+            if not tr.exists():
+
+                transaction_data = {
+                    'txid': transactionid,
+                    'address': address_obj,
+                    'token': token_obj,
+                    'amount': amount,
+                    'index': index,
+                    'source': source
+                }
+                transaction_list = [Transaction(**transaction_data)]
+                Transaction.objects.bulk_create(transaction_list)
+                transaction_created = True
+        except IntegrityError:
+            return None, None
 
         transaction_obj = Transaction.objects.get(
             txid=transactionid,
@@ -225,21 +229,6 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         
         return transaction_obj.id, transaction_created
 
-
-@shared_task(bind=True, queue='input_scanner')
-def input_scanner(self, txid, index, block_id=None):
-    tr = Transaction.objects.filter(
-        txid=txid,
-        index=index
-    )
-    if tr.exists():
-        if block_id:
-            tr.update(
-                spent=True,
-                spend_block_height_id=block_id
-            )
-        else:
-            tr.update(spent=True)
 
 @shared_task(bind=True, queue='bitdbquery_transactions')
 def bitdbquery_transaction(self, transaction, total, block_number, block_id, alert=True):
@@ -279,13 +268,6 @@ def bitdbquery_transaction(self, transaction, total, block_number, block_id, ale
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
-           
-    
-
-    for _in in transaction['in']:
-        txid = _in['e']['h']
-        index= _in['e']['i']
-        input_scanner(txid, index, block_id=block_id)
 
 
 @shared_task(bind=True, queue='bitdbquery', max_retries=30)
@@ -390,12 +372,6 @@ def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
                             if alert:
                                 client_acknowledgement(obj_id)
                     index += 1
-                
-
-                for _in in transaction['in']:
-                    txid = _in['e']['h']
-                    index= _in['e']['i']
-                    input_scanner(txid, index, block_id=block_id)
     
         
 @shared_task(bind=True, queue='slpdbquery', max_retries=20)
@@ -464,21 +440,25 @@ def manage_block_transactions(self):
     if int(REDIS_STORAGE.get('READY')): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
     if not blocks: return 'NO PENDING BLOCKS'
     
+    discard_block = False
     if int(REDIS_STORAGE.get('READY')):
-        active_block = blocks[0]
-
-        REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
-        REDIS_STORAGE.set('READY', 0)
-
-        block = BlockHeight.objects.get(number=active_block)        
-        slpdbquery.delay(block.id)
-
+        try:
+            active_block = blocks[0]
+            block = BlockHeight.objects.get(number=active_block)
+        except BlockHeight.DoesNotExist:
+            discard_block = True   
+    
         if active_block in blocks:
             blocks.remove(active_block)
             blocks = list(set(blocks))  # Uniquify the list
             blocks.sort()  # Then sort, ascending
             pending_blocks = json.dumps(blocks)
             REDIS_STORAGE.set('PENDING-BLOCKS', pending_blocks)
+
+        if not discard_block:
+            REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
+            REDIS_STORAGE.set('READY', 0)
+            slpdbquery.delay(block.id)     
     
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
@@ -656,6 +636,7 @@ def get_token_meta_data(self, token_id):
 @shared_task(bind=True, queue='broadcast', max_retries=10)
 def broadcast_transaction(self, transaction):
     txid = calc_txid(transaction)
+    LOGGER.info(f'Broadcasting {txid}:  {transaction}')
     txn_check = Transaction.objects.filter(txid=txid)
     if txn_check.exists():
         return True, txid
@@ -670,6 +651,166 @@ def broadcast_transaction(self, transaction):
                     self.retry(countdown=1)
             except Exception as exc:
                 error = exc.details()
+                LOGGER.error(error)
                 return False, error
         except AttributeError:
             self.retry(countdown=1)
+
+
+@shared_task(bind=True, queue='post_save_record')
+def parse_wallet_history(self, txid, wallet_hash):
+    parser = HistoryParser(txid, wallet_hash)
+    record_type, amount = parser.parse()
+    txn = Transaction.objects.get(txid=txid)
+    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+    history_check = WalletHistory.objects.filter(
+        wallet=wallet,
+        txid=txid
+    )
+    if history_check.exists():
+        history_check.update(
+            record_type=record_type,
+            amount=amount
+        )
+    else:
+        history = WalletHistory(
+            wallet=wallet,
+            txid=txid,
+            record_type=record_type,
+            amount=amount,
+            token=txn.token,
+            date_created=txn.date_created
+        )
+        history.save()
+
+
+@shared_task(bind=True, queue='post_save_record', max_retries=10)
+def transaction_post_save_task(self, address, txid, blockheight_id=None):
+    blockheight = None
+    if blockheight_id:
+        blockheight = BlockHeight.objects.get(id=blockheight_id)
+
+    wallets = []
+    txn_address = Address.objects.get(address=address)
+    if txn_address.wallet:
+        wallets.append(txn_address.wallet.wallet_hash)
+
+    if address.startswith('bitcoincash:'):
+        # Make sure that any corresponding SLP transaction is saved
+        bchd = BCHDQuery()
+        slp_tx = bchd.get_transaction(txid, parse_slp=True)
+
+        # Mark inputs as spent
+        for tx_input in slp_tx['inputs']:
+            try:
+                address = Address.objects.get(address=tx_input['address'])
+                if address.wallet:
+                    wallets.append(address.wallet.wallet_hash)
+            except Address.DoesNotExist:
+                pass
+            txn_check = Transaction.objects.filter(
+                txid=tx_input['txid'],
+                index=tx_input['spent_index']
+            )
+            txn_check.update(
+                spent=True,
+                spending_txid=txid
+            )
+
+        if slp_tx['valid']:
+            for tx_output in slp_tx['outputs']:
+                try:
+                    address = Address.objects.get(address=tx_output['address'])
+                    if address.wallet:
+                        wallets.append(address.wallet.wallet_hash)
+                except Address.DoesNotExist:
+                    pass
+                txn_check = Transaction.objects.filter(
+                    txid=slp_tx['txid'],
+                    address__address=tx_output['address'],
+                    index=tx_output['index']
+                )
+                if not txn_check.exists():
+                    blockheight_id = None
+                    if blockheight:
+                        blockheight_id = blockheight.id
+                    args = (
+                        slp_tx['token_id'],
+                        tx_output['address'],
+                        slp_tx['txid'],
+                        tx_output['amount'],
+                        'bchd-query',
+                        blockheight_id,
+                        tx_output['index']
+                    )
+                    obj_id, created = save_record(*args)
+                    if created:
+                        third_parties = client_acknowledgement(obj_id)
+                        for platform in third_parties:
+                            if 'telegram' in platform:
+                                message = platform[1]
+                                chat_id = platform[2]
+                                send_telegram_message(message, chat_id)
+
+    elif address.startswith('simpleledger:'):
+        # Make sure that any corresponding BCH transaction is saved
+        bchd = BCHDQuery()
+        txn = bchd.get_transaction(txid)
+        
+        # Mark inputs as spent
+        for tx_input in txn['inputs']:
+            try:
+                address = Address.objects.get(address=tx_input['address'])
+                if address.wallet:
+                    wallets.append(address.wallet.wallet_hash)
+            except Address.DoesNotExist:
+                pass
+            txn_check = Transaction.objects.filter(
+                txid=tx_input['txid'],
+                index=tx_input['spent_index']
+            )
+            txn_check.update(
+                spent=True,
+                spending_txid=txid
+            )
+
+        for tx_output in txn['outputs']:
+            try:
+                address = Address.objects.get(address=tx_output['address'])
+                if address.wallet:
+                    wallets.append(address.wallet.wallet_hash)
+            except Address.DoesNotExist:
+                pass
+            txn_check = Transaction.objects.filter(
+                txid=txn['txid'],
+                address__address=tx_output['address'],
+                index=tx_output['index']
+            )
+            if not txn_check.exists():
+                blockheight_id = None
+                if blockheight:
+                    blockheight_id = blockheight.id
+                value = tx_output['value'] / 10 ** 8
+                args = (
+                    'bch',
+                    tx_output['address'],
+                    txn['txid'],
+                    value,
+                    'bchd-query',
+                    blockheight_id,
+                    tx_output['index']
+                )
+                obj_id, created = save_record(*args)
+                if created:
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)
+
+
+
+    # Call task to parse wallet history
+    for wallet_hash in set(wallets):
+        parse_wallet_history.delay(txid, wallet_hash)

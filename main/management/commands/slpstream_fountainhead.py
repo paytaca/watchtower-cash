@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from main.models import Token, Transaction, Subscription
-from main.tasks import save_record, client_acknowledgement, input_scanner, send_telegram_message
+from main.tasks import save_record, client_acknowledgement, send_telegram_message
 from django.conf import settings
 import logging
 import requests
@@ -41,7 +41,6 @@ def run():
                 for _in in info['in']:
                     txid = _in['e']['h']
                     index = _in['e']['i']
-                    input_scanner(txid, index)
                     
                 if 'slp' in info.keys():
                     if info['slp']['valid']:

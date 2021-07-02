@@ -7,10 +7,9 @@ import uuid
 
 
 class Token(models.Model):
-    name = models.CharField(max_length=100, null=True)
+    name = models.CharField(max_length=200, blank=True)
     tokenid = models.CharField(
-        max_length=200,
-        null=True,
+        max_length=70,
         blank=True,
         unique=True,
         db_index=True
@@ -75,7 +74,7 @@ class Project(models.Model):
 
 class Wallet(models.Model):
     wallet_hash = models.CharField(
-        max_length=200,
+        max_length=70,
         db_index=True
     )
     wallet_type = models.CharField(
@@ -118,6 +117,7 @@ class Address(models.Model):
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
+        verbose_name = 'Address'
         verbose_name_plural = 'Addresses'
 
     def __str__(self):
@@ -135,7 +135,7 @@ class Address(models.Model):
 
 
 class Transaction(models.Model):
-    txid = models.CharField(max_length=200, db_index=True)
+    txid = models.CharField(max_length=70, db_index=True)
     address = models.ForeignKey(
         Address,
         related_name='transactions',
@@ -152,21 +152,14 @@ class Transaction(models.Model):
         null=True,
         blank=True
     )
-    source = models.CharField(max_length=200, null=True, db_index=True)
-    created_datetime = models.DateTimeField(default=timezone.now)
+    source = models.CharField(max_length=100, db_index=True)
     token = models.ForeignKey(
         Token,
         on_delete=models.CASCADE
     )
     index = models.IntegerField(default=0, db_index=True)
     spent = models.BooleanField(default=False)
-    spend_block_height = models.ForeignKey(
-        BlockHeight,
-        related_name='spent_transactions',
-        null=True,
-        blank=True,
-        on_delete=models.DO_NOTHING
-    )
+    spending_txid = models.CharField(max_length=70, blank=True, db_index=True)
     wallet = models.ForeignKey(
         Wallet,
         on_delete=models.SET_NULL,
@@ -174,6 +167,7 @@ class Transaction(models.Model):
         null=True,
         blank=True
     )
+    date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
         unique_together = [
@@ -181,14 +175,15 @@ class Transaction(models.Model):
             'address',
             'index'
         ]
+        ordering = ['-date_created']
 
     def __str__(self):
         return self.txid
 
 
 class Recipient(models.Model):
-    web_url = models.CharField(max_length=500,null=True, blank=True)
-    telegram_id = models.CharField(max_length=100,null=True, blank=True)
+    web_url = models.CharField(max_length=300, blank=True)
+    telegram_id = models.CharField(max_length=50, blank=True)
     valid = models.BooleanField(default=True)
 
     def __str__(self):
@@ -216,3 +211,50 @@ class Subscription(models.Model):
         related_name='subscriptions'
     )
     websocket=models.BooleanField(default=False)
+
+
+class WalletHistory(models.Model):
+    INCOMING = 'incoming'
+    OUTGOING = 'outgoing'
+    RECORD_TYPE_OPTIONS = [
+        (INCOMING, 'Incoming'),
+        (OUTGOING, 'Outgoing')
+    ]
+
+    wallet = models.ForeignKey(
+        Wallet,
+        related_name='history',
+        on_delete=models.CASCADE,
+        null=True
+    )
+    txid = models.CharField(
+        max_length=70,
+        unique=True,
+        db_index=True
+    )
+    record_type = models.CharField(
+        max_length=10,
+        blank=True,
+        choices=RECORD_TYPE_OPTIONS
+    )
+    amount = models.FloatField(default=0)
+    token = models.ForeignKey(
+        Token,
+        related_name='wallet_history_records',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    date_created = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Wallet history'
+        verbose_name_plural = 'Wallet histories'
+        ordering = ['-date_created']
+        unique_together = [
+            'wallet',
+            'txid'
+        ]
+
+    def __str__(self):
+        return self.txid
