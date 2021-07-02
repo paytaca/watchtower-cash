@@ -88,8 +88,8 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'blockheight',
         'token',
         'acknowledged',
-        'created_datetime',
-        'spent'
+        'spent',
+        'date_created'
     ]
 
     def get_actions(self, request):

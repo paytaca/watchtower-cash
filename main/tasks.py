@@ -678,7 +678,8 @@ def parse_wallet_history(self, txid, wallet_hash):
             txid=txid,
             record_type=record_type,
             amount=amount,
-            token=txn.token
+            token=txn.token,
+            date_created=txn.date_created
         )
         history.save()
 

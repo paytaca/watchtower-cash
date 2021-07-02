@@ -153,7 +153,6 @@ class Transaction(models.Model):
         blank=True
     )
     source = models.CharField(max_length=100, db_index=True)
-    created_datetime = models.DateTimeField(default=timezone.now)
     token = models.ForeignKey(
         Token,
         on_delete=models.CASCADE
@@ -168,6 +167,7 @@ class Transaction(models.Model):
         null=True,
         blank=True
     )
+    date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
         unique_together = [
@@ -175,6 +175,7 @@ class Transaction(models.Model):
             'address',
             'index'
         ]
+        ordering = ['-date_created']
 
     def __str__(self):
         return self.txid
@@ -249,7 +250,7 @@ class WalletHistory(models.Model):
     class Meta:
         verbose_name = 'Wallet history'
         verbose_name_plural = 'Wallet histories'
-
+        ordering = ['-date_created']
         unique_together = [
             'wallet',
             'txid'
