@@ -57,14 +57,15 @@ class Balance(APIView):
             else:
                 query =  Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_slp_balance(query)
-            data['balance'] = list(qs_balance)
+            balances = [round(x, 8) for x in list(qs_balance)]
+            data['balance'] = balances
             data['valid'] = True
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_bch_balance(query)
-            data['balance'] = qs_balance['balance']
+            data['balance'] = round(qs_balance['balance'], 8)
             data['valid'] = True
 
         if wallet_hash:
@@ -77,13 +78,14 @@ class Balance(APIView):
                 else:
                     query =  Q(wallet=wallet) & Q(spent=False)
                 qs_balance = _get_slp_balance(query)
-                data['balance'] = list(qs_balance)
+                balances = [round(x, 8) for x in list(qs_balance)]
+                data['balance'] = balances
                 data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
                 qs_balance = _get_bch_balance(query)
-                data['balance'] = qs_balance['balance']
+                data['balance'] = round(qs_balance['balance'], 8)
                 data['valid'] = True
 
         return Response(data=data, status=status.HTTP_200_OK)
