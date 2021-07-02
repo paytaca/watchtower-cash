@@ -121,9 +121,9 @@ class UTXO(APIView):
             
             if wallet.wallet_type == 'slp':
                 if tokenid:
-                    query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
                 else:
-                    query =  Q(address__address=data['address']) & Q(spent=False)
+                    query =  Q(wallet=wallet) & Q(spent=False)
                 utxos_values = _get_slp_utxos(query, show_address_index=True)
 
             elif wallet.wallet_type == 'bch':
