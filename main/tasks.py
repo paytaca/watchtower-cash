@@ -662,7 +662,16 @@ def parse_wallet_history(self, txid, wallet_hash):
     parser = HistoryParser(txid, wallet_hash)
     record_type, amount = parser.parse()
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-    txns = Transaction.objects.filter(txid=txid)
+    if wallet.wallet_type == 'bch':
+        txns = Transaction.objects.filter(
+            txid=txid,
+            address__address__startswith='bitcoincash:'
+        )
+    elif wallet.wallet_type == 'slp':
+        txns = Transaction.objects.filter(
+            txid=txid,
+            address__address__startswith='simpleledger:'
+        )
     txn = txns.last()
     history_check = WalletHistory.objects.filter(
         wallet=wallet,
@@ -671,7 +680,8 @@ def parse_wallet_history(self, txid, wallet_hash):
     if history_check.exists():
         history_check.update(
             record_type=record_type,
-            amount=amount
+            amount=amount,
+            token=txn.token
         )
     else:
         history = WalletHistory(
