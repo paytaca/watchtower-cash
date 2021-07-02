@@ -661,8 +661,9 @@ def broadcast_transaction(self, transaction):
 def parse_wallet_history(self, txid, wallet_hash):
     parser = HistoryParser(txid, wallet_hash)
     record_type, amount = parser.parse()
-    txn = Transaction.objects.get(txid=txid)
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+    txns = Transaction.objects.filter(txid=txid)
+    txn = txns.last()
     history_check = WalletHistory.objects.filter(
         wallet=wallet,
         txid=txid
