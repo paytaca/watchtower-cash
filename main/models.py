@@ -2,11 +2,12 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
+from psqlextra.models import PostgresModel
 from django.conf import settings
 import uuid
 
 
-class Token(models.Model):
+class Token(PostgresModel):
     name = models.CharField(max_length=200, blank=True)
     tokenid = models.CharField(
         max_length=70,
@@ -36,7 +37,7 @@ class Token(models.Model):
             return str(self.name)
 
 
-class BlockHeight(models.Model):
+class BlockHeight(PostgresModel):
     number = models.IntegerField(default=0, unique=True, db_index=True)
     transactions_count = models.IntegerField(default=0)
     created_datetime = models.DateTimeField(null=True, blank=True)
@@ -60,7 +61,7 @@ class BlockHeight(models.Model):
         return str(self.number)
 
 
-class Project(models.Model):
+class Project(PostgresModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, blank=True)
     date_created = models.DateTimeField(default=timezone.now)
@@ -72,7 +73,7 @@ class Project(models.Model):
             return str(self.id)
 
 
-class Wallet(models.Model):
+class Wallet(PostgresModel):
     wallet_hash = models.CharField(
         max_length=70,
         db_index=True
@@ -94,7 +95,7 @@ class Wallet(models.Model):
         return self.wallet_hash
 
 
-class Address(models.Model):
+class Address(PostgresModel):
     address = models.CharField(max_length=70, unique=True, db_index=True)
     project = models.ForeignKey(
         Project,
@@ -134,7 +135,7 @@ class Address(models.Model):
         super(Address, self).save(*args, **kwargs)
 
 
-class Transaction(models.Model):
+class Transaction(PostgresModel):
     txid = models.CharField(max_length=70, db_index=True)
     address = models.ForeignKey(
         Address,
@@ -181,7 +182,7 @@ class Transaction(models.Model):
         return self.txid
 
 
-class Recipient(models.Model):
+class Recipient(PostgresModel):
     web_url = models.CharField(max_length=300, blank=True)
     telegram_id = models.CharField(max_length=50, blank=True)
     valid = models.BooleanField(default=True)
@@ -195,7 +196,7 @@ class Recipient(models.Model):
             return 'N/A'
 
 
-class Subscription(models.Model):
+class Subscription(PostgresModel):
     address = models.ForeignKey(
         Address,
         on_delete=models.CASCADE,
@@ -213,7 +214,7 @@ class Subscription(models.Model):
     websocket=models.BooleanField(default=False)
 
 
-class WalletHistory(models.Model):
+class WalletHistory(PostgresModel):
     INCOMING = 'incoming'
     OUTGOING = 'outgoing'
     RECORD_TYPE_OPTIONS = [

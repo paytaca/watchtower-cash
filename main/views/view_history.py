@@ -14,7 +14,9 @@ class WalletHistoryView(APIView):
         wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         if wallet.wallet_type == 'slp':
             data = qs.annotate(
-                token=F('token__tokenid')
+                _token=F('token__tokenid')
+            ).rename_annotations(
+                _token='token'
             ).values(
                 'record_type',
                 'txid',

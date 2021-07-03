@@ -56,6 +56,8 @@ INSTALLED_APPS=[
     'rest_framework.authtoken',
     'corsheaders',
     'django.contrib.admin',
+    "django.contrib.postgres",
+    "psqlextra",
     'dynamic_raw_id',
     'drf_yasg',
     'channels',
@@ -106,7 +108,7 @@ POSTGRES_PASSWORD = decipher(config('POSTGRES_PASSWORD'))
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'ENGINE': 'psqlextra.backend',
         'NAME': POSTGRES_DB,
         'HOST': POSTGRES_HOST,
         'PORT': POSTGRES_PORT,
