@@ -7,23 +7,30 @@ from rest_framework.views import APIView
 from main import serializers
 
 
-def _get_slp_balance(query):
+def _get_slp_balance(query, multiple_tokens=False):
     qs = Transaction.objects.filter(query)
-    qs_balance = qs.annotate(
-        tokenid=F('token__tokenid'),
-        token_name=F('token__name'),
-        token_ticker=F('token__token_ticker'),
-        token_type=F('token__token_type')
-    ).values(
-        'tokenid',
-        'token_name',
-        'token_ticker',
-        'token_type'
-    ).order_by(
-        'tokenid'
-    ).annotate(
-        balance=Coalesce(Sum('amount'), 0)
-    )
+    if multiple_tokens:
+        # TODO: This is not working as expected in PostgresModel manager
+        # I created a github issue for this here:
+        # https://github.com/SectorLabs/django-postgres-extra/issues/143
+        # Multiple tokens balance will be disabled til that issue is resolved
+        qs_balance = qs.annotate(
+            _token=F('token__tokenid'),
+            token_name=F('token__name'),
+            token_ticker=F('token__token_ticker'),
+            token_type=F('token__token_type')
+        ).rename_annotations(
+            _token='token_id'
+        ).values(
+            'token_id',
+            'token_name',
+            'token_ticker',
+            'token_type'
+        ).annotate(
+            balance=Coalesce(Sum('amount'), 0)
+        )
+    else:
+        qs_balance = qs.aggregate(Sum('amount'))
     return qs_balance
 
 
@@ -53,10 +60,12 @@ class Balance(APIView):
         if slpaddress.startswith('simpleledger:'):
             data['address'] = slpaddress
             if tokenid:
+                multiple = False
                 query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
+                multiple = True
                 query =  Q(address__address=data['address']) & Q(spent=False)
-            qs_balance = _get_slp_balance(query)
+            qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
             data['balance'] = list(qs_balance)
             data['valid'] = True
         
@@ -73,12 +82,18 @@ class Balance(APIView):
 
             if wallet.wallet_type == 'slp':
                 if tokenid:
+                    multiple = False
                     query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
                 else:
+                    multiple = True
                     query =  Q(wallet=wallet) & Q(spent=False)
-                qs_balance = _get_slp_balance(query)
-                data['balance'] = list(qs_balance)
-                data['valid'] = True
+                qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
+                if multiple:
+                    pass
+                else:
+                    data['balance'] = qs_balance['amount__sum'] or 0
+                    data['token_id'] = tokenid
+                    data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)

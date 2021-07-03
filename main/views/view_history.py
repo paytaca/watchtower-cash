@@ -16,7 +16,7 @@ class WalletHistoryView(APIView):
             data = qs.annotate(
                 _token=F('token__tokenid')
             ).rename_annotations(
-                _token='token'
+                _token='token_id'
             ).values(
                 'record_type',
                 'txid',
