@@ -11,12 +11,17 @@ class TokensView(APIView):
         wallet_hash = kwargs.get('wallethash', None)
         qs = WalletHistory.objects.filter(
             wallet__wallet_hash=wallet_hash
-        ).distinct('token')
+        ).order_by(
+            'token'
+        ).distinct(
+            'token'
+        )
         tokens = qs.annotate(
             _token=F('token__tokenid'),
             name=F('token__name'),
             symbol=F('token__token_ticker'),
             type=F('token__token_type'),
+            logo=F('token__logo_url')
         ).rename_annotations(
             _token='token_id'
         ).values(
@@ -24,6 +29,6 @@ class TokensView(APIView):
             'name',
             'symbol',
             'type',
-            'logo_url'
+            'logo'
         )
         return Response(data=tokens, status=status.HTTP_200_OK)
