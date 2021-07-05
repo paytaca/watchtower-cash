@@ -13,6 +13,7 @@ class WalletHistoryView(APIView):
         qs = WalletHistory.objects.filter(wallet__wallet_hash=wallet_hash)
         wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         if wallet.wallet_type == 'slp':
+            qs = qs.filter(token__tokenid=token_id)
             data = qs.annotate(
                 _token=F('token__tokenid')
             ).rename_annotations(
