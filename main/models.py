@@ -231,7 +231,6 @@ class WalletHistory(PostgresModel):
     )
     txid = models.CharField(
         max_length=70,
-        unique=True,
         db_index=True
     )
     record_type = models.CharField(
