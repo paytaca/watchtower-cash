@@ -147,7 +147,7 @@ def client_acknowledgement(self, txid):
 
 
 @shared_task(queue='save_record')
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0, new_subscription=False):
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0, new_subscription=False, spent_txids=[]):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -160,9 +160,15 @@ def save_record(token, transaction_address, transactionid, amount, source, block
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
     )
-    if not subscription.exists(): return None, None
+    
+    spent_txids_check = Transaction.objects.filter(txid__in=spent_txids)
 
-    address_obj = Address.objects.get(address=transaction_address)
+    # We are only tracking outputs of either subscribed addresses or those of transactions
+    # that spend previous transactions with outputs involving tracked addresses
+    if not subscription.exists() and not spent_txids_check.exists():
+        return None, None
+
+    address_obj, _ = Address.objects.get_or_create(address=transaction_address)
 
     try:
         index = int(index)
@@ -673,26 +679,27 @@ def parse_wallet_history(self, txid, wallet_hash):
             address__address__startswith='simpleledger:'
         )
     txn = txns.last()
-    history_check = WalletHistory.objects.filter(
-        wallet=wallet,
-        txid=txid
-    )
-    if history_check.exists():
-        history_check.update(
-            record_type=record_type,
-            amount=amount,
-            token=txn.token
-        )
-    else:
-        history = WalletHistory(
+    if txn:
+        history_check = WalletHistory.objects.filter(
             wallet=wallet,
-            txid=txid,
-            record_type=record_type,
-            amount=amount,
-            token=txn.token,
-            date_created=txn.date_created
+            txid=txid
         )
-        history.save()
+        if history_check.exists():
+            history_check.update(
+                record_type=record_type,
+                amount=amount,
+                token=txn.token
+            )
+        else:
+            history = WalletHistory(
+                wallet=wallet,
+                txid=txid,
+                record_type=record_type,
+                amount=amount,
+                token=txn.token,
+                date_created=txn.date_created
+            )
+            history.save()
 
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
@@ -711,6 +718,8 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
         bchd = BCHDQuery()
         slp_tx = bchd.get_transaction(txid, parse_slp=True)
 
+        spent_txids = []
+
         # Mark inputs as spent
         for tx_input in slp_tx['inputs']:
             try:
@@ -719,6 +728,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                     wallets.append(address.wallet.wallet_hash)
             except Address.DoesNotExist:
                 pass
+            spent_txids.append(tx_input['txid'])
             txn_check = Transaction.objects.filter(
                 txid=tx_input['txid'],
                 index=tx_input['spent_index']
@@ -754,7 +764,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                         blockheight_id,
                         tx_output['index']
                     )
-                    obj_id, created = save_record(*args)
+                    obj_id, created = save_record(*args, spent_txids=spent_txids)
                     if created:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -767,6 +777,8 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
         # Make sure that any corresponding BCH transaction is saved
         bchd = BCHDQuery()
         txn = bchd.get_transaction(txid)
+
+        spent_txids = []
         
         # Mark inputs as spent
         for tx_input in txn['inputs']:
@@ -776,6 +788,8 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                     wallets.append(address.wallet.wallet_hash)
             except Address.DoesNotExist:
                 pass
+
+            spent_txids.append(tx_input['txid'])
             txn_check = Transaction.objects.filter(
                 txid=tx_input['txid'],
                 index=tx_input['spent_index']
@@ -811,7 +825,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                     blockheight_id,
                     tx_output['index']
                 )
-                obj_id, created = save_record(*args)
+                obj_id, created = save_record(*args, spent_txids=spent_txids)
                 if created:
                     third_parties = client_acknowledgement(obj_id)
                     for platform in third_parties:
@@ -819,8 +833,6 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                             message = platform[1]
                             chat_id = platform[2]
                             send_telegram_message(message, chat_id)
-
-
 
     # Call task to parse wallet history
     for wallet_hash in set(wallets):
