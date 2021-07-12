@@ -74,17 +74,17 @@ def client_acknowledgement(self, txid):
                 recipient = subscription.recipient
                 websocket = subscription.websocket
 
+                data = {
+                    'amount': transaction.amount,
+                    'address': transaction.address.address,
+                    'source': 'WatchTower',
+                    'token': transaction.token.tokenid,
+                    'txid': transaction.txid,
+                    'block': block,
+                    'index': transaction.index
+                }
+
                 if recipient:
-                    data = {
-                        'amount': transaction.amount,
-                        'address': transaction.address.address,
-                        'source': 'WatchTower',
-                        'token': transaction.token.tokenid,
-                        'txid': transaction.txid,
-                        'block': block,
-                        'index': transaction.index
-                    }
-                    
                     if recipient.valid:
                         if recipient.web_url:
                             resp = requests.post(recipient.web_url,data=data)
