@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
 from psqlextra.models import PostgresModel
+from django.contrib.postgres.fields import ArrayField
 from django.conf import settings
 import uuid
 
@@ -222,7 +223,16 @@ class WalletHistory(PostgresModel):
         (INCOMING, 'Incoming'),
         (OUTGOING, 'Outgoing')
     ]
-
+    senders = ArrayField(
+        ArrayField(models.CharField(max_length=70)),
+        default=list,
+        blank=True
+    )
+    recipients = ArrayField(
+        ArrayField(models.CharField(max_length=70)),
+        default=list,
+        blank=True
+    )
     wallet = models.ForeignKey(
         Wallet,
         related_name='history',
@@ -246,6 +256,7 @@ class WalletHistory(PostgresModel):
         null=True,
         blank=True
     )
+    tx_fee = models.FloatField(default=0)
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:

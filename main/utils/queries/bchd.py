@@ -56,6 +56,8 @@ class BCHDQuery(object):
             'txid': tx_hash,
             'valid': True
         }
+        total_input_sats = 0
+        total_output_sats = 0
         if parse_slp:
             is_valid = bool(txn.slp_transaction_info.validity_judgement)
             transaction['valid'] = is_valid
@@ -101,6 +103,7 @@ class BCHDQuery(object):
                 transaction['outputs'] = []
                 output_index = 0
                 for tx_output in txn.outputs:
+                    total_output_sats += tx_output.value
                     if tx_output.slp_token.token_id:
                         decimals = tx_output.slp_token.decimals or 0
                         amount = tx_output.slp_token.amount / (10 ** decimals)
@@ -112,8 +115,9 @@ class BCHDQuery(object):
                         transaction['outputs'].append(data)
                     output_index += 1
 
-            # If invalid, parse the inputs for marking of spent UTXOs
+            # Valid or invalid, parse the inputs for marking of spent UTXOs and computation of tx fee
             for tx_input in txn.inputs:
+                total_input_sats += tx_input.value
                 input_txid = tx_input.outpoint.hash[::-1].hex()
                 data = {
                     'txid': input_txid,
@@ -125,6 +129,7 @@ class BCHDQuery(object):
         else:
             transaction['inputs'] = []
             for tx_input in txn.inputs:
+                total_input_sats += tx_input.value
                 input_txid = tx_input.outpoint.hash[::-1].hex()
                 data = {
                     'txid': input_txid,
@@ -136,6 +141,8 @@ class BCHDQuery(object):
             transaction['outputs'] = []
             output_index = 0
             for tx_output in txn.outputs:
+                if tx_output.value is not None:
+                    total_output_sats += tx_output.value
                 if tx_output.address and tx_output.value:
                     data = {
                         'address': 'bitcoincash:' + tx_output.address,
@@ -145,6 +152,7 @@ class BCHDQuery(object):
                     transaction['outputs'].append(data)
                 output_index += 1
 
+        transaction['tx_fee'] =  total_input_sats - total_output_sats
         return transaction
 
     def get_transaction(self, transaction_hash, parse_slp=False):
@@ -160,6 +168,7 @@ class BCHDQuery(object):
 
             resp = stub.GetTransaction(req)
             txn = resp.transaction
+            print(txn)
             return self._parse_transaction(txn, parse_slp=parse_slp)
 
     def get_utxos(self, address):
