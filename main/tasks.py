@@ -664,7 +664,7 @@ def broadcast_transaction(self, transaction):
 
 
 @shared_task(bind=True, queue='post_save_record')
-def parse_wallet_history(self, txid, wallet_hash):
+def parse_wallet_history(self, txid, wallet_hash, tx_fee, senders, recipients):
     parser = HistoryParser(txid, wallet_hash)
     record_type, amount = parser.parse()
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
@@ -697,6 +697,9 @@ def parse_wallet_history(self, txid, wallet_hash):
                 record_type=record_type,
                 amount=amount,
                 token=txn.token,
+                tx_fee=tx_fee,
+                senders=senders,
+                recipients=recipients,
                 date_created=txn.date_created
             )
             history.save()
@@ -712,6 +715,10 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
     txn_address = Address.objects.get(address=address)
     if txn_address.wallet:
         wallets.append(txn_address.wallet.wallet_hash)
+
+    tx_fee = 0
+    senders = []
+    recipients = []
 
     if address.startswith('bitcoincash:'):
         # Make sure that any corresponding SLP transaction is saved
@@ -739,6 +746,12 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
             )
 
         if slp_tx['valid']:
+
+            tx_fee = slp_tx['tx_fee']
+            senders = [(i['address'], i['amount']) for i in slp_tx['inputs']]
+            if 'outputs' in slp_tx.keys():
+                recipients = [(i['address'], i['amount']) for i in slp_tx['outputs']]
+
             for tx_output in slp_tx['outputs']:
                 try:
                     address = Address.objects.get(address=tx_output['address'])
@@ -777,6 +790,11 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
         # Make sure that any corresponding BCH transaction is saved
         bchd = BCHDQuery()
         txn = bchd.get_transaction(txid)
+
+        tx_fee = txn['tx_fee']
+        senders = [(i['address'], i['value']) for i in txn['inputs']]
+        if 'outputs' in txn.keys():
+            recipients = [(i['address'], i['value']) for i in txn['outputs']]
 
         spent_txids = []
         
@@ -836,4 +854,10 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
 
     # Call task to parse wallet history
     for wallet_hash in set(wallets):
-        parse_wallet_history.delay(txid, wallet_hash)
+        parse_wallet_history.delay(
+            txid,
+            wallet_hash,
+            tx_fee,
+            senders,
+            recipients
+        )
