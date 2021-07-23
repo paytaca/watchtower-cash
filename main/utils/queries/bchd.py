@@ -86,6 +86,7 @@ class BCHDQuery(object):
                 }
             
             transaction['inputs'] = []
+            txid_spent_index_pairs = []
             if is_valid:
                 transaction['token_id'] = txn.slp_transaction_info.token_id.hex()
                 for tx_input in txn.inputs:
@@ -100,6 +101,7 @@ class BCHDQuery(object):
                             'address': 'simpleledger:' + tx_input.slp_token.address
                         }
                         transaction['inputs'].append(data)
+                        txid_spent_index_pairs.append(f"{input_txid}-{tx_input.outpoint.index}")
                 transaction['outputs'] = []
                 output_index = 0
                 for tx_output in txn.outputs:
@@ -125,7 +127,10 @@ class BCHDQuery(object):
                     'value': tx_input.value,
                     'address': 'bitcoincash:' + tx_input.address
                 }
-                transaction['inputs'].append(data)
+                txid_spent_index_pair = f"{input_txid}-{tx_input.outpoint.index}"
+                if txid_spent_index_pair not in txid_spent_index_pairs:
+                    transaction['inputs'].append(data)
+                    txid_spent_index_pairs.append(txid_spent_index_pair)
         else:
             transaction['inputs'] = []
             for tx_input in txn.inputs:
@@ -168,7 +173,6 @@ class BCHDQuery(object):
 
             resp = stub.GetTransaction(req)
             txn = resp.transaction
-            print(txn)
             return self._parse_transaction(txn, parse_slp=parse_slp)
 
     def get_utxos(self, address):

@@ -23,6 +23,9 @@ class WalletHistoryView(APIView):
                 'txid',
                 'amount',
                 'token',
+                'tx_fee',
+                'senders',
+                'recipients',
                 'date_created'
             )
         elif wallet.wallet_type == 'bch':
@@ -30,6 +33,9 @@ class WalletHistoryView(APIView):
                 'record_type',
                 'txid',
                 'amount',
+                'tx_fee',
+                'senders',
+                'recipients',
                 'date_created'
             )
         return Response(data=data, status=status.HTTP_200_OK)

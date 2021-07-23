@@ -664,7 +664,7 @@ def broadcast_transaction(self, transaction):
 
 
 @shared_task(bind=True, queue='post_save_record')
-def parse_wallet_history(self, txid, wallet_hash, tx_fee, senders, recipients):
+def parse_wallet_history(self, txid, wallet_hash, tx_fee=None, senders=[], recipients=[]):
     parser = HistoryParser(txid, wallet_hash)
     record_type, amount = parser.parse()
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
@@ -688,7 +688,10 @@ def parse_wallet_history(self, txid, wallet_hash, tx_fee, senders, recipients):
             history_check.update(
                 record_type=record_type,
                 amount=amount,
-                token=txn.token
+                token=txn.token,
+                tx_fee=tx_fee,
+                senders=senders,
+                recipients=recipients
             )
         else:
             history = WalletHistory(
@@ -716,15 +719,46 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
     if txn_address.wallet:
         wallets.append(txn_address.wallet.wallet_hash)
 
+    slp_tx = None
+    bch_tx = None
+
+    # Extract tx_fee, senders, and recipients
     tx_fee = 0
     senders = []
     recipients = []
 
-    if address.startswith('bitcoincash:'):
-        # Make sure that any corresponding SLP transaction is saved
-        bchd = BCHDQuery()
+    bchd = BCHDQuery()
+    parse_slp = address.startswith('simpleledger')
+    if parse_slp:
         slp_tx = bchd.get_transaction(txid, parse_slp=True)
+        tx_fee = slp_tx['tx_fee']
+        if slp_tx['valid']:
+            if txn_address.wallet:
+                if txn_address.wallet.wallet_type == 'slp':
+                    senders = []
+                    for tx_input in slp_tx['inputs']:
+                        if 'amount' in tx_input.keys():
+                            senders.append(
+                                (
+                                    tx_input['address'],
+                                    tx_input['amount']
+                                )
+                            )
+                if 'outputs' in slp_tx.keys():
+                    recipients = [(i['address'], i['amount']) for i in slp_tx['outputs']]
+    else:
+        bch_tx = bchd.get_transaction(txid)
+        tx_fee = bch_tx['tx_fee']
+        if txn_address.wallet:
+            if txn_address.wallet.wallet_type == 'bch':
+                senders = [(i['address'], i['value']) for i in bch_tx['inputs']]
+                if 'outputs' in bch_tx.keys():
+                    recipients = [(i['address'], i['value']) for i in bch_tx['outputs']]
 
+    # Make sure that any corresponding SLP transaction is saved
+    if address.startswith('bitcoincash:'):
+        if slp_tx is None:
+            slp_tx = bchd.get_transaction(txid, parse_slp=True)
         spent_txids = []
 
         # Mark inputs as spent
@@ -746,12 +780,6 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
             )
 
         if slp_tx['valid']:
-
-            tx_fee = slp_tx['tx_fee']
-            senders = [(i['address'], i['amount']) for i in slp_tx['inputs']]
-            if 'outputs' in slp_tx.keys():
-                recipients = [(i['address'], i['amount']) for i in slp_tx['outputs']]
-
             for tx_output in slp_tx['outputs']:
                 try:
                     address = Address.objects.get(address=tx_output['address'])
@@ -786,20 +814,15 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
 
+    # Make sure that any corresponding BCH transaction is saved
     elif address.startswith('simpleledger:'):
-        # Make sure that any corresponding BCH transaction is saved
-        bchd = BCHDQuery()
-        txn = bchd.get_transaction(txid)
-
-        tx_fee = txn['tx_fee']
-        senders = [(i['address'], i['value']) for i in txn['inputs']]
-        if 'outputs' in txn.keys():
-            recipients = [(i['address'], i['value']) for i in txn['outputs']]
+        if bch_tx is None:
+            bch_tx = bchd.get_transaction(txid)
 
         spent_txids = []
         
         # Mark inputs as spent
-        for tx_input in txn['inputs']:
+        for tx_input in bch_tx['inputs']:
             try:
                 address = Address.objects.get(address=tx_input['address'])
                 if address.wallet:
@@ -817,7 +840,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                 spending_txid=txid
             )
 
-        for tx_output in txn['outputs']:
+        for tx_output in bch_tx['outputs']:
             try:
                 address = Address.objects.get(address=tx_output['address'])
                 if address.wallet:
@@ -825,7 +848,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
             except Address.DoesNotExist:
                 pass
             txn_check = Transaction.objects.filter(
-                txid=txn['txid'],
+                txid=bch_tx['txid'],
                 address__address=tx_output['address'],
                 index=tx_output['index']
             )
@@ -837,7 +860,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                 args = (
                     'bch',
                     tx_output['address'],
-                    txn['txid'],
+                    bch_tx['txid'],
                     value,
                     'bchd-query',
                     blockheight_id,
@@ -854,10 +877,17 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
 
     # Call task to parse wallet history
     for wallet_hash in set(wallets):
-        parse_wallet_history.delay(
-            txid,
-            wallet_hash,
-            tx_fee,
-            senders,
-            recipients
-        )
+        if txn_address.wallet:
+            if wallet_hash == txn_address.wallet.wallet_hash:
+                parse_wallet_history.delay(
+                    txid,
+                    wallet_hash,
+                    tx_fee,
+                    senders,
+                    recipients
+                )
+        else:
+            parse_wallet_history.delay(
+                txid,
+                wallet_hash
+            )

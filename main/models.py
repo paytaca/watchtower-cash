@@ -256,7 +256,7 @@ class WalletHistory(PostgresModel):
         null=True,
         blank=True
     )
-    tx_fee = models.FloatField(default=0)
+    tx_fee = models.FloatField(null=True, blank=True)
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
