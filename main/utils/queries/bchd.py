@@ -13,7 +13,6 @@ class BCHDQuery(object):
     def __init__(self):
         nodes = [
             'bchd.imaginary.cash:8335',
-            'bchd.greyh.at:8335',
             'bchd.fountainhead.cash:443'
         ]
         self.base_url = random.choice(nodes)

@@ -688,11 +688,14 @@ def parse_wallet_history(self, txid, wallet_hash, tx_fee=None, senders=[], recip
             history_check.update(
                 record_type=record_type,
                 amount=amount,
-                token=txn.token,
-                tx_fee=tx_fee,
-                senders=senders,
-                recipients=recipients
+                token=txn.token
             )
+            if tx_fee and senders and recipients:
+                history_check.update(
+                    tx_fee=tx_fee,
+                    senders=senders,
+                    recipients=recipients
+                )
         else:
             history = WalletHistory(
                 wallet=wallet,

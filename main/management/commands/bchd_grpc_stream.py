@@ -17,8 +17,7 @@ def run():
     creds = grpc.ssl_channel_credentials()
     nodes = [
         'bchd.fountainhead.cash:443',
-        'bchd.imaginary.cash:8335',
-        'bchd.greyh.at:8335'
+        'bchd.imaginary.cash:8335'
     ]
     bchd_node = random.choice(nodes)
 
