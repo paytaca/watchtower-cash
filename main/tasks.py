@@ -667,7 +667,7 @@ def broadcast_transaction(self, transaction):
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[]):
     wallet_hash = wallet_handle.split('|')[1]
     parser = HistoryParser(txid, wallet_hash)
-    record_type, amount = parser.parse()
+    record_type, amount, change_address = parser.parse()
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
     if wallet.wallet_type == 'bch':
         txns = Transaction.objects.filter(
@@ -681,6 +681,9 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         )
     txn = txns.last()
     if txn:
+        if change_address:
+            recipients = [(x, y) for x, y in recipients if x != change_address]
+
         history_check = WalletHistory.objects.filter(
             wallet=wallet,
             txid=txid

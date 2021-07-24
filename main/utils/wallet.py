@@ -42,4 +42,17 @@ class HistoryParser(object):
         else:
             record_type = 'outgoing'
 
-        return record_type, diff
+        change_address = None
+        input_wallets = [x.address.wallet for x in inputs if x.address.wallet]
+        input_addresses = [x.address for x in inputs if x.address.wallet]
+        for tx_output in outputs:
+            if tx_output.address.wallet:
+                if tx_output.address.wallet in input_wallets:
+                    change_address = tx_output.address.address
+                    break
+            else:
+                if tx_output.address in input_addresses:
+                    change_address = tx_output.address.address
+                    break
+
+        return record_type, diff, change_address
