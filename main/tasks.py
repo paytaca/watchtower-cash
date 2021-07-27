@@ -78,7 +78,7 @@ def client_acknowledgement(self, txid):
                     'amount': transaction.amount,
                     'address': transaction.address.address,
                     'source': 'WatchTower',
-                    'token': transaction.token.tokenid,
+                    'token': transaction.token.tokenid or transaction.token.token_ticker.lower(),
                     'txid': transaction.txid,
                     'block': block,
                     'index': transaction.index
@@ -90,7 +90,7 @@ def client_acknowledgement(self, txid):
                             resp = requests.post(recipient.web_url,data=data)
                             if resp.status_code == 200:
                                 this_transaction.update(acknowledged=True)
-                                LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url}')
+                                LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url} DATA: {str(data)}')
                             elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
                                 Recipient.objects.filter(id=recipient.id).update(valid=False)
                                 LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
