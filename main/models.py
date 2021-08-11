@@ -17,10 +17,10 @@ class Token(PostgresModel):
         db_index=True
     )
     confirmation_limit = models.IntegerField(default=0)
-    decimals = models.IntegerField(default=0)
+    decimals = models.IntegerField(null=True)
 
     token_ticker = models.CharField(max_length=200)
-    token_type = models.IntegerField(default=1)
+    token_type = models.IntegerField(null=True)
     nft_token_group = models.ForeignKey(
         "main.Token",
         on_delete=models.CASCADE,
