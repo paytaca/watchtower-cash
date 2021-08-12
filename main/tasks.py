@@ -18,6 +18,7 @@ from main.utils import bitdb as bitdb_scanner
 from main.utils.wallet import HistoryParser
 from django.db.utils import IntegrityError
 from django.conf import settings
+from django.utils import timezone
 from django.db import transaction as trans
 from celery import Celery
 from main.utils.chunk import chunks
@@ -626,7 +627,8 @@ def get_token_meta_data(self, token_id):
             'name': info['name'],
             'token_ticker': info['ticker'],
             'token_type': info['type'],
-            'decimals': info['decimals']
+            'decimals': info['decimals'],
+            'date_updated': timezone.now()
         }
         if info['nft_token_group']:
             group_check = Token.objects.filter(tokenid=info['nft_token_group'])
@@ -661,7 +663,8 @@ def get_token_meta_data(self, token_id):
             image_server_base = 'https://images.watchtower.cash'
             image_url = f"{image_server_base}/{image_file_name}"
             Token.objects.filter(tokenid=token_id).update(
-                image_url=image_url
+                image_url=image_url,
+                date_updated=timezone.now()
             )
 
     except Exception:

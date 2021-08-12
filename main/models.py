@@ -28,6 +28,8 @@ class Token(PostgresModel):
         null=True
     )
     image_url = models.URLField(blank=True)
+    date_created = models.DateTimeField(default=timezone.now)
+    date_updated = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('name', 'tokenid',)
@@ -214,6 +216,7 @@ class Subscription(PostgresModel):
         related_name='subscriptions'
     )
     websocket=models.BooleanField(default=False)
+    date_created = models.DateTimeField(default=timezone.now)
 
 
 class WalletHistory(PostgresModel):
