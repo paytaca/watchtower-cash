@@ -11,7 +11,11 @@ class TokensView(APIView):
         wallet_hash = kwargs.get('wallethash', None)
         qs = WalletHistory.objects.filter(
             wallet__wallet_hash=wallet_hash
-        ).order_by(
+        )
+        token_type = request.query_params.get('token_type', None)
+        if token_type:
+            qs = qs.filter(token__token_type=token_type)
+        qs = qs.order_by(
             'token'
         ).distinct(
             'token'
