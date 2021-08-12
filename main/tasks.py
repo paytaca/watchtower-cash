@@ -622,50 +622,51 @@ def get_token_meta_data(self, token_id):
     try:
         bchd = BCHDQuery()
         txn = bchd.get_transaction(token_id, parse_slp=True)
-        info = txn['token_info']
-        data = {
-            'name': info['name'],
-            'token_ticker': info['ticker'],
-            'token_type': info['type'],
-            'decimals': info['decimals'],
-            'date_updated': timezone.now()
-        }
-        if info['nft_token_group']:
-            group_check = Token.objects.filter(tokenid=info['nft_token_group'])
-            if group_check.exists():
-                group = group_check.first()
-            else:
-                group = Token(tokenid=info['nft_token_group'])
-                group.save()
+        if txn:
+            info = txn['token_info']
+            data = {
+                'name': info['name'],
+                'token_ticker': info['ticker'],
+                'token_type': info['type'],
+                'decimals': info['decimals'],
+                'date_updated': timezone.now()
+            }
+            if info['nft_token_group']:
+                group_check = Token.objects.filter(tokenid=info['nft_token_group'])
+                if group_check.exists():
+                    group = group_check.first()
+                else:
+                    group = Token(tokenid=info['nft_token_group'])
+                    group.save()
 
-            data['nft_token_group'] = group
-        
-        Token.objects.filter(tokenid=token_id).update(**data)
+                data['nft_token_group'] = group
+            
+            Token.objects.filter(tokenid=token_id).update(**data)
 
-        # Get image / logo URL
-        image_file_name = None
-        if data['token_type'] == 1:
+            # Get image / logo URL
+            image_file_name = None
+            if data['token_type'] == 1:
 
-            # Check icons.fountainhead.cash
-            url = f"https://icons.fountainhead.cash/128/{token_id}.png"
-            resp = requests.get(url, stream=True, timeout=60)
-            if resp.status_code == 200:
-                content_type = resp.headers.get('content-type')
-                if content_type.split('/')[0] == 'image':
-                    file_ext = content_type.split('/')[1]
-                    response = requests.get(url, stream=True)
-                    out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
-                    with open(out_path, 'wb') as out_file:
-                        shutil.copyfileobj(resp.raw, out_file)
-                    image_file_name = f"{token_id}.{file_ext}"
+                # Check icons.fountainhead.cash
+                url = f"https://icons.fountainhead.cash/128/{token_id}.png"
+                resp = requests.get(url, stream=True, timeout=60)
+                if resp.status_code == 200:
+                    content_type = resp.headers.get('content-type')
+                    if content_type.split('/')[0] == 'image':
+                        file_ext = content_type.split('/')[1]
+                        response = requests.get(url, stream=True)
+                        out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
+                        with open(out_path, 'wb') as out_file:
+                            shutil.copyfileobj(resp.raw, out_file)
+                        image_file_name = f"{token_id}.{file_ext}"
 
-        if image_file_name:
-            image_server_base = 'https://images.watchtower.cash'
-            image_url = f"{image_server_base}/{image_file_name}"
-            Token.objects.filter(tokenid=token_id).update(
-                image_url=image_url,
-                date_updated=timezone.now()
-            )
+            if image_file_name:
+                image_server_base = 'https://images.watchtower.cash'
+                image_url = f"{image_server_base}/{image_file_name}"
+                Token.objects.filter(tokenid=token_id).update(
+                    image_url=image_url,
+                    date_updated=timezone.now()
+                )
 
     except Exception:
         self.retry(countdown=5)

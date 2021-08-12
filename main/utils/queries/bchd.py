@@ -4,6 +4,7 @@ import random
 import logging
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
+from grpc._channel import _InactiveRpcError
 import base64
 
 LOGGER = logging.getLogger(__name__)
@@ -72,7 +73,15 @@ class BCHDQuery(object):
             }
             if slp_action in genesis_map.keys():
                 genesis_info = eval('txn.slp_transaction_info.' + genesis_map[slp_action])
-                token_type = txn.outputs[1].slp_token.token_type
+                try:
+                    token_type = txn.outputs[1].slp_token.token_type
+                except IndexError:
+                    if slp_action == 4:
+                        token_type = 1
+                    elif slp_action == 7:
+                        token_type = 129
+                    elif slp_action == 10:
+                        token_type = 65
                 parent_group = None
                 if token_type == 65:
                     parent_group = genesis_info.group_token_id.hex()
@@ -165,15 +174,20 @@ class BCHDQuery(object):
 
         with grpc.secure_channel(self.base_url, creds) as channel:
             stub = bchrpc.bchrpcStub(channel)
+            
+            try:
+                req = pb.GetTransactionRequest()
+                txn_bytes = bytes.fromhex(transaction_hash)[::-1]
+                req.hash = txn_bytes
+                req.include_token_metadata = True
 
-            req = pb.GetTransactionRequest()
-            txn_bytes = bytes.fromhex(transaction_hash)[::-1]
-            req.hash = txn_bytes
-            req.include_token_metadata = True
+                resp = stub.GetTransaction(req)
+                txn = resp.transaction
+                return self._parse_transaction(txn, parse_slp=parse_slp)
+            except _InactiveRpcError as exc:
+                LOGGER.error(str(exc))
+                return None
 
-            resp = stub.GetTransaction(req)
-            txn = resp.transaction
-            return self._parse_transaction(txn, parse_slp=parse_slp)
 
     def get_utxos(self, address):
         creds = grpc.ssl_channel_credentials()
