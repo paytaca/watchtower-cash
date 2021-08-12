@@ -7,7 +7,7 @@ services:
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
     env_file: /root/watchtower/compose/.env_prod
     volumes:
-      - /root/watchtower/token_images:/images
+      - /var/www/images:/images
     ports:
       - 8000:8000
   rabbitmq:

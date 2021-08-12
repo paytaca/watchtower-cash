@@ -641,7 +641,7 @@ def get_token_meta_data(self, token_id):
         Token.objects.filter(tokenid=token_id).update(**data)
 
         # Get image / logo URL
-        image_found = False
+        image_file_name = None
         if data['token_type'] == 1:
 
             # Check icons.fountainhead.cash
@@ -655,11 +655,11 @@ def get_token_meta_data(self, token_id):
                     out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
                     with open(out_path, 'wb') as out_file:
                         shutil.copyfileobj(resp.raw, out_file)
-                    image_found = True
+                    image_file_name = f"{token_id}.{file_ext}"
 
-        if image_found:
+        if image_file_name:
             image_server_base = 'https://images.watchtower.cash'
-            image_url = f"{image_server_base}/{token_id}"
+            image_url = f"{image_server_base}/{image_file_name}"
             Token.objects.filter(tokenid=token_id).update(
                 image_url=image_url
             )

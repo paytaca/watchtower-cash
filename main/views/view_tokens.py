@@ -25,7 +25,7 @@ class TokensView(APIView):
             name=F('token__name'),
             symbol=F('token__token_ticker'),
             type=F('token__token_type'),
-            logo=F('token__image_url')
+            image_url=F('token__image_url')
         ).rename_annotations(
             _token='token_id'
         ).values(
@@ -33,6 +33,6 @@ class TokensView(APIView):
             'name',
             'symbol',
             'type',
-            'logo'
+            'image_url'
         )
         return Response(data=tokens, status=status.HTTP_200_OK)
