@@ -1,4 +1,4 @@
-import math, logging, json, time, requests
+import math, logging, json, time, requests, shutil
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
@@ -637,8 +637,33 @@ def get_token_meta_data(self, token_id):
                 group.save()
 
             data['nft_token_group'] = group
-
+        
         Token.objects.filter(tokenid=token_id).update(**data)
+
+        # Get image / logo URL
+        image_found = False
+        if data['token_type'] == 1:
+
+            # Check icons.fountainhead.cash
+            url = f"https://icons.fountainhead.cash/128/{token_id}.png"
+            resp = requests.get(url, stream=True, timeout=60)
+            if resp.status_code == 200:
+                content_type = resp.headers.get('content-type')
+                if content_type.split('/')[0] == 'image':
+                    file_ext = content_type.split('/')[1]
+                    response = requests.get(url, stream=True)
+                    out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
+                    with open(out_path, 'wb') as out_file:
+                        shutil.copyfileobj(resp.raw, out_file)
+                    image_found = True
+
+        if image_found:
+            image_server_base = 'https://images.watchtower.cash'
+            image_url = f"{image_server_base}/{token_id}"
+            Token.objects.filter(tokenid=token_id).update(
+                image_url=image_url
+            )
+
     except Exception:
         self.retry(countdown=5)
 

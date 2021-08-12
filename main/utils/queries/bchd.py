@@ -80,6 +80,7 @@ class BCHDQuery(object):
                     'name': genesis_info.name.decode(),
                     'type': token_type,
                     'ticker': genesis_info.ticker.decode(),
+                    'document_url': genesis_info.document_url.decode(),
                     'nft_token_group': parent_group,
                     'decimals': genesis_info.decimals or 0
                 }

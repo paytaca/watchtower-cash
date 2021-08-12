@@ -27,7 +27,7 @@ class Token(PostgresModel):
         related_name='children',
         null=True
     )
-    logo_url = models.URLField(blank=True)
+    image_url = models.URLField(blank=True)
 
     class Meta:
         unique_together = ('name', 'tokenid',)
