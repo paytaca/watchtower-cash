@@ -622,19 +622,23 @@ def get_token_meta_data(self, token_id):
         bchd = BCHDQuery()
         txn = bchd.get_transaction(token_id, parse_slp=True)
         info = txn['token_info']
-        group_check = Token.objects.filter(tokenid=info['nft_token_group'])
-        if group_check.exists():
-            group = group_check.first()
-        else:
-            group = Token(tokenid=info['nft_token_group'])
-            group.save()
-        Token.objects.filter(tokenid=token_id).update(
-            name=info['name'],
-            token_ticker=info['ticker'],
-            token_type=info['type'],
-            nft_token_group=group,
-            decimals=info['decimals']
-        )
+        data = {
+            'name': info['name'],
+            'token_ticker': info['ticker'],
+            'token_type': info['type'],
+            'decimals': info['decimals']
+        }
+        if info['nft_token_group']:
+            group_check = Token.objects.filter(tokenid=info['nft_token_group'])
+            if group_check.exists():
+                group = group_check.first()
+            else:
+                group = Token(tokenid=info['nft_token_group'])
+                group.save()
+
+            data['nft_token_group'] = group
+
+        Token.objects.filter(tokenid=token_id).update(**data)
     except Exception:
         self.retry(countdown=5)
 
