@@ -22,7 +22,7 @@ class Token(PostgresModel):
     token_ticker = models.CharField(max_length=200)
     token_type = models.IntegerField(null=True)
     nft_token_group = models.ForeignKey(
-        "main.Token",
+        'main.Token',
         on_delete=models.CASCADE,
         related_name='children',
         null=True
@@ -88,6 +88,18 @@ class Project(PostgresModel):
             return self.name
         else:
             return str(self.id)
+
+    @property
+    def wallets_count(self):
+        return self.wallets.count()
+
+    @property
+    def addresses_count(self):
+        return self.addresses.count()
+
+    @property
+    def transactions_count(self):
+        return WalletHistory.objects.filter(wallet__project_id=self.id).count() 
 
 
 class Wallet(PostgresModel):

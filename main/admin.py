@@ -36,6 +36,7 @@ class TokenAdmin(admin.ModelAdmin):
             return qs
         return qs.filter(subscriber__user=request.user)
 
+
 class BlockHeightAdmin(admin.ModelAdmin):
     actions = ['process']
     ordering = ('-number',)
@@ -162,8 +163,20 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 class ProjectAdmin(admin.ModelAdmin):
     list_display = [
         'name',
-        'date_created'
+        'date_created',
+        'wallets',
+        'addresses',
+        'transactions'
     ]
+
+    def wallets(self, obj):
+        return obj.wallets_count
+
+    def addresses(self, obj):
+        return obj.addresses_count
+
+    def transactions(self, obj):
+        return obj.transactions_count
 
 
 class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
