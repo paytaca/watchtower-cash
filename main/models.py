@@ -40,6 +40,18 @@ class Token(PostgresModel):
         else:
             return str(self.name)
 
+    def get_info(self):
+        if self.token_type:
+            info_id = 'slp/' + self.tokenid
+        else:
+            info_id = self.name.lower()
+        return {
+            'id': info_id,
+            'name': self.name,
+            'symbol': self.token_ticker,
+            'image_url': self.image_url
+        }
+
 
 class BlockHeight(PostgresModel):
     number = models.IntegerField(default=0, unique=True, db_index=True)

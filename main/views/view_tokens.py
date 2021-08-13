@@ -2,10 +2,25 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import F
 from rest_framework import status
-from main.models import Token, WalletHistory
+from main.models import Token, WalletHistory, Token
+from main.tasks import get_token_meta_data
+
 
 
 class TokensView(APIView):
+
+    def get(self, request, *args, **kwargs):
+        token_id = kwargs.get('tokenid', None)
+        token_check = Token.objects.filter(tokenid=token_id)
+        if token_check.exists():
+            token = token_check.first()
+            data = token.get_info()
+        else:
+            data = get_token_meta_data.run(token_id)
+        return Response(data)
+
+
+class WalletTokensView(APIView):
 
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', None)

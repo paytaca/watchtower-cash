@@ -619,9 +619,12 @@ def get_slp_utxos(self, address):
 
 @shared_task(bind=True, queue='token_metadata', max_retries=10)
 def get_token_meta_data(self, token_id):
+    token_obj, _ = Token.objects.get_or_create(
+        tokenid=token_id
+    )
     try:
         bchd = BCHDQuery()
-        txn = bchd.get_transaction(token_id, parse_slp=True)
+        txn = bchd.get_transaction(token_obj.tokenid, parse_slp=True)
         if txn:
             info = txn['token_info']
             data = {
@@ -645,6 +648,7 @@ def get_token_meta_data(self, token_id):
 
             # Get image / logo URL
             image_file_name = None
+            image_url = None
             if data['token_type'] == 1:
 
                 # Check icons.fountainhead.cash
@@ -667,6 +671,16 @@ def get_token_meta_data(self, token_id):
                     image_url=image_url,
                     date_updated=timezone.now()
                 )
+            
+            info_id = ''
+            if data['token_type']:
+                info_id = 'slp/' + token_id
+            return {
+                'info': info_id,
+                'name': data['name'],
+                'symbol': data['token_ticker'],
+                'image_url': image_url or ''
+            }
 
     except Exception:
         self.retry(countdown=5)
