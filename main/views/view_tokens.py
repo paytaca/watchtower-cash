@@ -12,11 +12,17 @@ class TokensView(APIView):
     def get(self, request, *args, **kwargs):
         token_id = kwargs.get('tokenid', None)
         token_check = Token.objects.filter(tokenid=token_id)
+        data = None
         if token_check.exists():
             token = token_check.first()
             data = token.get_info()
         else:
             data = get_token_meta_data.run(token_id)
+        if data:
+            data['success'] = True
+        else:
+            data['success'] = False
+            data['error'] = 'invalid_token_id'
         return Response(data)
 
 
