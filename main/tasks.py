@@ -1,4 +1,5 @@
 import math, logging, json, time, requests, shutil
+from urllib.parse import urlparse
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
@@ -617,6 +618,29 @@ def get_slp_utxos(self, address):
             LOGGER.error(f"CAN'T EXTRACT UTXOs OF {address} THIS TIME. THIS NEEDS PROPER FALLBACK.")
 
 
+def is_url(url):
+  try:
+    result = urlparse(url)
+    return all([result.scheme, result.netloc])
+  except ValueError:
+    return False
+
+
+def download_image(token_id, url):
+    resp = requests.get(url, stream=True, timeout=60)
+    image_file_name = None
+    if resp.status_code == 200:
+        content_type = resp.headers.get('content-type')
+        if content_type.split('/')[0] == 'image':
+            file_ext = content_type.split('/')[1]
+            response = requests.get(url, stream=True)
+            out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
+            with open(out_path, 'wb') as out_file:
+                shutil.copyfileobj(resp.raw, out_file)
+            image_file_name = f"{token_id}.{file_ext}"
+    return image_file_name
+
+
 @shared_task(bind=True, queue='token_metadata', max_retries=10)
 def get_token_meta_data(self, token_id):
     token_obj, _ = Token.objects.get_or_create(
@@ -627,6 +651,7 @@ def get_token_meta_data(self, token_id):
         txn = bchd.get_transaction(token_obj.tokenid, parse_slp=True)
         if txn:
             info = txn['token_info']
+            print(info)
             data = {
                 'name': info['name'],
                 'token_ticker': info['ticker'],
@@ -653,16 +678,14 @@ def get_token_meta_data(self, token_id):
 
                 # Check icons.fountainhead.cash
                 url = f"https://icons.fountainhead.cash/128/{token_id}.png"
-                resp = requests.get(url, stream=True, timeout=60)
-                if resp.status_code == 200:
-                    content_type = resp.headers.get('content-type')
-                    if content_type.split('/')[0] == 'image':
-                        file_ext = content_type.split('/')[1]
-                        response = requests.get(url, stream=True)
-                        out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
-                        with open(out_path, 'wb') as out_file:
-                            shutil.copyfileobj(resp.raw, out_file)
-                        image_file_name = f"{token_id}.{file_ext}"
+                image_file_name = download_image(token_id, url)
+
+            if data['token_type'] == 65:
+
+                # Try getting image directly from document URL
+                url = info['document_url']
+                if is_url(url):
+                    image_file_name = download_image(token_id, url)
 
             if image_file_name:
                 image_server_base = 'https://images.watchtower.cash'
@@ -671,7 +694,7 @@ def get_token_meta_data(self, token_id):
                     image_url=image_url,
                     date_updated=timezone.now()
                 )
-            
+
             info_id = ''
             if data['token_type']:
                 info_id = 'slp/' + token_id
