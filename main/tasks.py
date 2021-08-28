@@ -637,8 +637,8 @@ def download_image(token_id, url):
             out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
             with open(out_path, 'wb') as out_file:
                 shutil.copyfileobj(resp.raw, out_file)
-            image_file_name = f"{token_id}.{file_ext}"
-    return image_file_name
+                image_file_name = f"{token_id}.{file_ext}"
+    return resp.status_code, image_file_name
 
 
 @shared_task(bind=True, queue='token_metadata', max_retries=10)
@@ -674,37 +674,51 @@ def get_token_meta_data(self, token_id):
             # Get image / logo URL
             image_file_name = None
             image_url = None
+            status_code = 0
+
             if data['token_type'] == 1:
 
                 # Check icons.fountainhead.cash
                 url = f"https://icons.fountainhead.cash/128/{token_id}.png"
-                image_file_name = download_image(token_id, url)
+                status_code, image_file_name = download_image(token_id, url)
 
             if data['token_type'] == 65:
 
-                # Try getting image directly from document URL
-                url = info['document_url']
-                if is_url(url):
-                    image_file_name = download_image(token_id, url)
+                # Check if NFT group/parent token has image_base_url
+                nft_parent = token_obj.nft_token_group
+                if 'image_base_url' in nft_parent.nft_token_group_details.keys():
+                    image_base_url = nft_parent.nft_token_group_details['image_base_url']
+                    image_type = nft_parent.nft_token_group_details['image_type']
+                    url = f"{image_base_url}/{token_id}.{image_type}"
+                    status_code, image_file_name = download_image(token_id, url)
 
-            if image_file_name:
-                image_server_base = 'https://images.watchtower.cash'
-                image_url = f"{image_server_base}/{image_file_name}"
-                Token.objects.filter(tokenid=token_id).update(
-                    image_url=image_url,
-                    date_updated=timezone.now()
-                )
+                else:
+                    # Try getting image directly from document URL
+                    url = info['document_url']
+                    if is_url(url):
+                        status_code, image_file_name = download_image(token_id, url)
 
-            info_id = ''
-            if data['token_type']:
-                info_id = 'slp/' + token_id
-            return {
-                'id': info_id,
-                'name': data['name'],
-                'symbol': data['token_ticker'],
-                'token_type': data['token_type'],
-                'image_url': image_url or ''
-            }
+            if status_code == 200:
+                if image_file_name:
+                    image_server_base = 'https://images.watchtower.cash'
+                    image_url = f"{image_server_base}/{image_file_name}"
+                    Token.objects.filter(tokenid=token_id).update(
+                        image_url=image_url,
+                        date_updated=timezone.now()
+                    )
+
+                info_id = ''
+                if data['token_type']:
+                    info_id = 'slp/' + token_id
+                return {
+                    'id': info_id,
+                    'name': data['name'],
+                    'symbol': data['token_ticker'],
+                    'token_type': data['token_type'],
+                    'image_url': image_url or ''
+                }
+            else:
+                self.retry(countdown=5)
 
     except Exception:
         self.retry(countdown=5)
