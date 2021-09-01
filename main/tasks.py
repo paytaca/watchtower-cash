@@ -975,18 +975,20 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
         if wallet_handle.split('|')[0] == 'slp':
-            parse_wallet_history.delay(
-                txid,
-                wallet_handle,
-                tx_fee,
-                senders['slp'],
-                recipients['slp']
-            )
+            if senders['slp'] and recipients['slp']:
+                parse_wallet_history.delay(
+                    txid,
+                    wallet_handle,
+                    tx_fee,
+                    senders['slp'],
+                    recipients['slp']
+                )
         if wallet_handle.split('|')[0] == 'bch':
-            parse_wallet_history.delay(
-                txid,
-                wallet_handle,
-                tx_fee,
-                senders['bch'],
-                recipients['bch']
-            )
+            if senders['bch'] and recipients['bch']:
+                parse_wallet_history.delay(
+                    txid,
+                    wallet_handle,
+                    tx_fee,
+                    senders['bch'],
+                    recipients['bch']
+                )
