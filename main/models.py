@@ -213,8 +213,8 @@ class Transaction(PostgresModel):
 
 
 class Recipient(PostgresModel):
-    web_url = models.CharField(max_length=300, blank=True)
-    telegram_id = models.CharField(max_length=50, blank=True)
+    web_url = models.CharField(max_length=300, null=True, blank=True)
+    telegram_id = models.CharField(max_length=50, null=True, blank=True)
     valid = models.BooleanField(default=True)
 
     def __str__(self):
