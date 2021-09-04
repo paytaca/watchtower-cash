@@ -74,7 +74,8 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     dynamic_raw_id_fields = [
         'blockheight',
         'address',
-        'token'
+        'token',
+        'wallet'
     ]
 
     actions = ['resend_unacknowledged_transactions']
