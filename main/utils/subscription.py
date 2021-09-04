@@ -70,9 +70,11 @@ def new_subscription(**kwargs):
                 address_obj, _ = Address.objects.get_or_create(address=address)
                 if wallet_hash is not None and wallet_index is not None:
                     wallet, _ = Wallet.objects.get_or_create(
-                        wallet_hash=wallet_hash,
-                        project=project
+                        wallet_hash=wallet_hash
                     )
+                    if not wallet.project:
+                        wallet.project = project
+                        wallet.save()
                     address_obj.wallet = wallet
                     address_obj.wallet_index = wallet_index
                     address_obj.project = project
