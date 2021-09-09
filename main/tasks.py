@@ -323,7 +323,7 @@ def bitdbquery(self, block_id):
         
         processed_all = False
         while not processed_all:
-            currentcount  = int(REDIS_STORAGE.get('BITDBQUERY_COUNT'))
+            currentcount  = int(REDIS_STORAGE.get('BITDBQUERY_COUNT').decode())
             LOGGER.info(f"THERE ARE {currentcount} SUCCEEDED OUT OF {total} TASKS.")
             if currentcount == total:
                 block = BlockHeight.objects.get(id=block_id)
@@ -339,7 +339,7 @@ def bitdbquery(self, block_id):
         try:
             self.retry(countdown=10)
         except MaxRetriesExceededError:
-            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS').decode())
             pending_blocks.append(block.number)
             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
             REDIS_STORAGE.set('READY', 1)
@@ -349,7 +349,7 @@ def bitdbquery(self, block_id):
 def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
     source = 'slpdb-query'
 
-    block_id = int(REDIS_STORAGE.get('BLOCK_ID'))
+    block_id = int(REDIS_STORAGE.get('BLOCK_ID').decode())
     block = BlockHeight.objects.get(id=block_id)
     
     if transaction['slp']['valid']:
@@ -422,7 +422,7 @@ def slpdbquery(self, block_id):
         try:
             self.retry(countdown=10)
         except MaxRetriesExceededError:
-            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS'))
+            pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS').decode())
             pending_blocks.append(block.number)
             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
             REDIS_STORAGE.set('READY', 1)
@@ -434,8 +434,9 @@ def manage_block_transactions(self):
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
     
-    pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS')
+    pending_blocks = REDIS_STORAGE.get('PENDING-BLOCKS').decode()
     blocks = json.loads(pending_blocks)
+    blocks.sort()
 
     if len(blocks) == 0:
         unscanned_blocks = BlockHeight.objects.filter(
@@ -445,11 +446,11 @@ def manage_block_transactions(self):
         REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(list(unscanned_blocks)))
 
 
-    if int(REDIS_STORAGE.get('READY')): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
+    if int(REDIS_STORAGE.get('READY').decode()): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
     if not blocks: return 'NO PENDING BLOCKS'
     
     discard_block = False
-    if int(REDIS_STORAGE.get('READY')):
+    if int(REDIS_STORAGE.get('READY').decode()):
         try:
             active_block = blocks[0]
             block = BlockHeight.objects.get(number=active_block)
@@ -468,7 +469,7 @@ def manage_block_transactions(self):
             REDIS_STORAGE.set('READY', 0)
             slpdbquery.delay(block.id)     
     
-    active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK'))
+    active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
 
 
