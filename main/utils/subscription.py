@@ -35,67 +35,69 @@ def save_subscription(address, subscriber_id):
 
 def new_subscription(**kwargs):
     response = {'success': False}
-    address = kwargs.get('address', None)
+    addresses = kwargs.get('address', None)
     project_id = kwargs.get('project_id', None)
     wallet_hash = kwargs.get('wallet_hash', None)
     wallet_index = kwargs.get('wallet_index', None)
     web_url = kwargs.get('webhook_url', None)
     telegram_id = kwargs.get('telegram_id', None)
-    if address is not None:
-        address = address.lower()
-        if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
-            proceed = False
-            if project_id:
-                project_check = Project.objects.filter(id=project_id)
-                if project_check.exists():
-                    project = project_check.first()
+    if addresses is not None:
+        addresses = address.lower().split(',')
+        for address in addresses:
+            address = address.strip()
+            if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
+                proceed = False
+                if project_id:
+                    project_check = Project.objects.filter(id=project_id)
+                    if project_check.exists():
+                        project = project_check.first()
+                        proceed = True
+                    else:
+                        response['error'] = 'project_does_not_exist'
+                else:
                     proceed = True
-                else:
-                    response['error'] = 'project_does_not_exist'
-            else:
-                proceed = True
-            
-            if proceed:
-                obj_recipient = RecipientHandler(
-                    web_url=web_url,
-                    telegram_id=telegram_id
-                )
-                recipient, created = obj_recipient.get_or_create()
-                                
-                if recipient and not created:
-                    # Renew validity.
-                    recipient.valid = True
-                    recipient.save()
-                        
-                address_obj, _ = Address.objects.get_or_create(address=address)
-                if wallet_hash is not None and wallet_index is not None:
-                    wallet, _ = Wallet.objects.get_or_create(
-                        wallet_hash=wallet_hash
+                
+                if proceed:
+                    obj_recipient = RecipientHandler(
+                        web_url=web_url,
+                        telegram_id=telegram_id
                     )
-                    if not wallet.project:
-                        wallet.project = project
-                        wallet.save()
-                    address_obj.wallet = wallet
-                    address_obj.wallet_index = wallet_index
-                    address_obj.project = project
-                    address_obj.save()
+                    recipient, created = obj_recipient.get_or_create()
+                                    
+                    if recipient and not created:
+                        # Renew validity.
+                        recipient.valid = True
+                        recipient.save()
+                            
+                    address_obj, _ = Address.objects.get_or_create(address=address)
+                    if wallet_hash is not None and wallet_index is not None:
+                        wallet, _ = Wallet.objects.get_or_create(
+                            wallet_hash=wallet_hash
+                        )
+                        if not wallet.project:
+                            wallet.project = project
+                            wallet.save()
+                        address_obj.wallet = wallet
+                        address_obj.wallet_index = wallet_index
+                        address_obj.project = project
+                        address_obj.save()
 
-                _, created = Subscription.objects.get_or_create(
-                    recipient=recipient,
-                    address=address_obj
-                )
+                    _, created = Subscription.objects.get_or_create(
+                        recipient=recipient,
+                        address=address_obj
+                    )
 
-                if address.startswith('simpleledger'):
-                    get_slp_utxos.delay(address)
-                elif address.startswith('bitcoincash'):
-                    get_bch_utxos.delay(address)
+                    if address.startswith('simpleledger'):
+                        get_slp_utxos.delay(address)
+                    elif address.startswith('bitcoincash'):
+                        get_bch_utxos.delay(address)
 
-                if created:
-                    response['success'] = True
-                else:
-                    response['error'] = 'subscription_already_exists'
-        else:
-            response['error'] = 'invalid_address'
+                    if created:
+                        response['success'] = True
+                    else:
+                        response['error'] = 'subscription_already_exists'
+            else:
+                response['error'] = 'invalid_address'
 
     LOGGER.info(response)
     return response
