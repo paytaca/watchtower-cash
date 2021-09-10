@@ -21,12 +21,18 @@ import json
 admin.site.site_header = 'WatchTower.Cash Admin'
 REDIS_STORAGE = settings.REDISKV
 
-class TokenAdmin(admin.ModelAdmin):
+class TokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    search_fields = ['tokenid']
+
     list_display = [
         'tokenid',
         'name',
         'token_ticker',
         'token_type'
+    ]
+
+    dynamic_raw_id_fields = [
+        'nft_token_group'
     ]
 
     def get_query(self, request): 
