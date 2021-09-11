@@ -79,7 +79,7 @@ def new_subscription(**kwargs):
                     if wallet_hash is not None and wallet_index is not None:
                         if '/' in path:
                             address.path = int(path)
-                            wallet_version = 1
+                            wallet_version = 2
                         else:
                             # Deal with subscription for v1 wallets
                             address.wallet_index = int(path)

@@ -313,5 +313,3 @@ CHANNEL_LAYERS = {
 WATCH_ROOM = 'watch_room'
 
 START_BLOCK = int(decipher(config('START_BLOCK')))
-
-CURRENT_WALLET_VERSION = 2
