@@ -119,6 +119,7 @@ class Wallet(PostgresModel):
         null=True,
         blank=True
     )
+    version = models.IntegerField()
     date_created = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
@@ -141,10 +142,12 @@ class Address(PostgresModel):
         null=True,
         blank=True
     )
+    # `wallet_index` is kept for backward-compatibility with v1 wallets
     wallet_index = models.IntegerField(
         null=True,
         blank=True
     )
+    address_path = models.CharField(max_length=10)
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
