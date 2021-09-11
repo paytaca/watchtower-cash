@@ -36,6 +36,7 @@ def save_subscription(address, subscriber_id):
 def new_subscription(**kwargs):
     response = {'success': False}
     address = kwargs.get('address', None)
+    addresses = kwargs.get('addresses', None)
     project_id = kwargs.get('project_id', None)
     wallet_hash = kwargs.get('wallet_hash', None)
     # `wallet_index` is kept for backward-compatibility with v1 wallets
@@ -43,14 +44,15 @@ def new_subscription(**kwargs):
     address_index = kwargs.get('address_index', None)
     web_url = kwargs.get('webhook_url', None)
     telegram_id = kwargs.get('telegram_id', None)
-    if address is not None:
-        addresses = []
+    if address or addresses:
+        address_list = []
         if isinstance(address, str):
-            addresses.append([address.strip(), wallet_index])
-        elif isinstance(address, dict):
-            addresses.append([address['receiving'], '0/' + str(address_index)])
-            addresses.append([address['change'], '0/' + str(address_index)])
-        for address, path in addresses:
+            address_list.append([address.strip(), wallet_index])
+        elif isinstance(addresses, dict):
+            address_list.append([addresses['receiving'], '0/' + str(address_index)])
+            if 'change' in addresses.keys():
+                address_list.append([addresses['change'], '1/' + str(address_index)])
+        for address, path in address_list:
             if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
                 proceed = False
                 if project_id:
@@ -76,23 +78,25 @@ def new_subscription(**kwargs):
                         recipient.save()
                             
                     address_obj, _ = Address.objects.get_or_create(address=address)
-                    if wallet_hash is not None and wallet_index is not None:
-                        if '/' in path:
-                            address.path = int(path)
-                            wallet_version = 2
-                        else:
-                            # Deal with subscription for v1 wallets
-                            address.wallet_index = int(path)
-                            wallet_version = 1
-                        wallet, _ = Wallet.objects.get_or_create(
-                            wallet_hash=wallet_hash,
-                            version=wallet_version
-                        )
-                        if not wallet.project:
-                            wallet.project = project
-                            wallet.save()
-                        address_obj.wallet = wallet
-                        address_obj.save()
+                    if wallet_hash:
+                        if wallet_index or address_index:
+                            if isinstance(path, str):
+                                if '/' in path:
+                                    address_obj.path = path
+                                    wallet_version = 2
+                            else:
+                                # Deal with subscription for v1 wallets
+                                address_obj.wallet_index = int(path)
+                                wallet_version = 1
+                            wallet, _ = Wallet.objects.get_or_create(
+                                wallet_hash=wallet_hash,
+                                version=wallet_version
+                            )
+                            if not wallet.project:
+                                wallet.project = project
+                                wallet.save()
+                            address_obj.wallet = wallet
+                            address_obj.save()
 
                     _, created = Subscription.objects.get_or_create(
                         recipient=recipient,
