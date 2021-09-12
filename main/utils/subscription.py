@@ -82,11 +82,12 @@ def new_subscription(**kwargs):
                         if wallet_index or address_index:
                             if isinstance(path, str):
                                 if '/' in path:
-                                    address_obj.path = path
+                                    address_obj.address_path = path
                                     wallet_version = 2
                             else:
                                 # Deal with subscription for v1 wallets
                                 address_obj.wallet_index = int(path)
+                                address_obj.address_path = path
                                 wallet_version = 1
                             wallet, _ = Wallet.objects.get_or_create(
                                 wallet_hash=wallet_hash,
