@@ -68,13 +68,15 @@ def _get_bch_utxos(query, show_address_index=False):
             value=Round(F('amount') * (10 ** 8)),
             vout=F('index'),
             block=F('blockheight__number'),
-            wallet_index=F('address__wallet_index')
+            wallet_index=F('address__wallet_index'),
+            address_path=F('address__address_path')
         ).values(
             'txid',
             'vout',
             'value',
             'block',
-            'wallet_index'
+            'wallet_index',
+            'address_path'
         )
     else:
         utxos_values = qs.annotate(
