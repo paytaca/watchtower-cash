@@ -79,7 +79,7 @@ def new_subscription(**kwargs):
                             
                     address_obj, _ = Address.objects.get_or_create(address=address)
                     if wallet_hash:
-                        if wallet_index or address_index:
+                        if wallet_index is not None or address_index is not None:
                             if isinstance(path, str):
                                 if '/' in path:
                                     address_obj.address_path = path
