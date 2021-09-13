@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from main.models import Transaction, Wallet
+from main.models import Transaction, Wallet, Token
 from main.tasks import get_token_meta_data
 from rest_framework.response import Response
 from rest_framework import status

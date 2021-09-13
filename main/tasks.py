@@ -89,6 +89,8 @@ def client_acknowledgement(self, txid):
                 if recipient:
                     if recipient.valid:
                         if recipient.web_url:
+                            LOGGER.info(f"Webhook call to be sent to: {recipient.web_url}")
+                            LOGGER.info(f"Data: {str(data)}")
                             resp = requests.post(recipient.web_url,data=data)
                             if resp.status_code == 200:
                                 this_transaction.update(acknowledged=True)
