@@ -22,7 +22,8 @@ def _get_slp_utxos(query, show_address_index=False):
             token_ticker=F('token__token_ticker'),
             token_type=F('token__token_type'),
             block=F('blockheight__number'),
-            wallet_index=F('address__wallet_index')
+            wallet_index=F('address__wallet_index'),
+            address_path=F('address__address_path')
         ).values(
             'txid',
             'vout',
@@ -33,7 +34,8 @@ def _get_slp_utxos(query, show_address_index=False):
             'decimals',
             'token_type',
             'block',
-            'wallet_index'
+            'wallet_index',
+            'address_path'
         )
     else:
         utxos_values = qs.annotate(
