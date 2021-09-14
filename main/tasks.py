@@ -832,6 +832,9 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
     parse_slp = address.startswith('simpleledger')
     if parse_slp:
         slp_tx = bchd.get_transaction(txid, parse_slp=True)
+        if not slp_tx:
+            self.retry(countdown=5)
+            return
         tx_fee = slp_tx['tx_fee']
         if slp_tx['valid']:
             if txn_address.wallet:
@@ -848,6 +851,9 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                     recipients['slp'] = [(i['address'], i['amount']) for i in slp_tx['outputs']]
     else:
         bch_tx = bchd.get_transaction(txid)
+        if not bch_tx:
+            self.retry(countdown=5)
+            return
         tx_fee = bch_tx['tx_fee']
         if txn_address.wallet:
             if txn_address.wallet.wallet_type == 'bch':
