@@ -90,9 +90,11 @@ def new_subscription(**kwargs):
                                 address_obj.address_path = path
                                 wallet_version = 1
                             wallet, _ = Wallet.objects.get_or_create(
-                                wallet_hash=wallet_hash,
-                                version=wallet_version
+                                wallet_hash=wallet_hash
                             )
+                            if wallet.version != wallet_version:
+                                wallet.version = wallet_version
+                                wallet.save()
                             if not wallet.project:
                                 wallet.project = project
                                 wallet.save()
