@@ -16,8 +16,5 @@ class SubscribeViewSet(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             response = new_subscription(**serializer.data)
-            if response['success']:
-                return Response(response, status=status.HTTP_200_OK)
-            else:
-                return Response(response, status=status.HTTP_409_CONFLICT)
+            return Response(response, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

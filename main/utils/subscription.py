@@ -111,10 +111,7 @@ def new_subscription(**kwargs):
                     elif address.startswith('bitcoincash'):
                         get_bch_utxos.delay(address)
 
-                    if created:
-                        response['success'] = True
-                    else:
-                        response['error'] = 'subscription_already_exists'
+                    response['success'] = True
             else:
                 response['error'] = 'invalid_address'
 
