@@ -89,9 +89,17 @@ def new_subscription(**kwargs):
                                 address_obj.wallet_index = int(path)
                                 address_obj.address_path = path
                                 wallet_version = 1
-                            wallet, _ = Wallet.objects.get_or_create(
+                            wallet_check = Wallet.objects.filter(
                                 wallet_hash=wallet_hash
                             )
+                            if wallet_check.exists():
+                                wallet = wallet_check.last()
+                            else:
+                                wallet = Wallet(
+                                    wallet_hash=wallet_hash,
+                                    version=wallet_version
+                                )
+                                wallet.save()
                             if wallet.version != wallet_version:
                                 wallet.version = wallet_version
                                 wallet.save()
