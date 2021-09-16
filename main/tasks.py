@@ -83,7 +83,8 @@ def client_acknowledgement(self, txid):
                     'token': transaction.token.tokenid or transaction.token.token_ticker.lower(),
                     'txid': transaction.txid,
                     'block': block,
-                    'index': transaction.index
+                    'index': transaction.index,
+                    'address_path' : transaction.address.address_path
                 }
 
                 if recipient:
