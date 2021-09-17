@@ -81,12 +81,12 @@ def client_acknowledgement(self, txid):
                 if address.wallet.version == 2:
                     data = {
                         'token_name': transaction.token.name,
-                        'token_id': transaction.token.tokenid,
+                        'token_id':  'slp/' + transaction.token.tokenid if  transaction.token.tokenid  else 'bch',
                         'token_symbol': transaction.token.token_ticker.lower(),
                         'amount': transaction.amount,
                         'address': transaction.address.address,
                         'source': 'WatchTower',
-                        'txid': 'slp/' + transaction.txid if  transaction.txid  else 'bch',
+                        'txid': transaction.txid,
                         'block': block,
                         'index': transaction.index,
                         'address_path' : transaction.address.address_path
