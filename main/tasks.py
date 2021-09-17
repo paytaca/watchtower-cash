@@ -86,7 +86,7 @@ def client_acknowledgement(self, txid):
                         'amount': transaction.amount,
                         'address': transaction.address.address,
                         'source': 'WatchTower',
-                        'txid': 'slp' + transaction.txid if  transaction.txid  else 'bch',
+                        'txid': 'slp/' + transaction.txid if  transaction.txid  else 'bch',
                         'block': block,
                         'index': transaction.index,
                         'address_path' : transaction.address.address_path
