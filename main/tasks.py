@@ -65,6 +65,8 @@ def client_acknowledgement(self, txid):
             block = transaction.blockheight.number
         
         address = transaction.address
+
+            
         subscriptions = Subscription.objects.filter(
             address=address             
         )
@@ -76,16 +78,30 @@ def client_acknowledgement(self, txid):
                 recipient = subscription.recipient
                 websocket = subscription.websocket
 
-                data = {
-                    'amount': transaction.amount,
-                    'address': transaction.address.address,
-                    'source': 'WatchTower',
-                    'token': transaction.token.tokenid or transaction.token.token_ticker.lower(),
-                    'txid': transaction.txid,
-                    'block': block,
-                    'index': transaction.index,
-                    'address_path' : transaction.address.address_path
-                }
+                if address.wallet.version == 2:
+                    data = {
+                        'token_name': transaction.token.name,
+                        'token_id': transaction.token.tokenid,
+                        'token_symbol': transaction.token.token_ticker.lower(),
+                        'amount': transaction.amount,
+                        'address': transaction.address.address,
+                        'source': 'WatchTower',
+                        'txid': 'slp' + transaction.txid if  transaction.txid  else 'bch',
+                        'block': block,
+                        'index': transaction.index,
+                        'address_path' : transaction.address.address_path
+                    }
+                elif address.wallet.version == 1:
+                    data = {
+                        'amount': transaction.amount,
+                        'address': transaction.address.address,
+                        'source': 'WatchTower',
+                        'token': transaction.token.tokenid or transaction.token.token_ticker.lower(),
+                        'txid': transaction.txid,
+                        'block': block,
+                        'index': transaction.index,
+                        'address_path' : transaction.address.address_path
+                    }
 
                 if recipient:
                     if recipient.valid:
