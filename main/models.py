@@ -28,7 +28,8 @@ class Token(PostgresModel):
         null=True
     )
     nft_token_group_details = JSONField(default=dict)
-    image_url = models.URLField(blank=True)
+    original_image_url = models.URLField(blank=True)
+    medium_image_url = models.URLField(blank=True)
     thumbnail_image_url = models.URLField(blank=True)
     date_created = models.DateTimeField(default=timezone.now)
     date_updated = models.DateTimeField(null=True, blank=True)

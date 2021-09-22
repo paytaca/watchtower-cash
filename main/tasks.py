@@ -661,13 +661,14 @@ def is_url(url):
     return False
 
 
-def download_image(token_id, url):
+def download_image(token_id, url, resize=False):
     ImageFile.LOAD_TRUNCATED_IMAGES = True
     resp = requests.get(url, stream=True, timeout=300)
     image_file_name = None
     if resp.status_code == 200:
         content_type = resp.headers.get('content-type')
         if content_type.split('/')[0] == 'image':
+
             # Save original size
             file_ext = content_type.split('/')[1]
             response = requests.get(url, stream=True)
@@ -676,12 +677,19 @@ def download_image(token_id, url):
                 shutil.copyfileobj(resp.raw, out_file)
                 image_file_name = f"{token_id}.{file_ext}"
             
-            # Save thumbnail
-            img = Image.open(BytesIO(resp.content))
-            size = 200, 200
-            img.resize(size, Image.ANTIALIAS)
-            out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_thumbnail.{file_ext}"
-            img.save(out_path, quality=95)
+            if resize:
+                # Save medium size
+                img = Image.open(BytesIO(resp.content))
+                medium_size = 450, 450
+                img.resize(medium_size, Image.ANTIALIAS)
+                out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_medium.{file_ext}"
+                img.save(out_path, quality=95)
+
+                # Save thumbnail size
+                thumbnail_size = 150, 150
+                img.resize(thumbnail_size, Image.ANTIALIAS)
+                out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_thumbnail.{file_ext}"
+                img.save(out_path, quality=95)
 
     return resp.status_code, image_file_name
 
@@ -735,7 +743,7 @@ def get_token_meta_data(self, token_id):
                     image_base_url = nft_parent.nft_token_group_details['image_base_url']
                     image_type = nft_parent.nft_token_group_details['image_type']
                     url = f"{image_base_url}/{token_id}.{image_type}"
-                    status_code, image_file_name = download_image(token_id, url)
+                    status_code, image_file_name = download_image(token_id, url, resize=True)
 
                 else:
                     # Try getting image directly from document URL
@@ -747,11 +755,18 @@ def get_token_meta_data(self, token_id):
                 if image_file_name:
                     image_server_base = 'https://images.watchtower.cash'
                     image_url = f"{image_server_base}/{image_file_name}"
-                    Token.objects.filter(tokenid=token_id).update(
-                        image_url=image_url,
-                        thumbnail_image_url=image_url.replace('.', '_thumbnail.'),
-                        date_updated=timezone.now()
-                    )
+                    if data['token_type'] == 1:
+                        Token.objects.filter(tokenid=token_id).update(
+                            original_image_url=image_url,
+                            date_updated=timezone.now()
+                        )
+                    if data['token_type'] == 65:
+                        Token.objects.filter(tokenid=token_id).update(
+                            original_image_url=image_url,
+                            medium_image_url=image_url.replace('.', '_medium.'),
+                            thumbnail_image_url=image_url.replace('.', '_thumbnail.'),
+                            date_updated=timezone.now()
+                        )
 
                 info_id = ''
                 if data['token_type']:
