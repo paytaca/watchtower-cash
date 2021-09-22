@@ -19,7 +19,7 @@ from main.utils import bitdb as bitdb_scanner
 from main.utils.wallet import HistoryParser
 from django.db.utils import IntegrityError
 from django.conf import settings
-from django.utils import timezone
+from django.utils import timezone, dateparse
 from django.db import transaction as trans
 from celery import Celery
 from main.utils.chunk import chunks
@@ -27,6 +27,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.queries.bchd import BCHDQuery
 import base64
+import pytz
 
 
 LOGGER = logging.getLogger(__name__)
@@ -78,7 +79,17 @@ def client_acknowledgement(self, txid):
                 recipient = subscription.recipient
                 websocket = subscription.websocket
 
-                if address.wallet.version == 2:
+                wallet_version = 1
+                if address.wallet:
+                    wallet_version = address.wallet.version
+                else:
+                    # Hardcoded date-based check for addresses that are not associated with wallets
+                    v2_rollout_date_str = '2021-09-11 00:00:00'
+                    v2_rollout_date = pytz.UTC.localize(v2_rollout_date_str)
+                    if address.date_created >= v2_rollout_date:
+                        wallet_version = 2
+
+                if wallet_version == 2:
                     data = {
                         'token_name': transaction.token.name,
                         'token_id':  'slp/' + transaction.token.tokenid if  transaction.token.tokenid  else 'bch',
@@ -91,7 +102,7 @@ def client_acknowledgement(self, txid):
                         'index': transaction.index,
                         'address_path' : transaction.address.address_path
                     }
-                elif address.wallet.version == 1:
+                elif wallet_version == 1:
                     data = {
                         'amount': transaction.amount,
                         'address': transaction.address.address,
@@ -494,12 +505,14 @@ def manage_block_transactions(self):
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
-    # This task is intended to check new blockheight every 5 seconds through BitDB Query
+    # This task is intended to check new blockheight every 5 seconds through BCHD @ fountainhead.cash
     LOGGER.info('CHECKING THE LATEST BLOCK')
-    obj = bitdb_scanner.BitDB()
-    number = obj.get_latest_block()
-    obj, created = BlockHeight.objects.get_or_create(number=number)
-    if created: return f'*** NEW BLOCK { obj.number } ***'
+    url = 'https://bchd.fountainhead.cash/v1/GetBlockchainInfo'
+    resp = requests.post(url)
+    if resp.status_code == 200:
+        number = resp.json()['best_height']
+        obj, created = BlockHeight.objects.get_or_create(number=number)
+        if created: return f'*** NEW BLOCK { obj.number } ***'
 
 
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
