@@ -26,6 +26,8 @@ from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.queries.bchd import BCHDQuery
+from PIL import Image, ImageFile
+from io import BytesIO 
 import base64
 import pytz
 
@@ -660,17 +662,27 @@ def is_url(url):
 
 
 def download_image(token_id, url):
-    resp = requests.get(url, stream=True, timeout=60)
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
+    resp = requests.get(url, stream=True, timeout=300)
     image_file_name = None
     if resp.status_code == 200:
         content_type = resp.headers.get('content-type')
         if content_type.split('/')[0] == 'image':
+            # Save original size
             file_ext = content_type.split('/')[1]
             response = requests.get(url, stream=True)
             out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
             with open(out_path, 'wb') as out_file:
                 shutil.copyfileobj(resp.raw, out_file)
                 image_file_name = f"{token_id}.{file_ext}"
+            
+            # Save thumbnail
+            img = Image.open(BytesIO(resp.content))
+            size = 200, 200
+            img.resize(size, Image.ANTIALIAS)
+            out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_thumbnail.{file_ext}"
+            img.save(out_path, quality=95)
+
     return resp.status_code, image_file_name
 
 
@@ -737,6 +749,7 @@ def get_token_meta_data(self, token_id):
                     image_url = f"{image_server_base}/{image_file_name}"
                     Token.objects.filter(tokenid=token_id).update(
                         image_url=image_url,
+                        thumbnail_image_url=image_url.replace('.', '_thumbnail.'),
                         date_updated=timezone.now()
                     )
 

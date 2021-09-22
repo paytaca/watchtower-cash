@@ -46,7 +46,8 @@ class WalletTokensView(APIView):
             name=F('token__name'),
             symbol=F('token__token_ticker'),
             type=F('token__token_type'),
-            image_url=F('token__image_url')
+            image_url=F('token__image_url'),
+            thumbnail_image_url=F('token__thumbnail_image_url')
         ).rename_annotations(
             _token='token_id'
         ).values(
@@ -54,6 +55,7 @@ class WalletTokensView(APIView):
             'name',
             'symbol',
             'type',
-            'image_url'
+            'image_url',
+            'thumbnail_image_url'
         )
         return Response(data=tokens, status=status.HTTP_200_OK)
