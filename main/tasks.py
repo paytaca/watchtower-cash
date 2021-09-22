@@ -860,7 +860,9 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
 
     bchd = BCHDQuery()
     parse_slp = address.startswith('simpleledger')
+
     if parse_slp:
+        # Parse SLP senders and recipients
         slp_tx = bchd.get_transaction(txid, parse_slp=True)
         if not slp_tx:
             self.retry(countdown=5)
@@ -880,6 +882,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                 if 'outputs' in slp_tx.keys():
                     recipients['slp'] = [(i['address'], i['amount']) for i in slp_tx['outputs']]
     else:
+        # Parse BCH senders and recipients
         bch_tx = bchd.get_transaction(txid)
         if not bch_tx:
             self.retry(countdown=5)
@@ -891,13 +894,12 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                 if 'outputs' in bch_tx.keys():
                     recipients['bch'] = [(i['address'], i['value']) for i in bch_tx['outputs']]
 
-    # Make sure that any corresponding SLP transaction is saved
-    if address.startswith('bitcoincash:'):
+    if parse_slp:
         if slp_tx is None:
             slp_tx = bchd.get_transaction(txid, parse_slp=True)
         spent_txids = []
 
-        # Mark inputs as spent
+        # Mark SLP tx inputs as spent
         for tx_input in slp_tx['inputs']:
             try:
                 address = Address.objects.get(address=tx_input['address'])
@@ -915,6 +917,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                 spending_txid=txid
             )
 
+        # Parse SLP tx outputs
         if slp_tx['valid']:
             for tx_output in slp_tx['outputs']:
                 try:
@@ -949,15 +952,13 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
-
-    # Make sure that any corresponding BCH transaction is saved
-    elif address.startswith('simpleledger:'):
+    else:
         if bch_tx is None:
             bch_tx = bchd.get_transaction(txid)
 
         spent_txids = []
         
-        # Mark inputs as spent
+        # Mark BCH tx inputs as spent
         for tx_input in bch_tx['inputs']:
             try:
                 address = Address.objects.get(address=tx_input['address'])
@@ -976,6 +977,7 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                 spending_txid=txid
             )
 
+        # Parse BCH tx outputs
         for tx_output in bch_tx['outputs']:
             try:
                 address = Address.objects.get(address=tx_output['address'])
