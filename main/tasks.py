@@ -84,7 +84,7 @@ def client_acknowledgement(self, txid):
                     wallet_version = address.wallet.version
                 else:
                     # Hardcoded date-based check for addresses that are not associated with wallets
-                    v2_rollout_date_str = '2021-09-11 00:00:00'
+                    v2_rollout_date_str = dateparse.parse_datetime('2021-09-11 00:00:00')
                     v2_rollout_date = pytz.UTC.localize(v2_rollout_date_str)
                     if address.date_created >= v2_rollout_date:
                         wallet_version = 2
