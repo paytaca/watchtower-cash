@@ -708,11 +708,11 @@ def get_token_meta_data(self, token_id):
         tokenid=token_id
     )
     try:
+        LOGGER.info('Fetching token metadata from BCHD...')
         bchd = BCHDQuery()
         txn = bchd.get_transaction(token_obj.tokenid, parse_slp=True)
         if txn:
             info = txn['token_info']
-            print(info)
             data = {
                 'name': info['name'],
                 'token_ticker': info['ticker'],
@@ -789,7 +789,8 @@ def get_token_meta_data(self, token_id):
             else:
                 self.retry(countdown=5)
 
-    except Exception:
+    except Exception as exc:
+        LOGGER.error(str(exc))
         self.retry(countdown=5)
 
 

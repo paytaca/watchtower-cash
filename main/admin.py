@@ -11,7 +11,7 @@ from main.models import (
     WalletHistory
 )
 from django.contrib.auth.models import User, Group
-from main.tasks import client_acknowledgement, send_telegram_message
+from main.tasks import client_acknowledgement, send_telegram_message, get_token_meta_data
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
 from django.conf import settings
@@ -23,6 +23,7 @@ REDIS_STORAGE = settings.REDISKV
 
 class TokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = ['tokenid']
+    actions = ['get_token_metadata']
 
     list_display = [
         'tokenid',
@@ -41,6 +42,10 @@ class TokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         if request.user.is_superuser:
             return qs
         return qs.filter(subscriber__user=request.user)
+
+    def get_token_metadata(self, request, queryset):
+        for token in queryset:
+            get_token_meta_data(token.tokenid)
 
 
 class BlockHeightAdmin(admin.ModelAdmin):

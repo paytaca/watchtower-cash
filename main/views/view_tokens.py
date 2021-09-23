@@ -37,7 +37,8 @@ class WalletTokensView(APIView):
         if token_type:
             qs = qs.filter(token__token_type=token_type)
         qs = qs.order_by(
-            'token'
+            'token',
+            '-date_created'
         ).distinct(
             'token'
         )
@@ -58,6 +59,8 @@ class WalletTokensView(APIView):
             'type',
             'original_image_url',
             'medium_image_url',
-            'thumbnail_image_url'
+            'thumbnail_image_url',
+            'txid',
+            'date_created'
         )
         return Response(data=tokens, status=status.HTTP_200_OK)
