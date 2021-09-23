@@ -124,6 +124,8 @@ class RecipientAdmin(admin.ModelAdmin):
     ]
 
 class SubscriptionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    search_fields = ['address__address']
+
     list_display = [
         'address',
         'recipient',
@@ -137,6 +139,8 @@ class SubscriptionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
 
 class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    search_fields = ['address']
+
     list_display = [
         'address',
         'wallet',
