@@ -1,4 +1,4 @@
-import math, logging, json, time, requests, shutil
+import math, logging, json, time, requests
 from urllib.parse import urlparse
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
@@ -668,28 +668,31 @@ def download_image(token_id, url, resize=False):
     if resp.status_code == 200:
         content_type = resp.headers.get('content-type')
         if content_type.split('/')[0] == 'image':
-
-            # Save original size
             file_ext = content_type.split('/')[1]
-            response = requests.get(url, stream=True)
-            out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
-            with open(out_path, 'wb') as out_file:
-                shutil.copyfileobj(resp.raw, out_file)
-                image_file_name = f"{token_id}.{file_ext}"
-            
+
             if resize:
+                LOGGER.info('Saving resized images...')
                 # Save medium size
                 img = Image.open(BytesIO(resp.content))
-                medium_size = 450, 450
-                img.resize(medium_size, Image.ANTIALIAS)
+                medium_size = 250, 250
+                medium_img = img.resize(medium_size, Image.ANTIALIAS)
                 out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_medium.{file_ext}"
-                img.save(out_path, quality=95)
+                medium_img.save(out_path, quality=95)
+                LOGGER.info(out_path)
 
                 # Save thumbnail size
-                thumbnail_size = 150, 150
-                img.resize(thumbnail_size, Image.ANTIALIAS)
+                thumbnail_size = 120, 120
+                thumbnail_img = img.resize(thumbnail_size, Image.ANTIALIAS)
                 out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_thumbnail.{file_ext}"
-                img.save(out_path, quality=95)
+                thumbnail_img.save(out_path, quality=95)
+                LOGGER.info(out_path)
+
+            # Save original size
+            LOGGER.info('Saving original image...')
+            out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}.{file_ext}"
+            LOGGER.info(out_path)
+            img.save(out_path, quality=95)
+            image_file_name = f"{token_id}.{file_ext}"
 
     return resp.status_code, image_file_name
 
@@ -749,7 +752,7 @@ def get_token_meta_data(self, token_id):
                     # Try getting image directly from document URL
                     url = info['document_url']
                     if is_url(url):
-                        status_code, image_file_name = download_image(token_id, url)
+                        status_code, image_file_name = download_image(token_id, url, resize=True)
 
             if status_code == 200:
                 if image_file_name:
@@ -763,8 +766,8 @@ def get_token_meta_data(self, token_id):
                     if data['token_type'] == 65:
                         Token.objects.filter(tokenid=token_id).update(
                             original_image_url=image_url,
-                            medium_image_url=image_url.replace('.', '_medium.'),
-                            thumbnail_image_url=image_url.replace('.', '_thumbnail.'),
+                            medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
+                            thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
                             date_updated=timezone.now()
                         )
 
