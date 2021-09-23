@@ -674,14 +674,19 @@ def download_image(token_id, url, resize=False):
                 LOGGER.info('Saving resized images...')
                 # Save medium size
                 img = Image.open(BytesIO(resp.content))
-                medium_size = 250, 250
+                width, height = img.size
+                medium_width = 450
+                medium_height = medium_width * (height / width)
+                medium_size = (medium_width, int(medium_height))
                 medium_img = img.resize(medium_size, Image.ANTIALIAS)
                 out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_medium.{file_ext}"
                 medium_img.save(out_path, quality=95)
                 LOGGER.info(out_path)
 
                 # Save thumbnail size
-                thumbnail_size = 120, 120
+                thumbnail_width = 150
+                thumbnail_height = thumbnail_width * (height / width)
+                thumbnail_size = (thumbnail_width, int(thumbnail_height))
                 thumbnail_img = img.resize(thumbnail_size, Image.ANTIALIAS)
                 out_path = f"{settings.TOKEN_IMAGES_DIR}/{token_id}_thumbnail.{file_ext}"
                 thumbnail_img.save(out_path, quality=95)
