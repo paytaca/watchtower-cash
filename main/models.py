@@ -48,12 +48,15 @@ class Token(PostgresModel):
             info_id = 'slp/' + self.tokenid
         else:
             info_id = self.name.lower()
+        image_url = self.original_image_url
+        if self.thumbnail_image_url:
+            image_url = self.thumbnail_image_url
         return {
             'id': info_id,
             'name': self.name,
             'symbol': self.token_ticker,
             'token_type': self.token_type,
-            'image_url': self.image_url
+            'image_url': image_url
         }
 
 
