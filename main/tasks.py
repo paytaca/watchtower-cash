@@ -918,18 +918,18 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                             )
                 if 'outputs' in slp_tx.keys():
                     recipients['slp'] = [(i['address'], i['amount']) for i in slp_tx['outputs']]
-    else:
-        # Parse BCH senders and recipients
-        bch_tx = bchd.get_transaction(txid)
-        if not bch_tx:
-            self.retry(countdown=5)
-            return
-        tx_fee = bch_tx['tx_fee']
-        if txn_address.wallet:
-            if txn_address.wallet.wallet_type == 'bch':
-                senders['bch'] = [(i['address'], i['value']) for i in bch_tx['inputs']]
-                if 'outputs' in bch_tx.keys():
-                    recipients['bch'] = [(i['address'], i['value']) for i in bch_tx['outputs']]
+
+    # Parse BCH senders and recipients
+    bch_tx = bchd.get_transaction(txid)
+    if not bch_tx:
+        self.retry(countdown=5)
+        return
+    tx_fee = bch_tx['tx_fee']
+    if txn_address.wallet:
+        if txn_address.wallet.wallet_type == 'bch':
+            senders['bch'] = [(i['address'], i['value']) for i in bch_tx['inputs']]
+            if 'outputs' in bch_tx.keys():
+                recipients['bch'] = [(i['address'], i['value']) for i in bch_tx['outputs']]
 
     if parse_slp:
         if slp_tx is None:
@@ -989,66 +989,67 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
-    else:
-        if bch_tx is None:
-            bch_tx = bchd.get_transaction(txid)
 
-        spent_txids = []
-        
-        # Mark BCH tx inputs as spent
-        for tx_input in bch_tx['inputs']:
-            try:
-                address = Address.objects.get(address=tx_input['address'])
-                if address.wallet:
-                    wallets.append('bch|' + address.wallet.wallet_hash)
-            except Address.DoesNotExist:
-                pass
+    # Parse BCH inputs
+    if bch_tx is None:
+        bch_tx = bchd.get_transaction(txid)
 
-            spent_txids.append(tx_input['txid'])
-            txn_check = Transaction.objects.filter(
-                txid=tx_input['txid'],
-                index=tx_input['spent_index']
-            )
-            txn_check.update(
-                spent=True,
-                spending_txid=txid
-            )
+    spent_txids = []
+    
+    # Mark BCH tx inputs as spent
+    for tx_input in bch_tx['inputs']:
+        try:
+            address = Address.objects.get(address=tx_input['address'])
+            if address.wallet:
+                wallets.append('bch|' + address.wallet.wallet_hash)
+        except Address.DoesNotExist:
+            pass
 
-        # Parse BCH tx outputs
-        for tx_output in bch_tx['outputs']:
-            try:
-                address = Address.objects.get(address=tx_output['address'])
-                if address.wallet:
-                    wallets.append('bch|' + address.wallet.wallet_hash)
-            except Address.DoesNotExist:
-                pass
-            txn_check = Transaction.objects.filter(
-                txid=bch_tx['txid'],
-                address__address=tx_output['address'],
-                index=tx_output['index']
+        spent_txids.append(tx_input['txid'])
+        txn_check = Transaction.objects.filter(
+            txid=tx_input['txid'],
+            index=tx_input['spent_index']
+        )
+        txn_check.update(
+            spent=True,
+            spending_txid=txid
+        )
+
+    # Parse BCH tx outputs
+    for tx_output in bch_tx['outputs']:
+        try:
+            address = Address.objects.get(address=tx_output['address'])
+            if address.wallet:
+                wallets.append('bch|' + address.wallet.wallet_hash)
+        except Address.DoesNotExist:
+            pass
+        txn_check = Transaction.objects.filter(
+            txid=bch_tx['txid'],
+            address__address=tx_output['address'],
+            index=tx_output['index']
+        )
+        if not txn_check.exists():
+            blockheight_id = None
+            if blockheight:
+                blockheight_id = blockheight.id
+            value = tx_output['value'] / 10 ** 8
+            args = (
+                'bch',
+                tx_output['address'],
+                bch_tx['txid'],
+                value,
+                'bchd-query',
+                blockheight_id,
+                tx_output['index']
             )
-            if not txn_check.exists():
-                blockheight_id = None
-                if blockheight:
-                    blockheight_id = blockheight.id
-                value = tx_output['value'] / 10 ** 8
-                args = (
-                    'bch',
-                    tx_output['address'],
-                    bch_tx['txid'],
-                    value,
-                    'bchd-query',
-                    blockheight_id,
-                    tx_output['index']
-                )
-                obj_id, created = save_record(*args, spent_txids=spent_txids)
-                if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+            obj_id, created = save_record(*args, spent_txids=spent_txids)
+            if created:
+                third_parties = client_acknowledgement(obj_id)
+                for platform in third_parties:
+                    if 'telegram' in platform:
+                        message = platform[1]
+                        chat_id = platform[2]
+                        send_telegram_message(message, chat_id)
 
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
