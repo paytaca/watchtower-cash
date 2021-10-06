@@ -6,6 +6,7 @@ import grpc
 import time
 import random
 import logging
+import ssl
 from main.tasks import save_record, client_acknowledgement, send_telegram_message
 
 LOGGER = logging.getLogger(__name__)
@@ -14,14 +15,17 @@ LOGGER = logging.getLogger(__name__)
 
 def run():
     source = 'bchd-grpc-stream'
-    creds = grpc.ssl_channel_credentials()
     nodes = [
-        'bchd.fountainhead.cash:443',
-        'bchd.imaginary.cash:8335'
+        'bchd.imaginary.cash:8335',
+        'bchd.greyh.at:8335',
+        # 'bchd.fountainhead.cash:443'
     ]
     bchd_node = random.choice(nodes)
 
-    with grpc.secure_channel(bchd_node, creds) as channel:
+    cert = ssl.get_server_certificate(bchd_node.split(':'))
+    creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
+
+    with grpc.secure_channel(bchd_node, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
         stub = bchrpc.bchrpcStub(channel)
 
         req = pb.GetBlockchainInfoRequest()

@@ -6,6 +6,7 @@ from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
 from grpc._channel import _InactiveRpcError
 import base64
+import ssl
 
 LOGGER = logging.getLogger(__name__)
 
@@ -14,7 +15,8 @@ class BCHDQuery(object):
     def __init__(self):
         nodes = [
             'bchd.imaginary.cash:8335',
-            'bchd.fountainhead.cash:443'
+            'bchd.greyh.at:8335',
+            # 'bchd.fountainhead.cash:443'
         ]
         self.base_url = random.choice(nodes)
 
@@ -34,9 +36,10 @@ class BCHDQuery(object):
         }
 
     def get_latest_block(self):
-        creds = grpc.ssl_channel_credentials()
+        cert = ssl.get_server_certificate(self.base_url.split(':'))
+        creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
-        with grpc.secure_channel(self.base_url, creds) as channel:
+        with grpc.secure_channel(self.base_url, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = bchrpc.bchrpcStub(channel)
             
             req = pb.GetBlockchainInfoRequest()
@@ -170,9 +173,10 @@ class BCHDQuery(object):
         return transaction
 
     def get_transaction(self, transaction_hash, parse_slp=False):
-        creds = grpc.ssl_channel_credentials()
+        cert = ssl.get_server_certificate(self.base_url.split(':'))
+        creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
-        with grpc.secure_channel(self.base_url, creds) as channel:
+        with grpc.secure_channel(self.base_url, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = bchrpc.bchrpcStub(channel)
             
             try:
@@ -190,9 +194,10 @@ class BCHDQuery(object):
 
 
     def get_utxos(self, address):
-        creds = grpc.ssl_channel_credentials()
+        cert = ssl.get_server_certificate(self.base_url.split(':'))
+        creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
-        with grpc.secure_channel(self.base_url, creds) as channel:
+        with grpc.secure_channel(self.base_url, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = bchrpc.bchrpcStub(channel)
 
             req = pb.GetAddressUnspentOutputsRequest()
@@ -202,9 +207,10 @@ class BCHDQuery(object):
             return resp.outputs
 
     def get_transactions_count(self, blockheight):
-        creds = grpc.ssl_channel_credentials()
+        cert = ssl.get_server_certificate(self.base_url.split(':'))
+        creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
-        with grpc.secure_channel(self.base_url, creds) as channel:
+        with grpc.secure_channel(self.base_url, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = bchrpc.bchrpcStub(channel)
 
             req = pb.GetBlockRequest()
@@ -217,9 +223,10 @@ class BCHDQuery(object):
 
     def broadcast_transaction(self, transaction):
         txn_bytes = bytes.fromhex(transaction)
-        creds = grpc.ssl_channel_credentials()
+        cert = ssl.get_server_certificate(self.base_url.split(':'))
+        creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
-        with grpc.secure_channel(self.base_url, creds) as channel:
+        with grpc.secure_channel(self.base_url, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
             stub = bchrpc.bchrpcStub(channel)
 
             req = pb.SubmitTransactionRequest()
