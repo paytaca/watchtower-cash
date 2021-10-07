@@ -39,11 +39,11 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
     if created:
         
         # Make sure there are no missed blocks
-        last_processed_block = BlockHeight.objects.filter(processed=True).last().number
-        latest_block = BlockHeight.objects.last().number
+        # last_processed_block = BlockHeight.objects.filter(processed=True).last().number
+        # latest_block = BlockHeight.objects.last().number
         
-        for i in range(last_processed_block, latest_block):
-            obj, created = BlockHeight.objects.get_or_create(number=i)
+        # for i in range(last_processed_block, latest_block):
+        #     obj, created = BlockHeight.objects.get_or_create(number=i)
 
         # Queue to "PENDING-BLOCKS"
         if instance.requires_full_scan:                
