@@ -354,18 +354,28 @@ def bitdbquery(self, block_id):
         
         
         processed_all = False
+        idle_count = 0
+        last_current_count = 0
         while not processed_all:
-            currentcount  = int(REDIS_STORAGE.get('BITDBQUERY_COUNT').decode())
-            LOGGER.info(f"THERE ARE {currentcount} SUCCEEDED OUT OF {total} TASKS.")
-            if currentcount == total:
-                block = BlockHeight.objects.get(id=block_id)
-                block.currentcount = currentcount
-                block.save()
-                REDIS_STORAGE.set('READY', 1)
-                REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-                processed_all = True
-            time.sleep(1)
-        
+            if idle_count < 60:
+                currentcount  = int(REDIS_STORAGE.get('BITDBQUERY_COUNT').decode())
+                LOGGER.info(f"THERE ARE {currentcount} SUCCEEDED OUT OF {total} TASKS.")
+                if currentcount == total:
+                    block = BlockHeight.objects.get(id=block_id)
+                    block.currentcount = currentcount
+                    block.save()
+                    REDIS_STORAGE.set('READY', 1)
+                    REDIS_STORAGE.set('ACTIVE-BLOCK', '')
+                    processed_all = True
+                else:
+                    if currentcount == last_current_count:
+                        idle_count += 1
+                last_current_count = currentcount
+                time.sleep(1)
+            else:
+                # If 60 iterations has passed and the current count stays the same, break this loop
+                # This block will be re-processed automatically
+                break
 
     except bitdb_scanner.BitDBHttpException:
         try:
