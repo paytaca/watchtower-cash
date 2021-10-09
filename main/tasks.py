@@ -375,6 +375,8 @@ def bitdbquery(self, block_id):
             else:
                 # If 60 iterations has passed and the current count stays the same, break this loop
                 # This block will be re-processed automatically
+                REDIS_STORAGE.set('READY', 1)
+                REDIS_STORAGE.set('ACTIVE-BLOCK', '')
                 break
 
     except bitdb_scanner.BitDBHttpException:
