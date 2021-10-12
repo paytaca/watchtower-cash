@@ -811,15 +811,21 @@ def broadcast_transaction(self, transaction):
     txid = calc_txid(transaction)
     LOGGER.info(f'Broadcasting {txid}:  {transaction}')
     txn_check = Transaction.objects.filter(txid=txid)
+    success = False
     if txn_check.exists():
-        return True, txid
+        success = True
+        return success, txid
     else:
         try:
             obj = BCHDQuery()
             try:
                 txid = obj.broadcast_transaction(transaction)
                 if txid:
-                    return True, txid
+                    if tx_found:
+                        success = True
+                        return success, txid
+                    else:
+                        self.retry(countdown=1)
                 else:
                     self.retry(countdown=1)
             except Exception as exc:
