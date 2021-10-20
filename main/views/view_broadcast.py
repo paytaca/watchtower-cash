@@ -15,7 +15,10 @@ class BroadcastViewSet(generics.GenericAPIView):
         response = {'success': False}
         if serializer.is_valid():
             job = broadcast_transaction.delay(serializer.data['transaction'])
-            success, result = job.get()
+            try:
+                success, result = job.get()
+            except:
+                success, result = broadcast_transaction(serializer.data['transaction'])
             if 'already have transaction' in result:
                 success = True
             if success:

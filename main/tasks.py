@@ -806,7 +806,7 @@ def get_token_meta_data(self, token_id):
         self.retry(countdown=5)
 
 
-@shared_task(bind=True, queue='broadcast', max_retries=10)
+@shared_task(bind=True, queue='broadcast', max_retries=3)
 def broadcast_transaction(self, transaction):
     txid = calc_txid(transaction)
     LOGGER.info(f'Broadcasting {txid}:  {transaction}')

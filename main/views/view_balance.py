@@ -66,14 +66,15 @@ class Balance(APIView):
                 multiple = True
                 query =  Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
-            data['balance'] = list(qs_balance)
+            data['balance'] = qs_balance['amount__sum'] or 0
             data['valid'] = True
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_bch_balance(query)
-            data['balance'] = round(qs_balance['balance'], 8)
+            bch_balance = qs_balance['amount__sum'] or 0
+            data['balance'] = round(bch_balance, 8)
             data['valid'] = True
 
         if wallet_hash:
