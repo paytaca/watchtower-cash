@@ -714,7 +714,7 @@ def download_image(token_id, url, resize=False):
     return resp.status_code, image_file_name
 
 
-@shared_task(bind=True, queue='token_metadata', max_retries=10)
+@shared_task(bind=True, queue='token_metadata', max_retries=3)
 def get_token_meta_data(self, token_id):
     token_obj, _ = Token.objects.get_or_create(
         tokenid=token_id

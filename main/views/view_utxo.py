@@ -116,11 +116,6 @@ class UTXO(APIView):
             data['address'] = slpaddress
             if tokenid:
                 query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
-
-                # Get token metadata if incomplete
-                token_obj = Token.objects.get(tokenid=tokenid)
-                if not token_obj.original_image_url:
-                    get_token_meta_data.delay(tokenid)
             else:
                 query =  Q(address__address=data['address']) & Q(spent=False)
             utxos_values = _get_slp_utxos(query)
