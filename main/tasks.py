@@ -521,12 +521,10 @@ def manage_block_transactions(self):
 def get_latest_block(self):
     # This task is intended to check new blockheight every 5 seconds through BCHD @ fountainhead.cash
     LOGGER.info('CHECKING THE LATEST BLOCK')
-    url = 'https://bchd.fountainhead.cash/v1/GetBlockchainInfo'
-    resp = requests.post(url)
-    if resp.status_code == 200:
-        number = resp.json()['best_height']
-        obj, created = BlockHeight.objects.get_or_create(number=number)
-        if created: return f'*** NEW BLOCK { obj.number } ***'
+    bchd = BCHDQuery()
+    number = bchd.get_latest_block(include_transactions=False)
+    obj, created = BlockHeight.objects.get_or_create(number=number)
+    if created: return f'*** NEW BLOCK { obj.number } ***'
 
 
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
