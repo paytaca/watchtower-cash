@@ -789,15 +789,14 @@ def get_token_meta_data(self, token_id):
                 info_id = ''
                 if data['token_type']:
                     info_id = 'slp/' + token_id
-                return {
-                    'id': info_id,
-                    'name': data['name'],
-                    'symbol': data['token_ticker'],
-                    'token_type': data['token_type'],
-                    'image_url': image_url or ''
-                }
-            else:
-                self.retry(countdown=5)
+
+            return {
+                'id': info_id,
+                'name': data['name'],
+                'symbol': data['token_ticker'],
+                'token_type': data['token_type'],
+                'image_url': image_url or ''
+            }
 
     except Exception as exc:
         LOGGER.error(str(exc))
