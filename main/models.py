@@ -55,6 +55,7 @@ class Token(PostgresModel):
             'id': info_id,
             'name': self.name,
             'symbol': self.token_ticker,
+            'decimals': self.decimals,
             'token_type': self.token_type,
             'image_url': image_url
         }
