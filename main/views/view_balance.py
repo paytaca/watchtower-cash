@@ -73,7 +73,7 @@ class Balance(APIView):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_bch_balance(query)
-            bch_balance = qs_balance['amount__sum'] or 0
+            bch_balance = qs_balance['balance'] or 0
             data['balance'] = round(bch_balance, 8)
             data['valid'] = True
 
