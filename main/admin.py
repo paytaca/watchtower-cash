@@ -96,6 +96,7 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'txid',
         'index',
         'address',
+        'project',
         'amount',
         'source',
         'blockheight',
@@ -104,6 +105,12 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'spent',
         'date_created'
     ]
+
+    def project(self, obj):
+        if obj.address.wallet:
+            return obj.address.wallet.project
+        else:
+            return obj.address.project
 
     def get_actions(self, request):
         actions = super().get_actions(request)
