@@ -786,9 +786,9 @@ def get_token_meta_data(self, token_id):
                             date_updated=timezone.now()
                         )
 
-                info_id = ''
-                if data['token_type']:
-                    info_id = 'slp/' + token_id
+            info_id = ''
+            if data['token_type']:
+                info_id = 'slp/' + token_id
 
             return {
                 'id': info_id,
