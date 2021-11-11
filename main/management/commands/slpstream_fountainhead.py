@@ -50,7 +50,6 @@ def run():
                                 token_id = info['tx']['h']
                             else:
                                 token_id = slp_detail['tokenIdHex']
-                            token, _ = Token.objects.get_or_create(tokenid=token_id)
                             index = 1
                             for output in slp_detail['outputs']:
                                 slp_address = output['address']
@@ -61,6 +60,8 @@ def run():
 
                                 # Disregard bch address that are not subscribed.
                                 if subscription.exists():
+                                    token, _ = Token.objects.get_or_create(tokenid=token_id)
+                                    
                                     amount = float(output['amount'])
                                     # The amount given here is raw, it needs to be converted
                                     if token.decimals:

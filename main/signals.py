@@ -18,9 +18,12 @@ from main.utils.converter import (
 )
 from main.models import (
     BlockHeight,
-    Transaction
+    Transaction,
+    Token
 )
-from main.tasks import transaction_post_save_task
+from main.tasks import (
+    transaction_post_save_task
+)
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)

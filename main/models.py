@@ -25,7 +25,8 @@ class Token(PostgresModel):
         'main.Token',
         on_delete=models.CASCADE,
         related_name='children',
-        null=True
+        null=True,
+        blank=True
     )
     nft_token_group_details = JSONField(default=dict)
     original_image_url = models.URLField(blank=True)

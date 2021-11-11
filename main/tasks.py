@@ -217,7 +217,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             token_obj, _ = Token.objects.get_or_create(name=token)
         else:
             token_obj, created = Token.objects.get_or_create(tokenid=token)
-            if created: get_token_meta_data.delay(token_obj.tokenid)
+            if created:
+                get_token_meta_data.delay(token)
 
         try:
 
@@ -399,7 +400,6 @@ def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
     if transaction['slp']['valid']:
         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
             token_id = transaction['slp']['detail']['tokenIdHex']
-            token, _ = Token.objects.get_or_create(tokenid=token_id)
             if transaction['slp']['detail']['outputs'][0]['address'] is not None:
                 
                 index = 1
@@ -411,6 +411,8 @@ def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
                     
                     # Disregard slp address that are not subscribed.
                     if subscription.exists():
+                        token, _ = Token.objects.get_or_create(tokenid=token_id)
+
                         obj_id, created = save_record(
                             token.tokenid,
                             output['address'],
@@ -714,7 +716,7 @@ def download_image(token_id, url, resize=False):
 
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
 def get_token_meta_data(self, token_id):
-    token_obj, _ = Token.objects.get_or_create(
+    token_obj = Token.objects.get(
         tokenid=token_id
     )
     try:
@@ -722,63 +724,57 @@ def get_token_meta_data(self, token_id):
         bchd = BCHDQuery()
         txn = bchd.get_transaction(token_obj.tokenid, parse_slp=True)
         if txn:
+            # Update token info
             info = txn['token_info']
-            data = {
-                'name': info['name'],
-                'token_ticker': info['ticker'],
-                'token_type': info['type'],
-                'decimals': info['decimals'],
-                'date_updated': timezone.now()
-            }
-            if info['nft_token_group']:
-                group_check = Token.objects.filter(tokenid=info['nft_token_group'])
-                if group_check.exists():
-                    group = group_check.first()
-                else:
-                    group = Token(tokenid=info['nft_token_group'])
-                    group.save()
+            token_obj.name = info['name']
+            token_obj.token_ticker = info['ticker']
+            token_obj.token_type = info['type']
+            token_obj.decimals = info['decimals']
+            token_obj.date_updated = timezone.now()
 
-                data['nft_token_group'] = group
-            
-            Token.objects.filter(tokenid=token_id).update(**data)
+            group = None
+            if info['nft_token_group']:
+                group, _ = Token.objects.get_or_create(tokenid=info['nft_token_group'])
+                token_obj.nft_token_group = group
+
+            token_obj.save()
 
             # Get image / logo URL
             image_file_name = None
             image_url = None
             status_code = 0
 
-            if data['token_type'] == 1:
+            if token_obj.token_type == 1:
 
                 # Check icons.fountainhead.cash
                 url = f"https://icons.fountainhead.cash/128/{token_id}.png"
                 status_code, image_file_name = download_image(token_id, url)
 
-            if data['token_type'] == 65:
+            if token_obj.token_type == 65:
 
                 # Check if NFT group/parent token has image_base_url
-                nft_parent = token_obj.nft_token_group
-                if 'image_base_url' in nft_parent.nft_token_group_details.keys():
-                    image_base_url = nft_parent.nft_token_group_details['image_base_url']
-                    image_type = nft_parent.nft_token_group_details['image_type']
-                    url = f"{image_base_url}/{token_id}.{image_type}"
-                    status_code, image_file_name = download_image(token_id, url, resize=True)
-
-                else:
-                    # Try getting image directly from document URL
-                    url = info['document_url']
-                    if is_url(url):
+                if group:
+                    if 'image_base_url' in group.nft_token_group_details.keys():
+                        image_base_url = group.nft_token_group_details['image_base_url']
+                        image_type = group.nft_token_group_details['image_type']
+                        url = f"{image_base_url}/{token_id}.{image_type}"
                         status_code, image_file_name = download_image(token_id, url, resize=True)
+                    else:
+                        # Try getting image directly from document URL
+                        url = info['document_url']
+                        if is_url(url):
+                            status_code, image_file_name = download_image(token_id, url, resize=True)
 
             if status_code == 200:
                 if image_file_name:
                     image_server_base = 'https://images.watchtower.cash'
                     image_url = f"{image_server_base}/{image_file_name}"
-                    if data['token_type'] == 1:
+                    if token_obj.token_type == 1:
                         Token.objects.filter(tokenid=token_id).update(
                             original_image_url=image_url,
                             date_updated=timezone.now()
                         )
-                    if data['token_type'] == 65:
+                    if token_obj.token_type == 65:
                         Token.objects.filter(tokenid=token_id).update(
                             original_image_url=image_url,
                             medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
@@ -787,14 +783,14 @@ def get_token_meta_data(self, token_id):
                         )
 
             info_id = ''
-            if data['token_type']:
+            if token_obj.token_type:
                 info_id = 'slp/' + token_id
 
             return {
                 'id': info_id,
-                'name': data['name'],
-                'symbol': data['token_ticker'],
-                'token_type': data['token_type'],
+                'name': token_obj.name,
+                'symbol': token_obj.token_ticker,
+                'token_type': token_obj.token_type,
                 'image_url': image_url or ''
             }
 
