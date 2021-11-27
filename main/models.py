@@ -132,7 +132,6 @@ class Wallet(PostgresModel):
     def __str__(self):
         return self.wallet_hash
 
-
 class Address(PostgresModel):
     address = models.CharField(max_length=70, unique=True, db_index=True)
     project = models.ForeignKey(
@@ -309,3 +308,30 @@ class WalletHistory(PostgresModel):
 
     def __str__(self):
         return self.txid
+
+
+class WalletNftToken(models.Model):
+    wallet = models.ForeignKey(
+        Wallet,
+        related_name='tokens',
+        on_delete=models.CASCADE
+    )
+    token = models.ForeignKey(
+        Token,
+        related_name='wallets',
+        on_delete=models.CASCADE
+    )
+    date_acquired = models.DateTimeField(default=timezone.now)
+    acquisition_transaction = models.ForeignKey(
+        Transaction,
+        related_name='acquisitions',
+        on_delete=models.CASCADE
+    )
+    date_dispensed = models.DateTimeField(null=True, blank=True)
+    dispensation_transaction = models.ForeignKey(
+        Transaction,
+        related_name='dispensations',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
