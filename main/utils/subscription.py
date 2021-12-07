@@ -55,6 +55,7 @@ def new_subscription(**kwargs):
         for address, path in address_list:
             if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
                 proceed = False
+                project = None
                 if project_id:
                     project_check = Project.objects.filter(id=project_id)
                     if project_check.exists():
@@ -78,6 +79,10 @@ def new_subscription(**kwargs):
                         recipient.save()
                             
                     address_obj, _ = Address.objects.get_or_create(address=address)
+                    if project:
+                        address_obj.project = project
+                        address_obj.save()
+
                     if wallet_hash:
                         if wallet_index is not None or address_index is not None:
                             if isinstance(path, str):
