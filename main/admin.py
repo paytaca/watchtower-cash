@@ -8,7 +8,8 @@ from main.models import (
     Recipient,
     Project,
     Wallet,
-    WalletHistory
+    WalletHistory,
+    WalletNftToken
 )
 from django.contrib.auth.models import User, Group
 from main.tasks import client_acknowledgement, send_telegram_message, get_token_meta_data
@@ -223,6 +224,15 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
 
+class WalletNftTokenAdmin(admin.ModelAdmin):
+    list_display = [
+        'token',
+        'wallet',
+        'date_acquired',
+        'date_dispensed'
+    ]
+
+
 admin.site.unregister(User)
 admin.site.unregister(Group)
 
@@ -235,3 +245,4 @@ admin.site.register(Address, AddressAdmin)
 admin.site.register(Wallet, WalletAdmin)
 admin.site.register(Project, ProjectAdmin)
 admin.site.register(WalletHistory, WalletHistoryAdmin)
+admin.site.register(WalletNftToken, WalletNftTokenAdmin)
