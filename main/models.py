@@ -325,7 +325,9 @@ class WalletNftToken(PostgresModel):
     acquisition_transaction = models.ForeignKey(
         Transaction,
         related_name='acquisitions',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
     )
     date_dispensed = models.DateTimeField(null=True, blank=True)
     dispensation_transaction = models.ForeignKey(
@@ -335,3 +337,6 @@ class WalletNftToken(PostgresModel):
         null=True,
         blank=True
     )
+
+    class Meta:
+       ordering = ['-date_acquired']

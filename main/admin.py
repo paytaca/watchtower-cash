@@ -152,7 +152,6 @@ class SubscriptionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
 
 class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
-    search_fields = ['address']
 
     list_display = [
         'address',
@@ -167,7 +166,8 @@ class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
     search_fields = [
-        'wallet__wallet_hash'
+        'wallet__wallet_hash',
+        'address'
     ]
 
 
@@ -224,12 +224,23 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
 
-class WalletNftTokenAdmin(admin.ModelAdmin):
+class WalletNftTokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
         'token',
         'wallet',
         'date_acquired',
         'date_dispensed'
+    ]
+
+    dynamic_raw_id_fields = [
+        'wallet',
+        'token',
+        'acquisition_transaction',
+        'dispensation_transaction'
+    ]
+
+    search_fields = [
+        'wallet__wallet_hash'
     ]
 
 

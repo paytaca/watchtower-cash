@@ -881,9 +881,33 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             )
             history.save()
 
+            if txn.token.token_type == 65:
+                if record_type == 'incoming':
+                    wallet_nft_token, created = WalletNftToken.objects.get_or_create(
+                        wallet=wallet,
+                        token=txn.token,
+                        acquisition_transaction=txn
+                    )
+                    if created:
+                        wallet_nft_token.acquisition_transaction = txn
+                        wallet_nft_token.save()
+                elif record_type == 'outgoing':
+                    wallet_nft_token_check = WalletNftToken.objects.filter(
+                        wallet=wallet,
+                        token=txn.token,
+                        date_dispensed__isnull=True
+                    )
+                    if wallet_nft_token_check.exists():
+                        wallet_nft_token = wallet_nft_token_check.last()
+                        wallet_nft_token.date_dispensed = txn.date_created
+                        wallet_nft_token.dispensation_transaction = txn
+                        wallet_nft_token.save()
+
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
-def transaction_post_save_task(self, address, txid, blockheight_id=None):
+def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
+    transaction = Transaction.objects.get(id=transaction_id)
+    txid = transaction.txid
     blockheight = None
     if blockheight_id:
         blockheight = BlockHeight.objects.get(id=blockheight_id)
@@ -965,6 +989,16 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
                 spent=True,
                 spending_txid=txid
             )
+
+            if txn_check.exists():
+                txn_obj = txn_check.last()
+                if txn_obj.token.token_type == 65:
+                    wallet_nft_token = WalletNftToken.objects.get(
+                        acquisition_transaction=txn_obj
+                    )
+                    wallet_nft_token.date_dispensed = timezone.now()
+                    wallet_nft_token.dispensation_transaction = transaction
+                    wallet_nft_token.save()
 
         # Parse SLP tx outputs
         if slp_tx['valid']:
@@ -1086,8 +1120,8 @@ def transaction_post_save_task(self, address, txid, blockheight_id=None):
 
 
 @shared_task(queue='celery_rebuild_history')
-def rebuild_wallet_history(wallet_id):
-    addresses = Address.objects.filter(wallet_id=wallet_id)
+def rebuild_wallet_history(wallet_hash):
+    addresses = Address.objects.filter(wallet__wallet_hash=wallet_hash)
     for address in addresses:
         for transaction in address.transactions.all():
             history_check = WalletHistory.objects.filter(
@@ -1099,22 +1133,29 @@ def rebuild_wallet_history(wallet_id):
 
             if transaction.token.token_type == 65:
                 wallet_nft_token_check = WalletNftToken.objects.filter(
-                    wallet_id=wallet_id,
-                    token=transaction.token
+                    wallet__wallet_hash=wallet_hash,
+                    token=transaction.token,
+                    acquisition_transaction=transaction
                 )
                 if wallet_nft_token_check.exists():
                     wallet_nft_token = wallet_nft_token_check.last()
-                    if  wallet_nft_token.date_dispensed is None and transaction.spent:
-                        try:
-                            spending_tx = Transaction.objects.get(txid=transaction.spending_txid)
-                            wallet_nft_token.date_dispensed = spending_tx.date_created
-                        except Transaction.DoesNotExist:
-                            pass
                 else:
                     wallet_nft_token = WalletNftToken(
-                        wallet_id=wallet_id,
+                        wallet=Wallet.objects.get(wallet_hash=wallet_hash),
                         token=transaction.token,
                         date_acquired=transaction.date_created,
                         acquisition_transaction=transaction
                     )
                     wallet_nft_token.save()
+
+                if  wallet_nft_token.date_dispensed is None and transaction.spent:
+                    try:
+                        spending_tx = Transaction.objects.get(
+                            txid=transaction.spending_txid,
+                            token=transaction.token
+                        )
+                        wallet_nft_token.date_dispensed = spending_tx.date_created
+                        wallet_nft_token.dispensation_transaction = spending_tx
+                        wallet_nft_token.save()
+                    except Transaction.DoesNotExist:
+                        pass
