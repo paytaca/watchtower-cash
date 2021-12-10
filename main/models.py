@@ -310,7 +310,7 @@ class WalletHistory(PostgresModel):
         return self.txid
 
 
-class WalletNftToken(models.Model):
+class WalletNftToken(PostgresModel):
     wallet = models.ForeignKey(
         Wallet,
         related_name='tokens',

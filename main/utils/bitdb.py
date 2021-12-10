@@ -15,7 +15,7 @@ class BitDB(object):
     def __init__(self):
         urls = [
             'https://bitdb.bch.sx/q/',
-            'https://bitdb2.fountainhead.cash/q/'
+            #'https://bitdb2.fountainhead.cash/q/'
         ]
         self.base_url = random.choice(urls)
 
