@@ -12,7 +12,10 @@ class WalletHistoryView(APIView):
         wallet_hash = kwargs.get('wallethash', None)
         token_id = kwargs.get('tokenid', None)
         page = request.GET.get('page', 1)
+        record_type = request.GET.get('type', 'all')
         qs = WalletHistory.objects.filter(wallet__wallet_hash=wallet_hash)
+        if record_type in ['incoming', 'outgoing']:
+            qs = qs.filter(record_type=record_type)
         wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         if wallet.wallet_type == 'slp':
             qs = qs.filter(token__tokenid=token_id)
