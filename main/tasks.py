@@ -27,6 +27,7 @@ from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.queries.bchd import BCHDQuery
+from bs4 import BeautifulSoup
 from PIL import Image, ImageFile
 from io import BytesIO 
 import base64
@@ -760,10 +761,25 @@ def get_token_meta_data(self, token_id):
                         image_type = group.nft_token_group_details['image_type']
                         url = f"{image_base_url}/{token_id}.{image_type}"
                         status_code, image_file_name = download_image(token_id, url, resize=True)
-                    else:
-                        # Try getting image directly from document URL
-                        url = info['document_url']
-                        if is_url(url):
+                else:
+                    # TODO: Get group token metadata
+                    pass
+
+                if not image_file_name:
+                    # Try getting image directly from document URL
+                    url = info['document_url']
+                    if is_url(url):
+                        status_code, image_file_name = download_image(token_id, url, resize=True)
+
+                if not image_file_name:
+                    # Scrape NFT image link from simpleledger.info
+                    url = 'http://simpleledger.info/token/' + token_id
+                    resp = requests.get(url)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, 'html')
+                        img_div = soup.find_all('div', {'class': 'token-icon-large'})
+                        if img_div:
+                            url = img_div[0].img.attrs['src']
                             status_code, image_file_name = download_image(token_id, url, resize=True)
 
             if status_code == 200:
