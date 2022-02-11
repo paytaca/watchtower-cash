@@ -10,4 +10,6 @@ class MainConfig(AppConfig):
         # Restart block scanning upon re-deployment
         REDIS_STORAGE.delete('PENDING-BLOCKS')
         REDIS_STORAGE.delete('ACTIVE-BLOCK')
+        REDIS_STORAGE.delete('BITDBQUERY_COUNT')
+        REDIS_STORAGE.delete('BITDBQUERY_COUNT')
         REDIS_STORAGE.set('READY', 1)
