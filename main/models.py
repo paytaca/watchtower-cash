@@ -113,6 +113,7 @@ class Project(PostgresModel):
 class Wallet(PostgresModel):
     wallet_hash = models.CharField(
         max_length=70,
+        unique=True,
         db_index=True
     )
     wallet_type = models.CharField(
