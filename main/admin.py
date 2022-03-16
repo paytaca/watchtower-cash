@@ -12,7 +12,13 @@ from main.models import (
     WalletNftToken
 )
 from django.contrib.auth.models import User, Group
-from main.tasks import client_acknowledgement, send_telegram_message, get_token_meta_data
+from main.tasks import (
+    client_acknowledgement,
+    send_telegram_message,
+    get_token_meta_data,
+    get_bch_utxos,
+    get_slp_utxos
+)
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
 from django.conf import settings
@@ -178,11 +184,20 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'version',
         'project'
     ]
+    actions = [ 'rescan_utxos' ]
 
     dynamic_raw_id_fields = [
         'project'
     ]
 
+    def rescan_utxos(self, request, queryset):
+        for wallet in queryset:
+            addresses = wallet.addresses.filter(transactions__spent=False)
+            for address in addresses:
+                if wallet.wallet_type == 'bch':
+                    get_bch_utxos(address.address)
+                elif wallet.wallet_type == 'slp':
+                    get_slp_utxos(address.address)
 
 
 class ProjectAdmin(admin.ModelAdmin):
