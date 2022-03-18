@@ -2,6 +2,7 @@ import decimal
 from smartbch.models import Block, Transaction, TokenContract
 
 from .contract import abi
+from .formatters import format_block_number
 from .web3 import create_web3_client
 
 def save_transaction(txid):
@@ -106,3 +107,73 @@ def save_transaction_transfers(txid):
     instance.save()
 
     return instance
+
+
+def save_transactions_by_address(address, from_block=0, to_block=0, block_partition=0):
+    """Save transactions of a given address
+        Includes ERC20 & ERC721 Transfer event
+ 
+    Parameters
+    ------------
+        address: stirng
+            Hex string of wallet address
+        from_block: int
+            Start block to crawl through the blockchain
+        to_block: int
+            End block to crawl through the blockchain
+        block_partition: int
+            Will cause to iterate from start block to end block by N blocks.
+            A means to avoid burst request
+    Return
+    -----------
+        saved_transactions: Array[smartbch.models.Transaction]
+            List of smartbch.models.Transaction instances saved to db
+            Transactions that existed already are not included here
+    """
+    w3 = create_web3_client()
+    if not w3.isAddress(address):
+        return
+
+    # We add option to partition by a number of blocks to have the option to avoid burst of requests
+    block_markers=[from_block, to_block]
+    if block_partition > 0 and block_partition % 1 == 0:
+        block_markers = [*range(from_block, to_block, block_partition), to_block]
+
+    block_markers[0] -= 1
+
+    saved_transactions = []
+    for i in range(len(block_markers)-1):
+        unique_txids = set()
+        txs = w3.sbch.query_tx_by_addr(
+            address,
+            format_block_number(block_markers[i-1]+1),
+            format_block_number(block_markers[i]),
+            "0x0",
+        )
+        transfer_txs = w3.sbch.query_transfer_events(
+            wallet_address=address,
+            from_block=format_block_number(block_markers[i-1]+1),
+            to_block=format_block_number(block_markers[i]),
+        )
+
+        # get unique transaction ids of transaction and transfer events 
+        for tx in txs:
+            unique_txids.add(tx.hash)
+
+        for log in transfer_txs:
+            unique_txids.add(log.transactionHash.hex())
+
+        # save transactions that are not yet in db
+        saved_txs_queryset = Transaction.objects.filter(txid__in=unique_txids)
+        saved_tx_txids = {x for x in saved_txs_queryset.values_list('txid', flat=True)}
+        for txid in (unique_txids - saved_tx_txids):
+            tx_obj = save_transaction(txid)
+            saved_transactions.append(tx_obj)
+
+        # save transfers for transactions that are not yet parsed
+        transfer_saved_queryset = Transaction.objects.filter(txid__in=unique_txids, processed_transfers=True)
+        transfer_saved_tx_txids = {x for x in transfer_saved_queryset.values_list('txid', flat=True)}
+        for txid in (unique_txids-transfer_saved_tx_txids):
+            save_transaction_transfers(txid)
+
+    return saved_transactions
