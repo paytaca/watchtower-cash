@@ -62,6 +62,8 @@ INSTALLED_APPS=[
     'drf_yasg',
     'channels',
     'main',
+
+    'smartbch',
 ]
 
 MIDDLEWARE=[
