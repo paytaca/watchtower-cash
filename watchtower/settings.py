@@ -161,7 +161,10 @@ if DEPLOYMENT_INSTANCE == 'staging':
 REDIS_HOST = decipher(config('REDIS_HOST'))
 REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
 REDIS_PORT = decipher(config('REDIS_PORT'))
-CELERY_IMPORTS = ('main.tasks',)
+CELERY_IMPORTS = (
+    'main.tasks',
+    'smartbch.tasks',
+)
 
 CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 CELERY_RESULT_BACKEND = 'rpc://'
@@ -208,6 +211,14 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.manage_block_transactions',
         'schedule': 7
     }
+    'preload_smartbch_blocks': {
+        'task': 'smartbch.tasks.preload_new_blocks_task',
+        'schedule': 20,
+    },
+    'parse_new_smartbch_blocks': {
+        'task': 'smartbch.tasks.parse_blocks_task',
+        'schedule': 30,
+    },
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
