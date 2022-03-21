@@ -1,3 +1,4 @@
+import functools
 import web3
 from smartbch.models import TokenContract
 
@@ -21,27 +22,60 @@ def save_if_contract(address):
 
     return instance
 
-def save_token_contract_metadata(address, check_address=True):
+
+@functools.lru_cache(maxsize=None)
+def get_token_contract_metadata(address):
+    """
+    Return
+    -----------
+    (name, symbol): tuple
+        name: string or None
+        symbol string or None
+    """
+    if not web3.Web3.isAddress(address):
+        return None, None
+
     w3 = create_web3_client()
     contract = w3.eth.contract(address, abi=get_token_abi(20))
 
-    if check_address and not is_contract(address):
-        return
-
-    defaults = {}
-    try:
-        defaults["name"] = contract.functions.name().call()
-    except (web3.exceptions.BadFunctionCallOutput, web3.exceptions.ABIFunctionNotFound):
-        defaults["name"] = ""
+    name = None
+    symbol = None
 
     try:
-        defaults["symbol"] = contract.functions.symbol().call()
+        name = contract.functions.name().call()
     except (web3.exceptions.BadFunctionCallOutput, web3.exceptions.ABIFunctionNotFound):
-        defaults["symbol"] = ""
+        pass
 
+    try:
+        symbol = contract.functions.symbol().call()
+    except (web3.exceptions.BadFunctionCallOutput, web3.exceptions.ABIFunctionNotFound):
+        pass
+
+    return name, symbol
+
+
+def get_or_save_token_contract_metadata(address, force=False):
+    """
+    Return
+    -----------
+        (token_contract, updated):
+            token_contract: TokenContract instance or None
+            updated: if instance is updated
+    """
+    if not web3.Web3.isAddress(address):
+        return None, None
+
+    token_contract = TokenContract.objects.filter(address=address, name__isnull=False, symbol__isnull=False).first()
+    if token_contract and not force:
+        return token_contract, False
+
+    name, symbol = get_token_contract_metadata()
     instance, updated = TokenContract.objects.update_or_create(
         addresss=address,
-        defaults=defaults
+        defaults={
+            "name": name or "",
+            "symbol": symbol or "",
+        }
     )
 
-    return instance
+    return instance, updated

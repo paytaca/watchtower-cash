@@ -12,6 +12,9 @@ class Block(PostgresModel):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(#{block_number})"
+
 
 class TokenContract(PostgresModel):
     address = models.CharField(max_length=64)
@@ -44,6 +47,9 @@ class Transaction(PostgresModel):
 
     processed_transfers = models.BooleanField(null=True, blank=True)
 
+    def __str__(self):
+        return f"{self.__class__.__name__}:{self.txid}"
+
 
 class TransactionTransfer(PostgresModel):
     transaction = models.ForeignKey(
@@ -67,3 +73,53 @@ class TransactionTransfer(PostgresModel):
 
     amount = models.DecimalField(max_digits=36, decimal_places=18, null=True, blank=True)
     token_id = models.IntegerField(null=True, blank=True) # will be applicable to erc721
+
+    def get_subscription_data(self):
+        data = {
+            "source": "WatchTower",
+            "txid": self.transaction.txid,
+            "block_number": self.transaction.block.block_number,
+
+            "from": self.from_addr,
+            "to": self.to_addr,
+
+            "amount": str(self.amount) if self.amount is not None else None, 
+            "token_id": self.token_id,
+
+            "token_contract": {
+                "address": "",
+                "name": "",
+                "symbol": "",
+            }
+        }
+
+        if self.token_contract:
+            self.token_contract.refresh_from_db()
+
+            data["token_contract"] = {
+                "address": self.token_contract.address,
+                "name": self.token_contract.name,
+                "symbol": self.token_contract.symbol,
+            }
+
+        return data    
+
+
+class TransactionTransferReceipientLog(PostgresModel):
+    transaction_transfer = models.ForeignKey(
+        TransactionTransfer,
+        on_delete=models.CASCADE,
+        related_name="recipient_logs",
+    )
+    subscription = models.ForeignKey(
+        "main.Subscription",
+        on_delete=models.CASCADE,
+        related_name="transaction_transfer_logs",
+    )
+
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = (
+            ("transaction_transfer", "subscription"),
+        )
