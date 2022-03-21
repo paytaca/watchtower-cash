@@ -1,6 +1,8 @@
 import logging
+import web3
 from celery import shared_task
 from django.conf import settings
+from django.db import models
 
 from smartbch.conf import settings as app_settings
 from smartbch.models import Block
@@ -12,7 +14,9 @@ REDIS_CLIENT = settings.REDISKV
 
 ## Redis names used
 _REDIS_NAME__BLOCKS_BEING_PARSED = 'smartbch:blocks-being-parsed'
+_REDIS_NAME__TXS_BEING_PARSED = 'smartbch:txs-being-parsed'
 _REDIS_NAME__TXS_TRANSFERS_BEING_PARSED = 'smartbch:tx-transfers-being-parsed'
+_REDIS_NAME__ADDRESS_BEING_CRAWLED = 'smartbch:address-being-crawled'
 
 @shared_task
 def preload_new_blocks_task():
@@ -104,3 +108,62 @@ def save_transaction_transfers_task(txid):
         return f"save_transaction_transfers_task({txid}) error: {str(e)}"
     finally:
         REDIS_CLIENT.srem(_REDIS_NAME__TXS_TRANSFERS_BEING_PARSED, str(txid))
+
+
+@shared_task
+def save_transaction_task(txid):
+    LOGGER.info(f"Parsing transaction: {txid}")
+
+    if REDIS_CLIENT.exists(_REDIS_NAME__TXS_BEING_PARSED, str(txid)):
+        LOGGER.info(f"Transaction ({txid}) is being parsed by another task, will stop task")
+        return f"transaction_is_being_parsed: {txid}"
+
+    REDIS_CLIENT.sadd(_REDIS_NAME__TXS_BEING_PARSED, str(txid))
+
+    try:
+        tx_obj = transaction_utils.save_transaction(str(txid))
+        LOGGER.info(f"Parsed transaction successfully: {tx_obj}")
+        LOGGER.info(f"Queueing task for saving transaction transfers of: {tx_obj.txid}")
+        save_transaction_transfers_task.delay(tx_obj.txid)
+        return f"parsed transaction: {txid}"
+    except Exception as e:
+        return f"save_transaction_task({txid}) error: {str(e)}"
+    finally:
+        REDIS_CLIENT.srem(_REDIS_NAME__TXS_BEING_PARSED, str(txid))
+
+
+@shared_task
+def save_transactions_by_address(address):
+    LOGGER.info(f"Crawling transactions of: {address}")
+    if not web3.Web3.isAddress(address):
+        LOGGER.info(f"Address ({address}) is invalid")
+        return f"address_invalid: {address}"
+
+    if REDIS_CLIENT.exists(_REDIS_NAME__ADDRESS_BEING_CRAWLED, str(address)):
+        LOGGER.info(f"Address ({address}) is being parsed by another task, will stop task")
+        return f"address_is_being_crawled: {address}"
+
+    REDIS_CLIENT.sadd(_REDIS_NAME__ADDRESS_BEING_CRAWLED, str(address))
+
+    # we expect other tasks to save the newer unprocessed blocks
+    end_block = Block.objects.filter(processed=True).aggregate(latest_block = models.Max('block_number')).get('latest_block')
+
+    is_numeric = lambda var: isinstance(var, (int, decimal.Decimal))
+    start_block = app_settings.START_BLOCK
+    if not is_numeric(start_block):
+        start_block = Block.objects.filter(processed=True).aggregate(earliest_parsed_block = models.Min('block_number')).get('earliest_parsed_block')
+
+    # just added a guard to limit the block to backtrack to 250 blocks
+    if not is_numeric(start_block) or end_block - start_block > 250:
+        start_block = end_block - 250
+
+    iterator = transaction_utils.get_transactions_by_address(
+        address,
+        from_block=start_block,
+        to_block=end_block,
+        block_partition=10,
+    )
+
+    for tx_list in iterator:
+        for tx in tx_list.transactions:
+            save_transaction_task.delay(tx.hash)
