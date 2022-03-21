@@ -2,10 +2,20 @@ import decimal
 import datetime
 from django.db import models
 from django.utils.timezone import make_aware
+from web3.datastructures import AttributeDict
+from web3.exceptions import (
+    InvalidEventABI,
+    LogTopicError,
+    MismatchedABI,
+)
+
+from main.models import Address
 
 from smartbch.conf import settings as app_settings
 from smartbch.models import Block, Transaction
 
+from .contract import abi
+from .formatters import format_block_number
 from .web3 import create_web3_client
 
 def preload_new_blocks(force_start_block=None):
@@ -44,9 +54,56 @@ def parse_block(block_number, save_transactions=True):
         }
     )
 
+    # ERC20 and ERC721 Transfer event topic, apparenlty share the same topic in hex string
+    event_topic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+    block_logs = w3.eth.get_logs({
+        "fromBlock": format_block_number(block_number),
+        "toBlock": format_block_number(block_number),
+        "topics": [event_topic],
+    })
+
+    erc20 = w3.eth.contract('', abi=abi.get_token_abi(20))
+    erc721 = w3.eth.contract('', abi=abi.get_token_abi(721))
+    tx_log_addresses_map = {}
+    # extracting the addresses of the Transfer events in logs
+    for log in block_logs:
+        tx_hex = ""
+        addresses = set()
+        try:
+            parsed_log = erc20.events.Transfer().processLog(log)
+            tx_hex = parsed_log.transactionHash.hex()
+            addresses.add(parsed_log.args['from'])
+            addresses.add(parsed_log.args.to)
+        except (InvalidEventABI, LogTopicError, MismatchedABI):
+            pass
+
+        try:
+            parsed_log = erc721.events.Transfer().processLog(log)
+            tx_hex = parsed_log.transactionHash.hex()
+            addresses.add(parsed_log.args['from'])
+            addresses.add(parsed_log.args.to)
+        except (InvalidEventABI, LogTopicError, MismatchedABI):
+            pass
+
+        if tx_hex:
+            tx_log_addresses_map[tx_hex] = addresses
+
     if save_transactions:
         for transaction in block.transactions:
-            # TODO: Add condition to only save transactions that contain subscribed address
+            tx_addresses_list = [
+                transaction['from'],
+                transaction.to,
+            ]
+            if isinstance(tx_log_addresses_map.get(transaction.hash.hex(), None), (set, list)):
+                tx_addresses_list = [
+                    *tx_addresses_list,
+                    *tx_log_addresses_map[transaction.hash.hex()],
+                ]
+
+            tracked_addresses = Address.objects.filter(address__in=tx_addresses_list)
+            if not tracked_addresses.exists():
+                continue
+
             tx, created = Transaction.objects.get_or_create(
                 txid=transaction.hash.hex(),
                 defaults = {

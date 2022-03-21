@@ -1,4 +1,5 @@
 import re
+import decimal
 
 def is_hex_string(value):
     return re.match("0x[0-9a-f]*", value)
@@ -25,6 +26,9 @@ def format_block_number(value, exclude_names=False):
 
     if isinstance(value, int):
         return int_to_hex(value)
+
+    if isinstance(value, decimal.Decimal):
+        return int_to_hex(int(value))
 
     if is_hex_string(str(value)):
         return str(value)

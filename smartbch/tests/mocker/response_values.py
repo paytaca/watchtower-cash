@@ -42,6 +42,37 @@ test_block_response = AttributeDict({
     "uncles": [],
 })
 
+test_block_logs = [
+    AttributeDict({'address': '0x265bD28d79400D55a1665707Fa14A72978FA6043',
+        'topics': [
+            HexBytes('0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'),
+            HexBytes('0x000000000000000000000000fea305d5fe76cf6ea4a887234264a256ad269792'),
+            HexBytes('0x000000000000000000000000659f04f36e90143fcac202d4bc36c699c078fc98')
+        ],
+        'data': '0x0000000000000000000000000000000000000000000000000000000000007530',
+        'blockNumber': 3586044,
+        'transactionHash': HexBytes('0xe40c6856318c5ae33e4c1e61d54a6047e3c917d7bd64ccdd63f5a5f4b389c7e6'),
+        'transactionIndex': 0,
+        'blockHash': HexBytes('0x70d6332dbbe96b62bfde145dcff69f2c76c2da598a9cefff07601a2b93510dd2'),
+        'logIndex': 0,
+        'removed': False
+    }),
+    AttributeDict({
+        'address': '0x659F04F36e90143fCaC202D4BC36C699C078fC98',
+        'topics': [
+            HexBytes('0xe3d4187f6ca4248660cc0ac8b8056515bac4a8132be2eca31d6d0cc170722a7e'),
+            HexBytes('0x000000000000000000000000fea305d5fe76cf6ea4a887234264a256ad269792')
+        ],
+        'data': '0x0000000000000000000000000000000000007530000000c8000000006233e219',
+        'blockNumber': 3586044,
+        'transactionHash': HexBytes('0xe40c6856318c5ae33e4c1e61d54a6047e3c917d7bd64ccdd63f5a5f4b389c7e6'),
+        'transactionIndex': 0,
+        'blockHash': HexBytes('0x70d6332dbbe96b62bfde145dcff69f2c76c2da598a9cefff07601a2b93510dd2'),
+        'logIndex': 1,
+        'removed': False
+    })
+]
+
 test_tx = AttributeDict({
     "__mock": True,
     "blockNumber": 3572704, 
