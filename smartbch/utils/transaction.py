@@ -1,4 +1,5 @@
 import decimal
+import warnings
 from web3.datastructures import AttributeDict
 from smartbch.models import Block, Transaction, TokenContract
 
@@ -43,8 +44,12 @@ def save_transaction_transfers(txid):
     erc20 = w3.eth.contract('', abi=abi.get_token_abi(20))
     erc721 = w3.eth.contract('', abi=abi.get_token_abi(721))
 
-    erc20_transfers = erc20.events.Transfer().processReceipt(receipt)
-    erc721_transfers = erc721.events.Transfer().processReceipt(receipt)
+    erc20_transfers = []
+    erc721_transfers = []
+
+    with warnings.catch_warnings(record=True) as w:
+        erc20_transfers = erc20.events.Transfer().processReceipt(receipt)
+        erc721_transfers = erc721.events.Transfer().processReceipt(receipt)
 
     # print(f"erc20: {erc20_transfers}")
     # print(f"erc721: {erc721_transfers}")
