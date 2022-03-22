@@ -1,6 +1,7 @@
 from psqlextra.models import PostgresModel
 from django.db import models
 
+from django.apps import apps
 
 class Block(PostgresModel):
     block_number = models.DecimalField(max_digits=78, decimal_places=0)
@@ -73,6 +74,50 @@ class TransactionTransfer(PostgresModel):
 
     amount = models.DecimalField(max_digits=36, decimal_places=18, null=True, blank=True)
     token_id = models.IntegerField(null=True, blank=True) # will be applicable to erc721
+
+    @property
+    def subscription_model(self):
+        attr_name = "subscription_model"
+        if attr_name in self.__dict__:
+            return self.__dict__[attr_name]
+
+        try:
+            model = apps.get_model("main", "Subscription")
+            self.__dict__[attr_name] = model
+            return model
+        except LookupError:
+            pass
+
+    def get_subscriptions(self):
+        Subscription = self.subscription_model
+        if not Subscription:
+            return 
+
+        return Subscription.objects.filter(
+            address__address__in=[
+                self.from_addr,
+                self.to_addr,
+            ],
+        )
+
+    def get_valid_subscriptions(self):
+        subscriptions = self.get_subscriptions()
+        if not subscriptions:
+            return subscriptions
+
+        return subscriptions.filter(
+            models.Q(recipient__valid=True) | models.Q(websocket=True)
+        )
+
+    def get_unsent_valid_subscriptions(self):
+        valid_subs = self.get_valid_subscriptions()
+        if not valid_subs:
+            return valid_subs
+
+        return valid_subs.filter(
+            models.Q(transaction_transfer_logs__sent_at__isnull=True) |
+            models.Q(transaction_transfer_logs__isnull=True)
+        )
 
     def get_subscription_data(self):
         data = {

@@ -1,26 +1,17 @@
 import logging
 import web3
 import requests
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 from celery import shared_task
 from django.conf import settings
 from django.db import models
-from django.utils import timezone
-
-from main.models import (
-    Recipient,
-    Subscription,
-)
-from main.tasks import send_telegram_message
 
 from smartbch.conf import settings as app_settings
 from smartbch.models import (
     Block,
     TransactionTransfer,
-    TransactionTransferReceipientLog,
 )
 from smartbch.utils import block as block_utils
+from smartbch.utils import subscription as subscription_utils
 from smartbch.utils import transaction as transaction_utils
 from smartbch.utils import contract as contract_utils
 
@@ -199,109 +190,47 @@ def send_transaction_notification_task(txid):
         send_transaction_transfer_notification_task.delay(transfer_tx.id)
 
 
-
-@shared_task
+@shared_task(max_retries=3)
 def send_transaction_transfer_notification_task(tx_transfer_id):
     tx_transfer_obj = TransactionTransfer.objects.filter(id=tx_transfer_id).first()
 
     if not tx_transfer_obj:
         return f"transaction_transfer with id {tx_transfer_id} does not exist"
 
-    subscriptions = Subscription.objects.filter(
-        models.Q(recipient__valid=True) | models.Q(recipient__isnull=True),
-        address__address__in=[
-            tx_transfer_obj.from_addr,
-            tx_transfer_obj.to_addr,
-        ],
-    ).filter(
-        models.Q(transaction_transfer_logs__sent_at__isnull=False) |
-        models.Q(transaction_transfer_logs__isnull=False)
-    )
+    subscriptions = tx_transfer_obj.get_unsent_valid_subscriptions()
 
-    if subscriptions.exists():
+    if subscriptions is None or not subscriptions.exists():
         return f"transaction_transfer with id {tx_transfer_id} has no related valid subscriptions"
 
     if tx_transfer_obj.token_contract:
-        token_contract, _ = contract_utils.get_or_save_token_contract_metadata(tx_transfer_obj.token_contract.address)
-
-    data = tx_transfer_obj.get_subscription_data()
+        contract_utils.get_or_save_token_contract_metadata(
+            tx_transfer_obj.token_contract.address,
+            force=False,
+        )
 
     log_ids = []
+    failed_subs = []
     for subscription in subscriptions:
-        recipient = subscription.recipient
-        websocket = subscription.websocket
+        log, error = subscription_utils.send_transaction_transfer_notification_to_subscriber(
+            subscription,
+            tx_transfer_obj,
+        )
 
-        # check if already sent successfully
-        if TransactionTransferReceipientLog.filter(
-            subscription=subscription,
-            transaction_transfer=tx_transfer_obj,
-            sent_at__isnull=False
-        ).exists():
-            continue
-
-        if recipient and recipient.valid:
-            if recipient.web_url:
-                LOGGER.info(f"Webhook call to be sent to: {recipient.web_url}")
-                LOGGER.info(f"Data: {str(data)}")
-
-                resp = requests.post(recipient.web_url,data=data)
-                if resp.status_code == 200:
-                    this_transaction.update(acknowledged=True)
-                    LOGGER.info(f'ACKNOWLEDGEMENT SENT TX INFO : {transaction.txid} TO: {recipient.web_url} DATA: {str(data)}')
-                elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
-                    Recipient.objects.filter(id=recipient.id).update(valid=False)
-                    LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
-                else:
-                    LOGGER.error(resp)
-                    self.retry(countdown=3)
-
-            if recipient.telegram_id:
-                if tx_transfer_obj.token_contract:
-                    message=f"""<b>WatchTower Notification</b> ℹ️
-                        \n Address: {subscription.address.address}
-                        \n Amount: {tx_transfer_obj.amount} BCH
-                        \nhttps://www.smartscan.cash/transaction/{tx_transfer_obj.transaction.txid}
-                    """
-                else:
-                    message=f"""<b>WatchTower Notification</b> ℹ️
-                        \n Address: {subscription.address.address}
-                        \n Token: {tx_transfer_obj.token_contract.name}
-                        \n Token Address: {tx_transfer_obj.token_contract.address}
-                        \n Amount: {tx_transfer_obj.amount}
-                        \nhttps://www.smartscan.cash/transaction/{tx_transfer_obj.transaction.txid}
-                    """
-                    send_telegram_message(message, recipient.telegram_id)
-
-        if websocket:
-            room_name = f"{subscription.address.address}"
-
-            # send to websocket connections subscribed to address 
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f"{room_name}", 
-                {
-                    "type": "send_update",
-                    "data": data
-                }
+        if log:
+            log_ids.append(log.id)
+        elif error:
+            failed_subs.append(
+                (subscription, error)
             )
 
-            # send to websocket tokenconnections subscribed to address and contract address
-            if tx_transfer_obj.token_contract and tx_transfer_obj.token_contract.address:
-                room_name += f"_{tx_transfer_obj.token_contract.address}"
-                channel_layer = get_channel_layer()
-                async_to_sync(channel_layer.group_send)(
-                    f"{room_name}", 
-                    {
-                        "type": "send_update",
-                        "data": data
-                    }
-                )
-        
-        log, _ = TransactionTransferReceipientLog.objects.update_or_create(
-            transaction_transfer=tx_transfer_obj,
-            subscription=subscription,
-            defaults={ "sent_at": timezone.now() }
-        )
-        log_ids.append(log.id)
+    resp = []
+    if len(log_ids):
+        LOGGER.info(f"sucessfully sent subscription notifications: {log_ids}")
+        resp.append(f"sent {len(log_ids)} transaction_transfer notifications, log_ids: {log_ids}")
 
-    return f"sent {len(log_ids)} transaction_transfer notifications, log_ids: {log_ids}"
+    if len(failed_subs):
+        LOGGER.info(f"Failed to send subscription notifications: {failed_subs}")
+        resp.append(f"error sending {len(failed_subs)} transaction_transfer notifications: {failed_subs}")
+        self.retry(countdown=3)
+
+    return "\n".join(resp)

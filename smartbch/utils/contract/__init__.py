@@ -69,7 +69,7 @@ def get_or_save_token_contract_metadata(address, force=False):
     if token_contract and not force:
         return token_contract, False
 
-    name, symbol = get_token_contract_metadata()
+    name, symbol = get_token_contract_metadata(address)
     instance, updated = TokenContract.objects.update_or_create(
         addresss=address,
         defaults={
