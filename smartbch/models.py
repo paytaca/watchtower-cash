@@ -14,7 +14,7 @@ class Block(PostgresModel):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.__class__.__name__}(#{block_number})"
+        return f"{self.__class__.__name__}(#{self.block_number})"
 
 
 class TokenContract(PostgresModel):
@@ -23,6 +23,14 @@ class TokenContract(PostgresModel):
     token_type = models.IntegerField() # erc number e.g. (ERC20, ERC721, ERC777)
     name = models.CharField(max_length=50, null=True, blank=True)
     symbol = models.CharField(max_length=10, null=True, blank=True)
+
+    def __str__(self):
+        string = f"{self.__class__.__name__}:{self.address}"
+        if self.name:
+            string += f" - {self.name}"
+        if self.symbol:
+            string += f"({self.symbol})"
+        return string
 
 
 class Transaction(PostgresModel):
@@ -87,6 +95,18 @@ class TransactionTransfer(PostgresModel):
             return model
         except LookupError:
             pass
+
+    @property
+    def unit_name(self):
+        if self.token_contract:
+            return self.token_contract.name
+        return "Bitcoin Cash"
+
+    @property
+    def unit_symbol(self):
+        if self.token_contract:
+            return self.token_contract.symbol
+        return "BCH"
 
     def get_subscriptions(self):
         Subscription = self.subscription_model
