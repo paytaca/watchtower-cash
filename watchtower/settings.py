@@ -210,7 +210,7 @@ CELERY_BEAT_SCHEDULE = {
     'manage_block_transactions': {
         'task': 'main.tasks.manage_block_transactions',
         'schedule': 7
-    }
+    },
     'preload_smartbch_blocks': {
         'task': 'smartbch.tasks.preload_new_blocks_task',
         'schedule': 20,
@@ -219,6 +219,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'smartbch.tasks.parse_blocks_task',
         'schedule': 30,
     },
+    'parse_token_contract_metadata': {
+        'task': 'smartbch.tasks.parse_token_contract_metadata_task',
+        'schedule': 300,
+    }
 }
 
 CORS_ALLOW_ALL_ORIGINS = True

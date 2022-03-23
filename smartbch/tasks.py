@@ -9,6 +9,7 @@ from smartbch.conf import settings as app_settings
 from smartbch.models import (
     Block,
     TransactionTransfer,
+    TokenContract,
 )
 from smartbch.utils import block as block_utils
 from smartbch.utils import subscription as subscription_utils
@@ -234,3 +235,30 @@ def send_transaction_transfer_notification_task(tx_transfer_id):
         self.retry(countdown=3)
 
     return "\n".join(resp)
+
+
+@shared_task
+def parse_token_contract_metadata_task():
+    LOGGER.info(f"Checking for token contracts without metadata")
+    MAX_CONTRACTS_PER_TASK = 10
+    token_contract_addresses = TokenContract.objects.filter(
+        name__isnull=True,
+        symbol__isnull=True,
+    )[:MAX_CONTRACTS_PER_TASK].values_list("address", flat=True)
+
+    if not len(token_contract_addresses):
+        LOGGER.info(f"No token contracts without metadata found")
+        return "no_token_contract_found"
+
+    LOGGER.info(f"Found {len(token_contract_addresses)} token contract/s without metadata: {token_contract_addresses}")
+    results = []
+    for address in token_contract_addresses:
+        instance, updated = contract_utils.get_or_save_token_contract_metadata(address, force=False)
+        instance_id = instance.id if instance else None
+        results.append({
+            "id": instance_id,
+            "address": address,
+            "updated": updated,
+        })
+
+    return results
