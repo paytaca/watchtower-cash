@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.contrib import (
     admin,
     messages,
@@ -86,12 +87,9 @@ class TransactionTransferInline(admin.TabularInline):
 
 
 class TransactionAdmin(admin.ModelAdmin):
-    list_select_related = [
-        "block",
-    ]
-
     list_display = [
         "txid",
+        "block_number",
         "from_addr",
         "to_addr",
     ]
@@ -102,6 +100,11 @@ class TransactionAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    def block_number(self, obj):
+        return obj.block_number
+
+    block_number.admin_order_field = 'block__block_number'
 
 
 admin.site.register(TokenContract, TokenContractAdmin)

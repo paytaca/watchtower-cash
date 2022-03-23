@@ -59,6 +59,13 @@ class Transaction(PostgresModel):
     def __str__(self):
         return f"{self.__class__.__name__}:{self.txid}"
 
+    @property
+    def block_number(self):
+        if "block_number" not in self.__dict__:
+            self.__dict__["block_number"] = self.block.block_number
+
+        return self.__dict__["block_number"]
+
 
 class TransactionTransfer(PostgresModel):
     transaction = models.ForeignKey(
