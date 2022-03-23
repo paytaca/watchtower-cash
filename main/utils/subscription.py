@@ -11,6 +11,7 @@ from main.models import (
 )
 from main.tasks import get_slp_utxos, get_bch_utxos
 import logging
+import web3
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def new_subscription(**kwargs):
             if 'change' in addresses.keys():
                 address_list.append([addresses['change'], '1/' + str(address_index)])
         for address, path in address_list:
-            if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
+            if address.startswith('bitcoincash:') or address.startswith('simpleledger:') or web3.Web3.isAddress(address):
                 proceed = False
                 project = None
                 if project_id:
