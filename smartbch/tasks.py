@@ -134,8 +134,9 @@ def parse_blocks_task():
 
 @shared_task
 def parse_block_task(block_number, send_notifications=False):
+    active_blocks = REDIS_CLIENT.smembers(_REDIS_NAME__BLOCKS_BEING_PARSED)
     LOGGER.info(f"Parsing block: {block_number}")
-    LOGGER.info(f"Active blocks: {REDIS_CLIENT.smembers(_REDIS_NAME__BLOCKS_BEING_PARSED)}")
+    LOGGER.info(f"Active blocks: {active_blocks}")
 
     try:
         block_number = int(block_number)
@@ -143,9 +144,9 @@ def parse_block_task(block_number, send_notifications=False):
         LOGGER.info(f"Block number ({block_number}) is invalid")
         return f"invalid_block: {block_number}"
 
-    if REDIS_CLIENT.exists(_REDIS_NAME__BLOCKS_BEING_PARSED, str(block_number)):
+    if str(block_number) in active_blocks:
         LOGGER.info(f"Block number ({block_number}) is being parsed by another task, will stop task")
-        return f"block_is_being_parsed {block_number}"
+        return f"block_is_being_parsed {block_number}: {active_blocks}"
 
     REDIS_CLIENT.sadd(_REDIS_NAME__BLOCKS_BEING_PARSED, str(block_number))
     try:
