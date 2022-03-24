@@ -1,5 +1,7 @@
+import datetime
 import decimal
 import warnings
+from django.utils.timezone import make_aware
 from web3.datastructures import AttributeDict
 from smartbch.models import Block, Transaction, TokenContract
 
@@ -32,13 +34,23 @@ def save_transaction(txid):
     return tx
 
 
-def save_transaction_transfers(txid):
+def save_transaction_transfers(txid, parse_block_timestamp=False):
     instance = Transaction.objects.filter(txid=txid).first()
 
     if not instance:
         return
 
     w3 = create_web3_client()
+    if parse_block_timestamp and instance.block.timestamp is None:
+        block = w3.eth.get_block(int(instance.block.block_number), False)
+        block_obj, created = Block.objects.update_or_create(
+            block_number=instance.block.block_number,
+            defaults={
+                "timestamp": make_aware(datetime.datetime.fromtimestamp(block.timestamp)),
+                "transactions_count": len(block.transactions),
+            }
+        )
+
     receipt = w3.eth.get_transaction_receipt(instance.txid)
 
     erc20 = w3.eth.contract('', abi=abi.get_token_abi(20))
