@@ -230,6 +230,7 @@ class TransactionTransferReceipientLog(PostgresModel):
         on_delete=models.CASCADE,
         related_name="transaction_transfer_logs",
     )
+    remarks = models.TextField(null=True, blank=True)
 
     sent_at = models.DateTimeField(null=True, blank=True)
 

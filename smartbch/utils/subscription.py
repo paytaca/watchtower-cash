@@ -61,6 +61,7 @@ def send_transaction_transfer_notification_to_subscriber(
 
     data = tx_transfer_obj.get_subscription_data()
 
+    remarks = []
     if recipient and recipient.valid:
         if recipient.web_url:
             LOGGER.info(f"Webhook call to be sent to: {recipient.web_url}")
@@ -68,6 +69,7 @@ def send_transaction_transfer_notification_to_subscriber(
 
             resp = requests.post(recipient.web_url, data=data)
             if resp.status_code == 200:
+                remarks.append("Sent to web url.")
                 LOGGER.info(
                     "ACKNOWLEDGEMENT SENT TX TRANSFER INFO : {0} TO: {1} DATA: {2}".format(
                         tx_transfer_obj.transaction.txid,
@@ -83,6 +85,7 @@ def send_transaction_transfer_notification_to_subscriber(
                 return f"unknown_web_url_response_status_code: {resp.status_code}", None
 
         if recipient.telegram_id:
+            LOGGER.info(f"Sending telegram message for {tx_transfer_obj} to telegram({recipient.telegram_id})")
             message = ""
             if tx_transfer_obj.token_contract:
                 message=f"""<b>WatchTower Notification</b> ℹ️
@@ -100,6 +103,7 @@ def send_transaction_transfer_notification_to_subscriber(
                 """
 
             send_telegram_message(message, recipient.telegram_id)
+            remarks.append("Sent to telegram.")
 
 
     if websocket:
@@ -127,11 +131,15 @@ def send_transaction_transfer_notification_to_subscriber(
                     "data": data
                 }
             )
+        remarks.append("Sent to websocket.")
 
     log, _ = TransactionTransferReceipientLog.objects.update_or_create(
         transaction_transfer=tx_transfer_obj,
         subscription=subscription,
-        defaults={ "sent_at": timezone.now() }
+        defaults={
+            "sent_at": timezone.now(),
+            "remarks": " ".join(remarks),
+        }
     )
 
     return log, None
