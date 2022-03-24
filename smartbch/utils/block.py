@@ -18,27 +18,80 @@ from .contract import abi
 from .formatters import format_block_number
 from .web3 import create_web3_client
 
-def preload_new_blocks(force_start_block=None):
+
+def range_with_exclude(*args, to_exclude=[], **kwargs):
+    # This should work with new 
+    for i in range(*args, **kwargs):
+        if i in to_exclude:
+            continue
+        yield i
+
+def preload_block_range(start_block, end_block):
+    """
+        Preloads block range to database creates blocks within the specified range that are not yet in database
+
+    Parameters
+    ------------
+    start_block: int | decimal.Decimal
+    end_block: int | decimal.Decimal
+
+    Returns
+    ------------
+    (start_block, end_block, blocks_created)
+        blocks_created: list(smartbch.models.Block)
+            new blocks created, i.e. blocks within the specified range that have already existed are not included here
+    """
+    print(f"Pre saving blocks from {start_block} to {end_block}")
+    existing_block_numbers = Block.objects.filter(
+        block_number__gte=start_block, block_number__lte=end_block
+    ).order_by(
+        "block_number",
+    ).values_list(
+        "block_number", flat=True,
+    )
+
+    blocks_to_create = []
+    for block_number in range_with_exclude(int(start_block), int(end_block)+1, to_exclude=existing_block_numbers):
+        block = Block(
+            block_number=decimal.Decimal(block_number),
+        )
+        blocks_to_create.append(block)
+    
+    if len(blocks_to_create):
+        created_blocks = Block.objects.bulk_create(blocks_to_create)
+
+    return (start_block, end_block, created_blocks)
+
+
+def preload_new_blocks(blocks_to_preload=app_settings.BLOCK_TO_PRELOAD):
+    """
+        Preloads a specified number of blocks relative to the chain's latest block number to the database.
+
+    Parameters
+    ------------
+    blocks_to_preload: number, decimal.Decimal
+        Used to determine the start block, the specified value is subtracted to the latest block number
+
+    Returns
+    ------------
+        see `preload_block_range(start_block, end_block)`
+    """
     w3 = create_web3_client()
     latest_block = w3.eth.block_number
 
-    last_saved_block = Block.objects.aggregate(latest_block = models.Max('block_number')).get('latest_block')
+    # a hard coded value in case the parameter is not specified 
+    if not isinstance(blocks_to_preload, (int, decimal.Decimal)) or blocks_to_preload <= 0:
+        blocks_to_preload = 500
 
-    start_block = latest_block
-    if last_saved_block is not None and last_saved_block > 0:
-        start_block = last_saved_block
-    elif app_settings.START_BLOCK is not None and app_settings.START_BLOCK > 1:
-        start_block = app_settings.START_BLOCK-1
+    # a guard to set the start block, it implies the start block must be positive and
+    # greater than or equal to app_setting.START_BLOCK
+    HARD_START_BLOCK = 0
+    if isinstance(app_settings.START_BLOCK, (int, decimal.Decimal)):
+        HARD_START_BLOCK = max(0, app_settings.START_BLOCK)
 
-    if force_start_block is not None and force_start_block > 0 and force_start_block < latest_block:
-        start_block = force_start_block
+    start_block = max(HARD_START_BLOCK, latest_block - blocks_to_preload)
 
-    print(f"Pre saving blocks from {start_block} to {latest_block}")
-    for block_number in range(int(start_block), latest_block+1):
-        Block.objects.get_or_create(
-            block_number=decimal.Decimal(block_number),
-        )
-    return (start_block, latest_block)
+    return preload_block_range(start_block, latest_block)
 
 def parse_block(block_number, save_transactions=True):
     w3 = create_web3_client()
@@ -62,33 +115,33 @@ def parse_block(block_number, save_transactions=True):
         "topics": [event_topic],
     })
 
-    erc20 = w3.eth.contract('', abi=abi.get_token_abi(20))
-    erc721 = w3.eth.contract('', abi=abi.get_token_abi(721))
-    tx_log_addresses_map = {}
-    # extracting the addresses of the Transfer events in logs
-    for log in block_logs:
-        tx_hex = ""
-        addresses = set()
-        try:
-            parsed_log = erc20.events.Transfer().processLog(log)
-            tx_hex = parsed_log.transactionHash.hex()
-            addresses.add(parsed_log.args['from'])
-            addresses.add(parsed_log.args.to)
-        except (InvalidEventABI, LogTopicError, MismatchedABI):
-            pass
-
-        try:
-            parsed_log = erc721.events.Transfer().processLog(log)
-            tx_hex = parsed_log.transactionHash.hex()
-            addresses.add(parsed_log.args['from'])
-            addresses.add(parsed_log.args.to)
-        except (InvalidEventABI, LogTopicError, MismatchedABI):
-            pass
-
-        if tx_hex:
-            tx_log_addresses_map[tx_hex] = addresses
-
     if save_transactions:
+        erc20 = w3.eth.contract('', abi=abi.get_token_abi(20))
+        erc721 = w3.eth.contract('', abi=abi.get_token_abi(721))
+        tx_log_addresses_map = {}
+        # extracting the addresses of the Transfer events in logs
+        for log in block_logs:
+            tx_hex = ""
+            addresses = set()
+            try:
+                parsed_log = erc20.events.Transfer().processLog(log)
+                tx_hex = parsed_log.transactionHash.hex()
+                addresses.add(parsed_log.args['from'])
+                addresses.add(parsed_log.args.to)
+            except (InvalidEventABI, LogTopicError, MismatchedABI):
+                pass
+
+            try:
+                parsed_log = erc721.events.Transfer().processLog(log)
+                tx_hex = parsed_log.transactionHash.hex()
+                addresses.add(parsed_log.args['from'])
+                addresses.add(parsed_log.args.to)
+            except (InvalidEventABI, LogTopicError, MismatchedABI):
+                pass
+
+            if tx_hex:
+                tx_log_addresses_map[tx_hex] = addresses
+
         for transaction in block.transactions:
             tx_addresses_list = [
                 transaction['from'],

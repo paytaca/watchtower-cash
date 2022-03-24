@@ -24,7 +24,8 @@ class ObjDict(dict):
 
 default_settings = {
     "START_BLOCK": None,
-    "BLOCKS_PER_TASK": 5,
+    "BLOCK_TO_PRELOAD": None,
+    "BLOCKS_PER_TASK": 50,
     "JSON_RPC_PROVIDER_URL": "https://smartbch.fountainhead.cash/mainnet",
 }
 

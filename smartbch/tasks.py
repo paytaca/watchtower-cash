@@ -29,7 +29,7 @@ _REDIS_NAME__ADDRESS_BEING_CRAWLED = 'smartbch:address-being-crawled'
 def preload_new_blocks_task():
     LOGGER.info("Preloading new blocks to db")
 
-    (start_block, end_block) = block_utils.preload_new_blocks()
+    (start_block, end_block, _) = block_utils.preload_new_blocks()
     LOGGER.info(f"Preloaded blocks from {start_block} to {end_block}")
     return (start_block, end_block)
 
@@ -43,7 +43,7 @@ def parse_blocks_task():
         block_count = app_settings.BLOCKS_PER_TASK
     else:
         LOGGER.info(f"Using fallback settings for number of blocks to parse: 5")
-        block_count = 5
+        block_count = 50
 
     blocks_being_parsed = REDIS_CLIENT.smembers(_REDIS_NAME__BLOCKS_BEING_PARSED)
     blocks_being_parsed = [i.decode() for i in blocks_being_parsed]
@@ -53,7 +53,7 @@ def parse_blocks_task():
     ).exclude(
         processed=True
     ).order_by(
-        'block_number'
+        '-block_number'
     )[:block_count]
 
     LOGGER.info(f"Queueing blocks for parsing: {blocks.values_list('block_number', flat=True)}")
