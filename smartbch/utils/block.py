@@ -91,6 +91,9 @@ def preload_new_blocks(blocks_to_preload=app_settings.BLOCK_TO_PRELOAD):
 
     start_block = max(HARD_START_BLOCK, latest_block - blocks_to_preload)
 
+    if not Block.objects.exists():
+        start_block = latest_block
+
     return preload_block_range(start_block, latest_block)
 
 def parse_block(block_number, save_transactions=True):

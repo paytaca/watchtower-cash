@@ -51,7 +51,7 @@ def parse_missing_blocks_task():
     MAX_BLOCKS_TO_PARSE = 100
 
     min_block_number = Block.get_min_block_number()
-    if isinstance(app_settings.START_BLOCK, (int, decmial.Decimal)) and app_settings.START_BLOCK > 0:
+    if isinstance(app_settings.START_BLOCK, (int, decimal.Decimal)) and app_settings.START_BLOCK > 0:
         min_block_number = max(min_block_number, app_settings.START_BLOCK)
 
     count, iterator = Block.get_missing_block_numbers(
@@ -61,8 +61,13 @@ def parse_missing_blocks_task():
     LOGGER.info(f"Found {count} missing block_numbers, queueing {MAX_BLOCKS_TO_PARSE} for parsing")
     blocks_sent_for_parsing = 0
     while blocks_sent_for_parsing < MAX_BLOCKS_TO_PARSE:
-        parse_block_task.delay(next(iterator))
+        try:
+            parse_block_task.delay(next(iterator))
+        except StopIteration:
+            break
         blocks_sent_for_parsing += 1
+
+    return f"Sent {blocks_sent_for_parsing} block/s for parsing"
 
 
 @shared_task
@@ -76,12 +81,12 @@ def handle_transactions_with_unprocessed_transfers_task():
     unsaved_transactions = Transaction.objects.filter(
         processed_transfers=False,
     ).order_by(
-        "transaction__block__block_number",
+        "block__block_number",
     )
 
     transactions_to_process = unsaved_transactions[:MAX_TXS_TO_PROCESS]
     blocks_without_timestamp = Block.objects.filter(
-        transactions__in=[transactions_to_process],
+        transactions__in=transactions_to_process,
         timestamp__isnull=True,
         processed=False,
     ).values_list("block_number", flat=True)
