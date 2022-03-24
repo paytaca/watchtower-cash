@@ -1,5 +1,7 @@
+from decimal import Decimal
 from psqlextra.models import PostgresModel
 from django.db import models
+from django.db import connection
 
 from django.apps import apps
 
@@ -15,6 +17,46 @@ class Block(PostgresModel):
 
     def __str__(self):
         return f"{self.__class__.__name__}(#{self.block_number})"
+
+    @classmethod
+    def get_min_block_number(cls):
+        return cls.objects.aggregate(value = models.Min("block_number")).get("value")
+
+    @classmethod
+    def get_max_block_number(cls):
+        return cls.objects.aggregate(value = models.Max("block_number")).get("value")
+
+    @classmethod
+    def get_missing_block_numbers(cls, start_block_number=None, end_block_number=None):
+        """
+            Gets block numbers not in db in ascending order
+
+        Return
+        --------
+            (count, iterator): number of block_numbers and an iterator to loop through the list
+        """
+        if start_block_number is None:
+            start_block_number=cls.get_min_block_number()
+        
+        if end_block_number is None:
+            end_block_number = cls.get_max_block_number()
+
+        cursor = connection.cursor()
+        cursor.execute(f"""
+        WITH block_numbers AS (SELECT block_number FROM {cls._meta.db_table})
+        SELECT
+            generate_series AS block_number
+        FROM
+            generate_series({start_block_number}, {end_block_number})
+        WHERE
+            NOT generate_series IN (SELECT block_number FROM block_numbers)
+        """)
+
+        def generator(cursor):
+            for row in cursor:
+                yield Decimal(row[0])
+
+        return cursor.rowcount, generator(cursor)
 
 
 class TokenContract(PostgresModel):

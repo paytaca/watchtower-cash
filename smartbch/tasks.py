@@ -1,13 +1,16 @@
 import logging
 import web3
 import requests
+import decimal
 from celery import shared_task
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from smartbch.conf import settings as app_settings
 from smartbch.models import (
     Block,
+    Transaction,
     TransactionTransfer,
     TokenContract,
 )
@@ -32,6 +35,74 @@ def preload_new_blocks_task():
     (start_block, end_block, _) = block_utils.preload_new_blocks()
     LOGGER.info(f"Preloaded blocks from {start_block} to {end_block}")
     return (start_block, end_block)
+
+@shared_task
+def parse_missed_records_task():
+    parse_missing_blocks_task.delay()
+    handle_transactions_with_unprocessed_transfers_task.delay()
+
+@shared_task
+def parse_missing_blocks_task():
+    """
+        Parse missing block numbers in the database
+    """
+    LOGGER.info("Parsing for missing blocks")
+    # a hard limit to cap load
+    MAX_BLOCKS_TO_PARSE = 100
+
+    min_block_number = Block.get_min_block_number()
+    if isinstance(app_settings.START_BLOCK, (int, decmial.Decimal)) and app_settings.START_BLOCK > 0:
+        min_block_number = max(min_block_number, app_settings.START_BLOCK)
+
+    count, iterator = Block.get_missing_block_numbers(
+        start_block_number=min_block_number
+    )
+
+    LOGGER.info(f"Found {count} missing block_numbers, queueing {MAX_BLOCKS_TO_PARSE} for parsing")
+    blocks_sent_for_parsing = 0
+    while blocks_sent_for_parsing < MAX_BLOCKS_TO_PARSE:
+        parse_block_task.delay(next(iterator))
+        blocks_sent_for_parsing += 1
+
+
+@shared_task
+def handle_transactions_with_unprocessed_transfers_task():
+    """
+        Look for transactions with unprocessed transaction transfers and queue for parsing transfers
+        Starting from txs with earliest block number to prevent unsent transactions
+    """
+    LOGGER.info("Looking for transactions with unprocessed transfers transaction transfers")
+    MAX_TXS_TO_PROCESS = 100
+    unsaved_transactions = Transaction.objects.filter(
+        processed_transfers=False,
+    ).order_by(
+        "transaction__block__block_number",
+    )
+
+    transactions_to_process = unsaved_transactions[:MAX_TXS_TO_PROCESS]
+    blocks_without_timestamp = Block.objects.filter(
+        transactions__in=[transactions_to_process],
+        timestamp__isnull=True,
+        processed=False,
+    ).values_list("block_number", flat=True)
+
+    LOGGER.info(f"Detected blocks without timestamp, will resolve them: {blocks_without_timestamp}")
+    for block_number in blocks_without_timestamp:
+        block_utils.parse_block(block_number, save_transactions=False)
+
+    LOGGER.info(f"Found {unsaved_transactions.count()} transactions with unprocessed transfers, queueing {MAX_TXS_TO_PROCESS} txs for processing")
+    now = timezone.now()
+    for tx_obj in transactions_to_process:
+        send_notifications = False
+        if tx_obj.block.timestamp is not None:
+            tx_age = now - tx_obj.block.timestamp
+
+            # if transaction age is 1 hour, send the notification
+            if tx_age.total_seconds() > 3600:
+                send_notifications = True
+
+        save_transaction_transfers_task.delay(tx_obj.txid, send_notifications=send_notifications)
+
 
 @shared_task
 def parse_blocks_task():
@@ -103,7 +174,7 @@ def save_transaction_transfers_task(txid, send_notifications=False):
     REDIS_CLIENT.sadd(_REDIS_NAME__TXS_TRANSFERS_BEING_PARSED, str(txid))
 
     try:
-        tx_obj = transaction_utils.save_transaction_transfers(str(txid))
+        tx_obj = transaction_utils.save_transaction_transfers(str(txid), parse_block_timestamp=True)
         if tx_obj:
             LOGGER.info(f"Parsed transaction transfers successfully: {tx_obj}")
             if send_notifications:
