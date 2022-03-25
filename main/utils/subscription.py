@@ -10,6 +10,8 @@ from main.models import (
     Wallet
 )
 from main.tasks import get_slp_utxos, get_bch_utxos
+
+from smartbch.tasks import save_transactions_by_address
 import logging
 import web3
 
@@ -124,6 +126,8 @@ def new_subscription(**kwargs):
                         get_slp_utxos.delay(address)
                     elif address.startswith('bitcoincash'):
                         get_bch_utxos.delay(address)
+                    elif web3.Web3.isAddress(address):
+                        save_transactions_by_address.delay(address)
 
                     response['success'] = True
             else:
