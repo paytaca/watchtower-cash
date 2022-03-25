@@ -256,6 +256,19 @@ def save_transactions_by_address(address):
         for tx in tx_list.transactions:
             save_transaction_task.delay(tx.hash)
 
+@shared_task
+def save_transactions_by_address_task__manual(address, from_block=0, to_block=0, block_partition=0):
+    iterator = transaction_utils.get_transactions_by_address(
+        address,
+        from_block=int(from_block),
+        to_block=int(to_block),
+        block_partition=int(block_partition),
+    )
+
+    for tx_list in iterator:
+        for tx in tx_list.transactions:
+            save_transaction_task.delay(tx.hash)
+
 
 @shared_task
 def send_transaction_notification_task(txid):
