@@ -4,6 +4,7 @@ from django.contrib import (
 )
 from smartbch.models import TokenContract
 
+from smartbch.utils.contract import get_or_save_token_contract_metadata
 
 @admin.register(TokenContract)
 class TokenContractAdmin(admin.ModelAdmin):    
