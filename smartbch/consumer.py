@@ -86,8 +86,8 @@ class TransactionTransferUpdatesConsumer(WebsocketConsumer):
     def connect(self):
         self.address = self.scope["url_route"]["kwargs"]["address"]
         self.contract_address = ""
-        if CONTRACT_ADDRESS_LOOKUP_NAME in self.scope["url_route"]["kwargs"].keys():
-            self.CONTRACT_ADDRESS_LOOKUP_NAME = self.scope["url_route"]["kwargs"][CONTRACT_ADDRESS_LOOKUP_NAME]
+        if self.CONTRACT_ADDRESS_LOOKUP_NAME in self.scope["url_route"]["kwargs"].keys():
+            self.contract_address = self.scope["url_route"]["kwargs"][self.CONTRACT_ADDRESS_LOOKUP_NAME]
 
         if not web3.Web3.isAddress(self.address):
             LOGGER.info(f"Invalid address for websocket update connections: {self.address}")

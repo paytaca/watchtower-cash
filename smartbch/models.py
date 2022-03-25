@@ -183,16 +183,16 @@ class TransactionTransfer(PostgresModel):
         if not valid_subs:
             return valid_subs
 
-        return valid_subs.filter(
-            models.Q(transaction_transfer_logs__sent_at__isnull=True) |
-            models.Q(transaction_transfer_logs__isnull=True)
+        return valid_subs.exclude(
+            transaction_transfer_logs__transaction_transfer_id=self.id,
+            transaction_transfer_logs__sent_at__isnull=False   
         )
 
     def get_subscription_data(self):
         data = {
             "source": "WatchTower",
             "txid": self.transaction.txid,
-            "block_number": self.transaction.block.block_number,
+            "block_number": str(self.transaction.block.block_number),
 
             "from": self.from_addr,
             "to": self.to_addr,
