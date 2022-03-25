@@ -1,4 +1,5 @@
 import asyncio
+import json
 from unittest import mock
 from django.test import TestCase, tag
 from smartbch.tests.mocker import response_values as mock_responses
@@ -269,3 +270,10 @@ class TransactionTransferSubscriptionTestCase(TestCase):
         self.assertIn("address", data["token_contract"])
         self.assertIn("name", data["token_contract"])
         self.assertIn("symbol", data["token_contract"])
+
+    @tag("unit")
+    def test_get_subscription_data_json_serializable(self):
+        data = self.tx_transfer_obj.get_subscription_data()
+        
+        json_str = json.dumps(data)
+        json.loads(json_str)
