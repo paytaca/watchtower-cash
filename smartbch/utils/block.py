@@ -96,7 +96,23 @@ def preload_new_blocks(blocks_to_preload=app_settings.BLOCK_TO_PRELOAD):
 
     return preload_block_range(start_block, latest_block)
 
-def parse_block(block_number, save_transactions=True):
+def parse_block(block_number, save_transactions=True, save_all_transactions=False):
+    """
+        Parse block and save to db
+    
+    Parameters
+    ------------
+    save_transactions: boolean
+        Flag to determine whether to save the transactions inside the block to the database
+
+    save_all_transactions: boolean
+        Only meaningful when `save_transactions=True`, will save all the transactions under the block i.e.
+        it will save transactions even if no address is subscribed.
+
+    Returns
+    ------------
+        block: smartbch.models.Block
+    """
     w3 = create_web3_client()
 
     block = w3.eth.get_block(block_number, save_transactions)
@@ -119,46 +135,48 @@ def parse_block(block_number, save_transactions=True):
     })
 
     if save_transactions:
-        erc20 = w3.eth.contract('', abi=abi.get_token_abi(20))
-        erc721 = w3.eth.contract('', abi=abi.get_token_abi(721))
         tx_log_addresses_map = {}
-        # extracting the addresses of the Transfer events in logs
-        for log in block_logs:
-            tx_hex = ""
-            addresses = set()
-            try:
-                parsed_log = erc20.events.Transfer().processLog(log)
-                tx_hex = parsed_log.transactionHash.hex()
-                addresses.add(parsed_log.args['from'])
-                addresses.add(parsed_log.args.to)
-            except (InvalidEventABI, LogTopicError, MismatchedABI):
-                pass
+        if not save_all_transactions:
+            erc20 = w3.eth.contract('', abi=abi.get_token_abi(20))
+            erc721 = w3.eth.contract('', abi=abi.get_token_abi(721))
+            # extracting the addresses of the Transfer events in logs
+            for log in block_logs:
+                tx_hex = ""
+                addresses = set()
+                try:
+                    parsed_log = erc20.events.Transfer().processLog(log)
+                    tx_hex = parsed_log.transactionHash.hex()
+                    addresses.add(parsed_log.args['from'])
+                    addresses.add(parsed_log.args.to)
+                except (InvalidEventABI, LogTopicError, MismatchedABI):
+                    pass
 
-            try:
-                parsed_log = erc721.events.Transfer().processLog(log)
-                tx_hex = parsed_log.transactionHash.hex()
-                addresses.add(parsed_log.args['from'])
-                addresses.add(parsed_log.args.to)
-            except (InvalidEventABI, LogTopicError, MismatchedABI):
-                pass
+                try:
+                    parsed_log = erc721.events.Transfer().processLog(log)
+                    tx_hex = parsed_log.transactionHash.hex()
+                    addresses.add(parsed_log.args['from'])
+                    addresses.add(parsed_log.args.to)
+                except (InvalidEventABI, LogTopicError, MismatchedABI):
+                    pass
 
-            if tx_hex:
-                tx_log_addresses_map[tx_hex] = addresses
+                if tx_hex:
+                    tx_log_addresses_map[tx_hex] = addresses
 
         for transaction in block.transactions:
-            tx_addresses_list = [
-                transaction['from'],
-                transaction.to,
-            ]
-            if isinstance(tx_log_addresses_map.get(transaction.hash.hex(), None), (set, list)):
+            if not save_all_transactions:
                 tx_addresses_list = [
-                    *tx_addresses_list,
-                    *tx_log_addresses_map[transaction.hash.hex()],
+                    transaction['from'],
+                    transaction.to,
                 ]
+                if isinstance(tx_log_addresses_map.get(transaction.hash.hex(), None), (set, list)):
+                    tx_addresses_list = [
+                        *tx_addresses_list,
+                        *tx_log_addresses_map[transaction.hash.hex()],
+                    ]
 
-            tracked_addresses = Address.objects.filter(address__in=tx_addresses_list)
-            if not tracked_addresses.exists():
-                continue
+                tracked_addresses = Address.objects.filter(address__in=tx_addresses_list)
+                if not tracked_addresses.exists():
+                    continue
 
             tx, created = Transaction.objects.get_or_create(
                 txid=transaction.hash.hex(),

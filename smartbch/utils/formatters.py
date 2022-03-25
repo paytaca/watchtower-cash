@@ -6,7 +6,9 @@ def is_hex_string(value):
 
 
 def int_to_hex(value):
-    return "0x{:02x}".format(value)
+    if not value:
+        return "0x"
+    return "0x{:x}".format(value)
 
 def hex_to_int(hex_string):
     return int(hex_string, 16)
