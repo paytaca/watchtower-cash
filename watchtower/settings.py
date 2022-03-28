@@ -16,9 +16,18 @@ import redis
 import psycopg2
 from datetime import timedelta
 import base64
+import decimal
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def safe_cast(value, var_type=str, default=None):
+    try:
+        return var_type(value)
+    except Exception:
+        return default
+
 
 def decipher(value):
     try:
@@ -334,3 +343,22 @@ CHANNEL_LAYERS = {
 WATCH_ROOM = 'watch_room'
 
 START_BLOCK = int(decipher(config('START_BLOCK')))
+
+
+SMARTBCH = {
+    "START_BLOCK": safe_cast(
+        decipher(config('SBCH_START_BLOCK', None)),
+        var_type=decimal.Decimal,
+        default=None,
+    ),
+    "BLOCK_TO_PRELOAD": safe_cast(
+        decipher(config('SBCH_BLOCK_TO_PRELOAD', None)),
+        var_type=int,
+        default=None,
+    ),
+    "BLOCKS_PER_TASK": safe_cast(
+        decipher(config('SBCH_BLOCKS_PER_TASK', 50)),
+        var_type=int,
+        default=50,
+    ),
+}
