@@ -55,7 +55,8 @@ def parse_missing_blocks_task():
         min_block_number = max(min_block_number, app_settings.START_BLOCK)
 
     count, iterator = Block.get_missing_block_numbers(
-        start_block_number=min_block_number
+        start_block_number=min_block_number,
+        descending=True,
     )
 
     LOGGER.info(f"Found {count} missing block_numbers, queueing {MAX_BLOCKS_TO_PARSE} for parsing")

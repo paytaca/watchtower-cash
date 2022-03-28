@@ -27,7 +27,7 @@ class Block(PostgresModel):
         return cls.objects.aggregate(value = models.Max("block_number")).get("value")
 
     @classmethod
-    def get_missing_block_numbers(cls, start_block_number=None, end_block_number=None):
+    def get_missing_block_numbers(cls, start_block_number=None, end_block_number=None, descending=False):
         """
             Gets block numbers not in db in ascending order
 
@@ -42,6 +42,9 @@ class Block(PostgresModel):
             end_block_number = cls.get_max_block_number()
 
         cursor = connection.cursor()
+        order_by = ""
+        if descending:
+            order_by = "ORDER BY block_number DESC"
         cursor.execute(f"""
         WITH block_numbers AS (SELECT block_number FROM {cls._meta.db_table})
         SELECT
@@ -50,6 +53,7 @@ class Block(PostgresModel):
             generate_series({start_block_number}, {end_block_number})
         WHERE
             NOT generate_series IN (SELECT block_number FROM block_numbers)
+        {order_by}
         """)
 
         def generator(cursor):
