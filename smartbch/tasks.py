@@ -42,7 +42,7 @@ def preload_new_blocks_task():
     LOGGER.info(f"Preloaded blocks from {start_block} to {end_block}")
     return (start_block, end_block)
 
-@shared_task
+@shared_task(queue=_QUEUE_BLOCKS_PARSER)
 def parse_missed_records_task():
     parse_missing_blocks_task.delay()
     handle_transactions_with_unprocessed_transfers_task.delay()
