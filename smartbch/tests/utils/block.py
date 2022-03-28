@@ -126,6 +126,22 @@ class BlockUtilsTestCase(TestCase):
             )
 
     @tag("unit")
+    def test_preload_new_blocks_response(self):
+        HARD_START_BLOCK = 0
+        if isinstance(app_settings.START_BLOCK, (int, decimal.Decimal)):
+            HARD_START_BLOCK = max(0, app_settings.START_BLOCK)
+
+        mock_latest_block_number = HARD_START_BLOCK+20
+
+        with mock.patch("web3.eth.Eth.block_number", new_callable=mock.PropertyMock(return_value=mock_latest_block_number)) as block_number_patch:
+            (start_block, end_block, new_blocks) = block_utils.preload_new_blocks()
+            self.assertIsInstance(start_block, (int, decimal.Decimal))
+            self.assertIsInstance(end_block, (int, decimal.Decimal))
+            self.assertIsInstance(new_blocks, list)
+            if len(new_blocks):
+                self.assertIsInstance(new_blocks[0], Block)
+
+    @tag("unit")
     def test_parse_block(self):
         with mock.patch("web3.eth.Eth.get_block", return_value=mock_responses.test_block_response) as block_patch:
             with mock.patch("web3.eth.Eth.get_logs", return_value=mock_responses.test_block_logs):
