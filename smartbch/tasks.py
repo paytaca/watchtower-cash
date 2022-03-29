@@ -23,6 +23,7 @@ LOGGER = logging.getLogger(__name__)
 REDIS_CLIENT = settings.REDISKV
 
 ## Redis names used
+_REDIS_KEY_TTL = 300 # 5 minutes
 _REDIS_NAME__BLOCKS_BEING_PARSED = 'smartbch:blocks-being-parsed'
 _REDIS_NAME__TXS_BEING_PARSED = 'smartbch:txs-being-parsed'
 _REDIS_NAME__TXS_TRANSFERS_BEING_PARSED = 'smartbch:tx-transfers-being-parsed'
@@ -161,6 +162,7 @@ def parse_block_task(block_number, send_notifications=False):
         return f"block_is_being_parsed {block_number}: {active_blocks}"
 
     REDIS_CLIENT.sadd(_REDIS_NAME__BLOCKS_BEING_PARSED, str(block_number))
+    REDIS_CLIENT.expire(_REDIS_NAME__BLOCKS_BEING_PARSED, _REDIS_KEY_TTL)
     try:
         block_obj = block_utils.parse_block(block_number, save_transactions=True)
         LOGGER.info(f"Parsed block successfully: {block_obj}")
@@ -185,6 +187,7 @@ def save_transaction_transfers_task(txid, send_notifications=False):
         return f"transaction_is_being_parsed: {txid}"
 
     REDIS_CLIENT.sadd(_REDIS_NAME__TXS_TRANSFERS_BEING_PARSED, str(txid))
+    REDIS_CLIENT.expire(_REDIS_NAME__TXS_TRANSFERS_BEING_PARSED, _REDIS_KEY_TTL)
 
     try:
         tx_obj = transaction_utils.save_transaction_transfers(str(txid), parse_block_timestamp=True)
@@ -214,6 +217,7 @@ def save_transaction_task(txid):
         return f"transaction_is_being_parsed: {txid}"
 
     REDIS_CLIENT.sadd(_REDIS_NAME__TXS_BEING_PARSED, str(txid))
+    REDIS_CLIENT.expire(_REDIS_NAME__TXS_BEING_PARSED, _REDIS_KEY_TTL)
 
     try:
         tx_obj = transaction_utils.save_transaction(str(txid))
@@ -239,6 +243,7 @@ def save_transactions_by_address(address):
         return f"address_is_being_crawled: {address}"
 
     REDIS_CLIENT.sadd(_REDIS_NAME__ADDRESS_BEING_CRAWLED, str(address))
+    REDIS_CLIENT.expire(_REDIS_NAME__ADDRESS_BEING_CRAWLED, _REDIS_KEY_TTL)
 
     # we expect other tasks to save the newer unprocessed blocks
     end_block = Block.objects.filter(processed=True).aggregate(latest_block = models.Max('block_number')).get('latest_block')
