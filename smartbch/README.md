@@ -9,6 +9,18 @@ SMARTBCH = {
     "JSON_RPC_PROVIDER_URL": "https://smartbch.fountainhead.cash/mainnet",
 }
 ```
+### `START_BLOCK`
+A marker for not parsing blocks before the specified start block. If the value is `None`, automatically implies 0.
+
+### `BLOCK_TO_PRELOAD`
+Specifies the blocks to preload relative to the latest block. See `Main loop` below for more info. 
+
+### `BLOCKS_PER_TASK`
+Specifies the number of preloaded blocks to parse per task. See `Main loop` below for more info.
+
+#### `JSON_RPC_PROVIDER_URL`
+- URL of provider used. Blockchain data is taken from this url. 
+- When changing provider url, must ensure that it is of the same chain id since current implementation assumes it's storing for a single chain only. (SmartBCH main chain in this case).
 
 ## Models
 ```
@@ -55,10 +67,12 @@ The watchtower watches for new blocks and transactions and saves transfers of as
 1. Preload new blocks to database
     - Only block numbers are saved in the database in this step and flagged `processed=False`.
     - Saved block numbers are in range `(latest - BLOCK_TO_PRELOAD, latest)`. However if `latest - BLOCK_TO_PRELOAD` is less than zero or `START_BLOCK`, the start number of the range will be changed accordingly.
+    - `BLOCK_TO_PRELOAD` is set to limit db operations per iteration. Potential missed blocks due to this limit are handled by another task. See `Fallback processes` below for more info. 
     - Main function is at `tasks.preload_new_blocks_task`. Run by celery beat for every 20 seconds.
 2. Parse blocks
     - Looks for preloaded blocks that are flagged `processed=False`.
     - Parse individual blocks and saves other data about the block (e.g. timestamp, tx_count).
+    - A max number of blocks to process per iteration is placed to limit burst network usage. The max number of blocks is determined by settings `BLOCKS_PER_TASK`.
     - Saves the transactions if the transaction contains any subscribed address. Also checks the addresses of emmitted `Transfer` events for ERC20 & ERC721.
     - Main task is at `tasks.parse_blocks_task`. Run by celery beat for every 30 seconds
 3. Parse transaction transfers
