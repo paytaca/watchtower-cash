@@ -50,15 +50,17 @@ def preload_block_range(start_block, end_block):
         "block_number", flat=True,
     )
 
-    blocks_to_create = []
-    for block_number in range_with_exclude(int(start_block), int(end_block)+1, to_exclude=existing_block_numbers):
-        block = Block(
+    created_blocks = []
+    # blocks_to_create = []
+    for block_number in range(int(start_block), int(end_block)+1):
+        block, created = Block.objects.get_or_create(
             block_number=decimal.Decimal(block_number),
         )
-        blocks_to_create.append(block)
+        if created:
+            created_blocks.append(block)
     
-    if len(blocks_to_create):
-        created_blocks = Block.objects.bulk_create(blocks_to_create)
+    # if len(blocks_to_create):
+    #     created_blocks = Block.objects.bulk_create(blocks_to_create)
 
     return (start_block, end_block, created_blocks)
 
