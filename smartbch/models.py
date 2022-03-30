@@ -6,6 +6,8 @@ from django.db import connection
 from django.apps import apps
 
 class Block(PostgresModel):
+    id = models.BigAutoField(primary_key=True)
+
     block_number = models.DecimalField(max_digits=78, decimal_places=0, unique=True)
 
     transactions_count = models.IntegerField(default=0)
