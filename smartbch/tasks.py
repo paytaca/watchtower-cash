@@ -3,6 +3,7 @@ import web3
 import requests
 import decimal
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -30,12 +31,13 @@ _REDIS_NAME__TXS_TRANSFERS_BEING_PARSED = 'smartbch:tx-transfers-being-parsed'
 _REDIS_NAME__ADDRESS_BEING_CRAWLED = 'smartbch:address-being-crawled'
 
 ## CELERY QUEUES
+_TASK_TIME_LIMIT = 300 # 5 minutes
 _QUEUE_BLOCKS_PARSER = "sbch__blocks_parser_queue"
 _QUEUE_TRANSACTIONS_PARSER = "sbch__transactions_parser_queue"
 _QUEUE_ADDRESS_PARSER = "sbch__address_parser_queue"
 _QUEUE_TRANSACTION_TRANSFER_NOTIFICATION = "sbch__transaction_transfer_notification_queue"
 
-@shared_task(queue=_QUEUE_BLOCKS_PARSER)
+@shared_task(queue=_QUEUE_BLOCKS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def preload_new_blocks_task():
     LOGGER.info("Preloading new blocks to db")
 
@@ -43,12 +45,12 @@ def preload_new_blocks_task():
     LOGGER.info(f"Preloaded blocks from {start_block} to {end_block}")
     return (start_block, end_block)
 
-@shared_task(queue=_QUEUE_BLOCKS_PARSER)
+@shared_task(queue=_QUEUE_BLOCKS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def parse_missed_records_task():
     parse_missing_blocks_task.delay()
     handle_transactions_with_unprocessed_transfers_task.delay()
 
-@shared_task(queue=_QUEUE_BLOCKS_PARSER)
+@shared_task(queue=_QUEUE_BLOCKS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def parse_missing_blocks_task():
     """
         Parse missing block numbers in the database
@@ -78,7 +80,7 @@ def parse_missing_blocks_task():
     return f"Sent {blocks_sent_for_parsing} block/s for parsing"
 
 
-@shared_task(queue=_QUEUE_TRANSACTIONS_PARSER)
+@shared_task(queue=_QUEUE_TRANSACTIONS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def handle_transactions_with_unprocessed_transfers_task():
     """
         Look for transactions with unprocessed transaction transfers and queue for parsing transfers
@@ -117,7 +119,7 @@ def handle_transactions_with_unprocessed_transfers_task():
         save_transaction_transfers_task.delay(tx_obj.txid, send_notifications=send_notifications)
 
 
-@shared_task(queue=_QUEUE_BLOCKS_PARSER)
+@shared_task(queue=_QUEUE_BLOCKS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def parse_blocks_task():
     LOGGER.info("Parsing new blocks")
 
@@ -145,7 +147,7 @@ def parse_blocks_task():
         parse_block_task.delay(block_obj.block_number, send_notifications=True)
     
 
-@shared_task(queue=_QUEUE_BLOCKS_PARSER)
+@shared_task(queue=_QUEUE_BLOCKS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def parse_block_task(block_number, send_notifications=False):
     active_blocks = REDIS_CLIENT.smembers(_REDIS_NAME__BLOCKS_BEING_PARSED)
     LOGGER.info(f"Parsing block: {block_number}")
@@ -177,7 +179,7 @@ def parse_block_task(block_number, send_notifications=False):
         REDIS_CLIENT.srem(_REDIS_NAME__BLOCKS_BEING_PARSED, str(block_number))
 
 
-@shared_task(queue=_QUEUE_TRANSACTIONS_PARSER)
+@shared_task(queue=_QUEUE_TRANSACTIONS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def save_transaction_transfers_task(txid, send_notifications=False):
     LOGGER.info(f"Parsing transaction transfers: {txid}")
     LOGGER.info(f"Active transaction: {REDIS_CLIENT.smembers(_REDIS_NAME__TXS_TRANSFERS_BEING_PARSED)}")
@@ -208,7 +210,7 @@ def save_transaction_transfers_task(txid, send_notifications=False):
         REDIS_CLIENT.srem(_REDIS_NAME__TXS_TRANSFERS_BEING_PARSED, str(txid))
 
 
-@shared_task(queue=_QUEUE_TRANSACTIONS_PARSER)
+@shared_task(queue=_QUEUE_TRANSACTIONS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def save_transaction_task(txid):
     LOGGER.info(f"Parsing transaction: {txid}")
 
@@ -231,7 +233,7 @@ def save_transaction_task(txid):
         REDIS_CLIENT.srem(_REDIS_NAME__TXS_BEING_PARSED, str(txid))
 
 
-@shared_task(queue=_QUEUE_ADDRESS_PARSER)
+@shared_task(queue=_QUEUE_ADDRESS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def save_transactions_by_address(address):
     LOGGER.info(f"Crawling transactions of: {address}")
     if not web3.Web3.isAddress(address):
@@ -268,7 +270,7 @@ def save_transactions_by_address(address):
         for tx in tx_list.transactions:
             save_transaction_task.delay(tx.hash)
 
-@shared_task(queue=_QUEUE_ADDRESS_PARSER)
+@shared_task(queue=_QUEUE_ADDRESS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def save_transactions_by_address_task__manual(address, from_block=0, to_block=0, block_partition=0):
     iterator = transaction_utils.get_transactions_by_address(
         address,
@@ -282,7 +284,7 @@ def save_transactions_by_address_task__manual(address, from_block=0, to_block=0,
             save_transaction_task.delay(tx.hash)
 
 
-@shared_task(queue=_QUEUE_TRANSACTION_TRANSFER_NOTIFICATION)
+@shared_task(queue=_QUEUE_TRANSACTION_TRANSFER_NOTIFICATION, time_limit=_TASK_TIME_LIMIT)
 def send_transaction_notification_task(txid):
     tx_obj = Transaction.objects.filter(txid=txid).first()
 
@@ -293,7 +295,7 @@ def send_transaction_notification_task(txid):
         send_transaction_transfer_notification_task.delay(transfer_tx.id)
 
 
-@shared_task(queue=_QUEUE_TRANSACTION_TRANSFER_NOTIFICATION, max_retries=3)
+@shared_task(queue=_QUEUE_TRANSACTION_TRANSFER_NOTIFICATION, max_retries=3, time_limit=_TASK_TIME_LIMIT)
 def send_transaction_transfer_notification_task(tx_transfer_id):
     tx_transfer_obj = TransactionTransfer.objects.filter(id=tx_transfer_id).first()
 
@@ -339,7 +341,7 @@ def send_transaction_transfer_notification_task(tx_transfer_id):
     return "\n".join(resp)
 
 
-@shared_task(queue=_QUEUE_ADDRESS_PARSER)
+@shared_task(queue=_QUEUE_ADDRESS_PARSER, time_limit=_TASK_TIME_LIMIT)
 def parse_token_contract_metadata_task():
     LOGGER.info(f"Checking for token contracts without metadata")
     MAX_CONTRACTS_PER_TASK = 10
