@@ -83,7 +83,7 @@ def preload_new_blocks(blocks_to_preload=app_settings.BLOCK_TO_PRELOAD):
 
     # a hard coded value in case the parameter is not specified 
     if not isinstance(blocks_to_preload, (int, decimal.Decimal)) or blocks_to_preload <= 0:
-        blocks_to_preload = 500
+        blocks_to_preload = 100
 
     # a guard to set the start block, it implies the start block must be positive and
     # greater than or equal to app_setting.START_BLOCK

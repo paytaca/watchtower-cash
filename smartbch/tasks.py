@@ -55,7 +55,7 @@ def parse_missing_blocks_task():
     """
     LOGGER.info("Parsing for missing blocks")
     # a hard limit to cap load
-    MAX_BLOCKS_TO_PARSE = 100
+    MAX_BLOCKS_TO_PARSE = 25
 
     min_block_number = Block.get_min_block_number()
     if isinstance(app_settings.START_BLOCK, (int, decimal.Decimal)) and app_settings.START_BLOCK > 0:
@@ -85,7 +85,7 @@ def handle_transactions_with_unprocessed_transfers_task():
         Starting from txs with earliest block number to prevent unsent transactions
     """
     LOGGER.info("Looking for transactions with unprocessed transfers transaction transfers")
-    MAX_TXS_TO_PROCESS = 100
+    MAX_TXS_TO_PROCESS = 50
     unsaved_transactions = Transaction.objects.filter(
         processed_transfers=False,
     ).order_by(
@@ -126,8 +126,8 @@ def parse_blocks_task():
         LOGGER.info(f"Using app settings for number of blocks to parse: {app_settings.BLOCKS_PER_TASK}")
         block_count = app_settings.BLOCKS_PER_TASK
     else:
-        LOGGER.info(f"Using fallback settings for number of blocks to parse: 5")
-        block_count = 50
+        LOGGER.info(f"Using fallback settings for number of blocks to parse: 25")
+        block_count = 25
 
     blocks_being_parsed = REDIS_CLIENT.smembers(_REDIS_NAME__BLOCKS_BEING_PARSED)
     blocks_being_parsed = [i.decode() for i in blocks_being_parsed]
@@ -253,9 +253,9 @@ def save_transactions_by_address(address):
     if not is_numeric(start_block):
         start_block = Block.objects.filter(processed=True).aggregate(earliest_parsed_block = models.Min('block_number')).get('earliest_parsed_block')
 
-    # just added a guard to limit the block to backtrack to 250 blocks
-    if not is_numeric(start_block) or end_block - start_block > 250:
-        start_block = end_block - 250
+    # just added a guard to limit the block to backtrack to 125 blocks
+    if not is_numeric(start_block) or end_block - start_block > 125:
+        start_block = end_block - 125
 
     iterator = transaction_utils.get_transactions_by_address(
         address,
