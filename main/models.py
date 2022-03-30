@@ -199,7 +199,7 @@ class Transaction(PostgresModel):
         on_delete=models.CASCADE
     )
     index = models.IntegerField(default=0, db_index=True)
-    spent = models.BooleanField(default=False)
+    spent = models.BooleanField(default=False, db_index=True)
     spending_txid = models.CharField(max_length=70, blank=True, db_index=True)
     wallet = models.ForeignKey(
         Wallet,
