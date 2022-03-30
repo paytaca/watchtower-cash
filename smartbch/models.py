@@ -6,7 +6,7 @@ from django.db import connection
 from django.apps import apps
 
 class Block(PostgresModel):
-    block_number = models.DecimalField(max_digits=78, decimal_places=0)
+    block_number = models.DecimalField(max_digits=78, decimal_places=0, unique=True)
 
     transactions_count = models.IntegerField(default=0)
     timestamp = models.DateTimeField(null=True, blank=True)
@@ -64,7 +64,7 @@ class Block(PostgresModel):
 
 
 class TokenContract(PostgresModel):
-    address = models.CharField(max_length=64)
+    address = models.CharField(max_length=64, unique=True)
 
     token_type = models.IntegerField() # erc number e.g. (ERC20, ERC721, ERC777)
     name = models.CharField(max_length=50, null=True, blank=True)
@@ -80,7 +80,7 @@ class TokenContract(PostgresModel):
 
 
 class Transaction(PostgresModel):
-    txid = models.CharField(max_length=70, db_index=True)
+    txid = models.CharField(max_length=70, db_index=True, unique=True)
     block = models.ForeignKey(
         Block,
         on_delete=models.CASCADE,
