@@ -11,12 +11,15 @@ SMARTBCH = {
 ```
 ### `START_BLOCK`
 A marker for not parsing blocks before the specified start block. If the value is `None`, automatically implies 0.
+Set `SBCH_START_BLOCK` in environment variables to configure
 
 ### `BLOCK_TO_PRELOAD`
 Specifies the blocks to preload relative to the latest block. See `Main loop` below for more info. 
+Set `SBCH_BLOCK_TO_PRELOAD` in environment variables to configure
 
 ### `BLOCKS_PER_TASK`
 Specifies the number of preloaded blocks to parse per task. See `Main loop` below for more info.
+Set `SBCH_BLOCKS_PER_TASK` in environment variables to configure
 
 #### `JSON_RPC_PROVIDER_URL`
 - URL of provider used. Blockchain data is taken from this url. 
