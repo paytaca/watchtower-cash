@@ -27,6 +27,7 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from main.urls import main_urls, test_urls
+from smartbch.urls import urlpatterns as sbch_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -47,6 +48,7 @@ urlpatterns = [
     path('', TemplateView.as_view(template_name="main/index.html")),
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
+    path('api/smartbch/', include(sbch_urlpatterns)),
     path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

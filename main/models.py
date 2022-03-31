@@ -5,7 +5,10 @@ from django.contrib.postgres.fields import JSONField
 from psqlextra.models import PostgresModel
 from django.contrib.postgres.fields import ArrayField
 from django.conf import settings
+
+import re
 import uuid
+import web3
 
 
 class Token(PostgresModel):
@@ -171,6 +174,10 @@ class Address(PostgresModel):
                 wallet.wallet_type = 'slp'
             elif self.address.startswith('bitcoincash:'):
                 wallet.wallet_type = 'bch'
+            elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
+                wallet.wallet_type = 'sbch'
+            elif web3.Web3.isAddress(self.address):
+                wallet.wallet_type = 'sbch'
             wallet.save()
         super(Address, self).save(*args, **kwargs)
 

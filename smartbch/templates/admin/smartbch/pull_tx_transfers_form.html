@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/changelists.css" %}">
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+
+<div class="content-main">
+    <div class="right-part">
+        <form action="" method="post">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                {{ form.non_field_errors }}
+            {% endif %}
+            <fieldset class="module aligned">
+                {% for field in form %}
+                    <div class="form-row {% if field.errors %} errors {% endif %}">
+                        {% if field.errors %}{{ field.errors }}{% endif %}
+                        <div>
+                            <label>{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.field.help_text %}
+                                <div class="help">{{ field.field.help_text|safe }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </fieldset>
+            {% for fieldset in form.fieldsets %}
+                {% include "admin/includes/fieldset.html" %}
+            {% endfor %}
+            <fieldset>
+            <div class="info">
+                <div class="submit-row">
+                    <input class="default" type="submit" class="btn-item" value="Pull transactions"/>
+                </div>
+            </div>
+            </fieldset>
+        </form>
+    </div>
+</div>
+{% endblock content %}

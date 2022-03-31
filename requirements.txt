@@ -75,6 +75,7 @@ traitlets==4.3.3
 uritemplate==3.0.1
 urllib3==1.25.8
 wcwidth==0.1.8
+web3==5.28.0
 whitenoise==5.0.1
 zipp==3.0.0
 zope.event==4.4

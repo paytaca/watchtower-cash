@@ -10,7 +10,10 @@ from main.models import (
     Wallet
 )
 from main.tasks import get_slp_utxos, get_bch_utxos
+
+from smartbch.tasks import save_transactions_by_address
 import logging
+import web3
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,7 +56,7 @@ def new_subscription(**kwargs):
             if 'change' in addresses.keys():
                 address_list.append([addresses['change'], '1/' + str(address_index)])
         for address, path in address_list:
-            if address.startswith('bitcoincash:') or address.startswith('simpleledger:'):
+            if address.startswith('bitcoincash:') or address.startswith('simpleledger:') or web3.Web3.isAddress(address):
                 proceed = False
                 project = None
                 if project_id:
@@ -123,6 +126,8 @@ def new_subscription(**kwargs):
                         get_slp_utxos.delay(address)
                     elif address.startswith('bitcoincash'):
                         get_bch_utxos.delay(address)
+                    elif web3.Web3.isAddress(address):
+                        save_transactions_by_address.delay(address)
 
                     response['success'] = True
             else:

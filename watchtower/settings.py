@@ -16,9 +16,18 @@ import redis
 import psycopg2
 from datetime import timedelta
 import base64
+import decimal
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def safe_cast(value, var_type=str, default=None):
+    try:
+        return var_type(value)
+    except Exception:
+        return default
+
 
 def decipher(value):
     try:
@@ -62,6 +71,8 @@ INSTALLED_APPS=[
     'drf_yasg',
     'channels',
     'main',
+
+    'smartbch',
 ]
 
 MIDDLEWARE=[
@@ -159,7 +170,10 @@ if DEPLOYMENT_INSTANCE == 'staging':
 REDIS_HOST = decipher(config('REDIS_HOST'))
 REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
 REDIS_PORT = decipher(config('REDIS_PORT'))
-CELERY_IMPORTS = ('main.tasks',)
+CELERY_IMPORTS = (
+    'main.tasks',
+    'smartbch.tasks',
+)
 
 CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 CELERY_RESULT_BACKEND = 'rpc://'
@@ -205,6 +219,22 @@ CELERY_BEAT_SCHEDULE = {
     'manage_block_transactions': {
         'task': 'main.tasks.manage_block_transactions',
         'schedule': 7
+    },
+    'preload_smartbch_blocks': {
+        'task': 'smartbch.tasks.preload_new_blocks_task',
+        'schedule': 20,
+    },
+    'parse_new_smartbch_blocks': {
+        'task': 'smartbch.tasks.parse_blocks_task',
+        'schedule': 30,
+    },
+    'parse_token_contract_metadata': {
+        'task': 'smartbch.tasks.parse_token_contract_metadata_task',
+        'schedule': 300,
+    },
+    'parse_missing_records': {
+        'task': 'smartbch.tasks.parse_missed_records_task',
+        'schedule': 60 * 20 # run every 20 minutes.
     }
 }
 
@@ -313,3 +343,22 @@ CHANNEL_LAYERS = {
 WATCH_ROOM = 'watch_room'
 
 START_BLOCK = int(decipher(config('START_BLOCK')))
+
+
+SMARTBCH = {
+    "START_BLOCK": safe_cast(
+        decipher(config('SBCH_START_BLOCK', None)),
+        var_type=decimal.Decimal,
+        default=None,
+    ),
+    "BLOCK_TO_PRELOAD": safe_cast(
+        decipher(config('SBCH_BLOCK_TO_PRELOAD', None)),
+        var_type=int,
+        default=None,
+    ),
+    "BLOCKS_PER_TASK": safe_cast(
+        decipher(config('SBCH_BLOCKS_PER_TASK', 50)),
+        var_type=int,
+        default=50,
+    ),
+}
