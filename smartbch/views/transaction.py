@@ -27,6 +27,8 @@ class TransactionViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.
             "transfers",
             "transfers__transaction",
             "transfers__transaction__block",
+        ).order_by(
+            "-block__block_number",
         ).all()
 
     @swagger_auto_schema(responses={ 200: TransactionTransferSerializer(many=True) })
@@ -51,4 +53,6 @@ class TransactionTransferViewSet(viewsets.GenericViewSet, mixins.ListModelMixin)
             "token_contract",
             "transaction",
             "transaction__block",
+        ).order_by(
+            "-transaction__block__block_number"
         ).all()
