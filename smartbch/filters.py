@@ -22,7 +22,7 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
         return val
 
     def filter_queryset_by_address(self, request, queryset, view):
-        record_type = self._parse_query_param(request, self.RECORD_TYPE_QUERY_NAME)
+        record_type = self._parse_query_param(request, self.RECORD_TYPE_QUERY_NAME, is_list=False)
         addresses = self._parse_query_param(request, self.ADDRESSES_QUERY_NAME)
 
         if len(addresses):
