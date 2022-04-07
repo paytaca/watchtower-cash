@@ -42,7 +42,7 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
 
         if len(addresses):
             from_addr__iin = self.__case_insensitive_list_filter(name="from_addr", values=addresses)
-            to_addr__iin = self.__case_insensitive_list_filter(name="from_addr", values=addresses)
+            to_addr__iin = self.__case_insensitive_list_filter(name="to_addr", values=addresses)
 
             if record_type == "incoming":
                 queryset = queryset.filter(to_addr__iin)
