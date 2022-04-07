@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 from main import serializers
+from main.utils.tx_fee import get_tx_fee_bch
 
 
 def _get_slp_balance(query, multiple_tokens=False):
@@ -40,10 +41,11 @@ def _get_bch_balance(query):
     dust = 546 / (10 ** 8)
     query = query & Q(amount__gt=dust)
     qs = Transaction.objects.filter(query)
+    qs_count = qs.count()
     qs_balance = qs.aggregate(
         balance=Coalesce(Sum('amount'), 0)
     )
-    return qs_balance
+    return qs_balance, qs_count
 
 class Balance(APIView):
     
@@ -67,14 +69,16 @@ class Balance(APIView):
                 query =  Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
             data['balance'] = qs_balance['amount__sum'] or 0
+            data['spendable'] = data['balance']
             data['valid'] = True
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
-            qs_balance = _get_bch_balance(query)
+            qs_balance, qs_count = _get_bch_balance(query)
             bch_balance = qs_balance['balance'] or 0
             data['balance'] = round(bch_balance, 8)
+            data['spendable'] = max(data['balance'] - get_tx_fee_bch(p2pkh_input_count=qs_count), 0)
             data['valid'] = True
 
         if wallet_hash:
@@ -93,13 +97,15 @@ class Balance(APIView):
                     pass
                 else:
                     data['balance'] = qs_balance['amount__sum'] or 0
+                    data['spendable'] = data['balance']
                     data['token_id'] = tokenid
                     data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
-                qs_balance = _get_bch_balance(query)
+                qs_balance, qs_count = _get_bch_balance(query)
                 data['balance'] = round(qs_balance['balance'], 8)
+                data['spendable'] = max(data['balance'] - get_tx_fee_bch(p2pkh_input_count=qs_count), 0)
                 data['valid'] = True
 
         return Response(data=data, status=status.HTTP_200_OK)
