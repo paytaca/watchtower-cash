@@ -23,7 +23,7 @@ def get_multisig_input_byte_count(count=0, signers=0, size=0):
 def get_byte_count(
     p2pkh_input_count=0,
     multisig_inputs=[{'size': 0, 'signers': 0, 'count': 0}],
-    p2pkh_ouput_count=2,
+    p2pkh_output_count=2,
     p2sh_output_count=0,
 ):
     """
@@ -41,7 +41,7 @@ def get_byte_count(
     for multisig_info in  multisig_inputs:
         total += get_multisig_input_byte_count(**multisig_info)
 
-    total += p2pkh_ouput_count * 34
+    total += p2pkh_output_count * 34
     total += p2sh_output_count * 32
 
     return total
