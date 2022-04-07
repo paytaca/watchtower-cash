@@ -15,6 +15,21 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
     BEFORE_BLOCK_QUERY_NAME = "before_block"
     AFTER_BLOCK_QUERY_NAME = "after_block"
 
+    def __case_insensitive_list_filter(self, name="", values=[]):
+        """
+            Queryset filter builder for case insensitive filtering against list
+        """
+        _filter = models.Q()
+        if not isinstance(values, list):
+            return _filter
+
+        field_name = f"{name}__iexact"        
+        for value in values:
+            _filter |= models.Q(**{
+                field_name: value
+            })
+        return _filter
+
     def _parse_query_param(self, request, query_param, is_list=True, separator=",") -> (str, any):
         val = unquote(request.query_params.get(query_param, ""))
         if is_list:
@@ -26,13 +41,16 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
         addresses = self._parse_query_param(request, self.ADDRESSES_QUERY_NAME)
 
         if len(addresses):
+            from_addr__iin = self.__case_insensitive_list_filter(name="from_addr", values=addresses)
+            to_addr__iin = self.__case_insensitive_list_filter(name="from_addr", values=addresses)
+
             if record_type == "incoming":
-                queryset = queryset.filter(to_addr__in=addresses)
+                queryset = queryset.filter(to_addr__iin)
             elif record_type == "outgoing":
-                queryset = queryset.filter(from_addr__in=addresses)
+                queryset = queryset.filter(from_addr__iin)
             else:
                 queryset = queryset.filter(
-                    models.Q(from_addr__in=addresses) | models.Q(to_addr__in=addresses)
+                    models.Q(from_addr__iin) | models.Q(to_addr__iin)
                 )
         return queryset
 
@@ -40,20 +58,29 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
         token_addresses = self._parse_query_param(request, self.TOKEN_ADDRESSES_QUERY_NAME)
 
         if len(token_addresses):
+            token_contract__address__iin = self.__case_insensitive_list_filter(
+                name="token_contract__address",
+                values=token_addresses
+            )
+
             # "bch" is a special value for including transfers for BCH
             if "bch" in token_addresses:
                 queryset = queryset.filter(
-                    models.Q(token_contract__isnull=True) | models.Q(token_contract__address__in=token_addresses)
+                    models.Q(token_contract__isnull=True) | models.Q(token_contract__address__iin)
                 )
             else:
-                queryset = queryset.filter(token_contract__address__in=token_addresses)
+                queryset = queryset.filter(token_contract__address__iin)
 
         return queryset
 
     def filter_queryset_by_transactions(self, request, queryset, view):
         tx_hashes = self._parse_query_param(request, self.TRANSACTION_HASHES_QUERY_NAME)
         if len(tx_hashes):
-            queryset = queryset.filter(transaction__txid__in=tx_hashes)
+            transaction__txid__iin = self.__case_insensitive_list_filter(
+                name="transaction__txid",
+                values=tx_hashes
+            )
+            queryset = queryset.filter(transaction__txid__iin)
 
         return queryset
 

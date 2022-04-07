@@ -1,3 +1,4 @@
+from django.http import Http404
 from rest_framework import viewsets, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -19,6 +20,21 @@ class TransactionViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.
     lookup_field = "txid"
     serializer_class = TransactionSerializer
     pagination_class = CustomLimitOffsetPagination
+
+    def get_object(self):
+        Model = self.serializer_class.Meta.model
+        lookup_value = self.kwargs.get(self.lookup_field)
+        try:
+            instance = Model.objects.get(**{
+                f"{self.lookup_field}__iexact": lookup_value,
+            })
+            return instance
+        except Model.DoesNotExist:
+            raise Http404
+        except Model.MultipleObjectsReturned:
+            pass
+
+        return super().get_object()
 
     def get_queryset(self):
         return Transaction.objects.select_related(
