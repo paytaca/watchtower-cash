@@ -1,3 +1,4 @@
+from drf_yasg.utils import swagger_auto_schema
 from main.models import Transaction, Wallet
 from django.db.models import Q, Sum, F
 from django.db.models.functions import Coalesce
@@ -5,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 from main import serializers
+from main.utils.tx_fee import get_tx_fee_bch
 
 
 def _get_slp_balance(query, multiple_tokens=False):
@@ -40,13 +42,15 @@ def _get_bch_balance(query):
     dust = 546 / (10 ** 8)
     query = query & Q(amount__gt=dust)
     qs = Transaction.objects.filter(query)
+    qs_count = qs.count()
     qs_balance = qs.aggregate(
         balance=Coalesce(Sum('amount'), 0)
     )
-    return qs_balance
+    return qs_balance, qs_count
 
 class Balance(APIView):
-    
+
+    @swagger_auto_schema(responses={ 200: serializers.BalanceResponseSerializer })
     def get(self, request, *args, **kwargs):
         slpaddress = kwargs.get('slpaddress', '')
         bchaddress = kwargs.get('bchaddress', '')
@@ -67,14 +71,16 @@ class Balance(APIView):
                 query =  Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
             data['balance'] = qs_balance['amount__sum'] or 0
+            data['spendable'] = data['balance']
             data['valid'] = True
         
         if bchaddress.startswith('bitcoincash:'):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
-            qs_balance = _get_bch_balance(query)
+            qs_balance, qs_count = _get_bch_balance(query)
             bch_balance = qs_balance['balance'] or 0
             data['balance'] = round(bch_balance, 8)
+            data['spendable'] = max(data['balance'] - get_tx_fee_bch(p2pkh_input_count=qs_count), 0)
             data['valid'] = True
 
         if wallet_hash:
@@ -93,13 +99,62 @@ class Balance(APIView):
                     pass
                 else:
                     data['balance'] = qs_balance['amount__sum'] or 0
+                    data['spendable'] = data['balance']
                     data['token_id'] = tokenid
                     data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
-                qs_balance = _get_bch_balance(query)
+                qs_balance, qs_count = _get_bch_balance(query)
                 data['balance'] = round(qs_balance['balance'], 8)
+                data['spendable'] = max(data['balance'] - get_tx_fee_bch(p2pkh_input_count=qs_count), 0)
                 data['valid'] = True
 
         return Response(data=data, status=status.HTTP_200_OK)
+
+
+class SpendableBalance(APIView):
+    @swagger_auto_schema(
+        request_body=serializers.TxFeeCalculatorSerializer,
+        responses={ 200: serializers.BalanceResponseSerializer },
+    )
+    def post(self, request, *args, **kwargs):
+        bchaddress = kwargs.get('bchaddress', '')
+        wallet_hash = kwargs.get('wallethash', '')
+
+        data = {
+            'valid': True,
+        }
+
+        qs_balance = 0
+        qs_count = 0
+        if bchaddress.startswith('bitcoincash:'):
+            data['address'] = bchaddress
+            query = Q(address__address=bchaddress) & Q(spent=False)
+            qs_balance, qs_count = _get_bch_balance(query)
+        elif wallet_hash:
+            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+            data['wallet'] = wallet_hash
+            if wallet.wallet_type != 'bch':
+                return Response({ 'detail': 'Invalid wallet type' }, status=400)
+
+            query = Q(wallet=wallet) & Q(spent=False)
+            qs_balance, qs_count = _get_bch_balance(query)
+
+        qs_balance = qs_balance['balance'] or 0
+        qs_balance = round(qs_balance, 8)
+
+        serializer = serializers.TxFeeCalculatorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tx_fee_kwargs = serializer.validated_data
+
+        if not isinstance(tx_fee_kwargs.get('p2pkh_input_count', None), int):
+            tx_fee_kwargs['p2pkh_input_count'] = 0
+
+        tx_fee_kwargs['p2pkh_input_count'] += qs_count
+        tx_fee = get_tx_fee_bch(**tx_fee_kwargs)
+
+        data['balance'] = qs_balance
+        data['spendable'] = max(qs_balance - tx_fee, 0)
+
+        return Response(data, status=200)
