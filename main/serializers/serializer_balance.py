@@ -13,6 +13,12 @@ class TxFeeCalculatorSerializer(serializers.Serializer):
 
     p2pkh_output_count = serializers.IntegerField(required=False, default=2)
     p2sh_output_count = serializers.IntegerField(required=False, default=0)
+    push_data = serializers.ListField(
+        child=serializers.CharField(
+            help_text="List of outputs containing push data. Input can be in hex or utf8",
+        ),
+        required=False,
+    )
 
 
 class BalanceResponseSerializer(serializers.Serializer):
