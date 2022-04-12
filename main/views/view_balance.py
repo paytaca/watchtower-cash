@@ -84,7 +84,7 @@ class Balance(APIView):
             qs_balance, qs_count = _get_bch_balance(query)
             bch_balance = qs_balance['balance'] or 0
 
-            data['spendable'] = bch_to_satoshi(bch_balance) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+            data['spendable'] = int(bch_to_satoshi(bch_balance)) - round(get_tx_fee_sats(p2pkh_input_count=qs_count))
             data['spendable'] = satoshi_to_bch(data['spendable'])
             data['spendable'] = max(data['spendable'], 0)
 
@@ -116,7 +116,7 @@ class Balance(APIView):
                 qs_balance, qs_count = _get_bch_balance(query)
                 bch_balance = qs_balance['balance']
 
-                data['spendable'] = bch_to_satoshi(bch_balance) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+                data['spendable'] = int(bch_to_satoshi(bch_balance)) - round(get_tx_fee_sats(p2pkh_input_count=qs_count))
                 data['spendable'] = satoshi_to_bch(data['spendable'])
                 data['spendable'] = max(data['spendable'], 0)
 
@@ -169,7 +169,7 @@ class SpendableBalance(APIView):
         tx_fee = get_tx_fee_sats(**tx_fee_kwargs)
 
 
-        data['spendable'] = bch_to_satoshi(bch_balance) - tx_fee
+        data['spendable'] = int(bch_to_satoshi(bch_balance)) - round(tx_fee)
         data['spendable'] = satoshi_to_bch(data['spendable'])
         data['spendable'] = max(data['spendable'], 0)
 
