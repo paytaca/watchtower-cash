@@ -61,6 +61,8 @@ class Block(PostgresModel):
         def generator(cursor):
             for row in cursor:
                 yield Decimal(row[0])
+            cursor.close()
+            connection.close()
 
         return cursor.rowcount, generator(cursor)
 

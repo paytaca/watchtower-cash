@@ -6,7 +6,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 from main import serializers
-from main.utils.tx_fee import get_tx_fee_bch
+from main.utils.tx_fee import (
+    get_tx_fee_sats,
+    bch_to_satoshi,
+    satoshi_to_bch
+)
 
 
 def _get_slp_balance(query, multiple_tokens=False):
@@ -79,8 +83,12 @@ class Balance(APIView):
             query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance, qs_count = _get_bch_balance(query)
             bch_balance = qs_balance['balance'] or 0
+
+            data['spendable'] = bch_to_satoshi(bch_balance) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+            data['spendable'] = satoshi_to_bch(data['spendable'])
+            data['spendable'] = max(data['spendable'], 0)
+
             data['balance'] = round(bch_balance, 8)
-            data['spendable'] = max(data['balance'] - get_tx_fee_bch(p2pkh_input_count=qs_count), 0)
             data['valid'] = True
 
         if wallet_hash:
@@ -106,8 +114,13 @@ class Balance(APIView):
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
                 qs_balance, qs_count = _get_bch_balance(query)
+                bch_balance = qs_balance['balance']
+
+                data['spendable'] = bch_to_satoshi(bch_balance) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+                data['spendable'] = satoshi_to_bch(data['spendable'])
+                data['spendable'] = max(data['spendable'], 0)
+
                 data['balance'] = round(qs_balance['balance'], 8)
-                data['spendable'] = max(data['balance'] - get_tx_fee_bch(p2pkh_input_count=qs_count), 0)
                 data['valid'] = True
 
         return Response(data=data, status=status.HTTP_200_OK)
@@ -142,6 +155,7 @@ class SpendableBalance(APIView):
             qs_balance, qs_count = _get_bch_balance(query)
 
         qs_balance = qs_balance['balance'] or 0
+        bch_balance = qs_balance
         qs_balance = round(qs_balance, 8)
 
         serializer = serializers.TxFeeCalculatorSerializer(data=request.data)
@@ -152,9 +166,13 @@ class SpendableBalance(APIView):
             tx_fee_kwargs['p2pkh_input_count'] = 0
 
         tx_fee_kwargs['p2pkh_input_count'] += qs_count
-        tx_fee = get_tx_fee_bch(**tx_fee_kwargs)
+        tx_fee = get_tx_fee_sats(**tx_fee_kwargs)
+
+
+        data['spendable'] = bch_to_satoshi(bch_balance) - tx_fee
+        data['spendable'] = satoshi_to_bch(data['spendable'])
+        data['spendable'] = max(data['spendable'], 0)
 
         data['balance'] = qs_balance
-        data['spendable'] = max(qs_balance - tx_fee, 0)
 
         return Response(data, status=200)

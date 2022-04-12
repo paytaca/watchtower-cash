@@ -3,6 +3,8 @@ import re
 def is_hex(value):
     return bool(re.match("0x[0-9a-f]*", value, flags=re.IGNORECASE))
 
+def bch_to_satoshi(value):
+    return value * (10 ** 8)
 
 def satoshi_to_bch(value):
     return round(value / (10 ** 8), 8)
