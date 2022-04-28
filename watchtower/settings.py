@@ -216,8 +216,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
     },
-    'manage_block_transactions': {
-        'task': 'main.tasks.manage_block_transactions',
+    'manage_blocks': {
+        'task': 'main.tasks.manage_blocks',
         'schedule': 7
     },
     'preload_smartbch_blocks': {

@@ -476,8 +476,8 @@ def slpdbquery(self, block_id):
             REDIS_STORAGE.set('READY', 1)
 
 
-@shared_task(bind=True, queue='manage_block_transactions')
-def manage_block_transactions(self):
+@shared_task(bind=True, queue='manage_blocks')
+def manage_blocks(self):
     if b'READY' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('READY', 1)
     if b'ACTIVE-BLOCK' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     if b'PENDING-BLOCKS' not in REDIS_STORAGE.keys(): REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps([]))
