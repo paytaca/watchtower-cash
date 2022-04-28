@@ -35,7 +35,7 @@ class BCHDQuery(object):
             11: 'SLP_V1_NFT1_UNIQUE_CHILD_SEND'
         }
 
-    def get_latest_block(self, include_transactions=True):
+    def get_latest_block(self, include_transactions=True, full_transactions=False):
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -46,15 +46,21 @@ class BCHDQuery(object):
             resp = stub.GetBlockchainInfo(req)
             latest_block = resp.best_height
 
-            if include_transactions:
-                req = pb.GetBlockRequest()
-                req.height = latest_block
-                req.full_transactions = False
-                resp = stub.GetBlock(req)
+            return latest_block
 
-                return latest_block, resp.block.transaction_data
-            else:
-                return latest_block
+    def get_block(self, block, full_transactions=False):
+        cert = ssl.get_server_certificate(self.base_url.split(':'))
+        creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
+
+        with grpc.secure_channel(self.base_url, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
+            stub = bchrpc.bchrpcStub(channel)
+
+            req = pb.GetBlockRequest()
+            req.height = block
+            req.full_transactions = full_transactions
+            resp = stub.GetBlock(req)
+
+            return resp.block.transaction_data
 
     def _parse_transaction(self, txn, parse_slp=False):
         tx_hash = bytearray(txn.hash[::-1]).hex()

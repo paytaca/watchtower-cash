@@ -526,7 +526,7 @@ def get_latest_block(self):
     # This task is intended to check new blockheight every 5 seconds through BCHD @ fountainhead.cash
     LOGGER.info('CHECKING THE LATEST BLOCK')
     bchd = BCHDQuery()
-    number = bchd.get_latest_block(include_transactions=False)
+    number = bchd.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created: return f'*** NEW BLOCK { obj.number } ***'
 
