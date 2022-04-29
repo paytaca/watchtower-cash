@@ -181,7 +181,7 @@ class BCHDQuery(object):
         transaction['tx_fee'] =  total_input_sats - total_output_sats
         return transaction
 
-    def get_transaction(self, transaction_hash, parse_slp=False):
+    def _get_raw_transaction(self, transaction_hash):
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -195,12 +195,14 @@ class BCHDQuery(object):
                 req.include_token_metadata = True
 
                 resp = stub.GetTransaction(req)
-                txn = resp.transaction
-                return self._parse_transaction(txn, parse_slp=parse_slp)
+                return resp.transaction
             except _InactiveRpcError as exc:
                 LOGGER.error(str(exc))
                 return None
 
+    def get_transaction(self, transaction_hash, parse_slp=False):
+        txn = self._get_raw_transaction(transaction_hash)
+        return self._parse_transaction(txn, parse_slp=parse_slp)
 
     def get_utxos(self, address):
         cert = ssl.get_server_certificate(self.base_url.split(':'))
