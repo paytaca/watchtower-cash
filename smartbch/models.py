@@ -73,6 +73,8 @@ class TokenContract(PostgresModel):
     token_type = models.IntegerField() # erc number e.g. (ERC20, ERC721, ERC777)
     name = models.CharField(max_length=50, null=True, blank=True)
     symbol = models.CharField(max_length=10, null=True, blank=True)
+    image_url = models.URLField(null=True, blank=True)
+    image_url_source = models.CharField(max_length=20, null=True, blank=True)
 
     def __str__(self):
         string = f"{self.__class__.__name__}:{self.address}"
@@ -81,6 +83,11 @@ class TokenContract(PostgresModel):
         if self.symbol:
             string += f"({self.symbol})"
         return string
+
+    def save(self, *args, **kwargs):
+        if self.image_url is None:
+            self.image_url_source = None
+        return super().save(*args, **kwargs)
 
 
 class Transaction(PostgresModel):

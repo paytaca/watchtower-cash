@@ -19,6 +19,7 @@ from smartbch.utils import block as block_utils
 from smartbch.utils import subscription as subscription_utils
 from smartbch.utils import transaction as transaction_utils
 from smartbch.utils import contract as contract_utils
+from main.tasks import download_image
 
 LOGGER = logging.getLogger(__name__)
 REDIS_CLIENT = settings.REDISKV
@@ -364,5 +365,46 @@ def parse_token_contract_metadata_task():
             "address": address,
             "updated": updated,
         })
+
+    return results
+
+@shared_task(queue=_QUEUE_ADDRESS_PARSER, time_limit=_TASK_TIME_LIMIT)
+def save_token_icons_task():
+    LOGGER.info(f"Checking for token contracts without icons")
+    MAX_CONTRACTS_PER_TASK = 10
+
+    token_contracts = TokenContract.objects.filter(image_url__isnull=True)[:MAX_CONTRACTS_PER_TASK]
+    if not len(token_contracts):
+        LOGGER.info(f"No token contracts without icon found")
+        return "no_token_contract_found"
+
+    LOGGER.info(f"Found {len(token_contracts)} token contract/s without urls: {token_contracts}")
+
+    address_image_map = contract_utils.fetch_icons_from_marketcap() or {}
+    results = []
+    for token_contract in token_contracts:
+        url = f"https://www.smartscan.cash/assets/images/tokens/{token_contract.address}.png"
+        src = "smartscan"
+        if token_contract.address.lower() in address_image_map and address_image_map[token_contract.address.lower()]:
+            url = address_image_map[token_contract.address.lower()]
+            src = "marketcap"
+        response = requests.get(url)
+
+        content_type = f"{response.headers.get('Content-Header', None)}".split("/")
+        is_image = len(content_type) > 0 and content_type[0] == "image"
+
+        status_code, image_file_name = download_image(token_contract.address, url, resize=True)
+
+        image_server_base = 'https://images.watchtower.cash'
+        image_url = f"{image_server_base}/{image_file_name}"
+        if status_code != 200 or not image_file_name:
+            image_url = ""
+
+        token_contract.image_url = image_url
+        token_contract.image_url_source = src
+        token_contract.save()
+        results.append(
+            [token_contract.address, image_url]
+        )
 
     return results
