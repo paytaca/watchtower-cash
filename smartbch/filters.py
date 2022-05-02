@@ -6,16 +6,8 @@ from rest_framework.filters import BaseFilterBackend
 
 from smartbch.exceptions import InvalidQueryParameterException
 
-
-class TransactionTransferViewsetFilter(BaseFilterBackend):
-    RECORD_TYPE_QUERY_NAME = "record_type"
-    ADDRESSES_QUERY_NAME = "addresses"
-    TOKEN_ADDRESSES_QUERY_NAME = "tokens"
-    TRANSACTION_HASHES_QUERY_NAME = "txs"
-    BEFORE_BLOCK_QUERY_NAME = "before_block"
-    AFTER_BLOCK_QUERY_NAME = "after_block"
-
-    def __case_insensitive_list_filter(self, name="", values=[]):
+class FilterBackendUtils:
+    def _case_insensitive_list_filter(self, name="", values=[]):
         """
             Queryset filter builder for case insensitive filtering against list
         """
@@ -36,13 +28,23 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
             val = [v for v in val.split(separator) if v]
         return val
 
+
+class TransactionTransferViewsetFilter(BaseFilterBackend, FilterBackendUtils):
+    RECORD_TYPE_QUERY_NAME = "record_type"
+    ADDRESSES_QUERY_NAME = "addresses"
+    TOKEN_ADDRESSES_QUERY_NAME = "tokens"
+    TRANSACTION_HASHES_QUERY_NAME = "txs"
+    BEFORE_BLOCK_QUERY_NAME = "before_block"
+    AFTER_BLOCK_QUERY_NAME = "after_block"
+
+
     def filter_queryset_by_address(self, request, queryset, view):
         record_type = self._parse_query_param(request, self.RECORD_TYPE_QUERY_NAME, is_list=False)
         addresses = self._parse_query_param(request, self.ADDRESSES_QUERY_NAME)
 
         if len(addresses):
-            from_addr__iin = self.__case_insensitive_list_filter(name="from_addr", values=addresses)
-            to_addr__iin = self.__case_insensitive_list_filter(name="to_addr", values=addresses)
+            from_addr__iin = self._case_insensitive_list_filter(name="from_addr", values=addresses)
+            to_addr__iin = self._case_insensitive_list_filter(name="to_addr", values=addresses)
 
             if record_type == "incoming":
                 queryset = queryset.filter(to_addr__iin)
@@ -58,7 +60,7 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
         token_addresses = self._parse_query_param(request, self.TOKEN_ADDRESSES_QUERY_NAME)
 
         if len(token_addresses):
-            token_contract__address__iin = self.__case_insensitive_list_filter(
+            token_contract__address__iin = self._case_insensitive_list_filter(
                 name="token_contract__address",
                 values=token_addresses
             )
@@ -76,7 +78,7 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
     def filter_queryset_by_transactions(self, request, queryset, view):
         tx_hashes = self._parse_query_param(request, self.TRANSACTION_HASHES_QUERY_NAME)
         if len(tx_hashes):
-            transaction__txid__iin = self.__case_insensitive_list_filter(
+            transaction__txid__iin = self._case_insensitive_list_filter(
                 name="transaction__txid",
                 values=tx_hashes
             )
@@ -198,3 +200,87 @@ class TransactionTransferViewsetFilter(BaseFilterBackend):
                 }
             },
         ]
+
+
+class TokenContractViewSetFilter(BaseFilterBackend, FilterBackendUtils):
+    ADDRESSES_QUERY_NAME = "token_addresses"
+    HAS_IMAGE_URL_QUERY_NAME = "has_image"
+
+    def filter_queryset_by_address(self, request, queryset, view):
+        addresses = self._parse_query_param(request, self.ADDRESSES_QUERY_NAME)
+        address__in = self._case_insensitive_list_filter(name="address", values=addresses)
+        queryset = queryset.filter(address__in)
+        return queryset
+
+    def filter_queryset_has_image_url(self, request, queryset, view):
+        val = unquote(request.query_params.get(self.HAS_IMAGE_URL_QUERY_NAME, ""))
+
+        parsed_value = None
+        if val.lower() == "true":
+            parsed_value = True
+        elif val.lower() == "false":
+            parsed_value = False
+
+        # raise Exception(f"Parsed value: {parsed_value}")
+
+        if parsed_value is not None:
+            if parsed_value:
+                queryset = queryset.filter(image_url__isnull=False, image_url__gte=0)
+            else:
+                queryset = queryset.filter(models.Q(image_url__isnull=True) | models.Q(image_url__lte=0))
+
+        return queryset
+
+    def get_schema_fields(self, view):
+        assert coreapi is not None, 'coreapi must be installed to use `get_schema_fields()`'
+        assert coreschema is not None, 'coreschema must be installed to use `get_schema_fields()`'
+
+        filter_fields= []
+        for schema_param in self._get_schema_details(view):
+            filter_fields.append(
+                coreapi.Field(
+                    name=schema_param["name"],
+                    required=schema_param["required"],
+                    location=schema_param["in"],
+                    schema=coreschema.String(
+                        title=schema_param["title"],
+                        description=schema_param["description"],
+                    )
+                )
+            )
+
+        return filter_fields
+
+    def get_schema_operation_parameters(self, view):
+        return self._get_schema_details(view)
+
+    def _get_schema_details(self, view):
+        return [
+            {
+                "name": self.ADDRESSES_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.ADDRESSES_QUERY_NAME.capitalize(),
+                "description": f"Filter by token addresses separated by comma ','",
+                "schema": {
+                    "type": "string",
+                }
+            },
+            {
+                "name": self.HAS_IMAGE_URL_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.HAS_IMAGE_URL_QUERY_NAME.capitalize(),
+                "description": f"Filter by tokens with or without image_urls",
+                "schema": {
+                    "type": "boolean",
+                }
+            },
+        ]
+
+
+    def filter_queryset(self, request, queryset, view):
+        queryset = self.filter_queryset_by_address(request, queryset, view)
+        queryset = self.filter_queryset_has_image_url(request, queryset, view)
+
+        return queryset
