@@ -9,6 +9,14 @@ from .abi import get_token_abi
 
 
 def fetch_icons_from_marketcap():
+    """
+        Fetch token icon urls listed in marketcap.cash
+
+    Returns
+    --------------------
+    address_image_url_map: Map<Address, URL>
+        address is in lowercase to prevent mismatch due to case sensitivity
+    """
     marketcap_token_list_json_url = "https://raw.githubusercontent.com/MarketCap-Cash/SmartBCH-Token-List/main/tokens.json"
     response = requests.get(marketcap_token_list_json_url)
     if not response.ok:
@@ -28,7 +36,7 @@ def fetch_icons_from_marketcap():
         if not token_info["address"] or not token_info["image"]:
             continue
     
-        address_image_map[token_info["address"]] = token_info["image"]
+        address_image_map[f"{token_info['address']}".lower()] = token_info["image"]
 
     return address_image_map
 

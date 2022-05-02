@@ -232,6 +232,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'smartbch.tasks.parse_token_contract_metadata_task',
         'schedule': 300,
     },
+    'save_token_icons': {
+        'task': 'smartbch.tasks.save_token_icons_task',
+        'schedule': 300,
+    },
     'parse_missing_records': {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.

@@ -74,6 +74,7 @@ class TokenContract(PostgresModel):
     name = models.CharField(max_length=50, null=True, blank=True)
     symbol = models.CharField(max_length=10, null=True, blank=True)
     image_url = models.URLField(null=True, blank=True)
+    image_url_source = models.CharField(max_length=20, null=True, blank=True)
 
     def __str__(self):
         string = f"{self.__class__.__name__}:{self.address}"

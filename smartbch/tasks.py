@@ -366,7 +366,6 @@ def parse_token_contract_metadata_task():
             "updated": updated,
         })
 
-    save_token_icons_task.delay()
     return results
 
 @shared_task(queue=_QUEUE_ADDRESS_PARSER, time_limit=_TASK_TIME_LIMIT)
@@ -385,8 +384,10 @@ def save_token_icons_task():
     results = []
     for token_contract in token_contracts:
         url = f"https://www.smartscan.cash/assets/images/tokens/{token_contract.address}.png"
-        if token_contract.address in address_image_map and address_image_map[token_contract.address]:
-            url = address_image_map[token_contract.address]
+        src = "smartscan"
+        if token_contract.address.lower() in address_image_map and address_image_map[token_contract.address.lower()]:
+            url = address_image_map[token_contract.address.lower()]
+            src = "marketcap"
         response = requests.get(url)
 
         content_type = f"{response.headers.get('Content-Header', None)}".split("/")
@@ -400,6 +401,7 @@ def save_token_icons_task():
             image_url = ""
 
         token_contract.image_url = image_url
+        token_contract.image_url_source = src
         token_contract.save()
         results.append(
             [token_contract.address, image_url]
