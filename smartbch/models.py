@@ -84,6 +84,11 @@ class TokenContract(PostgresModel):
             string += f"({self.symbol})"
         return string
 
+    def save(self, *args, **kwargs):
+        if self.image_url is None:
+            self.image_url_source = None
+        return super().save(*args, **kwargs)
+
 
 class Transaction(PostgresModel):
     txid = models.CharField(max_length=70, db_index=True, unique=True)
