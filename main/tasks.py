@@ -748,8 +748,8 @@ def get_token_meta_data(self, token_id):
 
             if token_obj.token_type == 1:
 
-                # Check icons.fountainhead.cash
-                url = f"https://icons.fountainhead.cash/128/{token_id}.png"
+                # Check slp-token-icons repo
+                url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
                 status_code, image_file_name = download_image(token_id, url)
 
             if token_obj.token_type == 65:
@@ -771,16 +771,17 @@ def get_token_meta_data(self, token_id):
                     if is_url(url):
                         status_code, image_file_name = download_image(token_id, url, resize=True)
 
-                if not image_file_name:
-                    # Scrape NFT image link from simpleledger.info
-                    url = 'http://simpleledger.info/token/' + token_id
-                    resp = requests.get(url)
-                    if resp.status_code == 200:
-                        soup = BeautifulSoup(resp.text, 'html')
-                        img_div = soup.find_all('div', {'class': 'token-icon-large'})
-                        if img_div:
-                            url = img_div[0].img.attrs['src']
-                            status_code, image_file_name = download_image(token_id, url, resize=True)
+                # Disable simpleledger.info, it's being deprecated
+                # if not image_file_name:
+                #     # Scrape NFT image link from simpleledger.info
+                #     url = 'http://simpleledger.info/token/' + token_id
+                #     resp = requests.get(url)
+                #     if resp.status_code == 200:
+                #         soup = BeautifulSoup(resp.text, 'html')
+                #         img_div = soup.find_all('div', {'class': 'token-icon-large'})
+                #         if img_div:
+                #             url = img_div[0].img.attrs['src']
+                #             status_code, image_file_name = download_image(token_id, url, resize=True)
 
             if status_code == 200:
                 if image_file_name:
