@@ -1,9 +1,36 @@
+import json
+import requests
 import functools
 import web3
 from smartbch.models import TokenContract
 
 from ..web3 import create_web3_client
 from .abi import get_token_abi
+
+
+def fetch_icons_from_marketcap():
+    marketcap_token_list_json_url = "https://raw.githubusercontent.com/MarketCap-Cash/SmartBCH-Token-List/main/tokens.json"
+    response = requests.get(marketcap_token_list_json_url)
+    if not response.ok:
+        return None
+
+    data = {}
+    try:
+        data = response.json()
+    except json.decoder.JSONDecodeError:
+        pass
+
+    address_image_map = {}
+    for _, token_info in data.items():
+        if "address" not in token_info or "image" not in token_info:
+            continue
+
+        if not token_info["address"] or not token_info["image"]:
+            continue
+    
+        address_image_map[token_info["address"]] = token_info["image"]
+
+    return address_image_map
 
 
 def is_contract(address):
