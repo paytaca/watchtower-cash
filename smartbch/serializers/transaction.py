@@ -44,7 +44,9 @@ class TransactionSerializer(serializers.ModelSerializer):
             "value",
             "data",
             "gas",
+            "gas_used",
             "gas_price",
+            "tx_fee",
             "is_mined",
             "status",
         )
@@ -63,6 +65,7 @@ class TransactionTransferSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     token_contract = TokenContractSerializer(read_only=True)
+    tx_fee = serializers.FloatField(source="transaction.tx_fee", read_only=True)
     amount = serializers.CharField(source="normalized_amount")
 
     class Meta:
@@ -78,4 +81,5 @@ class TransactionTransferSerializer(serializers.ModelSerializer):
             "to_addr",
             "amount",
             "token_id",
+            "tx_fee",
         )
