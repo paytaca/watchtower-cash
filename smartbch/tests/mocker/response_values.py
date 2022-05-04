@@ -100,6 +100,7 @@ test_sep20_transfer_tx = AttributeDict({
 test_sep20_transfer_tx_receipt = AttributeDict({
     "__mock": True,
     "status": 1,
+    "gasUsed": 1,
     "logs": [
         AttributeDict({
             "address": "0x5fA664f69c2A4A3ec94FaC3cBf7049BD9CA73129",

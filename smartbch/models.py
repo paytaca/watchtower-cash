@@ -1,3 +1,4 @@
+import web3
 from decimal import Decimal
 from psqlextra.models import PostgresModel
 from django.db import models
@@ -106,6 +107,7 @@ class Transaction(PostgresModel):
     value = models.DecimalField(max_digits=36, decimal_places=18)
     data = models.TextField(null=True, blank=True)
     gas = models.IntegerField()
+    gas_used = models.IntegerField(null=True, blank=True)
     gas_price = models.IntegerField()
 
     is_mined = models.BooleanField(null=True, blank=True)
@@ -122,6 +124,19 @@ class Transaction(PostgresModel):
             self.__dict__["block_number"] = self.block.block_number
 
         return self.__dict__["block_number"]
+
+    @property
+    def normalized_value(self):
+        # https://stackoverflow.com/questions/11227620/drop-trailing-zeros-from-decimal
+        return self.value.to_integral() if self.value == self.value.to_integral() else self.value.normalize()
+
+    @property
+    def tx_fee(self):
+        if self.gas_used is None:
+            return None
+
+        return web3.Web3.fromWei(self.gas_used * self.gas_price, "ether")
+
 
 
 class TransactionTransfer(PostgresModel):
@@ -146,6 +161,14 @@ class TransactionTransfer(PostgresModel):
 
     amount = models.DecimalField(max_digits=36, decimal_places=18, null=True, blank=True)
     token_id = models.IntegerField(null=True, blank=True) # will be applicable to erc721
+
+    @property
+    def normalized_amount(self):
+        # https://stackoverflow.com/questions/11227620/drop-trailing-zeros-from-decimal
+        if self.amount is None:
+            return None
+
+        return self.amount.to_integral() if self.amount == self.amount.to_integral() else self.amount.normalize()
 
     @property
     def subscription_model(self):

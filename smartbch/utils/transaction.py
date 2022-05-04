@@ -121,6 +121,7 @@ def save_transaction_transfers(txid, parse_block_timestamp=False):
 
     instance.processed_transfers = True
     instance.status = receipt.status
+    instance.gas_used = receipt.gasUsed
     instance.save()
 
     return instance
