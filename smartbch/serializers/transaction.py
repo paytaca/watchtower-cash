@@ -30,6 +30,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         source="block.timestamp",
         read_only=True,
     )
+    value = serializers.CharField(source="normalized_value")
 
     class Meta:
         model = Transaction
@@ -62,6 +63,7 @@ class TransactionTransferSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     token_contract = TokenContractSerializer(read_only=True)
+    amount = serializers.CharField(source="normalized_amount")
 
     class Meta:
         model = TransactionTransfer

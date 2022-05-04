@@ -123,6 +123,11 @@ class Transaction(PostgresModel):
 
         return self.__dict__["block_number"]
 
+    @property
+    def normalized_value(self):
+        # https://stackoverflow.com/questions/11227620/drop-trailing-zeros-from-decimal
+        return self.value.to_integral() if self.value == self.value.to_integral() else self.value.normalize()
+
 
 class TransactionTransfer(PostgresModel):
     transaction = models.ForeignKey(
@@ -146,6 +151,14 @@ class TransactionTransfer(PostgresModel):
 
     amount = models.DecimalField(max_digits=36, decimal_places=18, null=True, blank=True)
     token_id = models.IntegerField(null=True, blank=True) # will be applicable to erc721
+
+    @property
+    def normalized_amount(self):
+        # https://stackoverflow.com/questions/11227620/drop-trailing-zeros-from-decimal
+        if self.amount is None:
+            return None
+
+        return self.amount.to_integral() if self.amount == self.amount.to_integral() else self.amount.normalize()
 
     @property
     def subscription_model(self):
