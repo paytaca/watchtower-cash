@@ -1,21 +1,9 @@
 from django.conf import settings
 from django.db.models.signals import post_save
-from main.tasks import (
-    save_record,
-    slpdbquery_transaction,
-    bitdbquery_transaction,
-    client_acknowledgement,
-    send_telegram_message
-)
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
 from main.utils import block_setter
-from main.utils.queries.bchd import BCHDQuery
-from main.utils.converter import (
-    convert_bch_to_slp_address,
-    convert_slp_to_bch_address
-)
 from main.models import (
     BlockHeight,
     Transaction,
