@@ -267,6 +267,55 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         
         return transaction_obj.id, transaction_created
 
+@shared_task(bind=True, queue='bchdbquery_transaction')
+def bchdbquery_transaction(self, tr_point, block_id, alert=True):
+    source ='bchdb'
+    hash = tr_point.transaction.hash
+    txid = bytearray(hash[::-1]).hex()
+    for out in tr_point.transaction.outputs:
+        print('txid: %s | address: %s |value: %s' % (
+            txid,
+            out.address,
+            out.value
+        ))
+    index = 0
+    for out in tr_point.transaction.outputs:
+        if not int(out.value): continue
+        # save bch transactions
+        args = (
+            'bch',
+            out.address,
+            txid,
+            out.value,
+            source,
+            block_id,
+            index
+        )
+        obj_id, created = save_record(*args)
+        if created and alert:
+            third_parties = client_acknowledgement(obj_id)
+            for platform in third_parties:
+                if 'telegram' in platform:
+                    message = platform[1]
+                    chat_id = platform[2]
+                    send_telegram_message(message, chat_id)
+
+        slp = out.slp_token
+        token_id = bytearray(slp.token_id).hex()
+        if token_id != '':
+            # save slp transactions
+            obj_id, created = save_record(
+                slp.token_id,
+                slp.address,
+                txid,
+                slp.amount,
+                source,
+                blockheightid=block_id,
+                index=index
+            )            
+            if created and alert:
+                client_acknowledgement(obj_id)
+        index += 1
 
 # @shared_task(bind=True, queue='bitdbquery_transactions')
 # def bitdbquery_transaction(self, transaction, total, block_number, block_id, alert=True):
@@ -510,11 +559,11 @@ def manage_blocks(self):
         if not discard_block:
             REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
             REDIS_STORAGE.set('READY', 0)
-            # Reamon Sumapig
             bchd = BCHDQuery()
-            transactions = bchd.get_block(full_transactions=True)
-            # slpdbquery.delay(block.id) 
-    
+            transactions = bchd.get_block(block.number, full_transactions=True)
+            for tr in transactions:
+                bchdbquery_transaction.delay(tr,block.id)
+
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
 
