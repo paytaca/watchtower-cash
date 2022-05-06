@@ -32,7 +32,7 @@ from PIL import Image, ImageFile
 from io import BytesIO 
 import base64
 import pytz
-
+from celery import group, chord
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
@@ -270,15 +270,9 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 @shared_task(bind=True, queue='bchdbquery_transaction')
 def bchdbquery_transaction(self, tr_point, block_id, alert=True):
     source ='bchdb'
+    index = 0
     hash = tr_point.transaction.hash
     txid = bytearray(hash[::-1]).hex()
-    for out in tr_point.transaction.outputs:
-        print('txid: %s | address: %s |value: %s' % (
-            txid,
-            out.address,
-            out.value
-        ))
-    index = 0
     for out in tr_point.transaction.outputs:
         if not int(out.value): continue
         # save bch transactions
@@ -317,208 +311,10 @@ def bchdbquery_transaction(self, tr_point, block_id, alert=True):
                 client_acknowledgement(obj_id)
         index += 1
 
-# @shared_task(bind=True, queue='bitdbquery_transactions')
-# def bitdbquery_transaction(self, transaction, total, block_number, block_id, alert=True):
-    
-#     tx_count = int(REDIS_STORAGE.incr('BITDBQUERY_COUNT'))
-
-#     source = 'bitdb-query'
-    
-#     txn_id = transaction['tx']['h']
-    
-#     for out in transaction['out']: 
-#         args = tuple()
-#         amount = out['e']['v'] / 100000000
-#         index = out['e']['i']
-#         if 'a' in out['e'].keys():
-#             bchaddress = 'bitcoincash:' + str(out['e']['a'])
-#             subscription = Subscription.objects.filter(address__address=bchaddress)
-#             LOGGER.info(f' * SOURCE: {source.upper()} | BLOCK {block_number} | TX: {txn_id} | BCH: {bchaddress} | {tx_count} OUT OF {total}')
-
-#             # Disregard bch address that are not subscribed.
-#             if subscription.exists():
-#                 args = (
-#                     'bch',
-#                     bchaddress,
-#                     txn_id,
-#                     amount,
-#                     source,
-#                     block_id,
-#                     index
-#                 )
-#                 obj_id, created = save_record(*args)
-#                 if created:
-#                     if alert:
-#                         third_parties = client_acknowledgement(obj_id)
-#                         for platform in third_parties:
-#                             if 'telegram' in platform:
-#                                 message = platform[1]
-#                                 chat_id = platform[2]
-#                                 send_telegram_message(message, chat_id)
-
-
-# @shared_task(bind=True, queue='bitdbquery', max_retries=30)
-# def bitdbquery(self, block_id):
-#     try:
-#         block = BlockHeight.objects.get(id=block_id)
-#         if block.processed: return  # Terminate here if processed already
-#         divider = "\n\n##########################################\n\n"
-#         source = 'bitdb-query'
-#         LOGGER.info(f"{divider}REQUESTING TRANSACTIONS COUNT TO {source.upper()} | BLOCK: {block.number}{divider}")
-        
-#         obj = bitdb_scanner.BitDB()
-#         total = obj.get_transactions_count(block.number)
-#         block.transactions_count = total
-#         block.currentcount = 0
-#         block.save()
-#         REDIS_STORAGE.set('BITDBQUERY_TOTAL', total)
-#         REDIS_STORAGE.set('BITDBQUERY_COUNT', 0)
-        
-#         LOGGER.info(f"{divider}{source.upper()} FOUND {total} TRANSACTIONS {divider}")
-
-#         skip = 0
-#         complete = False
-#         page = 1
-        
-#         while not complete:
-#             obj = bitdb_scanner.BitDB()
-#             source = 'bitdb-query'
-#             total_page = math.ceil(total/settings.BITDB_QUERY_LIMIT_PER_PAGE)
-            
-#             LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}\nPAGE {int(page)} of {int(total_page)}{divider}")
-
-#             last, data = obj.get_transactions_by_blk(int(block.number), skip, settings.BITDB_QUERY_LIMIT_PER_PAGE)
-            
-            
-#             for transaction in data:
-#                 bitdbquery_transaction.delay(transaction, total, block.number, block_id)
-            
-#             if last:
-#                 complete = True
-#             else:
-#                 page += 1
-#                 skip += settings.BITDB_QUERY_LIMIT_PER_PAGE
-        
-        
-#         processed_all = False
-#         idle_count = 0
-#         last_current_count = 0
-#         while not processed_all:
-#             if idle_count < 60:
-#                 currentcount  = int(REDIS_STORAGE.get('BITDBQUERY_COUNT').decode())
-#                 LOGGER.info(f"THERE ARE {currentcount} SUCCEEDED OUT OF {total} TASKS.")
-#                 if currentcount == total:
-#                     block = BlockHeight.objects.get(id=block_id)
-#                     block.currentcount = currentcount
-#                     block.save()
-#                     REDIS_STORAGE.set('READY', 1)
-#                     REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-#                     processed_all = True
-#                 else:
-#                     if currentcount == last_current_count:
-#                         idle_count += 1
-#                 last_current_count = currentcount
-#                 time.sleep(1)
-#             else:
-#                 # If 60 iterations has passed and the current count stays the same, break this loop
-#                 # This block will be re-processed automatically
-#                 REDIS_STORAGE.set('READY', 1)
-#                 REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-#                 break
-
-#     except bitdb_scanner.BitDBHttpException:
-#         try:
-#             self.retry(countdown=10)
-#         except MaxRetriesExceededError:
-#             pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS').decode())
-#             pending_blocks.append(block.number)
-#             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
-#             REDIS_STORAGE.set('READY', 1)
-
-
-# @shared_task(bind=True, queue='slpdbquery_transactions')
-# def slpdbquery_transaction(self, transaction, tx_count, total, alert=True):
-#     source = 'slpdb-query'
-
-#     block_id = int(REDIS_STORAGE.get('BLOCK_ID').decode())
-#     block = BlockHeight.objects.get(id=block_id)
-    
-#     if transaction['slp']['valid']:
-#         if transaction['slp']['detail']['transactionType'].lower() in ['send', 'mint', 'burn']:
-#             token_id = transaction['slp']['detail']['tokenIdHex']
-#             if transaction['slp']['detail']['outputs'][0]['address'] is not None:
-                
-#                 index = 1
-#                 for output in transaction['slp']['detail']['outputs']:
-#                     subscription = Subscription.objects.filter(
-#                         address__address=output['address']
-#                     )
-#                     LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block.number} | TX: {transaction['tx']['h']} | SLP: {output['address']} | {tx_count} OUT OF {total}")
-                    
-#                     # Disregard slp address that are not subscribed.
-#                     if subscription.exists():
-#                         token, _ = Token.objects.get_or_create(tokenid=token_id)
-
-#                         obj_id, created = save_record(
-#                             token.tokenid,
-#                             output['address'],
-#                             transaction['tx']['h'],
-#                             output['amount'],
-#                             source,
-#                             blockheightid=block_id,
-#                             index=index
-#                         )
-#                         if created:
-#                             if alert:
-#                                 client_acknowledgement(obj_id)
-#                     index += 1
-    
-        
-# @shared_task(bind=True, queue='slpdbquery', max_retries=20)
-# def slpdbquery(self, block_id):
-#     REDIS_STORAGE.set('BLOCK_ID', block_id)
-#     divider = "\n\n##########################################\n\n"
-
-#     block = BlockHeight.objects.get(id=block_id)
-#     prev = BlockHeight.objects.filter(number=block.number-1)
-
-#     if block.processed:
-#         REDIS_STORAGE.set('ACTIVE-BLOCK', '')
-#         REDIS_STORAGE.set('READY', 1)
-#         return  # Terminate here if processed already
-
-#     try:
-        
-#         source = 'slpdb-query'    
-#         LOGGER.info(f"{divider}REQUESTING TO {source.upper()} | BLOCK: {block.number}{divider}")
-        
-#         obj = slpdb_scanner.SLPDB()
-#         data = obj.get_transactions_by_blk(int(block.number))
-#         total = len(data)
-#         LOGGER.info(f"{divider}{source.upper()} WILL SERVE {total} SLP TRANSACTIONS {divider}")
-
-#         REDIS_STORAGE.set('SLPDBQUERY_TOTAL', total)
-#         REDIS_STORAGE.set('SLPDBQUERY_COUNT', 0)
-        
-#         tx_count = 0
-#         for chunk in chunks(data, 1000):
-#             for transaction in chunk:
-#                 tx_count += 1
-#                 REDIS_STORAGE.set('SLPDBQUERY_COUNT', tx_count)
-#                 slpdbquery_transaction.delay(transaction, tx_count, total)
-
-#         if len(data) == 0 or (total == tx_count):
-#             bitdbquery.delay(block_id)
-            
-#     except slpdb_scanner.SLPDBHttpExcetion:
-#         try:
-#             self.retry(countdown=10)
-#         except MaxRetriesExceededError:
-#             pending_blocks = json.loads(REDIS_STORAGE.get('PENDING-BLOCKS').decode())
-#             pending_blocks.append(block.number)
-#             REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(pending_blocks))
-#             REDIS_STORAGE.set('READY', 1)
-
+@shared_task(bind=True, queue='manage_blocks')
+def ready_to_accept(self):
+    REDIS_STORAGE.set('READY', 0)
+    return 'OK'
 
 @shared_task(bind=True, queue='manage_blocks')
 def manage_blocks(self):
@@ -561,9 +357,11 @@ def manage_blocks(self):
             REDIS_STORAGE.set('READY', 0)
             bchd = BCHDQuery()
             transactions = bchd.get_block(block.number, full_transactions=True)
+            tasks = []
             for tr in transactions:
-                bchdbquery_transaction.delay(tr,block.id)
-
+                tasks.append(bchdbquery_transaction.si(tr,block.id))
+            chord( group( tasks ), ready_to_accept.si() )
+            
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
 

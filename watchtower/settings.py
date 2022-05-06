@@ -212,34 +212,34 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 
 
 CELERY_BEAT_SCHEDULE = {
-    # 'get_latest_block': {
-    #     'task': 'main.tasks.get_latest_block',
-    #     'schedule': 5
-    # },
-    # 'manage_blocks': {
-    #     'task': 'main.tasks.manage_blocks',
-    #     'schedule': 7
-    # },
-    # 'preload_smartbch_blocks': {
-    #     'task': 'smartbch.tasks.preload_new_blocks_task',
-    #     'schedule': 20,
-    # },
-    # 'parse_new_smartbch_blocks': {
-    #     'task': 'smartbch.tasks.parse_blocks_task',
-    #     'schedule': 30,
-    # },
-    # 'parse_token_contract_metadata': {
-    #     'task': 'smartbch.tasks.parse_token_contract_metadata_task',
-    #     'schedule': 300,
-    # },
-    # 'save_token_icons': {
-    #     'task': 'smartbch.tasks.save_token_icons_task',
-    #     'schedule': 300,
-    # },
-    # 'parse_missing_records': {
-    #     'task': 'smartbch.tasks.parse_missed_records_task',
-    #     'schedule': 60 * 20 # run every 20 minutes.
-    # }
+    'get_latest_block': {
+        'task': 'main.tasks.get_latest_block',
+        'schedule': 5
+    },
+    'manage_blocks': {
+        'task': 'main.tasks.manage_blocks',
+        'schedule': 7
+    },
+    'preload_smartbch_blocks': {
+        'task': 'smartbch.tasks.preload_new_blocks_task',
+        'schedule': 20,
+    },
+    'parse_new_smartbch_blocks': {
+        'task': 'smartbch.tasks.parse_blocks_task',
+        'schedule': 30,
+    },
+    'parse_token_contract_metadata': {
+        'task': 'smartbch.tasks.parse_token_contract_metadata_task',
+        'schedule': 300,
+    },
+    'save_token_icons': {
+        'task': 'smartbch.tasks.save_token_icons_task',
+        'schedule': 300,
+    },
+    'parse_missing_records': {
+        'task': 'smartbch.tasks.parse_missed_records_task',
+        'schedule': 60 * 20 # run every 20 minutes.
+    }
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
