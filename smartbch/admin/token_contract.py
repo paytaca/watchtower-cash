@@ -26,6 +26,7 @@ class TokenContractAdminForm(forms.ModelForm):
             "address",
             "name",
             "symbol",
+            "decimals",
             "image",
             "image_url",
             "image_url_source",
@@ -65,6 +66,7 @@ class TokenContractAdmin(admin.ModelAdmin):
         "address",
         "name",
         "symbol",
+        "decimals",
         "token_type",
     ]
     actions = [
@@ -75,7 +77,7 @@ class TokenContractAdmin(admin.ModelAdmin):
         if obj is None:
             return []
 
-        return ["address", "name", "symbol", "image_url_source"]
+        return ["address", "name", "symbol", "decimals", "image_url_source"]
 
     # def has_change_permission(self, request, obj=None):
     #     if obj:
