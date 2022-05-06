@@ -1,3 +1,4 @@
+import os
 from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -8,6 +9,13 @@ from django.contrib import (
 from smartbch.models import TokenContract
 
 from smartbch.utils.contract import get_or_save_token_contract_metadata
+
+def handle_uploaded_file(f, outpath):
+    with open(outpath, 'wb') as destination:
+        for chunk in f.chunks():
+            destination.write(chunk)
+    os.chmod(outpath, 0o444)
+
 
 class TokenContractAdminForm(forms.ModelForm):
     image = forms.FileField(required=False)
@@ -80,6 +88,7 @@ class TokenContractAdmin(admin.ModelAdmin):
             (file_type, file_ext) = file.content_type.split("/")
             image_file_name = f"{obj.address}.{file_ext}"
             path = f"{settings.TOKEN_IMAGES_DIR}/{image_file_name}"
+            handle_uploaded_file(file, path)
             image_server_base = 'https://images.watchtower.cash'
             image_url = f"{image_server_base}/{image_file_name}"
             obj.image_url = image_url
