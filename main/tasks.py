@@ -38,11 +38,6 @@ LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 
 
-@shared_task()
-def add(x, y):
-    return x + y
-
-
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
 def send_telegram_message(message, chat_id):
