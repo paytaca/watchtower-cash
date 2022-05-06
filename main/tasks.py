@@ -313,7 +313,7 @@ def bchdbquery_transaction(self, tr_point, block_id, alert=True):
 
 @shared_task(bind=True, queue='manage_blocks')
 def ready_to_accept(self):
-    REDIS_STORAGE.set('READY', 0)
+    REDIS_STORAGE.set('READY', 1)
     return 'OK'
 
 @shared_task(bind=True, queue='manage_blocks')
