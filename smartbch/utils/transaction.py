@@ -5,7 +5,7 @@ from django.utils.timezone import make_aware
 from web3.datastructures import AttributeDict
 from smartbch.models import Block, Transaction, TokenContract
 
-from .contract import abi
+from .contract import abi, get_token_decimals
 from .formatters import format_block_number
 from .web3 import create_web3_client
 
@@ -75,13 +75,24 @@ def save_transaction_transfers(txid, parse_block_timestamp=False):
                 }
             )
 
+            decimals = None
+            if token_contract_instance.decimals is not None:
+                decimals = token_contract_instance.decimals
+            else:
+                decimals = get_token_decimals(token_contract_instance.address)
+                token_contract_instance.decimals = decimals
+                token_contract_instance.save()
+
+            if decimals is None:
+                continue
+
             instance.transfers.update_or_create(
                 token_contract=token_contract_instance,
                 log_index=event_log.logIndex,
                 defaults = {
                     "to_addr": event_log.args.to,
                     "from_addr": event_log.args["from"],
-                    "amount": decimal.Decimal(event_log.args.value) / 10 ** 18,
+                    "amount": decimal.Decimal(event_log.args.value) / 10 ** decimals,
                     "token_id": None,
                 }
             )

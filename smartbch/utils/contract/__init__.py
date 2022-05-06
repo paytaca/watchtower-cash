@@ -2,6 +2,7 @@ import json
 import requests
 import functools
 import web3
+from web3 import exceptions
 from smartbch.models import TokenContract
 
 from ..web3 import create_web3_client
@@ -114,3 +115,21 @@ def get_or_save_token_contract_metadata(address, force=False):
     )
 
     return instance, updated
+
+def get_token_decimals(address):
+    """
+        Get decimal count of SEP-20 token
+
+    Return
+    ------------------
+        int,None
+    """
+    if not web3.Web3.isAddress(address):
+        return None, None
+
+    w3 = create_web3_client()
+    contract = w3.eth.contract(address, abi=get_token_abi(20))
+    try:
+        return contract.functions.decimals().call()
+    except exceptions.ContractLogicError:
+        return None

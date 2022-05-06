@@ -15,6 +15,7 @@ class TokenContractSerializer(serializers.ModelSerializer):
             "address",
             "name",
             "symbol",
+            "decimals",
             "image_url",
         )
 

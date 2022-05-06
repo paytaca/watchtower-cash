@@ -20,9 +20,10 @@ class TransactionUtilsTestCase(TestCase):
         self.assertIsInstance(tx_obj, Transaction)
 
     @tag("unit")
+    @mock.patch("smartbch.utils.contract.get_token_decimals", return_value=18)
     @mock.patch("web3.eth.Eth.get_transaction_receipt", return_value=mock_responses.test_sep20_transfer_tx_receipt)
     @mock.patch("web3.eth.Eth.get_transaction", return_value=mock_responses.test_sep20_transfer_tx)
-    def test_save_transaction_transfers(self, mock_tx, mock_tx_receipt):
+    def test_save_transaction_transfers(self, mock_tx, mock_tx_receipt, mock_get_token_decimals):
         txid = mock_tx.return_value.hash.hex()
         token_contract_address = mock_tx_receipt.return_value.logs[0].address
 
