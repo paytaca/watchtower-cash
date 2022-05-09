@@ -297,7 +297,7 @@ def bchdbquery_transaction(tr_point, block_id, alert=True):
         if token_id != '':
             # save slp transactions
             obj_id, created = save_record(
-                slp.token_id,
+                token_id,
                 slp.address,
                 txid,
                 slp.amount,
