@@ -49,7 +49,8 @@ def send_telegram_message(message, chat_id):
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
     return f"send notification to {chat_id}"
-    
+  
+
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, txid):
     this_transaction = Transaction.objects.filter(id=txid)
@@ -263,6 +264,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         
         return transaction_obj.id, transaction_created
 
+
 @shared_task(queue='bchdbquery_transaction')
 def bchdbquery_transaction(tr_point, block_id, alert=True):
     source ='bchdb'
@@ -307,10 +309,13 @@ def bchdbquery_transaction(tr_point, block_id, alert=True):
                 client_acknowledgement(obj_id)
         index += 1
 
+
 @shared_task(bind=True, queue='manage_blocks')
 def ready_to_accept(self):
     REDIS_STORAGE.set('READY', 1)
+    REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     return 'OK'
+
 
 @shared_task(bind=True, queue='manage_blocks')
 def manage_blocks(self):
