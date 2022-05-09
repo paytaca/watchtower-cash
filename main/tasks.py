@@ -1,4 +1,4 @@
-import math, logging, json, time, requests
+import logging, json, requests
 from urllib.parse import urlparse
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
@@ -15,8 +15,6 @@ from main.models import (
     WalletNftToken
 )
 from celery.exceptions import MaxRetriesExceededError 
-from main.utils import slpdb as slpdb_scanner
-from main.utils import bitdb as bitdb_scanner
 from main.utils.wallet import HistoryParser
 from django.db.utils import IntegrityError
 from django.conf import settings
@@ -27,12 +25,10 @@ from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.queries.bchd import BCHDQuery
-from bs4 import BeautifulSoup
 from PIL import Image, ImageFile
 from io import BytesIO 
-import base64
 import pytz
-from celery import group, chord
+from celery import group
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
@@ -267,8 +263,8 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         
         return transaction_obj.id, transaction_created
 
-@shared_task(bind=True, queue='bchdbquery_transaction')
-def bchdbquery_transaction(self, tr_point, block_id, alert=True):
+@shared_task(queue='bchdbquery_transaction')
+def bchdbquery_transaction(tr_point, block_id, alert=True):
     source ='bchdb'
     index = 0
     hash = tr_point.transaction.hash
@@ -357,11 +353,13 @@ def manage_blocks(self):
             REDIS_STORAGE.set('READY', 0)
             bchd = BCHDQuery()
             transactions = bchd.get_block(block.number, full_transactions=True)
-            tasks = []
+            subtasks = []
             for tr in transactions:
-                tasks.append(bchdbquery_transaction.si(tr,block.id))
-            chord( group( tasks ), ready_to_accept.si() )
-            
+                subtasks.append(bchdbquery_transaction.si(tr,block.id))
+            grouped_task = group(subtasks)
+            chain_tasks = (grouped_task | ready_to_accept.si())
+            chain_tasks()
+          
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
 
