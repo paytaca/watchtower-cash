@@ -273,10 +273,11 @@ def bchdbquery_transaction(tr_point, block_id, alert=True):
     txid = bytearray(hash[::-1]).hex()
     for out in tr_point.transaction.outputs:
         if not int(out.value): continue
+        if len(out.address) != 42: continue
         # save bch transactions
         args = (
             'bch',
-            out.address,
+            'bitcoincash:%s' % out.address,
             txid,
             out.value,
             source,
@@ -298,7 +299,7 @@ def bchdbquery_transaction(tr_point, block_id, alert=True):
             # save slp transactions
             obj_id, created = save_record(
                 token_id,
-                slp.address,
+                'simpleledger:%s' % slp.address,
                 txid,
                 slp.amount,
                 source,
