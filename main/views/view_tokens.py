@@ -48,7 +48,7 @@ class TokensViewSet(
             data['success'] = False
             data['error'] = 'invalid_token_id'
         serializer = self.serializer_class(data=data)
-        return Response(serializer=serializer.data)
+        return Response(data=serializer.initial_data)
 
 
 class WalletTokensView(APIView):
