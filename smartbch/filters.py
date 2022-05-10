@@ -205,6 +205,9 @@ class TransactionTransferViewsetFilter(BaseFilterBackend, FilterBackendUtils):
 class TokenContractViewSetFilter(BaseFilterBackend, FilterBackendUtils):
     ADDRESSES_QUERY_NAME = "token_addresses"
     HAS_IMAGE_URL_QUERY_NAME = "has_image"
+    TOKEN_TYPE_QUERY_NAME = "token_type"
+    EXCLUDE_ADDRESSES_QUERY_NAME = "exclude_addresses"
+    WALLET_ADDRESSES_QUERY_NAME = "wallet_addresses"
 
     def filter_queryset_by_address(self, request, queryset, view):
         addresses = self._parse_query_param(request, self.ADDRESSES_QUERY_NAME)
@@ -229,6 +232,27 @@ class TokenContractViewSetFilter(BaseFilterBackend, FilterBackendUtils):
             else:
                 queryset = queryset.filter(models.Q(image_url__isnull=True) | models.Q(image_url__lte=0))
 
+        return queryset
+
+    def filter_queryset_by_token_type(self, request, queryset, view):
+        token_type = self._parse_query_param(request, self.TOKEN_TYPE_QUERY_NAME, is_list=False)
+        if token_type:
+            queryset = queryset.filter(token_type=token_type)
+        return queryset
+
+    def filter_queryset_by_exclude_addresses(self, request, queryset, view):
+        exclude_addresses = self._parse_query_param(request, self.EXCLUDE_ADDRESSES_QUERY_NAME, is_list=True)
+        if len(exclude_addresses):
+            _exclude_addresses_filter = self._case_insensitive_list_filter(name="address", values=exclude_addresses)
+            queryset = queryset.exclude(_exclude_addresses_filter)
+        return queryset
+    
+    def filter_queryset_by_wallet_address(self, request, queryset, view):
+        addresses = self._parse_query_param(request, self.WALLET_ADDRESSES_QUERY_NAME)
+        if addresses:
+            from_addr_filter = self._case_insensitive_list_filter(name="transfers__from_addr", values=addresses)
+            to_addr_filter = self._case_insensitive_list_filter(name="transfers__to_addr", values=addresses)
+            queryset = queryset.filter(models.Q(from_addr_filter | to_addr_filter)).distinct()
         return queryset
 
     def get_schema_fields(self, view):
@@ -267,6 +291,16 @@ class TokenContractViewSetFilter(BaseFilterBackend, FilterBackendUtils):
                 }
             },
             {
+                "name": self.EXCLUDE_ADDRESSES_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.EXCLUDE_ADDRESSES_QUERY_NAME.capitalize(),
+                "description": f"Exclude token addresses specified, separated by comma ','",
+                "schema": {
+                    "type": "string",
+                }
+            },
+            {
                 "name": self.HAS_IMAGE_URL_QUERY_NAME,
                 "required": False,
                 "in": "query",
@@ -276,11 +310,34 @@ class TokenContractViewSetFilter(BaseFilterBackend, FilterBackendUtils):
                     "type": "boolean",
                 }
             },
+            {
+                "name": self.TOKEN_TYPE_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.TOKEN_TYPE_QUERY_NAME.capitalize(),
+                "description": f"Filter by token type (e.g. '20', '721')",
+                "schema": {
+                    "type": "string",
+                }
+            },
+            {
+                "name": self.WALLET_ADDRESSES_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.WALLET_ADDRESSES_QUERY_NAME.capitalize(),
+                "description": f"Filter by transaction transfers on the addresses separated by comma ','",
+                "schema": {
+                    "type": "string",
+                }
+            },
         ]
 
 
     def filter_queryset(self, request, queryset, view):
         queryset = self.filter_queryset_by_address(request, queryset, view)
         queryset = self.filter_queryset_has_image_url(request, queryset, view)
+        queryset = self.filter_queryset_by_token_type(request, queryset, view)
+        queryset = self.filter_queryset_by_exclude_addresses(request, queryset, view)
+        queryset = self.filter_queryset_by_wallet_address(request, queryset, view)
 
         return queryset
