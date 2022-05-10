@@ -8,6 +8,7 @@ app_name = "main"
 
 
 router = routers.DefaultRouter()
+router.register(r"tokens", views.TokensViewSet, basename="tokens")
 
 main_urls = router.urls
 
@@ -30,7 +31,7 @@ main_urls += [
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/$", views.WalletHistoryView.as_view(),name='wallet-history'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/(?P<tokenid>[\w+]+)/$", views.WalletHistoryView.as_view(),name='wallet-history-token'),
     re_path(r"^tokens/wallet/(?P<wallethash>[\w+:]+)/$", views.WalletTokensView.as_view(),name='wallet-tokens'),
-    re_path(r"^tokens/(?P<tokenid>[\w+:]+)/$", views.TokensView.as_view(),name='tokens'),
+    # re_path(r"^tokens/(?P<tokenid>[\w+:]+)/$", views.TokensView.as_view(),name='tokens'),
     path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction")
 ]
 

@@ -1,20 +1,39 @@
+from rest_framework import viewsets, mixins
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import F
 from rest_framework import status
+
+from main.filters import TokensViewSetFilter
 from main.models import (
     Token,
     WalletHistory,
     Token,
     WalletNftToken
 )
+from main.serializers import TokenSerializer
 from main.tasks import get_token_meta_data
 
+from smartbch.pagination import CustomLimitOffsetPagination
 
 
-class TokensView(APIView):
+class TokensViewSet(
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin
+):
+    lookup_field="tokenid"
+    serializer_class = TokenSerializer
+    pagination_class = CustomLimitOffsetPagination
 
-    def get(self, request, *args, **kwargs):
+    filter_backends = [
+        TokensViewSetFilter
+    ]
+
+    def get_queryset(self):
+        return Token.objects.all()
+
+    def retrieve(self, request, *args, **kwargs):
         token_id = kwargs.get('tokenid', None)
         token_check = Token.objects.filter(tokenid=token_id)
         data = None
@@ -28,7 +47,8 @@ class TokensView(APIView):
         else:
             data['success'] = False
             data['error'] = 'invalid_token_id'
-        return Response(data)
+        serializer = self.serializer_class(data=data)
+        return Response(serializer=serializer.data)
 
 
 class WalletTokensView(APIView):

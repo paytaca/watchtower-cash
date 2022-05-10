@@ -47,6 +47,19 @@ class Token(PostgresModel):
         else:
             return str(self.name)
 
+    @property
+    def info_id(self):
+        if self.token_type:
+            return 'slp/' + self.tokenid
+        else:
+            return self.name.lower()
+    @property
+    def image_url(self):
+        if self.thumbnail_image_url:
+            return self.thumbnail_image_url
+
+        return self.original_image_url
+
     def get_info(self):
         if self.token_type:
             info_id = 'slp/' + self.tokenid
