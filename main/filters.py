@@ -1,8 +1,10 @@
 from urllib.parse import unquote
-from django.db.models import Sum, Q
-from django.db.models.functions import Coalesce
+from django.db.models import Q
+from django.db.models import Exists, OuterRef
 from rest_framework.compat import coreapi, coreschema
 from rest_framework.filters import BaseFilterBackend
+
+from main.models import Transaction
 
 class TokensViewSetFilter(BaseFilterBackend):
     WALLET_HASH_QUERY_NAME = "wallet_hash"
@@ -44,12 +46,20 @@ class TokensViewSetFilter(BaseFilterBackend):
         if wallet_hash:
             queryset = queryset.filter(transaction__wallet__wallet_hash=wallet_hash)
             if has_balance is not None:
-                queryset = queryset.filter(transaction__spent=False)
-                queryset = queryset.annotate(_wallet_balance = Coalesce(Sum('transaction__amount'), 0))
+                # Since transaction amount will always be positive,
+                # instead of using SUM operator against all transaction, we will only check if
+                # the filtered wallet has(or doesnt have) any unspent transaction that has amount greater than zero,
+                subquery = Transaction.objects.filter(
+                    spent=False,
+                    token_id=OuterRef('pk'),
+                    amount__gte=0,
+                )
                 if has_balance:
-                    queryset = queryset.filter(_wallet_balance__gt=0)
+                    queryset = queryset.filter(Exists(subquery))
                 else:
-                    queryset = queryset.filter(_wallet_balance__lte=0)
+                    queryset = queryset.filter(~Exists(subquery))
+
+        queryset = queryset.distinct()
 
         return queryset
 
