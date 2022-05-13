@@ -8,6 +8,7 @@ class TokensViewSetFilter(BaseFilterBackend):
     WALLET_HASH_QUERY_NAME = "wallet_hash"
     HAS_BALANCE_QUERY_NAME = "has_balance"
     EXCLUDE_TOKEN_IDS_QUERY_NAME = "exclude_token_ids"
+    TOKEN_TYPE_QUERY_NAME = "token_type"
 
     def _parse_query_param(self, request, query_param, is_list=True, separator=",") -> (str, any):
         val = unquote(request.query_params.get(query_param, ""))
@@ -60,9 +61,16 @@ class TokensViewSetFilter(BaseFilterBackend):
             queryset = queryset.exclude(_exclude_token_ids_filter)
         return queryset
 
+    def filter_queryset_by_token_type(self, request, queryset, view):
+        token_type = self._parse_query_param(request, self.TOKEN_TYPE_QUERY_NAME, is_list=False)
+        if token_type:
+            queryset = queryset.filter(token_type=token_type)
+        return queryset
+
     def filter_queryset(self, request, queryset, view):
         queryset = self.filter_queryset_by_wallet_hash(request, queryset, view)
         queryset = self.filter_queryset_by_exclude_token_ids(request, queryset, view)
+        queryset = self.filter_queryset_by_token_type(request, queryset, view)
 
         return queryset
 
@@ -117,6 +125,16 @@ class TokensViewSetFilter(BaseFilterBackend):
                 "in": "query",
                 "title": self.EXCLUDE_TOKEN_IDS_QUERY_NAME.capitalize(),
                 "description": f"Exclude tokenids separated by comma ','",
+                "schema": {
+                    "type": "string",
+                }
+            },
+            {
+                "name": self.TOKEN_TYPE_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.TOKEN_TYPE_QUERY_NAME.capitalize(),
+                "description": f"Filter by token type",
                 "schema": {
                     "type": "string",
                 }
