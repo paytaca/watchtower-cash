@@ -265,13 +265,14 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         return transaction_obj.id, transaction_created
 
 
-@shared_task(queue='bchdbquery_transaction')
-def bchdbquery_transaction(tr_point, block_id, alert=True):
-    source ='bchdb'
+@shared_task(queue='bchdquery_transaction')
+def bchdquery_transaction(transaction, block_id, alert=True):
+    source ='bchd'
     index = 0
-    hash = tr_point.transaction.hash
+    hash = transaction.hash
     txid = bytearray(hash[::-1]).hex()
-    for out in tr_point.transaction.outputs:
+    bchd = BCHDQuery()
+    for out in transaction.outputs:
         if not int(out.value): continue
         if len(out.address) != 42: continue
         # save bch transactions
@@ -361,11 +362,11 @@ def manage_blocks(self):
             transactions = bchd.get_block(block.number, full_transactions=True)
             subtasks = []
             for tr in transactions:
-                subtasks.append(bchdbquery_transaction.si(tr,block.id))
+                subtasks.append(bchdquery_transaction.si(tr.transaction, block.id))
             grouped_task = group(subtasks)
             chain_tasks = (grouped_task | ready_to_accept.si())
             chain_tasks()
-          
+
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
 
