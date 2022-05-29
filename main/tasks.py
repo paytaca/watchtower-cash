@@ -28,7 +28,7 @@ from main.utils.queries.bchd import BCHDQuery
 from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
-from celery import group
+from celery import chord
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
@@ -239,81 +239,92 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         except IntegrityError:
             return None, None
 
-        transaction_obj = Transaction.objects.get(
-            txid=transactionid,
-            address=address_obj,
-            token=token_obj,
-            amount=amount,
-            index=index
-        )
+        if transaction_created:
+            transaction_obj = Transaction.objects.get(
+                txid=transactionid,
+                address=address_obj,
+                token=token_obj,
+                amount=amount,
+                index=index
+            )
 
-        if blockheightid is not None:
-            transaction_obj.blockheight_id = blockheightid
-            if new_subscription:
-                transaction_obj.acknowledged = True
+            if blockheightid is not None:
+                transaction_obj.blockheight_id = blockheightid
+                if new_subscription:
+                    transaction_obj.acknowledged = True
 
-            # Automatically update all transactions with block height.
-            Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
+                # Automatically update all transactions with block height.
+                Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
 
-        # Check if address belongs to a wallet
-        if address_obj.wallet:
-            transaction_obj.wallet = address_obj.wallet
+            # Check if address belongs to a wallet
+            if address_obj.wallet:
+                transaction_obj.wallet = address_obj.wallet
 
-        # Save updates and trigger post-save signals
-        transaction_obj.save()
-        
-        return transaction_obj.id, transaction_created
+            # Save updates and trigger post-save signals
+            transaction_obj.save()
+            
+            return transaction_obj.id, transaction_created
+        else:
+            return None, None
 
 
 @shared_task(queue='bchdquery_transaction')
-def bchdquery_transaction(transaction, block_id, alert=True):
+def bchdquery_transaction(txid, block_id, alert=True):
     source ='bchd'
     index = 0
-    hash = transaction.hash
-    txid = bytearray(hash[::-1]).hex()
     bchd = BCHDQuery()
+    transaction = bchd._get_raw_transaction(txid)
+    if not transaction.outputs: return None
     for out in transaction.outputs:
-        if not int(out.value): continue
-        if len(out.address) != 42: continue
-        # save bch transactions
-        args = (
-            'bch',
-            'bitcoincash:%s' % out.address,
-            txid,
-            out.value,
-            source,
-            block_id,
-            index
-        )
-        obj_id, created = save_record(*args)
-        if created and alert:
-            third_parties = client_acknowledgement(obj_id)
-            for platform in third_parties:
-                if 'telegram' in platform:
-                    message = platform[1]
-                    chat_id = platform[2]
-                    send_telegram_message(message, chat_id)
+        if len(out.address) == 42 and int(out.value):
+            if out.address:
+                block_height = BlockHeight.objects.get(id=block_id)
+                LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block_height.number} | TX: {txid} | ADDRESS: {out.address}")
 
-        slp = out.slp_token
-        token_id = bytearray(slp.token_id).hex()
-        if token_id != '':
-            # save slp transactions
-            obj_id, created = save_record(
-                token_id,
-                'simpleledger:%s' % slp.address,
-                txid,
-                slp.amount,
-                source,
-                blockheightid=block_id,
-                index=index
-            )            
-            if created and alert:
-                client_acknowledgement(obj_id)
+            slp = out.slp_token
+            token_id = bytearray(slp.token_id).hex()
+            if token_id != '':
+                # save slp transaction
+                obj_id, created = save_record(
+                    token_id,
+                    'simpleledger:%s' % slp.address,
+                    txid,
+                    slp.amount,
+                    source,
+                    blockheightid=block_id,
+                    index=index
+                )            
+                if created and alert:
+                    client_acknowledgement(obj_id)
+            else:
+                # save bch transaction
+                args = (
+                    'bch',
+                    'bitcoincash:%s' % out.address,
+                    txid,
+                    out.value,
+                    source,
+                    block_id,
+                    index
+                )
+                obj_id, created = save_record(*args)
+                if created and alert:
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)
         index += 1
 
 
 @shared_task(bind=True, queue='manage_blocks')
-def ready_to_accept(self):
+def ready_to_accept(self, block_number, txs_count):
+    BlockHeight.objects.filter(number=block_number).update(
+        processed=True,
+        transactions_count=txs_count,
+        updated_datetime=timezone.now()
+    )
     REDIS_STORAGE.set('READY', 1)
     REDIS_STORAGE.set('ACTIVE-BLOCK', '')
     return 'OK'
@@ -359,16 +370,18 @@ def manage_blocks(self):
             REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
             REDIS_STORAGE.set('READY', 0)
             bchd = BCHDQuery()
-            transactions = bchd.get_block(block.number, full_transactions=True)
+            transactions = bchd.get_block(block.number, full_transactions=False)
             subtasks = []
             for tr in transactions:
-                subtasks.append(bchdquery_transaction.si(tr.transaction, block.id))
-            grouped_task = group(subtasks)
-            chain_tasks = (grouped_task | ready_to_accept.si())
-            chain_tasks()
+                txid = bytearray(tr.transaction_hash[::-1]).hex()
+                subtasks.append(bchdquery_transaction.si(txid, block.id))
+            callback = ready_to_accept.si(block.number, len(subtasks))
+            # Execute the workflow
+            workflow = chord(subtasks)(callback)
+            workflow.apply_async()
 
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
-    if active_block: return f'REDIS IS TOO BUSY FOR BLOCK {str(active_block)}.'
+    if active_block: return f'CURRENTLY PROCESSING BLOCK {str(active_block)}.'
 
 
 @shared_task(bind=True, queue='get_latest_block')
