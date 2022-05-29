@@ -214,33 +214,33 @@ def save_record(token, transaction_address, transactionid, amount, source, block
             if created:
                 get_token_meta_data.delay(token)
 
-        try:
+        # try:
 
-            #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
-            tr = Transaction.objects.filter(
-                txid=transactionid,
-                address=address_obj,
-                index=index,
-            )
+        #     #  USE FILTER AND BULK CREATE AS A REPLACEMENT FOR GET_OR_CREATE        
+        #     tr = Transaction.objects.filter(
+        #         txid=transactionid,
+        #         address=address_obj,
+        #         index=index,
+        #     )
             
-            if not tr.exists():
+        #     if not tr.exists():
 
-                transaction_data = {
-                    'txid': transactionid,
-                    'address': address_obj,
-                    'token': token_obj,
-                    'amount': amount,
-                    'index': index,
-                    'source': source
-                }
-                transaction_list = [Transaction(**transaction_data)]
-                Transaction.objects.bulk_create(transaction_list)
-                transaction_created = True
-        except IntegrityError:
-            return None, None
+        #         transaction_data = {
+        #             'txid': transactionid,
+        #             'address': address_obj,
+        #             'token': token_obj,
+        #             'amount': amount,
+        #             'index': index,
+        #             'source': source
+        #         }
+        #         transaction_list = [Transaction(**transaction_data)]
+        #         Transaction.objects.bulk_create(transaction_list)
+        #         transaction_created = True
+        # except IntegrityError:
+        #     return None, None
 
-        if transaction_created:
-            transaction_obj = Transaction.objects.get(
+        try:
+            transaction_obj, transaction_created = Transaction.objects.get_or_create(
                 txid=transactionid,
                 address=address_obj,
                 token=token_obj,
@@ -248,24 +248,30 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 index=index
             )
 
-            if blockheightid is not None:
-                transaction_obj.blockheight_id = blockheightid
-                if new_subscription:
-                    transaction_obj.acknowledged = True
+            if transaction_obj.source != source:
+                transaction_obj.source = source
 
-                # Automatically update all transactions with block height.
-                Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
-
-            # Check if address belongs to a wallet
-            if address_obj.wallet:
-                transaction_obj.wallet = address_obj.wallet
-
-            # Save updates and trigger post-save signals
-            transaction_obj.save()
-            
-            return transaction_obj.id, transaction_created
-        else:
+        except IntegrityError as exc:
+            LOGGER.error('ERROR in saving txid: ' + transactionid)
+            LOGGER.error(str(exc))
             return None, None
+
+        if blockheightid is not None:
+            transaction_obj.blockheight_id = blockheightid
+            if new_subscription:
+                transaction_obj.acknowledged = True
+
+            # Automatically update all transactions with block height.
+            Transaction.objects.filter(txid=transactionid).update(blockheight_id=blockheightid)
+
+        # Check if address belongs to a wallet
+        if address_obj.wallet:
+            transaction_obj.wallet = address_obj.wallet
+
+        # Save updates and trigger post-save signals
+        transaction_obj.save()
+        
+        return transaction_obj.id, transaction_created
 
 
 @shared_task(queue='bchdquery_transaction')
@@ -274,47 +280,49 @@ def bchdquery_transaction(txid, block_id, alert=True):
     index = 0
     bchd = BCHDQuery()
     transaction = bchd._get_raw_transaction(txid)
-    if not transaction.outputs: return None
-    for out in transaction.outputs:
-        if len(out.address) == 42 and int(out.value):
-            if out.address:
-                block_height = BlockHeight.objects.get(id=block_id)
-                LOGGER.info(f" * SOURCE: {source.upper()} | BLOCK {block_height.number} | TX: {txid} | ADDRESS: {out.address}")
 
-            slp = out.slp_token
-            token_id = bytearray(slp.token_id).hex()
-            if token_id != '':
-                # save slp transaction
-                obj_id, created = save_record(
-                    token_id,
-                    'simpleledger:%s' % slp.address,
-                    txid,
-                    slp.amount,
-                    source,
-                    blockheightid=block_id,
-                    index=index
-                )            
-                if created and alert:
-                    client_acknowledgement(obj_id)
-            else:
-                # save bch transaction
-                args = (
-                    'bch',
-                    'bitcoincash:%s' % out.address,
-                    txid,
-                    out.value,
-                    source,
-                    block_id,
-                    index
-                )
-                obj_id, created = save_record(*args)
-                if created and alert:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+    for output in transaction.outputs:
+        if output.address:
+            # save bch transaction
+            amount = output.value / (10 ** 8)
+            obj_id, created = save_record(
+                'bch',
+                'bitcoincash:%s' % output.address,
+                txid,
+                amount,
+                source,
+                blockheightid=block_id,
+                index=index
+            )
+            if created and alert:
+                third_parties = client_acknowledgement(obj_id)
+                for platform in third_parties:
+                    if 'telegram' in platform:
+                        message = platform[1]
+                        chat_id = platform[2]
+                        send_telegram_message(message, chat_id)
+
+        if output.slp_token.token_id:
+            token_id = bytearray(output.slp_token.token_id).hex()
+            amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+            # save slp transaction
+            obj_id, created = save_record(
+                token_id,
+                'simpleledger:%s' % output.slp_token.address,
+                txid,
+                amount,
+                source,
+                blockheightid=block_id,
+                index=index
+            )            
+            if created and alert:
+                third_parties = client_acknowledgement(obj_id)
+                for platform in third_parties:
+                    if 'telegram' in platform:
+                        message = platform[1]
+                        chat_id = platform[2]
+                        send_telegram_message(message, chat_id)
+
         index += 1
 
 
