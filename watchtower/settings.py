@@ -180,7 +180,7 @@ CELERY_RESULT_BACKEND = 'rpc://'
 
 if REDIS_PASSWORD:
     # CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    # CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
@@ -216,8 +216,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
     },
-    'manage_block_transactions': {
-        'task': 'main.tasks.manage_block_transactions',
+    'manage_blocks': {
+        'task': 'main.tasks.manage_blocks',
         'schedule': 7
     },
     'preload_smartbch_blocks': {
