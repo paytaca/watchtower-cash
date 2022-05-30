@@ -32,9 +32,9 @@ def safe_cast(value, var_type=str, default=None):
 def decipher(value):
     try:
         return base64.b64decode(value.encode()).decode()
-    except Exception as exc:
-        if str(exc) == 'Incorrect padding':
-            return value
+    except:
+        return value
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
@@ -124,10 +124,7 @@ DATABASES = {
         'HOST': POSTGRES_HOST,
         'PORT': POSTGRES_PORT,
         'USER': POSTGRES_USER,
-        'PASSWORD': POSTGRES_PASSWORD,
-        # 'OPTIONS': {
-        #     'isolation_level': psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE,
-        # }
+        'PASSWORD': POSTGRES_PASSWORD
     }
 }
 
