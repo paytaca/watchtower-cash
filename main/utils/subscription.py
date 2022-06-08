@@ -116,18 +116,21 @@ def new_subscription(**kwargs):
                                 wallet.save()
                             address_obj.wallet = wallet
                             address_obj.save()
+                    
+                    try:
+                        _, created = Subscription.objects.get_or_create(
+                            recipient=recipient,
+                            address=address_obj
+                        )
 
-                    _, created = Subscription.objects.get_or_create(
-                        recipient=recipient,
-                        address=address_obj
-                    )
-
-                    if address.startswith('simpleledger'):
-                        get_slp_utxos.delay(address)
-                    elif address.startswith('bitcoincash'):
-                        get_bch_utxos.delay(address)
-                    elif web3.Web3.isAddress(address):
-                        save_transactions_by_address.delay(address)
+                        if address.startswith('simpleledger'):
+                            get_slp_utxos.delay(address)
+                        elif address.startswith('bitcoincash'):
+                            get_bch_utxos.delay(address)
+                        elif web3.Web3.isAddress(address):
+                            save_transactions_by_address.delay(address)
+                    except Subscription.MultipleObjectsReturned:
+                        pass
 
                     response['success'] = True
             else:
