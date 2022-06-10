@@ -48,8 +48,6 @@ DEBUG = False
 DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
 
 ALLOWED_HOSTS = [
-    'watchtower.scibizinformatics.com',
-    'localhost',
     '*'
 ]
 
