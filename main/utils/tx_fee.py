@@ -1,5 +1,12 @@
 import re
 
+def truncate(num, digits):
+    sp = str(num).split('.')
+    if len(sp) == 2:
+        return float('.'.join([sp[0], sp[1][:digits]]))
+    else:
+        return num
+
 def is_hex(value):
     return bool(re.match("0x[0-9a-f]*", value, flags=re.IGNORECASE))
 
@@ -7,7 +14,7 @@ def bch_to_satoshi(value):
     return value * (10 ** 8)
 
 def satoshi_to_bch(value):
-    return round(value / (10 ** 8), 8)
+    return truncate(value / (10 ** 8), 8)
 
 def get_multisig_input_byte_count(count=0, signers=0, size=0):
     """

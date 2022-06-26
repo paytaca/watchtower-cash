@@ -54,6 +54,13 @@ def _get_bch_balance(query):
 
 class Balance(APIView):
 
+    def truncate(self, num, digits):
+        sp = str(num).split('.')
+        if len(sp) == 2:
+            return float('.'.join([sp[0], sp[1][:digits]]))
+        else:
+            return num
+
     @swagger_auto_schema(responses={ 200: serializers.BalanceResponseSerializer })
     def get(self, request, *args, **kwargs):
         slpaddress = kwargs.get('slpaddress', '')
@@ -84,11 +91,12 @@ class Balance(APIView):
             qs_balance, qs_count = _get_bch_balance(query)
             bch_balance = qs_balance['balance'] or 0
 
-            data['spendable'] = int(bch_to_satoshi(bch_balance)) - round(get_tx_fee_sats(p2pkh_input_count=qs_count))
+            data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
             data['spendable'] = satoshi_to_bch(data['spendable'])
             data['spendable'] = max(data['spendable'], 0)
+            data['spendable'] = self.truncate(data['spendable'], 8)
 
-            data['balance'] = round(bch_balance, 8)
+            data['balance'] = self.truncate(bch_balance, 8)
             data['valid'] = True
 
         if wallet_hash:
@@ -116,9 +124,10 @@ class Balance(APIView):
                 qs_balance, qs_count = _get_bch_balance(query)
                 bch_balance = qs_balance['balance']
 
-                data['spendable'] = int(bch_to_satoshi(bch_balance)) - round(get_tx_fee_sats(p2pkh_input_count=qs_count))
+                data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
                 data['spendable'] = satoshi_to_bch(data['spendable'])
                 data['spendable'] = max(data['spendable'], 0)
+                data['spendable'] = self.truncate(data['spendable'], 8)
 
                 data['balance'] = round(qs_balance['balance'], 8)
                 data['valid'] = True
