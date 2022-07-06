@@ -89,6 +89,11 @@ def get_token_contract_metadata(address):
 
     return name, symbol
 
+def _truncate_text(name, length):
+    if isinstance(name, str):
+        return name[0:length]
+    else:
+        return ''
 
 def get_or_save_token_contract_metadata(address, force=False):
     """
@@ -109,8 +114,8 @@ def get_or_save_token_contract_metadata(address, force=False):
     instance, updated = TokenContract.objects.update_or_create(
         address=address,
         defaults={
-            "name": name or "",
-            "symbol": symbol or "",
+            "name": _truncate_text(name, 100),
+            "symbol": _truncate_text(symbol, 50),
         }
     )
 
