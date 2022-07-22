@@ -8,6 +8,7 @@ from main.models import Transaction
 
 class TokensViewSetFilter(BaseFilterBackend):
     WALLET_HASH_QUERY_NAME = "wallet_hash"
+    ADDRESS_QUERY_NAME = "address"
     HAS_BALANCE_QUERY_NAME = "has_balance"
     EXCLUDE_TOKEN_IDS_QUERY_NAME = "exclude_token_ids"
     TOKEN_TYPE_QUERY_NAME = "token_type"
@@ -33,7 +34,38 @@ class TokensViewSetFilter(BaseFilterBackend):
             })
         return _filter
 
+    def filter_queryset_by_address(self, request, queryset, view):
+        address = self._parse_query_param(request, self.ADDRESS_QUERY_NAME, is_list=False)
+        has_balance = self._parse_query_param(request, self.HAS_BALANCE_QUERY_NAME, is_list=False)
+        if has_balance.lower() == "true":
+            has_balance = True
+        elif has_balance.lower() == "false":
+            has_balance = False
+        else:
+            has_balance = None
+
+        if address:
+            queryset = queryset.filter(transaction__address__address=address)
+            if has_balance is not None:
+                # Since transaction amount will always be positive,
+                # instead of using SUM operator against all transaction, we will only check if
+                # the filtered wallet has(or doesnt have) any unspent transaction that has amount greater than zero,
+                subquery = Transaction.objects.filter(
+                    spent=False,
+                    token_id=OuterRef('pk'),
+                    amount__gte=0,
+                )
+                if has_balance:
+                    queryset = queryset.filter(Exists(subquery))
+                else:
+                    queryset = queryset.filter(~Exists(subquery))
+
+        queryset = queryset.distinct()
+
+        return queryset
+
     def filter_queryset_by_wallet_hash(self, request, queryset, view):
+        address = self._parse_query_param(request, self.ADDRESS_QUERY_NAME, is_list=False)
         wallet_hash = self._parse_query_param(request, self.WALLET_HASH_QUERY_NAME, is_list=False)
         has_balance = self._parse_query_param(request, self.HAS_BALANCE_QUERY_NAME, is_list=False)
         if has_balance.lower() == "true":
@@ -43,8 +75,13 @@ class TokensViewSetFilter(BaseFilterBackend):
         else:
             has_balance = None
 
+        if address:
+            queryset = queryset.filter(transaction__address__address=address)
+
         if wallet_hash:
             queryset = queryset.filter(transaction__wallet__wallet_hash=wallet_hash)
+
+        if address or wallet_hash:
             if has_balance is not None:
                 # Since transaction amount will always be positive,
                 # instead of using SUM operator against all transaction, we will only check if
@@ -78,6 +115,7 @@ class TokensViewSetFilter(BaseFilterBackend):
         return queryset
 
     def filter_queryset(self, request, queryset, view):
+        queryset = self.filter_queryset_by_address(request, queryset, view)
         queryset = self.filter_queryset_by_wallet_hash(request, queryset, view)
         queryset = self.filter_queryset_by_exclude_token_ids(request, queryset, view)
         queryset = self.filter_queryset_by_token_type(request, queryset, view)
@@ -109,6 +147,16 @@ class TokensViewSetFilter(BaseFilterBackend):
 
     def _get_schema_details(self, view):
         return [
+            {
+                "name": self.ADDRESS_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.ADDRESS_QUERY_NAME.capitalize(),
+                "description": f"Filter tokens that have transactions related to the address",
+                "schema": {
+                    "type": "string",
+                }
+            },
             {
                 "name": self.WALLET_HASH_QUERY_NAME,
                 "required": False,
