@@ -1,5 +1,5 @@
 from drf_yasg.utils import swagger_auto_schema
-from main.models import Transaction, Wallet
+from main.models import Transaction, Wallet, Token
 from django.db.models import Q, Sum, F
 from django.db.models.functions import Coalesce
 from rest_framework.response import Response
@@ -81,8 +81,12 @@ class Balance(APIView):
                 multiple = True
                 query =  Q(address__address=data['address']) & Q(spent=False)
             qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
-            data['balance'] = qs_balance['amount__sum'] or 0
-            data['spendable'] = data['balance']
+            token = Token.objects.get(tokenid=tokenid)
+            balance = qs_balance['amount__sum'] or 0
+            if balance > 0 and token.decimals:
+                balance = self.truncate(balance, token.decimals)
+            data['balance'] = balance
+            data['spendable'] = balance
             data['valid'] = True
         
         if bchaddress.startswith('bitcoincash:'):
