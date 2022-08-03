@@ -54,10 +54,22 @@ def _get_bch_balance(query):
 
 class Balance(APIView):
 
-    def truncate(self, num, digits):
-        sp = str(num).split('.')
+    def truncate(self, num, decimals):
+        """
+        Truncate instead of rounding off
+        Rounding off sometimes results to a value greater than the actual balance
+        """
+        # Preformat first if it it's in scientific notation form
+        if 'e-' in str(num):
+            num, power = str(num).split('e-')
+            power = int(power)
+            num = num.replace('.', '')
+            left_pad = (power - 1) * '0'
+            sp = '0.' + left_pad + num
+        # Proceed to truncate
+        sp = str(sp).split('.')
         if len(sp) == 2:
-            return float('.'.join([sp[0], sp[1][:digits]]))
+            return float('.'.join([sp[0], sp[1][:decimals]]))
         else:
             return num
 
@@ -118,8 +130,12 @@ class Balance(APIView):
                 if multiple:
                     pass
                 else:
-                    data['balance'] = qs_balance['amount__sum'] or 0
-                    data['spendable'] = data['balance']
+                    token = Token.objects.get(tokenid=tokenid)
+                    balance = qs_balance['amount__sum'] or 0
+                    if balance > 0 and token.decimals:
+                        balance = self.truncate(balance, token.decimals)
+                    data['balance'] = balance
+                    data['spendable'] = balance
                     data['token_id'] = tokenid
                     data['valid'] = True
 
@@ -133,7 +149,7 @@ class Balance(APIView):
                 data['spendable'] = max(data['spendable'], 0)
                 data['spendable'] = self.truncate(data['spendable'], 8)
 
-                data['balance'] = round(qs_balance['balance'], 8)
+                data['balance'] = self.truncate(qs_balance['balance'], 8)
                 data['valid'] = True
 
         return Response(data=data, status=status.HTTP_200_OK)
