@@ -66,8 +66,10 @@ class Balance(APIView):
             num = num.replace('.', '')
             left_pad = (power - 1) * '0'
             sp = '0.' + left_pad + num
+        else:
+            sp = str(num)
         # Proceed to truncate
-        sp = str(sp).split('.')
+        sp = sp.split('.')
         if len(sp) == 2:
             return float('.'.join([sp[0], sp[1][:decimals]]))
         else:
