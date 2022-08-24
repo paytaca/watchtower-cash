@@ -30,7 +30,7 @@ class Block(PostgresModel):
         return cls.objects.aggregate(value = models.Max("block_number")).get("value")
 
     @classmethod
-    def get_missing_block_numbers(cls, start_block_number=None, end_block_number=None, descending=False, limit=None):
+    def __get_missing_block_numbers(cls, start_block_number=None, end_block_number=None, descending=False, limit=None):
         """
             Gets block numbers not in db in ascending order
 
@@ -78,6 +78,25 @@ class Block(PostgresModel):
                 close_iterator()
 
         return cursor.rowcount, generator(cursor), close_iterator
+
+    @classmethod
+    def get_missing_block_numbers(cls, start_block_number=None, end_block_number=None, descending=False, limit=None):
+        """
+            Gets block numbers not in db in ascending order
+
+        Return
+            block_numbers
+        """
+        count, iterator, close_iterator = cls.__get_missing_block_numbers(
+            start_block_number=start_block_number,
+            end_block_number=end_block_number,
+            descending=descending,
+            limit=limit,
+        )
+        try:
+            return list(iterator)
+        finally:
+            close_iterator()
 
 
 class TokenContract(PostgresModel):
