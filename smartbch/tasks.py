@@ -64,25 +64,20 @@ def parse_missing_blocks_task():
     if isinstance(app_settings.START_BLOCK, (int, decimal.Decimal)) and app_settings.START_BLOCK > 0:
         min_block_number = max(min_block_number, app_settings.START_BLOCK)
 
-    count, iterator, close_iterator = Block.get_missing_block_numbers(
+    block_numbers = Block.get_missing_block_numbers(
         start_block_number=min_block_number,
         descending=True,
         limit=MAX_BLOCKS_TO_PARSE,
     )
+    count = len(block_numbers)
 
     LOGGER.info(f"Found {count} missing block_numbers, queueing {MAX_BLOCKS_TO_PARSE} for parsing")
-    try:
-        blocks_sent_for_parsing = 0
-        while blocks_sent_for_parsing < MAX_BLOCKS_TO_PARSE:
-            try:
-                parse_block_task.delay(next(iterator))
-            except StopIteration:
-                break
-            blocks_sent_for_parsing += 1
+    blocks_sent_for_parsing = 0
+    for block_number in block_numbers:
+        parse_block_task.delay(block_number)
+        blocks_sent_for_parsing += 1
 
-        return f"Sent {blocks_sent_for_parsing} block/s for parsing out of {count}."
-    finally:
-        close_iterator()
+    return f"Sent {blocks_sent_for_parsing} block/s for parsing out of {count}."
 
 
 @shared_task(queue=_QUEUE_TRANSACTIONS_PARSER, time_limit=_TASK_TIME_LIMIT)
