@@ -385,8 +385,9 @@ def manage_blocks(self):
                 subtasks.append(bchdquery_transaction.si(txid, block.id))
             callback = ready_to_accept.si(block.number, len(subtasks))
             # Execute the workflow
-            workflow = chord(subtasks)(callback)
-            workflow.apply_async()
+            if subtasks:
+                workflow = chord(subtasks)(callback)
+                workflow.apply_async()
 
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'CURRENTLY PROCESSING BLOCK {str(active_block)}.'
