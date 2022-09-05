@@ -1048,3 +1048,14 @@ def rebuild_wallet_history(wallet_hash):
                         wallet_nft_token.save()
                     except Transaction.DoesNotExist:
                         pass
+
+
+@shared_task(queue='rescan_utxos')
+def rescan_utxos(wallet_hash):
+    wallet = Wallet.object.get(wallet_hash=wallet_hash)
+    addresses = wallet.addresses.filter(transactions__spent=False)
+    for address in addresses:
+        if wallet.wallet_type == 'bch':
+            get_bch_utxos(address.address)
+        elif wallet.wallet_type == 'slp':
+            get_slp_utxos(address.address)
