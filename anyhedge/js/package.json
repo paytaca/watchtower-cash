@@ -1,7 +1,8 @@
 {
   "dependencies": {
     "@generalprotocols/anyhedge": "0.14.99-development.1842373198",
-    "@generalprotocols/price-oracle": "2.0.0-development.2117217816"
+    "@generalprotocols/price-oracle": "2.0.0-development.2117217816",
+    "axios": "^0.27.2"
   },
   "type": "module"
 }
