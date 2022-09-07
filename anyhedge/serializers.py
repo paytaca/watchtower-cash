@@ -241,9 +241,37 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
                         auto_settled=True,
                     )
                     settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
-                    settle_hedge_position_offer_serializer.save()
+                    instance = settle_hedge_position_offer_serializer.save()
                 else:
                     raise Exception("Error creating contract data")
+            elif instance.hedge_funding_proposal:
+                lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance)
+                if lp_matchmaking_result["success"]:
+                    contract_data = response["contractData"]
+                    settle_hedge_position_offer_data = {
+                        "address": contract_data["address"],
+                        "anyhedge_contract_version": contract_data["version"],
+                        "oracle_pubkey": contract_data["metadata"]["oraclePublicKey"],
+                        "oracle_price": contract_data["metadata"]["startPrice"],
+                        "oracle_timestamp": contract_data["metadata"]["startTimestamp"],
+                        "long_wallet_hash": "",
+                        "long_address": contract_data["metadata"]["longAddress"],
+                        "long_pubkey": contract_data["metadata"]["longPublicKey"],
+                    }
+
+                    settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
+                        data=settle_hedge_position_offer_data,
+                        hedge_position_offer=instance,
+                        auto_settled=True,
+                    )
+                    settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
+                    instance = settle_hedge_position_offer_serializer.save()
+
+                    # TODO: resolve tx_hash and other funding details and save to instance.hedge_position
+                    instance.hedge_position.funding_tx_hash = ""
+                    instance.hedge_position.save()
+                else:
+                    raise Exception(f"Failed to find match in liduidity pool for {instance}")
             else:
                 raise Exception(f"Failed to find match for {instance}")
         return instance 

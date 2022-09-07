@@ -173,6 +173,7 @@ export async function matchAndFundHedgePositionOffer(hedgePositionOffer, funding
 
   const fundContractResponse = await backend.post('/api/v1/fundContract', fundContractData)
 
+  // TODO: determine structure and improve handling of the response data of this api response
   response.fundingContract = fundContractResponse.data
   return response 
 }

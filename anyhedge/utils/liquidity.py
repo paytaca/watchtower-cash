@@ -1,5 +1,6 @@
 from django.db.models import OuterRef, Subquery, Sum, F, Value
 from django.db.models.functions import Coalesce, Greatest
+from ..js.runner import AnyhedgeFunctions
 from ..models import (
     LongAccount,
 )
@@ -26,3 +27,23 @@ def consume_long_account_allowance(long_address, long_input_sats):
     for wallet_hash in wallet_hashes:
         send_long_account_update(wallet_hash, action="consume_allowance")
     return resp
+
+def match_hedge_position_to_liquidity_provider(hedge_position_offer_obj):
+    hedge_position_offer_data = {
+        "satoshis": hedge_position_offer_obj.satoshis,
+        "durationSeconds": hedge_position_offer_obj.duration_seconds,
+        "lowLiquidationMultiplier": hedge_position_offer_obj.low_liquidation_multiplier,
+        "highLiquidationMultiplier": hedge_position_offer_obj.high_liquidation_multiplier,
+        "hedgeAddress": hedge_position_offer_obj.hedge_address,
+        "hedgePubkey": hedge_position_offer_obj.hedge_pubkey,
+    }
+    funding_proposal_data = {
+        "txHash": hedge_position_offer_obj.hedge_funding_proposal.tx_hash,
+        "txIndex": hedge_position_offer_obj.hedge_funding_proposal.tx_index,
+        "txValue": hedge_position_offer_obj.hedge_funding_proposal.tx_value,
+        "scriptSig": hedge_position_offer_obj.hedge_funding_proposal.script_sig,
+        "publicKey": hedge_position_offer_obj.hedge_funding_proposal.pubkey,
+        "inputTxHashes": hedge_position_offer_obj.hedge_funding_proposal.input_tx_hashes,
+    }
+
+    return AnyhedgeFunctions.matchAndFundHedgePositionOffer(hedge_position_offer_data, funding_proposal_data)
