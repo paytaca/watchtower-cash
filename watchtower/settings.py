@@ -71,6 +71,7 @@ INSTALLED_APPS=[
     'main',
 
     'smartbch',
+    'anyhedge',
 ]
 
 MIDDLEWARE=[
