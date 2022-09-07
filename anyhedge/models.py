@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.fields import ArrayField
 
 # Create your models here.
 class LongAccount(models.Model):
@@ -19,6 +20,13 @@ class HedgeFundingProposal(models.Model):
     tx_index = models.IntegerField()
     tx_value = models.BigIntegerField()
     script_sig = models.TextField()
+
+    pubkey = models.CharField(max_length=75, default="")
+    input_tx_hashes = ArrayField(
+        base_field=models.CharField(max_length=75),
+        null=True,
+        blank=True,
+    )
 
 
 class HedgePosition(models.Model):
@@ -101,6 +109,13 @@ class HedgePositionOffer(models.Model):
 
     hedge_address = models.CharField(max_length=75)
     hedge_pubkey = models.CharField(max_length=75)
+    hedge_funding_proposal = models.OneToOneField(
+        HedgeFundingProposal,
+        related_name="hedge_position_offer",
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+    )
+
     hedge_position = models.OneToOneField(
         HedgePosition,
         related_name="position_offer",
