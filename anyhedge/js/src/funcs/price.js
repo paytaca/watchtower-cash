@@ -3,8 +3,14 @@ import { hexToBin } from '@bitauth/libauth'
 
 const ORACLE_PUBLIC_KEY = '02d3c1de9d4bc77d6c3608cbe44d10138c7488e592dc2b1e10a6cf0e92c2ecb047'
 const ORACLE_RELAY = 'staging-oracles.generalprotocols.com'
+const ORACLE_RELAY_PORT = 7083
 
 /**
+ * 
+ * @typedef {Object} PriceMessageConfig
+ * @property {String} oraclePubKey
+ * @property {String} oracleRelay
+ * @property {String} oracleRelayPort
  * 
  * @typedef {Object} OraclePriceMessage
  * @property {String} message - 16-bit hex string containing data of price message
@@ -22,15 +28,21 @@ const ORACLE_RELAY = 'staging-oracles.generalprotocols.com'
 
 
 /**
+ * @param {PriceMessageConfig|undefined} config
  * @returns {Promise<OraclePriceMessage>} oracle price message
  */
-export async function getPriceMessage() {
+export async function getPriceMessage(config) {
+	const _conf = {
+		publicKey: config?.oraclePubKey || ORACLE_PUBLIC_KEY,
+		relay: config?.oracleRelay || ORACLE_RELAY,
+		port: config?.oracleRelayPort || ORACLE_RELAY_PORT,
+	}
 	const searchRequest = {
-	    publicKey: ORACLE_PUBLIC_KEY,
+	    publicKey: _conf.publicKey,
 	    minDataSequence: 1,
 	    count: 1,
 	};
-	const requestedMessages = await OracleNetwork.request(searchRequest, ORACLE_RELAY, 7083);
+	const requestedMessages = await OracleNetwork.request(searchRequest, _conf.relay, _conf.port);
 	const { message, signature, publicKey } = requestedMessages[0];
 
 	// const message = '5003d6623f100200ee0f0200c32e0000'
@@ -41,10 +53,11 @@ export async function getPriceMessage() {
 
 /**
  * 
+ * @param {PriceMessageConfig|undefined} config
  * @returns {Promise<{priceData: PriceMessageData, msgData: OraclePriceMessage}>}
  */
-export async function getPrice() {
-	const msgData = await getPriceMessage()
+export async function getPrice(config) {
+	const msgData = await getPriceMessage(config)
 	let { message, signature, publicKey } = msgData
 	const validMessageSignature = await OracleData.verifyMessageSignature(
 		hexToBin(message),
@@ -62,9 +75,10 @@ export async function getPrice() {
 
 /**
  * 
+ * @param {PriceMessageConfig|undefined} config
  * @returns {Promise<PriceMessageData>}
  */
-export async function getPriceData() {
-	const price = await getPrice()
+export async function getPriceData(config) {
+	const price = await getPrice(config)
 	return price.priceData
 }
