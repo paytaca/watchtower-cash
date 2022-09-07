@@ -30,3 +30,4 @@ services:
       - rabbitmq
     volumes:
       - ./:/code
+      - /code/anyhedge/js/node_modules
