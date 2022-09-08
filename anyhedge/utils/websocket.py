@@ -65,13 +65,19 @@ def send_hedge_position_offer_update(hedge_position_offer_obj, action:str=""):
     )
 
 
-def send_funding_tx_update(hedge_position_obj, position:str=""):
+def send_funding_tx_update(hedge_position_obj, position:str="", tx_hash:str=""):
     channel_layer = get_channel_layer()
     data = {
         "resource": "hedge_position",
         "action": "funding_proposal",
         "meta": { "address": hedge_position_obj.address }
     }
+
+    if position:
+        data["meta"]["updated_position"] = position
+
+    if tx_hash:
+        data["meta"]["new_tx_hash"] = tx_hash
 
     if hedge_position_obj.hedge_wallet_hash:
         room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"

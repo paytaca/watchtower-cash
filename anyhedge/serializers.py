@@ -11,6 +11,7 @@ from .models import (
 )
 from .utils.address import match_pubkey_to_cash_address
 from .utils.contract import create_contract
+from .utils.funding import get_tx_hash
 from .utils.liquidity import (
     consume_long_account_allowance,
     get_position_offer_suggestions,
@@ -435,3 +436,44 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
 
         send_settlement_update(self.hedge_position_offer)
         return self.hedge_position_offer
+
+
+class SubmitFundingTransactionSerializer(serializers.Serializer):
+    hedge_position_address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
+    tx_hash = serializers.CharField(validators=[ValidTxHash()], required=False)
+    tx_hex = serializers.CharField(required=False)
+
+    def validate_hedge_address(value):
+        try:
+            hedge_position_obj = HedgePosition.objects.get(address=value)
+        except HedgePosition.DoesNotExist:
+            raise serializers.ValidationError("Hedge position does not exist")
+
+        return value
+
+    def validate(self, data):
+        tx_hash = data.get("tx_hash", None)
+        tx_hex = data.get("tx_hex", None)
+        if not tx_hash and not tx_hex:
+            raise serializers.ValidationError("tx_hash or tx_hex required")
+
+        # TODO: route for broadcasting tx_hex if necessary
+        # TODO: validate tx_hex or tx_hash data if matching with hedge position's details
+
+        return data
+    
+    @transaction.atomic()
+    def save(self):
+        validated_data = self.validated_data
+        hedge_position_address = validated_data["hedge_position_address"]
+
+        tx_hash = validated_data.get("tx_hash", None)
+        if not tx_hash:
+            tx_hash = get_tx_hash(validated_data["tx_hex"])
+
+        hedge_position_obj = HedgePosition.objects.get(address=hedge_position_address)
+
+        hedge_position_obj.funding_tx_hash = tx_hash
+        hedge_position_obj.save()
+        send_funding_tx_update(hedge_position_obj, tx_hash=hedge_position_obj.funding_tx_hash)
+        return hedge_position_obj

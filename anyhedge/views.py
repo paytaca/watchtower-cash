@@ -17,6 +17,7 @@ from .serializers import (
     HedgePositionSerializer,
     HedgePositionOfferSerializer,
     SettleHedgePositionOfferSerializer,
+    SubmitFundingTransactionSerializer,
 )
 from .filters import (
     LongAccountFilter,
@@ -72,6 +73,14 @@ class HedgePositionViewSet(
         serializer.is_valid(raise_exception=True)
         serializer.save()
         hedge_obj = serializer.instance.hedge_position or serializer.instance.long_position
+        return Response(self.serializer_class(hedge_obj).data)
+
+    @swagger_auto_schema(method="post", request_body=SubmitFundingTransactionSerializer, responses={201: serializer_class})
+    @decorators.action(methods=["post"], detail=False)
+    def set_funding_tx(self, request):
+        serializer = SubmitFundingTransactionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        hedge_obj = serializer.save()
         return Response(self.serializer_class(hedge_obj).data)
 
 
