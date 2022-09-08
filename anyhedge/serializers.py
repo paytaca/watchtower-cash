@@ -20,6 +20,56 @@ from .utils.websocket import (
     send_funding_tx_update,
 )
 
+class FundHedgePositionOfferSerializer(serializers.Serializer):
+    hedge_position_offer_id = serializers.IntegerField()
+    tx_hash = serializers.CharField()
+    tx_index = serializers.IntegerField()
+    tx_value = serializers.IntegerField()
+    script_sig = serializers.CharField()
+    pubkey = serializers.CharField(required=False)
+    input_tx_hashes = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+
+    def validate_hedge_position_offer_id(self, value):
+        try:
+            instance = HedgePositionOffer.objects.get(id=value)
+            if instance.status == HedgePositionOffer.STATUS_CANCELLED:
+                raise serializers.ValidationError("Hedge position offer is already cancelled")
+            if instance.status == HedgePositionOffer.STATUS_SETTLED:
+                raise serializers.ValidationError("Hedge position offer is already settled, submit to hedge position instead")
+        except HedgePositionOffer.DoesNotExist:
+            raise serializers.ValidationError("Hedge position offer does not exist")
+
+        return value
+
+    @transaction.atomic()
+    def create(self, validated_data):
+        hedge_position_offer_id = validated_data.pop("hedge_position_offer_id", None)
+        hedge_position_offer_obj = HedgePositionOffer.objects.get(id=hedge_position_offer_id)
+
+        funding_proposal = HedgeFundingProposal()
+        update_position_offer = True
+
+        if hedge_position_offer_obj.hedge_funding_proposal:
+            funding_proposal = hedge_position_offer_obj.hedge_funding_proposal
+            update_position_offer = False
+
+        funding_proposal.tx_hash = validated_data["tx_hash"]
+        funding_proposal.tx_index = validated_data["tx_index"]
+        funding_proposal.tx_value = validated_data["tx_value"]
+        funding_proposal.script_sig = validated_data["script_sig"]
+        funding_proposal.pubkey = validated_data["pubkey"]
+        funding_proposal.input_tx_hashes = validated_data.get("pubkey", None)
+        funding_proposal.save()
+
+        if update_position_offer:
+            hedge_position_offer_obj.hedge_funding_proposal = funding_proposal
+            hedge_position_offer_obj.save()
+
+        return funding_proposal
+
 
 class FundingProposalSerializer(serializers.Serializer):
     hedge_address = serializers.CharField()
@@ -51,10 +101,11 @@ class FundingProposalSerializer(serializers.Serializer):
     def create(self, validated_data):
         hedge_address = validated_data.pop("hedge_address")
         position = validated_data.pop("position")
-        hedge_pos_obj = HedgePosition.objects.get(hedge_address.value)
+        hedge_pos_obj = HedgePosition.objects.get(address=hedge_address)
 
         update_hedge_obj = True
 
+        funding_proposal = HedgeFundingProposal()
         if position == "hedge" and hedge_pos_obj.hedge_funding_proposal:
             funding_proposal = hedge_pos_obj.hedge_funding_proposal
             update_hedge_obj = False

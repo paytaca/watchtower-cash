@@ -11,6 +11,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
 from .serializers import (
+    FundHedgePositionOfferSerializer,
     FundingProposalSerializer,
     LongAccountSerializer,
     HedgePositionSerializer,
@@ -116,3 +117,12 @@ class HedgePositionOfferViewSet(
         instance = serializer.save()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+    @swagger_auto_schema(method="post", request_body=FundHedgePositionOfferSerializer, responses={201: serializer_class})
+    @decorators.action(methods=["post"], detail=False)
+    def submit_funding_proposal(self, request):
+        serializer = FundHedgePositionOfferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        hedge_position_offer_obj = serializer.instance.hedge_position_offer
+        return Response(self.serializer_class(hedge_position_offer_obj).data)
