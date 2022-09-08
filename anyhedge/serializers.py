@@ -24,6 +24,15 @@ from .utils.websocket import (
     send_funding_tx_update,
 )
 
+
+class TimestampField(serializers.IntegerField):
+    def to_representation(self, value):
+        return datetime.timestamp(value)
+
+    def to_internal_value(self, data):
+        return datetime.fromtimestamp(data).replace(tzinfo=pytz.UTC)
+
+
 class FundHedgePositionOfferSerializer(serializers.Serializer):
     hedge_position_offer_id = serializers.IntegerField()
     tx_hash = serializers.CharField(validators=[ValidTxHash()])
@@ -174,8 +183,8 @@ class HedgeFundingProposalSerializer(serializers.ModelSerializer):
 class HedgePositionSerializer(serializers.ModelSerializer):
     hedge_funding_proposal = HedgeFundingProposalSerializer()
     long_funding_proposal = HedgeFundingProposalSerializer()
-    start_timestamp = serializers.SerializerMethodField()
-    maturity_timestamp = serializers.SerializerMethodField()
+    start_timestamp = TimestampField()
+    maturity_timestamp = TimestampField()
 
     class Meta:
         model = HedgePosition
@@ -209,13 +218,6 @@ class HedgePositionSerializer(serializers.ModelSerializer):
                 "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
             },
         }
-
-
-    def get_start_timestamp(self, obj):
-        return datetime.timestamp(obj.start_timestamp)
-
-    def get_maturity_timestamp(self, obj):
-        return datetime.timestamp(obj.maturity_timestamp)
 
     def validate(self, data):
         if not match_pubkey_to_cash_address(data["hedge_pubkey"], data["hedge_address"]):
