@@ -15,6 +15,10 @@ from .utils.liquidity import (
     consume_long_account_allowance,
     get_position_offer_suggestions,
 )
+from .utils.validators import (
+    ValidAddress,
+    ValidTxHash,
+)
 from .utils.websocket import (
     send_settlement_update,
     send_funding_tx_update,
@@ -22,7 +26,7 @@ from .utils.websocket import (
 
 class FundHedgePositionOfferSerializer(serializers.Serializer):
     hedge_position_offer_id = serializers.IntegerField()
-    tx_hash = serializers.CharField()
+    tx_hash = serializers.CharField(validators=[ValidTxHash()])
     tx_index = serializers.IntegerField()
     tx_value = serializers.IntegerField()
     script_sig = serializers.CharField()
@@ -72,9 +76,9 @@ class FundHedgePositionOfferSerializer(serializers.Serializer):
 
 
 class FundingProposalSerializer(serializers.Serializer):
-    hedge_address = serializers.CharField()
+    hedge_address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
     position = serializers.CharField() # hedge | long
-    tx_hash = serializers.CharField()
+    tx_hash = serializers.CharField(validators=[ValidTxHash()])
     tx_index = serializers.IntegerField()
     tx_value = serializers.IntegerField()
     script_sig = serializers.CharField()
@@ -148,7 +152,7 @@ class LongAccountSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-        if "pubkey" in data and "address" in data:
+        if "pubkey" in data and "address" in data or not self.instance:
             if not match_pubkey_to_cash_address(data["pubkey"], data["address"]):
                 raise serializers.ValidationError("public key & address does not match")
         return data
@@ -194,6 +198,18 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "hedge_funding_proposal",
             "long_funding_proposal",
         ]
+        extra_kwargs = {
+            "address": {
+                "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
+            },
+            "hedge_address": {
+                "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
+            },
+            "long_address": {
+                "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
+            },
+        }
+
 
     def get_start_timestamp(self, obj):
         return datetime.timestamp(obj.start_timestamp)
@@ -329,13 +345,13 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
 
 
 class SettleHedgePositionOfferSerializer(serializers.Serializer):
-    address = serializers.CharField()
+    address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
     anyhedge_contract_version = serializers.CharField()
     oracle_pubkey = serializers.CharField()
     oracle_price = serializers.IntegerField()
     oracle_timestamp = serializers.IntegerField() # unix
     long_wallet_hash = serializers.CharField()
-    long_address = serializers.CharField()
+    long_address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
     long_pubkey = serializers.CharField()
 
     def __init__(self, *args, hedge_position_offer=None, auto_settled=False, **kwargs):
