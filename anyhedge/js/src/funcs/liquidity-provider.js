@@ -32,9 +32,10 @@ const backend = axios.create({
  * @param {Number} assetPrice 
  */
 function calculateHedgePositionOfferInputs(hedgePositionOffer, assetPrice) {
-  const hedgeNominalUnits = hedgePositionOffer.satoshis * assetPrice
+  const _hedgeNominalUnitSats = hedgePositionOffer.satoshis * assetPrice
+  const  hedgeNominalUnits = _hedgeNominalUnitSats / 10 ** 8
   const lowLiquidationPrice = Math.round(assetPrice * hedgePositionOffer.lowLiquidationMultiplier)
-  const totalSats = Math.round(hedgeNominalUnits / lowLiquidationPrice)
+  const totalSats = Math.round(_hedgeNominalUnitSats / lowLiquidationPrice)
   const longSats = totalSats - hedgePositionOffer.satoshis
   const longNominalUnits = (longSats * assetPrice) / 10 ** 8
 
@@ -58,6 +59,7 @@ export async function getLiquidityServiceInfo() {
  * @param {{ priceValue: Number, oraclePubKey: String }} priceData
  */
 export async function checkLiquidityProviderConstraints(hedgePositionOffer, priceData) {
+  const response = { valid: true, error: '' }
   const { longNominalUnits } = calculateHedgePositionOfferInputs(hedgePositionOffer, priceData.priceValue)
   const durationSeconds = hedgePositionOffer.durationSeconds
   const lowLiquidationMultiplier = hedgePositionOffer.lowLiquidationMultiplier
@@ -66,11 +68,23 @@ export async function checkLiquidityProviderConstraints(hedgePositionOffer, pric
   const constraints = liquidityServiceInfo?.liquidityParameters?.[priceData.oraclePubKey]?.long
   if (!constraints) return undefined
   
-  if (constraints.minimumNominalUnits > longNominalUnits || constraints.maximumNominalUnits < longNominalUnits) return false
-  if (constraints.minimumDuration > durationSeconds || constraints.maximumDuration < durationSeconds) return false
-  if (constraints.minimumLiquidationLimit > lowLiquidationMultiplier || constraints.maximumLiquidationLimit < lowLiquidationMultiplier) return false
+  if (constraints.minimumNominalUnits > longNominalUnits || constraints.maximumNominalUnits < longNominalUnits){
+    response.valid = false
+    response.error = `Nominal units ${longNominalUnits} outside (${constraints.minimumNominalUnits}, ${constraints.maximumNominalUnits})`
+    return response
+  }
+  if (constraints.minimumDuration > durationSeconds || constraints.maximumDuration < durationSeconds) {
+    response.valid = false
+    response.error = `Duration ${durationSeconds} outside (${constraints.minimumDuration}, ${constraints.maximumDuration})`
+    return response
+  }
+  if (constraints.minimumLiquidationLimit > lowLiquidationMultiplier || constraints.maximumLiquidationLimit < lowLiquidationMultiplier){
+    response.valid = false
+    response.error = `Liquidation limit ${lowLiquidationMultiplier} outside (${constraints.minimumLiquidationLimit}, ${constraints.maximumLiquidationLimit})`
+    return response 
+  }
 
-  return true
+  return response
 }
 
 
@@ -89,7 +103,7 @@ export async function prepareContractPosition(hedgePositionOffer, priceData) {
       liquidityProvidersPayoutAddress: '',
     }
   }
-  const requestData = { oraclePubkey: priceData.oraclePubKey }
+  const requestData = { oraclePublicKey: priceData.oraclePubKey }
   const { data } = await backend.post('/api/v1/prepareContractPosition', requestData)
 
   const { longSats } = calculateHedgePositionOfferInputs(hedgePositionOffer, priceData.priceValue)
@@ -114,10 +128,10 @@ export async function matchHedgePositionOffer(hedgePositionOffer) {
 
   const priceData = await getPriceData()
 
-  const lpConstraintsValid = await checkLiquidityProviderConstraints(hedgePositionOffer, priceData)
-  if (!lpConstraintsValid) {
+  const lpConstraintsCheck = await checkLiquidityProviderConstraints(hedgePositionOffer, priceData)
+  if (!lpConstraintsCheck.valid) {
     response.success = false
-    response.error = 'hedge position offer outside liquidity provider\'s constraints'
+    response.error = lpConstraintsCheck.error || 'hedge position offer outside liquidity provider\'s constraints'
     return response
   }
 

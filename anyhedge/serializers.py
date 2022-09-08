@@ -14,6 +14,7 @@ from .utils.contract import create_contract
 from .utils.liquidity import (
     consume_long_account_allowance,
     get_position_offer_suggestions,
+    match_hedge_position_to_liquidity_provider,
 )
 from .utils.validators import (
     ValidAddress,
@@ -217,6 +218,12 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "long_address": {
                 "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
             },
+            "hedge_pubkey": {
+                "allow_blank": True
+            },
+            "long_pubkey": {
+                "allow_blank": True
+            },
         }
 
     def validate(self, data):
@@ -316,7 +323,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             elif instance.hedge_funding_proposal:
                 lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance)
                 if lp_matchmaking_result["success"]:
-                    contract_data = response["contractData"]
+                    contract_data = lp_matchmaking_result["contractData"]
                     settle_hedge_position_offer_data = {
                         "address": contract_data["address"],
                         "anyhedge_contract_version": contract_data["version"],
@@ -340,7 +347,10 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
                     instance.hedge_position.funding_tx_hash = ""
                     instance.hedge_position.save()
                 else:
-                    raise Exception(f"Failed to find match in liduidity pool for {instance}")
+                    error = f"Failed to find match in liduidity pool for {instance}"
+                    if lp_matchmaking_result.get("error", None):
+                        error += f". Reason: {lp_matchmaking_result['error']}"
+                    raise Exception(error)
             else:
                 raise Exception(f"Failed to find match for {instance}")
         return instance 
@@ -352,7 +362,7 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
     oracle_pubkey = serializers.CharField()
     oracle_price = serializers.IntegerField()
     oracle_timestamp = serializers.IntegerField() # unix
-    long_wallet_hash = serializers.CharField()
+    long_wallet_hash = serializers.CharField(allow_blank=True)
     long_address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
     long_pubkey = serializers.CharField()
 

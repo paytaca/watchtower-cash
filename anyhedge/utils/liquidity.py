@@ -37,13 +37,19 @@ def match_hedge_position_to_liquidity_provider(hedge_position_offer_obj):
         "hedgeAddress": hedge_position_offer_obj.hedge_address,
         "hedgePubkey": hedge_position_offer_obj.hedge_pubkey,
     }
-    funding_proposal_data = {
-        "txHash": hedge_position_offer_obj.hedge_funding_proposal.tx_hash,
-        "txIndex": hedge_position_offer_obj.hedge_funding_proposal.tx_index,
-        "txValue": hedge_position_offer_obj.hedge_funding_proposal.tx_value,
-        "scriptSig": hedge_position_offer_obj.hedge_funding_proposal.script_sig,
-        "publicKey": hedge_position_offer_obj.hedge_funding_proposal.pubkey,
-        "inputTxHashes": hedge_position_offer_obj.hedge_funding_proposal.input_tx_hashes,
-    }
+
+    funding_proposal_data = None
+    if hedge_position_offer_obj.hedge_funding_proposal:
+        funding_proposal_data = {
+            "txHash": hedge_position_offer_obj.hedge_funding_proposal.tx_hash,
+            "txIndex": hedge_position_offer_obj.hedge_funding_proposal.tx_index,
+            "txValue": hedge_position_offer_obj.hedge_funding_proposal.tx_value,
+            "scriptSig": hedge_position_offer_obj.hedge_funding_proposal.script_sig,
+            "publicKey": hedge_position_offer_obj.hedge_funding_proposal.pubkey,
+            "inputTxHashes": hedge_position_offer_obj.hedge_funding_proposal.input_tx_hashes,
+        }
+
+    if funding_proposal_data is None:
+        return AnyhedgeFunctions.matchHedgePositionOffer(hedge_position_offer_data)
 
     return AnyhedgeFunctions.matchAndFundHedgePositionOffer(hedge_position_offer_data, funding_proposal_data)
