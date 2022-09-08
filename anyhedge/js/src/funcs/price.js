@@ -12,6 +12,15 @@ const ORACLE_RELAY_PORT = 7083
  * @property {String} oracleRelay
  * @property {String} oracleRelayPort
  * 
+ * @typedef {Object} PriceRequestParams
+ * @property {Number|undefined} minDataSequence 
+ * @property {Number|undefined} maxDataSequence 
+ * @property {Number|undefined} minMessageTimestamp 
+ * @property {Number|undefined} maxMessageTimestamp 
+ * @property {Number|undefined} minMessageSequence 
+ * @property {Number|undefined} minMessageSequence 
+ * @property {Number|undefined} count 
+ * 
  * @typedef {Object} OraclePriceMessage
  * @property {String} message - 16-bit hex string containing data of price message
  * @property {String} signature - 64-bit hex string signature
@@ -38,9 +47,9 @@ export async function getPriceMessage(config) {
 		port: config?.oracleRelayPort || ORACLE_RELAY_PORT,
 	}
 	const searchRequest = {
-	    publicKey: _conf.publicKey,
-	    minDataSequence: 1,
-	    count: 1,
+		publicKey: _conf.publicKey,
+		minDataSequence: 1,
+		count: 1,
 	};
 	const requestedMessages = await OracleNetwork.request(searchRequest, _conf.relay, _conf.port);
 	const { message, signature, publicKey } = requestedMessages[0];
@@ -81,4 +90,52 @@ export async function getPrice(config) {
 export async function getPriceData(config) {
 	const price = await getPrice(config)
 	return price.priceData
+}
+
+/**
+ * 
+ * @param {PriceMessageConfig|undefined} config 
+ * @param {PriceRequestParams|undefined} requestParams 
+ * @returns {{success:Boolean, error:String, results: { priceMessage: OraclePriceMessage, priceData: PriceMessageData }[]}}
+ */
+export async function getPriceMessages(config, requestParams) {
+	const response = { success: false, results: [], error: '' }
+
+	const _conf = {
+		publicKey: config?.oraclePubKey || ORACLE_PUBLIC_KEY,
+		relay: config?.oracleRelay || ORACLE_RELAY,
+		port: config?.oracleRelayPort || ORACLE_RELAY_PORT,
+	}
+	const _searchRequest = Object.assign({ publicKey: _conf.publicKey }, requestParams)
+	const searchRequest = Object.assign({}, _searchRequest)
+	if (!searchRequest.count) searchRequest.count = 1
+	const requestedMessages = await OracleNetwork.request(searchRequest, _conf.relay, _conf.port);
+
+	if (!Array.isArray(requestedMessages)) {
+		response.success = false
+		response.error = requestedMessages
+		return response
+	}
+
+	const parsedMessages = await Promise.all(
+		requestedMessages.map(async (priceMessage) => {
+			const { message, signature, publicKey } = priceMessage
+			const validMessageSignature = await OracleData.verifyMessageSignature(
+				hexToBin(message),
+				hexToBin(signature),
+				hexToBin(publicKey)
+			);
+
+			if (!validMessageSignature) {
+				return null
+			}
+
+			const priceData = await OracleData.parsePriceMessage(hexToBin(message))
+			return { priceMessage, priceData }
+		})
+	)
+
+	response.results = parsedMessages
+	response.success = true
+	return response
 }

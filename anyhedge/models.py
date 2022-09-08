@@ -125,3 +125,20 @@ class HedgePositionOffer(models.Model):
 
     auto_settled = models.BooleanField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Oracle(models.Model):
+    pubkey = models.CharField(max_length=75, unique=True)
+    relay = models.CharField(max_length=50)
+    port = models.IntegerField()
+    asset_name = models.CharField(max_length=25)
+
+
+class PriceOracleMessage(models.Model):
+    pubkey = models.CharField(max_length=75)
+    signature = models.CharField(max_length=130)
+    message = models.CharField(max_length=40)
+    message_timestamp = models.DateTimeField()
+    price_value = models.IntegerField()
+    price_sequence = models.IntegerField()
+    message_sequence = models.IntegerField()

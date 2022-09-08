@@ -169,6 +169,7 @@ REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = (
     'main.tasks',
     'smartbch.tasks',
+    'anyhedge.tasks',
 )
 
 CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -208,6 +209,10 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 
 
 CELERY_BEAT_SCHEDULE = {
+    'update_oracle_prices': {
+        'task': 'anyhedge.tasks.check_new_price_messages',
+        'schedule': 60,
+    },
     'get_latest_block': {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
