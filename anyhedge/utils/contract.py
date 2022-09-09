@@ -9,6 +9,7 @@ def create_contract(
     hedge_pubkey:str="",
     short_address:str="",
     short_pubkey:str="",
+    oracle_pubkey:str=None,
 ):
     intent =  {
         "amount": satoshis/10**8,
@@ -22,7 +23,13 @@ def create_contract(
         "shortAddress": short_address,
         "shortPubkey": short_pubkey,
     }
-    return AnyhedgeFunctions.create(intent, pubkeys)
+
+    priceMessageConfig = None
+    if oracle_pubkey:
+        priceMessageConfig = {
+            "oraclePubKey": oracle_pubkey,
+        }
+    return AnyhedgeFunctions.create(intent, pubkeys, priceMessageConfig)
 
 def compile_contract(
     nominal_units:int=0,

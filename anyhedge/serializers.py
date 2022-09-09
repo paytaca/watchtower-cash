@@ -263,6 +263,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             "duration_seconds",
             "high_liquidation_multiplier",
             "low_liquidation_multiplier",
+            "oracle_pubkey",
             "hedge_address",
             "hedge_pubkey",
             "hedge_position",
@@ -321,6 +322,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
                 hedge_pubkey=instance.hedge_pubkey,
                 short_address=long_account.address,
                 short_pubkey=long_account.pubkey,
+                oracle_pubkey=instance.oracle_pubkey,
             )
 
             if "success" in response and response["success"]:

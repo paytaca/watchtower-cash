@@ -10,7 +10,7 @@ const ORACLE_RELAY_PORT = 7083
  * @typedef {Object} PriceMessageConfig
  * @property {String} oraclePubKey
  * @property {String} oracleRelay
- * @property {String} oracleRelayPort
+ * @property {Number} oracleRelayPort
  * 
  * @typedef {Object} PriceRequestParams
  * @property {Number|undefined} minDataSequence 

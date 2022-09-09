@@ -107,6 +107,7 @@ class HedgePositionOffer(models.Model):
     high_liquidation_multiplier = models.FloatField()
     low_liquidation_multiplier = models.FloatField()
 
+    oracle_pubkey = models.CharField(max_length=75, null=True, blank=True)
     hedge_address = models.CharField(max_length=75)
     hedge_pubkey = models.CharField(max_length=75)
     hedge_funding_proposal = models.OneToOneField(

@@ -13,10 +13,11 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
  * @param {String} pubkeys.hedgePubkey - Public key of hedger
  * @param {String} pubkeys.shortAddress - Destination address of counterparty's funds on maturity/liquidation
  * @param {String} pubkeys.shortPubkey - Public key of counterparty
+ * @param {PriceMessageConfig | undefined } asset
  */
-export async function create(intent, pubkeys) {
+export async function create(intent, pubkeys, priceMessageConfig) {
   try {
-    const priceData = await getPriceData()
+    const priceData = await getPriceData(priceMessageConfig)
 
     const nominalUnits = intent.amount * priceData.priceValue // BCH * (UScents / BCH)
 
