@@ -344,8 +344,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
                     settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
                     instance = settle_hedge_position_offer_serializer.save()
 
-                    # TODO: resolve tx_hash and other funding details and save to instance.hedge_position
-                    instance.hedge_position.funding_tx_hash = ""
+                    instance.hedge_position.funding_tx_hash = lp_matchmaking_result["fundingContract"]["fundingTransactionHash"]
                     instance.hedge_position.save()
                 else:
                     error = f"Failed to find match in liduidity pool for {instance}"
