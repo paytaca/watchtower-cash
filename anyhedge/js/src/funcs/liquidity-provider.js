@@ -118,13 +118,37 @@ export async function prepareContractPosition(hedgePositionOffer, priceData) {
   return response
 }
 
+/**
+ * 
+ * @param {Object} contractCreationParameters 
+ * @param {Number} contractStartingOracleMessageSequence 
+ * @returns 
+ */
+export async function proposeContract(contractCreationParameters, contractStartingOracleMessageSequence) {
+  const response = {
+    success: false,
+    error: '',
+    liquidityFees: {
+      liquidityProviderFee: 0,
+      renegotiateAfterTimestamp: 0,
+    },
+  }
+  const requestData = { contractCreationParameters, contractStartingOracleMessageSequence }
+  const { data } = await backend.post('/api/v1/proposeContract', requestData)
+
+  response.success = true
+  response.liquidityFees.liquidityProviderFee = data.liquidityProviderFee
+  response.liquidityFees.renegotiateAfterTimestamp = data.renegotiateAfterTimestamp
+  return response
+}
+
 
 /**
  * 
  * @param {HedgePositionOffer} hedgePositionOffer 
  */
 export async function matchHedgePositionOffer(hedgePositionOffer) {
-  const response = { success: false, error: '', contractData: {} }
+  const response = { success: false, error: '', contractData: {}, liquidityFees: {} }
 
   const priceData = await getPriceData()
 
@@ -157,6 +181,14 @@ export async function matchHedgePositionOffer(hedgePositionOffer) {
     hedgeAddress: hedgePositionOffer.hedgeAddress,
     longAddress: longPosition.details.liquidityProvidersPayoutAddress,
   }
+  const contractProposalResponse = await proposeContract(contractCreationParameters, priceData.messageSequence)
+  if (!contractProposalResponse.success) {
+    response.success = false
+    response.error = contractProposalResponse.error || 'Error proposing hedge position'
+    return response
+  }
+
+  response.liquidityFees = contractProposalResponse.liquidityFees
 
   const contractData = await compileContract(contractCreationParameters)
   response.success = true
@@ -183,6 +215,13 @@ export async function matchAndFundHedgePositionOffer(hedgePositionOffer, funding
     publicKey: fundingProposal.publicKey,
     takerSide: 'hedge', // hedge | long
     dependencyTransactions: fundingProposal.inputTxHashes,
+  }
+
+  const expectedFundingSats = response.contractData?.metadata?.totalInputSats + response.liquidityFees?.liquidityProviderFee
+  if (fundingProposal.txValue !== expectedFundingSats) {
+    response.success = false
+    response.error = `Funding proposal satoshis must be ${expectedFundingSats}, got ${fundingProposal.txValue}`
+    return response
   }
 
   const fundContractResponse = await backend.post('/api/v1/fundContract', fundContractData)
