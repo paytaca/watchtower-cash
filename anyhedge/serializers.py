@@ -237,10 +237,18 @@ class HedgePositionSerializer(serializers.ModelSerializer):
 
 
 class HedgePositionOfferSerializer(serializers.ModelSerializer):
+    AUTO_MATCH_LP = "anyhedge_LP"
+    AUTO_MATCH_P2P = "watchtower_P2P"
+    AUTO_MATCH_CHOICES = [
+        AUTO_MATCH_LP,
+        AUTO_MATCH_P2P,
+    ]
+
     status = serializers.CharField(read_only=True)
     hedge_position = HedgePositionSerializer(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     auto_match = serializers.BooleanField(default=False)
+    auto_match_pool_target = serializers.ChoiceField(choices=AUTO_MATCH_CHOICES, required=False)
     hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
 
     class Meta:
@@ -257,6 +265,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             "hedge_position",
             "created_at",
             "auto_match",
+            "auto_match_pool_target",
             "hedge_funding_proposal",
         ]
 
@@ -269,6 +278,8 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
     @transaction.atomic()
     def create(self, validated_data, *args, **kwargs):
         auto_match = validated_data.pop("auto_match", False)
+        auto_match_pool_target = validated_data.pop("auto_match_pool_target", None)
+
         hedge_funding_proposal_data = validated_data.pop("hedge_funding_proposal", None)
         instance = super().create(validated_data, *args, **kwargs)
 
@@ -280,80 +291,98 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             instance.save()
 
         if auto_match:
-            long_accounts = get_position_offer_suggestions(
-                amount=instance.satoshis,
-                duration_seconds=instance.duration_seconds,
-                low_liquidation_multiplier=instance.low_liquidation_multiplier,
-                high_liquidation_multiplier=instance.high_liquidation_multiplier,
-            )
-            if long_accounts:
-                long_account = long_accounts[0]
-                response = create_contract(
-                    satoshis=instance.satoshis,
-                    low_price_multiplier=instance.low_liquidation_multiplier,
-                    high_price_multiplier=instance.high_liquidation_multiplier,
-                    duration_seconds=instance.duration_seconds,
-                    hedge_address=instance.hedge_address,
-                    hedge_pubkey=instance.hedge_pubkey,
-                    short_address=long_account.address,
-                    short_pubkey=long_account.pubkey,
-                )
-
-                if "success" in response and response["success"]:
-                    contract_data = response["contractData"]
-                    settle_hedge_position_offer_data = {
-                        "address": contract_data["address"],
-                        "anyhedge_contract_version": contract_data["version"],
-                        "oracle_pubkey": contract_data["metadata"]["oraclePublicKey"],
-                        "oracle_price": contract_data["metadata"]["startPrice"],
-                        "oracle_timestamp": contract_data["metadata"]["startTimestamp"],
-                        "long_wallet_hash": long_account.wallet_hash,
-                        "long_address": contract_data["metadata"]["longAddress"],
-                        "long_pubkey": contract_data["metadata"]["longPublicKey"],
-                    }
-
-                    settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
-                        data=settle_hedge_position_offer_data,
-                        hedge_position_offer=instance,
-                        auto_settled=True,
-                    )
-                    settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
-                    instance = settle_hedge_position_offer_serializer.save()
-                else:
-                    raise Exception("Error creating contract data")
-            elif instance.hedge_funding_proposal:
-                lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance)
-                if lp_matchmaking_result["success"]:
-                    contract_data = lp_matchmaking_result["contractData"]
-                    settle_hedge_position_offer_data = {
-                        "address": contract_data["address"],
-                        "anyhedge_contract_version": contract_data["version"],
-                        "oracle_pubkey": contract_data["metadata"]["oraclePublicKey"],
-                        "oracle_price": contract_data["metadata"]["startPrice"],
-                        "oracle_timestamp": contract_data["metadata"]["startTimestamp"],
-                        "long_wallet_hash": "",
-                        "long_address": contract_data["metadata"]["longAddress"],
-                        "long_pubkey": contract_data["metadata"]["longPublicKey"],
-                    }
-
-                    settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
-                        data=settle_hedge_position_offer_data,
-                        hedge_position_offer=instance,
-                        auto_settled=True,
-                    )
-                    settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
-                    instance = settle_hedge_position_offer_serializer.save()
-
-                    instance.hedge_position.funding_tx_hash = lp_matchmaking_result["fundingContract"]["fundingTransactionHash"]
-                    instance.hedge_position.save()
-                else:
-                    error = f"Failed to find match in liduidity pool for {instance}"
-                    if lp_matchmaking_result.get("error", None):
-                        error += f". Reason: {lp_matchmaking_result['error']}"
-                    raise Exception(error)
+            if auto_match_pool_target == self.AUTO_MATCH_P2P:
+                instance = self.auto_match_p2p(instance)  
+            elif auto_match_pool_target == self.AUTO_MATCH_LP:
+                instance = self.auto_match_lp(instance)
             else:
-                raise Exception(f"Failed to find match for {instance}")
+                raise Exception(f"Failed to resolve auto match pool")
         return instance 
+
+    @classmethod
+    def auto_match_p2p(cls, instance:HedgePositionOffer) -> HedgePositionOffer:
+        long_accounts = get_position_offer_suggestions(
+            amount=instance.satoshis,
+            duration_seconds=instance.duration_seconds,
+            low_liquidation_multiplier=instance.low_liquidation_multiplier,
+            high_liquidation_multiplier=instance.high_liquidation_multiplier,
+        )
+        if long_accounts:
+            long_account = long_accounts[0]
+            response = create_contract(
+                satoshis=instance.satoshis,
+                low_price_multiplier=instance.low_liquidation_multiplier,
+                high_price_multiplier=instance.high_liquidation_multiplier,
+                duration_seconds=instance.duration_seconds,
+                hedge_address=instance.hedge_address,
+                hedge_pubkey=instance.hedge_pubkey,
+                short_address=long_account.address,
+                short_pubkey=long_account.pubkey,
+            )
+
+            if "success" in response and response["success"]:
+                contract_data = response["contractData"]
+                settle_hedge_position_offer_data = {
+                    "address": contract_data["address"],
+                    "anyhedge_contract_version": contract_data["version"],
+                    "oracle_pubkey": contract_data["metadata"]["oraclePublicKey"],
+                    "oracle_price": contract_data["metadata"]["startPrice"],
+                    "oracle_timestamp": contract_data["metadata"]["startTimestamp"],
+                    "long_wallet_hash": long_account.wallet_hash,
+                    "long_address": contract_data["metadata"]["longAddress"],
+                    "long_pubkey": contract_data["metadata"]["longPublicKey"],
+                }
+
+                settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
+                    data=settle_hedge_position_offer_data,
+                    hedge_position_offer=instance,
+                    auto_settled=True,
+                )
+                settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
+                instance = settle_hedge_position_offer_serializer.save()
+            else:
+                raise Exception("Error creating contract data")
+        else:
+            raise Exception(f"Failed to find match for {instance}")
+        return instance
+
+
+    @classmethod
+    def auto_match_lp(cls, instance:HedgePositionOffer) -> HedgePositionOffer:
+        if not instance.hedge_funding_proposal:
+            raise Exception("Hedge funding proposal required when matching liquidity pool")
+
+        lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance)
+        if lp_matchmaking_result["success"]:
+            contract_data = lp_matchmaking_result["contractData"]
+            settle_hedge_position_offer_data = {
+                "address": contract_data["address"],
+                "anyhedge_contract_version": contract_data["version"],
+                "oracle_pubkey": contract_data["metadata"]["oraclePublicKey"],
+                "oracle_price": contract_data["metadata"]["startPrice"],
+                "oracle_timestamp": contract_data["metadata"]["startTimestamp"],
+                "long_wallet_hash": "",
+                "long_address": contract_data["metadata"]["longAddress"],
+                "long_pubkey": contract_data["metadata"]["longPublicKey"],
+            }
+
+            settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
+                data=settle_hedge_position_offer_data,
+                hedge_position_offer=instance,
+                auto_settled=True,
+            )
+            settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
+            instance = settle_hedge_position_offer_serializer.save()
+
+            instance.hedge_position.funding_tx_hash = lp_matchmaking_result["fundingContract"]["fundingTransactionHash"]
+            instance.hedge_position.save()
+        else:
+            error = f"Failed to find match in liduidity pool for {instance}"
+            if lp_matchmaking_result.get("error", None):
+                error += f". Reason: {lp_matchmaking_result['error']}"
+            raise Exception(error)
+
+        return instance
 
 
 class SettleHedgePositionOfferSerializer(serializers.Serializer):
