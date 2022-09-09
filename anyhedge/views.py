@@ -18,11 +18,17 @@ from .serializers import (
     HedgePositionOfferSerializer,
     SettleHedgePositionOfferSerializer,
     SubmitFundingTransactionSerializer,
+
+    OracleSerializer,
+    PriceOracleMessageSerializer,
 )
 from .filters import (
     LongAccountFilter,
     HedgePositionFilter,
     HedgePositionOfferFilter,
+
+    OracleFilter,
+    PriceOracleMessageFilter,
 )
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import (
@@ -135,3 +141,34 @@ class HedgePositionOfferViewSet(
         serializer.save()
         hedge_position_offer_obj = serializer.instance.hedge_position_offer
         return Response(self.serializer_class(hedge_position_offer_obj).data)
+
+
+class OracleViewSet(
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+):
+    lookup_field="pubkey"
+    serializer_class = OracleSerializer
+    pagination_class = CustomLimitOffsetPagination
+
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = OracleFilter
+
+    def get_queryset(self):
+        return OracleSerializer.Meta.model.objects.all()
+
+
+class PriceOracleMessageViewSet(
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+):
+    serializer_class = PriceOracleMessageSerializer
+    pagination_class = CustomLimitOffsetPagination
+
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = PriceOracleMessageFilter
+
+
+    def get_queryset(self):
+        return PriceOracleMessageSerializer.Meta.model.objects.all()

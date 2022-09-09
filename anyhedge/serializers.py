@@ -8,6 +8,9 @@ from .models import (
     HedgePosition,
     HedgeFundingProposal,
     HedgePositionOffer,
+
+    Oracle,
+    PriceOracleMessage,
 )
 from .utils.address import match_pubkey_to_cash_address
 from .utils.contract import create_contract
@@ -505,3 +508,25 @@ class SubmitFundingTransactionSerializer(serializers.Serializer):
         hedge_position_obj.save()
         send_funding_tx_update(hedge_position_obj, tx_hash=hedge_position_obj.funding_tx_hash)
         return hedge_position_obj
+
+
+class OracleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Oracle
+        fields = [
+            "pubkey",
+            "asset_name",
+        ]
+
+class PriceOracleMessageSerializer(serializers.ModelSerializer):
+    message_timestamp = TimestampField()
+
+    class Meta:
+        model = PriceOracleMessage
+        fields = [
+            "pubkey",
+            "message_timestamp",
+            "price_value",
+            "price_sequence",
+            "message_sequence",
+        ]

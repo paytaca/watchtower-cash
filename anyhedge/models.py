@@ -142,3 +142,6 @@ class PriceOracleMessage(models.Model):
     price_value = models.IntegerField()
     price_sequence = models.IntegerField()
     message_sequence = models.IntegerField()
+
+    class Meta:
+        ordering = ['-message_timestamp']
