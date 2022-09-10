@@ -32,8 +32,9 @@ def check_new_oracle_price_messages(oracle_pubkey):
     latest_timestamp = PriceOracleMessage.objects.filter(
         pubkey=oracle_pubkey,
     ).aggregate(
-        value = models.Max("message_timestamp"),
-    ).get("message_timestamp")
+        latest_timestamp = models.Max("message_timestamp"),
+    ).get("latest_timestamp")
+    latest_timestamp = datetime.timestamp(latest_timestamp)
 
     count = 5
     if latest_timestamp is not None:
