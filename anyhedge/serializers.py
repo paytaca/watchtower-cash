@@ -518,6 +518,8 @@ class OracleSerializer(serializers.ModelSerializer):
         fields = [
             "pubkey",
             "asset_name",
+            "asset_currency",
+            "asset_decimals",
         ]
 
 class PriceOracleMessageSerializer(serializers.ModelSerializer):

@@ -133,6 +133,8 @@ class Oracle(models.Model):
     relay = models.CharField(max_length=50)
     port = models.IntegerField()
     asset_name = models.CharField(max_length=25)
+    asset_currency = models.CharField(max_length=10, default='')
+    asset_decimals = models.IntegerField(default=0)
 
 
 class PriceOracleMessage(models.Model):
