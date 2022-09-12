@@ -10,6 +10,7 @@ def create_contract(
     short_address:str="",
     short_pubkey:str="",
     oracle_pubkey:str=None,
+    price_oracle_message_sequence:int=None,
 ):
     intent =  {
         "amount": satoshis/10**8,
@@ -29,7 +30,14 @@ def create_contract(
         priceMessageConfig = {
             "oraclePubKey": oracle_pubkey,
         }
-    return AnyhedgeFunctions.create(intent, pubkeys, priceMessageConfig)
+
+    priceMessageRequestParams = None
+    if price_oracle_message_sequence:
+        priceMessageRequestParams = {
+            "minMessageSequence": price_oracle_message_sequence,
+            "maxMessageSequence": price_oracle_message_sequence,
+        }
+    return AnyhedgeFunctions.create(intent, pubkeys, priceMessageConfig, priceMessageRequestParams)
 
 def compile_contract(
     nominal_units:int=0,

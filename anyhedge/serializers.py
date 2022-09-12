@@ -249,10 +249,17 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
 
     status = serializers.CharField(read_only=True)
     hedge_position = HedgePositionSerializer(read_only=True)
+    auto_settled = serializers.BooleanField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
-    auto_match = serializers.BooleanField(default=False)
+    auto_match = serializers.BooleanField(default=False, write_only=True)
     auto_match_pool_target = serializers.ChoiceField(choices=AUTO_MATCH_CHOICES, required=False)
     hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
+
+    price_oracle_message_sequence = serializers.IntegerField(required=False, write_only=True)
+
+    # Create a hedge position without saving the hedge position offer by setting this to false and;
+    # setting auto_match to true
+    save_position_offer = serializers.BooleanField(default=True, write_only=True)
 
     class Meta:
         model = HedgePositionOffer
@@ -267,15 +274,23 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             "hedge_address",
             "hedge_pubkey",
             "hedge_position",
+            "auto_settled",
             "created_at",
             "auto_match",
             "auto_match_pool_target",
+            "price_oracle_message_sequence",
+            "save_position_offer",
             "hedge_funding_proposal",
         ]
 
     def validate(self, data):
+        save_position_offer = data.get("save_position_offer", None)
+        auto_match = data.get("auto_match", None)
         if not match_pubkey_to_cash_address(data["hedge_pubkey"], data["hedge_address"]):
             raise serializers.ValidationError("public key & address does not match")
+
+        if not auto_match and not save_position_offer:
+            raise serializers.ValidationError("'save_position_offer' or 'auto_match' must either be selected")
 
         return data
 
@@ -283,28 +298,45 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
     def create(self, validated_data, *args, **kwargs):
         auto_match = validated_data.pop("auto_match", False)
         auto_match_pool_target = validated_data.pop("auto_match_pool_target", None)
+        price_oracle_message_sequence = validated_data.pop("price_oracle_message_sequence", None)
+        save_position_offer = validated_data.pop("save_position_offer", None)
 
+        instance = self.init_instance(validated_data, save=save_position_offer)
+
+        if auto_match:
+            if auto_match_pool_target == self.AUTO_MATCH_P2P:
+                instance = self.auto_match_p2p(instance, price_oracle_message_sequence=price_oracle_message_sequence)
+            elif auto_match_pool_target == self.AUTO_MATCH_LP:
+                instance = self.auto_match_lp(instance, price_oracle_message_sequence=price_oracle_message_sequence)
+            else:
+                raise Exception(f"Failed to resolve auto match pool")
+        return instance
+
+    def init_instance(self, validated_data, save=False):
         hedge_funding_proposal_data = validated_data.pop("hedge_funding_proposal", None)
-        instance = super().create(validated_data, *args, **kwargs)
+
+        if save:
+            instance = super().create(validated_data)
+        else:
+            instance = self.Meta.model(**validated_data)
 
         if hedge_funding_proposal_data is not None:
             hedge_funding_proposal_serializer = HedgeFundingProposalSerializer(data=hedge_funding_proposal_data)
             hedge_funding_proposal_serializer.is_valid(raise_exception=True)
-            hedge_funding_proposal = hedge_funding_proposal_serializer.save()
-            instance.hedge_funding_proposal = hedge_funding_proposal
-            instance.save()
-
-        if auto_match:
-            if auto_match_pool_target == self.AUTO_MATCH_P2P:
-                instance = self.auto_match_p2p(instance)  
-            elif auto_match_pool_target == self.AUTO_MATCH_LP:
-                instance = self.auto_match_lp(instance)
+            if save:
+                hedge_funding_proposal = hedge_funding_proposal_serializer.save()
             else:
-                raise Exception(f"Failed to resolve auto match pool")
-        return instance 
+                hedge_funding_proposal_serializer.Meta.model(**hedge_funding_proposal_serializer.validated_data)
+
+            instance.hedge_funding_proposal = hedge_funding_proposal
+
+            if save:
+                instance.save()
+
+        return instance
 
     @classmethod
-    def auto_match_p2p(cls, instance:HedgePositionOffer) -> HedgePositionOffer:
+    def auto_match_p2p(cls, instance:HedgePositionOffer, price_oracle_message_sequence=None) -> HedgePositionOffer:
         long_accounts = get_position_offer_suggestions(
             amount=instance.satoshis,
             duration_seconds=instance.duration_seconds,
@@ -323,6 +355,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
                 short_address=long_account.address,
                 short_pubkey=long_account.pubkey,
                 oracle_pubkey=instance.oracle_pubkey,
+                price_oracle_message_sequence=price_oracle_message_sequence,
             )
 
             if "success" in response and response["success"]:
@@ -346,18 +379,22 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
                 settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
                 instance = settle_hedge_position_offer_serializer.save()
             else:
-                raise Exception("Error creating contract data")
+                error = "Error creating contract data"
+                script_error = response.get("error", None)
+                if script_error:
+                    error += f". {script_error}"
+                raise Exception(error)
         else:
             raise Exception(f"Failed to find match for {instance}")
         return instance
 
 
     @classmethod
-    def auto_match_lp(cls, instance:HedgePositionOffer) -> HedgePositionOffer:
-        if not instance.hedge_funding_proposal:
-            raise Exception("Hedge funding proposal required when matching liquidity pool")
+    def auto_match_lp(cls, instance:HedgePositionOffer, price_oracle_message_sequence=price_oracle_message_sequence) -> HedgePositionOffer:
+        # if not instance.hedge_funding_proposal:
+        #     raise Exception("Hedge funding proposal required when matching liquidity pool")
 
-        lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance)
+        lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance, price_oracle_message_sequence=price_oracle_message_sequence)
         if lp_matchmaking_result["success"]:
             contract_data = lp_matchmaking_result["contractData"]
             settle_hedge_position_offer_data = {
@@ -379,8 +416,9 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
             instance = settle_hedge_position_offer_serializer.save()
 
-            instance.hedge_position.funding_tx_hash = lp_matchmaking_result["fundingContract"]["fundingTransactionHash"]
-            instance.hedge_position.save()
+            if lp_matchmaking_result.get("fundingContract", None):
+                instance.hedge_position.funding_tx_hash = lp_matchmaking_result["fundingContract"]["fundingTransactionHash"]
+                instance.hedge_position.save()
         else:
             error = f"Failed to find match in liduidity pool for {instance}"
             if lp_matchmaking_result.get("error", None):
@@ -446,7 +484,8 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         self.hedge_position_offer.hedge_position = hedge_position
         self.hedge_position_offer.status = HedgePositionOffer.STATUS_SETTLED
         self.hedge_position_offer.auto_settled = self.auto_settled
-        self.hedge_position_offer.save()
+        if self.hedge_position_offer.id:
+            self.hedge_position_offer.save()
 
         if self.hedge_position_offer.hedge_funding_proposal:
             hedge_funding_proposal = self.hedge_position_offer.hedge_funding_proposal
