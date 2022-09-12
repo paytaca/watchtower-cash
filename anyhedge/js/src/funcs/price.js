@@ -35,63 +35,6 @@ const ORACLE_RELAY_PORT = 7083
  * 
  */
 
-
-/**
- * @param {PriceMessageConfig|undefined} config
- * @returns {Promise<OraclePriceMessage>} oracle price message
- */
-export async function getPriceMessage(config) {
-	const _conf = {
-		publicKey: config?.oraclePubKey || ORACLE_PUBLIC_KEY,
-		relay: config?.oracleRelay || ORACLE_RELAY,
-		port: config?.oracleRelayPort || ORACLE_RELAY_PORT,
-	}
-	const searchRequest = {
-		publicKey: _conf.publicKey,
-		minDataSequence: 1,
-		count: 1,
-	};
-	const requestedMessages = await OracleNetwork.request(searchRequest, _conf.relay, _conf.port);
-	const { message, signature, publicKey } = requestedMessages[0];
-
-	// const message = '5003d6623f100200ee0f0200c32e0000'
-	// const signature = '405e46f66e9d77582849e3c68bfdd05af42324b32dda1f537cc9b205c4bad73a6d7a45cf720e79efd1e899e92face2c9867cc08984a7e1705eeddf7fe0fd98b1'
-	// const publicKey = '02d3c1de9d4bc77d6c3608cbe44d10138c7488e592dc2b1e10a6cf0e92c2ecb047'
-	return { message, signature, publicKey }
-}
-
-/**
- * 
- * @param {PriceMessageConfig|undefined} config
- * @returns {Promise<{priceData: PriceMessageData, msgData: OraclePriceMessage}>}
- */
-export async function getPrice(config) {
-	const msgData = await getPriceMessage(config)
-	let { message, signature, publicKey } = msgData
-	const validMessageSignature = await OracleData.verifyMessageSignature(
-		hexToBin(message),
-		hexToBin(signature),
-		hexToBin(publicKey)
-	);
-
-	if (!validMessageSignature) {
-		throw (new Error('Could not get starting conditions due to the oracle relay providing an invalid signature for the message.'));
-	}
-	const priceData = await OracleData.parsePriceMessage(hexToBin(message))
-	priceData.oraclePubKey = msgData.publicKey
-	return { priceData, msgData }
-}
-
-/**
- * 
- * @param {PriceMessageConfig|undefined} config
- * @returns {Promise<PriceMessageData>}
- */
-export async function getPriceData(config) {
-	const price = await getPrice(config)
-	return price.priceData
-}
-
 /**
  * 
  * @param {PriceMessageConfig|undefined} config 
