@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getPriceData } from './price.js'
+import { getPriceMessages } from './price.js'
 import { compileContract } from './create.js'
 
 /**
@@ -103,7 +103,7 @@ export async function prepareContractPosition(hedgePositionOffer, priceData) {
       liquidityProvidersPayoutAddress: '',
     }
   }
-  const requestData = { oraclePublicKey: priceData.oraclePubKey }
+  const requestData = { oraclePublicKey: priceData.oraclePubKey, poolSide: 'hedge' }
   const { data } = await backend.post('/api/v1/prepareContractPosition', requestData)
 
   const { longSats } = calculateHedgePositionOfferInputs(hedgePositionOffer, priceData.priceValue)
@@ -146,11 +146,15 @@ export async function proposeContract(contractCreationParameters, contractStarti
 /**
  * 
  * @param {HedgePositionOffer} hedgePositionOffer 
+ * @param {PriceMessageConfig | undefined } priceMessageConfig
+ * @param {PriceRequestParams | undefined } priceMessageRequestParams
  */
-export async function matchHedgePositionOffer(hedgePositionOffer) {
+export async function matchHedgePositionOffer(hedgePositionOffer, priceMessageConfig, priceMessageRequestParams) {
   const response = { success: false, error: '', contractData: {}, liquidityFees: {} }
 
-  const priceData = await getPriceData()
+  const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
+  const priceData = priceMessagesResponse?.results?.[0]?.priceData
+  if (!priceData) throw 'Unable to retrieve price data'
 
   const lpConstraintsCheck = await checkLiquidityProviderConstraints(hedgePositionOffer, priceData)
   if (!lpConstraintsCheck.valid) {
@@ -200,10 +204,12 @@ export async function matchHedgePositionOffer(hedgePositionOffer) {
 /**
  * 
  * @param {HedgePositionOffer} hedgePositionOffer 
- * @param {FundingProposal} fundingProposal 
+ * @param {FundingProposal} fundingProposal
+ * @param {PriceMessageConfig | undefined } priceMessageConfig
+ * @param {PriceRequestParams | undefined } priceMessageRequestParams 
  */
-export async function matchAndFundHedgePositionOffer(hedgePositionOffer, fundingProposal)  {
-  const response = await matchHedgePositionOffer(hedgePositionOffer)
+export async function matchAndFundHedgePositionOffer(hedgePositionOffer, fundingProposal, priceMessageConfig, priceMessageRequestParams)  {
+  const response = await matchHedgePositionOffer(hedgePositionOffer, priceMessageConfig, priceMessageRequestParams)
   if (!response.success) return response
 
   const fundContractData = {

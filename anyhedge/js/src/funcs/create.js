@@ -1,4 +1,4 @@
-import { getPriceData } from './price.js'
+import { getPriceMessages } from './price.js'
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
 
 /**
@@ -13,11 +13,14 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
  * @param {String} pubkeys.hedgePubkey - Public key of hedger
  * @param {String} pubkeys.shortAddress - Destination address of counterparty's funds on maturity/liquidation
  * @param {String} pubkeys.shortPubkey - Public key of counterparty
- * @param {PriceMessageConfig | undefined } asset
+ * @param {PriceMessageConfig | undefined } priceMessageConfig
+ * @param {PriceRequestParams | undefined } priceMessageRequestParams
  */
-export async function create(intent, pubkeys, priceMessageConfig) {
+export async function create(intent, pubkeys, priceMessageConfig, priceMessageRequestParams) {
   try {
-    const priceData = await getPriceData(priceMessageConfig)
+    const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
+    const priceData = priceMessagesResponse?.results?.[0]?.priceData
+    if (!priceData) throw 'Unable to retrieve price data'
 
     const nominalUnits = intent.amount * priceData.priceValue // BCH * (UScents / BCH)
 

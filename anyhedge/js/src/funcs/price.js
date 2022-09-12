@@ -106,9 +106,9 @@ export async function getPriceMessages(config, requestParams) {
 		relay: config?.oracleRelay || ORACLE_RELAY,
 		port: config?.oracleRelayPort || ORACLE_RELAY_PORT,
 	}
-	const _searchRequest = Object.assign({ publicKey: _conf.publicKey }, requestParams)
-	const searchRequest = Object.assign({}, _searchRequest)
-	if (!searchRequest.count) searchRequest.count = 1
+
+	const defaultSearchRequest = { publicKey: _conf.publicKey, count: 1, minDataSequence: 1 }
+	const searchRequest = Object.assign({}, defaultSearchRequest, requestParams)
 	const requestedMessages = await OracleNetwork.request(searchRequest, _conf.relay, _conf.port);
 
 	if (!Array.isArray(requestedMessages)) {
@@ -131,6 +131,7 @@ export async function getPriceMessages(config, requestParams) {
 			}
 
 			const priceData = await OracleData.parsePriceMessage(hexToBin(message))
+			priceData.oraclePubKey = publicKey
 			return { priceMessage, priceData }
 		})
 	)
