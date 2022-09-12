@@ -44,7 +44,7 @@ def check_new_oracle_price_messages(oracle_pubkey):
         count = round(count / 60)
 
         count = max(1, count)
-        count = min(count, 50) # setup a hard limit
+        count = min(count, 10) # setup a hard limit
 
     price_messages = get_price_messages(oracle_pubkey, min_message_timestamp=latest_timestamp, count=count)
     for price_message in price_messages:
