@@ -60,7 +60,7 @@ export async function getLiquidityServiceInfo() {
  */
 export async function checkLiquidityProviderConstraints(hedgePositionOffer, priceData) {
   const response = { valid: true, error: '' }
-  const { longNominalUnits } = calculateHedgePositionOfferInputs(hedgePositionOffer, priceData.priceValue)
+  const { hedgeNominalUnits } = calculateHedgePositionOfferInputs(hedgePositionOffer, priceData.priceValue)
   const durationSeconds = hedgePositionOffer.durationSeconds
   const lowLiquidationMultiplier = hedgePositionOffer.lowLiquidationMultiplier
 
@@ -68,9 +68,9 @@ export async function checkLiquidityProviderConstraints(hedgePositionOffer, pric
   const constraints = liquidityServiceInfo?.liquidityParameters?.[priceData.oraclePubKey]?.long
   if (!constraints) return undefined
   
-  if (constraints.minimumNominalUnits > longNominalUnits || constraints.maximumNominalUnits < longNominalUnits){
+  if (constraints.minimumNominalUnits > hedgeNominalUnits || constraints.maximumNominalUnits < hedgeNominalUnits){
     response.valid = false
-    response.error = `Nominal units ${longNominalUnits} outside (${constraints.minimumNominalUnits}, ${constraints.maximumNominalUnits})`
+    response.error = `Nominal units ${hedgeNominalUnits} outside (${constraints.minimumNominalUnits}, ${constraints.maximumNominalUnits})`
     return response
   }
   if (constraints.minimumDuration > durationSeconds || constraints.maximumDuration < durationSeconds) {
@@ -129,7 +129,7 @@ export async function proposeContract(contractCreationParameters, contractStarti
     success: false,
     error: '',
     liquidityFees: {
-      liquidityProviderFee: 0,
+      liquidityProviderFeeInSatoshis: 0,
       renegotiateAfterTimestamp: 0,
     },
   }
@@ -137,7 +137,7 @@ export async function proposeContract(contractCreationParameters, contractStarti
   const { data } = await backend.post('/api/v1/proposeContract', requestData)
 
   response.success = true
-  response.liquidityFees.liquidityProviderFee = data.liquidityProviderFee
+  response.liquidityFees.liquidityProviderFeeInSatoshis = data.liquidityProviderFeeInSatoshis
   response.liquidityFees.renegotiateAfterTimestamp = data.renegotiateAfterTimestamp
   return response
 }
@@ -150,11 +150,12 @@ export async function proposeContract(contractCreationParameters, contractStarti
  * @param {PriceRequestParams | undefined } priceMessageRequestParams
  */
 export async function matchHedgePositionOffer(hedgePositionOffer, priceMessageConfig, priceMessageRequestParams) {
-  const response = { success: false, error: '', contractData: {}, liquidityFees: {} }
+  const response = { success: false, error: '', contractData: {}, liquidityFees: {}, oracleMessageSequence: 0 }
 
   const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
   const priceData = priceMessagesResponse?.results?.[0]?.priceData
   if (!priceData) throw 'Unable to retrieve price data'
+  response.oracleMessageSequence = priceData.messageSequence
 
   const lpConstraintsCheck = await checkLiquidityProviderConstraints(hedgePositionOffer, priceData)
   if (!lpConstraintsCheck.valid) {
@@ -221,12 +222,15 @@ export async function matchAndFundHedgePositionOffer(hedgePositionOffer, funding
     publicKey: fundingProposal.publicKey,
     takerSide: 'hedge', // hedge | long
     dependencyTransactions: fundingProposal.inputTxHashes,
+    oracleMessageSequence: response.oracleMessageSequence,
   }
 
-  const expectedFundingSats = response.contractData?.metadata?.totalInputSats + response.liquidityFees?.liquidityProviderFee
+  const input = response.contractData?.metadata?.hedgeInputSats
+  const fees = response.liquidityFees?.liquidityProviderFeeInSatoshis
+  const expectedFundingSats = input + fees
   if (fundingProposal.txValue !== expectedFundingSats) {
     response.success = false
-    response.error = `Funding proposal satoshis must be ${expectedFundingSats}, got ${fundingProposal.txValue}`
+    response.error = `Funding proposal satoshis must be ${input}+ ${fees}, got ${fundingProposal.txValue}\n${JSON.stringify(response, undefined, 2)}`
     return response
   }
 

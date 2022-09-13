@@ -391,8 +391,8 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
 
     @classmethod
     def auto_match_lp(cls, instance:HedgePositionOffer, price_oracle_message_sequence=price_oracle_message_sequence) -> HedgePositionOffer:
-        # if not instance.hedge_funding_proposal:
-        #     raise Exception("Hedge funding proposal required when matching liquidity pool")
+        if not instance.hedge_funding_proposal:
+            raise Exception("Hedge funding proposal required when matching liquidity pool")
 
         lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance, price_oracle_message_sequence=price_oracle_message_sequence)
         if lp_matchmaking_result["success"]:
