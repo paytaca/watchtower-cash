@@ -34,10 +34,10 @@ def check_new_oracle_price_messages(oracle_pubkey):
     ).aggregate(
         latest_timestamp = models.Max("message_timestamp"),
     ).get("latest_timestamp")
-    latest_timestamp = datetime.timestamp(latest_timestamp)
 
     count = 5
     if latest_timestamp is not None:
+        latest_timestamp = datetime.timestamp(latest_timestamp)
         latest_timestamp = round(latest_timestamp)
         # messages are generated per minute, so we can approximate how many messages we will need to be up to date
         count = datetime.now().timestamp() - latest_timestamp
