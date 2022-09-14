@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { AnyHedgeManager } from '@generalprotocols/anyhedge'
 import { getPriceMessages } from './price.js'
 import { compileContract } from './create.js'
 
@@ -57,28 +58,35 @@ export async function getLiquidityServiceInfo() {
  * 
  * @param {HedgePositionOffer} hedgePositionOffer 
  * @param {{ priceValue: Number, oraclePubKey: String }} priceData
+ * @param {Object} constraints
  */
-export async function checkLiquidityProviderConstraints(hedgePositionOffer, priceData) {
+export async function checkLiquidityProviderConstraints(hedgePositionOffer, priceData, constraints) {
   const response = { valid: true, error: '' }
   const { hedgeNominalUnits } = calculateHedgePositionOfferInputs(hedgePositionOffer, priceData.priceValue)
   const durationSeconds = hedgePositionOffer.durationSeconds
   const lowLiquidationMultiplier = hedgePositionOffer.lowLiquidationMultiplier
 
-  const liquidityServiceInfo = await getLiquidityServiceInfo()
-  const constraints = liquidityServiceInfo?.liquidityParameters?.[priceData.oraclePubKey]?.long
-  if (!constraints) return undefined
-  
-  if (constraints.minimumNominalUnits > hedgeNominalUnits || constraints.maximumNominalUnits < hedgeNominalUnits){
+  if (!constraints) {
+    response.valid = false
+    response.error = 'Constraints not found'
+    return
+  }
+
+  const withinNominalRange = constraints.minimumNominalUnits <= hedgeNominalUnits && constraints.maximumNominalUnits >= hedgeNominalUnits
+  if (!withinNominalRange){
     response.valid = false
     response.error = `Nominal units ${hedgeNominalUnits} outside (${constraints.minimumNominalUnits}, ${constraints.maximumNominalUnits})`
     return response
   }
-  if (constraints.minimumDuration > durationSeconds || constraints.maximumDuration < durationSeconds) {
+  const withinDurationRange = constraints.minimumDuration <= durationSeconds && constraints.maximumDuration >= durationSeconds
+  if (!withinDurationRange) {
     response.valid = false
     response.error = `Duration ${durationSeconds} outside (${constraints.minimumDuration}, ${constraints.maximumDuration})`
     return response
   }
-  if (constraints.minimumLiquidationLimit > lowLiquidationMultiplier || constraints.maximumLiquidationLimit < lowLiquidationMultiplier){
+
+  const withinLiquidationRange = constraints.minimumLiquidationLimit <= lowLiquidationMultiplier && constraints.maximumLiquidationLimit >= lowLiquidationMultiplier
+  if (withinLiquidationRange) {
     response.valid = false
     response.error = `Liquidation limit ${lowLiquidationMultiplier} outside (${constraints.minimumLiquidationLimit}, ${constraints.maximumLiquidationLimit})`
     return response 
@@ -150,14 +158,41 @@ export async function proposeContract(contractCreationParameters, contractStarti
  * @param {PriceRequestParams | undefined } priceMessageRequestParams
  */
 export async function matchHedgePositionOffer(hedgePositionOffer, priceMessageConfig, priceMessageRequestParams) {
-  const response = { success: false, error: '', contractData: {}, liquidityFees: {}, oracleMessageSequence: 0 }
+  const response = {
+    success: false,
+    error: '',
+    contractData: {},
+    contractCreationParameters: {},
+    liquidityFees: {},
+    settlementService: {},
+    oracleRelay: {},
+    oracleMessageSequence: 0
+  }
 
-  const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
+  const liquidityServiceInfo = await getLiquidityServiceInfo()
+  if (liquidityServiceInfo?.oracleRelay) response.oracleRelay = liquidityServiceInfo?.oracleRelay
+  if (liquidityServiceInfo?.settlementService) response.settlementService = liquidityServiceInfo?.settlementService
+
+  const _priceMessageConfig = Object.assign({}, priceMessageConfig)
+  if (liquidityServiceInfo?.oracleRelay?.host) {
+    _priceMessageConfig.oracleRelay = liquidityServiceInfo?.oracleRelay?.host
+    // _priceMessageConfig.oracleRelayPort = liquidityServiceInfo?.oracleRelay?.port
+  }
+
+  const priceMessagesResponse = await getPriceMessages(_priceMessageConfig, priceMessageRequestParams)
   const priceData = priceMessagesResponse?.results?.[0]?.priceData
   if (!priceData) throw 'Unable to retrieve price data'
   response.oracleMessageSequence = priceData.messageSequence
 
-  const lpConstraintsCheck = await checkLiquidityProviderConstraints(hedgePositionOffer, priceData)
+
+  const constraints = liquidityServiceInfo?.liquidityParameters?.[priceData.oraclePubKey]?.long
+  if (!constraints) {
+    response.success = false
+    response.error = 'Liquidity provider constraints not found'
+    return response
+  }
+
+  const lpConstraintsCheck = await checkLiquidityProviderConstraints(hedgePositionOffer, priceData, constraints)
   if (!lpConstraintsCheck.valid) {
     response.success = false
     response.error = lpConstraintsCheck.error || 'hedge position offer outside liquidity provider\'s constraints'
@@ -198,6 +233,49 @@ export async function matchHedgePositionOffer(hedgePositionOffer, priceMessageCo
   const contractData = await compileContract(contractCreationParameters)
   response.success = true
   response.contractData = contractData
+  response.contractCreationParameters = contractCreationParameters
+
+  return response
+}
+
+/**
+ * 
+ * @param {Object} contractData 
+ * @param {FundingProposal} fundingProposal 
+ * @param {Number} oracleMessageSequence 
+ */
+export async function fundHedgePosition(contractData, fundingProposal, oracleMessageSequence) {
+  const response = { success: false, fundingTransactionHash: '', error: '' }
+  const fundContractData = {
+    contractAddress: response.contractData.address,
+    outpointTransactionHash: fundingProposal.txHash,
+    outpointIndex: fundingProposal.txIndex,
+    satoshis: fundingProposal.txValue,
+    signature: fundingProposal.scriptSig,
+    publicKey: fundingProposal.publicKey,
+    takerSide: 'hedge', // hedge | long
+    dependencyTransactions: fundingProposal.inputTxHashes,
+    oracleMessageSequence: oracleMessageSequence,
+  }
+
+  const input = contractData?.metadata?.hedgeInputSats
+  const fees = contractData?.fees?.satoshis
+  const expectedFundingSats = input + fees
+  if (fundingProposal.txValue !== expectedFundingSats) {
+    response.success = false
+    response.error = `Funding proposal satoshis must be ${input}+ ${fees}, got ${fundingProposal.txValue}`
+    return response
+  }
+
+  try {
+    const fundContractResponse = await backend.post('/api/v1/fundContract', fundContractData)
+    // https://gitlab.com/GeneralProtocols/anyhedge/library/-/blob/development/lib/interfaces/liquidity-provider.ts#L147
+    response.fundingTransactionHash = fundContractResponse.data.fundingTransactionHash
+    response.success = true
+  } catch(error) {
+    response.success = false
+    response.error = error
+  }
 
   return response
 }
@@ -213,32 +291,25 @@ export async function matchAndFundHedgePositionOffer(hedgePositionOffer, funding
   const response = await matchHedgePositionOffer(hedgePositionOffer, priceMessageConfig, priceMessageRequestParams)
   if (!response.success) return response
 
-  const fundContractData = {
-    contractAddress: response.contractData.address,
-    outpointTransactionHash: fundingProposal.txHash,
-    outpointIndex: fundingProposal.txIndex,
-    satoshis: fundingProposal.txValue,
-    signature: fundingProposal.scriptSig,
-    publicKey: fundingProposal.publicKey,
-    takerSide: 'hedge', // hedge | long
-    dependencyTransactions: fundingProposal.inputTxHashes,
-    oracleMessageSequence: response.oracleMessageSequence,
+  const _managerConfig = {
+    serviceScheme: response.settlementService.scheme,
+    serviceDomain: response.settlementService.host,
+    servicePort: response.settlementService.port,
   }
+  const manager = new AnyHedgeManager(_managerConfig);
+  const authenticationToken = await manager.requestAuthenticationToken('Paytaca')
+  _managerConfig.authenticationToken = authenticationToken
+  const managerWithAuthToken = new AnyHedgeManager(_managerConfig);
+  response.contractData = await managerWithAuthToken.getContractStatus(response.contractData.address);
 
-  const input = response.contractData?.metadata?.hedgeInputSats
-  const fees = response.liquidityFees?.liquidityProviderFeeInSatoshis
-  const expectedFundingSats = input + fees
-  if (fundingProposal.txValue !== expectedFundingSats) {
+  const fundingResponse = await fundHedgePosition(response.contractData, fundingProposal, response.oracleMessageSequence)
+  if (!fundingResponse.success) {
     response.success = false
-    response.error = `Funding proposal satoshis must be ${input}+ ${fees}, got ${fundingProposal.txValue}\n${JSON.stringify(response, undefined, 2)}`
-    return response
+    response.error = fundingResponse?.error || 'Error encountered in funding contract'
+  } else {
+    response.success = true
+    response.fundingTransactionHash = fundingResponse.fundingTransactionHash
   }
 
-  const fundContractResponse = await backend.post('/api/v1/fundContract', fundContractData)
-
-  // https://gitlab.com/GeneralProtocols/anyhedge/library/-/blob/development/lib/interfaces/liquidity-provider.ts#L147
-  response.fundingContract = {
-    fundingTransactionHash: fundContractResponse.data.fundingTransactionHash,
-  }
-  return response 
+  return response
 }
