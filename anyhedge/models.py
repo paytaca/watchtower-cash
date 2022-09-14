@@ -110,12 +110,6 @@ class HedgePositionOffer(models.Model):
     oracle_pubkey = models.CharField(max_length=75, null=True, blank=True)
     hedge_address = models.CharField(max_length=75)
     hedge_pubkey = models.CharField(max_length=75)
-    hedge_funding_proposal = models.OneToOneField(
-        HedgeFundingProposal,
-        related_name="hedge_position_offer",
-        on_delete=models.CASCADE,
-        null=True, blank=True,
-    )
 
     hedge_position = models.OneToOneField(
         HedgePosition,

@@ -38,57 +38,6 @@ class TimestampField(serializers.IntegerField):
         return datetime.fromtimestamp(data).replace(tzinfo=pytz.UTC)
 
 
-class FundHedgePositionOfferSerializer(serializers.Serializer):
-    hedge_position_offer_id = serializers.IntegerField()
-    tx_hash = serializers.CharField(validators=[ValidTxHash()])
-    tx_index = serializers.IntegerField()
-    tx_value = serializers.IntegerField()
-    script_sig = serializers.CharField()
-    pubkey = serializers.CharField(required=False)
-    input_tx_hashes = serializers.ListField(
-        child=serializers.CharField(),
-        required=False
-    )
-
-    def validate_hedge_position_offer_id(self, value):
-        try:
-            instance = HedgePositionOffer.objects.get(id=value)
-            if instance.status == HedgePositionOffer.STATUS_CANCELLED:
-                raise serializers.ValidationError("Hedge position offer is already cancelled")
-            if instance.status == HedgePositionOffer.STATUS_SETTLED:
-                raise serializers.ValidationError("Hedge position offer is already settled, submit to hedge position instead")
-        except HedgePositionOffer.DoesNotExist:
-            raise serializers.ValidationError("Hedge position offer does not exist")
-
-        return value
-
-    @transaction.atomic()
-    def create(self, validated_data):
-        hedge_position_offer_id = validated_data.pop("hedge_position_offer_id", None)
-        hedge_position_offer_obj = HedgePositionOffer.objects.get(id=hedge_position_offer_id)
-
-        funding_proposal = HedgeFundingProposal()
-        update_position_offer = True
-
-        if hedge_position_offer_obj.hedge_funding_proposal:
-            funding_proposal = hedge_position_offer_obj.hedge_funding_proposal
-            update_position_offer = False
-
-        funding_proposal.tx_hash = validated_data["tx_hash"]
-        funding_proposal.tx_index = validated_data["tx_index"]
-        funding_proposal.tx_value = validated_data["tx_value"]
-        funding_proposal.script_sig = validated_data["script_sig"]
-        funding_proposal.pubkey = validated_data["pubkey"]
-        funding_proposal.input_tx_hashes = validated_data.get("pubkey", None)
-        funding_proposal.save()
-
-        if update_position_offer:
-            hedge_position_offer_obj.hedge_funding_proposal = funding_proposal
-            hedge_position_offer_obj.save()
-
-        return funding_proposal
-
-
 class FundingProposalSerializer(serializers.Serializer):
     hedge_address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
     position = serializers.CharField() # hedge | long
@@ -253,7 +202,6 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
     created_at = serializers.DateTimeField(read_only=True)
     auto_match = serializers.BooleanField(default=False, write_only=True)
     auto_match_pool_target = serializers.ChoiceField(choices=AUTO_MATCH_CHOICES, required=False)
-    hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
 
     price_oracle_message_sequence = serializers.IntegerField(required=False, write_only=True)
 
@@ -280,7 +228,6 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             "auto_match_pool_target",
             "price_oracle_message_sequence",
             "save_position_offer",
-            "hedge_funding_proposal",
         ]
 
     def validate(self, data):
@@ -313,25 +260,10 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
         return instance
 
     def init_instance(self, validated_data, save=False):
-        hedge_funding_proposal_data = validated_data.pop("hedge_funding_proposal", None)
-
         if save:
             instance = super().create(validated_data)
         else:
             instance = self.Meta.model(**validated_data)
-
-        if hedge_funding_proposal_data is not None:
-            hedge_funding_proposal_serializer = HedgeFundingProposalSerializer(data=hedge_funding_proposal_data)
-            hedge_funding_proposal_serializer.is_valid(raise_exception=True)
-            if save:
-                hedge_funding_proposal = hedge_funding_proposal_serializer.save()
-            else:
-                hedge_funding_proposal_serializer.Meta.model(**hedge_funding_proposal_serializer.validated_data)
-
-            instance.hedge_funding_proposal = hedge_funding_proposal
-
-            if save:
-                instance.save()
 
         return instance
 
@@ -391,8 +323,6 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
 
     @classmethod
     def auto_match_lp(cls, instance:HedgePositionOffer, price_oracle_message_sequence=price_oracle_message_sequence) -> HedgePositionOffer:
-        if not instance.hedge_funding_proposal:
-            raise Exception("Hedge funding proposal required when matching liquidity pool")
 
         lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance, price_oracle_message_sequence=price_oracle_message_sequence)
         if lp_matchmaking_result["success"]:
@@ -486,22 +416,6 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         self.hedge_position_offer.auto_settled = self.auto_settled
         if self.hedge_position_offer.id:
             self.hedge_position_offer.save()
-
-        if self.hedge_position_offer.hedge_funding_proposal:
-            hedge_funding_proposal = self.hedge_position_offer.hedge_funding_proposal
-            funding_proposal_data = {
-                "hedge_address": hedge_position.address,
-                "position": "hedge",
-                "tx_hash": hedge_funding_proposal.tx_hash,
-                "tx_index": hedge_funding_proposal.tx_index,
-                "tx_value": hedge_funding_proposal.tx_value,
-                "script_sig": hedge_funding_proposal.script_sig,
-                "pubkey": hedge_funding_proposal.pubkey,
-                "input_tx_hashes": hedge_funding_proposal.input_tx_hashes,
-            }
-            funding_proposal_serializer = FundingProposalSerializer(data=funding_proposal_data)
-            funding_proposal_serializer.is_valid(raise_exception=True)
-            funding_proposal_serializer.save()
 
         if self.auto_settled:
             consume_long_account_allowance(hedge_position.long_address, hedge_position.long_input_sats)
