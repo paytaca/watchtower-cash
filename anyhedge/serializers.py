@@ -157,8 +157,8 @@ class HedgePositionFeeSerializer(serializers.ModelSerializer):
 
 
 class HedgePositionSerializer(serializers.ModelSerializer):
-    hedge_funding_proposal = HedgeFundingProposalSerializer()
-    long_funding_proposal = HedgeFundingProposalSerializer()
+    hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
+    long_funding_proposal = HedgeFundingProposalSerializer(required=False)
     start_timestamp = TimestampField()
     maturity_timestamp = TimestampField()
 
@@ -174,8 +174,10 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "satoshis",
             "start_timestamp",
             "maturity_timestamp",
+            "hedge_wallet_hash",
             "hedge_address",
             "hedge_pubkey",
+            "long_wallet_hash",
             "long_address",
             "long_pubkey",
             "oracle_pubkey",
@@ -199,10 +201,13 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "long_address": {
                 "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
             },
-            "hedge_pubkey": {
+            "hedge_wallet_hash": {
                 "allow_blank": True
             },
-            "long_pubkey": {
+            "long_wallet_hash": {
+                "allow_blank": True
+            },
+            "funding_tx_hash": {
                 "allow_blank": True
             },
         }
@@ -273,6 +278,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
     class Meta:
         model = HedgePositionOffer
         fields = [
+            "id",
             "status",
             "wallet_hash",
             "satoshis",
