@@ -67,3 +67,23 @@ def compile_contract(
     }
 
     return AnyhedgeFunctions.compileContract(data)
+
+
+def get_contract_status(
+    contract_address, pubkey, signature,
+    settlement_service_scheme="",
+    settlement_service_domain="", 
+    settlement_service_port=0,
+    authentication_token="",
+):
+    return AnyhedgeFunctions.getContractStatus(
+        contract_address,
+        pubkey,
+        signature,
+        {
+            "scheme": settlement_service_scheme,
+            "domain": settlement_service_domain,
+            "port": settlement_service_port,
+            "authenticationToken": authentication_token,
+        }
+    )

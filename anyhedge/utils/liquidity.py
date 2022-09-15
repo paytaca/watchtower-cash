@@ -66,3 +66,7 @@ def match_hedge_position_to_liquidity_provider(hedge_position_offer_obj, price_o
         return AnyhedgeFunctions.matchHedgePositionOffer(hedge_position_offer_data, priceMessageConfig, priceMessageRequestParams)
 
     return AnyhedgeFunctions.matchAndFundHedgePositionOffer(hedge_position_offer_data, funding_proposal_data, priceMessageConfig, priceMessageRequestParams)
+
+
+def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence):
+    return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence)

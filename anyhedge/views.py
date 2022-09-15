@@ -17,6 +17,7 @@ from .serializers import (
     HedgePositionOfferSerializer,
     SettleHedgePositionOfferSerializer,
     SubmitFundingTransactionSerializer,
+    FundGeneralProcotolLPContractSerializer,
 
     OracleSerializer,
     PriceOracleMessageSerializer,
@@ -84,6 +85,15 @@ class HedgePositionViewSet(
     @decorators.action(methods=["post"], detail=False)
     def set_funding_tx(self, request):
         serializer = SubmitFundingTransactionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        hedge_obj = serializer.save()
+        return Response(self.serializer_class(hedge_obj).data)
+
+
+    @swagger_auto_schema(method="post", request_body=FundGeneralProcotolLPContractSerializer, responses={201: serializer_class})
+    @decorators.action(methods=["post"], detail=False)
+    def fund_gp_lp_contract(self, request):
+        serializer = FundGeneralProcotolLPContractSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
         return Response(self.serializer_class(hedge_obj).data)

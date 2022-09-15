@@ -15,12 +15,16 @@ from .models import (
     PriceOracleMessage,
 )
 from .utils.address import match_pubkey_to_cash_address
-from .utils.contract import create_contract
+from .utils.contract import (
+    create_contract,
+    get_contract_status
+)
 from .utils.funding import get_tx_hash
 from .utils.liquidity import (
     consume_long_account_allowance,
     get_position_offer_suggestions,
     match_hedge_position_to_liquidity_provider,
+    fund_hedge_position,
 )
 from .utils.validators import (
     ValidAddress,
@@ -529,6 +533,97 @@ class SubmitFundingTransactionSerializer(serializers.Serializer):
         hedge_position_obj.funding_tx_hash = tx_hash
         hedge_position_obj.save()
         send_funding_tx_update(hedge_position_obj, tx_hash=hedge_position_obj.funding_tx_hash)
+        return hedge_position_obj
+
+
+class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
+    contract_address = serializers.CharField()
+    hedge_wallet_hash = serializers.CharField()
+    hedge_pubkey = serializers.CharField()
+    oracle_message_sequence = serializers.IntegerField()
+
+    settlement_service = SettlementServiceSerializer() # do i need this here or js script will provide ?
+    funding_proposal = HedgeFundingProposalSerializer()
+
+    @transaction.atomic()
+    def save(self):
+        validated_data = self.validated_data
+        contract_address = validated_data["contract_address"]
+        hedge_wallet_hash = validated_data["hedge_wallet_hash"]
+        hedge_pubkey = validated_data["hedge_pubkey"]
+        oracle_message_sequence = validated_data["oracle_message_sequence"]
+        settlement_service = validated_data["settlement_service"]
+        funding_proposal = validated_data["funding_proposal"]
+
+        contract_data = get_contract_status(
+            contract_address,
+            hedge_pubkey,
+            settlement_service["hedge_signature"],
+            settlement_service_scheme=settlement_service["scheme"],
+            settlement_service_domain=settlement_service["domain"],
+            settlement_service_port=settlement_service["port"],
+        )
+
+        if contract_data["address"] != contract_address:
+            raise serializers.ValidationError("Contract address from settlement does not match")
+
+        contract_metadata = contract_data["metadata"]
+        start_timestamp = contract_metadata["startTimestamp"]
+        maturity_timestamp = start_timestamp + contract_metadata["duration"]
+
+        hedge_position_data = {
+            "address": contract_data["address"],
+            "anyhedge_contract_version": contract_data["version"],
+            "satoshis": contract_metadata["hedgeInputSats"],
+            "start_timestamp": contract_metadata["startTimestamp"],
+            "maturity_timestamp": maturity_timestamp,
+            "hedge_wallet_hash": hedge_wallet_hash,
+            "hedge_address": contract_metadata["hedgeAddress"],
+            "hedge_pubkey": contract_metadata["hedgePublicKey"],
+            "long_wallet_hash": "",
+            "long_address": contract_metadata["longAddress"],
+            "long_pubkey": contract_metadata["longPublicKey"],
+            "oracle_pubkey": contract_metadata["oraclePublicKey"],
+            "start_price": contract_metadata["startPrice"],
+            "low_liquidation_multiplier": contract_metadata["lowLiquidationPriceMultiplier"],
+            "high_liquidation_multiplier": contract_metadata["highLiquidationPriceMultiplier"],
+            "funding_tx_hash": "",
+            "hedge_funding_proposal": funding_proposal,
+            "settlement_service": settlement_service,
+        }
+
+        if contract_data.get("fee", None):
+            hedge_position_data["fee"] = {
+                "address": contract_data["fee"]["address"],
+                "satoshis": contract_data["fee"]["satoshis"],
+            }
+
+        hedge_position_serializer = HedgePositionSerializer(data=hedge_position_data)
+        hedge_position_serializer.is_valid(raise_exception=True)
+        hedge_position_obj = hedge_position_serializer.save()
+
+        # this must be at the last part as much as possible
+        funding_response = fund_hedge_position(
+            contract_data,
+            {
+                "txHash": funding_proposal["tx_hash"],
+                "txIndex": funding_proposal["tx_index"],
+                "txValue": funding_proposal["tx_value"],
+                "scriptSig": funding_proposal["script_sig"],
+                "publicKey": funding_proposal["pubkey"],
+                "inputTxHashes": funding_proposal["input_tx_hashes"],
+            },
+            oracle_message_sequence
+        )
+        if not funding_response["success"]:
+            error = "Error in funding hedge position"
+            if funding_response.get("error", None):
+                error += f". {funding_response['error']}"
+            raise serializers.ValidationError(error)
+
+        hedge_position_obj.funding_tx_hash = funding_response["fundingTransactionHash"]
+        hedge_position_obj.save()
+
         return hedge_position_obj
 
 
