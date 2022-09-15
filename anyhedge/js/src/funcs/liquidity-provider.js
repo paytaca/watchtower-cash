@@ -247,7 +247,7 @@ export async function matchHedgePositionOffer(hedgePositionOffer, priceMessageCo
 export async function fundHedgePosition(contractData, fundingProposal, oracleMessageSequence) {
   const response = { success: false, fundingTransactionHash: '', error: '' }
   const fundContractData = {
-    contractAddress: response.contractData.address,
+    contractAddress: contractData.address,
     outpointTransactionHash: fundingProposal.txHash,
     outpointIndex: fundingProposal.txIndex,
     satoshis: fundingProposal.txValue,
@@ -258,14 +258,14 @@ export async function fundHedgePosition(contractData, fundingProposal, oracleMes
     oracleMessageSequence: oracleMessageSequence,
   }
 
-  const input = contractData?.metadata?.hedgeInputSats
-  const fees = contractData?.fees?.satoshis
-  const expectedFundingSats = input + fees
-  if (fundingProposal.txValue !== expectedFundingSats) {
-    response.success = false
-    response.error = `Funding proposal satoshis must be ${input}+ ${fees}, got ${fundingProposal.txValue}`
-    return response
-  }
+  // const input = contractData?.metadata?.hedgeInputSats
+  // const fees = contractData?.fee?.satoshis
+  // const expectedFundingSats = input + fees
+  // if (fundingProposal.txValue !== expectedFundingSats) {
+  //   response.success = false
+  //   response.error = `Funding proposal satoshis must be ${input} + ${fees}, got ${fundingProposal.txValue}`
+  //   return response
+  // }
 
   try {
     const fundContractResponse = await backend.post('/api/v1/fundContract', fundContractData)
@@ -274,7 +274,12 @@ export async function fundHedgePosition(contractData, fundingProposal, oracleMes
     response.success = true
   } catch(error) {
     response.success = false
-    response.error = error
+    if (Array.isArray(error?.response?.data?.errors)) {
+      response.errors = error.response.data.errors
+      response.error = response.errors?.[0]
+    } else if (error?.message) {
+      response.error = error?.message
+    }
   }
 
   return response
