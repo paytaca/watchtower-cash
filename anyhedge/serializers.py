@@ -6,6 +6,8 @@ from rest_framework import serializers
 from .models import (
     LongAccount,
     HedgePosition,
+    SettlementService,
+    HedgePositionFee,
     HedgeFundingProposal,
     HedgePositionOffer,
 
@@ -134,11 +136,34 @@ class HedgeFundingProposalSerializer(serializers.ModelSerializer):
         ]
         
 
+class SettlementServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SettlementService
+        fields = [
+            "domain",
+            "scheme",
+            "port",
+            "hedge_signature",
+        ]
+
+
+class HedgePositionFeeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HedgePositionFee
+        fields = [
+            "address",
+            "satoshis",
+        ]
+
+
 class HedgePositionSerializer(serializers.ModelSerializer):
     hedge_funding_proposal = HedgeFundingProposalSerializer()
     long_funding_proposal = HedgeFundingProposalSerializer()
     start_timestamp = TimestampField()
     maturity_timestamp = TimestampField()
+
+    settlement_service = SettlementServiceSerializer()
+    fee = HedgePositionFeeSerializer()
 
     class Meta:
         model = HedgePosition
@@ -160,6 +185,9 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "funding_tx_hash",
             "hedge_funding_proposal",
             "long_funding_proposal",
+
+            "settlement_service",
+            "fee",
         ]
         extra_kwargs = {
             "address": {
@@ -186,6 +214,39 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         if not match_pubkey_to_cash_address(data["long_pubkey"], data["long_address"]):
             raise serializers.ValidationError("long public key & address does not match")
         return data
+
+    @transaction.atomic()
+    def create(self, validated_data):
+        settlement_service_data = validated_data.pop("settlement_service", None)
+        fee_data = validated_data.pop("fee", None)
+        hedge_funding_proposal_data = validated_data.pop("hedge_funding_proposal", None)
+        long_funding_proposal_data = validated_data.pop("long_funding_proposal", None)
+
+        instance = super().create(validated_data)
+        save_instance = False
+
+        if settlement_service_data is not None:
+            settlement_service_data["hedge_position"] = instance
+            SettlementService.objects.create(**settlement_service_data)
+        
+        if fee_data is not None:
+            fee_data["hedge_position"] = instance
+            HedgePositionFee.objects.create(**fee_data)
+
+        if hedge_funding_proposal_data is not None:
+            hedge_funding_proposal = HedgeFundingProposal.objects.create(**hedge_funding_proposal_data)
+            instance.hedge_funding_proposal = hedge_funding_proposal
+            save_instance = True
+
+        if long_funding_proposal_data is not None:
+            long_funding_proposal = HedgeFundingProposal.objects.create(**long_funding_proposal_data)
+            instance.long_funding_proposal = long_funding_proposal
+            save_instance = True
+
+        if save_instance:
+            instance.save()
+
+        return instance
 
 
 class HedgePositionOfferSerializer(serializers.ModelSerializer):

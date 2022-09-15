@@ -86,6 +86,26 @@ class HedgePosition(models.Model):
         return self.total_sats - self.satoshis
 
 
+# usable when hedge position is using an external settlement service
+class SettlementService(models.Model):
+    hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement_service")
+    domain = models.CharField(max_length=50)
+    scheme = models.CharField(max_length=10)
+    port = models.IntegerField()
+
+    # settlement service requires signature and pubkey to access api
+    # e.g. <scheme>://<domain>:<port>/status/?contractAddress=<address>&signature<hedge_signature>&pubkey=<hedge_pubkey>
+    # generating signature is done here 
+    # https://gitlab.com/GeneralProtocols/anyhedge/library/-/blob/v0.14.2/lib/anyhedge.ts#L399
+    hedge_signature = models.TextField()
+
+
+class HedgePositionFee(models.Model):
+    hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="fee")
+    address = models.CharField(max_length=75)
+    satoshis = models.IntegerField()
+
+
 class HedgePositionOffer(models.Model):
     STATUS_PENDING = "pending"
     STATUS_SETTLED = "settled"
