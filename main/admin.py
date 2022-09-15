@@ -190,6 +190,10 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'project'
     ]
 
+    search_fields = [
+        'wallet_hash'
+    ]
+
     def rescan_utxos(self, request, queryset):
         for wallet in queryset:
             addresses = wallet.addresses.filter(transactions__spent=False)
