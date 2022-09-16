@@ -68,6 +68,9 @@ class HedgePosition(models.Model):
         null=True, blank=True,
     )
 
+    class Meta:
+        ordering = ['-start_timestamp']
+
 
     @property
     def low_liquidation_price(self):
@@ -84,6 +87,22 @@ class HedgePosition(models.Model):
     @property
     def long_input_sats(self):
         return self.total_sats - self.satoshis
+
+class HedgeSettlement(models.Model):
+    hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement")
+
+    spending_transaction = models.CharField(max_length=75)
+    settlement_type = models.CharField(max_length=20)
+    hedge_satoshis = models.BigIntegerField()
+    long_satoshis = models.BigIntegerField()
+
+    oracle_pubkey = models.CharField(max_length=75)
+    settlement_price = models.IntegerField(null=True, blank=True)
+    settlement_price_sequence = models.IntegerField(null=True, blank=True)
+    settlement_message_sequence = models.IntegerField(null=True, blank=True)
+    settlement_message_timestamp = models.DateTimeField(null=True, blank=True)
+    settlement_message = models.CharField(max_length=40, null=True, blank=True)
+    settlement_signature = models.CharField(max_length=130, null=True, blank=True)
 
 
 # usable when hedge position is using an external settlement service

@@ -35,3 +35,7 @@ def get_price_messages(
         raise Exception(error)
 
     return response["results"]
+
+
+def parse_oracle_message(message, pubkey=None, signature=None):
+    return AnyhedgeFunctions.parseOracleMessage(message, pubkey, signature)

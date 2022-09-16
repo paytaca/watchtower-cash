@@ -6,6 +6,7 @@ from rest_framework import serializers
 from .models import (
     LongAccount,
     HedgePosition,
+    HedgeSettlement,
     SettlementService,
     HedgePositionFee,
     HedgeFundingProposal,
@@ -138,7 +139,23 @@ class HedgeFundingProposalSerializer(serializers.ModelSerializer):
             "pubkey",
             "input_tx_hashes",
         ]
-        
+
+
+class HedgeSettlementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HedgeSettlement
+        fields = [
+            "spending_transaction",
+            "settlement_type",
+            "hedge_satoshis",
+            "long_satoshis",
+            "oracle_pubkey",
+            "settlement_price",
+            "settlement_price_sequence",
+            "settlement_message_sequence",
+            "settlement_message_timestamp",
+        ]
+
 
 class SettlementServiceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -166,6 +183,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
     start_timestamp = TimestampField()
     maturity_timestamp = TimestampField()
 
+    settlement = HedgeSettlementSerializer(read_only=True)
     settlement_service = SettlementServiceSerializer()
     fee = HedgePositionFeeSerializer()
 
@@ -192,6 +210,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "hedge_funding_proposal",
             "long_funding_proposal",
 
+            "settlement",
             "settlement_service",
             "fee",
         ]
