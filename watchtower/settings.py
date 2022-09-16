@@ -213,6 +213,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'anyhedge.tasks.check_new_price_messages',
         'schedule': 60,
     },
+    'update_anyhedge_contract_settlements': {
+        'task': 'anyhedge.tasks.update_matured_contracts',
+        'schedule': 60,
+    },
     'get_latest_block': {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
@@ -240,7 +244,7 @@ CELERY_BEAT_SCHEDULE = {
     'parse_missing_records': {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.
-    }
+    },
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
