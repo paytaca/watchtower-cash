@@ -31,9 +31,34 @@ const ORACLE_RELAY_PORT = 7083
  * @property {Number} messageSequence - Sequence number for this price message relative to all of this oracle's messages.
  * @property {Number} priceSequence - Sequence number for this price message relative to all of this oracle's price messages.
  * @property {Number} priceValue - Price of the asset. e.g. 'US cents per BCH'(USCents/BCH)
- * @property {String} oraclePubKey - 33-bit hex string public key of the oracle
+ * @property {String} [oraclePubKey] - 33-bit hex string public key of the oracle
  * 
  */
+
+/**
+ * 
+ * @param {String} message 
+ * @param {String} [publicKey]
+ * @param {String} [signature]
+ */
+export async function parseOracleMessage(message, publicKey, signature) {
+	const response = { success: false, priceData: {}, error: null }
+	try {
+		if (publicKey && signature) {
+			const validMessageSignature = await OracleData.verifyMessageSignature(hexToBin(message), hexToBin(signature), hexToBin(publicKey));
+			if (!validMessageSignature) throw new Error('Oracle message invalid')
+		}
+		response.priceData = await OracleData.parsePriceMessage(hexToBin(message))
+		if (publicKey) response.priceData.oraclePubKey = publicKey
+		response.success = true
+		return response
+	} catch(error) {
+		if (typeof error === 'string') response.error = error
+		else if (error?.message) response.error = error.message
+		response.success = false
+	}
+	return response
+}
 
 /**
  * 
@@ -63,18 +88,9 @@ export async function getPriceMessages(config, requestParams) {
 	const parsedMessages = await Promise.all(
 		requestedMessages.map(async (priceMessage) => {
 			const { message, signature, publicKey } = priceMessage
-			const validMessageSignature = await OracleData.verifyMessageSignature(
-				hexToBin(message),
-				hexToBin(signature),
-				hexToBin(publicKey)
-			);
-
-			if (!validMessageSignature) {
-				return null
-			}
-
-			const priceData = await OracleData.parsePriceMessage(hexToBin(message))
-			priceData.oraclePubKey = publicKey
+			const parseOracleMessageResponse = await parseOracleMessage(message, publicKey, signature)
+			if (!parseOracleMessageResponse.success) return parseOracleMessageResponse.error
+			const priceData = parseOracleMessageResponse.priceData
 			return { priceMessage, priceData }
 		})
 	)
