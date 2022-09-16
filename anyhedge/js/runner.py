@@ -4,7 +4,34 @@ from subprocess import run, PIPE
 
 # This class gets populated with functions in the javascript after loading this file
 # Refer to code below
-class AnyhedgeFunctions:
+
+class AnyhedgeFunctionsMeta(type):
+    functions_loaded = False
+    functions = {}
+
+    def load_anyhedge_functions(cls):
+        print("loading anyhedge functions")
+        process = run(['node', '/code/anyhedge/js/src/load.js'], stdout=PIPE)
+        functions = []
+        if process.stdout:
+            functions = json.loads(process.stdout)
+
+        for function in functions:
+            cls.functions[function] = generate_func(function)
+
+
+    def __getattr__(cls, key):
+        if not cls.functions_loaded:
+            cls.load_anyhedge_functions()
+            cls.functions_loaded = True
+
+        if key not in cls.functions:
+            raise AttributeError(key)
+
+        return cls.functions[key]
+
+
+class AnyhedgeFunctions(metaclass=AnyhedgeFunctionsMeta):
     pass
 
 def generate_func(func_name):
@@ -27,12 +54,3 @@ def generate_func(func_name):
         return result
 
     return func
-
-process = run(['node', '/code/anyhedge/js/src/load.js'], stdout=PIPE)
-functions = []
-print (process)
-if process.stdout:
-    functions = json.loads(process.stdout)
-
-for function in functions:
-    setattr(AnyhedgeFunctions, function, staticmethod(generate_func(function)))
