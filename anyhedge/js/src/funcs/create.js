@@ -66,9 +66,14 @@ export async function create(intent, pubkeys, priceMessageConfig, priceMessageRe
  * @param {String} contractCreationParameters.longPublicKey
  * @param {String} contractCreationParameters.hedgeAddress
  * @param {String} contractCreationParameters.longAddress
+ * @param {Object} fee
+ * @param {String} fee.address
+ * @param {Number} fee.satoshis
  * @returns 
  */
-export async function compileContract(contractCreationParameters) {
+export async function compileContract(contractCreationParameters, fee) {
   const manager = new AnyHedgeManager();
-  return await manager.createContract(contractCreationParameters);
+  const contractData = await manager.createContract(contractCreationParameters);
+  if (fee?.address && fee?.satoshis) contractData.fee = fee
+  return contractData
 }

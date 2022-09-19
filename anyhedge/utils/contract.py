@@ -51,6 +51,8 @@ def compile_contract(
     longPublicKey:str="",
     hedgeAddress:str="",
     longAddress:str="",
+    fee_address:str="",
+    fee_satoshis:int=0,
 ):
     data = {
         "nominalUnits": nominal_units,
@@ -65,8 +67,11 @@ def compile_contract(
         "hedgeAddress": hedgeAddress,
         "longAddress": longAddress,
     }
+    fee = None
+    if fee_address and fee_satoshis:
+        fee = { "address": fee_address, "satoshis": fee_satoshis }
 
-    return AnyhedgeFunctions.compileContract(data)
+    return AnyhedgeFunctions.compileContract(data, fee)
 
 
 def get_contract_status(
