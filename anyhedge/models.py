@@ -2,6 +2,28 @@ from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
 # Create your models here.
+class HedgePositionQuerySet(models.QuerySet):
+    class Annotations:
+        low_liquidation_price = models.ExpressionWrapper(
+            models.functions.Round(models.F("start_price") * models.F("low_liquidation_multiplier")),
+            output_field=models.BigIntegerField()
+        )
+        nominal_unit_sats = models.ExpressionWrapper(
+            models.functions.Round(models.F("start_price") * models.F("satoshis")),
+            output_field=models.BigIntegerField()
+        )
+        total_sats = models.ExpressionWrapper(
+            nominal_unit_sats / low_liquidation_price,
+            output_field=models.BigIntegerField()
+        )
+
+        long_sats = total_sats - models.F("satoshis")
+        long_unit_sats = models.ExpressionWrapper(
+            long_sats * models.F("start_price"),
+            output_field=models.BigIntegerField()
+        )
+
+
 class LongAccount(models.Model):
     wallet_hash = models.CharField(max_length=100, unique=True)
     address_path = models.CharField(max_length=10)
@@ -30,6 +52,8 @@ class HedgeFundingProposal(models.Model):
 
 
 class HedgePosition(models.Model):
+    objects = HedgePositionQuerySet.as_manager()
+
     address = models.CharField(max_length=75, unique=True)
     anyhedge_contract_version = models.CharField(max_length=20)
 

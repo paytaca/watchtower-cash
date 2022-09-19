@@ -1,3 +1,4 @@
+from django.db import models
 from django_filters import rest_framework as filters
 from rest_framework import (
     generics,
@@ -71,6 +72,24 @@ class HedgePositionViewSet(
 
     def get_queryset(self):
         return HedgePositionSerializer.Meta.model.objects.all()
+
+
+    @decorators.action(methods=["get"], detail=False)
+    def summary(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        queryset = queryset.annotate(
+            nominal_unit_sats = queryset.Annotations.nominal_unit_sats,
+            long_sats = queryset.Annotations.long_sats,
+        )
+        queryset = queryset.values('oracle_pubkey')
+        queryset.query.clear_ordering(force_empty=True)
+        queryset = queryset.annotate(
+            total_hedge_unit_sats=models.Sum("nominal_unit_sats"),
+            total_long_sats=models.Sum("long_sats"),
+        )
+        data = queryset.values('oracle_pubkey', 'total_hedge_unit_sats', 'total_long_sats')
+        return Response(data, status=status.HTTP_200_OK)
+
 
     @swagger_auto_schema(method="post", request_body=FundingProposalSerializer, responses={201: serializer_class})
     @decorators.action(methods=["post"], detail=False)
