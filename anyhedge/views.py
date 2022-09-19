@@ -97,7 +97,14 @@ class HedgePositionViewSet(
         serializer = FundingProposalSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        hedge_obj = serializer.instance.hedge_position or serializer.instance.long_position
+
+        funding_proposal_obj = serializer.instance
+        hedge_obj = None
+        try:
+            hedge_obj = funding_proposal_obj.hedge_position
+        except funding_proposal_obj.__class__.hedge_position.RelatedObjectDoesNotExist: 
+            hedge_obj = serializer.instance.long_position
+
         return Response(self.serializer_class(hedge_obj).data)
 
     @swagger_auto_schema(method="post", request_body=SubmitFundingTransactionSerializer, responses={201: serializer_class})

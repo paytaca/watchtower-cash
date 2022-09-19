@@ -59,7 +59,7 @@ class FundingProposalSerializer(serializers.Serializer):
         required=False
     )
 
-    def validate_hedge_address(value):
+    def validate_hedge_address(self, value):
         try:
             HedgePosition.objects.get(address=value)
         except HedgePosition.DoesNotExist:
@@ -67,8 +67,8 @@ class FundingProposalSerializer(serializers.Serializer):
 
         return value
 
-    def validate_position(value):
-        if position != "hedge" or position != "long":
+    def validate_position(self, value):
+        if value != "hedge" and value != "long":
             raise serializers.ValidationError("Position must be \"hedge\" or \"long\"")
         return value
 
@@ -93,7 +93,7 @@ class FundingProposalSerializer(serializers.Serializer):
         funding_proposal.tx_value = validated_data["tx_value"]
         funding_proposal.script_sig = validated_data["script_sig"]
         funding_proposal.pubkey = validated_data["pubkey"]
-        funding_proposal.input_tx_hashes = validated_data.get("pubkey", None)
+        funding_proposal.input_tx_hashes = validated_data.get("input_tx_hashes", None)
         funding_proposal.save()
 
         if update_hedge_obj:
