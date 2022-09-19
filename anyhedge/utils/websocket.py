@@ -21,7 +21,7 @@ def send_long_account_update(wallet_hash:str, action:str=""):
     )
 
 
-def send_settlement_update(hedge_position_offer_obj):
+def send_offer_settlement_update(hedge_position_offer_obj):
     hedge_position_obj = hedge_position_offer_obj.hedge_position 
     if not hedge_position_obj:
         return

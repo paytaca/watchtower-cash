@@ -32,7 +32,7 @@ from .utils.validators import (
     ValidTxHash,
 )
 from .utils.websocket import (
-    send_settlement_update,
+    send_offer_settlement_update,
     send_funding_tx_update,
 )
 
@@ -142,6 +142,8 @@ class HedgeFundingProposalSerializer(serializers.ModelSerializer):
 
 
 class HedgeSettlementSerializer(serializers.ModelSerializer):
+    settlement_message_timestamp = TimestampField()
+
     class Meta:
         model = HedgeSettlement
         fields = [
@@ -510,7 +512,7 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         if self.auto_settled:
             consume_long_account_allowance(hedge_position.long_address, hedge_position.long_input_sats)
 
-        send_settlement_update(self.hedge_position_offer)
+        send_offer_settlement_update(self.hedge_position_offer)
         return self.hedge_position_offer
 
 
