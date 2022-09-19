@@ -7,7 +7,7 @@ from ..models import (
 from .websocket import send_long_account_update
 
 
-def get_position_offer_suggestions(amount=0, duration_seconds=0, low_liquidation_multiplier=0.9, high_liquidation_multiplier=10):
+def get_position_offer_suggestions(amount=0, duration_seconds=0, low_liquidation_multiplier=0.9, high_liquidation_multiplier=10, exclude_wallet_hash=""):
     # NOTE: long_amount_needed is an estimate and may be off by a bit from the actual amount needed, this is due to;
     # missing oracle price
     long_amount_needed = (amount / low_liquidation_multiplier) - amount
@@ -16,6 +16,8 @@ def get_position_offer_suggestions(amount=0, duration_seconds=0, low_liquidation
         auto_accept_allowance__gte=long_amount_needed,
         min_auto_accept_duration__lte=duration_seconds,
         max_auto_accept_duration__gte=duration_seconds,
+    ).exclude(
+        wallet_hash=exclude_wallet_hash,
     ).order_by('auto_accept_allowance')
 
 

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from django.db import transaction
 from rest_framework import serializers
 
+from .conf import settings as app_settings
 from .models import (
     LongAccount,
     HedgePosition,
@@ -366,6 +367,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             duration_seconds=instance.duration_seconds,
             low_liquidation_multiplier=instance.low_liquidation_multiplier,
             high_liquidation_multiplier=instance.high_liquidation_multiplier,
+            exclude_wallet_hash=instance.wallet_hash,
         )
         if long_accounts:
             long_account = long_accounts[0]
