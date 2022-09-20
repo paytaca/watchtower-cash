@@ -20,6 +20,10 @@ from .utils.funding import (
     validate_funding_transaction,
 )
 from .utils.price_oracle import get_price_messages, parse_oracle_message
+from .utils.settlement import (
+    search_settlement_tx,
+    settle_hedge_position_maturity,
+)
 from .utils.websocket import (
     send_settlement_update,
     send_funding_tx_update,
@@ -88,11 +92,46 @@ def update_matured_contracts():
 
     contract_addresses = []
     for hedge_position in matured_hedge_positions:
-        update_contract_settlement.delay(hedge_position.address)
+        try:
+            if hedge_position.settlement:
+                update_contract_settlement.delay(hedge_position.address)
+        except HedgePosition.settlement.RelatedObjectDoesNotExist:
+            settle_contract_maturity.delay(hedge_position.address)
+
         contract_addresses.append(hedge_position.address)
 
     return contract_addresses
 
+def __save_settlement(settlement_data, hedge_position_obj):
+    hedge_settlement = HedgeSettlement.objects.filter(hedge_position=hedge_position_obj).first()
+    if not hedge_settlement:
+        hedge_settlement = HedgeSettlement()
+        hedge_settlement.hedge_position = hedge_position_obj
+
+    parse_oracle_message_response = parse_oracle_message(
+        settlement_data["settlementMessage"],
+        pubkey=settlement_data["oraclePublicKey"],
+        signature=settlement_data["settlementSignature"],
+    )
+
+    hedge_settlement.spending_transaction = settlement_data["spendingTransaction"]
+    hedge_settlement.settlement_type = settlement_data["settlementType"]
+    hedge_settlement.hedge_satoshis = settlement_data["hedgeSatoshis"]
+    hedge_settlement.long_satoshis = settlement_data["longSatoshis"]
+
+    hedge_settlement.oracle_pubkey = settlement_data["oraclePublicKey"]
+    hedge_settlement.settlement_message = settlement_data["settlementMessage"]
+    hedge_settlement.settlement_signature = settlement_data["settlementSignature"]
+
+    if parse_oracle_message_response["success"]:
+        price_data = parse_oracle_message_response["priceData"]
+        hedge_settlement.settlement_price = price_data["priceValue"]
+        hedge_settlement.settlement_price_sequence = price_data["priceSequence"]
+        hedge_settlement.settlement_message_sequence = price_data["messageSequence"]
+        hedge_settlement.settlement_message_timestamp = datetime.fromtimestamp(price_data["messageTimestamp"]).replace(tzinfo=pytz.UTC)
+
+    hedge_settlement.save()
+    return hedge_settlement
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
 def update_contract_settlement(contract_address):
@@ -114,37 +153,87 @@ def update_contract_settlement(contract_address):
 
     if "settlement" in contract_data and isinstance(contract_data["settlement"], list):
         for settlement_data in contract_data["settlement"]:
-            parse_oracle_message_response = parse_oracle_message(
-                settlement_data["settlementMessage"],
-                pubkey=settlement_data["oraclePublicKey"],
-                signature=settlement_data["settlementSignature"],
-            )
-            hedge_settlement = HedgeSettlement.objects.filter(hedge_position=hedge_position_obj).first()
-            if not hedge_settlement:
-                hedge_settlement = HedgeSettlement()
-                hedge_settlement.hedge_position = hedge_position_obj
-
-            hedge_settlement.spending_transaction = settlement_data["spendingTransaction"]
-            hedge_settlement.settlement_type = settlement_data["settlementType"]
-            hedge_settlement.hedge_satoshis = settlement_data["hedgeSatoshis"]
-            hedge_settlement.long_satoshis = settlement_data["longSatoshis"]
-
-            hedge_settlement.oracle_pubkey = settlement_data["oraclePublicKey"]
-            hedge_settlement.settlement_message = settlement_data["settlementMessage"]
-            hedge_settlement.settlement_signature = settlement_data["settlementSignature"]
-
-            if parse_oracle_message_response["success"]:
-                price_data = parse_oracle_message_response["priceData"]
-                hedge_settlement.settlement_price = price_data["priceValue"]
-                hedge_settlement.settlement_price_sequence = price_data["priceSequence"]
-                hedge_settlement.settlement_message_sequence = price_data["messageSequence"]
-                hedge_settlement.settlement_message_timestamp = datetime.fromtimestamp(price_data["messageTimestamp"]).replace(tzinfo=pytz.UTC)
-
-            hedge_settlement.save()
+            __save_settlement(settlement_data, hedge_position_obj)
 
     send_settlement_update(hedge_position_obj)
     return contract_data
 
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def update_contract_settlement_from_chain(contract_address):
+    LOGGER.info(f"Searching for settlement transaction of contract({contract_address})")
+    response = { "success": False }
+
+    hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
+    if not hedge_position_obj:
+        response["success"] = False
+        response["error"] = "contract not found"
+        return response
+
+    settlements = search_settlement_tx(contract_address)
+    if not isinstance(settlements, list):
+        response["success"] = False
+        response["error"] = "no settlements found"
+
+    found_settlement = False
+    for settlement in settlements:
+        settlement_data = settlement["settlement"]
+        hedge_settlement = __save_settlement(settlement_data, hedge_position_obj)
+        found_settlement = True
+
+    if found_settlement:
+        send_settlement_update(hedge_position_obj)
+
+    response["success"] = True
+    response["settlements"] = settlements
+    return response
+
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def settle_contract_maturity(contract_address):
+    LOGGER.info(f"Attempting to settle maturity of contract({contract_address})")
+    response = { "success": False }
+
+    settlement_search_response = update_contract_settlement_from_chain(contract_address)
+    if settlement_search_response["success"] and \
+        isinstance(settlement_search_response.get("settlements", None), list) and \
+        len(settlement_search_response["settlements"]):
+
+        response["success"] = True
+        response["settlements"] = settlement_search_response["settlements"]
+        return response
+
+    hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
+    if not hedge_position_obj:
+        response["success"] = False
+        response["error"] = "contract not found"
+
+    if not hedge_position_obj.get_hedge_position_funding():
+        contract_funding_validation = validate_contract_funding(hedge_position_obj.address)
+        if not contract_funding_validation["success"]:
+            response["success"] = False
+            response["error"] = "contract funding not validated"
+            return response
+
+    settle_hedge_position_maturity_response = settle_hedge_position_maturity(hedge_position_obj)
+    settlement_data = settle_hedge_position_maturity_response.get("settlementData", None)
+    if not settle_hedge_position_maturity_response["success"] or not settlement_data:
+        response["success"] = False
+        if "error" in settle_hedge_position_maturity_response:
+            response["error"] = settle_hedge_position_maturity_response["error"]
+        else:
+            response["error"] = "encountered error in settling contract maturity"
+
+        return response
+    
+    hedge_settlement = __save_settlement(settlement_data, hedge_position_obj)
+
+    send_settlement_update(hedge_position_obj)
+
+    response["success"] = True
+    response["settlements"] = [settlement_data]
+    return response
+ 
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
 def complete_contract_funding(contract_address):

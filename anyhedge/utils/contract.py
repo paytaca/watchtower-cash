@@ -54,6 +54,11 @@ def compile_contract(
     longAddress:str="",
     fee_address:str="",
     fee_satoshis:int=0,
+    funding_tx_hash:str=None,
+    funding_output:int=-1,
+    funding_satoshis:int=0,
+    funding_fee_output:int=-1,
+    funding_fee_satoshis:int=0,
 ):
     data = {
         "nominalUnits": nominal_units,
@@ -72,7 +77,18 @@ def compile_contract(
     if fee_address and fee_satoshis:
         fee = { "address": fee_address, "satoshis": fee_satoshis }
 
-    return AnyhedgeFunctions.compileContract(data, fee)
+    funding = None
+    if funding_tx_hash and isinstance(funding_output, int) and funding_output >= 0:
+        funding = {
+            "txHash": funding_tx_hash,
+            "fundingOutput": funding_output,
+            "fundingSatoshis": funding_satoshis,
+        }
+        if isinstance(funding_fee_output, int) and funding_fee_output >= 0:
+            funding["feeOutput"] = funding_fee_output
+            funding["feeSatoshis"] = funding_fee_satoshis
+
+    return AnyhedgeFunctions.compileContract(data, fee, funding)
 
 
 def compile_contract_from_hedge_position(hedge_position_obj):
@@ -83,6 +99,17 @@ def compile_contract_from_hedge_position(hedge_position_obj):
         fee_satoshis = hedge_position_obj.fee.satoshis
     except hedge_position_obj.__class__.fee.RelatedObjectDoesNotExist:
         pass
+
+    funding_output = -1
+    funding_satoshis = 0
+    fee_output = -1
+    fee_satoshis = 0
+    funding = hedge_position_obj.get_hedge_position_funding()
+    if funding:
+        funding_output = fee.funding_output
+        funding_satoshis = fee.funding_satoshis
+        fee_output = fee.fee_output
+        fee_satoshis = fee.fee_satoshis
 
     return compile_contract(
         nominal_units=hedge_position_obj.nominal_units,
@@ -98,6 +125,11 @@ def compile_contract_from_hedge_position(hedge_position_obj):
         longAddress=hedge_position_obj.long_address,
         fee_address=fee_address,
         fee_satoshis=fee_satoshis,
+        funding_tx_hash=hedge_position_obj.funding_tx_hash,
+        funding_output=funding_output,
+        funding_satoshis=funding_satoshis,
+        funding_fee_output=fee_output,
+        funding_fee_satoshis=fee_satoshis,
     )
 
 

@@ -122,6 +122,12 @@ class HedgePosition(models.Model):
     def duration_seconds(self):
         return (self.maturity_timestamp - self.start_timestamp).total_seconds() 
 
+    def get_hedge_position_funding(self):
+        if not self.funding_tx_hash:
+            return
+
+        return HedgePositionFunding.objects.filter(tx_hash=self.funding_tx_hash).first()
+
 
 class HedgeSettlement(models.Model):
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement")
