@@ -21,7 +21,10 @@ from .utils.contract import (
     create_contract,
     get_contract_status
 )
-from .utils.funding import get_tx_hash
+from .utils.funding import (
+    get_tx_hash,
+    validate_funding_transaction,
+)
 from .utils.liquidity import (
     consume_long_account_allowance,
     get_position_offer_suggestions,
@@ -532,13 +535,22 @@ class SubmitFundingTransactionSerializer(serializers.Serializer):
         return value
 
     def validate(self, data):
+        hedge_position_address = data.get("hedge_position_address", None)
         tx_hash = data.get("tx_hash", None)
         tx_hex = data.get("tx_hex", None)
         if not tx_hash and not tx_hex:
             raise serializers.ValidationError("tx_hash or tx_hex required")
 
         # TODO: route for broadcasting tx_hex if necessary
-        # TODO: validate tx_hex or tx_hash data if matching with hedge position's details
+        if tx_hash:
+            funding_tx_validation = validate_funding_transaction(hedge_position_address, tx_hash)
+            if not funding_tx_validation["valid"]:
+                raise serializers.ValidationError(f"funding tx hash '{tx_hash}' invalid")
+        elif tx_hex:
+            _tx_hash = get_tx_hash(tx_hex)
+            funding_tx_validation = validate_funding_transaction(hedge_position_address, _tx_hash)
+            if not funding_tx_validation["valid"]:
+                raise serializers.ValidationError(f"funding tx hex invalid")
 
         return data
     

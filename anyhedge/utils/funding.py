@@ -114,6 +114,59 @@ def search_funding_tx(contract_address, sats:int=None):
 
     return ""
 
+
+def validate_funding_transaction(tx_hash, contract_address, fee_address=None):
+    response = {
+        "valid": False,
+        "funding_output": -1,
+        "funding_satoshis": 0,
+        "fee_satoshis": 0,
+        "fee_output": -1,
+    }
+    cash_address = convert.to_cash_address(contract_address)
+    address = cash_address.replace("bitcoincash:", "")
+
+    parsed_fee_address = None
+    if fee_address is not None:
+        cash_address = convert.to_cash_address(fee_address)
+        parsed_fee_address = cash_address.replace("bitcoincash:", "")
+
+    query = {
+        "v": 3,
+        "q": {
+            "find": {
+                "tx.h": tx_hash,
+                "out.e.a": address,
+            },
+            "limit": 10,
+            "project": { "tx.h": 1, "out.e": 1 },
+        },
+        # "r": {
+        #     "f": "[.[] | { hash: .tx.h?, out: .out[].e? }  ]"
+        # }
+    }
+    query_string = json.dumps(query)
+    query_bytes = query_string.encode('ascii')
+    query_b64 = base64.b64encode(query_bytes)
+    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
+    data = requests.get(url).json()
+
+    txs = [*data["c"], *data["u"]]
+    for tx in txs:
+        if tx["tx"]["h"] != tx_hash:
+            continue
+
+        for output in tx["out"]:
+            if output["e"]["a"] == address:
+                response["funding_satoshis"] = output["e"]["v"]
+                response["funding_output"] = output["e"]["i"]
+                response["valid"] = True
+            elif output["e"]["a"] == parsed_fee_address:
+                response["fee_satoshis"] = output["e"]["v"]
+                response["fee_output"] = output["e"]["i"]
+
+    return response
+
 # form a task for doing the full funding processs
 # add function for searching funding tx hash of contract from blockchain
 # utxo validation function

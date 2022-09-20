@@ -79,6 +79,8 @@ class HedgePosition(models.Model):
     # high_liquidation_price = models.IntegerField()
 
     funding_tx_hash = models.CharField(max_length=75, null=True, blank=True)
+    funding_tx_hash_validated = models.BooleanField(default=False)
+
     hedge_funding_proposal = models.OneToOneField(
         HedgeFundingProposal,
         related_name="hedge_position",
@@ -150,6 +152,14 @@ class SettlementService(models.Model):
     # generating signature is done here 
     # https://gitlab.com/GeneralProtocols/anyhedge/library/-/blob/v0.14.2/lib/anyhedge.ts#L399
     hedge_signature = models.TextField()
+
+
+class HedgePositionFunding(models.Model):
+    tx_hash = models.CharField(max_length=75)
+    funding_output = models.IntegerField()
+    funding_satoshis = models.BigIntegerField()
+    fee_output = models.IntegerField(null=True, blank=True)
+    fee_satoshis = models.IntegerField(null=True, blank=True)
 
 
 class HedgePositionFee(models.Model):

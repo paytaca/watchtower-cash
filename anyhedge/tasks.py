@@ -8,6 +8,7 @@ from main.tasks import broadcast_transaction
 from .models import (
     HedgePosition,
     HedgeSettlement,
+    HedgePositionFunding,
     Oracle,
     PriceOracleMessage,
 )
@@ -16,6 +17,7 @@ from .utils.funding import (
     complete_funding_proposal,
     search_funding_tx,
     get_tx_hash,
+    validate_funding_transaction,
 )
 from .utils.price_oracle import get_price_messages, parse_oracle_message
 from .utils.websocket import (
@@ -200,3 +202,44 @@ def complete_contract_funding(contract_address):
         response["success"] = False
         response["error"] = str(exception)
         return response
+
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def validate_contract_funding(contract_address, save=True):
+    LOGGER.info(f"Attempting to validate funding for contract({contract_address})")
+    response = { "success": False, "error": None }
+
+    hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
+    if not hedge_position_obj.funding_tx_hash:
+        response["success"] = False
+        response["error"] = "funding transaction not found"
+        return response
+
+    fee_address = None
+    try:
+        if hedge_position_obj.fee and hedge_position_obj.fee.address:
+            fee_address = hedge_position_obj.fee.address
+    except HedgePosition.fee.RelatedObjectDoesNotExist:
+        pass
+
+    funding_tx_validation = validate_funding_transaction(hedge_position_obj.funding_tx_hash, hedge_position_obj.address, fee_address=fee_address)
+    if not funding_tx_validation["valid"]:
+        response["success"] = False
+        response["error"] = "invalid funding transaction"
+
+    if save:
+        defaults = {
+            "funding_output": funding_tx_validation["funding_output"],
+            "funding_satoshis": funding_tx_validation["funding_satoshis"],
+        }
+        if funding_tx_validation["fee_output"] >= 0 and funding_tx_validation["fee_satoshis"]:
+            defaults["fee_output"] = funding_tx_validation["fee_output"]
+            defaults["fee_satoshis"] = funding_tx_validation["fee_satoshis"]
+
+        HedgePositionFunding.objects.update_or_create(tx_hash=hedge_position_obj.funding_tx_hash, defaults=defaults)
+        hedge_position_obj.funding_tx_hash_validated = True
+        hedge_position_obj.save()
+
+    response["success"] = True
+    response["validation"] = funding_tx_validation
+    return response
