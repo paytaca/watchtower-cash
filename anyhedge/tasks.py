@@ -150,6 +150,10 @@ def complete_contract_funding(contract_address):
     response = { "success": False, "tx_hash": "", "error": "", "message": "" }
 
     hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
+    if not hedge_position_obj:
+        response["success"] = False
+        response["error"] = "contract not found"
+
     if hedge_position_obj.funding_tx_hash:
         response["success"] = True
         response["tx_hash"] = hedge_position_obj.funding_tx_hash
