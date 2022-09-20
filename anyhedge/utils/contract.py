@@ -1,3 +1,4 @@
+from datetime import datetime
 from ..js.runner import AnyhedgeFunctions
 
 def create_contract(
@@ -72,6 +73,32 @@ def compile_contract(
         fee = { "address": fee_address, "satoshis": fee_satoshis }
 
     return AnyhedgeFunctions.compileContract(data, fee)
+
+
+def compile_contract_from_hedge_position(hedge_position_obj):
+    fee_address = ""
+    fee_satoshis = 0
+    try:
+        fee_address = hedge_position_obj.fee.address
+        fee_satoshis = hedge_position_obj.fee.satoshis
+    except hedge_position_obj.__class__.fee.RelatedObjectDoesNotExist:
+        pass
+
+    return compile_contract(
+        nominal_units=hedge_position_obj.nominal_units,
+        duration=hedge_position_obj.duration_seconds,
+        startPrice=hedge_position_obj.start_price,
+        startTimestamp=datetime.timestamp(hedge_position_obj.start_timestamp),
+        oraclePublicKey=hedge_position_obj.oracle_pubkey,
+        highLiquidationPriceMultiplier=hedge_position_obj.high_liquidation_multiplier,
+        lowLiquidationPriceMultiplier=hedge_position_obj.low_liquidation_multiplier,
+        hedgePublicKey=hedge_position_obj.hedge_pubkey,
+        longPublicKey=hedge_position_obj.long_pubkey,
+        hedgeAddress=hedge_position_obj.hedge_address,
+        longAddress=hedge_position_obj.long_address,
+        fee_address=fee_address,
+        fee_satoshis=fee_satoshis,
+    )
 
 
 def get_contract_status(

@@ -4,6 +4,7 @@ from datetime import datetime
 from celery import shared_task
 from django.db import models
 from django.utils import timezone
+from main.tasks import broadcast_transaction
 from .models import (
     HedgePosition,
     HedgeSettlement,
@@ -11,8 +12,16 @@ from .models import (
     PriceOracleMessage,
 )
 from .utils.contract import get_contract_status
+from .utils.funding import (
+    complete_funding_proposal,
+    search_funding_tx,
+    get_tx_hash,
+)
 from .utils.price_oracle import get_price_messages, parse_oracle_message
-from .utils.websocket import send_settlement_update
+from .utils.websocket import (
+    send_settlement_update,
+    send_funding_tx_update,
+)
 
 
 ## CELERY QUEUES
@@ -133,3 +142,57 @@ def update_contract_settlement(contract_address):
 
     send_settlement_update(hedge_position_obj)
     return contract_data
+
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def complete_contract_funding(contract_address):
+    LOGGER.info(f"Attempting to complete funding for contract({contract_address})")
+    response = { "success": False, "tx_hash": "", "error": "", "message": "" }
+
+    hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
+    if hedge_position_obj.funding_tx_hash:
+        response["success"] = True
+        response["tx_hash"] = hedge_position_obj.funding_tx_hash
+        response["message"] = "funding transaction already in db"
+        return response
+
+    funding_tx_hash = search_funding_tx(hedge_position_obj.address)
+    if funding_tx_hash:
+        hedge_position_obj.funding_tx_hash = funding_tx_hash
+        hedge_position_obj.save()
+        response["success"] = True
+        response["tx_hash"] = funding_tx_hash
+        response["message"] = "found funding transaction in chain"
+        return response
+
+    try:
+        complete_funding_proposal_response = complete_funding_proposal(hedge_position_obj)
+        if not complete_funding_proposal_response["success"]:
+            response["success"] = False
+            response["error"] = complete_funding_proposal_response["error"]
+            return response
+
+        tx_hex = complete_funding_proposal_response["fundingTxHex"]
+        success, result = broadcast_transaction(tx_hex)
+        if 'already have transaction' in result:
+            success = True
+
+        if success:
+            tx_hash = result.split(' ')[-1]
+            hedge_position_obj.funding_tx_hash = tx_hash
+            hedge_position_obj.save()
+            response["success"] = True
+            response["tx_hash"] = tx_hash
+            response["message"] = "submitted funding transaction"
+
+            send_funding_tx_update(hedge_position_obj, tx_hash=tx_hash)
+            return response
+        else:
+            response["success"] = False
+            response["error"] = result
+            return response
+
+    except Exception as exception:
+        response["success"] = False
+        response["error"] = str(exception)
+        return response

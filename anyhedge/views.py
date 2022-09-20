@@ -5,6 +5,7 @@ from rest_framework import (
     viewsets,
     mixins,
     decorators,
+    serializers,
     status,
 )
 from rest_framework.response import Response
@@ -35,6 +36,7 @@ from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import (
     send_hedge_position_offer_update,
 )
+from .tasks import complete_contract_funding
 
 
 class LongAccountViewSet(
@@ -105,7 +107,28 @@ class HedgePositionViewSet(
         except funding_proposal_obj.__class__.hedge_position.RelatedObjectDoesNotExist: 
             hedge_obj = serializer.instance.long_position
 
+        if hedge_obj.hedge_funding_proposal and hedge_obj.long_funding_proposal:
+            funding_task_response = complete_contract_funding(hedge_obj.address)
+            funding_tx_hash = funding_task_response.get("tx_hash", None)
+            if funding_tx_hash:
+                hedge_obj.funding_tx_hash = funding_tx_hash
+                hedge_obj.save()
+
         return Response(self.serializer_class(hedge_obj).data)
+
+    @swagger_auto_schema(method="post", request_body=serializers.Serializer, responses={200: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def complete_funding(self, request, *args, **kwargs):
+        instance = self.get_object()
+        funding_task_response = complete_contract_funding(instance.address)
+        if funding_task_response["success"]:
+            instance.refresh_from_db()
+            return Response(self.serializer_class(instance).data)
+        else:
+            error_data = funding_task_response["error"]
+            if not isinstance(error_data, list):
+                error_data = [error_data]
+            return Response(error_data, status=status.HTTP_400_BAD_REQUEST)
 
     @swagger_auto_schema(method="post", request_body=SubmitFundingTransactionSerializer, responses={201: serializer_class})
     @decorators.action(methods=["post"], detail=False)

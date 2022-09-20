@@ -112,6 +112,15 @@ class HedgePosition(models.Model):
     def long_input_sats(self):
         return self.total_sats - self.satoshis
 
+    @property
+    def nominal_units(self):
+        return (self.satoshis * self.start_price) / 10 ** 8
+
+    @property
+    def duration_seconds(self):
+        return (self.maturity_timestamp - self.start_timestamp).total_seconds() 
+
+
 class HedgeSettlement(models.Model):
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement")
 
