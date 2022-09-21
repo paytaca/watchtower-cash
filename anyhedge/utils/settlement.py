@@ -57,4 +57,13 @@ def search_settlement_tx(contract_address):
 
 def settle_hedge_position_maturity(hedge_position_obj):
     contract_data = compile_contract_from_hedge_position(hedge_position_obj)
-    return AF.settleContractMaturity(contract_data)
+
+    oracle = Oracle.objects.filter(pubkey=hedge_position_obj.oracle_pubkey).first()
+    oracle_info = None
+    if oracle and oracle.relay and oracle.port:
+        oracle_info = {
+            "oracleRelay": oracle.relay,
+            "oracleRelayPort": oracle.port,
+        }
+
+    return AF.settleContractMaturity(contract_data, oracle_info)
