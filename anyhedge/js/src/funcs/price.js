@@ -18,7 +18,7 @@ const ORACLE_RELAY_PORT = 7083
  * @property {Number|undefined} minMessageTimestamp 
  * @property {Number|undefined} maxMessageTimestamp 
  * @property {Number|undefined} minMessageSequence 
- * @property {Number|undefined} minMessageSequence 
+ * @property {Number|undefined} maxMessageSequence 
  * @property {Number|undefined} count 
  * 
  * @typedef {Object} OraclePriceMessage

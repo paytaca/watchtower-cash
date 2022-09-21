@@ -1,6 +1,5 @@
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
-import { getPriceMessages } from "./price.js"
-import { PriceMessageConfig } from './price.js'
+import { parseOracleMessage, getPriceMessages } from "./price.js"
 
 /**
  * 
@@ -82,6 +81,57 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     response.success = true
   } catch(error) {
     response.error = 'Encoutered error in creating maturity payout'
+    if (error?.message) response.error = error
+    response.success = false
+  }
+  return response
+}
+
+/**
+ * 
+ * @param {Object} contractData 
+ * @param {OraclePriceMessage} prevPriceMessage
+ * @param {OraclePriceMessage} settlementPriceMessage 
+ */
+export async function liquidateContract(contractData, prevPriceMessage, settlementPriceMessage) {
+  const response = {
+    success: false,
+    settlementData: {},
+    error: '',
+  }
+
+  const oraclePubKey = contractData?.metadata?.oraclePublicKey
+  const parsePrevOracleMessageResponse = await parseOracleMessage(
+    prevPriceMessage.message, oraclePubKey, prevPriceMessage.signature)
+  if (!parsePrevOracleMessageResponse.success) {
+    response.success = false
+    response.error = parsePrevOracleMessageResponse.error || 'Invalid previous price message'
+  }
+  const parseSettlementOracleMessageResponse = await parseOracleMessage(
+    settlementPriceMessage.message, oraclePubKey, settlementPriceMessage.signature)
+  if (!parseSettlementOracleMessageResponse.success) {
+    response.success = false
+    response.error = parseSettlementOracleMessageResponse.error || 'Invalid settlement price message'
+  }
+
+  const contractSettlementParameters = {
+    oraclePublicKey: oraclePubKey,
+    settlementMessage: settlementPriceMessage.message,
+    settlementSignature: settlementPriceMessage.signature,
+    previousMessage: prevPriceMessage.message,
+    previousSignature: prevPriceMessage.signature,
+    contractFunding: contractData.funding?.[0],
+    contractMetadata: contractData.metadata,
+    contractParameters: contractData.parameters,
+  }
+
+  const manager = new AnyhedgeManager()
+  try {
+    const settlementData = await manager.liquidateContractFunding(contractSettlementParameters)
+    response.settlementData = settlementData
+    response.success = true
+  } catch(error) {
+    response.error = 'Encoutered error in creating liquidation payout'
     if (error?.message) response.error = error
     response.success = false
   }
