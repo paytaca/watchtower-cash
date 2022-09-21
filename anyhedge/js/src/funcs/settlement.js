@@ -126,7 +126,7 @@ export async function liquidateContract(contractData, prevPriceMessage, settleme
     contractParameters: contractData.parameters,
   }
 
-  const manager = new AnyhedgeManager()
+  const manager = new AnyHedgeManager()
   try {
     const settlementData = await manager.liquidateContractFunding(contractSettlementParameters)
     response.settlementData = settlementData

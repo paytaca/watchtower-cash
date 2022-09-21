@@ -282,6 +282,15 @@ def liquidate_contract(contract_address, message_sequence):
             response["settlements"] = settlement_search_response["settlements"]
             return response
 
+
+    if not hedge_position_obj.get_hedge_position_funding():
+        contract_funding_validation = validate_contract_funding(hedge_position_obj.address)
+        if not contract_funding_validation["success"]:
+            response["success"] = False
+            response["error"] = "contract funding not validated"
+            return response
+
+
     liquidation_response = liquidate_hedge_position(hedge_position_obj, message_sequence)
     settlement_data = liquidation_response.get("settlementData", None)
     if not liquidation_response["success"] or not settlement_data:
