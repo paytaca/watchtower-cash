@@ -30,6 +30,9 @@ def search_settlement_tx(contract_address):
     for tx in txs:
         tx_hashes.append(tx["tx"]["h"])
 
+    if len(tx_hashes) == 0:
+        return []
+
     # get raw transactions of used utxos
     response = requests.post(
         "https://rest1.biggestfan.net/v2/rawtransactions/getRawTransaction",
@@ -37,6 +40,8 @@ def search_settlement_tx(contract_address):
         headers = {'Content-type': 'application/json', 'Accept': 'text/plain'},
     )
     raw_transactions = response.json()
+    if not isinstance(raw_transactions, list):
+        return []
 
     # parse raw transactions to settlements
     parse_settlement_txs_response = AnyhedgeFunctions.parseSettlementTransactions(raw_transactions)

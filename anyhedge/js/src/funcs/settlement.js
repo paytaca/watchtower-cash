@@ -46,8 +46,8 @@ export async function settleContractMaturity(contractData, oracleInfo) {
 
   let prevPrice, settlementPrice
   for (var i = 0; i <= getPriceMessagesResponse.results.length-2; i++) {
-    const _prevPrice = getPriceMessagesResponse.results[i]
-    const _settlementPrice = getPriceMessagesResponse.results[i+1]
+    const _prevPrice = getPriceMessagesResponse.results[i+1]
+    const _settlementPrice = getPriceMessagesResponse.results[i]
 
     const _prevTimestamp = _prevPrice.priceData.messageTimestamp
     const _settlementTimestamp = _settlementPrice.priceData.messageTimestamp
@@ -61,6 +61,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
   if (!prevPrice || !settlementPrice) {
     response.success = false
     response.error = 'unable to find settlement price'
+    return response
   }
 
   const contractSettlementParameters = {
@@ -74,7 +75,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     contractParameters: contractData.parameters,
   }
 
-  const manager = new AnyhedgeManager()
+  const manager = new AnyHedgeManager()
   try {
     const settlementData = await manager.matureContractFunding(contractSettlementParameters)
     response.settlementData = settlementData

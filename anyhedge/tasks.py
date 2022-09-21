@@ -165,7 +165,7 @@ def update_contract_settlement_from_chain(contract_address):
         return response
 
     settlements = search_settlement_tx(contract_address)
-    if not isinstance(settlements, list):
+    if not isinstance(settlements, list) or len(settlements) == 0:
         response["success"] = False
         response["error"] = "no settlements found"
 
