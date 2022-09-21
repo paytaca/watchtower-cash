@@ -93,9 +93,9 @@ def update_matured_contracts():
     contract_addresses = []
     for hedge_position in matured_hedge_positions:
         try:
-            if hedge_position.settlement:
+            if hedge_position.settlement_service:
                 update_contract_settlement.delay(hedge_position.address)
-        except HedgePosition.settlement.RelatedObjectDoesNotExist:
+        except HedgePosition.settlement_service.RelatedObjectDoesNotExist:
             settle_contract_maturity.delay(hedge_position.address)
 
         contract_addresses.append(hedge_position.address)
