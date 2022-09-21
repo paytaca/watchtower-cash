@@ -19,7 +19,11 @@ from .utils.funding import (
     get_tx_hash,
     validate_funding_transaction,
 )
-from .utils.price_oracle import get_price_messages, parse_oracle_message
+from .utils.price_oracle import (
+    get_price_messages,
+    parse_oracle_message,
+    save_price_oracle_message,
+)
 from .utils.settlement import (
     search_settlement_tx,
     settle_hedge_position_maturity,
@@ -69,17 +73,7 @@ def check_new_oracle_price_messages(oracle_pubkey):
 
     price_messages = get_price_messages(oracle_pubkey, min_message_timestamp=latest_timestamp, count=count)
     for price_message in price_messages:
-        PriceOracleMessage.objects.update_or_create(
-            pubkey = oracle_pubkey,
-            signature = price_message["priceMessage"]["signature"],
-            message = price_message["priceMessage"]["message"],
-            defaults={
-                "message_timestamp": datetime.fromtimestamp(price_message["priceData"]["messageTimestamp"]).replace(tzinfo=pytz.UTC),
-                "price_value": price_message["priceData"]["priceValue"],
-                "price_sequence": price_message["priceData"]["priceSequence"],
-                "message_sequence": price_message["priceData"]["messageSequence"],
-            }
-        )
+        save_price_oracle_message(oracle_pubkey, price_message)
 
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
