@@ -25,8 +25,10 @@ from .utils.price_oracle import (
     save_price_oracle_message,
 )
 from .utils.settlement import (
+    get_contracts_for_liquidation,
     search_settlement_tx,
     settle_hedge_position_maturity,
+    liquidate_hedge_position,
 )
 from .utils.websocket import (
     send_settlement_update,
@@ -74,6 +76,16 @@ def check_new_oracle_price_messages(oracle_pubkey):
     price_messages = get_price_messages(oracle_pubkey, min_message_timestamp=latest_timestamp, count=count)
     for price_message in price_messages:
         save_price_oracle_message(oracle_pubkey, price_message)
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def update_contracts_for_liquidation():
+    contracts_for_liquidation = get_contracts_for_liquidation()
+
+    contract_addresses = []
+    for contract in contracts_for_liquidation:
+        liquidate_contract.delay(contract.address, contract.liquidation_message_sequence)
+        contract_addresses.append(contract.address)
+    return contract_addresses
 
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
@@ -228,6 +240,68 @@ def settle_contract_maturity(contract_address):
     response["settlements"] = [settlement_data]
     return response
  
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def liquidate_contract(contract_address, message_sequence):
+    LOGGER.info(f"Liquidating contract({contract_address})")
+    response = { "success": False }
+    hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
+    if not hedge_position_obj:
+        response["success"] = False
+        response["error"] = "contract not found"
+        return response
+
+    try:
+        if hedge_position_obj.settlement:
+            response["success"] = True
+            response["message"] = "contract settlement already exists"
+            return response
+    except HedgePosition.settlement.RelatedObjectDoesNotExist:
+        pass
+
+    # attempt to check if contract is settled but not yet saved in db
+    try:
+        # necessary to check if contract has external settlement service
+        if hedge_position_obj.settlement_service:
+            pass
+
+        contract_settlement_response = update_contract_settlement.delay(hedge_position_obj.address)
+        if "settlement" in contract_settlement_response:
+            response["success"] = True
+            response["message"] = "contract already settled"
+            response["settlement"] = contract_settlement_response["settlement"]
+            return response
+    except HedgePosition.settlement_service.RelatedObjectDoesNotExist: 
+        settlement_search_response = update_contract_settlement_from_chain(contract_address)
+        if settlement_search_response["success"] and \
+            isinstance(settlement_search_response.get("settlements", None), list) and \
+            len(settlement_search_response["settlements"]):
+
+            response["success"] = True
+            response["message"] = "contract already settled"
+            response["settlements"] = settlement_search_response["settlements"]
+            return response
+
+    liquidation_response = liquidate_hedge_position(hedge_position_obj, message_sequence)
+    settlement_data = liquidation_response.get("settlementData", None)
+    if not liquidation_response["success"] or not settlement_data:
+        response["success"] = False
+        if "error" in liquidation_response:
+            response["error"] = liquidation_response["error"]
+        else:
+            response["error"] = "encountered error in liquidating contract"
+
+        return response
+    
+    hedge_settlement = __save_settlement(settlement_data, hedge_position_obj)
+
+    send_settlement_update(hedge_position_obj)
+
+    response["success"] = True
+    response["message"] = f"contract({hedge_position_obj.address}) liquidated at message sequence {message_sequence}"
+    response["settlements"] = [settlement_data]
+    return response
+
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
 def complete_contract_funding(contract_address):

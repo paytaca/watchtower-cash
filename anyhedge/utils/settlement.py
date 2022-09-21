@@ -1,9 +1,47 @@
 import json
 import base64
 import requests
+from django.db import models
 from cashaddress import convert
 from .contract import compile_contract_from_hedge_position
+from .price_oracle import (
+    save_price_oracle_message,
+    get_price_messages,
+)
 from ..js.runner import AnyhedgeFunctions
+from ..models import (
+    HedgePosition,
+    Oracle,
+    PriceOracleMessage,
+)
+
+def get_contracts_for_liquidation():
+    liquidation_price_msg_subquery = PriceOracleMessage.objects.filter(
+        models.Q(price_value__lte=models.OuterRef('_low_lq_price')) | models.Q(price_value__gte=models.OuterRef('_high_lq_price')),
+        pubkey=models.OuterRef('oracle_pubkey'),
+        message_timestamp__gte=models.OuterRef('start_timestamp'),
+        message_timestamp__lte=models.OuterRef('maturity_timestamp'),
+    ).order_by(
+        'message_timestamp'
+    ).values(
+        'message_sequence',
+    )
+
+    unsettled_contracts = HedgePosition.objects.filter(
+        funding_tx_hash__isnull=False, # funded
+        settlement__isnull=True, # not settled
+    )
+    unsettled_contracts_for_liquidation = unsettled_contracts.annotate(
+        _low_lq_price=unsettled_contracts.Annotations.low_liquidation_price,
+        _high_lq_price=unsettled_contracts.Annotations.high_liquidation_price,
+    ).annotate(
+        liquidation_message_sequence=models.Subquery(liquidation_price_msg_subquery[:1])
+    ).filter(
+        liquidation_message_sequence__isnull=False
+    )
+
+    return unsettled_contracts_for_liquidation
+
 
 def search_settlement_tx(contract_address):
     cash_address = convert.to_cash_address(contract_address)
@@ -72,3 +110,31 @@ def settle_hedge_position_maturity(hedge_position_obj):
         }
 
     return AnyhedgeFunctions.settleContractMaturity(contract_data, oracle_info)
+
+
+def liquidate_hedge_position(hedge_position_obj, message_sequence):
+    contract_data = compile_contract_from_hedge_position(hedge_position_obj)
+    settlement_price_message = PriceOracleMessage.objects.filter(
+        pubkey=hedge_position_obj.oracle_pubkey,
+        message_sequence=message_sequence,
+    ).first()
+    previous_price_message = PriceOracleMessage.objects.filter(
+        pubkey=hedge_position_obj.oracle_pubkey,
+        message_sequence=message_sequence-1,
+    ).first()
+
+    if not settlement_price_message or not previous_price_message:
+        oracle = Oracle.objects.filter(pubkey=hedge_position_obj.oracle_pubkey).first()
+        price_messages = get_price_messages(
+            hedge_position_obj.oracle_pubkey,
+            relay= oracle.relay if oracle else None,
+            port= oracle.port if oracle else None,
+            max_message_sequence=message_sequence,
+            count=2,
+        )
+        settlement_price_message = save_price_oracle_message(price_messages[0])
+        previous_price_message = save_price_oracle_message(price_messages[1])
+
+    prevPriceMessage = { "message": previous_price_message.message, "signature": previous_price_message.signature }
+    settlementPriceMessage = { "message": settlement_price_message.message, "signature": settlement_price_message.signature }
+    return AnyhedgeFunctions.liquidateContract(contract_data, prevPriceMessage, settlementPriceMessage)

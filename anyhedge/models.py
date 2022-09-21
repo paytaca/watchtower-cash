@@ -8,6 +8,10 @@ class HedgePositionQuerySet(models.QuerySet):
             models.functions.Round(models.F("start_price") * models.F("low_liquidation_multiplier")),
             output_field=models.BigIntegerField()
         )
+        high_liquidation_price = models.ExpressionWrapper(
+            models.functions.Round(models.F("start_price") * models.F("high_liquidation_multiplier")),
+            output_field=models.BigIntegerField()
+        )
         nominal_unit_sats = models.ExpressionWrapper(
             models.functions.Round(models.F("start_price") * models.F("satoshis")),
             output_field=models.BigIntegerField()

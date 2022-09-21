@@ -217,6 +217,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'anyhedge.tasks.update_matured_contracts',
         'schedule': 60,
     },
+    'update_anyhedge_contracts_for_liquidation': {
+        'task': 'anyhedge.tasks.update_contracts_for_liquidation',
+        'schedule': 120,
+    },
     'get_latest_block': {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
