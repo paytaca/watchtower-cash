@@ -66,4 +66,4 @@ def settle_hedge_position_maturity(hedge_position_obj):
             "oracleRelayPort": oracle.port,
         }
 
-    return AF.settleContractMaturity(contract_data, oracle_info)
+    return AnyhedgeFunctions.settleContractMaturity(contract_data, oracle_info)
