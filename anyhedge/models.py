@@ -69,9 +69,11 @@ class HedgePosition(models.Model):
     hedge_wallet_hash = models.CharField(max_length=75)
     hedge_address = models.CharField(max_length=75)
     hedge_pubkey = models.CharField(max_length=75)
+    hedge_address_path = models.CharField(max_length=10, null=True, blank=True)
     long_wallet_hash = models.CharField(max_length=75)
     long_address = models.CharField(max_length=75)
     long_pubkey = models.CharField(max_length=75)
+    long_address_path = models.CharField(max_length=10, null=True, blank=True)
 
     oracle_pubkey = models.CharField(max_length=75)
 
@@ -206,6 +208,7 @@ class HedgePositionOffer(models.Model):
     oracle_pubkey = models.CharField(max_length=75, null=True, blank=True)
     hedge_address = models.CharField(max_length=75)
     hedge_pubkey = models.CharField(max_length=75)
+    hedge_address_path = models.CharField(max_length=10, null=True, blank=True)
 
     hedge_position = models.OneToOneField(
         HedgePosition,

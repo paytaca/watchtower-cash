@@ -220,9 +220,11 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "hedge_wallet_hash",
             "hedge_address",
             "hedge_pubkey",
+            "hedge_address_path",
             "long_wallet_hash",
             "long_address",
             "long_pubkey",
+            "long_address_path",
             "oracle_pubkey",
             "start_price",
             "low_liquidation_multiplier",
@@ -337,6 +339,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             "oracle_pubkey",
             "hedge_address",
             "hedge_pubkey",
+            "hedge_address_path",
             "hedge_position",
             "auto_settled",
             "created_at",
@@ -413,6 +416,7 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
                     "long_wallet_hash": long_account.wallet_hash,
                     "long_address": contract_data["metadata"]["longAddress"],
                     "long_pubkey": contract_data["metadata"]["longPublicKey"],
+                    "long_address_path": long_account.address_path,
                 }
 
                 settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
@@ -479,6 +483,7 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
     long_wallet_hash = serializers.CharField(allow_blank=True)
     long_address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
     long_pubkey = serializers.CharField()
+    long_address_path = serializers.CharField(required=False)
 
     def __init__(self, *args, hedge_position_offer=None, auto_settled=False, **kwargs):
         self.hedge_position_offer = hedge_position_offer
@@ -514,9 +519,11 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
             hedge_wallet_hash = self.hedge_position_offer.wallet_hash,
             hedge_address = self.hedge_position_offer.hedge_address,
             hedge_pubkey = self.hedge_position_offer.hedge_pubkey,
+            hedge_address_path = self.hedge_position_offer.hedge_address_path,
             long_wallet_hash = validated_data["long_wallet_hash"],
             long_address = validated_data["long_address"],
             long_pubkey = validated_data["long_pubkey"],
+            long_address_path = validated_data.get("long_address_path", None),
             oracle_pubkey = validated_data["oracle_pubkey"],
             start_price = validated_data["oracle_price"],
             low_liquidation_multiplier = self.hedge_position_offer.low_liquidation_multiplier,
@@ -590,6 +597,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
     contract_address = serializers.CharField()
     hedge_wallet_hash = serializers.CharField()
     hedge_pubkey = serializers.CharField()
+    hedge_address_path = serializers.CharField(required=False)
     oracle_message_sequence = serializers.IntegerField()
 
     settlement_service = SettlementServiceSerializer() # do i need this here or js script will provide ?
@@ -601,6 +609,8 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         contract_address = validated_data["contract_address"]
         hedge_wallet_hash = validated_data["hedge_wallet_hash"]
         hedge_pubkey = validated_data["hedge_pubkey"]
+        hedge_address_path = validated_data.get("hedge_address_path", None)
+        
         oracle_message_sequence = validated_data["oracle_message_sequence"]
         settlement_service = validated_data["settlement_service"]
         funding_proposal = validated_data["funding_proposal"]
@@ -629,6 +639,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             "maturity_timestamp": maturity_timestamp,
             "hedge_wallet_hash": hedge_wallet_hash,
             "hedge_address": contract_metadata["hedgeAddress"],
+            "hedge_address_path": hedge_address_path,
             "hedge_pubkey": contract_metadata["hedgePublicKey"],
             "long_wallet_hash": "",
             "long_address": contract_metadata["longAddress"],
