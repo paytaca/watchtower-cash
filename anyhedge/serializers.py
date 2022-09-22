@@ -12,6 +12,7 @@ from .models import (
     HedgePositionFee,
     HedgeFundingProposal,
     HedgePositionOffer,
+    HedgePositionFunding,
 
     Oracle,
     PriceOracleMessage,
@@ -64,7 +65,9 @@ class FundingProposalSerializer(serializers.Serializer):
 
     def validate_hedge_address(self, value):
         try:
-            HedgePosition.objects.get(address=value)
+            hedge_position_obj = HedgePosition.objects.get(address=value)
+            if hedge_position_obj.funding_tx_hash:
+                raise serializers.ValidationError("Hedge position is already funded")    
         except HedgePosition.DoesNotExist:
             raise serializers.ValidationError("Hedge position does not exist")
 
@@ -182,6 +185,17 @@ class HedgePositionFeeSerializer(serializers.ModelSerializer):
             "satoshis",
         ]
 
+class HedgePositionFundingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HedgePositionFunding
+        fields = [
+            "tx_hash",
+            "funding_output",
+            "funding_satoshis",
+            "fee_output",
+            "fee_satoshis",
+        ]
+
 
 class HedgePositionSerializer(serializers.ModelSerializer):
     hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
@@ -192,6 +206,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
     settlement = HedgeSettlementSerializer(read_only=True)
     settlement_service = SettlementServiceSerializer()
     fee = HedgePositionFeeSerializer()
+    funding = HedgePositionFundingSerializer(read_only=True)
 
     class Meta:
         model = HedgePosition
@@ -213,12 +228,14 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "low_liquidation_multiplier",
             "high_liquidation_multiplier",
             "funding_tx_hash",
+            "funding_tx_hash_validated",
             "hedge_funding_proposal",
             "long_funding_proposal",
 
             "settlement",
             "settlement_service",
             "fee",
+            "funding",
         ]
         extra_kwargs = {
             "address": {
@@ -238,6 +255,9 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             },
             "funding_tx_hash": {
                 "allow_blank": True
+            },
+            "funding_tx_hash_validated": {
+                "read_only": True
             },
         }
 

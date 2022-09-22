@@ -132,6 +132,10 @@ class HedgePosition(models.Model):
 
         return HedgePositionFunding.objects.filter(tx_hash=self.funding_tx_hash).first()
 
+    @property
+    def funding(self):
+        return self.get_hedge_position_funding()
+
 
 class HedgeSettlement(models.Model):
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement")
