@@ -118,30 +118,35 @@ def __save_settlement(settlement_data, hedge_position_obj):
         hedge_settlement = HedgeSettlement()
         hedge_settlement.hedge_position = hedge_position_obj
 
-    parse_oracle_message_response = parse_oracle_message(
-        settlement_data["settlementMessage"],
-        pubkey=settlement_data["oraclePublicKey"],
-        signature=settlement_data["settlementSignature"],
-    )
-
     hedge_settlement.spending_transaction = settlement_data["spendingTransaction"]
     hedge_settlement.settlement_type = settlement_data["settlementType"]
     hedge_settlement.hedge_satoshis = settlement_data["hedgeSatoshis"]
     hedge_settlement.long_satoshis = settlement_data["longSatoshis"]
 
-    hedge_settlement.oracle_pubkey = settlement_data["oraclePublicKey"]
-    hedge_settlement.settlement_message = settlement_data["settlementMessage"]
-    hedge_settlement.settlement_signature = settlement_data["settlementSignature"]
+    if "settlementMessage" in settlement_data:
+        settlement_message = settlement_data["settlementMessage"]
+        oracle_pubkey = settlement_data.get("oraclePublicKey", None)
+        settlement_signature = settlement_data("settlementSignature", None)
+        parse_oracle_message_response = parse_oracle_message(
+            settlement_message,
+            pubkey=oracle_pubkey,
+            signature=settlement_signature,
+        )
 
-    if parse_oracle_message_response["success"]:
-        price_data = parse_oracle_message_response["priceData"]
-        hedge_settlement.settlement_price = price_data["priceValue"]
-        hedge_settlement.settlement_price_sequence = price_data["priceSequence"]
-        hedge_settlement.settlement_message_sequence = price_data["messageSequence"]
-        hedge_settlement.settlement_message_timestamp = datetime.fromtimestamp(price_data["messageTimestamp"]).replace(tzinfo=pytz.UTC)
+        hedge_settlement.oracle_pubkey = oracle_pubkey
+        hedge_settlement.settlement_message = settlement_message
+        hedge_settlement.settlement_signature = settlement_signature
+
+        if parse_oracle_message_response["success"]:
+            price_data = parse_oracle_message_response["priceData"]
+            hedge_settlement.settlement_price = price_data["priceValue"]
+            hedge_settlement.settlement_price_sequence = price_data["priceSequence"]
+            hedge_settlement.settlement_message_sequence = price_data["messageSequence"]
+            hedge_settlement.settlement_message_timestamp = datetime.fromtimestamp(price_data["messageTimestamp"]).replace(tzinfo=pytz.UTC)
 
     hedge_settlement.save()
     return hedge_settlement
+
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
 def update_contract_settlement(contract_address, new_task=True):
