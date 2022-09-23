@@ -293,6 +293,7 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
         instance.long_satoshis = validated_data["long_satoshis"]
         instance.hedge_satoshis = validated_data["hedge_satoshis"]
         instance.redemption_type = validated_data["redemption_type"]
+        instance.settlement_price = validated_data.get("settlement_price", None)
 
         if validated_data.get("hedge_schnorr_sig", None):
             instance.hedge_schnorr_sig = validated_data["hedge_schnorr_sig"]
