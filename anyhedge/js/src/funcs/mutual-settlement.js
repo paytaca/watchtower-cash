@@ -1,4 +1,4 @@
-import { AnyHedgeManager, ContractData } from '@generalprotocols/anyhedge'
+import { AnyHedgeManager } from '@generalprotocols/anyhedge'
 
 /**
  * @typedef {Object} RedemptionData
@@ -11,7 +11,7 @@ import { AnyHedgeManager, ContractData } from '@generalprotocols/anyhedge'
  * @property {RedemptionData[]} redemptionDataList
  * 
  * @typedef {Object} MutualRedemptionData
- * @property {'refund' | 'early_maturiation' | 'arbitrary'} redemptionType
+ * @property {'refund' | 'early_maturation' | 'arbitrary'} redemptionType
  * @property {Number} hedgeSatoshis
  * @property {Number} longSatoshis
  * @property {String} hedgeSchnorrSig
@@ -87,6 +87,30 @@ export async function validateEarlyMaturation(contractData, mutualRedemptionData
 }
 
 
+/**
+ * 
+ * @param {ContractData} contractData 
+ * @param {MutualRedemptionData} mutualRedemptionData 
+ */
+export async function validateArbitraryRedemption(contractData, mutualRedemptionData) {
+  const response = { valid: false, error: undefined, extraSats: 0 }
+
+  // calculations from mutual refund & early maturation leave 1175 sats
+  const txFee = 1175
+  const fundingSats = contractData?.funding?.[0]?.fundingSatoshis
+
+  const valid = fundingSats >= mutualRedemptionData.hedgeSatoshis + mutualRedemptionData.longSatoshis + txFee
+  response.extraSats = fundingSats - mutualRedemptionData.hedgeSatoshis + mutualRedemptionData.longSatoshis + txFee
+  if (!valid) {
+    response.valid = false
+    response.error = `total payout satoshis exceeded ${fundingSats}`
+    return response
+  }
+
+  response.valid = true
+  return response
+}
+
 
 /**
  * @param {ContractData} contractData 
@@ -111,25 +135,35 @@ export async function completeMutualRedemption(contractData, mutualRedemptionDat
     }
   }
 
+  const arbitraryValidation = await validateArbitraryRedemption(contractData, mutualRedemptionData)
+  if (!(await arbitraryValidation).valid) {
+    response.success = false
+    response.error = arbitraryValidation.error || 'Invalid redemption sats'
+    return response 
+  }
+
   const input = {
     txid: contractData?.funding?.[0]?.fundingTransaction,
     vout: contractData?.funding?.[0]?.fundingOutput,
     satoshis: contractData?.funding?.[0]?.fundingSatoshis,
   }
+  const hedgeOutput = { to: contractData?.metadata?.hedgeAddress, amount: mutualRedemptionData.hedgeSatoshis }
+  const longOutput = { to: contractData?.metadata?.longAddress, amount: mutualRedemptionData.longSatoshis }
+
   const hedgeProposal = {
     inputs: [Object.assign({}, input)],
-    outputs: [{ to: contractData?.metadata?.hedgeAddress, amount: mutualRedemptionData.hedgeSatoshis }],
+    outputs: [Object.assign({}, hedgeOutput), Object.assign({}, longOutput)],
     redemptionDataList: [{ 'hedge_key.schnorr_signature.all_outputs': mutualRedemptionData.hedgeSchnorrSig }]
   }
   const longProposal = {
     inputs: [Object.assign({}, input)],
-    outputs: [{ to: contractData?.metadata?.longAddress, amount: mutualRedemptionData.longSatoshis }],
+    outputs: [Object.assign({}, hedgeOutput), Object.assign({}, longOutput)],
     redemptionDataList: [{ 'long_key.schnorr_signature.all_outputs': mutualRedemptionData.longSchnorrSig }]
   }
 
   const manager = new AnyHedgeManager()
   try {
-    const txid = await manager.completeMutualRedemption(hedgeProposal, longProposal, contract?.parameters)
+    const txid = await manager.completeMutualRedemption(hedgeProposal, longProposal, contractData?.parameters)
     response.success = true
     response.settlementTxid = txid
   } catch(error) {
