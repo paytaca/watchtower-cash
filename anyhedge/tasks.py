@@ -94,13 +94,15 @@ def update_matured_contracts():
         funding_tx_hash__isnull=False,
         maturity_timestamp__lte=timezone.now(),
         settlement__isnull=True
+    ).exclude(
+        funding_tx_hash=""
     )
 
     contract_addresses = []
     for hedge_position in matured_hedge_positions:
         try:
             if hedge_position.settlement_service:
-                update_contract_settlement.delay(hedge_position.address)
+                update_contract_settlement_from_service.delay(hedge_position.address)
         except HedgePosition.settlement_service.RelatedObjectDoesNotExist:
             settle_contract_maturity.delay(hedge_position.address)
 
@@ -140,13 +142,42 @@ def __save_settlement(settlement_data, hedge_position_obj):
     return hedge_settlement
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
-def update_contract_settlement(contract_address):
+def update_contract_settlement(contract_address, new_task=True):
+    response = { "success": False }
     hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
     if not hedge_position_obj:
-        return
+        response["success"] = False
+        response["error"] = "Contract not found"
+        return response
+
+    try:
+        if hedge_position_obj.settlement_service:
+            if new_task:
+                return update_contract_settlement_from_service.delay(hedge_position_obj.address)
+            else:
+                return update_contract_settlement_from_service(hedge_position_obj.address)
+    except HedgePosition.settlement_service.RelatedObjectDoesNotExist:
+        if new_task:
+            return update_contract_settlement_from_chain.delay(hedge_position_obj.address)
+        else:
+            return update_contract_settlement_from_chain(hedge_position_obj.address)
+
+    return response
+
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def update_contract_settlement_from_service(contract_address):
+    response = { "success": False }
+    hedge_position_obj = HedgePosition.objects.filter(address=contract_address).first()
+    if not hedge_position_obj:
+        response["success"] = False
+        response["error"] = "Contract not found"
+        return response
 
     if not hedge_position_obj.settlement_service:
-        return
+        response["success"] = False
+        response["error"] = "Settlement service not found"
+        return response
 
     contract_data = get_contract_status(
         hedge_position_obj.address,
@@ -162,7 +193,10 @@ def update_contract_settlement(contract_address):
             __save_settlement(settlement_data, hedge_position_obj)
 
     send_settlement_update(hedge_position_obj)
-    return contract_data
+    
+    response["success"] = True
+    response["settlements"] = contract_data["settlement"]
+    return response
 
 
 @shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
@@ -200,7 +234,7 @@ def settle_contract_maturity(contract_address):
     LOGGER.info(f"Attempting to settle maturity of contract({contract_address})")
     response = { "success": False }
 
-    settlement_search_response = update_contract_settlement_from_chain(contract_address)
+    settlement_search_response = update_contract_settlement(contract_address, new_task=False)
     if settlement_search_response["success"] and \
         isinstance(settlement_search_response.get("settlements", None), list) and \
         len(settlement_search_response["settlements"]):
@@ -260,27 +294,15 @@ def liquidate_contract(contract_address, message_sequence):
         pass
 
     # attempt to check if contract is settled but not yet saved in db
-    try:
-        # necessary to check if contract has external settlement service
-        if hedge_position_obj.settlement_service:
-            pass
+    settlement_search_response = update_contract_settlement(contract_address, new_task=False)
+    if settlement_search_response["success"] and \
+        isinstance(settlement_search_response.get("settlements", None), list) and \
+        len(settlement_search_response["settlements"]):
 
-        contract_settlement_response = update_contract_settlement.delay(hedge_position_obj.address)
-        if "settlement" in contract_settlement_response:
-            response["success"] = True
-            response["message"] = "contract already settled"
-            response["settlement"] = contract_settlement_response["settlement"]
-            return response
-    except HedgePosition.settlement_service.RelatedObjectDoesNotExist: 
-        settlement_search_response = update_contract_settlement_from_chain(contract_address)
-        if settlement_search_response["success"] and \
-            isinstance(settlement_search_response.get("settlements", None), list) and \
-            len(settlement_search_response["settlements"]):
-
-            response["success"] = True
-            response["message"] = "contract already settled"
-            response["settlements"] = settlement_search_response["settlements"]
-            return response
+        response["success"] = True
+        response["message"] = "contract already settled"
+        response["settlements"] = settlement_search_response["settlements"]
+        return response
 
 
     if not hedge_position_obj.get_hedge_position_funding():
