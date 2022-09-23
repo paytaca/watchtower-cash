@@ -11,6 +11,7 @@ from .models import (
     SettlementService,
     HedgePositionFee,
     HedgeFundingProposal,
+    MutualRedemption,
     HedgePositionOffer,
     HedgePositionFunding,
 
@@ -39,7 +40,9 @@ from .utils.validators import (
 from .utils.websocket import (
     send_offer_settlement_update,
     send_funding_tx_update,
+    send_mutual_redemption_update,
 )
+from .tasks import validate_contract_funding
 
 
 class TimestampField(serializers.IntegerField):
@@ -197,6 +200,107 @@ class HedgePositionFundingSerializer(serializers.ModelSerializer):
         ]
 
 
+class MutualRedemptionSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = MutualRedemption
+        fields = [
+            "redemption_type",
+            "hedge_satoshis",
+            "long_satoshis",
+            "hedge_schnorr_sig",
+            "long_schnorr_sig",
+            "settlement_price",
+            "tx_hash",
+        ]
+
+        extra_kwargs = {
+            "tx_hash": {
+                "read_only": True,
+            },
+        }
+
+    def __init__(self, *args, hedge_position=None, **kwargs):
+        self.hedge_position = hedge_position
+        return super().__init__(*args, **kwargs)
+
+    def validate_redemption_type(self, value):
+        if self.instance and self.instance.redemption_type != value:
+            raise serializers.ValidationError("Redemption type is not editable")
+        return value
+
+    def validate_hedge_satoshis(self, value):
+        if self.instance and self.instance.hedge_satoshis != value:
+            raise serializers.ValidationError("Hedge satoshis is not editable")
+        return value
+
+    def validate_long_satoshis(self, value):
+        if self.instance and self.instance.long_satoshis != value:
+            raise serializers.ValidationError("Long satoshis is not editable")
+        return value
+
+    def validate_settlement_price(self, value):
+        if self.instance and self.instance.settlement_price != value:
+            raise serializers.ValidationError("Settlement price is not editable")
+        return value
+
+    def validate(self, data):
+        redemption_type = data.get("redemption_type", None)
+        settlement_price = data.get("settlement_price", None)
+        hedge_satoshis = data.get("hedge_satoshis", None)
+        long_satoshis = data.get("long_satoshis", None)
+
+        if not self.hedge_position.funding_tx_hash:
+            raise serializers.ValidationError("Contract is not yet funded")
+
+        if not self.hedge_position.funding:
+            funding_validation = validate_contract_funding(self.hedge_position.address)
+            if not funding_validation["success"] or not self.hedge_position.funding:
+                raise serializers.ValidationError("Unable to verify funding transaction")
+
+        if redemption_type == MutualRedemption.TYPE_EARLY_MATURATION:
+            if not settlement_price and settlement_price <= 0:
+                raise serializers.ValidationError(f"Settlement price required for type '{MutualRedemption.TYPE_EARLY_MATURATION}'")
+
+        elif redemption_type == MutualRedemption.TYPE_REFUND:
+            if abs(hedge_satoshis - self.hedge_position.satoshis) > 1:
+                raise serializers.ValidationError(f"Hedge payout must be {self.hedge_position.satoshis} for type '{MutualRedemption.TYPE_REFUND}'")
+            elif abs(long_satoshis - self.hedge_position.long_input_sats) > 1:
+                raise serializers.ValidationError(f"Long payout must be {self.hedge_position.long_input_sats} for type '{MutualRedemption.TYPE_REFUND}'")
+
+        # calculations from anyhedge library leaves 1175 for tx fee
+        tx_fee = 1175
+        expected_total_output = self.hedge_position.funding.funding_satoshis - tx_fee
+        total_output = hedge_satoshis + long_satoshis
+        if expected_total_output != total_output:
+            raise serializers.ValidationError(f"Payout satoshis is not equal to {expected_total_output}")
+
+        return data
+
+    def create(self, validated_data):
+        instance = MutualRedemption.objects.filter(hedge_position=self.hedge_position).first()
+
+        if not instance:
+            instance = MutualRedemption(hedge_position=self.hedge_position, **validated_data)
+
+        if instance.long_satoshis != validated_data["long_satoshis"] or \
+            instance.hedge_satoshis != validated_data["hedge_satoshis"] or \
+            instance.redemption_type != validated_data["redemption_type"]:
+
+            instance.hedge_schnorr_sig = None
+            instance.long_schnorr_sig = None
+
+        if validated_data.get("hedge_schnorr_sig", None):
+            instance.hedge_schnorr_sig = validated_data["hedge_schnorr_sig"]
+
+        if validated_data.get("long_schnorr_sig", None):
+            instance.long_schnorr_sig = validated_data["long_schnorr_sig"]
+
+        instance.save()
+        send_mutual_redemption_update(instance, action="created")
+        return instance
+
+
 class HedgePositionSerializer(serializers.ModelSerializer):
     hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
     long_funding_proposal = HedgeFundingProposalSerializer(required=False)
@@ -207,6 +311,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
     settlement_service = SettlementServiceSerializer()
     fee = HedgePositionFeeSerializer()
     funding = HedgePositionFundingSerializer(read_only=True)
+    mutual_redemption = MutualRedemptionSerializer(read_only=True)
 
     class Meta:
         model = HedgePosition
@@ -238,6 +343,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "settlement_service",
             "fee",
             "funding",
+            "mutual_redemption",
         ]
         extra_kwargs = {
             "address": {

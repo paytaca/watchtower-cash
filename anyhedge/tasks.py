@@ -6,6 +6,7 @@ from django.db import models
 from django.utils import timezone
 from main.tasks import broadcast_transaction
 from .models import (
+    MutualRedemption,
     HedgePosition,
     HedgeSettlement,
     HedgePositionFunding,
@@ -29,6 +30,7 @@ from .utils.settlement import (
     search_settlement_tx,
     settle_hedge_position_maturity,
     liquidate_hedge_position,
+    complete_mutual_redemption,
 )
 from .utils.websocket import (
     send_settlement_update,
@@ -430,4 +432,50 @@ def validate_contract_funding(contract_address, save=True):
 
     response["success"] = True
     response["validation"] = funding_tx_validation
+    return response
+
+@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+def redeem_contract(contract_address):
+    response = { "success": False }
+    mutual_redemption_obj = MutualRedemption.objects.filter(hedge_position__address=contract_address).first()
+    if not mutual_redemption_obj:
+        response["success"] = False
+        response["error"] = "Mutual redemption not found"
+        return response
+
+    try:
+        if mutual_redemption_obj.hedge_position.settlement:
+            response["success"] = False
+            response["error"] = "Contract is already settled"
+    except HedgePosition.settlement.RelatedObjectDoesNotExist:
+        settlement_search_response = update_contract_settlement(contract_address, new_task=False)
+        if settlement_search_response["success"] and \
+            isinstance(settlement_search_response.get("settlements", None), list) and \
+            len(settlement_search_response["settlements"]):
+
+            response["success"] = False
+            response["error"] = "Contarct is already settled"
+            response["settlements"] = settlement_search_response["settlements"]
+            return response
+
+    if mutual_redemption_obj.tx_hash:
+        response["success"] = False
+        response["error"] = "Mutual redemption is already completed"
+        return response
+
+    if not mutual_redemption_obj.hedge_schnorr_sig or not mutual_redemption_obj.long_schnorr_sig:
+        response["success"] = False
+        response["error"] = "Incomplete signatures"
+        return response
+
+    mutual_redemption_response = complete_mutual_redemption(mutual_redemption_obj)
+    if not mutual_redemption_response["success"]:
+        response["success"] = False
+        response["error"] = mutual_redemption_response.get("error", None) or "Error in completing redemption"
+        return response
+
+    mutual_redemption_obj.tx_hash = mutual_redemption_response["settlementTxid"]
+    mutual_redemption_obj.save()
+    response["success"] = True
+    response["tx_hash"] = mutual_redemption_response
     return response

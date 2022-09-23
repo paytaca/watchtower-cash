@@ -138,3 +138,17 @@ def liquidate_hedge_position(hedge_position_obj, message_sequence):
     prevPriceMessage = { "message": previous_price_message.message, "signature": previous_price_message.signature }
     settlementPriceMessage = { "message": settlement_price_message.message, "signature": settlement_price_message.signature }
     return AnyhedgeFunctions.liquidateContract(contract_data, prevPriceMessage, settlementPriceMessage)
+
+
+def complete_mutual_redemption(mutual_redemption_obj):
+    contract_data = compile_contract_from_hedge_position(mutual_redemption_obj.hedge_position)
+    mutual_redemption_data = {
+        "redemptionType": mutual_redemption_obj.redemption_type,
+        "hedgeSatoshis": mutual_redemption_obj.hedge_satoshis,
+        "longSatoshis": mutual_redemption_obj.long_satoshis,
+        "hedgeSchnorrSig": mutual_redemption_obj.hedge_schnorr_sig,
+        "longSchnorrSig": mutual_redemption_obj.long_schnorr_sig,
+        "settlementPrice": mutual_redemption_obj.settlement_price,
+    }
+
+    return AnyhedgeFunctions.completeMutualRedemption(contract_data, mutual_redemption_data)

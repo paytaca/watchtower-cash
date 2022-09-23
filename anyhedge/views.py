@@ -15,6 +15,7 @@ from drf_yasg.utils import swagger_auto_schema
 from .serializers import (
     FundingProposalSerializer,
     LongAccountSerializer,
+    MutualRedemptionSerializer,
     HedgePositionSerializer,
     HedgePositionOfferSerializer,
     SettleHedgePositionOfferSerializer,
@@ -36,7 +37,12 @@ from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import (
     send_hedge_position_offer_update,
 )
-from .tasks import complete_contract_funding
+from .tasks import (
+    complete_contract_funding,
+    validate_contract_funding,
+    update_contract_settlement,
+    redeem_contract,
+)
 
 
 class LongAccountViewSet(
@@ -113,6 +119,7 @@ class HedgePositionViewSet(
             if funding_tx_hash:
                 hedge_obj.funding_tx_hash = funding_tx_hash
                 hedge_obj.save()
+                validate_contract_funding.delay(hedge_obj.address)
 
         return Response(self.serializer_class(hedge_obj).data)
 
@@ -123,9 +130,24 @@ class HedgePositionViewSet(
         funding_task_response = complete_contract_funding(instance.address)
         if funding_task_response["success"]:
             instance.refresh_from_db()
+            validate_contract_funding.delay(instance.address)
             return Response(self.serializer_class(instance).data)
         else:
             error_data = funding_task_response["error"]
+            if not isinstance(error_data, list):
+                error_data = [error_data]
+            return Response(error_data, status=status.HTTP_400_BAD_REQUEST)
+
+    @swagger_auto_schema(method="post", request_body=serializers.Serializer, responses={200: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def validate_contract_funding(self, request, *args, **kwargs):
+        instance = self.get_object()
+        validate_contract_funding_response = validate_contract_funding(instance.address)
+        if validate_contract_funding_response["success"]:
+            instance.refresh_from_db()
+            return Response(self.serializer_class(instance).data)
+        else:
+            error_data = validate_contract_funding_response["error"]
             if not isinstance(error_data, list):
                 error_data = [error_data]
             return Response(error_data, status=status.HTTP_400_BAD_REQUEST)
@@ -137,6 +159,50 @@ class HedgePositionViewSet(
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
         return Response(self.serializer_class(hedge_obj).data)
+
+    @swagger_auto_schema(method="post", request_body=MutualRedemptionSerializer, responses={201: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def mutual_redemption(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = MutualRedemptionSerializer(data=request.data, hedge_position=instance)
+        serializer.is_valid(raise_exception=True)
+        mutual_redemption_obj = serializer.save()
+        instance = mutual_redemption_obj.hedge_position
+
+        if mutual_redemption_obj.hedge_schnorr_sig and mutual_redemption_obj.long_schnorr_sig:    
+            redeem_contract_response = redeem_contract(instance.address)
+            if not redeem_contract_response["success"]:
+                error = "Encountered error in redeeming contract"
+                if redeem_contract_response.get("error", None):
+                    error = redeem_contract_response["error"]
+                return Response([error], status=status.HTTP_400_BAD_REQUEST)
+            update_contract_settlement.delay(instance.address)
+
+        instance.refresh_from_db()
+        return Response(self.serializer_class(instance).data)
+
+    @swagger_auto_schema(method="post", request_body=serializers.Serializer, responses={201: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def complete_mutual_redemption(self, request):
+        instance = self.get_object()
+        try:
+            instance.mutual_redemption
+        except HedgePositionSerializer.Meta.model.mutual_redemption.RelatedObjectDoesNotExist:
+            return Response(["no mutual redemption found"], status=status.HTTP_400_BAD_REQUEST)
+
+        if not instance.mutual_redemption.hedge_schnorr_sig or not instance.mutual_redemption.long_schnorr_sig:
+            return Response(["incomplete signatures"], status=status.HTTP_400_BAD_REQUEST)
+
+        redeem_contract_response = redeem_contract(instance.address)
+        if not redeem_contract_response["success"]:
+            error = "Encountered error in redeeming contract"
+            if redeem_contract_response.get("error", None):
+                error = redeem_contract_response["error"]
+            return Response([error], status=status.HTTP_400_BAD_REQUEST)
+
+        update_contract_settlement.delay(instance.address)
+        instance.refresh_from_db()
+        return Response(self.serializer_class(instance).data)
 
 
     @swagger_auto_schema(method="post", request_body=FundGeneralProcotolLPContractSerializer, responses={201: serializer_class})

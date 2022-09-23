@@ -114,7 +114,7 @@ class HedgePosition(models.Model):
 
     @property
     def total_sats(self):
-        return round((self.satoshis * self.start_price) / self.low_liquidation_price)
+        return round(round(self.satoshis * self.start_price) / self.low_liquidation_price)
 
     @property
     def long_input_sats(self):
@@ -182,6 +182,29 @@ class HedgePositionFee(models.Model):
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="fee")
     address = models.CharField(max_length=75)
     satoshis = models.IntegerField()
+
+
+class MutualRedemption(models.Model):
+    TYPE_REFUND = 'refund'
+    TYPE_EARLY_MATURATION = 'early_maturation'
+    TYPE_ARBITRARY = 'arbitrary' 
+    REDEMPTION_TYPES = [
+        TYPE_REFUND,
+        TYPE_EARLY_MATURATION,
+        TYPE_ARBITRARY,
+    ]
+    REDEMPTION_TYPES = [(REDEMPTION_TYPE, REDEMPTION_TYPE.replace('_', ' ').capitalize()) for REDEMPTION_TYPE in REDEMPTION_TYPES]
+
+    hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="mutual_redemption")
+    redemption_type = models.CharField(max_length=20, choices=REDEMPTION_TYPES)
+    hedge_satoshis = models.BigIntegerField()
+    long_satoshis = models.BigIntegerField()
+    hedge_schnorr_sig = models.TextField(null=True, blank=True)
+    long_schnorr_sig = models.TextField(null=True, blank=True)
+    settlement_price = models.IntegerField(null=True, blank=True)
+
+    # existence of this data would imply it is executed already
+    tx_hash = models.CharField(max_length=75, null=True, blank=True)
 
 
 class HedgePositionOffer(models.Model):

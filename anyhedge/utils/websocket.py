@@ -118,3 +118,32 @@ def send_settlement_update(hedge_position_obj):
             room_name, 
             { "type": "send_update", "data": data }
         )
+
+def send_mutual_redemption_update(mutual_redemption_obj, action=""):
+    channel_layer = get_channel_layer()
+    hedge_position_obj = mutual_redemption_obj.hedge_position
+    data = {
+        "resource": "mutual_redemption",
+        "action": action,
+        "meta": {
+            "id": mutual_redemption_obj.id,
+            "redemption_type": mutual_redemption_obj.redemption_type,
+            "address": hedge_position_obj.address,
+        }
+    }
+
+    if hedge_position_obj.hedge_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
+        data["meta"]["position"] = "hedge"
+        async_to_sync(channel_layer.group_send)(
+            room_name, 
+            { "type": "send_update", "data": data }
+        )
+
+    if hedge_position_obj.long_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.long_wallet_hash}"
+        data["meta"]["position"] = "long"
+        async_to_sync(channel_layer.group_send)(
+            room_name, 
+            { "type": "send_update", "data": data }
+        )
