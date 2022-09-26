@@ -30,7 +30,6 @@ from .utils.funding import (
 from .utils.liquidity import (
     consume_long_account_allowance,
     get_position_offer_suggestions,
-    match_hedge_position_to_liquidity_provider,
     fund_hedge_position,
 )
 from .utils.validators import (
@@ -417,19 +416,11 @@ class HedgePositionSerializer(serializers.ModelSerializer):
 
 
 class HedgePositionOfferSerializer(serializers.ModelSerializer):
-    # AUTO_MATCH_LP = "anyhedge_LP"
-    # AUTO_MATCH_P2P = "watchtower_P2P"
-    # AUTO_MATCH_CHOICES = [
-    #     AUTO_MATCH_LP,
-    #     AUTO_MATCH_P2P,
-    # ]
-
     status = serializers.CharField(read_only=True)
     hedge_position = HedgePositionSerializer(read_only=True)
     auto_settled = serializers.BooleanField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     auto_match = serializers.BooleanField(default=False, write_only=True)
-    # auto_match_pool_target = serializers.ChoiceField(choices=AUTO_MATCH_CHOICES, required=False)
 
     price_oracle_message_sequence = serializers.IntegerField(required=False, write_only=True)
 
@@ -455,7 +446,6 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             "auto_settled",
             "created_at",
             "auto_match",
-            # "auto_match_pool_target",
             "price_oracle_message_sequence",
             "save_position_offer",
         ]
@@ -474,7 +464,6 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
     @transaction.atomic()
     def create(self, validated_data, *args, **kwargs):
         auto_match = validated_data.pop("auto_match", False)
-        # auto_match_pool_target = validated_data.pop("auto_match_pool_target", None)
         price_oracle_message_sequence = validated_data.pop("price_oracle_message_sequence", None)
         save_position_offer = validated_data.pop("save_position_offer", None)
 
@@ -546,44 +535,6 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
         else:
             raise Exception(f"Failed to find match for {instance}")
         return instance
-
-
-    # @classmethod
-    # def auto_match_lp(cls, instance:HedgePositionOffer, price_oracle_message_sequence=price_oracle_message_sequence) -> HedgePositionOffer:
-
-    #     lp_matchmaking_result = match_hedge_position_to_liquidity_provider(instance, price_oracle_message_sequence=price_oracle_message_sequence)
-    #     if lp_matchmaking_result["success"]:
-    #         contract_data = lp_matchmaking_result["contractData"]
-    #         settle_hedge_position_offer_data = {
-    #             "address": contract_data["address"],
-    #             "anyhedge_contract_version": contract_data["version"],
-    #             "oracle_pubkey": contract_data["metadata"]["oraclePublicKey"],
-    #             "oracle_price": contract_data["metadata"]["startPrice"],
-    #             "oracle_timestamp": contract_data["metadata"]["startTimestamp"],
-    #             "long_wallet_hash": "",
-    #             "long_address": contract_data["metadata"]["longAddress"],
-    #             "long_pubkey": contract_data["metadata"]["longPublicKey"],
-    #         }
-
-    #         settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
-    #             data=settle_hedge_position_offer_data,
-    #             hedge_position_offer=instance,
-    #             auto_settled=True,
-    #         )
-    #         settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
-    #         instance = settle_hedge_position_offer_serializer.save()
-
-    #         if lp_matchmaking_result.get("fundingContract", None):
-    #             instance.hedge_position.funding_tx_hash = lp_matchmaking_result["fundingContract"]["fundingTransactionHash"]
-    #             instance.hedge_position.save()
-    #     else:
-    #         error = f"Failed to find match in liduidity pool for {instance}"
-    #         if lp_matchmaking_result.get("error", None):
-    #             error += f". Reason: {lp_matchmaking_result['error']}"
-    #         raise Exception(error)
-
-    #     return instance
-
 
 class SettleHedgePositionOfferSerializer(serializers.Serializer):
     address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])

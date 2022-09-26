@@ -1,6 +1,6 @@
 import { compileContract, create } from './create.js'
 import { calculateFundingAmounts, completeFundingProposal } from './funding.js'
-import { matchHedgePositionOffer, fundHedgePosition, matchAndFundHedgePositionOffer } from './liquidity-provider.js'
+import { fundHedgePosition } from './liquidity-provider.js'
 import { completeMutualRedemption } from './mutual-settlement.js'
 import { parseOracleMessage, getPriceMessages } from './price.js'
 import { parseSettlementTransactions, settleContractMaturity, liquidateContract } from './settlement.js'
@@ -12,9 +12,7 @@ const funcs = {
     create,
     calculateFundingAmounts,
     completeFundingProposal,
-    matchHedgePositionOffer,
     fundHedgePosition,
-    matchAndFundHedgePositionOffer,
     completeMutualRedemption,
     parseOracleMessage,
     getPriceMessages,

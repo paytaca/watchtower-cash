@@ -30,45 +30,5 @@ def consume_long_account_allowance(long_address, long_input_sats):
         send_long_account_update(wallet_hash, action="consume_allowance")
     return resp
 
-def match_hedge_position_to_liquidity_provider(hedge_position_offer_obj, price_oracle_message_sequence:int=None):
-    hedge_position_offer_data = {
-        "satoshis": hedge_position_offer_obj.satoshis,
-        "durationSeconds": hedge_position_offer_obj.duration_seconds,
-        "lowLiquidationMultiplier": hedge_position_offer_obj.low_liquidation_multiplier,
-        "highLiquidationMultiplier": hedge_position_offer_obj.high_liquidation_multiplier,
-        "hedgeAddress": hedge_position_offer_obj.hedge_address,
-        "hedgePubkey": hedge_position_offer_obj.hedge_pubkey,
-    }
-
-    priceMessageConfig = None
-    if hedge_position_offer_obj.oracle_pubkey:
-        priceMessageConfig = {
-            "oraclePubKey": hedge_position_offer_obj.oracle_pubkey,
-        }
-
-    priceMessageRequestParams = None
-    if price_oracle_message_sequence:
-        priceMessageRequestParams = {
-            "minMessageSequence": price_oracle_message_sequence,
-            "maxMessageSequence": price_oracle_message_sequence,
-        }
-
-    funding_proposal_data = None
-    if hedge_position_offer_obj.hedge_funding_proposal:
-        funding_proposal_data = {
-            "txHash": hedge_position_offer_obj.hedge_funding_proposal.tx_hash,
-            "txIndex": hedge_position_offer_obj.hedge_funding_proposal.tx_index,
-            "txValue": hedge_position_offer_obj.hedge_funding_proposal.tx_value,
-            "scriptSig": hedge_position_offer_obj.hedge_funding_proposal.script_sig,
-            "publicKey": hedge_position_offer_obj.hedge_funding_proposal.pubkey,
-            "inputTxHashes": hedge_position_offer_obj.hedge_funding_proposal.input_tx_hashes,
-        }
-
-    if funding_proposal_data is None:
-        return AnyhedgeFunctions.matchHedgePositionOffer(hedge_position_offer_data, priceMessageConfig, priceMessageRequestParams)
-
-    return AnyhedgeFunctions.matchAndFundHedgePositionOffer(hedge_position_offer_data, funding_proposal_data, priceMessageConfig, priceMessageRequestParams)
-
-
 def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence):
     return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence)
