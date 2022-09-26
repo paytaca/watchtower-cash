@@ -126,7 +126,7 @@ def __save_settlement(settlement_data, hedge_position_obj):
     if "settlementMessage" in settlement_data:
         settlement_message = settlement_data["settlementMessage"]
         oracle_pubkey = settlement_data.get("oraclePublicKey", None)
-        settlement_signature = settlement_data("settlementSignature", None)
+        settlement_signature = settlement_data.get("settlementSignature", None)
         parse_oracle_message_response = parse_oracle_message(
             settlement_message,
             pubkey=oracle_pubkey,
