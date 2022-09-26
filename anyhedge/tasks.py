@@ -186,10 +186,19 @@ def update_contract_settlement_from_service(contract_address):
         response["error"] = "Settlement service not found"
         return response
 
+    access_pubkey = ""
+    access_signature = ""
+    if hedge_position_obj.settlement_service.hedge_signature:
+        access_pubkey = hedge_position_obj.hedge_pubkey
+        access_signature = hedge_position_obj.settlement_service.hedge_signature
+    elif hedge_position_obj.settlement_service.long_signature:
+        access_pubkey = hedge_position_obj.long_pubkey
+        access_signature = hedge_position_obj.settlement_service.long_signature
+
     contract_data = get_contract_status(
         hedge_position_obj.address,
-        hedge_position_obj.hedge_pubkey,
-        hedge_position_obj.settlement_service.hedge_signature,
+        access_pubkey,
+        access_signature,
         settlement_service_scheme=hedge_position_obj.settlement_service.scheme,
         settlement_service_domain=hedge_position_obj.settlement_service.domain,
         settlement_service_port=hedge_position_obj.settlement_service.port,

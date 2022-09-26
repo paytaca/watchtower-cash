@@ -167,7 +167,8 @@ class SettlementService(models.Model):
     # e.g. <scheme>://<domain>:<port>/status/?contractAddress=<address>&signature<hedge_signature>&pubkey=<hedge_pubkey>
     # generating signature is done here 
     # https://gitlab.com/GeneralProtocols/anyhedge/library/-/blob/v0.14.2/lib/anyhedge.ts#L399
-    hedge_signature = models.TextField()
+    hedge_signature = models.TextField(null=True, blank=True)
+    long_signature = models.TextField(null=True, blank=True)
 
 
 class HedgePositionFunding(models.Model):

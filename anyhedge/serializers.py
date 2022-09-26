@@ -176,7 +176,13 @@ class SettlementServiceSerializer(serializers.ModelSerializer):
             "scheme",
             "port",
             "hedge_signature",
+            "long_signature",
         ]
+
+    def validate(self, data):
+        if not data.get("hedge_signature", None) and not data.get("long_signature", None):
+            raise serializers.ValidationError("hedge_signature or long_signature must be given")
+        return data
 
 
 class HedgePositionFeeSerializer(serializers.ModelSerializer):
@@ -657,30 +663,63 @@ class SubmitFundingTransactionSerializer(serializers.Serializer):
 
 class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
     contract_address = serializers.CharField()
-    hedge_wallet_hash = serializers.CharField()
-    hedge_pubkey = serializers.CharField()
+    position = serializers.ChoiceField(choices=["hedge", "long"])
+    hedge_wallet_hash = serializers.CharField(required=False)
+    hedge_pubkey = serializers.CharField(required=False)
     hedge_address_path = serializers.CharField(required=False)
+
+    long_wallet_hash = serializers.CharField(required=False)
+    long_pubkey = serializers.CharField(required=False)
+    long_address_path = serializers.CharField(required=False)
     oracle_message_sequence = serializers.IntegerField()
 
     settlement_service = SettlementServiceSerializer() # do i need this here or js script will provide ?
     funding_proposal = HedgeFundingProposalSerializer()
 
+    def validate(self, data):
+        position = data["position"]
+        hedge_wallet_hash = data.get("hedge_wallet_hash", None)
+        hedge_pubkey = data.get("hedge_pubkey", None)
+        long_wallet_hash = data.get("long_wallet_hash", None)
+        long_pubkey = data.get("long_pubkey", None)
+
+        if position == "hedge" and (not hedge_wallet_hash or not hedge_pubkey):
+            raise serializers.ValidationError("'hedge_wallet_hash' or 'hedge_pubkey' required when taking 'hedge' position")
+
+        if position == "long" and (not long_wallet_hash or not long_pubkey):
+            raise serializers.ValidationError("'long_wallet_hash' or 'long_pubkey' required when taking 'long' position")
+
+        return data
+
     @transaction.atomic()
     def save(self):
         validated_data = self.validated_data
         contract_address = validated_data["contract_address"]
-        hedge_wallet_hash = validated_data["hedge_wallet_hash"]
-        hedge_pubkey = validated_data["hedge_pubkey"]
+        position = validated_data["position"]
+        hedge_wallet_hash = validated_data.get("hedge_wallet_hash", None)
+        hedge_pubkey = validated_data.get("hedge_pubkey", None)
         hedge_address_path = validated_data.get("hedge_address_path", None)
-        
+        long_wallet_hash = validated_data.get("long_wallet_hash", None)
+        long_pubkey = validated_data.get("long_pubkey", None)
+        long_address_path = validated_data.get("long_address_path", None)
+
         oracle_message_sequence = validated_data["oracle_message_sequence"]
         settlement_service = validated_data["settlement_service"]
         funding_proposal = validated_data["funding_proposal"]
 
+        access_pubkey = ""
+        access_signature = ""
+        if settlement_service.get("hedge_signature", None):
+            access_signature = settlement_service["hedge_signature"]
+            access_pubkey = hedge_pubkey
+        elif settlement_service.get("long_signature", None):
+            access_signature = long_signature
+            access_pubkey = long_pubkey
+
         contract_data = get_contract_status(
             contract_address,
-            hedge_pubkey,
-            settlement_service["hedge_signature"],
+            access_pubkey,
+            access_signature,
             settlement_service_scheme=settlement_service["scheme"],
             settlement_service_domain=settlement_service["domain"],
             settlement_service_port=settlement_service["port"],
@@ -699,21 +738,26 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             "satoshis": contract_metadata["hedgeInputSats"],
             "start_timestamp": contract_metadata["startTimestamp"],
             "maturity_timestamp": maturity_timestamp,
-            "hedge_wallet_hash": hedge_wallet_hash,
+            "hedge_wallet_hash": hedge_wallet_hash or "",
             "hedge_address": contract_metadata["hedgeAddress"],
             "hedge_address_path": hedge_address_path,
             "hedge_pubkey": contract_metadata["hedgePublicKey"],
-            "long_wallet_hash": "",
+            "long_wallet_hash": long_wallet_hash or "",
             "long_address": contract_metadata["longAddress"],
+            "long_address_path": long_address_path,
             "long_pubkey": contract_metadata["longPublicKey"],
             "oracle_pubkey": contract_metadata["oraclePublicKey"],
             "start_price": contract_metadata["startPrice"],
             "low_liquidation_multiplier": contract_metadata["lowLiquidationPriceMultiplier"],
             "high_liquidation_multiplier": contract_metadata["highLiquidationPriceMultiplier"],
             "funding_tx_hash": "",
-            "hedge_funding_proposal": funding_proposal,
             "settlement_service": settlement_service,
         }
+
+        if position == "hedge":
+            validated_data["hedge_funding_proposal"] = funding_proposal
+        elif position == "long":
+            validated_data["long_funding_proposal"] = funding_proposal
 
         if contract_data.get("fee", None):
             hedge_position_data["fee"] = {
@@ -736,7 +780,8 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
                 "publicKey": funding_proposal["pubkey"],
                 "inputTxHashes": funding_proposal["input_tx_hashes"],
             },
-            oracle_message_sequence
+            oracle_message_sequence,
+            position=position,
         )
         if not funding_response["success"]:
             error = "Error in funding hedge position"

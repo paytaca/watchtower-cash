@@ -30,5 +30,5 @@ def consume_long_account_allowance(long_address, long_input_sats):
         send_long_account_update(wallet_hash, action="consume_allowance")
     return resp
 
-def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence):
-    return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence)
+def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence, position="hedge"):
+    return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence, position)
