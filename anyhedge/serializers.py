@@ -713,7 +713,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             access_signature = settlement_service["hedge_signature"]
             access_pubkey = hedge_pubkey
         elif settlement_service.get("long_signature", None):
-            access_signature = long_signature
+            access_signature = settlement_service["long_signature"]
             access_pubkey = long_pubkey
 
         contract_data = get_contract_status(
