@@ -43,9 +43,9 @@ def run():
             tx_hash = bytearray(tx.hash[::-1]).hex()
 
             for _input in tx.inputs:
-                
-                txid = _input.outpoint.hash.hex()
+                txid = bytearray(_input.outpoint.hash[::-1]).hex()
                 index = _input.outpoint.index
+                Transaction.objects.filter(txid=txid, index=index).update(spent=True, spending_txid=tx_hash)
 
             for output in tx.outputs:
                 if output.address:
