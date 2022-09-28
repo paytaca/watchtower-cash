@@ -69,7 +69,13 @@ class FundingProposalSerializer(serializers.Serializer):
         try:
             hedge_position_obj = HedgePosition.objects.get(address=value)
             if hedge_position_obj.funding_tx_hash:
-                raise serializers.ValidationError("Hedge position is already funded")    
+                raise serializers.ValidationError("Hedge position is already funded")
+            try:
+                if hedge_position_obj.settlement:
+                    raise serializers.ValidationError("Hedge position is already settled")
+            except HedgePosition.settlement.RelatedObjectDoesNotExist:
+                pass
+
         except HedgePosition.DoesNotExist:
             raise serializers.ValidationError("Hedge position does not exist")
 
@@ -380,11 +386,41 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, data):
+        contract_address = data.get("address", None)
+        oracle_pubkey = data.get("oracle_pubkey", None)
+        settlement_service = data.get("settlement_service", None)
+        hedge_pubkey = data.get("hedge_pubkey", None)
+        long_pubkey = data.get("long_pubkey")
+
         if not match_pubkey_to_cash_address(data["hedge_pubkey"], data["hedge_address"]):
             raise serializers.ValidationError("hedge public key & address does not match")
 
         if not match_pubkey_to_cash_address(data["long_pubkey"], data["long_address"]):
             raise serializers.ValidationError("long public key & address does not match")
+
+        if not settlement_service:
+            if not Oracle.objects.filter(pubkey=oracle_pubkey).exists():
+                raise serializers.ValidationError("Unknown 'oracle_pubkey', must provide settlement service")
+        else:
+            access_pubkey = ""
+            access_signature = ""
+            if settlement_service.get("hedge_signature", None):
+                access_signature = settlement_service["hedge_signature"]
+                access_pubkey = hedge_pubkey
+            elif settlement_service.get("long_signature", None):
+                access_signature = settlement_service["long_signature"]
+                access_pubkey = long_pubkey
+            contract_data = get_contract_status(
+                contract_address,
+                access_pubkey,
+                access_signature,
+                settlement_service_scheme=settlement_service["scheme"],
+                settlement_service_domain=settlement_service["domain"],
+                settlement_service_port=settlement_service["port"],
+            )
+            if not contract_data or not contract_data.get("address", None) != contract_address:
+                raise serializers.ValidationError("Unable to verify contract from external settlement service")
+
         return data
 
     @transaction.atomic()
@@ -566,7 +602,11 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
             raise serializers.ValidationError("Hedge position offer is already settled")
         elif self.hedge_position_offer.status == HedgePositionOffer.STATUS_CANCELLED:
             raise serializers.ValidationError("Hedge position offer is already cancelled")
-    
+        elif self.hedge_position_offer.hedge_position:
+            self.hedge_position_offer.status = HedgePositionOffer.STATUS_SETTLED
+            self.hedge_position_offer.save()
+            raise serializers.ValidationError("Hedge position offer is already settled")
+
         if not match_pubkey_to_cash_address(data["long_pubkey"], data["long_address"]):
             raise serializers.ValidationError("public key & address does not match")
 
@@ -633,12 +673,12 @@ class SubmitFundingTransactionSerializer(serializers.Serializer):
 
         # TODO: route for broadcasting tx_hex if necessary
         if tx_hash:
-            funding_tx_validation = validate_funding_transaction(hedge_position_address, tx_hash)
+            funding_tx_validation = validate_funding_transaction(tx_hash, hedge_position_address)
             if not funding_tx_validation["valid"]:
                 raise serializers.ValidationError(f"funding tx hash '{tx_hash}' invalid")
         elif tx_hex:
             _tx_hash = get_tx_hash(tx_hex)
-            funding_tx_validation = validate_funding_transaction(hedge_position_address, _tx_hash)
+            funding_tx_validation = validate_funding_transaction(_tx_hash, hedge_position_address)
             if not funding_tx_validation["valid"]:
                 raise serializers.ValidationError(f"funding tx hex invalid")
 
@@ -654,6 +694,9 @@ class SubmitFundingTransactionSerializer(serializers.Serializer):
             tx_hash = get_tx_hash(validated_data["tx_hex"])
 
         hedge_position_obj = HedgePosition.objects.get(address=hedge_position_address)
+
+        if hedge_position_obj.funding_tx_hash != tx_hash:
+            hedge_position_obj.funding_tx_hash_validated = False
 
         hedge_position_obj.funding_tx_hash = tx_hash
         hedge_position_obj.save()
