@@ -19,14 +19,15 @@ class AnyhedgeFunctionsMeta(type):
         for function in functions:
             cls.functions[function] = generate_func(function)
 
+        cls.functions_loaded = True
 
     def __getattr__(cls, key):
-        if not cls.functions_loaded:
-            cls.load_anyhedge_functions()
-            cls.functions_loaded = True
+        if key == "__load_functions__":
+            return cls.load_anyhedge_functions
 
         if key not in cls.functions:
-            raise AttributeError(key)
+            cls.functions[key] = generate_func(key)
+            # raise AttributeError(key)
 
         return cls.functions[key]
 
@@ -40,7 +41,7 @@ def generate_func(func_name):
             "function": func_name,
             "params": args,
         }
-        process = run(['node', './anyhedge/js/src/main.js'], input=json.dumps(_input).encode(), stdout=PIPE)
+        process = run(['node', './anyhedge/js/src/main.js'], input=json.dumps(_input).encode(), stdout=PIPE, stderr=PIPE)
         result = None
 
         print(process)
@@ -50,7 +51,7 @@ def generate_func(func_name):
             except json.JSONDecodeError:
                 result = process.stdout
         elif process.stderr:
-            raise Exception(process.stderr)
+            raise Exception(process.stderr.decode())
         return result
 
     return func
