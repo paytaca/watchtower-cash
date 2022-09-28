@@ -325,6 +325,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
 
     settlement = HedgeSettlementSerializer(read_only=True)
     settlement_service = SettlementServiceSerializer()
+    check_settlement_service = serializers.BooleanField(default=True, required=False, write_only=True)
     fee = HedgePositionFeeSerializer()
     funding = HedgePositionFundingSerializer(read_only=True)
     mutual_redemption = MutualRedemptionSerializer(read_only=True)
@@ -357,6 +358,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
 
             "settlement",
             "settlement_service",
+            "check_settlement_service",
             "fee",
             "funding",
             "mutual_redemption",
@@ -389,6 +391,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         contract_address = data.get("address", None)
         oracle_pubkey = data.get("oracle_pubkey", None)
         settlement_service = data.get("settlement_service", None)
+        check_settlement_service = data.get("check_settlement_service", None)
         hedge_pubkey = data.get("hedge_pubkey", None)
         long_pubkey = data.get("long_pubkey")
 
@@ -398,10 +401,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         if not match_pubkey_to_cash_address(data["long_pubkey"], data["long_address"]):
             raise serializers.ValidationError("long public key & address does not match")
 
-        if not settlement_service:
-            if not Oracle.objects.filter(pubkey=oracle_pubkey).exists():
-                raise serializers.ValidationError("Unknown 'oracle_pubkey', must provide settlement service")
-        else:
+        if settlement_service and check_settlement_service:
             access_pubkey = ""
             access_signature = ""
             if settlement_service.get("hedge_signature", None):
@@ -418,13 +418,17 @@ class HedgePositionSerializer(serializers.ModelSerializer):
                 settlement_service_domain=settlement_service["domain"],
                 settlement_service_port=settlement_service["port"],
             )
-            if not contract_data or not contract_data.get("address", None) != contract_address:
+            if not contract_data or contract_data.get("address", None) != contract_address:
                 raise serializers.ValidationError("Unable to verify contract from external settlement service")
+        elif not settlement_service:
+            if not Oracle.objects.filter(pubkey=oracle_pubkey).exists():
+                raise serializers.ValidationError("Unknown 'oracle_pubkey', must provide settlement service")
 
         return data
 
     @transaction.atomic()
     def create(self, validated_data):
+        validated_data.pop("check_settlement_service", None)
         settlement_service_data = validated_data.pop("settlement_service", None)
         fee_data = validated_data.pop("fee", None)
         hedge_funding_proposal_data = validated_data.pop("hedge_funding_proposal", None)
@@ -795,6 +799,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             "high_liquidation_multiplier": contract_metadata["highLiquidationPriceMultiplier"],
             "funding_tx_hash": "",
             "settlement_service": settlement_service,
+            "check_settlement_service": False,
         }
 
         if position == "hedge":

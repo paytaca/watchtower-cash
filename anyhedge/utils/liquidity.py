@@ -1,3 +1,5 @@
+import json
+import requests
 from django.db.models import OuterRef, Subquery, Sum, F, Value
 from django.db.models.functions import Coalesce, Greatest
 from ..js.runner import AnyhedgeFunctions
@@ -31,4 +33,46 @@ def consume_long_account_allowance(long_address, long_input_sats):
     return resp
 
 def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence, position="hedge"):
-    return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence, position)
+    response = { "success": False, "fundingTransactionHash": "", "error": "" }
+
+    data = {
+        "contractAddress": contract_data["address"],
+        "outpointTransactionHash": funding_proposal["txHash"],
+        "outpointIndex": funding_proposal["txIndex"],
+        "satoshis": funding_proposal["txValue"],
+        "signature": funding_proposal["scriptSig"],
+        "publicKey": funding_proposal["publicKey"],
+        "takerSide": position,
+        "dependencyTransactions": funding_proposal["inputTxHashes"],
+        "oracleMessageSequence": oracle_message_sequence,
+    }
+    try:
+        resp = requests.post(
+            "https://staging-liquidity.anyhedge.com/api/v1/fundContract",
+            data = json.dumps(data),
+            headers = {'Content-type': 'application/json', 'Accept': 'text/plain'},
+        )
+        response_data = resp.json()
+        if resp.ok:
+            response["success"] = True
+            response["fundingTransactionHash"] = response_data["fundingTransactionHash"]
+            return response
+        else:
+            if isinstance(response_data, list) and len(response_data):
+                response["success"] = False
+                response["error"] = response_data[0]
+                return response
+            else:
+                response["success"] = False
+                response["error"] = "Encountered error in funding contract"
+                return response
+
+    except ConnectionError:
+        response["success"] = False
+        response["error"] = "Connection error"
+        return response
+    except json.JSONDecodeError:
+        response["success"] = False
+        response["error"] = "Encountered error in funding contract"
+        return response
+    # return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence, position)

@@ -174,7 +174,7 @@ class HedgePositionViewSet(
             if instance.mutual_redemption and instance.mutual_redemption.tx_hash:
                 update_contract_settlement.delay(instance.address)
                 return Response(["Mutual redemption is already completed"], status=status.HTTP_400_BAD_REQUEST)
-        except: instance.__class__.mutual_redemption.RelatedObjectDoesNotExist:
+        except instance.__class__.mutual_redemption.RelatedObjectDoesNotExist:
             pass
 
         serializer = MutualRedemptionSerializer(data=request.data, hedge_position=instance)
