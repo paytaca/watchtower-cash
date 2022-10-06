@@ -1,14 +1,25 @@
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import F, Q, Subquery, Func, OuterRef
 from rest_framework import status
 from main.models import Wallet, Address, WalletHistory
 from django.core.paginator import Paginator
+from main.serializers import PaginatedWalletHistorySerializer
 
 POS_ID_MAX_DIGITS = 4
 
 class WalletHistoryView(APIView):
 
+    @swagger_auto_schema(
+        responses={200: PaginatedWalletHistorySerializer},
+        manual_parameters=[
+            openapi.Parameter(name="page", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, default=1),
+            openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', None)
         token_id = kwargs.get('tokenid', None)
