@@ -2,7 +2,13 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import F, Q, Subquery, Func, OuterRef
+from django.db.models import (
+    F, Q, Value,
+    OuterRef, Subquery,
+    Func, Count,
+    BigIntegerField,
+)
+from django.db.models.functions import Substr, Cast, Floor
 from rest_framework import status
 from main.models import Wallet, Address, WalletHistory
 from django.core.paginator import Paginator
@@ -88,3 +94,61 @@ class WalletHistoryView(APIView):
                 'has_next': page_obj.has_next()
             }
             return Response(data=data, status=status.HTTP_200_OK)
+
+
+class LastAddressIndexView(APIView):
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="with_tx", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
+            openapi.Parameter(name="posid", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        """
+            Get the last receiving address index of a wallet
+        """
+        wallet_hash = kwargs.get("wallethash", None)
+        with_tx = request.query_params.get("with_tx", False)
+        posid = request.query_params.get("posid", None)
+        if posid is not None:
+            try:
+                posid = int(posid)
+            except (TypeError, ValueError):
+                return Response(data=[f"invalid POS ID: {type(posid)}({posid})"], status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = Address.objects.annotate(
+            address_index = Cast(Substr(F("address_path"), Value("0/(\d+)")), BigIntegerField()),
+        ).filter(
+            wallet__wallet_hash=wallet_hash,
+            address_index__isnull=False,
+        )
+        fields = ["address", "address_index"]
+        ordering = ["-address_index"]
+
+        if with_tx:
+            queryset = queryset.annotate(tx_count = Count("transactions__txid", distinct=True))
+            queryset = queryset.filter(tx_count__gt=0)
+            ordering = ["tx_count", "-address_index"]
+            fields.append("tx_count")
+
+        if isinstance(posid, int) and posid >= 0:
+            POSID_MULTIPLIER = Value(10 ** POS_ID_MAX_DIGITS)
+            queryset = queryset.annotate(posid=F("address_index") % POSID_MULTIPLIER)
+            queryset = queryset.annotate(payment_index=Floor(F("address_index") / POSID_MULTIPLIER))
+            queryset = queryset.filter(address_index__gte=POSID_MULTIPLIER)
+            # queryset = queryset.filter(address_index__gte=models.Value(0))
+            fields.append("posid")
+            fields.append("payment_index")
+
+        queryset = queryset.values(*fields).order_by(*ordering)
+        if len(queryset):
+            address = queryset[0]
+        else:
+            address = None
+
+        data = {
+            "wallet_hash": wallet_hash,
+            "address": address,
+        }
+
+        return Response(data)
