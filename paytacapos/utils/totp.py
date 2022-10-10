@@ -3,6 +3,8 @@ import hmac
 import hashlib
 from django.utils import timezone
 
+from ..conf import settings as app_settings
+
 def generate_totp(secret, digits=6, interval=30, offset=0, timestamp=None):
     if timestamp is None:
         timestamp = timezone.now().timestamp()
@@ -21,3 +23,10 @@ def generate_totp(secret, digits=6, interval=30, offset=0, timestamp=None):
         code_str = "0" + code_str
 
     return code
+
+
+def generate_pos_device_totp(wallet_hash, posid, digits=6, interval=30, offset=0, timestamp=None):
+    return generate_totp(
+        f"{app_settings.TOTP_SECRET_KEY}:{wallet_hash}-{posid}",
+        digits=6, interval=30, offset=0, timestamp=None,
+    )
