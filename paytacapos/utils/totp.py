@@ -22,7 +22,7 @@ def generate_totp(secret, digits=6, interval=30, offset=0, timestamp=None):
     while len(code_str) < digits:
         code_str = "0" + code_str
 
-    return code
+    return code_str
 
 
 def generate_pos_device_totp(wallet_hash, posid, digits=6, interval=30, offset=0, timestamp=None):
