@@ -16,8 +16,8 @@ LOGGER = logging.getLogger(__name__)
 def run():
     source = 'bchd-grpc-stream'
     nodes = [
-        #'bchd.imaginary.cash:8335',
-        'bchd.greyh.at:8335',
+        'bchd.imaginary.cash:8335',
+        # 'bchd.greyh.at:8335',
         # 'bchd.fountainhead.cash:443'
     ]
     bchd_node = random.choice(nodes)
@@ -43,9 +43,9 @@ def run():
             tx_hash = bytearray(tx.hash[::-1]).hex()
 
             for _input in tx.inputs:
-                
-                txid = _input.outpoint.hash.hex()
+                txid = bytearray(_input.outpoint.hash[::-1]).hex()
                 index = _input.outpoint.index
+                Transaction.objects.filter(txid=txid, index=index).update(spent=True, spending_txid=tx_hash)
 
             for output in tx.outputs:
                 if output.address:

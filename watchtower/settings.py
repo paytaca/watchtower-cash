@@ -72,6 +72,7 @@ INSTALLED_APPS=[
 
     'smartbch',
     'paytacapos',
+    'anyhedge',
 ]
 
 MIDDLEWARE=[
@@ -169,6 +170,7 @@ REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = (
     'main.tasks',
     'smartbch.tasks',
+    'anyhedge.tasks',
 )
 
 CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -208,6 +210,18 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 
 
 CELERY_BEAT_SCHEDULE = {
+    'update_oracle_prices': {
+        'task': 'anyhedge.tasks.check_new_price_messages',
+        'schedule': 60,
+    },
+    'update_anyhedge_contract_settlements': {
+        'task': 'anyhedge.tasks.update_matured_contracts',
+        'schedule': 60,
+    },
+    'update_anyhedge_contracts_for_liquidation': {
+        'task': 'anyhedge.tasks.update_contracts_for_liquidation',
+        'schedule': 120,
+    },
     'get_latest_block': {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
@@ -235,7 +249,7 @@ CELERY_BEAT_SCHEDULE = {
     'parse_missing_records': {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.
-    }
+    },
 }
 
 CORS_ALLOW_ALL_ORIGINS = True

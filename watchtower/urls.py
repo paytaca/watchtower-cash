@@ -29,6 +29,7 @@ from drf_yasg import openapi
 from main.urls import main_urls, test_urls
 from paytacapos.urls import urlpatterns as paytacapos_urlpatterns
 from smartbch.urls import urlpatterns as sbch_urlpatterns
+from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -51,6 +52,7 @@ urlpatterns = [
     path('api/', include(main_urls)),
     path('api/smartbch/', include(sbch_urlpatterns)),
     path('api/paytacapos/', include(paytacapos_urlpatterns)),
+    path('api/anyhedge/', include(anyhedge_urlpatterns)),
     path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
