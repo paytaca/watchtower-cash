@@ -1,0 +1,14 @@
+[
+  {
+    "model": "anyhedge.oracle",
+    "pk": 1,
+    "fields": {
+      "pubkey": "02d3c1de9d4bc77d6c3608cbe44d10138c7488e592dc2b1e10a6cf0e92c2ecb047",
+      "relay": "staging-oracles.generalprotocols.com",
+      "port": 7083,
+      "asset_name": "US Dollars",
+      "asset_currency": "USD",
+      "asset_decimals": 2
+    }
+  }
+]

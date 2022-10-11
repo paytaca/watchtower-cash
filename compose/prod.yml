@@ -8,6 +8,7 @@ services:
     env_file: /root/watchtower/compose/.env_prod
     volumes:
       - /var/www/images:/images
+      - /code/anyhedge/js/node_modules
     ports:
       - 8000:8000
       - 9000:9000
