@@ -376,3 +376,8 @@ SMARTBCH = {
         default=50,
     ),
 }
+
+
+PAYTACAPOS = {
+    "TOTP_SECRET_KEY": decipher(config('TOTP_SECRET_KEY')),
+}
