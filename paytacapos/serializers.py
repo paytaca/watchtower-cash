@@ -3,6 +3,7 @@ from datetime import datetime
 from django.utils import timezone
 from rest_framework import serializers
 
+from .models import PosDevice
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 
@@ -15,9 +16,50 @@ class TimestampField(serializers.IntegerField):
         return datetime.fromtimestamp(data).replace(tzinfo=pytz.UTC)
 
 
-class PosDeviceSerializer(serializers.Serializer):
-    posid = serializers.IntegerField()
+class PosDeviceSerializer(serializers.ModelSerializer):
+    posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
+    name = serializers.CharField(required=False)
+
+    class Meta:
+        model = PosDevice
+        fields = [
+            "posid",
+            "wallet_hash",
+            "name",
+        ]
+    
+    def get_unique_together_validators(self):
+        """Overriding method to disable unique together checks"""
+        return []
+
+    def validate_posid(self, value):
+        if self.instance and self.instance.posid != value:
+            raise serializers.ValidationError("editing posid is not allowed")
+        return value
+
+    def validate_wallet_hash(self, value):
+        if self.instance and self.instance.wallet_hash != value:
+            raise serializers.ValidationError("editing posid is not allowed")
+        return value
+
+    def create(self, validated_data, *args, **kwargs):
+        wallet_hash = validated_data["wallet_hash"]
+        posid = validated_data["posid"]
+
+        if posid < 0:
+            posid = PosDevice.find_new_posid(wallet_hash)
+            if posid is None:
+                raise serializers.ValidationError("unable to find new posid")
+            validated_data["posid"] = posid
+
+        try:
+            instance = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
+            return super().update(instance, validated_data)
+        except PosDevice.DoesNotExist:
+            pass
+
+        return super().create(validated_data, *args, **kwargs)
 
 
 class POSPaymentSerializer(serializers.Serializer):
