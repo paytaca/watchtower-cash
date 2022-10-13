@@ -18,7 +18,7 @@ class PosDevice(models.Model):
         if last_posid is not None and last_posid+1 < 10 ** 4:
             return last_posid + 1
 
-        posids = queryset.values_list("posid").distinct()
+        posids = queryset.values_list("posid", flat=True).distinct()
         for i in range(10**4):
             if i not in posids:
                 return i
