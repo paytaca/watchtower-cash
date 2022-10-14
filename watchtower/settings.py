@@ -71,6 +71,7 @@ INSTALLED_APPS=[
     'main',
 
     'smartbch',
+    'paytacapos',
     'anyhedge',
 ]
 
@@ -374,4 +375,9 @@ SMARTBCH = {
         var_type=int,
         default=50,
     ),
+}
+
+
+PAYTACAPOS = {
+    "TOTP_SECRET_KEY": decipher(config('TOTP_SECRET_KEY')),
 }
