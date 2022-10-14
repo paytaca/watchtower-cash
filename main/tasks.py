@@ -704,11 +704,8 @@ def broadcast_transaction(self, transaction):
             try:
                 txid = obj.broadcast_transaction(transaction)
                 if txid:
-                    if tx_found:
-                        success = True
-                        return success, txid
-                    else:
-                        self.retry(countdown=1)
+                    success = True
+                    return success, txid
                 else:
                     self.retry(countdown=1)
             except Exception as exc:
