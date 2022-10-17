@@ -41,7 +41,7 @@ class WalletHistoryView(APIView):
             try:
                 posid = int(posid)
                 posid = str(posid)
-                pad = "0" * (len(posid)-POS_ID_MAX_DIGITS)
+                pad = "0" * (POS_ID_MAX_DIGITS-len(posid))
                 posid = pad + posid
             except (TypeError, ValueError):
                 return Response(data=[f"invalid POS ID: {type(posid)}({posid})"], status=status.HTTP_400_BAD_REQUEST)
