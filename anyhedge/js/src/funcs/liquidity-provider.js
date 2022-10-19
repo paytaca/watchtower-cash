@@ -18,7 +18,7 @@ import axios from 'axios'
  * @property {String[]} inputTxHashes - Array of transaction hashes that the outpoint depends upon.
  */
 
-const BASE_URL = 'https://staging-liquidity.anyhedge.com'
+const BASE_URL = process.env.ANYHEDGE_LP_BASE_URL || 'https://staging-liquidity.anyhedge.com'
 
 const backend = axios.create({
   baseURL: BASE_URL,
