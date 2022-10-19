@@ -41,7 +41,7 @@ class WalletHistoryView(APIView):
             try:
                 posid = int(posid)
                 posid = str(posid)
-                pad = "0" * (len(posid)-POS_ID_MAX_DIGITS)
+                pad = "0" * (POS_ID_MAX_DIGITS-len(posid))
                 posid = pad + posid
             except (TypeError, ValueError):
                 return Response(data=[f"invalid POS ID: {type(posid)}({posid})"], status=status.HTTP_400_BAD_REQUEST)
@@ -125,6 +125,9 @@ class LastAddressIndexView(APIView):
         fields = ["address", "address_index"]
         ordering = ["-address_index"]
 
+        if isinstance(with_tx, str) and with_tx.lower() == "false":
+            with_tx = False
+
         if with_tx:
             queryset = queryset.annotate(tx_count = Count("transactions__txid", distinct=True))
             queryset = queryset.filter(tx_count__gt=0)
@@ -136,6 +139,7 @@ class LastAddressIndexView(APIView):
             queryset = queryset.annotate(posid=F("address_index") % POSID_MULTIPLIER)
             queryset = queryset.annotate(payment_index=Floor(F("address_index") / POSID_MULTIPLIER))
             queryset = queryset.filter(address_index__gte=POSID_MULTIPLIER)
+            queryset = queryset.filter(posid=posid)
             # queryset = queryset.filter(address_index__gte=models.Value(0))
             fields.append("posid")
             fields.append("payment_index")
