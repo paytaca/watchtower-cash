@@ -7,7 +7,12 @@ import time
 import random
 import logging
 import ssl
-from main.tasks import save_record, client_acknowledgement, send_telegram_message
+from main.tasks import (
+    save_record,
+    client_acknowledgement,
+    send_telegram_message,
+    parse_tx_wallet_histories,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,10 +47,13 @@ def run():
             tx = notification.unconfirmed_transaction.transaction
             tx_hash = bytearray(tx.hash[::-1]).hex()
 
+            has_subscribed_input = False
+            has_updated_output = False
             for _input in tx.inputs:
                 txid = bytearray(_input.outpoint.hash[::-1]).hex()
                 index = _input.outpoint.index
                 for transaction in Transaction.objects.filter(txid=txid, index=index):
+                    has_subscribed_input = True
                     transaction.spent = True
                     transaction.spending_txid=tx_hash
                     transaction.save()
@@ -64,6 +72,7 @@ def run():
                         output.index
                     )
                     obj_id, created = save_record(*args)
+                    has_updated_output = has_updated_output or created
                     if created:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -88,6 +97,7 @@ def run():
                         output.index
                     )
                     obj_id, created = save_record(*args)
+                    has_updated_output = has_updated_output or created
 
                     if created:
                         third_parties = client_acknowledgement(obj_id)
@@ -98,6 +108,10 @@ def run():
                                 send_telegram_message(message, chat_id)
                     msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
                     LOGGER.info(msg)
+
+            if has_subscribed_input and not has_updated_output:
+                LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
+                parse_tx_wallet_histories.delay(tx_hash)
 
 
 class Command(BaseCommand):
