@@ -175,7 +175,7 @@ def client_acknowledgement(self, txid):
 
 
 @shared_task(queue='save_record')
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0, new_subscription=False, spent_txids=[]):
+def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0, new_subscription=False, spent_txids=[], force_create=False):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -193,7 +193,7 @@ def save_record(token, transaction_address, transactionid, amount, source, block
 
     # We are only tracking outputs of either subscribed addresses or those of transactions
     # that spend previous transactions with outputs involving tracked addresses
-    if not subscription.exists() and not spent_txids_check.exists():
+    if not subscription.exists() and not spent_txids_check.exists() and not force_create:
         return None, None
 
     address_obj, _ = Address.objects.get_or_create(address=transaction_address)
@@ -1056,3 +1056,61 @@ def rescan_utxos(wallet_hash):
             get_bch_utxos(address.address)
         elif wallet.wallet_type == 'slp':
             get_slp_utxos(address.address)
+
+@shared_task(queue='post_save_record', max_retries=3)
+def parse_tx_wallet_histories(txid, source=""):
+    bchd = BCHDQuery()
+    bch_tx = bchd.get_transaction(txid)
+
+    tx_fee = bch_tx['tx_fee']
+
+    # parse inputs and outputs to desired structure
+    inputs = [(i['address'], i['value']) for i in bch_tx['inputs']]
+    outputs = [(i['address'], i['value']) for i in bch_tx['outputs']]
+
+    # get bch wallets with addresses that are in inputs and outputs
+    input_addresses = [i[0] for i in inputs]
+    output_addresses = [i[0] for i in outputs]
+    addresses = set([*input_addresses, *output_addresses])
+    wallets = Wallet.objects.filter(addresses__address__in=addresses, wallet_type="bch")
+
+    # parse_wallet_history requires an output saved in Transaction model
+    # this block will attempt to create one if there are none
+    if not Transaction.objects.filter(txid=txid).exists():
+        output_index = -1
+        output_address = ""
+
+        address_obj = Address.objects.filter(address__in=output_addresses).first()
+        if address_obj:
+            output_address = address_obj.address
+            output_index = output_addresses.index(output_address)
+
+        if not output_address or ouput_index < 0:
+            output_address = output_addresses[0]
+            output_index = 0
+
+        save_record(
+            'bch',
+            output_address,
+            txid,
+            outputs[output_index][1] /  (10 ** 8),
+            source,
+            None,
+            index=output_index,
+            force_create=True
+        )
+
+    # parse wallet history of bch wallets
+    wallet_handles = []
+    for wallet in wallets:
+        wallet_handle = f"bch|{wallet.wallet_hash}"
+        wallet_handles.append(wallet_handle)
+        parse_wallet_history.delay(
+            txid,
+            wallet_handle,
+            tx_fee,
+            inputs,
+            outputs,
+        )
+
+    return wallet_handles
