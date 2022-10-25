@@ -29,7 +29,7 @@ class HedgePositionQuerySet(models.QuerySet):
 
 
 class LongAccount(models.Model):
-    wallet_hash = models.CharField(max_length=100, unique=True)
+    wallet_hash = models.CharField(max_length=100, unique=True, db_index=True)
     address_path = models.CharField(max_length=10)
     address = models.CharField(max_length=75)
     pubkey = models.CharField(max_length=75)
@@ -58,7 +58,7 @@ class HedgeFundingProposal(models.Model):
 class HedgePosition(models.Model):
     objects = HedgePositionQuerySet.as_manager()
 
-    address = models.CharField(max_length=75, unique=True)
+    address = models.CharField(max_length=75, unique=True, db_index=True)
     anyhedge_contract_version = models.CharField(max_length=20)
 
     satoshis = models.BigIntegerField()
@@ -66,11 +66,11 @@ class HedgePosition(models.Model):
     start_timestamp = models.DateTimeField()
     maturity_timestamp = models.DateTimeField()
 
-    hedge_wallet_hash = models.CharField(max_length=75)
+    hedge_wallet_hash = models.CharField(max_length=75, db_index=True)
     hedge_address = models.CharField(max_length=75)
     hedge_pubkey = models.CharField(max_length=75)
     hedge_address_path = models.CharField(max_length=10, null=True, blank=True)
-    long_wallet_hash = models.CharField(max_length=75)
+    long_wallet_hash = models.CharField(max_length=75, db_index=True)
     long_address = models.CharField(max_length=75)
     long_pubkey = models.CharField(max_length=75)
     long_address_path = models.CharField(max_length=10, null=True, blank=True)
@@ -84,7 +84,7 @@ class HedgePosition(models.Model):
     # low_liquidation_price = models.IntegerField()
     # high_liquidation_price = models.IntegerField()
 
-    funding_tx_hash = models.CharField(max_length=75, null=True, blank=True)
+    funding_tx_hash = models.CharField(max_length=75, null=True, blank=True, db_index=True)
     funding_tx_hash_validated = models.BooleanField(default=False)
 
     hedge_funding_proposal = models.OneToOneField(
@@ -142,7 +142,7 @@ class HedgePosition(models.Model):
 class HedgeSettlement(models.Model):
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement")
 
-    spending_transaction = models.CharField(max_length=75)
+    spending_transaction = models.CharField(max_length=75, db_index=True)
     settlement_type = models.CharField(max_length=20)
     hedge_satoshis = models.BigIntegerField()
     long_satoshis = models.BigIntegerField()
@@ -172,7 +172,7 @@ class SettlementService(models.Model):
 
 
 class HedgePositionFunding(models.Model):
-    tx_hash = models.CharField(max_length=75)
+    tx_hash = models.CharField(max_length=75, db_index=True)
     funding_output = models.IntegerField()
     funding_satoshis = models.BigIntegerField()
     fee_output = models.IntegerField(null=True, blank=True)
@@ -222,7 +222,7 @@ class HedgePositionOffer(models.Model):
     STATUSES = [(STATUS, STATUS.replace('_', ' ').capitalize()) for STATUS in STATUSES]
     status = models.CharField(max_length=15, choices=STATUSES, default=STATUS_PENDING)
 
-    wallet_hash = models.CharField(max_length=100)
+    wallet_hash = models.CharField(max_length=100, db_index=True)
     satoshis = models.BigIntegerField()
 
     duration_seconds = models.IntegerField()
@@ -238,7 +238,8 @@ class HedgePositionOffer(models.Model):
         HedgePosition,
         related_name="position_offer",
         on_delete=models.CASCADE,
-        null=True, blank=True
+        null=True, blank=True,
+        db_index=True,
     )
 
     auto_settled = models.BooleanField(null=True, blank=True)
@@ -249,19 +250,19 @@ class Oracle(models.Model):
     pubkey = models.CharField(max_length=75, unique=True)
     relay = models.CharField(max_length=50)
     port = models.IntegerField()
-    asset_name = models.CharField(max_length=25)
+    asset_name = models.CharField(max_length=25, db_index=True)
     asset_currency = models.CharField(max_length=10, default='')
     asset_decimals = models.IntegerField(default=0)
 
 
 class PriceOracleMessage(models.Model):
-    pubkey = models.CharField(max_length=75)
+    pubkey = models.CharField(max_length=75, db_index=True)
     signature = models.CharField(max_length=130)
     message = models.CharField(max_length=40)
-    message_timestamp = models.DateTimeField()
+    message_timestamp = models.DateTimeField(db_index=True)
     price_value = models.IntegerField()
-    price_sequence = models.IntegerField()
-    message_sequence = models.IntegerField()
+    price_sequence = models.IntegerField(db_index=True)
+    message_sequence = models.IntegerField(db_index=True)
 
     class Meta:
         ordering = ['-message_timestamp']

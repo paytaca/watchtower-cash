@@ -1085,7 +1085,7 @@ def parse_tx_wallet_histories(txid, source=""):
             output_address = address_obj.address
             output_index = output_addresses.index(output_address)
 
-        if not output_address or ouput_index < 0:
+        if not output_address or output_index < 0:
             output_address = output_addresses[0]
             output_index = 0
 
