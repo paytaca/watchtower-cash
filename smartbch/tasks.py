@@ -60,24 +60,16 @@ def parse_missing_blocks_task():
     # a hard limit to cap load
     MAX_BLOCKS_TO_PARSE = 25
 
-    min_block_number = Block.get_min_block_number()
-    if isinstance(app_settings.START_BLOCK, (int, decimal.Decimal)) and app_settings.START_BLOCK > 0:
-        min_block_number = max(min_block_number, app_settings.START_BLOCK)
-
     block_numbers = Block.get_missing_block_numbers(
-        start_block_number=min_block_number,
-        descending=True,
         limit=MAX_BLOCKS_TO_PARSE,
+        lookback_size=1000,
     )
-    count = len(block_numbers)
 
-    LOGGER.info(f"Found {count} missing block_numbers, queueing {MAX_BLOCKS_TO_PARSE} for parsing")
-    blocks_sent_for_parsing = 0
+    LOGGER.info(f"Found {len(block_numbers)} missing block_numbers")
     for block_number in block_numbers:
         parse_block_task.delay(block_number)
-        blocks_sent_for_parsing += 1
 
-    return f"Sent {blocks_sent_for_parsing} block/s for parsing out of {count}."
+    return f"Sent blocks: {block_numbers}"
 
 
 @shared_task(queue=_QUEUE_TRANSACTIONS_PARSER, time_limit=_TASK_TIME_LIMIT)

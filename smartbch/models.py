@@ -30,73 +30,38 @@ class Block(PostgresModel):
         return cls.objects.aggregate(value = models.Max("block_number")).get("value")
 
     @classmethod
-    def __get_missing_block_numbers(cls, start_block_number=None, end_block_number=None, descending=False, limit=None):
+    def get_missing_block_numbers(cls, limit=50, lookback_size=1000):
         """
-            Gets block numbers not in db in ascending order
-
-        Return
-        --------
-            (count, iterator, close_iterator):
-                count: number of block_numbers
-                iterator: an iterator to loop through the list
-                close_iterator: call to close db connection in case iterator is not finished
-        """
-        if start_block_number is None:
-            start_block_number=cls.get_min_block_number()
-        
-        if end_block_number is None:
-            end_block_number = cls.get_max_block_number()
-
-        cursor = connection.cursor()
-        order_by = ""
-        if descending:
-            order_by = "ORDER BY block_number DESC"
-        cursor.execute(f"""
-        WITH block_numbers AS (SELECT block_number FROM {cls._meta.db_table})
-        SELECT
-            generate_series AS block_number
-        FROM
-            generate_series({start_block_number}, {end_block_number})
-        WHERE
-            NOT generate_series IN (SELECT block_number FROM block_numbers)
-        {order_by}
-        """)
-
-        def close_iterator():
-            cursor.close()
-            connection.close()
-
-        def generator(cursor):
-            try:
-                count = 0
-                for row in cursor:
-                    count += 1
-                    if limit is not None and count > limit:
-                        break
-                    yield Decimal(row[0])
-            finally:
-                close_iterator()
-
-        return cursor.rowcount, generator(cursor), close_iterator
-
-    @classmethod
-    def get_missing_block_numbers(cls, start_block_number=None, end_block_number=None, descending=False, limit=None):
-        """
-            Gets block numbers not in db in ascending order
-
+            Gets block numbers not in db in descending order
         Return
             block_numbers
         """
-        count, iterator, close_iterator = cls.__get_missing_block_numbers(
-            start_block_number=start_block_number,
-            end_block_number=end_block_number,
-            descending=descending,
-            limit=limit,
-        )
-        try:
-            return list(iterator)
-        finally:
-            close_iterator()
+
+        # get latest block with a missing previous block
+        # getting this value ensures that we get find a missing block even when;
+        # a low `lookback_size` is provided
+        end_block_number = cls.objects.annotate(
+            prev_block_number = models.F("block_number") - models.Value(1),
+        ).exclude(
+            prev_block_number__in=models.Subquery(cls.objects.values("block_number").distinct()),
+        ).order_by("-block_number").aggregate(max=models.Max("block_number"))["max"]
+
+        # look back to upto `lookback_size` blocks to find missing blocks
+        # used for limiting the range of blocks to search for as a larger range consume more resources
+        start_block_number = max(cls.get_min_block_number(), end_block_number - lookback_size)
+
+        if limit is None:
+            limit = 50
+        limit = max([limit, 50])
+
+        block_objects = cls.objects.raw(f"""
+            SELECT block_number as id, block_number
+            FROM generate_series({start_block_number}, {end_block_number}) block_number
+            WHERE NOT block_number IN (SELECT "{cls._meta.db_table}"."block_number" FROM "{cls._meta.db_table}")
+            ORDER BY block_number DESC
+            LIMIT {limit}
+        """)
+        return [e.block_number for e in block_objects]
 
 
 class TokenContract(PostgresModel):
