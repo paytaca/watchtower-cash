@@ -41,9 +41,12 @@ class Block(PostgresModel):
         # getting this value ensures that we get find a missing block even when;
         # a low `lookback_size` is provided
         end_block_number = cls.objects.annotate(
-            prev_block_number = models.F("block_number") - models.Value(1),
-        ).exclude(
-            prev_block_number__in=models.Subquery(cls.objects.values("block_number").distinct()),
+            prev_block = models.Subquery(
+                cls.objects.filter(block_number=models.OuterRef("block_number") - models.Value(1)).values('id'),
+                output_field=cls.id.field,
+            ),
+        ).filter(
+            prev_block__isnull=True,
         ).order_by("-block_number").aggregate(max=models.Max("block_number"))["max"]
 
         # look back to upto `lookback_size` blocks to find missing blocks
@@ -57,7 +60,12 @@ class Block(PostgresModel):
         block_objects = cls.objects.raw(f"""
             SELECT block_number as id, block_number
             FROM generate_series({start_block_number}, {end_block_number}) block_number
-            WHERE NOT block_number IN (SELECT "{cls._meta.db_table}"."block_number" FROM "{cls._meta.db_table}")
+            WHERE NOT block_number IN (
+                SELECT "{cls._meta.db_table}"."block_number"
+                FROM "{cls._meta.db_table}"
+                WHERE "{cls._meta.db_table}"."block_number" >= {start_block_number} AND
+                    "{cls._meta.db_table}"."block_number" <= {end_block_number}
+            )
             ORDER BY block_number DESC
             LIMIT {limit}
         """)
