@@ -68,6 +68,8 @@ def client_acknowledgement(self, txid):
             address=address             
         )
 
+        senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
+
         if subscriptions.exists():
             
             for subscription in subscriptions:
@@ -96,7 +98,8 @@ def client_acknowledgement(self, txid):
                         'txid': transaction.txid,
                         'block': block,
                         'index': transaction.index,
-                        'address_path' : transaction.address.address_path
+                        'address_path' : transaction.address.address_path,
+                        'senders': senders,
                     }
                 elif wallet_version == 1:
                     data = {
