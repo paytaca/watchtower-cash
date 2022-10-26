@@ -175,7 +175,16 @@ def client_acknowledgement(self, txid):
 
 
 @shared_task(queue='save_record')
-def save_record(token, transaction_address, transactionid, amount, source, blockheightid=None, index=0, new_subscription=False, spent_txids=[], force_create=False):
+def save_record(
+    token, transaction_address, transactionid, amount, source,
+    blockheightid=None,
+    index=0,
+    new_subscription=False,
+    spent_txids=[],
+    inputs=None,
+    spending_txid=None,
+    force_create=False,
+):
     """
         token                : can be tokenid (slp token) or token name (bch)
         transaction_address  : the destination address where token had been deposited.
@@ -183,7 +192,16 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         amount               : the amount being transacted.
         source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
         blockheight          : an optional argument indicating the block height number of a transaction.
-        index          : used to make sure that each record is unique based on slp/bch address in a given transaction_id
+        index                : used to make sure that each record is unique based on slp/bch address in a given transaction_id
+        inputs               : an array of dicts containing data on the transaction's inputs
+                               example: {
+                                    "index": 0,
+                                    "token": "bch",
+                                    "address": "",
+                                    "amount": 0,
+                                    "outpoint_txid": "",
+                                    "outpoint_index": 0,
+                                }
     """
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
@@ -248,6 +266,10 @@ def save_record(token, transaction_address, transactionid, amount, source, block
                 index=index
             )
 
+            if spending_txid:
+                transaction_obj.spending_txid = spending_txid
+                transaction_obj.spent = True
+
             if transaction_obj.source != source:
                 transaction_obj.source = source
 
@@ -271,6 +293,20 @@ def save_record(token, transaction_address, transactionid, amount, source, block
         # Save updates and trigger post-save signals
         transaction_obj.save()
         
+        # save the transaction_obj's inputs if provided
+        if inputs is not None:
+            for tx_input in inputs:
+                save_record(
+                    tx_input["token"],
+                    tx_input["address"],
+                    tx_input["outpoint_txid"],
+                    tx_input["amount"],
+                    source,
+                    index=tx_input["outpoint_index"],
+                    spending_txid=transaction_obj.txid,
+                    force_create=True,
+                )
+
         return transaction_obj.id, transaction_created
 
 

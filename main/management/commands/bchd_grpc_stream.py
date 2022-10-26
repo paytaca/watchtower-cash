@@ -49,14 +49,41 @@ def run():
 
             has_subscribed_input = False
             has_updated_output = False
+
+            inputs_added = False
+            inputs_data = [
+                # { "index": 0, "token": "bch", "address": "", "amount": 0,  "outpoint_txid": "", "outpoint_index": 0 }
+            ]
             for _input in tx.inputs:
                 txid = bytearray(_input.outpoint.hash[::-1]).hex()
                 index = _input.outpoint.index
                 for transaction in Transaction.objects.filter(txid=txid, index=index):
-                    has_subscribed_input = True
+                    has_subscribed_input = has_subscribed_input or transaction.wallet is not None
                     transaction.spent = True
                     transaction.spending_txid=tx_hash
                     transaction.save()
+
+                token_id = None
+                address = None
+                amount = 0
+                if _input.slp_token.token_id:
+                    token_id = bytearray(_input.slp_token.token_id).hex() 
+                    address = 'simpleledger:' + _input.address
+                    amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                else:
+                    token_id = "bch"
+                    address = 'bitcoincash:' + _input.address
+                    amount = _input.value / (10 ** 8)
+
+                if token_id and address:
+                    inputs_data.append({
+                        "index": _input.index,
+                        "token": token_id,
+                        "address": address,
+                        "amount": amount,
+                        "outpoint_txid": txid,
+                        "outpoint_index": index,
+                    })
 
             for output in tx.outputs:
                 if output.address:
@@ -71,7 +98,7 @@ def run():
                         None,
                         output.index
                     )
-                    obj_id, created = save_record(*args)
+                    obj_id, created = save_record(*args, inputs=inputs_data)
                     has_updated_output = has_updated_output or created
                     if created:
                         third_parties = client_acknowledgement(obj_id)
@@ -96,7 +123,7 @@ def run():
                         None,
                         output.index
                     )
-                    obj_id, created = save_record(*args)
+                    obj_id, created = save_record(*args, inputs=inputs_data)
                     has_updated_output = has_updated_output or created
 
                     if created:
