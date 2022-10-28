@@ -21,9 +21,7 @@ LOGGER = logging.getLogger(__name__)
 def run():
     source = 'bchd-grpc-stream'
     nodes = [
-        'bchd.imaginary.cash:8335',
-        # 'bchd.greyh.at:8335',
-        # 'bchd.fountainhead.cash:443'
+        'bchd.paytaca.com:8335'
     ]
     bchd_node = random.choice(nodes)
 
