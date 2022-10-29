@@ -26,6 +26,7 @@ main_urls += [
     re_path(r"^utxo/bch/(?P<bchaddress>[\w+:]+)/$", views.UTXO.as_view(),name='bch-utxo'),
     re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/$", views.UTXO.as_view(),name='slp-utxo'),
     re_path(r"^utxo/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)/$", views.UTXO.as_view(),name='slp-token-utxo'),
+    re_path(r"^utxo/wallet/(?P<wallethash>[\w+:]+)/scan/$", views.ScanUtxos.as_view(),name='scan-utxos'),
     re_path(r"^utxo/wallet/(?P<wallethash>[\w+:]+)/$", views.UTXO.as_view(),name='wallet-utxo'),
     re_path(r"^utxo/wallet/(?P<wallethash>[\w+:]+)/(?P<tokenid>[\w+]+)/$", views.UTXO.as_view(),name='wallet-utxo-token'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/$", views.WalletHistoryView.as_view(),name='wallet-history'),

@@ -3,6 +3,7 @@ from main.models import Transaction, Wallet, Token
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q, F, Func
+from main.tasks import get_slp_utxos, get_bch_utxos
 
 
 class Round(Func):
@@ -137,3 +138,17 @@ class UTXO(APIView):
         data['utxos'] = list(utxos_values)
         data['valid'] = True  
         return Response(data=data, status=status.HTTP_200_OK)
+
+
+class ScanUtxos(APIView):
+
+    def get(self, request, *args, **kwargs):
+        wallet_hash = kwargs.get('wallethash', '')
+        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        addresses = wallet.addresses.filter(transactions__spent=False)
+        for address in addresses:
+            if wallet.wallet_type == 'bch':
+                get_bch_utxos(address.address)
+            elif wallet.wallet_type == 'slp':
+                get_slp_utxos(address.address)
+        return Response(data={'success': True}, status=status.HTTP_200_OK)
