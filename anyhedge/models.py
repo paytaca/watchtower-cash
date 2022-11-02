@@ -170,6 +170,8 @@ class SettlementService(models.Model):
     hedge_signature = models.TextField(null=True, blank=True)
     long_signature = models.TextField(null=True, blank=True)
 
+    auth_token = models.TextField(null=True, blank=True)
+
 
 class HedgePositionFunding(models.Model):
     tx_hash = models.CharField(max_length=75, db_index=True)
