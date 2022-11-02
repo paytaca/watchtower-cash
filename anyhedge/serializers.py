@@ -183,6 +183,7 @@ class SettlementServiceSerializer(serializers.ModelSerializer):
             "port",
             "hedge_signature",
             "long_signature",
+            "auth_token",
         ]
 
     def validate(self, data):
@@ -417,6 +418,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
                 settlement_service_scheme=settlement_service["scheme"],
                 settlement_service_domain=settlement_service["domain"],
                 settlement_service_port=settlement_service["port"],
+                authentication_token=settlement_service.get("auth_token", None),
             )
             if not contract_data or contract_data.get("address", None) != contract_address:
                 raise serializers.ValidationError("Unable to verify contract from external settlement service")
@@ -770,6 +772,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             settlement_service_scheme=settlement_service["scheme"],
             settlement_service_domain=settlement_service["domain"],
             settlement_service_port=settlement_service["port"],
+            authentication_token=settlement_service.get("auth_token", None),
         )
 
         if contract_data["address"] != contract_address:

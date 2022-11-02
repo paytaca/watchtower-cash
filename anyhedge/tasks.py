@@ -13,6 +13,7 @@ from .models import (
     Oracle,
     PriceOracleMessage,
 )
+from .utils.auth_token import get_settlement_service_auth_token
 from .utils.contract import get_contract_status
 from .utils.funding import (
     complete_funding_proposal,
@@ -195,14 +196,31 @@ def update_contract_settlement_from_service(contract_address):
         access_pubkey = hedge_position_obj.long_pubkey
         access_signature = hedge_position_obj.settlement_service.long_signature
 
-    contract_data = get_contract_status(
-        hedge_position_obj.address,
-        access_pubkey,
-        access_signature,
-        settlement_service_scheme=hedge_position_obj.settlement_service.scheme,
-        settlement_service_domain=hedge_position_obj.settlement_service.domain,
-        settlement_service_port=hedge_position_obj.settlement_service.port,
-    )
+    try:
+        contract_data = get_contract_status(
+            hedge_position_obj.address,
+            access_pubkey,
+            access_signature,
+            settlement_service_scheme=hedge_position_obj.settlement_service.scheme,
+            settlement_service_domain=hedge_position_obj.settlement_service.domain,
+            settlement_service_port=hedge_position_obj.settlement_service.port,
+            authentication_token=hedge_position_obj.settlement_service.auth_token,
+        )
+    except Exception as exception:
+        if str(exception).strip() != "Request failed with status code 401":
+            raise exception
+        settlement_service = hedge_position_obj.settlement_service
+        settlement_service.auth_token = get_settlement_service_auth_token(settlement_service.scheme, settlement_service.domain, settlement_service.port)
+        contract_data = get_contract_status(
+            hedge_position_obj.address,
+            access_pubkey,
+            access_signature,
+            settlement_service_scheme=settlement_service.scheme,
+            settlement_service_domain=settlement_service.domain,
+            settlement_service_port=settlement_service.port,
+            authentication_token=settlement_service.auth_token,
+        )
+        settlement_service.save()
 
     if "settlement" in contract_data and isinstance(contract_data["settlement"], list):
         for settlement_data in contract_data["settlement"]:

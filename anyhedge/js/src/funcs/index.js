@@ -1,3 +1,4 @@
+import { getSettlementServiceAuthToken } from './authToken.js'
 import { compileContract, create } from './create.js'
 import { calculateFundingAmounts, completeFundingProposal } from './funding.js'
 import { fundHedgePosition } from './liquidity-provider.js'
@@ -8,6 +9,7 @@ import { getContractStatus } from './status.js'
 import { sum, asyncSum } from './test.js'
 
 const funcs = {
+    getSettlementServiceAuthToken,
     compileContract,
     create,
     calculateFundingAmounts,
