@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { AnyHedgeManager } from "@generalprotocols/anyhedge";
 
 /**
  * 
@@ -14,12 +13,7 @@ import { AnyHedgeManager } from "@generalprotocols/anyhedge";
  */
 export async function getContractStatus(contractAddress, pubkey, signature, settlementService) {
   if (!settlementService.authenticationToken) {
-    const manager = new AnyHedgeManager({
-      serviceScheme: settlementService.scheme,
-      serviceDomain: settlementService.domain,
-      servicePort: settlementService.port,
-    })
-    settlementService.authenticationToken = await manager.requestAuthenticationToken('Paytaca')
+    settlementService.authenticationToken = process.env.ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN
   }
 
   const { data } = await axios.get(
