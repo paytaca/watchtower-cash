@@ -230,6 +230,23 @@ class BCHDQuery(object):
             trs = resp.block.transaction_data
             return len(trs)
 
+    def get_address_transactions(self, address, limit=None, offset=None):
+        cert = ssl.get_server_certificate(self.base_url.split(':'))
+        creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
+
+        with grpc.secure_channel(self.base_url, creds, options=(('grpc.enable_http_proxy', 0),)) as channel:
+            stub = bchrpc.bchrpcStub(channel)
+
+            req = pb.GetAddressTransactionsRequest()
+            req.address = address
+            if limit is not None:
+                req.nb_fetch = limit
+            if offset is not None:
+                req.nb_skip = offset
+            resp = stub.GetAddressTransactions(req)
+
+            return resp
+
     def broadcast_transaction(self, transaction):
         txn_bytes = bytes.fromhex(transaction)
         cert = ssl.get_server_certificate(self.base_url.split(':'))

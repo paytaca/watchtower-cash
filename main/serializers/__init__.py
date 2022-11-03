@@ -1,3 +1,4 @@
+from main.serializers.serializer_address_search import *
 from main.serializers.serializer_balance import *
 from main.serializers.serializer_blockheight import *
 from main.serializers.serializer_token import *
