@@ -163,6 +163,7 @@ class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'address',
         'wallet',
         'wallet_index',
+        'address_path',
         'project'
     ]
 
