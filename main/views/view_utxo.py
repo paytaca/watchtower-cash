@@ -145,7 +145,8 @@ class ScanUtxos(APIView):
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', '')
         wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-        addresses = wallet.addresses.filter(transactions__spent=False)
+        # addresses = wallet.addresses.filter(transactions__spent=False)
+        addresses = wallet.addresses.all()
         for address in addresses:
             if wallet.wallet_type == 'bch':
                 get_bch_utxos(address.address)
