@@ -100,6 +100,7 @@ class LastAddressIndexView(APIView):
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter(name="with_tx", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
+            openapi.Parameter(name="exclude_pos", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
             openapi.Parameter(name="posid", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
         ]
     )
@@ -109,6 +110,7 @@ class LastAddressIndexView(APIView):
         """
         wallet_hash = kwargs.get("wallethash", None)
         with_tx = request.query_params.get("with_tx", False)
+        exclude_pos = request.query_params.get("exclude_pos", False)
         posid = request.query_params.get("posid", None)
         if posid is not None:
             try:
@@ -128,6 +130,9 @@ class LastAddressIndexView(APIView):
         if isinstance(with_tx, str) and with_tx.lower() == "false":
             with_tx = False
 
+        if isinstance(exclude_pos, str) and exclude_pos.lower() == "false":
+            exclude_pos = False
+
         if with_tx:
             queryset = queryset.annotate(tx_count = Count("transactions__txid", distinct=True))
             queryset = queryset.filter(tx_count__gt=0)
@@ -143,6 +148,13 @@ class LastAddressIndexView(APIView):
             # queryset = queryset.filter(address_index__gte=models.Value(0))
             fields.append("posid")
             fields.append("payment_index")
+        elif exclude_pos:
+            POSID_MULTIPLIER = Value(10 ** POS_ID_MAX_DIGITS)
+            MAX_UNHARDENED_ADDRESS_INDEX = Value(2**32-1)
+            queryset = queryset.exclude(
+                address_index__gte=POSID_MULTIPLIER,
+                address_index__lte=MAX_UNHARDENED_ADDRESS_INDEX,
+            )
 
         queryset = queryset.values(*fields).order_by(*ordering)
         if len(queryset):
