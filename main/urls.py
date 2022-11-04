@@ -9,7 +9,7 @@ app_name = "main"
 
 router = routers.DefaultRouter()
 router.register(r"tokens", views.TokensViewSet, basename="tokens")
-router.register(r"wallet/address-search", views.WalletAddressSearchViewSet, basename="address-search")
+router.register(r"wallet/address-scan", views.WalletAddressScanViewSet, basename="address-scan")
 
 main_urls = router.urls
 

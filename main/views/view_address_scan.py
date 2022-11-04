@@ -13,11 +13,11 @@ from main.utils.queries.bchd import BCHDQuery
 from main import serializers
 
 
-class WalletAddressSearchViewSet(viewsets.GenericViewSet):
-    serializer_class = serializers.WalletAddressSearchSerializer
+class WalletAddressScanViewSet(viewsets.GenericViewSet):
+    serializer_class = serializers.WalletAddressScanSerializer
     permission_classes = [AllowAny,]
 
-    @swagger_auto_schema(responses={200: serializers.WalletAddressSearchResponseSerializer(many=True)})
+    @swagger_auto_schema(responses={200: serializers.WalletAddressScanResponseSerializer(many=True)})
     # `create()` is rest_framework.GenericViewSet's function name for POST
     def create(self, request, *args, **kwargs):
         """
