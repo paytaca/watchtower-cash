@@ -6,8 +6,8 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
 from main.models import Transaction, Wallet, Token
-from main.tasks import get_slp_utxos, get_bch_utxos, rescan_utxos, some_task
-
+from main.tasks import rescan_utxos
+from main.throttles import ScanUtxoThrottle
 
 
 class Round(Func):
@@ -164,14 +164,8 @@ class ScanUtxos(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         if background:
-            task = some_task.delay(wallet_hash)
+            task = rescan_utxos.delay(wallet.wallet_hash, full=True)
             return Response({ "task_id": task.id }, status = status.HTTP_202_ACCEPTED)
 
-        # addresses = wallet.addresses.filter(transactions__spent=False)
-        addresses = wallet.addresses.all()
-        for address in addresses:
-            if wallet.wallet_type == 'bch':
-                get_bch_utxos(address.address)
-            elif wallet.wallet_type == 'slp':
-                get_slp_utxos(address.address)
+        rescan_utxos(wallet.wallet_hash, full=True)
         return Response(data={'success': True}, status=status.HTTP_200_OK)
