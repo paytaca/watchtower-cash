@@ -5,6 +5,8 @@ from rest_framework import status
 from django.db.models import Q, F, Func
 from main.tasks import get_slp_utxos, get_bch_utxos
 
+from main.throttles import ScanUtxoThrottle
+
 
 class Round(Func):
     function = "ROUND"
@@ -141,6 +143,7 @@ class UTXO(APIView):
 
 
 class ScanUtxos(APIView):
+    throttle_classes = [ScanUtxoThrottle]
 
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', '')
