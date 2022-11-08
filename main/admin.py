@@ -17,7 +17,8 @@ from main.tasks import (
     send_telegram_message,
     get_token_meta_data,
     get_bch_utxos,
-    get_slp_utxos
+    get_slp_utxos,
+    parse_tx_wallet_histories
 )
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
@@ -96,7 +97,10 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet'
     ]
 
-    actions = ['resend_unacknowledged_transactions']
+    actions = [
+        'resend_unacknowledged_transactions',
+        'save_wallet_history'
+    ]
 
     list_display = [
         'id',
@@ -133,6 +137,10 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                     message = platform[1]
                     chat_id = platform[2]
                     send_telegram_message(message, chat_id)
+
+    def save_wallet_history(self, request, queryset):
+        for tr in queryset:
+            parse_tx_wallet_histories(tr.txid)
 
 
 class RecipientAdmin(admin.ModelAdmin):

@@ -754,7 +754,7 @@ def broadcast_transaction(self, transaction):
             self.retry(countdown=1)
 
 
-@shared_task(bind=True, queue='post_save_record')
+@shared_task(bind=True, queue='wallet_history')
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[]):
     wallet_hash = wallet_handle.split('|')[1]
     parser = HistoryParser(txid, wallet_hash)
@@ -1095,7 +1095,7 @@ def rescan_utxos(wallet_hash):
         elif wallet.wallet_type == 'slp':
             get_slp_utxos(address.address)
 
-@shared_task(queue='post_save_record', max_retries=3)
+@shared_task(queue='wallet_history', max_retries=3)
 def parse_tx_wallet_histories(txid, source=""):
     bchd = BCHDQuery()
     bch_tx = bchd.get_transaction(txid)
