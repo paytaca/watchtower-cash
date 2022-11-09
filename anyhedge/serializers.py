@@ -7,6 +7,7 @@ from .conf import settings as app_settings
 from .models import (
     LongAccount,
     HedgePosition,
+    HedgePositionMetadata,
     HedgeSettlement,
     SettlementService,
     HedgePositionFee,
@@ -317,6 +318,16 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
         send_mutual_redemption_update(instance, action="created")
         return instance
 
+class HedgePositionMetadataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HedgePositionMetadata
+        fields = [
+            "position_taker",
+            "liqiudidty_fee",
+            "network_fee",
+            "total_hedge_funding_sats",
+            "total_long_funding_sats",
+        ]
 
 class HedgePositionSerializer(serializers.ModelSerializer):
     hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
@@ -330,6 +341,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
     fee = HedgePositionFeeSerializer()
     funding = HedgePositionFundingSerializer(read_only=True)
     mutual_redemption = MutualRedemptionSerializer(read_only=True)
+    metadata = HedgePositionMetadataSerializer(read_only=True)
 
     class Meta:
         model = HedgePosition
@@ -363,6 +375,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "fee",
             "funding",
             "mutual_redemption",
+            "metadata",
         ]
         extra_kwargs = {
             "address": {
