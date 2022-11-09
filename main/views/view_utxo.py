@@ -1,9 +1,13 @@
+from django.db.models import Q, F, Func
 from rest_framework.views import APIView
-from main.models import Transaction, Wallet, Token
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Q, F, Func
-from main.tasks import get_slp_utxos, get_bch_utxos
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+
+from main.models import Transaction, Wallet, Token
+from main.tasks import rescan_utxos
+from main.throttles import ScanUtxoThrottle
 
 
 class Round(Func):
@@ -141,15 +145,27 @@ class UTXO(APIView):
 
 
 class ScanUtxos(APIView):
+    throttle_classes = [ScanUtxoThrottle]
 
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="background", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', '')
-        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-        # addresses = wallet.addresses.filter(transactions__spent=False)
-        addresses = wallet.addresses.all()
-        for address in addresses:
-            if wallet.wallet_type == 'bch':
-                get_bch_utxos(address.address)
-            elif wallet.wallet_type == 'slp':
-                get_slp_utxos(address.address)
+        background = request.query_params.get("background", None)
+        if isinstance(background, str) and background.lower() == "false":
+            background = False
+
+        try:
+            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        except Wallet.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if background:
+            task = rescan_utxos.delay(wallet.wallet_hash, full=True)
+            return Response({ "task_id": task.id }, status = status.HTTP_202_ACCEPTED)
+
+        rescan_utxos(wallet.wallet_hash, full=True)
         return Response(data={'success': True}, status=status.HTTP_200_OK)
