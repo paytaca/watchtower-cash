@@ -81,7 +81,16 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
     # return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence, position)
 
 
-def resolve_liquidity_fee(hedge_pos_obj):
+def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
+    """
+    Populates values for models.HedgePositionMetadata of a models.HedgePosition obj. Also does a funding transaction validation update, if data is available
+
+    Parameters
+    ------------
+        hedge_position_obj: models.HedgePosition
+        hard_update: bool
+            If set to true, will update all metadata values even if resolves to "None"
+    """
     bchd = get_bchd_instance()
     if not hedge_pos_obj.funding_tx_hash:
         return
@@ -152,15 +161,31 @@ def resolve_liquidity_fee(hedge_pos_obj):
         maker_sats, taker_input_sats = hedge_sats, long_funding_sats
 
     liqiudidty_fee = taker_input_sats - total_input + maker_sats
+
+    metadata_values = {
+        "position_taker": position_taker,
+        "liqiudidty_fee": liqiudidty_fee,
+        "network_fee": network_fee,
+        "total_hedge_funding_sats": hedge_funding_sats,
+        "total_long_funding_sats": long_funding_sats,
+    }
+
+    if hedge_position_obj.metadata and not hard_update:
+        existing_metadata_obj = hedge_position_obj.metadata
+        if existing_metadata_obj.position_taker:
+            metadata_values["position_taker"] = existing_metadata_obj.position_taker
+        if existing_metadata_obj.liqiudidty_fee:
+            metadata_values["liqiudidty_fee"] = existing_metadata_obj.liqiudidty_fee
+        if existing_metadata_obj.network_fee:
+            metadata_values["network_fee"] = existing_metadata_obj.network_fee
+        if existing_metadata_obj.total_hedge_funding_sats:
+            metadata_values["total_hedge_funding_sats"] = existing_metadata_obj.total_hedge_funding_sats
+        if existing_metadata_obj.total_long_funding_sats:
+            metadata_values["total_long_funding_sats"] = existing_metadata_obj.total_long_funding_sats
+
     metadata_obj, created = HedgePositionMetadata.objects.update_or_create(
         hedge_position=hedge_pos_obj,
-        defaults={
-            "position_taker": position_taker,
-            "liqiudidty_fee": liqiudidty_fee,
-            "network_fee": network_fee,
-            "total_hedge_funding_sats": hedge_funding_sats,
-            "total_long_funding_sats": long_funding_sats,
-        }
+        defaults=default,
     )
 
     return metadata_obj
