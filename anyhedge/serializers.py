@@ -323,7 +323,7 @@ class HedgePositionMetadataSerializer(serializers.ModelSerializer):
         model = HedgePositionMetadata
         fields = [
             "position_taker",
-            "liqiudidty_fee",
+            "liquidity_fee",
             "network_fee",
             "total_hedge_funding_sats",
             "total_long_funding_sats",

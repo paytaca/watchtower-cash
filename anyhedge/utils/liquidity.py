@@ -160,11 +160,11 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
     elif position_taker == "long":
         maker_sats, taker_input_sats = hedge_sats, long_funding_sats
 
-    liqiudidty_fee = taker_input_sats - total_input + maker_sats
+    liquidity_fee = taker_input_sats - total_input + maker_sats
 
     metadata_values = {
         "position_taker": position_taker,
-        "liqiudidty_fee": liqiudidty_fee,
+        "liquidity_fee": liquidity_fee,
         "network_fee": network_fee,
         "total_hedge_funding_sats": hedge_funding_sats,
         "total_long_funding_sats": long_funding_sats,
@@ -174,8 +174,8 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         existing_metadata_obj = hedge_position_obj.metadata
         if existing_metadata_obj.position_taker:
             metadata_values["position_taker"] = existing_metadata_obj.position_taker
-        if existing_metadata_obj.liqiudidty_fee:
-            metadata_values["liqiudidty_fee"] = existing_metadata_obj.liqiudidty_fee
+        if existing_metadata_obj.liquidity_fee:
+            metadata_values["liquidity_fee"] = existing_metadata_obj.liquidity_fee
         if existing_metadata_obj.network_fee:
             metadata_values["network_fee"] = existing_metadata_obj.network_fee
         if existing_metadata_obj.total_hedge_funding_sats:
