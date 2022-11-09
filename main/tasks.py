@@ -1086,9 +1086,13 @@ def rebuild_wallet_history(wallet_hash):
 
 
 @shared_task(queue='rescan_utxos')
-def rescan_utxos(wallet_hash):
+def rescan_utxos(wallet_hash, full=False):
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-    addresses = wallet.addresses.filter(transactions__spent=False)
+    if full:
+        addresses = wallet.addresses.all()
+    else:
+        addresses = wallet.addresses.filter(transactions__spent=False)
+
     for address in addresses:
         if wallet.wallet_type == 'bch':
             get_bch_utxos(address.address)
