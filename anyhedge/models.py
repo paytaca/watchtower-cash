@@ -138,6 +138,20 @@ class HedgePosition(models.Model):
     def funding(self):
         return self.get_hedge_position_funding()
 
+class HedgePositionMetadata(models.Model):
+    POSITION_TAKER_HEDGE = "hedge"
+    POSITION_TAKER_LONG = "long"
+    POSITION_TAKERS = [POSITION_TAKER_HEDGE, POSITION_TAKER_LONG]
+    POSITION_TAKERS = [(pos, pos) for pos in POSITION_TAKERS]
+
+    hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="metadata")
+
+    position_taker = models.CharField(choices=POSITION_TAKERS, null=True, blank=True, max_length=5) # synonymous to what position the user took
+    liqiudidty_fee = models.IntegerField(null=True, blank=True) # with respect to `position_taker`
+    network_fee = models.IntegerField(null=True, blank=True) # total tx fees for funding and settlement
+    total_hedge_funding_sats = models.IntegerField(null=True, blank=True)
+    total_long_funding_sats = models.IntegerField(null=True, blank=True)
+
 
 class HedgeSettlement(models.Model):
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement")

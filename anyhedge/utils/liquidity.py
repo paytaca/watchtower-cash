@@ -5,7 +5,10 @@ from django.db.models.functions import Coalesce, Greatest
 from ..js.runner import AnyhedgeFunctions
 from ..models import (
     LongAccount,
+    HedgePositionFunding,
+    HedgePositionMetadata,
 )
+from .api import get_bchd_instance
 from .websocket import send_long_account_update
 
 
@@ -76,3 +79,88 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
         response["error"] = "Encountered error in funding contract"
         return response
     # return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence, position)
+
+
+def resolve_liquidity_fee(hedge_pos_obj):
+    bchd = get_bchd_instance()
+    if not hedge_pos_obj.funding_tx_hash:
+        return
+
+    # funding tx data
+    tx_data = bchd.get_transaction(hedge_pos_obj.funding_tx_hash, parse_slp=False)
+    total_input =  sum([inp["value"] for inp in tx_data["inputs"]])
+    total_output =  sum([out["value"] for out in tx_data["outputs"]])
+    funding_satoshis = None
+    funding_output = None
+    fee_satoshis = None
+    fee_output = None
+    for output in tx_data["outputs"]:
+        if hedge_pos_obj.address == output["address"]:
+            funding_satoshis = output["value"]
+            funding_output = output["index"]
+        elif hedge_pos_obj.fee and hedge_pos_obj.fee.address == output["address"]:
+            fee_satoshis = output["value"]
+            fee_output = output["index"]
+
+    # not really necessary functionality
+    # validate contract funding_tx_hash since the data is already available anyway
+    if funding_output is not None and funding_satoshis is not None:
+        defaults={
+            "funding_output": funding_output,
+            "funding_satoshis": funding_satoshis,
+        }
+        if fee_output is not None and fee_satoshis is not None:
+            defaults["fee_output"] = fee_output
+            defaults["fee_satoshis"] = fee_satoshis
+
+        HedgePositionFunding.objects.update_or_create(tx_hash=hedge_pos_obj.funding_tx_hash, defaults=defaults)
+        hedge_pos_obj.funding_tx_hash_validated = True
+        hedge_pos_obj.save()
+
+    hedge_sats = hedge_pos_obj.satoshis
+    long_sats = hedge_pos_obj.long_input_sats
+    total_payout_sats = hedge_sats + long_sats
+    network_fee = total_input - total_output
+    if funding_satoshis is not None:
+        network_fee += funding_satoshis - total_payout_sats
+
+    position_taker = None
+    if hedge_pos_obj.hedge_wallet_hash and not hedge_pos_obj.long_wallet_hash:
+        position_taker = "hedge"
+    elif not hedge_pos_obj.hedge_wallet_hash and hedge_pos_obj.long_wallet_hash:
+        position_taker = "long"
+
+    hedge_funding_sats = None
+    long_funding_sats = None
+    if len(tx_data["inputs"]) == 2:
+        # guessing which of 2 inputs is from the hedge/long
+        input_0_val = tx_data["inputs"][0]["value"]
+        input_1_val = tx_data["inputs"][1]["value"]
+        hedge_diff = abs(input_0_val-hedge_sats)
+        long_diff = abs(input_0_val-long_sats)
+        if long_diff > hedge_diff:
+            hedge_funding_sats = input_0_val
+            long_funding_sats = input_1_val
+        else:
+            hedge_funding_sats = input_1_val
+            long_funding_sats = input_0_val
+
+    maker_sats, taker_input_sats = None, None
+    if position_taker == "hedge":
+        maker_sats, taker_input_sats = long_sats, hedge_funding_sats
+    elif position_taker == "long":
+        maker_sats, taker_input_sats = hedge_sats, long_funding_sats
+
+    liqiudidty_fee = taker_input_sats - total_input + maker_sats
+    metadata_obj, created = HedgePositionMetadata.objects.update_or_create(
+        hedge_position=hedge_pos_obj,
+        defaults={
+            "position_taker": position_taker,
+            "liqiudidty_fee": liqiudidty_fee,
+            "network_fee": network_fee,
+            "total_hedge_funding_sats": hedge_funding_sats,
+            "total_long_funding_sats": long_funding_sats,
+        }
+    )
+
+    return metadata_obj
