@@ -170,8 +170,8 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         "total_long_funding_sats": long_funding_sats,
     }
 
-    if hedge_position_obj.metadata and not hard_update:
-        existing_metadata_obj = hedge_position_obj.metadata
+    if hedge_pos_obj.metadata and not hard_update:
+        existing_metadata_obj = hedge_pos_obj.metadata
         if existing_metadata_obj.position_taker:
             metadata_values["position_taker"] = existing_metadata_obj.position_taker
         if existing_metadata_obj.liquidity_fee:
@@ -185,7 +185,7 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
 
     metadata_obj, created = HedgePositionMetadata.objects.update_or_create(
         hedge_position=hedge_pos_obj,
-        defaults=default,
+        defaults=metadata_values,
     )
 
     return metadata_obj
