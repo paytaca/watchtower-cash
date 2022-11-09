@@ -42,7 +42,10 @@ from .utils.websocket import (
     send_funding_tx_update,
     send_mutual_redemption_update,
 )
-from .tasks import validate_contract_funding
+from .tasks import (
+    validate_contract_funding,
+    parse_contract_liquidity_fee,
+)
 
 
 class TimestampField(serializers.IntegerField):
@@ -341,7 +344,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
     fee = HedgePositionFeeSerializer()
     funding = HedgePositionFundingSerializer(read_only=True)
     mutual_redemption = MutualRedemptionSerializer(read_only=True)
-    metadata = HedgePositionMetadataSerializer(read_only=True)
+    metadata = HedgePositionMetadataSerializer()
 
     class Meta:
         model = HedgePosition
@@ -448,6 +451,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         fee_data = validated_data.pop("fee", None)
         hedge_funding_proposal_data = validated_data.pop("hedge_funding_proposal", None)
         long_funding_proposal_data = validated_data.pop("long_funding_proposal", None)
+        metadata_data = validated_data.pop("metadata", None)
 
         instance = super().create(validated_data)
         save_instance = False
@@ -469,6 +473,10 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             long_funding_proposal = HedgeFundingProposal.objects.create(**long_funding_proposal_data)
             instance.long_funding_proposal = long_funding_proposal
             save_instance = True
+
+        if metadata_data is not None:
+            metadata_data["hedge_position"] = instance 
+            HedgePositionMetadata.objects.create(**metadata_data)
 
         if save_instance:
             instance.save()
@@ -734,6 +742,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
     long_pubkey = serializers.CharField(required=False)
     long_address_path = serializers.CharField(required=False)
     oracle_message_sequence = serializers.IntegerField()
+    liquidity_fee = serializers.IntegerField(required=False)
 
     settlement_service = SettlementServiceSerializer() # do i need this here or js script will provide ?
     funding_proposal = HedgeFundingProposalSerializer()
@@ -766,6 +775,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         long_address_path = validated_data.get("long_address_path", None)
 
         oracle_message_sequence = validated_data["oracle_message_sequence"]
+        liquidity_fee = validated_data.get("liquidity_fee", None)
         settlement_service = validated_data["settlement_service"]
         funding_proposal = validated_data["funding_proposal"]
 
@@ -816,18 +826,26 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             "funding_tx_hash": "",
             "settlement_service": settlement_service,
             "check_settlement_service": False,
+            "metadata": {
+                "position_taker": position,
+            },
         }
 
         if position == "hedge":
             validated_data["hedge_funding_proposal"] = funding_proposal
+            hedge_position_data["metadata"]["total_hedge_funding_sats"] = funding_proposal["tx_value"]
         elif position == "long":
             validated_data["long_funding_proposal"] = funding_proposal
+            hedge_position_data["metadata"]["total_long_funding_sats"] = funding_proposal["tx_value"]
 
         if contract_data.get("fee", None):
             hedge_position_data["fee"] = {
                 "address": contract_data["fee"]["address"],
                 "satoshis": contract_data["fee"]["satoshis"],
             }
+
+        if liquidity_fee is not None:
+            hedge_position_data["metadata"]["liquidity_fee"] = liquidity_fee
 
         hedge_position_serializer = HedgePositionSerializer(data=hedge_position_data)
         hedge_position_serializer.is_valid(raise_exception=True)
@@ -856,6 +874,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         hedge_position_obj.funding_tx_hash = funding_response["fundingTransactionHash"]
         hedge_position_obj.save()
 
+        parse_contract_liquidity_fee.delay(hedge_position_obj.address, hard_update=False)
         return hedge_position_obj
 
 

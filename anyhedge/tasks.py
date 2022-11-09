@@ -514,6 +514,21 @@ def redeem_contract(contract_address):
     response["tx_hash"] = mutual_redemption_response
     return response
 
+
+@shared_task(queue=_QUEUE_FUNDING_PARSER, time_limit=_TASK_TIME_LIMIT)
+def parse_contract_liquidity_fee(contract_address, hard_update=False):
+    response = { "success": False, "error": None }
+    hedge_position_obj = HedgePosition.objects.get(address=contract_address)
+    if not hedge_position_obj.funding_tx_hash:
+        response["success"] = False
+        response["error"] = "No funding transaction"
+        return response
+
+    metadata_obj = resolve_liquidity_fee(hedge_position_obj, hard_update=hard_update)
+    if metadata_obj:
+        response["success"] = True
+    return response
+
 @shared_task(queue=_QUEUE_FUNDING_PARSER, time_limit=_TASK_TIME_LIMIT)
 def parse_contracts_liquidity_fee():
     NO_CONTRACTS_TO_PARSE = 5 
