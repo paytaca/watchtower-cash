@@ -21,6 +21,7 @@ from .utils.funding import (
     get_tx_hash,
     validate_funding_transaction,
 )
+from .utils.liquidity import resolve_liquidity_fee
 from .utils.price_oracle import (
     get_price_messages,
     parse_oracle_message,
@@ -43,6 +44,7 @@ from .utils.websocket import (
 _TASK_TIME_LIMIT = 300 # 5 minutes
 _QUEUE_PRICE_ORACLE = "anyhedge__price_oracle"
 _QUEUE_SETTLEMENT_UPDATE = "anyhedge__settlement_updates"
+_QUEUE_FUNDING_PARSER = "anyhedge__funding_parser"
 
 
 LOGGER = logging.getLogger(__name__)
@@ -426,7 +428,7 @@ def complete_contract_funding(contract_address):
         return response
 
 
-@shared_task(queue=_QUEUE_SETTLEMENT_UPDATE, time_limit=_TASK_TIME_LIMIT)
+@shared_task(queue=_QUEUE_FUNDING_PARSER, time_limit=_TASK_TIME_LIMIT)
 def validate_contract_funding(contract_address, save=True):
     LOGGER.info(f"Attempting to validate funding for contract({contract_address})")
     response = { "success": False, "error": None }
@@ -511,3 +513,43 @@ def redeem_contract(contract_address):
     response["success"] = True
     response["tx_hash"] = mutual_redemption_response
     return response
+
+
+@shared_task(queue=_QUEUE_FUNDING_PARSER, time_limit=_TASK_TIME_LIMIT)
+def parse_contract_liquidity_fee(contract_address, hard_update=False):
+    response = { "success": False, "error": None }
+    hedge_position_obj = HedgePosition.objects.get(address=contract_address)
+    if not hedge_position_obj.funding_tx_hash:
+        response["success"] = False
+        response["error"] = "No funding transaction"
+        return response
+
+    metadata_obj = resolve_liquidity_fee(hedge_position_obj, hard_update=hard_update)
+    if metadata_obj:
+        response["success"] = True
+    return response
+
+@shared_task(queue=_QUEUE_FUNDING_PARSER, time_limit=_TASK_TIME_LIMIT)
+def parse_contracts_liquidity_fee():
+    NO_CONTRACTS_TO_PARSE = 5 
+    hedge_position_objects = HedgePosition.objects.annotate(
+        funding_tx_len=models.functions.Coalesce(
+            models.functions.Length("funding_tx_hash"), models.Value(0)
+        ),
+        hedge_wallet_hash_len=models.functions.Length("hedge_wallet_hash"),
+        long_wallet_hash_len=models.functions.Length("long_wallet_hash"),
+    ).filter(
+        models.Q(hedge_wallet_hash_len__gt=0, long_wallet_hash_len=0) | models.Q(hedge_wallet_hash_len=0, long_wallet_hash_len__gt=0),
+        funding_tx_len__gt=0,
+        metadata__isnull=True,
+    )[:NO_CONTRACTS_TO_PARSE]
+
+    contracts_parsed = []
+    for hedge_position_obj in hedge_position_objects:
+        try:
+            resolve_liquidity_fee(hedge_position_obj)
+            contracts_parsed.append(hedge_position_obj.address)
+        except Exception:
+            pass
+
+    return contracts_parsed

@@ -222,6 +222,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'anyhedge.tasks.update_contracts_for_liquidation',
         'schedule': 120,
     },
+    'parse_contracts_liquidity_fee': {
+        'task': 'anyhedge.tasks.parse_contracts_liquidity_fee',
+        'schedule': 5 * 60,
+    },
     'get_latest_block': {
         'task': 'main.tasks.get_latest_block',
         'schedule': 5
