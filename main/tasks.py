@@ -1180,3 +1180,22 @@ def parse_tx_wallet_histories(txid, source=""):
         )
 
     return wallet_handles
+
+
+@shared_task(queue='wallet_history', max_retries=3)
+def find_wallet_history_missing_tx_timestamps():
+    NO_TXIDS_TO_PARSE = 15
+    txids = WalletHistory.objects.filter(
+        tx_timestamp__isnull=True,
+    ).order_by('-date_created').values_list('txid', flat=True).distinct()[:NO_TXIDS_TO_PARSE]
+
+    bchd = BCHDQuery()
+    txids_updated = []
+    for txid in txids:
+        tx = bchd.get_transaction(txid)
+        _tx_timestamp = tx["timestamp"]
+        tx_timestamp = datetime.fromtimestamp(_tx_timestamp).replace(tzinfo=pytz.UTC)
+        WalletHistory.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
+        Transaction.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
+        txids_updated.append([txid, _tx_timestamp])
+    return txids_updated

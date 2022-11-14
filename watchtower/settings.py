@@ -234,6 +234,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.manage_blocks',
         'schedule': 7
     },
+    'find_wallet_history_missing_tx_timestamps': {
+        'task': 'main.tasks.find_wallet_history_missing_tx_timestamps',
+        'schedule': 60 * 2,
+    },
     'preload_smartbch_blocks': {
         'task': 'smartbch.tasks.preload_new_blocks_task',
         'schedule': 20,
