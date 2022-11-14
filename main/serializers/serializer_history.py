@@ -21,6 +21,7 @@ class WalletHistorySerializer(serializers.ModelSerializer):
             "senders",
             "recipients",
             "date_created",
+            "tx_timestamp",
         ]
 
 

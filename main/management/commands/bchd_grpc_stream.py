@@ -1,3 +1,4 @@
+from django.utils import timezone as tz
 from django.core.management.base import BaseCommand
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
@@ -42,6 +43,7 @@ def run():
         req.subscribe.CopyFrom(tx_filter)
 
         for notification in stub.SubscribeTransactions(req):
+            now = tz.now().timestamp()
             tx = notification.unconfirmed_transaction.transaction
             tx_hash = bytearray(tx.hash[::-1]).hex()
 
@@ -96,7 +98,7 @@ def run():
                         None,
                         output.index
                     )
-                    obj_id, created = save_record(*args, inputs=inputs_data)
+                    obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
                     has_updated_output = has_updated_output or created
                     if created:
                         third_parties = client_acknowledgement(obj_id)

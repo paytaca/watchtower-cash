@@ -64,6 +64,7 @@ class BCHDQuery(object):
         tx_hash = bytearray(txn.hash[::-1]).hex()
         transaction = {
             'txid': tx_hash,
+            'timestamp': txn.timestamp,
             'valid': True
         }
         total_input_sats = 0

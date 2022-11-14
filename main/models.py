@@ -228,6 +228,7 @@ class Transaction(PostgresModel):
         null=True,
         blank=True
     )
+    tx_timestamp = models.DateTimeField(null=True, blank=True)
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -316,6 +317,7 @@ class WalletHistory(PostgresModel):
         blank=True
     )
     tx_fee = models.FloatField(null=True, blank=True)
+    tx_timestamp = models.DateTimeField(null=True,blank=True)
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:

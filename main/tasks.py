@@ -1,5 +1,8 @@
 import logging, json, requests
+import pytz
+from datetime import datetime
 from urllib.parse import urlparse
+from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
@@ -186,6 +189,7 @@ def save_record(
     spent_txids=[],
     inputs=None,
     spending_txid=None,
+    tx_timestamp=None,
     force_create=False,
 ):
     """
@@ -196,6 +200,7 @@ def save_record(
         source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
         blockheight          : an optional argument indicating the block height number of a transaction.
         index                : used to make sure that each record is unique based on slp/bch address in a given transaction_id
+        tx_timestamp         : unix timestamp of transaction
         inputs               : an array of dicts containing data on the transaction's inputs
                                example: {
                                     "index": 0,
@@ -276,6 +281,9 @@ def save_record(
             if transaction_obj.source != source:
                 transaction_obj.source = source
 
+            if tx_timestamp:
+                transaction_obj.tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
+
         except IntegrityError as exc:
             LOGGER.error('ERROR in saving txid: ' + transactionid)
             LOGGER.error(str(exc))
@@ -307,6 +315,7 @@ def save_record(
                     source,
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
+                    tx_timestamp=tx_timestamp,
                     force_create=True,
                 )
 
@@ -331,6 +340,7 @@ def bchdquery_transaction(txid, block_id, alert=True):
                 amount,
                 source,
                 blockheightid=block_id,
+                tx_timestamp=transaction.timestamp,
                 index=index
             )
             if created and alert:
@@ -352,6 +362,7 @@ def bchdquery_transaction(txid, block_id, alert=True):
                 amount,
                 source,
                 blockheightid=block_id,
+                tx_timestamp=transaction.timestamp,
                 index=index
             )            
             if created and alert:
@@ -771,6 +782,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             address__address__startswith='simpleledger:'
         )
     txn = txns.last()
+    tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
     if txn:
         if change_address:
             recipients = [(x, y) for x, y in recipients if x != change_address]
@@ -791,6 +803,10 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     senders=senders,
                     recipients=recipients
                 )
+            if tx_timestamp:
+                history_check.update(
+                    tx_timestamp=tx_timestamp,
+                )
         else:
             history = WalletHistory(
                 wallet=wallet,
@@ -801,7 +817,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 tx_fee=tx_fee,
                 senders=senders,
                 recipients=recipients,
-                date_created=txn.date_created
+                date_created=txn.date_created,
+                tx_timestamp=tx_timestamp,
             )
             history.save()
 
@@ -885,6 +902,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         self.retry(countdown=5)
         return
     tx_fee = bch_tx['tx_fee']
+    tx_timestamp = bch_tx['timestamp']
+
+    # use batch update to not trigger the post save signal and potentially create an infinite loop
+    parsed_tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
+    Transaction.objects.filter(txid=txid, tx_timestamp__isnull=True).update(tx_timestamp=parsed_tx_timestamp)
     if txn_address.wallet:
         if txn_address.wallet.wallet_type == 'bch':
             senders['bch'] = [(i['address'], i['value']) for i in bch_tx['inputs']]
@@ -951,7 +973,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         blockheight_id,
                         tx_output['index']
                     )
-                    obj_id, created = save_record(*args, spent_txids=spent_txids)
+                    obj_id, created = save_record(*args, spent_txids=spent_txids, tx_timestamp=tx_timestamp)
                     if created:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -1012,7 +1034,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                 blockheight_id,
                 tx_output['index']
             )
-            obj_id, created = save_record(*args, spent_txids=spent_txids)
+            obj_id, created = save_record(*args, spent_txids=spent_txids, tx_timestamp=bch_tx['timestamp'])
             if created:
                 third_parties = client_acknowledgement(obj_id)
                 for platform in third_parties:
@@ -1105,6 +1127,7 @@ def parse_tx_wallet_histories(txid, source=""):
     bch_tx = bchd.get_transaction(txid)
 
     tx_fee = bch_tx['tx_fee']
+    tx_timestamp = bch_tx['timestamp']
 
     # parse inputs and outputs to desired structure
     inputs = [(i['address'], i['value']) for i in bch_tx['inputs']]
@@ -1139,6 +1162,7 @@ def parse_tx_wallet_histories(txid, source=""):
             source,
             None,
             index=output_index,
+            tx_timestamp=tx_timestamp,
             force_create=True
         )
 
