@@ -325,7 +325,7 @@ class WalletHistory(PostgresModel):
     class Meta:
         verbose_name = 'Wallet history'
         verbose_name_plural = 'Wallet histories'
-        ordering = ['-date_created']
+        ordering = ['-tx_timestamp', '-date_created']
         unique_together = [
             'wallet',
             'txid'
