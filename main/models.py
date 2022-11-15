@@ -320,6 +320,8 @@ class WalletHistory(PostgresModel):
     tx_timestamp = models.DateTimeField(null=True,blank=True)
     date_created = models.DateTimeField(default=timezone.now)
 
+    usd_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
     class Meta:
         verbose_name = 'Wallet history'
         verbose_name_plural = 'Wallet histories'
@@ -363,3 +365,14 @@ class WalletNftToken(PostgresModel):
 
     class Meta:
        ordering = ['-date_acquired']
+
+
+class AssetPriceLog(models.Model):
+    """
+     Prices are asset per BCH
+    """
+    currency = models.CharField(max_length=5, db_index=True)
+    timestamp = models.DateTimeField(db_index=True)
+    source = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+
+    price_value = models.DecimalField(max_digits=15, decimal_places=3)

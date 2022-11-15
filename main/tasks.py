@@ -15,8 +15,10 @@ from main.models import (
     Address,
     Wallet,
     WalletHistory,
-    WalletNftToken
+    WalletNftToken,
+    AssetPriceLog,
 )
+from main.utils.market_price import fetch_currency_value_for_timestamp
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils.wallet import HistoryParser
 from django.db.utils import IntegrityError
@@ -807,6 +809,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 history_check.update(
                     tx_timestamp=tx_timestamp,
                 )
+                resolve_wallet_history_usd_values.delay(txid=txid)
         else:
             history = WalletHistory(
                 wallet=wallet,
@@ -821,6 +824,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 tx_timestamp=tx_timestamp,
             )
             history.save()
+            resolve_wallet_history_usd_values.delay(txid=txid)
 
             if txn.token.token_type == 65:
                 if record_type == 'incoming':
@@ -1198,4 +1202,40 @@ def find_wallet_history_missing_tx_timestamps():
         WalletHistory.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
         Transaction.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
         txids_updated.append([txid, _tx_timestamp])
+    return txids_updated
+
+@shared_task(queue='wallet_history', max_retries=3)
+def resolve_wallet_history_usd_values(txid=None):
+    CURRENCY = "USD"
+    queryset = WalletHistory.objects.filter(
+        usd_price__isnull=True,
+        tx_timestamp__isnull=False,
+    )
+    if txid:
+        queryset = queryset.filter(txid = txid)
+
+    timestamps = queryset.order_by(
+        "-tx_timestamp",
+    ).values_list('tx_timestamp', flat=True).distinct()[:15]
+
+    txids_updated = []
+    for timestamp in timestamps:
+        price_value_data = fetch_currency_value_for_timestamp(timestamp, currency=CURRENCY)
+        if not price_value_data:
+            continue
+
+        (price_value, actual_timestamp, price_data_source) = price_value_data
+        wallet_histories = WalletHistory.objects.filter(tx_timestamp=timestamp)
+        wallet_histories.update(usd_price=price_value)
+        txids = list(wallet_histories.values_list("txid", flat=True).distinct())
+        txids_updated = txids_updated + txids
+        AssetPriceLog.objects.update_or_create(
+            currency=CURRENCY,
+            timestamp=actual_timestamp,
+            source=price_data_source,
+            defaults={
+                "price_value": price_value,
+            }
+        )
+
     return txids_updated
