@@ -1,3 +1,4 @@
+import json
 import requests
 from decimal import Decimal
 from datetime import timedelta 
@@ -5,12 +6,6 @@ from django.db import models
 from django.apps import apps
 from main.models import AssetPriceLog
 
-
-def fetch_usd_value(timestamps):
-    currency="USD"
-    price_values = []
-    for timestamp in timestamps:
-        data = fetch_currency_value_for_timestamp(timestamp, currency=currency)
 
 def fetch_currency_value_for_timestamp(timestamp, currency="USD"):
     """
@@ -58,22 +53,5 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD"):
             return (price_value, closest.message_timestamp, f"anyhedge:{closest.pubkey}")
     except LookupError:
         pass
-
-
-    coingecko_resp = requests.get(
-        "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
-        "vs_currency=usd" + \
-        f"&from={timestamp_range_low.timestamp()}" + \
-        f"&to={timestamp_range_high.timestamp()}"
-    )
-    coingecko_prices_list = coingecko_resp.json().get("prices", [])
-    if isinstance(coingecko_prices_list, list):
-        sort_element_value = lambda price: abs((timestamp.timestamp() * 1000 - price[0]))
-        # sorted price list by timestamp difference from the timestamp returned by data
-        sorted_price_list = sorted(coingecko_prices_list, key=sort_element_value)
-        if len(sorted_price_list):
-            closest = sorted_price_list[0]
-            closest_timestamp = datetime.fromtimestamp(closest[0]/1000).replace(tzinfo=pytz.UTC)
-            return (Decimal(closest[1]), closest_timestamp, "coingecko")
 
     return None

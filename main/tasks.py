@@ -1,5 +1,6 @@
 import logging, json, requests
 import pytz
+from decimal import Decimal
 from datetime import datetime
 from urllib.parse import urlparse
 from django.db import models
@@ -851,6 +852,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
+    LOGGER.info(f"TX POST SAVE TASK: {address} | {transaction_id} | {blockheight_id}")
     transaction = Transaction.objects.get(id=transaction_id)
     txid = transaction.txid
     blockheight = None
@@ -1068,6 +1070,8 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     recipients['bch']
                 )
 
+    return list(set(wallets))
+
 
 @shared_task(queue='celery_rebuild_history')
 def rebuild_wallet_history(wallet_hash):
@@ -1239,3 +1243,43 @@ def resolve_wallet_history_usd_values(txid=None):
         )
 
     return txids_updated
+
+@shared_task(queue='wallet_history', max_retries=3)
+def fetch_latest_usd_price():
+    CURRENCY = "USD"
+    to_timestamp = timezone.now()
+    from_timestamp = to_timestamp - timezone.timedelta(minutes=10)
+    coingecko_resp = requests.get(
+        "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
+        f"vs_currency={CURRENCY}" + \
+        f"&from={from_timestamp.timestamp()}" + \
+        f"&to={to_timestamp.timestamp()}"
+    )
+
+    coingecko_prices_list = None
+    try:
+        response_data = coingecko_resp.json()
+        if isinstance(response_data, dict) and "prices" in response_data:
+            coingecko_prices_list = response_data.get("prices", [])
+    except json.decoder.JSONDecodeError:
+        pass
+
+    asset_prices = []
+    for coingecko_price_data in coingecko_prices_list:
+        timestamp = coingecko_price_data[0]/1000
+        timestamp_obj = timezone.datetime.fromtimestamp(timestamp).replace(tzinfo=pytz.UTC)
+        price_value = Decimal(coingecko_price_data[1])
+        instance, created = AssetPriceLog.objects.update_or_create(
+            currency=CURRENCY,
+            timestamp=timestamp_obj,
+            source="coingecko",
+            defaults={ "price_value": price_value }
+        )
+        asset_prices.append({
+            "currency": instance.currency,
+            "timestamp": instance.timestamp,
+            "source": instance.source,
+            "price_value": instance.price_value,
+        })
+
+    return asset_prices

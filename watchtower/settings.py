@@ -242,6 +242,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.resolve_wallet_history_usd_values',
         'schedule': 60 * 2,
     },
+    'fetch_latest_usd_price': {
+        'task': 'main.tasks.fetch_latest_usd_price',
+        'schedule': 60 * 2,
+    },
     'preload_smartbch_blocks': {
         'task': 'smartbch.tasks.preload_new_blocks_task',
         'schedule': 20,
