@@ -309,7 +309,6 @@ def save_record(
                     spending_txid=transaction_obj.txid,
                     force_create=True,
                 )
-
         return transaction_obj.id, transaction_created
 
 
