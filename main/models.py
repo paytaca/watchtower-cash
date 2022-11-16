@@ -369,9 +369,10 @@ class WalletNftToken(PostgresModel):
 
 class AssetPriceLog(models.Model):
     """
-     Prices are asset per BCH
+        Price in currency / relative_currency (e.g. USD/BCH)
     """
     currency = models.CharField(max_length=5, db_index=True)
+    relative_currency = models.CharField(max_length=5, db_index=True)
     timestamp = models.DateTimeField(db_index=True)
     source = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 

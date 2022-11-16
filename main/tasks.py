@@ -1211,7 +1211,9 @@ def find_wallet_history_missing_tx_timestamps():
 @shared_task(queue='wallet_history', max_retries=3)
 def resolve_wallet_history_usd_values(txid=None):
     CURRENCY = "USD"
+    RELATIVE_CURRENCY = "BCH"
     queryset = WalletHistory.objects.filter(
+        token__name="bch",
         usd_price__isnull=True,
         tx_timestamp__isnull=False,
     )
@@ -1229,12 +1231,16 @@ def resolve_wallet_history_usd_values(txid=None):
             continue
 
         (price_value, actual_timestamp, price_data_source) = price_value_data
-        wallet_histories = WalletHistory.objects.filter(tx_timestamp=timestamp)
+        wallet_histories = WalletHistory.objects.filter(
+            token__name="bch",
+            tx_timestamp=timestamp,
+        )
         wallet_histories.update(usd_price=price_value)
         txids = list(wallet_histories.values_list("txid", flat=True).distinct())
         txids_updated = txids_updated + txids
         AssetPriceLog.objects.update_or_create(
             currency=CURRENCY,
+            relative_currency=RELATIVE_CURRENCY,
             timestamp=actual_timestamp,
             source=price_data_source,
             defaults={
@@ -1247,6 +1253,7 @@ def resolve_wallet_history_usd_values(txid=None):
 @shared_task(queue='wallet_history', max_retries=3)
 def fetch_latest_usd_price():
     CURRENCY = "USD"
+    RELATIVE_CURRENCY = "BCH"
     to_timestamp = timezone.now()
     from_timestamp = to_timestamp - timezone.timedelta(minutes=10)
     coingecko_resp = requests.get(
@@ -1271,6 +1278,7 @@ def fetch_latest_usd_price():
         price_value = Decimal(coingecko_price_data[1])
         instance, created = AssetPriceLog.objects.update_or_create(
             currency=CURRENCY,
+            relative_currency=RELATIVE_CURRENCY,
             timestamp=timestamp_obj,
             source="coingecko",
             defaults={ "price_value": price_value }
