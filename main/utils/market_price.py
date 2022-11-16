@@ -6,6 +6,8 @@ from django.db import models
 from django.apps import apps
 from main.models import AssetPriceLog
 
+from anyhedge.utils.price_oracle import (get_price_messages, save_price_oracle_message)
+
 
 def fetch_currency_value_for_timestamp(timestamp, currency="USD"):
     """
@@ -51,6 +53,35 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD"):
             asset_decimals = oracles_decimals_map[closest.pubkey]
             price_value = Decimal(closest.price_value) / 10 ** asset_decimals
             return (price_value, closest.message_timestamp, f"anyhedge:{closest.pubkey}")
+    except LookupError:
+        pass
+
+    try:
+        Oracle = apps.get_model("anyhedge", "Oracle")
+        oracles = Oracle.objects.filter(asset_currency=currency)
+        for oracle in oracles:
+            price_messages = get_price_messages(
+                oracle_pubkey=oracle.pubkey,
+                relay=oracle.relay or None,
+                port=oracle.port or None,
+                min_message_timestamp=timestamp_range_low.timestamp(),
+                max_message_timestamp=timestamp_range_high.timestamp(),
+            )
+            closest = None
+            for price_msg in price_messages:
+                price_msg_obj = save_price_oracle_message(oracle.pubkey, price_msg)
+                if closest is None:
+                    closest = price_msg_obj
+                else:
+                    closest_diff = abs(closest.message_timestamp - timestamp)
+                    obj_diff = abs(price_msg_obj - timestamp)
+                    if obj_diff < closest_diff:
+                        closest = price_msg_obj
+
+            if closest:
+                asset_decimals = oracle.asset_decimals
+                price_value = Decimal(closest.price_value) / 10 ** asset_decimals
+                return (price_value, closest.message_timestamp, f"anyhedge-oracle:{closest.pubkey}")
     except LookupError:
         pass
 
