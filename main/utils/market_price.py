@@ -70,13 +70,13 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD"):
             closest = None
             for price_msg in price_messages:
                 price_msg_obj = save_price_oracle_message(oracle.pubkey, price_msg)
-                obj_diff = abs(price_msg_obj - timestamp)
-                if closest is None and obj_diff < timedelta(seconds=30):
-                    closest = price_msg_obj
-                else:
+                obj_diff = abs(price_msg_obj.message_timestamp - timestamp)
+                if closest is not None:
                     closest_diff = abs(closest.message_timestamp - timestamp)
                     if obj_diff < closest_diff:
                         closest = price_msg_obj
+                elif obj_diff < timedelta(seconds=30):
+                    closest = price_msg_obj
 
             if closest:
                 asset_decimals = oracle.asset_decimals
