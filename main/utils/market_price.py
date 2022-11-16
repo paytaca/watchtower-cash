@@ -64,17 +64,17 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD"):
                 oracle_pubkey=oracle.pubkey,
                 relay=oracle.relay or None,
                 port=oracle.port or None,
-                min_message_timestamp=timestamp_range_low.timestamp(),
-                max_message_timestamp=timestamp_range_high.timestamp(),
+                min_message_timestamp=int(timestamp_range_low.timestamp()),
+                max_message_timestamp=int(timestamp_range_high.timestamp()),
             )
             closest = None
             for price_msg in price_messages:
                 price_msg_obj = save_price_oracle_message(oracle.pubkey, price_msg)
-                if closest is None:
+                obj_diff = abs(price_msg_obj - timestamp)
+                if closest is None and obj_diff < timedelta(seconds=30):
                     closest = price_msg_obj
                 else:
                     closest_diff = abs(closest.message_timestamp - timestamp)
-                    obj_diff = abs(price_msg_obj - timestamp)
                     if obj_diff < closest_diff:
                         closest = price_msg_obj
 
