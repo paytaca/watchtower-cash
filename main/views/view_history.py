@@ -56,6 +56,8 @@ class WalletHistoryView(APIView):
             )
 
         wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
+        
         if wallet.wallet_type == 'slp':
             qs = qs.filter(token__tokenid=token_id)
             history = qs.annotate(

@@ -767,7 +767,7 @@ def broadcast_transaction(self, transaction):
             self.retry(countdown=1)
 
 
-@shared_task(bind=True, queue='wallet_history')
+@shared_task(bind=True, queue='wallet_history_1')
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[]):
     wallet_hash = wallet_handle.split('|')[1]
     parser = HistoryParser(txid, wallet_hash)
@@ -1072,48 +1072,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
     return list(set(wallets))
 
 
-@shared_task(queue='celery_rebuild_history')
-def rebuild_wallet_history(wallet_hash):
-    addresses = Address.objects.filter(wallet__wallet_hash=wallet_hash)
-    for address in addresses:
-        for transaction in address.transactions.all():
-            history_check = WalletHistory.objects.filter(
-                txid=transaction.txid,
-                recipients__contains=[address.address]
-            )
-            if not history_check.exists():
-                transaction.save()
-
-            if transaction.token.token_type == 65:
-                wallet_nft_token_check = WalletNftToken.objects.filter(
-                    wallet__wallet_hash=wallet_hash,
-                    token=transaction.token,
-                    acquisition_transaction=transaction
-                )
-                if wallet_nft_token_check.exists():
-                    wallet_nft_token = wallet_nft_token_check.last()
-                else:
-                    wallet_nft_token = WalletNftToken(
-                        wallet=Wallet.objects.get(wallet_hash=wallet_hash),
-                        token=transaction.token,
-                        date_acquired=transaction.date_created,
-                        acquisition_transaction=transaction
-                    )
-                    wallet_nft_token.save()
-
-                if  wallet_nft_token.date_dispensed is None and transaction.spent:
-                    try:
-                        spending_tx = Transaction.objects.get(
-                            txid=transaction.spending_txid,
-                            token=transaction.token
-                        )
-                        wallet_nft_token.date_dispensed = spending_tx.date_created
-                        wallet_nft_token.dispensation_transaction = spending_tx
-                        wallet_nft_token.save()
-                    except Transaction.DoesNotExist:
-                        pass
-
-
 @shared_task(queue='rescan_utxos')
 def rescan_utxos(wallet_hash, full=False):
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
@@ -1128,7 +1086,8 @@ def rescan_utxos(wallet_hash, full=False):
         elif wallet.wallet_type == 'slp':
             get_slp_utxos(address.address)
 
-@shared_task(queue='wallet_history', max_retries=3)
+
+@shared_task(queue='wallet_history_1', max_retries=3)
 def parse_tx_wallet_histories(txid, source=""):
     bchd = BCHDQuery()
     bch_tx = bchd.get_transaction(txid)
@@ -1189,7 +1148,7 @@ def parse_tx_wallet_histories(txid, source=""):
     return wallet_handles
 
 
-@shared_task(queue='wallet_history', max_retries=3)
+@shared_task(queue='wallet_history_2', max_retries=3)
 def find_wallet_history_missing_tx_timestamps():
     NO_TXIDS_TO_PARSE = 15
     txids = WalletHistory.objects.filter(
@@ -1207,7 +1166,8 @@ def find_wallet_history_missing_tx_timestamps():
         txids_updated.append([txid, _tx_timestamp])
     return txids_updated
 
-@shared_task(queue='wallet_history', max_retries=3)
+
+@shared_task(queue='wallet_history_2', max_retries=3)
 def resolve_wallet_history_usd_values(txid=None):
     CURRENCY = "USD"
     RELATIVE_CURRENCY = "BCH"
@@ -1249,7 +1209,7 @@ def resolve_wallet_history_usd_values(txid=None):
 
     return txids_updated
 
-@shared_task(queue='wallet_history', max_retries=3)
+@shared_task(queue='wallet_history_2', max_retries=3)
 def fetch_latest_usd_price():
     CURRENCY = "USD"
     RELATIVE_CURRENCY = "BCH"
