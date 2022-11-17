@@ -70,7 +70,9 @@ class WalletHistoryView(APIView):
                 'tx_fee',
                 'senders',
                 'recipients',
-                'date_created'
+                'date_created',
+                'tx_timestamp',
+                'usd_price',
             )
         elif wallet.wallet_type == 'bch':
             history = qs.values(
@@ -80,7 +82,9 @@ class WalletHistoryView(APIView):
                 'tx_fee',
                 'senders',
                 'recipients',
-                'date_created'
+                'date_created',
+                'tx_timestamp',
+                'usd_price',
             )
         if wallet.version == 1:
             return Response(data=history, status=status.HTTP_200_OK)
@@ -136,7 +140,7 @@ class LastAddressIndexView(APIView):
         if with_tx:
             queryset = queryset.annotate(tx_count = Count("transactions__txid", distinct=True))
             queryset = queryset.filter(tx_count__gt=0)
-            ordering = ["tx_count", "-address_index"]
+            ordering = ["-tx_count", "-address_index"]
             fields.append("tx_count")
 
         if isinstance(posid, int) and posid >= 0:

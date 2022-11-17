@@ -234,6 +234,18 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.manage_blocks',
         'schedule': 7
     },
+    'find_wallet_history_missing_tx_timestamps': {
+        'task': 'main.tasks.find_wallet_history_missing_tx_timestamps',
+        'schedule': 60 * 2,
+    },
+    'resolve_wallet_history_usd_values': {
+        'task': 'main.tasks.resolve_wallet_history_usd_values',
+        'schedule': 60 * 2,
+    },
+    'fetch_latest_usd_price': {
+        'task': 'main.tasks.fetch_latest_usd_price',
+        'schedule': 60 * 2,
+    },
     'preload_smartbch_blocks': {
         'task': 'smartbch.tasks.preload_new_blocks_task',
         'schedule': 20,

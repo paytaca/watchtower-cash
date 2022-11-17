@@ -1,5 +1,9 @@
 import logging, json, requests
+import pytz
+from decimal import Decimal
+from datetime import datetime
 from urllib.parse import urlparse
+from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
@@ -12,8 +16,10 @@ from main.models import (
     Address,
     Wallet,
     WalletHistory,
-    WalletNftToken
+    WalletNftToken,
+    AssetPriceLog,
 )
+from main.utils.market_price import fetch_currency_value_for_timestamp
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils.wallet import HistoryParser
 from django.db.utils import IntegrityError
@@ -186,6 +192,7 @@ def save_record(
     spent_txids=[],
     inputs=None,
     spending_txid=None,
+    tx_timestamp=None,
     force_create=False,
 ):
     """
@@ -196,6 +203,7 @@ def save_record(
         source               : the layer that summoned this function (e.g SLPDB, Bitsocket, BitDB, SLPFountainhead etc.)
         blockheight          : an optional argument indicating the block height number of a transaction.
         index                : used to make sure that each record is unique based on slp/bch address in a given transaction_id
+        tx_timestamp         : unix timestamp of transaction
         inputs               : an array of dicts containing data on the transaction's inputs
                                example: {
                                     "index": 0,
@@ -276,6 +284,9 @@ def save_record(
             if transaction_obj.source != source:
                 transaction_obj.source = source
 
+            if tx_timestamp:
+                transaction_obj.tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
+
         except IntegrityError as exc:
             LOGGER.error('ERROR in saving txid: ' + transactionid)
             LOGGER.error(str(exc))
@@ -307,6 +318,7 @@ def save_record(
                     source,
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
+                    tx_timestamp=tx_timestamp,
                     force_create=True,
                 )
         return transaction_obj.id, transaction_created
@@ -330,6 +342,7 @@ def bchdquery_transaction(txid, block_id, alert=True):
                 amount,
                 source,
                 blockheightid=block_id,
+                tx_timestamp=transaction.timestamp,
                 index=index
             )
             if created and alert:
@@ -351,6 +364,7 @@ def bchdquery_transaction(txid, block_id, alert=True):
                 amount,
                 source,
                 blockheightid=block_id,
+                tx_timestamp=transaction.timestamp,
                 index=index
             )            
             if created and alert:
@@ -770,6 +784,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             address__address__startswith='simpleledger:'
         )
     txn = txns.last()
+    tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
     if txn:
         if change_address:
             recipients = [(x, y) for x, y in recipients if x != change_address]
@@ -790,6 +805,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     senders=senders,
                     recipients=recipients
                 )
+            if tx_timestamp:
+                history_check.update(
+                    tx_timestamp=tx_timestamp,
+                )
+                resolve_wallet_history_usd_values.delay(txid=txid)
         else:
             history = WalletHistory(
                 wallet=wallet,
@@ -800,9 +820,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 tx_fee=tx_fee,
                 senders=senders,
                 recipients=recipients,
-                date_created=txn.date_created
+                date_created=txn.date_created,
+                tx_timestamp=tx_timestamp,
             )
             history.save()
+            resolve_wallet_history_usd_values.delay(txid=txid)
 
             if txn.token.token_type == 65:
                 if record_type == 'incoming':
@@ -829,6 +851,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
+    LOGGER.info(f"TX POST SAVE TASK: {address} | {transaction_id} | {blockheight_id}")
     transaction = Transaction.objects.get(id=transaction_id)
     txid = transaction.txid
     blockheight = None
@@ -884,6 +907,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         self.retry(countdown=5)
         return
     tx_fee = bch_tx['tx_fee']
+    tx_timestamp = bch_tx['timestamp']
+
+    # use batch update to not trigger the post save signal and potentially create an infinite loop
+    parsed_tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
+    Transaction.objects.filter(txid=txid, tx_timestamp__isnull=True).update(tx_timestamp=parsed_tx_timestamp)
     if txn_address.wallet:
         if txn_address.wallet.wallet_type == 'bch':
             senders['bch'] = [(i['address'], i['value']) for i in bch_tx['inputs']]
@@ -950,7 +978,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         blockheight_id,
                         tx_output['index']
                     )
-                    obj_id, created = save_record(*args, spent_txids=spent_txids)
+                    obj_id, created = save_record(*args, spent_txids=spent_txids, tx_timestamp=tx_timestamp)
                     if created:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -1011,7 +1039,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                 blockheight_id,
                 tx_output['index']
             )
-            obj_id, created = save_record(*args, spent_txids=spent_txids)
+            obj_id, created = save_record(*args, spent_txids=spent_txids, tx_timestamp=bch_tx['timestamp'])
             if created:
                 third_parties = client_acknowledgement(obj_id)
                 for platform in third_parties:
@@ -1040,6 +1068,8 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     senders['bch'],
                     recipients['bch']
                 )
+
+    return list(set(wallets))
 
 
 @shared_task(queue='celery_rebuild_history')
@@ -1104,6 +1134,7 @@ def parse_tx_wallet_histories(txid, source=""):
     bch_tx = bchd.get_transaction(txid)
 
     tx_fee = bch_tx['tx_fee']
+    tx_timestamp = bch_tx['timestamp']
 
     # parse inputs and outputs to desired structure
     inputs = [(i['address'], i['value']) for i in bch_tx['inputs']]
@@ -1138,6 +1169,7 @@ def parse_tx_wallet_histories(txid, source=""):
             source,
             None,
             index=output_index,
+            tx_timestamp=tx_timestamp,
             force_create=True
         )
 
@@ -1155,3 +1187,106 @@ def parse_tx_wallet_histories(txid, source=""):
         )
 
     return wallet_handles
+
+
+@shared_task(queue='wallet_history', max_retries=3)
+def find_wallet_history_missing_tx_timestamps():
+    NO_TXIDS_TO_PARSE = 15
+    txids = WalletHistory.objects.filter(
+        tx_timestamp__isnull=True,
+    ).order_by('-date_created').values_list('txid', flat=True).distinct()[:NO_TXIDS_TO_PARSE]
+
+    bchd = BCHDQuery()
+    txids_updated = []
+    for txid in txids:
+        tx = bchd.get_transaction(txid)
+        _tx_timestamp = tx["timestamp"]
+        tx_timestamp = datetime.fromtimestamp(_tx_timestamp).replace(tzinfo=pytz.UTC)
+        WalletHistory.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
+        Transaction.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
+        txids_updated.append([txid, _tx_timestamp])
+    return txids_updated
+
+@shared_task(queue='wallet_history', max_retries=3)
+def resolve_wallet_history_usd_values(txid=None):
+    CURRENCY = "USD"
+    RELATIVE_CURRENCY = "BCH"
+    queryset = WalletHistory.objects.filter(
+        token__name="bch",
+        usd_price__isnull=True,
+        tx_timestamp__isnull=False,
+    )
+    if txid:
+        queryset = queryset.filter(txid = txid)
+
+    timestamps = queryset.order_by(
+        "-tx_timestamp",
+    ).values_list('tx_timestamp', flat=True).distinct()[:15]
+
+    txids_updated = []
+    for timestamp in timestamps:
+        price_value_data = fetch_currency_value_for_timestamp(timestamp, currency=CURRENCY)
+        if not price_value_data:
+            continue
+
+        (price_value, actual_timestamp, price_data_source) = price_value_data
+        wallet_histories = WalletHistory.objects.filter(
+            token__name="bch",
+            tx_timestamp=timestamp,
+        )
+        wallet_histories.update(usd_price=price_value)
+        txids = list(wallet_histories.values_list("txid", flat=True).distinct())
+        txids_updated = txids_updated + txids
+        AssetPriceLog.objects.update_or_create(
+            currency=CURRENCY,
+            relative_currency=RELATIVE_CURRENCY,
+            timestamp=actual_timestamp,
+            source=price_data_source,
+            defaults={
+                "price_value": price_value,
+            }
+        )
+
+    return txids_updated
+
+@shared_task(queue='wallet_history', max_retries=3)
+def fetch_latest_usd_price():
+    CURRENCY = "USD"
+    RELATIVE_CURRENCY = "BCH"
+    to_timestamp = timezone.now()
+    from_timestamp = to_timestamp - timezone.timedelta(minutes=10)
+    coingecko_resp = requests.get(
+        "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
+        f"vs_currency={CURRENCY}" + \
+        f"&from={from_timestamp.timestamp()}" + \
+        f"&to={to_timestamp.timestamp()}"
+    )
+
+    coingecko_prices_list = None
+    try:
+        response_data = coingecko_resp.json()
+        if isinstance(response_data, dict) and "prices" in response_data:
+            coingecko_prices_list = response_data.get("prices", [])
+    except json.decoder.JSONDecodeError:
+        pass
+
+    asset_prices = []
+    for coingecko_price_data in coingecko_prices_list:
+        timestamp = coingecko_price_data[0]/1000
+        timestamp_obj = timezone.datetime.fromtimestamp(timestamp).replace(tzinfo=pytz.UTC)
+        price_value = Decimal(coingecko_price_data[1])
+        instance, created = AssetPriceLog.objects.update_or_create(
+            currency=CURRENCY,
+            relative_currency=RELATIVE_CURRENCY,
+            timestamp=timestamp_obj,
+            source="coingecko",
+            defaults={ "price_value": price_value }
+        )
+        asset_prices.append({
+            "currency": instance.currency,
+            "timestamp": instance.timestamp,
+            "source": instance.source,
+            "price_value": instance.price_value,
+        })
+
+    return asset_prices
