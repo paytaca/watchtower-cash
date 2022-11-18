@@ -1,9 +1,14 @@
 import pytz
 from datetime import datetime
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import PosDevice
+from .models import (
+    PosDevice,
+    Location,
+    Merchant,
+)
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 
@@ -28,6 +33,10 @@ class PosDeviceSerializer(serializers.ModelSerializer):
             "wallet_hash",
             "name",
         ]
+
+    def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
+        self.supress_merchant_info_validations = supress_merchant_info_validations
+        return super().__init__(*args, **kwargs)
     
     def get_unique_together_validators(self):
         """Overriding method to disable unique together checks"""
@@ -41,6 +50,11 @@ class PosDeviceSerializer(serializers.ModelSerializer):
     def validate_wallet_hash(self, value):
         if self.instance and self.instance.wallet_hash != value:
             raise serializers.ValidationError("editing posid is not allowed")
+
+        if not self.supress_merchant_info_validations:
+            if not Merchant.objects.filter(wallet_hash = value).exists():
+                raise serializers.ValidationError("Wallet hash does not have merchant information", code="missing_merchant_info")
+
         return value
 
     def create(self, validated_data, *args, **kwargs):
@@ -66,7 +80,7 @@ class POSPaymentSerializer(serializers.Serializer):
     transaction = serializers.CharField()
     otp = serializers.CharField(required=False)
     payment_timestamp = TimestampField()
-    pos_device = PosDeviceSerializer()
+    pos_device = PosDeviceSerializer(supress_merchant_info_validations=True)
 
     def save(self):
         validated_data = self.validated_data
@@ -109,3 +123,61 @@ class POSPaymentResponseSerializer(serializers.Serializer):
     otp = serializers.CharField(required=False)
     otp_timestamp = serializers.IntegerField()
     otp_valid = serializers.CharField(required=False)
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Location
+        fields = [
+            "landmark",
+            "location",
+            "street",
+            "city",
+            "country",
+            "longitude",
+            "latitude",
+        ]
+
+
+class MerchantSerializer(serializers.ModelSerializer):
+    location = LocationSerializer(required=False)
+    wallet_hash = serializers.CharField() # to supress unique validation
+
+    class Meta:
+        model = Merchant
+        fields = [
+            "id",
+            "wallet_hash",
+            "name",
+            "primary_contact_number",
+            "location",
+        ]
+
+
+    @transaction.atomic()
+    def create(self, validated_data):
+        wallet_hash = validated_data["wallet_hash"]
+        existing_merchant = Merchant.objects.filter(wallet_hash=wallet_hash).first()
+        if existing_merchant:
+            return self.update(existing_merchant, validated_data)
+
+        location_data = validated_data.pop("location", None)
+        if location_data:
+            location_serializer = LocationSerializer(data=location_data)
+            if not location_serializer.is_valid():
+                raise serializers.ValidationError({ "location": location_serializer.errors })
+            validated_data["location"] = location_serializer.save()
+
+        return super().create(validated_data)
+
+    @transaction.atomic()
+    def update(self, instance, validated_data):
+        location_data = validated_data.pop("location", None)
+
+        if location_data:
+            location_serializer = LocationSerializer(instance.location, data=location_data, partial=self.partial)
+            if not location_serializer.is_valid():
+                raise serializers.ValidationError({ "location": location_serializer.errors })
+            validated_data["location"] = location_serializer.save()
+
+        return super().update(instance, validated_data)

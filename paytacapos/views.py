@@ -14,6 +14,7 @@ from .serializers import (
     POSPaymentSerializer,
     POSPaymentResponseSerializer,
     PosDeviceSerializer,
+    MerchantSerializer,
 )
 from .filters import PosDevicetFilter
 from .pagination import CustomLimitOffsetPagination
@@ -55,3 +56,18 @@ class PosDeviceViewSet(
                 output_field=CharField(max_length=75),
             )
         ).all()
+
+
+class MerchantViewSet(
+    viewsets.GenericViewSet,
+    # mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+):
+    serializer_class = MerchantSerializer
+    lookup_field="wallet_hash"
+    pagination_class = CustomLimitOffsetPagination
+
+    def get_queryset(self):
+        return self.serializer_class.Meta.model.objects.all()
