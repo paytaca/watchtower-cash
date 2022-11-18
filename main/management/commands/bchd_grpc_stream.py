@@ -123,7 +123,7 @@ def run():
                         None,
                         output.index
                     )
-                    obj_id, created = save_record(*args, inputs=inputs_data)
+                    obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
                     has_updated_output = has_updated_output or created
 
                     if created:
