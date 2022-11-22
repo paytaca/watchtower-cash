@@ -52,6 +52,9 @@ class Merchant(models.Model):
         related_name="merchant",
     )
 
+    def __str__(self):
+        return f"Merchant ({self.name})"
+
 
 class Branch(models.Model):
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="branches")
@@ -61,3 +64,9 @@ class Branch(models.Model):
         null=True, blank=True,
         related_name="branch",
     )
+
+    class Meta:
+        verbose_name_plural = "branches"
+
+    def __str__(self):
+        return f"Branch ({self.merchant.name} - {self.name})"
