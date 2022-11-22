@@ -318,7 +318,6 @@ def save_record(
                     source,
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
-                    tx_timestamp=tx_timestamp,
                     force_create=True,
                 )
         return transaction_obj.id, transaction_created
