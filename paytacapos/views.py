@@ -15,8 +15,12 @@ from .serializers import (
     POSPaymentResponseSerializer,
     PosDeviceSerializer,
     MerchantSerializer,
+    BranchSerializer,
 )
-from .filters import PosDevicetFilter
+from .filters import (
+    PosDevicetFilter,
+    BranchFilter,
+)
 from .pagination import CustomLimitOffsetPagination
 
 
@@ -68,6 +72,17 @@ class MerchantViewSet(
     serializer_class = MerchantSerializer
     lookup_field="wallet_hash"
     pagination_class = CustomLimitOffsetPagination
+
+    def get_queryset(self):
+        return self.serializer_class.Meta.model.objects.all()
+
+
+class BranchViewSet(viewsets.ModelViewSet):
+    serializer_class = BranchSerializer
+    pagination_class = CustomLimitOffsetPagination
+
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = BranchFilter
 
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.all()

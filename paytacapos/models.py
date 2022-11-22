@@ -6,6 +6,12 @@ class PosDevice(models.Model):
 
     name = models.CharField(max_length=100, null=True, blank=True)
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL, related_name="devices",
+        null=True, blank=True,
+    )
+
     class Meta:
         unique_together = (
             ("posid", "wallet_hash"),
@@ -44,4 +50,14 @@ class Merchant(models.Model):
         Location, on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="merchant",
+    )
+
+
+class Branch(models.Model):
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="branches")
+    name = models.CharField(max_length=75)
+    location = models.OneToOneField(
+        Location, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="branch",
     )
