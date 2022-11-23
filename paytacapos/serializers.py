@@ -61,6 +61,9 @@ class PosDeviceSerializer(serializers.ModelSerializer):
         return value
 
     def validate_branch_id(self, value):
+        if not value:
+            return value
+
         try:
             Branch.objects.get(id=value)
         except Branch.DoesNotExist:
