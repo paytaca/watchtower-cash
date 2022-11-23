@@ -65,6 +65,7 @@ class PosDeviceSerializer(serializers.ModelSerializer):
             Branch.objects.get(id=value)
         except Branch.DoesNotExist:
             raise serializers.ValidationError("branch not found")
+        return value
 
     def validate(self, data):
         wallet_hash = data["wallet_hash"]
