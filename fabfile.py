@@ -71,4 +71,10 @@ def nginx(c):
 @task(hosts=hosts)
 def logs(c):
     with c.cd(f'/root/{project}'):
-        c.run(f'docker-compose -p {project} -f compose/prod.yml logs  -f web')
+        c.run(f'docker-compose -f compose/prod.yml logs  -f web')
+
+
+@task(hosts=hosts)
+def reports(c):
+    with c.cd(f'/root/{project}'):
+        c.run(f'docker-compose -f compose/prod.yml exec -T web python manage.py reports -p paytaca')
