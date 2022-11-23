@@ -6,6 +6,12 @@ class PosDevice(models.Model):
 
     name = models.CharField(max_length=100, null=True, blank=True)
 
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL, related_name="devices",
+        null=True, blank=True,
+    )
+
     class Meta:
         unique_together = (
             ("posid", "wallet_hash"),
@@ -24,3 +30,43 @@ class PosDevice(models.Model):
                 return i
 
         return None
+
+
+class Location(models.Model):
+    landmark = models.TextField(null=True, blank=True, help_text="Other helpful information to locate the place")
+    location = models.CharField(max_length=100, null=True, blank=True, help_text="Unit of location that is lower than street")
+    street = models.CharField(max_length=60, null=True, blank=True)
+    city = models.CharField(max_length=60, null=True, blank=True)
+    country = models.CharField(max_length=60, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+
+
+class Merchant(models.Model):
+    wallet_hash = models.CharField(max_length=75, unique=True, db_index=True)
+    name = models.CharField(max_length=75)
+    primary_contact_number = models.CharField(max_length=20, null=True, blank=True)
+    location = models.OneToOneField(
+        Location, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="merchant",
+    )
+
+    def __str__(self):
+        return f"Merchant ({self.name})"
+
+
+class Branch(models.Model):
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="branches")
+    name = models.CharField(max_length=75)
+    location = models.OneToOneField(
+        Location, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="branch",
+    )
+
+    class Meta:
+        verbose_name_plural = "branches"
+
+    def __str__(self):
+        return f"Branch ({self.merchant.name} - {self.name})"
