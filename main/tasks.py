@@ -19,7 +19,10 @@ from main.models import (
     WalletNftToken,
     AssetPriceLog,
 )
-from main.utils.market_price import fetch_currency_value_for_timestamp
+from main.utils.market_price import (
+    fetch_currency_value_for_timestamp,
+    get_latest_bch_rates,
+)
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils.wallet import HistoryParser
 from django.db.utils import IntegrityError
@@ -809,6 +812,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     tx_timestamp=tx_timestamp,
                 )
                 resolve_wallet_history_usd_values.delay(txid=txid)
+                for history in history_check:
+                    parse_wallet_history_market_values.delay(history.id)
         else:
             history = WalletHistory(
                 wallet=wallet,
@@ -824,6 +829,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             )
             history.save()
             resolve_wallet_history_usd_values.delay(txid=txid)
+            if history.tx_timestamp:
+                parse_wallet_history_market_values.delay(history.id)
 
             if txn.token.token_type == 65:
                 if record_type == 'incoming':
@@ -1184,7 +1191,7 @@ def resolve_wallet_history_usd_values(txid=None):
 
     txids_updated = []
     for timestamp in timestamps:
-        price_value_data = fetch_currency_value_for_timestamp(timestamp, currency=CURRENCY)
+        price_value_data = fetch_currency_value_for_timestamp(timestamp, currency=CURRENCY, relative_currency=RELATIVE_CURRENCY)
         if not price_value_data:
             continue
 
@@ -1249,3 +1256,85 @@ def fetch_latest_usd_price():
         })
 
     return asset_prices
+
+@shared_task(queue='wallet_history_2', max_retries=3)
+def parse_wallet_history_market_values(wallet_history_id):
+    if not wallet_history_id:
+        return
+    try:
+        wallet_history_obj = WalletHistory.objects.get(id=wallet_history_id)
+    except WalletHistory.DoesNotExist:
+        return
+
+    if wallet_history_obj.tx_timestamp is None:
+        return
+
+    # block for bch txs only
+    if wallet_history_obj.token.name != "bch":
+        return
+
+    LOGGER.info(" | ".join([
+        f"WALLET_HISTORY_MARKET_VALUES",
+        f"{wallet_history_obj.id}:{wallet_history_obj.txid}",
+        f"{wallet_history_obj.tx_timestamp}",
+    ]))
+
+    # resolves the currencies needed to store for the wallet history
+    # replace with wallet preferences
+    currencies = ["PHP"]
+    currencies = [c.upper() for c in currencies if isinstance(c, str) and len(c)]
+
+    market_prices = wallet_history_obj.market_prices or {}
+    if wallet_history_obj.usd_price:
+        market_prices["USD"] = wallet_history_obj.usd_price
+
+    # check for existing price logs that can be used
+    timestamp = wallet_history_obj.tx_timestamp
+    timestamp_range_low = timestamp - timezone.timedelta(seconds=30)
+    timestamp_range_high = timestamp + timezone.timedelta(seconds=30)
+    asset_price_logs = AssetPriceLog.objects.filter(
+        currency__in=currencies,
+        relative_currency="BCH",
+        timestamp__gt = timestamp_range_low,
+        timestamp__lt = timestamp_range_high,
+    ).annotate(
+        diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
+    ).order_by("-diff")
+
+    # sorting above is closest timestamp last so the loop below ends up with the closest one
+    for price_log in asset_price_logs:
+        market_prices[price_log.currency] = price_log.price_value
+
+    # last resort for resolving prices, only for new txs
+    missing_currencies = [c for c in currencies if c not in market_prices]
+    tx_age = (timezone.now() - timestamp).total_seconds()
+    if tx_age < 30 and len(missing_currencies):
+        for currency in missing_currencies:
+            bch_rates = get_latest_bch_rates(currency=currency)
+            bch_rate = bch_rates.get(currency.lower(), None)
+            if bch_rate:
+                market_prices[currency] = bch_rate[0]
+                AssetPriceLog.objects.update_or_create(
+                    currency=currency,
+                    relative_currency="BCH",
+                    timestamp=bch_rate[1],
+                    source=bch_rate[2],
+                    defaults={
+                        "price_value": bch_rate[0],
+                    }
+                )
+
+    wallet_history_obj.market_prices = market_prices
+    if "USD" in wallet_history_obj.market_prices and not wallet_history_obj.usd_price:
+        wallet_history_obj.usd_price = wallet_history_obj.market_prices["USD"]
+    for currency, price in wallet_history_obj.market_prices.items():
+        if isinstance(price, Decimal):
+            wallet_history_obj.market_prices[currency] = float(price)
+    wallet_history_obj.save()
+    return {
+        "id": wallet_history_obj.id,
+        "txid": wallet_history_obj.txid,
+        "tx_timestamp": str(wallet_history_obj.tx_timestamp),
+        "market_prices": market_prices,
+        "TX_AGE": tx_age,
+    }
