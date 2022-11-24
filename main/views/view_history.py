@@ -75,6 +75,7 @@ class WalletHistoryView(APIView):
                 'date_created',
                 'tx_timestamp',
                 'usd_price',
+                'market_prices',
             )
         elif wallet.wallet_type == 'bch':
             history = qs.values(
@@ -87,6 +88,7 @@ class WalletHistoryView(APIView):
                 'date_created',
                 'tx_timestamp',
                 'usd_price',
+                'market_prices',
             )
         if wallet.version == 1:
             return Response(data=history, status=status.HTTP_200_OK)

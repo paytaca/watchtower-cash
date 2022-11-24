@@ -321,6 +321,7 @@ class WalletHistory(PostgresModel):
     date_created = models.DateTimeField(default=timezone.now)
 
     usd_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    market_prices = JSONField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'Wallet history'
@@ -377,3 +378,8 @@ class AssetPriceLog(models.Model):
     source = models.CharField(max_length=100, null=True, blank=True, db_index=True)
 
     price_value = models.DecimalField(max_digits=15, decimal_places=3)
+
+
+class WalletPreferences(PostgresModel):
+    wallet = models.OneToOneField(Wallet, on_delete=models.CASCADE, related_name="preferences")
+    selected_currency = models.CharField(max_length=5, default="USD")

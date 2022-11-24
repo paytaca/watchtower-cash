@@ -7,10 +7,12 @@ from main.utils import block_setter
 from main.models import (
     BlockHeight,
     Transaction,
-    Token
+    Token,
+    WalletPreferences,
 )
 from main.tasks import (
-    transaction_post_save_task
+    transaction_post_save_task,
+    update_wallet_history_currency,
 )
 
 
@@ -50,3 +52,9 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
 
     # Trigger the transaction post-save task
     transaction_post_save_task.delay(address, instance.id, blockheight_id)
+
+
+@receiver(post_save, sender=WalletPreferences)
+def transaction_post_save(sender, instance=None, created=False, **kwargs):
+    if instance and instance.selected_currency and instance.wallet:
+        update_wallet_history_currency.delay(instance.wallet.wallet_hash, instance.selected_currency)
