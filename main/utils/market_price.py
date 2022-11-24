@@ -1,5 +1,6 @@
 import json
 import requests
+import concurrent.futures
 from decimal import Decimal
 from datetime import timedelta, datetime
 from django.db import models
@@ -94,7 +95,7 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD", relative_curre
     return None
 
 
-def get_latest_bch_rates(currency=None):
+def get_latest_bch_rates(currencies=[]):
     """
         Fetch latest BCH rates
         Will always return a usd/bch rate
@@ -108,9 +109,9 @@ def get_latest_bch_rates(currency=None):
             - source: where the data came from
     """
     asset_prices = []
-    currencies = ["usd"]
-    if isinstance(currency, str) and len(currency):
-        currencies.append(currency.lower())
+    currencies = [c.lower() for c in currencies if isinstance(c, str) and len(c)]
+    if "usd" not in currencies:
+        currencies.append("usd")
     vs_currencies = ",".join(currencies)
     response = requests.get(
         f"https://api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
@@ -119,27 +120,64 @@ def get_latest_bch_rates(currency=None):
     response_timestamp = datetime.strptime(response.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
     response_data = response.json()
     bch_rates = response_data["bitcoin-cash"]
+
     usd_rate = bch_rates.get("usd", None)
+    currencies_to_convert = []
     response = {}
     for currency in currencies:
-        if currency not in bch_rates:
-            if usd_rate is not None:
-                usd_rate_resp = get_yadio_rate(currency=currency)
+        if currency in bch_rates:
+            response[currency] = (
+                Decimal(bch_rates[currency]),
+                response_timestamp,
+                "coingecko",
+            )
+        else:
+            currencies_to_convert.append(currency)
+
+    if usd_rate is not None and len(currencies_to_convert):
+        usd_rates_resp = get_yadio_rates(currencies=currencies_to_convert)
+        for currency, usd_rate_resp in usd_rates_resp.items():
+            if isinstance(usd_rate_resp, dict) and "rate" in usd_rate_resp and "timestamp" in usd_rate_resp:
                 price_value = usd_rate_resp["rate"] * usd_rate
                 response[currency] = (
                     Decimal(price_value),
                     datetime.fromtimestamp(usd_rate_resp["timestamp"] / 1000),
                     "coingecko-yadio",
                 )
-        else:
-            response[currency] = (
-                Decimal(bch_rates[currency]),
-                response_timestamp,
-                "coingecko",
-            )
 
     return response
 
 
 def get_yadio_rate(currency=None, source_currency="USD"):
+    """
+    Parameters
+        currency: str, source_currency: str
+            - rate returned is in currency per source_currency
+    Returns:
+        {"rate": float, "timestamp": int, "request": str}
+    """
     return requests.get(f"https://api.yadio.io/rate/{currency}/{source_currency}", timeout=15).json()
+
+
+def get_yadio_rates(currencies=[], source_currency="USD"):
+    """
+    Parameters
+        currencies: List(str), source_currency: str
+            - rate returned is in currency per source_currency
+    Returns:
+        Map("currency": str, {"rate": float, "timestamp": int, "request": str})
+    """
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        threads = {}
+        for currency in currencies:
+            threads[currency] = executor.submit(
+                get_yadio_rate, currency=currency, source_currency=source_currency)
+
+        results = {}
+        for currency, thread in threads.items():
+            try:
+                results[currency] = thread.result()
+            except Exception as error:
+                results[currency] = error
+
+        return results

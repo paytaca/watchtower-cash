@@ -1309,8 +1309,8 @@ def parse_wallet_history_market_values(wallet_history_id):
     missing_currencies = [c for c in currencies if c not in market_prices]
     tx_age = (timezone.now() - timestamp).total_seconds()
     if tx_age < 30 and len(missing_currencies):
+        bch_rates = get_latest_bch_rates(currencies=missing_currencies)
         for currency in missing_currencies:
-            bch_rates = get_latest_bch_rates(currency=currency)
             bch_rate = bch_rates.get(currency.lower(), None)
             if bch_rate:
                 market_prices[currency] = bch_rate[0]
