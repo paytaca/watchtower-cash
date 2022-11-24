@@ -107,8 +107,8 @@ def run():
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
-                        msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
-                        LOGGER.info(msg)
+                    msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
+                    LOGGER.info(msg)
 
                 if output.slp_token.token_id:
                     token_id = bytearray(output.slp_token.token_id).hex() 
