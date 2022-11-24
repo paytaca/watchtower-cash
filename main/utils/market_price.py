@@ -6,7 +6,10 @@ from datetime import timedelta, datetime
 from django.db import models
 from django.apps import apps
 from django.utils import timezone as tz
-from main.models import AssetPriceLog
+from main.models import (
+    AssetPriceLog,
+    WalletHistory,
+)
 
 from anyhedge.utils.price_oracle import (get_price_messages, save_price_oracle_message)
 
@@ -181,3 +184,64 @@ def get_yadio_rates(currencies=[], source_currency="USD"):
                 results[currency] = error
 
         return results
+
+def save_wallet_history_currency(wallet_hash, currency):
+    if not currency:
+        return
+
+    queryset = WalletHistory.objects.filter(
+        wallet__wallet_hash=wallet_hash,
+        token__name="bch",
+        tx_timestamp__isnull=False,
+    )
+
+    if currency == "USD":
+        queryset = queryset.filter(models.Q(usd_price__isnull=True) | models.Q(**{f"market_prices__{currency}__isnull": True}))
+    else:
+        queryset = queryset.filter(**{f"market_prices__{currency}__isnull": True})
+
+
+    class Epoch(models.expressions.Func):
+        template = 'EXTRACT(epoch FROM %(expressions)s)::INTEGER'
+        output_field = models.IntegerField()
+
+    WINDOW_SIZE = 60 # we will group wallet history timestamps by windows
+    NUM_OF_WINDOWS = 30 # specify a max number of windows to limit the db load
+
+    timestamp_blocks = queryset.annotate(
+        ts_epoch = Epoch(models.F("tx_timestamp"))
+    ).annotate(
+        ts_block = models.F("ts_epoch") - models.F("ts_epoch") % models.Value(WINDOW_SIZE),
+    ).order_by("-ts_block").values_list("ts_block", flat=True).distinct()[:NUM_OF_WINDOWS]
+
+    results = []
+    for ts_block in timestamp_blocks:
+        timestamp_range_low = tz.make_aware(datetime.fromtimestamp(ts_block))
+        timestamp = timestamp_range_low + timedelta(seconds=WINDOW_SIZE/2)
+        timestamp_range_high = timestamp_range_low + timedelta(seconds=WINDOW_SIZE)
+
+        asset_price_logs = AssetPriceLog.objects.filter(
+            currency=currency,
+            relative_currency="BCH",
+            timestamp__gte = timestamp_range_low,
+            timestamp__lte = timestamp_range_high,
+        ).annotate(
+            diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
+        ).order_by("-diff")
+
+        closest = asset_price_logs.first()
+        if closest:
+            results.append(f"{timestamp} | {closest.price_value} | {currency}")
+            queryset_block = queryset.filter(
+                tx_timestamp__gte=timestamp_range_low,
+                tx_timestamp__lte=timestamp_range_high,
+            )
+            for wallet_history in queryset_block:
+                market_prices = wallet_history.market_prices or {}
+                market_prices[currency] = float(closest.price_value)
+                wallet_history.market_prices = market_prices
+                if currency == "USD" and wallet_history.usd_price is None:
+                    wallet_history.usd_price = closest.price_value
+                wallet_history.save()
+
+    return results

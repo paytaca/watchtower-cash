@@ -22,6 +22,7 @@ from main.models import (
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
+    save_wallet_history_currency,
 )
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils.wallet import HistoryParser
@@ -1343,3 +1344,8 @@ def parse_wallet_history_market_values(wallet_history_id):
         "market_prices": market_prices,
         "TX_AGE": tx_age,
     }
+
+
+@shared_task(queue='wallet_history_2', max_retries=3)
+def update_wallet_history_currency(wallet_hash, currency):
+    return save_wallet_history_currency(wallet_hash, currency)
