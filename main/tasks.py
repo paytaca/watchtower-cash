@@ -1280,8 +1280,13 @@ def parse_wallet_history_market_values(wallet_history_id):
     ]))
 
     # resolves the currencies needed to store for the wallet history
-    # replace with wallet preferences
-    currencies = ["PHP"]
+    currencies = []
+    try:
+        if wallet_history_obj.wallet and wallet_history_obj.wallet.preferences and wallet_history_obj.wallet.preferences.selected_currency:
+            currencies.append(wallet_history_obj.wallet.preferences.selected_currency)
+    except Wallet.preferences.RelatedObjectDoesNotExist:
+        pass
+
     currencies = [c.upper() for c in currencies if isinstance(c, str) and len(c)]
 
     market_prices = wallet_history_obj.market_prices or {}
