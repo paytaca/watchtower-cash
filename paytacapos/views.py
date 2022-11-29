@@ -8,9 +8,12 @@ from django_filters import rest_framework as filters
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, mixins, decorators
 from rest_framework import status
 from .serializers import (
+    PosDeviceLinkSerializer,
+    PosDeviceLinkRequestSerializer,
+    LinkedDeviceInfoSerializer,
     POSPaymentSerializer,
     POSPaymentResponseSerializer,
     PosDeviceSerializer,
@@ -60,6 +63,31 @@ class PosDeviceViewSet(
                 output_field=CharField(max_length=75),
             )
         ).all()
+
+    @swagger_auto_schema(method="post", request_body=None, responses={ 200: serializer_class })
+    @decorators.action(methods=["post"], detail=True)
+    def unlink_device(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.linked_device.delete()
+        return Response(self.get_serializer(instance).data)
+
+    @swagger_auto_schema(method="post", request_body=PosDeviceLinkRequestSerializer, responses={ 200: PosDeviceLinkSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def generate_link_device_code(self, request, *args, **kwargs):
+        code_ttl = 60 * 5
+        serializer = PosDeviceLinkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.save_link_request()
+        return Response(data)
+
+    @swagger_auto_schema(method="post", request_body=LinkedDeviceInfoSerializer, responses={ 200: serializer_class(xpubkey="string") })
+    @decorators.action(methods=["post"], detail=False)
+    def redeem_link_device_code(self, request, *args, **kwargs):
+        serializer = LinkedDeviceInfoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        serializer.remove_link_code_data()
+        return Response(self.serializer_class(instance.pos_device, xpubkey=instance.pos_device.xpubkey).data)
 
 
 class MerchantViewSet(
