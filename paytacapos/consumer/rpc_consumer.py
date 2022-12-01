@@ -137,11 +137,17 @@ class RPCWebSocketConsumer(AsyncJsonWebsocketConsumer):
         await self.send(json.dumps(data))
 
     async def send_rpc_response(self, response):
+        if not response.request.rpc_req_id:
+            return
+
         return await self.send(text_data=response.serialize(encode=True))
 
     async def send_batch_rpc_responses(self, responses):
         serialized_responses = []
         for response in responses:
+            if not response.request.rpc_req_id:
+                continue
+
             serialized_responses.append(response.serialize(encode=False))
         return await self.send(text_data=json.dumps(serialized_responses))
 
