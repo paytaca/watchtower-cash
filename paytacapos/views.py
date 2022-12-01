@@ -4,6 +4,7 @@ from django.db.models import (
     ExpressionWrapper,
     CharField,
 )
+from django.db import transaction
 from django_filters import rest_framework as filters
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
@@ -25,6 +26,7 @@ from .filters import (
     BranchFilter,
 )
 from .pagination import CustomLimitOffsetPagination
+from .utils.websocket import send_device_update
 
 
 
@@ -64,11 +66,14 @@ class PosDeviceViewSet(
             )
         ).all()
 
+    @transaction.atomic
     @swagger_auto_schema(method="post", request_body=None, responses={ 200: serializer_class })
     @decorators.action(methods=["post"], detail=True)
     def unlink_device(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.linked_device.delete()
+        instance.refresh_from_db()
+        send_device_update(instance, action="unlink")
         return Response(self.get_serializer(instance).data)
 
     @swagger_auto_schema(method="post", request_body=PosDeviceLinkRequestSerializer, responses={ 200: PosDeviceLinkSerializer })
@@ -87,6 +92,7 @@ class PosDeviceViewSet(
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         serializer.remove_link_code_data()
+        send_device_update(instance.pos_device, action="link")
         return Response(self.serializer_class(instance.pos_device, xpubkey=instance.pos_device.xpubkey).data)
 
 

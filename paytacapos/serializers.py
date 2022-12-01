@@ -16,6 +16,7 @@ from .models import (
 )
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
+from .utils.websocket import send_device_update
 
 
 REDIS_CLIENT = settings.REDISKV
@@ -69,6 +70,7 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
         model = LinkedDeviceInfo
         fields = [
             "link_code",
+            "device_id",
             "name",
             "device_model",
             "os",
@@ -211,11 +213,15 @@ class PosDeviceSerializer(serializers.ModelSerializer):
 
         try:
             instance = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
-            return super().update(instance, validated_data)
+            instance = super().update(instance, validated_data)
+            send_device_update(instance, action="update")
+            return instance
         except PosDevice.DoesNotExist:
             pass
 
-        return super().create(validated_data, *args, **kwargs)
+        instance = super().create(validated_data, *args, **kwargs)
+        send_device_update(instance, action="create")
+        return instance
 
 
 class POSPaymentSerializer(serializers.Serializer):
