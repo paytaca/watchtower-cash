@@ -52,10 +52,23 @@ class PosDeviceLinkRequestSerializer(serializers.Serializer):
 
         return data
 
+    @classmethod
+    def generate_redis_key(cls, code):
+        return f"posdevicelink:{code}"
+
+    @classmethod
+    def retrieve_link_request_data(cls, code):
+        redis_key = cls.generate_redis_key(code)
+        encoded_data = REDIS_CLIENT.get(redis_key)
+        try:
+            return json.loads(encoded_data)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
     def save_link_request(self):
         code_ttl = 60 * 5 # seconds
         code = uuid4().hex
-        redis_key = f"posdevicelink:{code}"
+        redis_key = self.generate_redis_key(code)
         data = json.dumps(self.validated_data).encode()
         REDIS_CLIENT.set(redis_key, data, ex=code_ttl)
         now = timezone.now()
@@ -91,15 +104,10 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         link_code = data["link_code"]
-        redis_key = f"posdevicelink:{link_code}"
-        encoded_data = REDIS_CLIENT.get(redis_key)
-        try:
-            link_code_data = json.loads(encoded_data)
-            data_serializer = PosDeviceLinkRequestSerializer(data=link_code_data)
-            if not data_serializer.is_valid():
-                raise serializers.ValidationError("data from link code is invalid")
-        except (json.JSONDecodeError, TypeError):
-            raise serializers.ValidationError("link code invalid")
+        link_code_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
+        data_serializer = PosDeviceLinkRequestSerializer(data=link_code_data)
+        if not data_serializer.is_valid():
+            raise serializers.ValidationError("data from link code is invalid")
 
         data["link_code_data"] = data_serializer.validated_data
 
