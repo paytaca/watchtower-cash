@@ -6,6 +6,7 @@ from django.db.models import (
 )
 from django.db import transaction
 from django_filters import rest_framework as filters
+from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -85,7 +86,24 @@ class PosDeviceViewSet(
         data = serializer.save_link_request()
         return Response(data)
 
-    @swagger_auto_schema(method="post", request_body=LinkedDeviceInfoSerializer, responses={ 200: serializer_class(xpubkey="string") })
+    @swagger_auto_schema(
+        method="get",
+        responses={ 200: openapi.Schema(type=openapi.TYPE_STRING) },
+        manual_parameters=[
+            openapi.Parameter(name="code", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY),
+        ]
+    )
+    @decorators.action(methods=["get"], detail=False)
+    def link_code_data(self, request, *args, **kwargs):
+        link_code = request.query_params.get("code", None)
+        link_request_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
+        code_ttl = 60 * 5
+        serializer = PosDeviceLinkRequestSerializer(data=link_request_data)
+        if not serializer.is_valid():
+            return Response(status=400)
+        return Response(serializer.validated_data["encrypted_xpubkey"])
+
+    @swagger_auto_schema(method="post", request_body=LinkedDeviceInfoSerializer)
     @decorators.action(methods=["post"], detail=False)
     def redeem_link_device_code(self, request, *args, **kwargs):
         serializer = LinkedDeviceInfoSerializer(data=request.data)
@@ -93,7 +111,7 @@ class PosDeviceViewSet(
         instance = serializer.save()
         serializer.remove_link_code_data()
         send_device_update(instance.pos_device, action="link")
-        return Response(self.serializer_class(instance.pos_device, xpubkey=instance.pos_device.xpubkey).data)
+        return Response(self.serializer_class(instance.pos_device).data)
 
 
 class MerchantViewSet(

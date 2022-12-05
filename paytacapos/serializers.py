@@ -1,5 +1,6 @@
 import json
 import pytz
+import bitcoin
 from uuid import uuid4
 from datetime import datetime
 from django.conf import settings
@@ -38,7 +39,8 @@ class PosDeviceLinkSerializer(serializers.Serializer):
 class PosDeviceLinkRequestSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
     posid = serializers.IntegerField()
-    xpubkey = serializers.CharField()
+    encrypted_xpubkey = serializers.CharField()
+    signature = serializers.CharField()
 
     def validate(self, data):
         wallet_hash = data["wallet_hash"]
@@ -77,11 +79,13 @@ class PosDeviceLinkRequestSerializer(serializers.Serializer):
 
 
 class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
+    verifying_pubkey = serializers.CharField(write_only=True)
     link_code = serializers.CharField()
 
     class Meta:
         model = LinkedDeviceInfo
         fields = [
+            "verifying_pubkey",
             "link_code",
             "device_id",
             "name",
@@ -103,11 +107,17 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
         encoded_data = REDIS_CLIENT.delete(redis_key)
 
     def validate(self, data):
+        verifying_pubkey = data.pop("verifying_pubkey")
         link_code = data["link_code"]
         link_code_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
         data_serializer = PosDeviceLinkRequestSerializer(data=link_code_data)
         if not data_serializer.is_valid():
             raise serializers.ValidationError("data from link code is invalid")
+
+        encrypted_xpubkey = data_serializer.validated_data["encrypted_xpubkey"]
+        signature = data_serializer.validated_data["signature"]
+        if not bitcoin.ecdsa_verify(encrypted_xpubkey, signature, verifying_pubkey):
+            raise serializers.ValidationError("invalid verifying pubkey")
 
         data["link_code_data"] = data_serializer.validated_data
 
@@ -130,7 +140,6 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
 
         wallet_hash = link_code_data["wallet_hash"]
         posid = link_code_data["posid"]
-        xpubkey = link_code_data["xpubkey"]
 
         pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
         if not pos_device:
@@ -143,7 +152,6 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
             pos_device.linked_device = instance
             pos_device.save()
 
-        pos_device.xpubkey = xpubkey
         return instance
 
 
@@ -164,10 +172,8 @@ class PosDeviceSerializer(serializers.ModelSerializer):
             "linked_device",
         ]
 
-    def __init__(self, *args, supress_merchant_info_validations=False, xpubkey=None, **kwargs):
+    def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
         self.supress_merchant_info_validations = supress_merchant_info_validations
-        if xpubkey:
-            self.fields["xpubkey"] = serializers.CharField(read_only=True)
         return super().__init__(*args, **kwargs)
     
     def get_unique_together_validators(self):
