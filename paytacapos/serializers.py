@@ -10,6 +10,7 @@ from rest_framework import serializers
 
 from .models import (
     LinkedDeviceInfo,
+    UnlinkDeviceRequest,
     PosDevice,
     Location,
     Merchant,
@@ -78,9 +79,80 @@ class PosDeviceLinkRequestSerializer(serializers.Serializer):
         return { "code": code, "expires": expires.timestamp() }
 
 
+class UnlinkDeviceSerializer(serializers.Serializer):
+    verifying_pubkey = serializers.CharField()
+
+    def __init__(self, *args, pos_device=None, **kwargs):
+        self.pos_device = pos_device
+        return super().__init__(*args, **kwargs)
+
+    def validate(self, data):
+        if not self.pos_device.linked_device:
+            raise serializers.ValidationError("pos device is not linked")
+        if not self.pos_device.linked_device.get_unlink_request():
+            raise serializers.ValidationError("pos device has no unlink request")
+
+        verifying_pubkey = data["verifying_pubkey"]
+        unlink_request = self.pos_device.linked_device.get_unlink_request()
+        if not bitcoin.ecdsa_verify(unlink_request.message, unlink_request.signature, verifying_pubkey):
+            raise serializers.ValidationError("invalid verifying pubkey")
+
+        return data
+
+    def save(self):
+        self.pos_device.linked_device.delete()
+        self.pos_device.refresh_from_db()
+        send_device_update(self.pos_device, action="unlink")
+        return self.pos_device
+
+
+class UnlinkDeviceRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnlinkDeviceRequest
+        fields = [
+            "id",
+            "force",
+            "signature",
+            "nonce",
+            "updated_at",
+        ]
+
+        extra_kwargs = {
+            "updated_at": {
+                "read_only": True,
+            },
+        }
+
+    def __init__(self, *args, linked_device_info=None, **kwargs):
+        self.linked_device_info = linked_device_info
+        return super().__init__(*args, **kwargs)
+
+    def validate_nonce(self, value):
+        if value < 0 or value > 2 ** 31:
+            raise serializers.ValidationError(f"nonce must be between 0 and 2^31")
+        return value
+
+    def validate(self, data):
+        data["linked_device_info"] = self.linked_device_info
+        return data
+
+    def create(self, validated_data):
+        linked_device_info = validated_data["linked_device_info"]
+        instance = None
+        try:
+            instance = UnlinkDeviceRequest.objects.get(linked_device_info=linked_device_info)
+        except UnlinkDeviceRequest.DoesNotExist:
+            pass
+
+        if instance:
+            return super().update(instance, validated_data)
+        return super().create(validated_data)
+
+
 class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
     verifying_pubkey = serializers.CharField(write_only=True)
     link_code = serializers.CharField()
+    unlink_request = UnlinkDeviceRequestSerializer(read_only=True)
 
     class Meta:
         model = LinkedDeviceInfo
@@ -92,6 +164,7 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
             "device_model",
             "os",
             "is_suspended",
+            "unlink_request",
         ]
 
         extra_kwargs = {

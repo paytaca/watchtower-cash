@@ -16,6 +16,8 @@ from .serializers import (
     PosDeviceLinkSerializer,
     PosDeviceLinkRequestSerializer,
     LinkedDeviceInfoSerializer,
+    UnlinkDeviceSerializer,
+    UnlinkDeviceRequestSerializer,
     POSPaymentSerializer,
     POSPaymentResponseSerializer,
     PosDeviceSerializer,
@@ -68,13 +70,34 @@ class PosDeviceViewSet(
         ).all()
 
     @transaction.atomic
-    @swagger_auto_schema(method="post", request_body=None, responses={ 200: serializer_class })
+    @swagger_auto_schema(method="post", request_body=UnlinkDeviceSerializer, responses={ 200: serializer_class })
     @decorators.action(methods=["post"], detail=True)
     def unlink_device(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.linked_device.delete()
-        instance.refresh_from_db()
-        send_device_update(instance, action="unlink")
+        serializer = UnlinkDeviceSerializer(pos_device=instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        return Response(self.get_serializer(instance).data)
+
+    @transaction.atomic
+    @swagger_auto_schema(method="post", request_body=UnlinkDeviceRequestSerializer, responses={ 200: serializer_class })
+    @decorators.action(methods=["post"], detail=True, url_path=f"unlink_device/request")
+    def unlink_device_request(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = UnlinkDeviceRequestSerializer(linked_device_info=instance.linked_device, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        pos_device_instance = instance.linked_device_info.pos_device
+        send_device_update(pos_device_instance, action="unlink_request")
+        return Response(self.get_serializer(pos_device_instance).data)
+
+    @swagger_auto_schema(method="post", request_body=openapi.Schema(type=openapi.TYPE_OBJECT), responses={ 200: serializer_class })
+    @decorators.action(methods=["post"], detail=True, url_path=f"unlink_device/cancel")
+    def cancel_unlink_request(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.linked_device and instance.linked_device.get_unlink_request():
+            instance.linked_device.get_unlink_request().delete()
+            instance.refresh_from_db()
         return Response(self.get_serializer(instance).data)
 
     @swagger_auto_schema(method="post", request_body=PosDeviceLinkRequestSerializer, responses={ 200: PosDeviceLinkSerializer })
