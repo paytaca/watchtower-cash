@@ -31,6 +31,15 @@ class TimestampField(serializers.IntegerField):
     def to_internal_value(self, data):
         return datetime.fromtimestamp(data).replace(tzinfo=pytz.UTC)
 
+
+class SummaryRecordSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField()
+    day = serializers.IntegerField(required=False)
+    total = serializers.FloatField()
+    count = serializers.IntegerField()
+
+
 class SuspendDeviceSerializer(serializers.Serializer):
     is_suspended = serializers.BooleanField()
 

@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, decorators
 from rest_framework import status
 from .serializers import (
+    SummaryRecordSerializer,
     SuspendDeviceSerializer,
     PosDeviceLinkSerializer,
     PosDeviceLinkRequestSerializer,
@@ -31,6 +32,7 @@ from .filters import (
 )
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
+from .utils.report import get_sales_summary
 
 
 
@@ -145,6 +147,36 @@ class PosDeviceViewSet(
         serializer.remove_link_code_data()
         send_device_update(instance.pos_device, action="link")
         return Response(self.serializer_class(instance.pos_device).data)
+
+    @swagger_auto_schema(
+        method="get",
+        responses={ 200: SummaryRecordSerializer(many=True) },
+        manual_parameters=[
+            openapi.Parameter(name="range", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="month", enum=["month", "day"]),
+            openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
+    @decorators.action(
+        methods=["get"],
+        detail=False,
+        pagination_class=None,
+        filter_backends=[],
+        url_path=f"sales_report/(?P<wallet_hash>[^/.]+)",
+    )
+    def sales_report(self, request, *args, **kwargs):
+        wallet_hash = kwargs["wallet_hash"]
+        summary_range = request.query_params.get("range", "month")
+        posid = request.query_params.get("posid", None)
+        try:
+            posid = int(posid)
+        except (TypeError, ValueError):
+            posid = None
+
+        serializer = SummaryRecordSerializer(
+            get_sales_summary(wallet_hash=wallet_hash, posid=posid, summary_range=summary_range),
+            many=True,
+        )
+        return Response(serializer.data)
 
 
 class MerchantViewSet(

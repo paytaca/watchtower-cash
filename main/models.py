@@ -275,8 +275,43 @@ class Subscription(PostgresModel):
     websocket=models.BooleanField(default=False)
     date_created = models.DateTimeField(default=timezone.now)
 
+class WalletHistoryQuerySet(models.QuerySet):
+    POS_ID_MAX_DIGITS = 4
+
+    def filter_pos(self, wallet_hash, posid=None):
+        try:
+            posid = int(posid)
+            posid = str(posid)
+            pad = "0" * (self.POS_ID_MAX_DIGITS-len(posid))
+            posid = pad + posid
+        except (ValueError, TypeError):
+            posid=None
+    
+        addresses = Address.objects.filter(wallet__wallet_hash=models.OuterRef("wallet__wallet_hash"))
+        if posid is None:
+            addresses = addresses.annotate(
+                address_index = models.functions.Cast(
+                    models.functions.Substr(models.F("address_path"), models.Value("0/(\d+)")),
+                    models.BigIntegerField(),
+                )
+            )
+            addresses = addresses.filter(
+                address_index__gte=10 ** self.POS_ID_MAX_DIGITS,
+                address_index__lte=2**31-1,
+            )
+        else:
+            addresses = addresses.filter(address_path__iregex=f"((0|1)/)?0*\d+{posid}")
+
+        addresses = addresses.values("address").distinct()
+        addresses_subquery = models.Func(models.Subquery(addresses), function="array")
+
+        return self.filter(
+            models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery),
+        )
 
 class WalletHistory(PostgresModel):
+    objects = WalletHistoryQuerySet.as_manager()
+
     INCOMING = 'incoming'
     OUTGOING = 'outgoing'
     RECORD_TYPE_OPTIONS = [
