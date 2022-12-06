@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, decorators
 from rest_framework import status
 from .serializers import (
-    SummaryRecordSerializer,
+    SalesSummarySerializer,
     SuspendDeviceSerializer,
     PosDeviceLinkSerializer,
     PosDeviceLinkRequestSerializer,
@@ -33,10 +33,7 @@ from .filters import (
 )
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
-from .utils.report import (
-    get_sales_summary,
-    SalesSummaryException,
-)
+from .utils.report import SalesSummary
 
 
 
@@ -154,7 +151,7 @@ class PosDeviceViewSet(
 
     @swagger_auto_schema(
         method="get",
-        responses={ 200: SummaryRecordSerializer(many=True) },
+        responses={ 200: SalesSummarySerializer(many=True) },
         manual_parameters=[
             openapi.Parameter(name="range", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="month", enum=["month", "day"]),
             openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
@@ -166,6 +163,7 @@ class PosDeviceViewSet(
     @decorators.action(
         methods=["get"],
         detail=False,
+        pagination_class=None,
         filter_backends=[],
         url_path=f"sales_report/(?P<wallet_hash>[^/.]+)",
     )
@@ -191,22 +189,14 @@ class PosDeviceViewSet(
         except (TypeError, ValueError):
             timestamp_to = None
 
-        try:
-            queryset = get_sales_summary(
-                wallet_hash=wallet_hash, posid=posid,
-                summary_range=summary_range,
-                timestamp_from=timestamp_from, timestamp_to=timestamp_to,
-                currency=currency,
-            )
-        except SalesSummaryException as e:
-            return Response(str(e), status=400)
+        sales_summary = SalesSummary.get_summary(
+            wallet_hash=wallet_hash, posid=posid,
+            summary_range=summary_range,
+            timestamp_from=timestamp_from, timestamp_to=timestamp_to,
+            currency=currency,
+        )
 
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = SummaryRecordSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = SummaryRecordSerializer(queryset, many=True)
+        serializer = SalesSummarySerializer(sales_summary)
         return Response(serializer.data)
 
 

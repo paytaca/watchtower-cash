@@ -37,7 +37,18 @@ class SummaryRecordSerializer(serializers.Serializer):
     month = serializers.IntegerField()
     day = serializers.IntegerField(required=False)
     total = serializers.FloatField()
+    total_market_value = serializers.FloatField(required=False)
+    currency = serializers.CharField(required=False)
     count = serializers.IntegerField()
+
+
+class SalesSummarySerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField()
+    posid = serializers.IntegerField(required=False)
+    range_type = serializers.CharField()
+    timestamp_from = TimestampField(required=False)
+    timestamp_to = TimestampField(required=False)
+    data = SummaryRecordSerializer(many=True)
 
 
 class SuspendDeviceSerializer(serializers.Serializer):
