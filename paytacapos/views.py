@@ -5,6 +5,7 @@ from django.db.models import (
     CharField,
 )
 from django.db import transaction
+from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -32,7 +33,10 @@ from .filters import (
 )
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
-from .utils.report import get_sales_summary
+from .utils.report import (
+    get_sales_summary,
+    SalesSummaryException,
+)
 
 
 
@@ -154,17 +158,20 @@ class PosDeviceViewSet(
         manual_parameters=[
             openapi.Parameter(name="range", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="month", enum=["month", "day"]),
             openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="from", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="to", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="currency", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
         ]
     )
     @decorators.action(
         methods=["get"],
         detail=False,
-        pagination_class=None,
         filter_backends=[],
         url_path=f"sales_report/(?P<wallet_hash>[^/.]+)",
     )
     def sales_report(self, request, *args, **kwargs):
         wallet_hash = kwargs["wallet_hash"]
+        currency = request.query_params.get("currency", None)
         summary_range = request.query_params.get("range", "month")
         posid = request.query_params.get("posid", None)
         try:
@@ -172,10 +179,34 @@ class PosDeviceViewSet(
         except (TypeError, ValueError):
             posid = None
 
-        serializer = SummaryRecordSerializer(
-            get_sales_summary(wallet_hash=wallet_hash, posid=posid, summary_range=summary_range),
-            many=True,
-        )
+        try:
+            timestamp_from = int(request.query_params.get("from", None))
+            timestamp_from = timezone.datetime.fromtimestamp(timestamp_from).replace(tzinfo=timezone.pytz.UTC)
+        except (TypeError, ValueError):
+            timestamp_from = None
+
+        try:
+            timestamp_to = int(request.query_params.get("to", None))
+            timestamp_to = timezone.datetime.fromtimestamp(timestamp_to).replace(tzinfo=timezone.pytz.UTC)
+        except (TypeError, ValueError):
+            timestamp_to = None
+
+        try:
+            queryset = get_sales_summary(
+                wallet_hash=wallet_hash, posid=posid,
+                summary_range=summary_range,
+                timestamp_from=timestamp_from, timestamp_to=timestamp_to,
+                currency=currency,
+            )
+        except SalesSummaryException as e:
+            return Response(str(e), status=400)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = SummaryRecordSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = SummaryRecordSerializer(queryset, many=True)
         return Response(serializer.data)
 
 
