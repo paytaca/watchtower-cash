@@ -173,11 +173,11 @@ CELERY_IMPORTS = (
     'anyhedge.tasks',
 )
 
-CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
-CELERY_RESULT_BACKEND = 'rpc://'
+# CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
+# CELERY_RESULT_BACKEND = 'rpc://'
 
 if REDIS_PASSWORD:
-    # CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
     CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
@@ -186,8 +186,8 @@ if REDIS_PASSWORD:
         db=DB_NUM[2]
     )
 else:
-    # CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    # CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         port=6379,

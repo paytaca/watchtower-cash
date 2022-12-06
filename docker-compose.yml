@@ -10,13 +10,13 @@ services:
     image: "redis:alpine"
     env_file:
       - .env_dev
-  rabbitmq:
-    container_name: rabbitmq
-    hostname: rabbitmq
-    image: rabbitmq:latest
-    ports:
-      - "5672:5672"
-    restart: on-failure
+  # rabbitmq:
+  #   container_name: rabbitmq
+  #   hostname: rabbitmq
+  #   image: rabbitmq:latest
+  #   ports:
+  #     - "5672:5672"
+  #   restart: on-failure
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
