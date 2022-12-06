@@ -31,6 +31,32 @@ class TimestampField(serializers.IntegerField):
     def to_internal_value(self, data):
         return datetime.fromtimestamp(data).replace(tzinfo=pytz.UTC)
 
+class SuspendDeviceSerializer(serializers.Serializer):
+    is_suspended = serializers.BooleanField()
+
+    def __init__(self, *args, pos_device=None, **kwargs):
+        self.pos_device = pos_device
+        return super().__init__(*args, **kwargs)
+
+    def validate(self, data):
+        if not isinstance(self.pos_device, PosDevice):
+            raise serializers.ValidationError("pos device not found")
+
+        if not self.pos_device.linked_device:
+            raise serializers.ValidationError("pos device is not linked")
+
+        return data
+
+    def save(self):
+        is_suspended = self.validated_data["is_suspended"]
+        if self.pos_device.linked_device.is_suspended != is_suspended:
+            self.pos_device.linked_device.is_suspended = is_suspended
+            self.pos_device.linked_device.save()
+            self.pos_device.linked_device.refresh_from_db()
+
+            send_device_update(self.pos_device, action = "suspend" if is_suspended else "unsuspend")
+        return self.pos_device
+
 
 class PosDeviceLinkSerializer(serializers.Serializer):
     code = serializers.CharField()

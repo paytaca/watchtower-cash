@@ -20,3 +20,15 @@
         - `device_id`, `name`, `device_model`, `os` - optional information about the POS app's device
     - `/devices/redeem_link_device_code/` api returns the pos device's info
     - After successfull call, the app stores `link_code`, `xpubkey`, `walle_hash`, `posid`
+
+
+# POS Device unlinking flow
+Unlinking is initiated by the merchant then confirmed by the pos device
+1. (Main app) Creates a unlink request through `/devices/{wallet_hash_posid}/unlink_device/`
+    - The app will generate a random `nonce` and sign the linked device's `link_code` using the key pair of the wallet at index `nonce`
+    - Pass the `nonce` & `signature` to api for creating an unlink request
+2. (POS app) POS Device confirm unlink request
+    - Device retrieves the device info which has the unlink request data needed to confirm
+    - To verify that the pos device confirmed the unlink process, the device must generate the pubkey of the wallet at index `nonce`
+
+- Both either side can cancel the unlink request through `/devices/{wallet_hash_posid}/unlink_device/cancel/`

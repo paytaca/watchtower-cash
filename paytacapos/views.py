@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, decorators
 from rest_framework import status
 from .serializers import (
+    SuspendDeviceSerializer,
     PosDeviceLinkSerializer,
     PosDeviceLinkRequestSerializer,
     LinkedDeviceInfoSerializer,
@@ -68,6 +69,15 @@ class PosDeviceViewSet(
                 output_field=CharField(max_length=75),
             )
         ).all()
+
+    @swagger_auto_schema(method="post", request_body=SuspendDeviceSerializer, responses={ 200: serializer_class })
+    @decorators.action(methods=["post"], detail=True)
+    def suspend(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = SuspendDeviceSerializer(pos_device=instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        return Response(self.get_serializer(instance).data)
 
     @transaction.atomic
     @swagger_auto_schema(method="post", request_body=UnlinkDeviceSerializer, responses={ 200: serializer_class })
