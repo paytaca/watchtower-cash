@@ -16,7 +16,7 @@ RUN sudo apt install -y curl
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
 RUN sudo apt install nodejs -y
 COPY ./anyhedge/js/package*.json /code/anyhedge/js/
-RUN npm install --prefix /code/anyhedge/js
+RUN npm install --prefix /code/anyhedge/js --legacy-peer-deps
 
 COPY . /code
 WORKDIR /code
