@@ -83,5 +83,5 @@ class SalesSummary(object):
         queryset = queryset.order_by(*["-" + key for key in annotate.keys()])
         queryset = queryset.annotate(**fields)
 
-        response.data = queryset
+        response.data = queryset.all()
         return response
