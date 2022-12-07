@@ -2,7 +2,7 @@ from django.utils import timezone as tz
 from django.core.management.base import BaseCommand
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
-from main.models import Token, Transaction
+from main.models import Token, Transaction, Subscription
 import grpc
 import time
 import random
@@ -57,11 +57,11 @@ def run():
             for _input in tx.inputs:
                 txid = bytearray(_input.outpoint.hash[::-1]).hex()
                 index = _input.outpoint.index
-                for transaction in Transaction.objects.filter(txid=txid, index=index):
-                    has_subscribed_input = has_subscribed_input or transaction.wallet is not None
-                    transaction.spent = True
-                    transaction.spending_txid=tx_hash
-                    transaction.save()
+                spent_transactions = Transaction.objects.filter(txid=txid, index=index)
+                
+                spent_transactions.update(spent=True, spending_txid=tx_hash)
+                has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
+                has_subscribed_input = has_subscribed_input or has_existing_wallet
 
                 token_id = None
                 address = None
@@ -75,7 +75,12 @@ def run():
                     address = 'bitcoincash:' + _input.address
                     amount = _input.value / (10 ** 8)
 
-                if token_id and address:
+
+                subscription = Subscription.objects.filter(
+                    address__address=address             
+                )
+
+                if token_id and subscription.exists():
                     inputs_data.append({
                         "index": _input.index,
                         "token": token_id,

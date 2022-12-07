@@ -221,12 +221,10 @@ def save_record(
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
     )
-    
-    spent_txids_check = Transaction.objects.filter(txid__in=spent_txids)
 
     # We are only tracking outputs of either subscribed addresses or those of transactions
     # that spend previous transactions with outputs involving tracked addresses
-    if not subscription.exists() and not spent_txids_check.exists() and not force_create:
+    if not subscription.exists() and not force_create:
         return None, None
 
     address_obj, _ = Address.objects.get_or_create(address=transaction_address)
@@ -928,7 +926,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
     if parse_slp:
         if slp_tx is None:
             slp_tx = bchd.get_transaction(txid, parse_slp=True)
-        spent_txids = []
 
         # Mark SLP tx inputs as spent
         for tx_input in slp_tx['inputs']:
@@ -938,7 +935,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     wallets.append('slp|' + address.wallet.wallet_hash)
             except Address.DoesNotExist:
                 pass
-            spent_txids.append(tx_input['txid'])
             txn_check = Transaction.objects.filter(
                 txid=tx_input['txid'],
                 index=tx_input['spent_index']
@@ -985,7 +981,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         blockheight_id,
                         tx_output['index']
                     )
-                    obj_id, created = save_record(*args, spent_txids=spent_txids, tx_timestamp=tx_timestamp)
+                    obj_id, created = save_record(*args, tx_timestamp=tx_timestamp)
                     if created:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -998,8 +994,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
     if bch_tx is None:
         bch_tx = bchd.get_transaction(txid)
 
-    spent_txids = []
-    
     # Mark BCH tx inputs as spent
     for tx_input in bch_tx['inputs']:
         try:
@@ -1009,7 +1003,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         except Address.DoesNotExist:
             pass
 
-        spent_txids.append(tx_input['txid'])
         txn_check = Transaction.objects.filter(
             txid=tx_input['txid'],
             index=tx_input['spent_index']
@@ -1046,7 +1039,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                 blockheight_id,
                 tx_output['index']
             )
-            obj_id, created = save_record(*args, spent_txids=spent_txids, tx_timestamp=bch_tx['timestamp'])
+            obj_id, created = save_record(*args, tx_timestamp=bch_tx['timestamp'])
             if created:
                 third_parties = client_acknowledgement(obj_id)
                 for platform in third_parties:
