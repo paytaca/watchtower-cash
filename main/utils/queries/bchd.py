@@ -201,7 +201,8 @@ class BCHDQuery(object):
 
     def get_transaction(self, transaction_hash, parse_slp=False):
         txn = self._get_raw_transaction(transaction_hash)
-        return self._parse_transaction(txn, parse_slp=parse_slp)
+        if txn:
+            return self._parse_transaction(txn, parse_slp=parse_slp)
 
     def get_utxos(self, address):
         cert = ssl.get_server_certificate(self.base_url.split(':'))

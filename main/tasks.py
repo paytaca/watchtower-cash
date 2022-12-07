@@ -858,9 +858,9 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
-    LOGGER.info(f"TX POST SAVE TASK: {address} | {transaction_id} | {blockheight_id}")
     transaction = Transaction.objects.get(id=transaction_id)
     txid = transaction.txid
+    LOGGER.info(f"TX POST SAVE TASK: {address} | {txid} | {blockheight_id}")
     blockheight = None
     if blockheight_id:
         blockheight = BlockHeight.objects.get(id=blockheight_id)
@@ -1096,6 +1096,7 @@ def rescan_utxos(wallet_hash, full=False):
 
 @shared_task(queue='wallet_history_1', max_retries=3)
 def parse_tx_wallet_histories(txid, source=""):
+    LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
     bchd = BCHDQuery()
     bch_tx = bchd.get_transaction(txid)
 
