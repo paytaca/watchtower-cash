@@ -1,10 +1,52 @@
 from django.db import models
 
+
+class LinkedDeviceInfo(models.Model):
+    link_code = models.CharField(max_length=100, unique=True)
+
+    device_id = models.CharField(max_length=50, null=True, blank=True)
+    name = models.CharField(max_length=50, null=True, blank=True)
+    device_model = models.CharField(max_length=50, null=True, blank=True)
+    os = models.CharField(max_length=15, null=True, blank=True)
+    is_suspended = models.BooleanField(default=False)
+
+    def get_unlink_request(self):
+        try:
+            return self.unlink_request
+        except LinkedDeviceInfo.unlink_request.RelatedObjectDoesNotExist:
+            pass
+
+
+class UnlinkDeviceRequest(models.Model):
+    linked_device_info = models.OneToOneField(
+        LinkedDeviceInfo,
+        on_delete=models.CASCADE,
+        related_name="unlink_request",
+    )
+
+    force = models.BooleanField(default=False)
+    signature = models.TextField(
+        help_text="Signed data of link_code"
+    )
+    nonce = models.IntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def message(self):
+        return self.linked_device_info.link_code
+
+
 class PosDevice(models.Model):
     posid = models.IntegerField()
     wallet_hash = models.CharField(max_length=70)
 
     name = models.CharField(max_length=100, null=True, blank=True)
+    linked_device = models.OneToOneField(
+        LinkedDeviceInfo,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="pos_device",
+    )
 
     branch = models.ForeignKey(
         "Branch",

@@ -1,10 +1,16 @@
+import json
 import pytz
+import bitcoin
+from uuid import uuid4
 from datetime import datetime
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (
+    LinkedDeviceInfo,
+    UnlinkDeviceRequest,
     PosDevice,
     Location,
     Merchant,
@@ -12,6 +18,10 @@ from .models import (
 )
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
+from .utils.websocket import send_device_update
+
+
+REDIS_CLIENT = settings.REDISKV
 
 
 class TimestampField(serializers.IntegerField):
@@ -22,11 +32,254 @@ class TimestampField(serializers.IntegerField):
         return datetime.fromtimestamp(data).replace(tzinfo=pytz.UTC)
 
 
+class SummaryRecordSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField()
+    day = serializers.IntegerField(required=False)
+    total = serializers.FloatField()
+    total_market_value = serializers.FloatField(required=False)
+    currency = serializers.CharField(required=False)
+    count = serializers.IntegerField()
+
+
+class SalesSummarySerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField()
+    posid = serializers.IntegerField(required=False)
+    range_type = serializers.CharField()
+    timestamp_from = TimestampField(required=False)
+    timestamp_to = TimestampField(required=False)
+    data = SummaryRecordSerializer(many=True)
+
+
+class SuspendDeviceSerializer(serializers.Serializer):
+    is_suspended = serializers.BooleanField()
+
+    def __init__(self, *args, pos_device=None, **kwargs):
+        self.pos_device = pos_device
+        return super().__init__(*args, **kwargs)
+
+    def validate(self, data):
+        if not isinstance(self.pos_device, PosDevice):
+            raise serializers.ValidationError("pos device not found")
+
+        if not self.pos_device.linked_device:
+            raise serializers.ValidationError("pos device is not linked")
+
+        return data
+
+    def save(self):
+        is_suspended = self.validated_data["is_suspended"]
+        if self.pos_device.linked_device.is_suspended != is_suspended:
+            self.pos_device.linked_device.is_suspended = is_suspended
+            self.pos_device.linked_device.save()
+            self.pos_device.linked_device.refresh_from_db()
+
+            send_device_update(self.pos_device, action = "suspend" if is_suspended else "unsuspend")
+        return self.pos_device
+
+
+class PosDeviceLinkSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    expires = serializers.CharField(read_only=True)
+
+
+class PosDeviceLinkRequestSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField()
+    posid = serializers.IntegerField()
+    encrypted_xpubkey = serializers.CharField()
+    signature = serializers.CharField()
+
+    def validate(self, data):
+        wallet_hash = data["wallet_hash"]
+        posid = data["posid"]
+
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid = posid).first()
+        if not pos_device:
+            raise serializers.ValidationError("pos device does not exist")
+        if pos_device.linked_device:
+            raise serializers.ValidationError("pos device is already linked")
+
+        return data
+
+    @classmethod
+    def generate_redis_key(cls, code):
+        return f"posdevicelink:{code}"
+
+    @classmethod
+    def retrieve_link_request_data(cls, code):
+        redis_key = cls.generate_redis_key(code)
+        encoded_data = REDIS_CLIENT.get(redis_key)
+        try:
+            return json.loads(encoded_data)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    def save_link_request(self):
+        code_ttl = 60 * 5 # seconds
+        code = uuid4().hex
+        redis_key = self.generate_redis_key(code)
+        data = json.dumps(self.validated_data).encode()
+        REDIS_CLIENT.set(redis_key, data, ex=code_ttl)
+        now = timezone.now()
+        expires = now + timezone.timedelta(seconds=code_ttl)
+        return { "code": code, "expires": expires.timestamp() }
+
+
+class UnlinkDeviceSerializer(serializers.Serializer):
+    verifying_pubkey = serializers.CharField()
+
+    def __init__(self, *args, pos_device=None, **kwargs):
+        self.pos_device = pos_device
+        return super().__init__(*args, **kwargs)
+
+    def validate(self, data):
+        if not self.pos_device.linked_device:
+            raise serializers.ValidationError("pos device is not linked")
+        if not self.pos_device.linked_device.get_unlink_request():
+            raise serializers.ValidationError("pos device has no unlink request")
+
+        verifying_pubkey = data["verifying_pubkey"]
+        unlink_request = self.pos_device.linked_device.get_unlink_request()
+        if not bitcoin.ecdsa_verify(unlink_request.message, unlink_request.signature, verifying_pubkey):
+            raise serializers.ValidationError("invalid verifying pubkey")
+
+        return data
+
+    def save(self):
+        self.pos_device.linked_device.delete()
+        self.pos_device.refresh_from_db()
+        send_device_update(self.pos_device, action="unlink")
+        return self.pos_device
+
+
+class UnlinkDeviceRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnlinkDeviceRequest
+        fields = [
+            "id",
+            "force",
+            "signature",
+            "nonce",
+            "updated_at",
+        ]
+
+        extra_kwargs = {
+            "updated_at": {
+                "read_only": True,
+            },
+        }
+
+    def __init__(self, *args, linked_device_info=None, **kwargs):
+        self.linked_device_info = linked_device_info
+        return super().__init__(*args, **kwargs)
+
+    def validate_nonce(self, value):
+        if value < 0 or value > 2 ** 31:
+            raise serializers.ValidationError(f"nonce must be between 0 and 2^31")
+        return value
+
+    def validate(self, data):
+        data["linked_device_info"] = self.linked_device_info
+        return data
+
+    def create(self, validated_data):
+        linked_device_info = validated_data["linked_device_info"]
+        instance = None
+        try:
+            instance = UnlinkDeviceRequest.objects.get(linked_device_info=linked_device_info)
+        except UnlinkDeviceRequest.DoesNotExist:
+            pass
+
+        if instance:
+            return super().update(instance, validated_data)
+        return super().create(validated_data)
+
+
+class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
+    verifying_pubkey = serializers.CharField(write_only=True)
+    link_code = serializers.CharField()
+    unlink_request = UnlinkDeviceRequestSerializer(read_only=True)
+
+    class Meta:
+        model = LinkedDeviceInfo
+        fields = [
+            "verifying_pubkey",
+            "link_code",
+            "device_id",
+            "name",
+            "device_model",
+            "os",
+            "is_suspended",
+            "unlink_request",
+        ]
+
+        extra_kwargs = {
+            "is_suspended": {
+                "read_only": True,
+            },
+        }
+
+    def remove_link_code_data(self):
+        if not self.instance:
+            return
+        redis_key = f"posdevicelink:{self.instance.link_code}"
+        encoded_data = REDIS_CLIENT.delete(redis_key)
+
+    def validate(self, data):
+        verifying_pubkey = data.pop("verifying_pubkey")
+        link_code = data["link_code"]
+        link_code_data = PosDeviceLinkRequestSerializer.retrieve_link_request_data(link_code)
+        data_serializer = PosDeviceLinkRequestSerializer(data=link_code_data)
+        if not data_serializer.is_valid():
+            raise serializers.ValidationError("data from link code is invalid")
+
+        encrypted_xpubkey = data_serializer.validated_data["encrypted_xpubkey"]
+        signature = data_serializer.validated_data["signature"]
+        if not bitcoin.ecdsa_verify(encrypted_xpubkey, signature, verifying_pubkey):
+            raise serializers.ValidationError("invalid verifying pubkey")
+
+        data["link_code_data"] = data_serializer.validated_data
+
+        wallet_hash = data["link_code_data"]["wallet_hash"]
+        posid = data["link_code_data"]["posid"]
+
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
+        if not pos_device:
+            raise serializers.ValidationError("pos device not found")
+
+        if pos_device.linked_device and pos_device.linked_device != link_code:
+            raise serializers.ValidationError("pos device is already linked")
+
+        return data
+
+    @transaction.atomic
+    def create(self, validated_data):
+        link_code = validated_data["link_code"]
+        link_code_data = validated_data.pop("link_code_data")
+
+        wallet_hash = link_code_data["wallet_hash"]
+        posid = link_code_data["posid"]
+
+        pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
+        if not pos_device:
+            raise ValidationError("pos device not found")
+
+        if pos_device.linked_device and pos_device.linked_device.link_code == link_code:
+            instance = super().update(pos_device.linked_device, validated_data)
+        else:
+            instance = super().create(validated_data)
+            pos_device.linked_device = instance
+            pos_device.save()
+
+        return instance
+
+
 class PosDeviceSerializer(serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
     name = serializers.CharField(required=False)
     branch_id = serializers.IntegerField(required=False, allow_null=True)
+    linked_device = LinkedDeviceInfoSerializer(read_only=True)
 
     class Meta:
         model = PosDevice
@@ -35,6 +288,7 @@ class PosDeviceSerializer(serializers.ModelSerializer):
             "wallet_hash",
             "name",
             "branch_id",
+            "linked_device",
         ]
 
     def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
@@ -92,11 +346,15 @@ class PosDeviceSerializer(serializers.ModelSerializer):
 
         try:
             instance = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
-            return super().update(instance, validated_data)
+            instance = super().update(instance, validated_data)
+            send_device_update(instance, action="update")
+            return instance
         except PosDevice.DoesNotExist:
             pass
 
-        return super().create(validated_data, *args, **kwargs)
+        instance = super().create(validated_data, *args, **kwargs)
+        send_device_update(instance, action="create")
+        return instance
 
 
 class POSPaymentSerializer(serializers.Serializer):
