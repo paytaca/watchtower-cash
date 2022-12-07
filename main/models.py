@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import JSONField
 from psqlextra.models import PostgresModel
+from psqlextra.query import PostgresQuerySet
 from django.contrib.postgres.fields import ArrayField
 from django.conf import settings
 
@@ -275,7 +276,7 @@ class Subscription(PostgresModel):
     websocket=models.BooleanField(default=False)
     date_created = models.DateTimeField(default=timezone.now)
 
-class WalletHistoryQuerySet(models.QuerySet):
+class WalletHistoryQuerySet(PostgresQuerySet):
     POS_ID_MAX_DIGITS = 4
 
     def filter_pos(self, wallet_hash, posid=None):
@@ -307,6 +308,7 @@ class WalletHistoryQuerySet(models.QuerySet):
 
         return self.filter(
             models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery),
+            wallet__wallet_hash=wallet_hash,
         )
 
 class WalletHistory(PostgresModel):
