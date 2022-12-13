@@ -73,6 +73,16 @@ class PosDeviceViewSet(
             )
         ).all()
 
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.linked_device:
+            return Response(["POS device is linked, unlink device first"], status=400)
+
+        response = super().destroy(request, *args, **kwargs)
+        send_device_update(instance, action="destroy")
+        return response
+
     @swagger_auto_schema(method="post", request_body=SuspendDeviceSerializer, responses={ 200: serializer_class })
     @decorators.action(methods=["post"], detail=True)
     def suspend(self, request, *args, **kwargs):
