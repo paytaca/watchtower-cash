@@ -2,6 +2,7 @@ import binascii
 import requests
 import bitcoin
 import cashaddress
+import urllib.parse
 from django.utils import timezone
 
 from . import paymentrequest_pb2 as pb2
@@ -53,6 +54,13 @@ class PaymentRequest:
             self.outputs.append({ "address": cashaddr, "amount": o.amount })
         self.memo = self.details.memo
         self.payment_url = self.details.payment_url
+
+        parsed_payment_url = urllib.parse.urlparse(self.payment_url)
+        path = parsed_payment_url.path
+        if isinstance(path, bytes):
+            path = path.encode()
+        tokenized_path = [segment for segment in path.split('/') if segment]
+        self.payment_id = tokenized_path[-1]
 
         self.time = timezone.datetime.fromtimestamp(self.details.time).replace(tzinfo=timezone.pytz.UTC)
         self.expires = timezone.datetime.fromtimestamp(self.details.expires).replace(tzinfo=timezone.pytz.UTC)
