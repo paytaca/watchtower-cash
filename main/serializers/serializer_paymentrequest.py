@@ -41,3 +41,17 @@ class PaySerializer(serializers.Serializer):
             return False, "PaymentACK could not be processed. Payment was sent; please manually verify that payment was received."
         print("PaymentACK message received: %s" % payment_ack_pb.memo)
         return True, payment_ack_pb.memo
+
+
+class OutputSerializer(serializers.Serializer):
+    address = serializers.CharField()
+    amount = serializers.IntegerField()
+
+class PaymentDetailsSerializer(serializers.Serializer):
+    network = serializers.CharField()
+    outputs = OutputSerializer(many=True)
+    memo = serializers.CharField()
+    payment_url = serializers.CharField()
+
+    time = serializers.DateTimeField()
+    expires = serializers.DateTimeField()
