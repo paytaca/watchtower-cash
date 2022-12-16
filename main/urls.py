@@ -11,6 +11,7 @@ router = routers.DefaultRouter()
 router.register(r"tokens", views.TokensViewSet, basename="tokens")
 router.register(r"wallet/address-scan", views.WalletAddressScanViewSet, basename="address-scan")
 router.register(r"wallet/preferences", views.WalletPreferencesViewSet, basename="wallet-preferences")
+router.register(r"payment-requests", views.PaymentRequestViewSet, basename="payment-requests")
 
 main_urls = router.urls
 
