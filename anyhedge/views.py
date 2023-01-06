@@ -242,6 +242,7 @@ class HedgePositionOfferViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
 ):
     serializer_class = HedgePositionOfferSerializer
     pagination_class = CustomLimitOffsetPagination
@@ -251,6 +252,12 @@ class HedgePositionOfferViewSet(
 
     def get_queryset(self):
         return HedgePositionOfferSerializer.Meta.model.objects.all()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != HedgePositionOffer.STATUS_PENDING:
+            return Response(status=400)
+        return super().destroy(request, *args, **kwargs)
 
     @swagger_auto_schema(method="post", request_body=HedgePositionOfferCounterPartySerializer, responses={200: serializer_class})
     @decorators.action(methods=["post"], detail=True)
