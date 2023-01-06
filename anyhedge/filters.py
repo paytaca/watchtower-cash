@@ -78,11 +78,13 @@ class HedgePositionFilter(filters.FilterSet):
 class HedgePositionOfferFilter(filters.FilterSet):
     statuses = filters.CharFilter(field_name="status", method="statuses_filter")
     exclude_wallet_hash = filters.CharFilter(field_name="wallet_hash", method="exclude_wallet_hash_filter")
+    counter_party_wallet_hash = filters.CharFilter(field_name="counter_party_info__wallet_hash")
 
     class Meta:
         model = HedgePositionOffer
         fields= [
             "wallet_hash",
+            "position",
         ]
     
     def statuses_filter(self, queryset, name, value):
