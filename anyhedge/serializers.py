@@ -683,9 +683,9 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             "address",
             "pubkey",
             "address_path",
-            "hedge_position",
             "expires_at",
             "created_at",
+            "hedge_position",
             "counter_party_info",
         ]
 
@@ -696,8 +696,21 @@ class HedgePositionOfferSerializer(serializers.ModelSerializer):
             },
         }
 
+    def validate_wallet_hash(self, value):
+        if self.instance and self.instance.wallet_hash != value:
+            raise serializers.ValidationError("wallet_hash is not editable")
+        return value
+
     def validate(self, data):
-        if not match_pubkey_to_cash_address(data["pubkey"], data["address"]):
+        if self.instance and self.instance.status != HedgePositionOffer.STATUS_PENDING:
+            raise serializers.ValidationError(f"unable to edit in \"{self.instance.status}\" state")
+        if self.instance:
+            pubkey = data.get("pubkey", self.instance.pubkey)
+            address = data.get("address", self.instance.address)
+        else:
+            pubkey = data["pubkey"]
+            address = data["address"]
+        if not match_pubkey_to_cash_address(pubkey, address):
             raise serializers.ValidationError("public key & address does not match")
         return data
 

@@ -243,6 +243,7 @@ class HedgePositionOfferViewSet(
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
     mixins.DestroyModelMixin,
+    mixins.UpdateModelMixin,
 ):
     serializer_class = HedgePositionOfferSerializer
     pagination_class = CustomLimitOffsetPagination
