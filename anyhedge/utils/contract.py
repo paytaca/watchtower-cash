@@ -1,5 +1,26 @@
 from datetime import datetime
 from ..js.runner import AnyhedgeFunctions
+from ..models import HedgePositionOffer
+
+
+def calculate_hedge_sats(long_sats=0.0, low_price_mult=1, price_value=None):
+    """
+        Calculate hedge satoshis based on long satoshis
+        NOTE: resulting value is off by some small amount due to the
+            original formula (calculating long sats from hedge sats) uses unreversible function "round"
+        More info on the equation in: https://gist.github.com/khirvy019/f5786918dddb63413c5cd412335a8354
+    """
+    if price_value:
+        low_liquidation_price = round(price_value * low_price_mult)
+        calculated_sats = round(long_sats / ((price_value / low_liquidation_price) - 1))
+    else:
+        # long_sats = (calculated_sats / low_price_mult) - calculated_sats
+        # long_sats = calculated_sats * (1/low_price_mult - 1)
+        # long_sats = calculated_sats * (1-low_price_mult)/low_price_mult
+        # calculated_sats =  long_sats / (1-low_price_mult)/low_price_mult
+        calculated_sats =  long_sats * low_price_mult / (1-low_price_mult)
+    return calculated_sats
+
 
 def create_contract(
     satoshis:int=0,
@@ -130,6 +151,48 @@ def compile_contract_from_hedge_position(hedge_position_obj):
         funding_satoshis=funding_satoshis,
         funding_fee_output=fee_output,
         funding_fee_satoshis=fee_satoshis,
+    )
+
+def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
+    duration_seconds = hedge_position_offer_obj.duration_seconds
+    low_price_mult = hedge_position_offer_obj.low_liquidation_multiplier
+    high_price_mult = hedge_position_offer_obj.high_liquidation_multiplier
+
+    oracle_pubkey = hedge_position_offer_obj.oracle_pubkey
+    start_price = hedge_position_offer_obj.counter_party_info.price_value
+    start_timestamp = hedge_position_offer_obj.counter_party_info.price_message_timestamp
+
+    hedge_address = hedge_position_offer_obj.address
+    hedge_pubkey = hedge_position_offer_obj.pubkey
+    long_address = hedge_position_offer_obj.counter_party_info.address
+    long_pubkey = hedge_position_offer_obj.counter_party_info.pubkey
+    if hedge_position_offer_obj.position == HedgePositionOffer.POSITION_LONG:
+        hedge_address, long_address = long_address, hedge_address
+        hedge_pubkey, long_pubkey = long_pubkey, hedge_pubkey
+
+    if hedge_position_offer_obj.position == HedgePositionOffer.POSITION_HEDGE:
+        contract_sats = hedge_position_offer_obj.satoshis
+    else:
+        contract_sats = calculate_hedge_sats(
+            long_sats=hedge_position_offer_obj.satoshis,
+            low_price_mult=low_price_mult,
+            price_value=start_price,
+        )
+
+    nominal_units = contract_sats * start_price / 10 ** 8
+
+    return compile_contract(
+        nominal_units=nominal_units,
+        duration=duration_seconds,
+        startPrice=start_price,
+        startTimestamp=datetime.timestamp(start_timestamp),
+        oraclePublicKey=oracle_pubkey,
+        highLiquidationPriceMultiplier=high_price_mult,
+        lowLiquidationPriceMultiplier=low_price_mult,
+        hedgePublicKey=hedge_pubkey,
+        longPublicKey=long_pubkey,
+        hedgeAddress=hedge_address,
+        longAddress=long_address,
     )
 
 

@@ -42,14 +42,23 @@ List views are always paginated by limit-offset, defaults to limit=10,offset=0
   - `/anyhedge/price-messages/`
     - provides a list of oracle price messages, can be filtered by `pubkey`, `timestamp`(range), `price_sequence`(range), and/or `message_sequence`(range)
 ### HedgePositionOffer - `/anyhedge/hedge-position-offers/.*`
-  - List view: rest-framework's default, can be filtered by `wallet_hash`
+  - List view: rest-framework's default, can be filtered by `wallet_hash`, `exclude_wallet_hash`, `statuses`
   - Create view: 
     - rest-framework's default
-    - has option to `auto_match` to P2P liquidity. If set, it will create a HedgePosition if succeeds to find a counterparty, otherwise, will throw an error. 
-    - has option to skip saving the hedge position offer and simply create a HedgePosition if `auto_match` is enabled by providing `save_position_offer` flag.
-  - POST:`/{id}/cancel_hedge_request/` - will flag the hedge position offer as cancelled
+  - POST:`/find_match/` - finds a matching hedge position offer given a set of parameters
+    - if there is no suitable match, it will return a list of offers that is similar to the expected match
+  - POST: `{id}/accept_offer/`
+    - used for accepting an existing hedge position offer created by other users
+    - the request payload will contain the other information needed to compile a contract in 
+    - the accepted offer's status will be set to "accepted"
+    - while the offer is in "accepted" state, the offer will not be matched in the `/find_match/` endpoint
+    - there will be a `settlement_deadline` where the user that accepted the offer must settle the offer by providing its funding utxo(through `{id}/settle_offer/` API)
   - POST:`/{id}/settle_offer/`
-    - will create a hedge position from the HedgePositionOffer instance and the long's(counterparty) info provided in the request payload 
+    - to settle an offer, the offer must be in "accepted" state
+    - the request payload must contain the funding utxo for the counterparty
+    - will create a hedge position from the HedgePositionOffer instance and its HedgePositionOfferCounterParty info
+    - will update the offer's status to "settled"
+    - "settled" offers no longer be used in the `/find_match/` endpoint
 
 ### Other endpoints
   - Websocket updates `ws/anyhedge/updates/{wallet_hash}/$`

@@ -3,7 +3,10 @@ import base64
 import requests
 from cashaddress import convert
 from hashlib import sha256
-from .contract import compile_contract_from_hedge_position
+from .contract import (
+    compile_contract_from_hedge_position,
+    calculate_hedge_sats,
+)
 from ..js.runner import AnyhedgeFunctions
 
 
@@ -16,13 +19,9 @@ def get_tx_hash(tx_hex):
     return d.hex()
 
 
-def calculate_funding_amounts(hedge_position_obj):
-    contract_data = compile_contract_from_hedge_position(hedge_position_obj)
+def calculate_funding_amounts(contract_data, position="hedge", premium=0):
+    return AnyhedgeFunctions.calculateFundingAmounts(contract_data, position, premium)
 
-    if contract_data["address"] != hedge_position_obj.address:
-        raise Exception(f"Contract data compilation mismatch, got '{contract_data['address']}' instead of '{hedge_position_obj.address}'")
-    
-    return AnyhedgeFunctions.calculateFundingAmounts(contract_data, "hedge")
 
 
 def complete_funding_proposal(hedge_position_obj):

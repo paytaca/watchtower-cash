@@ -1,6 +1,7 @@
 import pytz
 from datetime import datetime, timedelta
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from .conf import settings as app_settings
@@ -14,6 +15,7 @@ from .models import (
     HedgeFundingProposal,
     MutualRedemption,
     HedgePositionOffer,
+    HedgePositionOfferCounterParty,
     HedgePositionFunding,
 
     Oracle,
@@ -22,16 +24,25 @@ from .models import (
 from .utils.address import match_pubkey_to_cash_address
 from .utils.contract import (
     create_contract,
-    get_contract_status
+    get_contract_status,
+    compile_contract_from_hedge_position_offer,
 )
 from .utils.funding import (
     get_tx_hash,
+    calculate_funding_amounts,
     validate_funding_transaction,
+    calculate_hedge_sats,
 )
 from .utils.liquidity import (
     consume_long_account_allowance,
     get_position_offer_suggestions,
+    find_matching_position_offer,
+    find_close_matching_offer_suggestion,
     fund_hedge_position,
+)
+from .utils.price_oracle import (
+    get_price_messages,
+    save_price_oracle_message,
 )
 from .utils.validators import (
     ValidAddress,
@@ -484,198 +495,336 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         return instance
 
 
+class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
+    calculated_hedge_sats = serializers.SerializerMethodField()
+    class Meta:
+        model = HedgePositionOfferCounterParty
+        fields = [
+            "settlement_deadline",
+            "contract_address",
+            "anyhedge_contract_version",
+            "wallet_hash",
+            "address",
+            "pubkey",
+            "address_path",
+            "price_message_timestamp",
+            "price_value",
+            "oracle_message_sequence",
+            "calculated_hedge_sats",
+        ]
+
+        extra_kwargs = {
+            "contract_address": {
+                "read_only": True,
+            },
+            "anyhedge_contract_version": {
+                "read_only": True,
+            },
+            "price_message_timestamp": {
+                "read_only": True,
+            },
+            "price_value": {
+                "read_only": True,
+            },
+            "settlement_deadline": {
+                "read_only": True,
+            },
+            "oracle_message_sequence": {
+                "required": False,
+            },
+        }
+
+    def __init__(self, *args, hedge_position_offer=None, **kwargs):
+        self.hedge_position_offer = hedge_position_offer
+        super().__init__(*args, **kwargs)
+
+    def get_calculated_hedge_sats(self, obj):
+        if obj.hedge_position_offer.position == HedgePositionOffer.POSITION_LONG:
+            return calculate_hedge_sats(
+                long_sats=obj.hedge_position_offer.satoshis,
+                low_price_mult=obj.hedge_position_offer.low_liquidation_multiplier,
+                price_value=obj.price_value,
+            )
+        
+
+    def validate_hedge_position_offer_id(self, value):
+        try:
+            hedge_position_offer = HedgePositionOffer.objects.get(id=value)
+            if hedge_position_offer.status != HedgePositionOffer.STATUS_PENDING:
+                raise serializers.ValidationError("hedge position offer is no longer active")
+        except HedgePositionOffer.DoesNotExist:
+            raise serializers.ValidationError("hedge position offer not found")
+
+        return value
+
+    def validate(self, data):
+        if not isinstance(self.hedge_position_offer, HedgePositionOffer):
+            raise serializers.ValidationError("invalid hedge position offer")
+
+        if self.hedge_position_offer.status != HedgePositionOffer.STATUS_PENDING:
+            raise serializers.ValidationError("hedge position offer is no longer active")
+
+        if not match_pubkey_to_cash_address(data["pubkey"], data["address"]):
+            raise serializers.ValidationError("public key & address does not match")
+        return data
+
+    @transaction.atomic()
+    def create(self, validated_data):
+        validated_data["hedge_position_offer"] = self.hedge_position_offer
+
+        # get latest price data or price data from oracle_message_sequence
+        oracle_message_sequence = validated_data.pop("oracle_message_sequence", None)
+        price_oracle_message = self.get_price_message(
+            self.hedge_position_offer.oracle_pubkey,
+            oracle_message_sequence=oracle_message_sequence,
+        )
+
+        # construct contract from js scripts to get address & anyhedge_contract_version
+        contract_creation_params = {
+            "low_price_multiplier": self.hedge_position_offer.low_liquidation_multiplier,
+            "high_price_multiplier": self.hedge_position_offer.high_liquidation_multiplier,
+            "duration_seconds": self.hedge_position_offer.duration_seconds,
+            "oracle_pubkey": self.hedge_position_offer.oracle_pubkey,
+            "price_oracle_message_sequence": price_oracle_message.message_sequence,
+        }
+        if self.hedge_position_offer.position == HedgePositionOffer.POSITION_HEDGE:
+            contract_creation_params["satoshis"] = self.hedge_position_offer.satoshis
+            contract_creation_params["hedge_address"] = self.hedge_position_offer.address
+            contract_creation_params["hedge_pubkey"] = self.hedge_position_offer.pubkey
+            contract_creation_params["short_address"] = validated_data["address"]
+            contract_creation_params["short_pubkey"] = validated_data["pubkey"]
+        else:
+            calculated_hedge_sats = calculate_hedge_sats(
+                long_sats=self.hedge_position_offer.satoshis,
+                low_price_mult=self.hedge_position_offer.low_liquidation_multiplier,
+                price_value=price_oracle_message.price_value,
+            )
+            contract_creation_params["satoshis"] = calculated_hedge_sats
+            contract_creation_params["hedge_address"] = validated_data["address"]
+            contract_creation_params["hedge_pubkey"] = validated_data["pubkey"]
+            contract_creation_params["short_address"] = self.hedge_position_offer.address
+            contract_creation_params["short_pubkey"] = self.hedge_position_offer.pubkey
+
+        create_contract_response = create_contract(**contract_creation_params)
+        if not create_contract_response.get("success", None):
+            raise serializers.ValidationError("unable to construct contract")
+        contract_data = create_contract_response["contractData"]
+
+        validated_data["contract_address"] = contract_data["address"]
+        validated_data["anyhedge_contract_version"] = contract_data["version"]
+        validated_data["price_message_timestamp"] = price_oracle_message.message_timestamp
+        validated_data["price_value"] = price_oracle_message.price_value
+        validated_data["settlement_deadline"] = timezone.now() + timedelta(minutes=15)
+        validated_data["oracle_message_sequence"] = price_oracle_message.message_sequence
+
+        instance = super().create(validated_data)
+        instance.hedge_position_offer.status = HedgePositionOffer.STATUS_ACCEPTED
+        instance.hedge_position_offer.save()
+
+        return instance
+
+    def get_price_message(self, oracle_pubkey, oracle_message_sequence=None):
+        now = timezone.now()
+        query_kwargs = {
+            "pubkey": oracle_pubkey,
+        }
+        if oracle_message_sequence:
+            query_kwargs["message_sequence"] = oracle_message_sequence
+        else:
+            query_kwargs["message_timestamp__gte"] = now - timedelta(seconds=60)
+
+        price_oracle_message = PriceOracleMessage.objects.filter(**query_kwargs).order_by("-message_timestamp").first()
+
+        if not price_oracle_message:
+            query_kwargs = { "count": 1 }
+            oracle_obj = Oracle.objects.filter(pubkey=oracle_pubkey).first()
+            if oracle_obj:
+                query_kwargs["relay"] = oracle_obj.relay
+                query_kwargs["port"] = oracle_obj.port
+
+            if oracle_message_sequence:
+                query_kwargs["min_message_sequence"] = oracle_message_sequence
+                query_kwargs["max_message_sequence"] = oracle_message_sequence
+            price_data = get_price_messages(oracle_pubkey, **query_kwargs)
+            if len(price_data):
+                price_oracle_message = save_price_oracle_message(oracle_pubkey, price_data[0])
+
+        if not price_oracle_message:
+            raise serializers.ValidationError("unable to resolve oracle price")
+        elif price_oracle_message.message_timestamp < now - timedelta(seconds=120):
+            raise serializers.ValidationError("starting price is outdated")
+        return price_oracle_message
+
+
 class HedgePositionOfferSerializer(serializers.ModelSerializer):
     status = serializers.CharField(read_only=True)
     hedge_position = HedgePositionSerializer(read_only=True)
-    auto_settled = serializers.BooleanField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
-    auto_match = serializers.BooleanField(default=False, write_only=True)
-
-    price_oracle_message_sequence = serializers.IntegerField(required=False, write_only=True)
-
-    # Create a hedge position without saving the hedge position offer by setting this to false and;
-    # setting auto_match to true
-    save_position_offer = serializers.BooleanField(default=True, write_only=True)
+    counter_party_info = HedgePositionOfferCounterPartySerializer(read_only=True)
 
     class Meta:
         model = HedgePositionOffer
         fields = [
             "id",
             "status",
+            "position",
             "wallet_hash",
             "satoshis",
             "duration_seconds",
             "high_liquidation_multiplier",
             "low_liquidation_multiplier",
             "oracle_pubkey",
-            "hedge_address",
-            "hedge_pubkey",
-            "hedge_address_path",
+            "address",
+            "pubkey",
+            "address_path",
             "hedge_position",
-            "auto_settled",
+            "expires_at",
             "created_at",
-            "auto_match",
-            "price_oracle_message_sequence",
-            "save_position_offer",
+            "counter_party_info",
         ]
 
+        extra_kwargs = {
+            "position": {
+                "required": True,
+                "allow_blank": False,
+            },
+        }
+
     def validate(self, data):
-        save_position_offer = data.get("save_position_offer", None)
-        auto_match = data.get("auto_match", None)
-        if not match_pubkey_to_cash_address(data["hedge_pubkey"], data["hedge_address"]):
+        if not match_pubkey_to_cash_address(data["pubkey"], data["address"]):
             raise serializers.ValidationError("public key & address does not match")
-
-        if not auto_match and not save_position_offer:
-            raise serializers.ValidationError("'save_position_offer' or 'auto_match' must either be selected")
-
         return data
 
-    @transaction.atomic()
-    def create(self, validated_data, *args, **kwargs):
-        auto_match = validated_data.pop("auto_match", False)
-        price_oracle_message_sequence = validated_data.pop("price_oracle_message_sequence", None)
-        save_position_offer = validated_data.pop("save_position_offer", None)
 
-        instance = self.init_instance(validated_data, save=save_position_offer)
+class MatchHedgePositionSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField(required=False)
+    position = serializers.CharField()
+    satoshis = serializers.IntegerField()
+    duration_seconds = serializers.IntegerField()
+    low_liquidation_multiplier = serializers.FloatField()
+    high_liquidation_multiplier = serializers.FloatField()
+    oracle_pubkey = serializers.CharField()
 
-        if auto_match:
-            instance = self.auto_match_p2p(instance, price_oracle_message_sequence=price_oracle_message_sequence)
-        return instance
+    matching_position_offer = HedgePositionOfferSerializer(read_only=True)
+    similar_position_offers = HedgePositionOfferSerializer(many=True, read_only=True)
 
-    def init_instance(self, validated_data, save=False):
-        if save:
-            instance = super().create(validated_data)
-        else:
-            instance = self.Meta.model(**validated_data)
+    def validate_position(self, value):
+        if value not in [HedgePositionOffer.POSITION_HEDGE, HedgePositionOffer.POSITION_LONG]:
+            raise serializers.ValidationError("invalid position type")
+        return value
 
-        return instance
-
-    @classmethod
-    def auto_match_p2p(cls, instance:HedgePositionOffer, price_oracle_message_sequence=None) -> HedgePositionOffer:
-        long_accounts = get_position_offer_suggestions(
-            amount=instance.satoshis,
-            duration_seconds=instance.duration_seconds,
-            low_liquidation_multiplier=instance.low_liquidation_multiplier,
-            high_liquidation_multiplier=instance.high_liquidation_multiplier,
-            exclude_wallet_hash=instance.wallet_hash,
+    def find_match(self):
+        response = { **self.validated_data }
+        response["matching_position_offer"] = find_matching_position_offer(
+            position=self.validated_data["position"],
+            amount=self.validated_data["satoshis"],
+            duration_seconds=self.validated_data["duration_seconds"],
+            low_liquidation_multiplier=self.validated_data["low_liquidation_multiplier"],
+            high_liquidation_multiplier=self.validated_data["high_liquidation_multiplier"],
+            exclude_wallet_hash=self.validated_data["wallet_hash"],
+            oracle_pubkey=self.validated_data["oracle_pubkey"],
         )
-        if long_accounts:
-            long_account = long_accounts[0]
-            response = create_contract(
-                satoshis=instance.satoshis,
-                low_price_multiplier=instance.low_liquidation_multiplier,
-                high_price_multiplier=instance.high_liquidation_multiplier,
-                duration_seconds=instance.duration_seconds,
-                hedge_address=instance.hedge_address,
-                hedge_pubkey=instance.hedge_pubkey,
-                short_address=long_account.address,
-                short_pubkey=long_account.pubkey,
-                oracle_pubkey=instance.oracle_pubkey,
-                price_oracle_message_sequence=price_oracle_message_sequence,
+
+        response["similar_position_offers"] = []
+        if not response["matching_position_offer"]:
+            response["similar_position_offers"] = find_close_matching_offer_suggestion(
+                position=self.validated_data["position"],
+                amount=self.validated_data["satoshis"],
+                duration_seconds=self.validated_data["duration_seconds"],
+                low_liquidation_multiplier=self.validated_data["low_liquidation_multiplier"],
+                high_liquidation_multiplier=self.validated_data["high_liquidation_multiplier"],
+                exclude_wallet_hash=self.validated_data["wallet_hash"],
+                oracle_pubkey=self.validated_data["oracle_pubkey"],
             )
 
-            if "success" in response and response["success"]:
-                contract_data = response["contractData"]
-                settle_hedge_position_offer_data = {
-                    "address": contract_data["address"],
-                    "anyhedge_contract_version": contract_data["version"],
-                    "oracle_pubkey": contract_data["metadata"]["oraclePublicKey"],
-                    "oracle_price": contract_data["metadata"]["startPrice"],
-                    "oracle_timestamp": contract_data["metadata"]["startTimestamp"],
-                    "long_wallet_hash": long_account.wallet_hash,
-                    "long_address": contract_data["metadata"]["longAddress"],
-                    "long_pubkey": contract_data["metadata"]["longPublicKey"],
-                    "long_address_path": long_account.address_path,
-                }
+        return response
 
-                settle_hedge_position_offer_serializer = SettleHedgePositionOfferSerializer(
-                    data=settle_hedge_position_offer_data,
-                    hedge_position_offer=instance,
-                    auto_settled=True,
-                )
-                settle_hedge_position_offer_serializer.is_valid(raise_exception=True)
-                instance = settle_hedge_position_offer_serializer.save()
-            else:
-                error = "Error creating contract data"
-                script_error = response.get("error", None)
-                if script_error:
-                    error += f". {script_error}"
-                raise Exception(error)
-        else:
-            raise Exception(f"Failed to find match for {instance}")
-        return instance
 
 class SettleHedgePositionOfferSerializer(serializers.Serializer):
-    address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
-    anyhedge_contract_version = serializers.CharField()
-    oracle_pubkey = serializers.CharField()
-    oracle_price = serializers.IntegerField()
-    oracle_timestamp = serializers.IntegerField() # unix
-    long_wallet_hash = serializers.CharField(allow_blank=True)
-    long_address = serializers.CharField(validators=[ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)])
-    long_pubkey = serializers.CharField()
-    long_address_path = serializers.CharField(required=False)
+    counter_party_funding_proposal = HedgeFundingProposalSerializer()
 
-    def __init__(self, *args, hedge_position_offer=None, auto_settled=False, **kwargs):
+    def __init__(self, *args, hedge_position_offer=None, **kwargs):
         self.hedge_position_offer = hedge_position_offer
-        self.auto_settled = auto_settled
-        return super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def validate(self, data):
-        assert isinstance(self.hedge_position_offer, HedgePositionOffer), \
-            f"Expected type {HedgePositionOffer} but got {type(self.hedge_position_offer)}"
+        if not isinstance(self.hedge_position_offer, HedgePositionOffer):
+            raise serializers.ValidationError("invalid hedge position offer")
 
-        if self.hedge_position_offer.status == HedgePositionOffer.STATUS_SETTLED:
-            raise serializers.ValidationError("Hedge position offer is already settled")
-        elif self.hedge_position_offer.status == HedgePositionOffer.STATUS_CANCELLED:
-            raise serializers.ValidationError("Hedge position offer is already cancelled")
-        elif self.hedge_position_offer.hedge_position:
-            self.hedge_position_offer.status = HedgePositionOffer.STATUS_SETTLED
-            self.hedge_position_offer.save()
-            raise serializers.ValidationError("Hedge position offer is already settled")
+        if self.hedge_position_offer.status != HedgePositionOffer.STATUS_ACCEPTED:
+            raise serializers.ValidationError("hedge position offer has not been accepted yet")
 
-        if not match_pubkey_to_cash_address(data["long_pubkey"], data["long_address"]):
-            raise serializers.ValidationError("public key & address does not match")
+        try:
+            if not self.hedge_position_offer.counter_party_info:
+                raise HedgePositionOffer.counter_party_info.RelatedObjectDoesNotExist
+        except HedgePositionOffer.counter_party_info.RelatedObjectDoesNotExist:
+            raise serializers.ValidationError("counter party info missing")
+
+        contract_data = compile_contract_from_hedge_position_offer(self.hedge_position_offer)
+        funding_amounts = calculate_funding_amounts(contract_data, position=self.hedge_position_offer.position)
+
+        counter_party_funding_proposal_data = data["counter_party_funding_proposal"]
+        funding_amount = counter_party_funding_proposal_data["tx_value"]
+        expected_amount = funding_amounts["long" if self.hedge_position_offer.position == HedgePositionOffer.POSITION_HEDGE else "hedge"]
+        if funding_amount != expected_amount:
+            raise serializers.ValidationError(f"invalid funding amount, expected {expected_amount} satoshis")
 
         return data
 
     @transaction.atomic()
     def save(self):
         validated_data = self.validated_data
-        start_timestamp = datetime.fromtimestamp(validated_data["oracle_timestamp"]).replace(tzinfo=pytz.UTC)
-        maturity_timestamp = start_timestamp + timedelta(seconds=self.hedge_position_offer.duration_seconds) 
+
+        # create hedge position instance
+        contract_data = compile_contract_from_hedge_position_offer(self.hedge_position_offer)
+        contract_metadata = contract_data["metadata"]
+        start_timestamp = self.hedge_position_offer.counter_party_info.price_message_timestamp
+        maturity_timestamp = start_timestamp + timedelta(seconds=self.hedge_position_offer.duration_seconds)
 
         hedge_position = HedgePosition.objects.create(
-            address = validated_data["address"],
-            anyhedge_contract_version = validated_data["anyhedge_contract_version"],
-            satoshis = self.hedge_position_offer.satoshis,
+            address = contract_data["address"],
+            anyhedge_contract_version = contract_data["version"],
+            satoshis = contract_metadata["hedgeInputSats"],
             start_timestamp = start_timestamp,
             maturity_timestamp = maturity_timestamp,
-            hedge_wallet_hash = self.hedge_position_offer.wallet_hash,
-            hedge_address = self.hedge_position_offer.hedge_address,
-            hedge_pubkey = self.hedge_position_offer.hedge_pubkey,
-            hedge_address_path = self.hedge_position_offer.hedge_address_path,
-            long_wallet_hash = validated_data["long_wallet_hash"],
-            long_address = validated_data["long_address"],
-            long_pubkey = validated_data["long_pubkey"],
-            long_address_path = validated_data.get("long_address_path", None),
-            oracle_pubkey = validated_data["oracle_pubkey"],
-            start_price = validated_data["oracle_price"],
-            low_liquidation_multiplier = self.hedge_position_offer.low_liquidation_multiplier,
-            high_liquidation_multiplier = self.hedge_position_offer.high_liquidation_multiplier,
+            hedge_address = contract_metadata["hedgeAddress"],
+            hedge_pubkey = contract_metadata["hedgePublicKey"],
+            long_address = contract_metadata["longAddress"],
+            long_pubkey = contract_metadata["longPublicKey"],
+            oracle_pubkey = contract_metadata["oraclePublicKey"],
+            start_price = contract_metadata["startPrice"],
+            low_liquidation_multiplier = contract_metadata["lowLiquidationPriceMultiplier"],
+            high_liquidation_multiplier = contract_metadata["highLiquidationPriceMultiplier"],
+        )
+        hedge_position.hedge_wallet_hash = self.hedge_position_offer.wallet_hash
+        hedge_position.hedge_address_path = self.hedge_position_offer.address_path
+        hedge_position.long_wallet_hash = self.hedge_position_offer.counter_party_info.wallet_hash
+        hedge_position.long_address_path = self.hedge_position_offer.counter_party_info.address_path
+        if self.hedge_position_offer.position == HedgePositionOffer.POSITION_LONG:
+            hedge_position.hedge_wallet_hash, hedge_position.long_wallet_hash = hedge_position.long_wallet_hash, hedge_position.hedge_wallet_hash
+            hedge_position.hedge_address_path, hedge_position.long_address_path = hedge_position.long_address_path, hedge_position.hedge_address_path
+
+        # create funding proposal of counter party
+        counter_party_funding_proposal_data = validated_data["counter_party_funding_proposal"]
+        counter_party_funding_proposal_obj = HedgeFundingProposal.objects.create(**counter_party_funding_proposal_data)
+        if self.hedge_position_offer.position == HedgePositionOffer.POSITION_HEDGE:
+            hedge_position.long_funding_proposal = counter_party_funding_proposal_obj
+        else:
+            hedge_position.hedge_funding_proposal = counter_party_funding_proposal_obj
+        hedge_position.save()
+
+        # create hedge position's metadata
+        HedgePositionMetadata.objects.create(
+            hedge_position=hedge_position,
+            position_taker=self.hedge_position_offer.position,
+            liquidity_fee=0,
         )
 
+        hedge_position.refresh_from_db()
         self.hedge_position_offer.hedge_position = hedge_position
         self.hedge_position_offer.status = HedgePositionOffer.STATUS_SETTLED
-        self.hedge_position_offer.auto_settled = self.auto_settled
-        if self.hedge_position_offer.id:
-            self.hedge_position_offer.save()
-
-        if self.auto_settled:
-            consume_long_account_allowance(hedge_position.long_address, hedge_position.long_input_sats)
-
-        send_offer_settlement_update(self.hedge_position_offer)
-        return self.hedge_position_offer
+        self.hedge_position_offer.save()
+        return hedge_position
 
 
 class SubmitFundingTransactionSerializer(serializers.Serializer):
