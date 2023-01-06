@@ -252,21 +252,6 @@ class HedgePositionOfferViewSet(
     def get_queryset(self):
         return HedgePositionOfferSerializer.Meta.model.objects.all()
 
-    @swagger_auto_schema(method="post", request_body=openapi.Schema(type=openapi.TYPE_OBJECT), responses={201: serializer_class})
-    @decorators.action(methods=["post"], detail=True)
-    def cancel_hedge_request(self, request):
-        instance = self.get_object()
-
-        if instance.status == HedgePositionOfferSerializer.Meta.model.STATUS_SETTLED:
-            return Response(['Position offer already settled'], status=status.HTTP_400_BAD_REQUEST)
-
-        instance.status = HedgePositionOfferSerializer.Meta.model.STATUS_CANCELLED
-        instance.save()
-        send_hedge_position_offer_update(instance, action="cancel")
-
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
-
     @swagger_auto_schema(method="post", request_body=HedgePositionOfferCounterPartySerializer, responses={200: serializer_class})
     @decorators.action(methods=["post"], detail=True)
     def accept_offer(self, request, *args, **kwargs):
@@ -294,6 +279,7 @@ class HedgePositionOfferViewSet(
         instance.status = HedgePositionOffer.STATUS_PENDING
         instance.save()
         instance.refresh_from_db()
+        send_hedge_position_offer_update(instance, action="cancel_accept")
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)

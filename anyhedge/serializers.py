@@ -52,6 +52,7 @@ from .utils.websocket import (
     send_offer_settlement_update,
     send_funding_tx_update,
     send_mutual_redemption_update,
+    send_hedge_position_offer_update,
 )
 from .tasks import (
     validate_contract_funding,
@@ -621,6 +622,11 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
         instance.hedge_position_offer.status = HedgePositionOffer.STATUS_ACCEPTED
         instance.hedge_position_offer.save()
 
+        send_hedge_position_offer_update(
+            instance.hedge_position_offer,
+            action="accepted",
+            metadata={ "accepting_wallet_hash": instance.wallet_hash }
+        )
         return instance
 
     def get_price_message(self, oracle_pubkey, oracle_message_sequence=None):
@@ -824,6 +830,13 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         self.hedge_position_offer.hedge_position = hedge_position
         self.hedge_position_offer.status = HedgePositionOffer.STATUS_SETTLED
         self.hedge_position_offer.save()
+        send_hedge_position_offer_update(
+            self.hedge_position_offer,
+            action="settled",
+            metadata={
+                "address": self.hedge_position_offer.hedge_position.address,
+            }
+        )
         return hedge_position
 
 

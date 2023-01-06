@@ -49,20 +49,36 @@ def send_offer_settlement_update(hedge_position_offer_obj):
         )
 
 
-def send_hedge_position_offer_update(hedge_position_offer_obj, action:str=""):
-    room_name = ""
+def send_hedge_position_offer_update(hedge_position_offer_obj, action:str="", metadata=None):
+    room_names = []
     if hedge_position_offer_obj.wallet_hash:
-        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
+        room_names.append(f"updates_{hedge_position_offer_obj.wallet_hash}")
 
-    if not room_name:
+    if hedge_position_offer_obj.get_counter_party_info():
+        counter_party_wallet_hash = hedge_position_offer_obj.get_counter_party_info().wallet_hash
+        room_names.append(f"updates_{counter_party_wallet_hash}")
+
+    if not len(room_names):
         return
 
     channel_layer = get_channel_layer()
-    data = { "resource": "hedge_position_offer", "action": action }
-    async_to_sync(channel_layer.group_send)(
-        room_name, 
-        { "type": "send_update", "data": data }
-    )
+    data = {
+        "resource": "hedge_position_offer",
+        "action": action,
+        "meta": {
+            "id": hedge_position_offer_obj.id,
+            "position": hedge_position_offer_obj.position,
+        }
+    }
+
+    if isinstance(metadata, dict):
+        data["meta"].update(metadata)
+
+    for room_name in room_names:
+        async_to_sync(channel_layer.group_send)(
+            room_name, 
+            { "type": "send_update", "data": data }
+        )
 
 
 def send_funding_tx_update(hedge_position_obj, position:str="", tx_hash:str=""):

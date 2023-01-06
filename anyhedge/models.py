@@ -228,13 +228,11 @@ class HedgePositionOffer(models.Model):
     STATUS_PENDING = "pending"
     STATUS_ACCEPTED = "accepted"
     STATUS_SETTLED = "settled"
-    STATUS_CANCELLED = "cancelled"
 
     STATUSES = [
         STATUS_PENDING,
         STATUS_ACCEPTED,
         STATUS_SETTLED,
-        STATUS_CANCELLED,
     ]
 
     STATUSES = [(STATUS, STATUS.replace('_', ' ').capitalize()) for STATUS in STATUSES]
@@ -271,6 +269,12 @@ class HedgePositionOffer(models.Model):
 
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def get_counter_party_info(self):
+        try:
+            return self.counter_party_info
+        except HedgePositionOffer.counter_party_info.RelatedObjectDoesNotExist:
+            pass
 
 
 class HedgePositionOfferCounterParty(models.Model):
