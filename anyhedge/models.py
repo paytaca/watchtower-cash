@@ -28,19 +28,6 @@ class HedgePositionQuerySet(models.QuerySet):
         )
 
 
-class LongAccount(models.Model):
-    wallet_hash = models.CharField(max_length=100, unique=True, db_index=True)
-    address_path = models.CharField(max_length=10)
-    address = models.CharField(max_length=75)
-    pubkey = models.CharField(max_length=75)
-
-    # balance = models.BigIntegerField(null=True, blank=True)
-
-    min_auto_accept_duration = models.IntegerField(default=0)
-    max_auto_accept_duration = models.IntegerField(default=0)
-    auto_accept_allowance = models.BigIntegerField(default=0)
-
-
 class HedgeFundingProposal(models.Model):
     tx_hash = models.CharField(max_length=75)
     tx_index = models.IntegerField()

@@ -15,7 +15,6 @@ from drf_yasg.utils import swagger_auto_schema
 from .models import HedgePositionOffer
 from .serializers import (
     FundingProposalSerializer,
-    LongAccountSerializer,
     MutualRedemptionSerializer,
     HedgePositionSerializer,
     HedgePositionOfferCounterPartySerializer,
@@ -29,7 +28,6 @@ from .serializers import (
     PriceOracleMessageSerializer,
 )
 from .filters import (
-    LongAccountFilter,
     HedgePositionFilter,
     HedgePositionOfferFilter,
 
@@ -46,25 +44,6 @@ from .tasks import (
     update_contract_settlement,
     redeem_contract,
 )
-
-
-class LongAccountViewSet(
-    viewsets.GenericViewSet,
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.UpdateModelMixin,
-    mixins.DestroyModelMixin,
-):
-    lookup_field="wallet_hash"
-    serializer_class = LongAccountSerializer
-    pagination_class = CustomLimitOffsetPagination
-
-    filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = LongAccountFilter
-
-    def get_queryset(self):
-        return LongAccountSerializer.Meta.model.objects.all()
 
 
 # Create your views here.

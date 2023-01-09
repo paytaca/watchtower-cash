@@ -4,7 +4,6 @@ from django.db import models
 from django_filters import rest_framework as filters
 
 from .models import (
-    LongAccount,
     HedgePosition,
     HedgePositionOffer,
 
@@ -20,13 +19,6 @@ class TimestampFilter(filters.NumberFilter):
         return super().filter(qs, value, *args, **kwargs)
 
 
-class LongAccountFilter(filters.FilterSet):
-
-    class Meta:
-        model = LongAccount
-        fields= [
-            "wallet_hash",
-        ]
 
 
 class HedgePositionFilter(filters.FilterSet):

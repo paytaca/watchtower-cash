@@ -31,9 +31,6 @@ List views are always paginated by limit-offset, defaults to limit=10,offset=0
   - POST: `{address}/complete_mutual_redemption/`
     - See `redeem_contract` task below
     - Currently for generated contracts through P2P only
-### LongAccount - `/anyhedge/long-accounts/.*`
-  - API endpoints are simple CRUD API. Lookup field is `wallet_hash` instead of `id`.
-  - Used for providing P2P liquidity for users creating hedge position offers
 ### Oracles & Price messages
   - `/anyhedge/oracles/`
     - provide a list of oracles saved in the db. provides oracles pubkey and asset info(asset name, currency, & decimals).

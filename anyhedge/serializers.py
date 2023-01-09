@@ -6,7 +6,6 @@ from rest_framework import serializers
 
 from .conf import settings as app_settings
 from .models import (
-    LongAccount,
     HedgePosition,
     HedgePositionMetadata,
     HedgeSettlement,
@@ -35,8 +34,6 @@ from .utils.funding import (
     calculate_hedge_sats,
 )
 from .utils.liquidity import (
-    consume_long_account_allowance,
-    get_position_offer_suggestions,
     find_matching_position_offer,
     find_close_matching_offer_suggestion,
     fund_hedge_position,
@@ -136,28 +133,6 @@ class FundingProposalSerializer(serializers.Serializer):
 
         send_funding_tx_update(hedge_pos_obj, position=position)
         return funding_proposal
-
-
-class LongAccountSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LongAccount
-        fields = [
-            "id",
-            "wallet_hash",
-            "address_path",
-            "address",
-            "pubkey",
-
-            "min_auto_accept_duration",
-            "max_auto_accept_duration",
-            "auto_accept_allowance",
-        ]
-
-    def validate(self, data):
-        if "pubkey" in data and "address" in data or not self.instance:
-            if not match_pubkey_to_cash_address(data["pubkey"], data["address"]):
-                raise serializers.ValidationError("public key & address does not match")
-        return data
 
 
 class HedgeFundingProposalSerializer(serializers.ModelSerializer):
