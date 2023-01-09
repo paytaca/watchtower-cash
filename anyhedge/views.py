@@ -61,7 +61,16 @@ class HedgePositionViewSet(
     filterset_class = HedgePositionFilter
 
     def get_queryset(self):
-        return HedgePositionSerializer.Meta.model.objects.all()
+        return HedgePositionSerializer.Meta.model.objects.select_related(
+            "hedge_funding_proposal",
+            "long_funding_proposal",
+        ).prefetch_related(
+            "metadata",
+            "settlement",
+            "settlement_service",
+            "fee",
+            "mutual_redemption",
+        ).all()
 
 
     @decorators.action(methods=["get"], detail=False)
@@ -231,7 +240,20 @@ class HedgePositionOfferViewSet(
     filterset_class = HedgePositionOfferFilter
 
     def get_queryset(self):
-        return HedgePositionOfferSerializer.Meta.model.objects.all()
+        return HedgePositionOfferSerializer.Meta.model.objects.order_by(
+            "-created_at"
+        ).select_related(
+            "hedge_position",
+            "hedge_position__hedge_funding_proposal",
+            "hedge_position__long_funding_proposal",
+        ).prefetch_related(
+            "counter_party_info",
+            "hedge_position__metadata",
+            "hedge_position__settlement",
+            "hedge_position__settlement_service",
+            "hedge_position__fee",
+            "hedge_position__mutual_redemption",
+        ).all()
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
