@@ -123,14 +123,14 @@ def compile_contract_from_hedge_position(hedge_position_obj):
 
     funding_output = -1
     funding_satoshis = 0
-    fee_output = -1
-    fee_satoshis = 0
+    funding_fee_output = -1
+    funding_fee_satoshis = 0
     funding = hedge_position_obj.get_hedge_position_funding()
     if funding:
         funding_output = funding.funding_output
         funding_satoshis = funding.funding_satoshis
-        fee_output = funding.fee_output
-        fee_satoshis = funding.fee_satoshis
+        funding_fee_output = funding.fee_output
+        funding_fee_satoshis = funding.fee_satoshis
 
     return compile_contract(
         nominal_units=hedge_position_obj.nominal_units,
@@ -149,8 +149,8 @@ def compile_contract_from_hedge_position(hedge_position_obj):
         funding_tx_hash=hedge_position_obj.funding_tx_hash,
         funding_output=funding_output,
         funding_satoshis=funding_satoshis,
-        funding_fee_output=fee_output,
-        funding_fee_satoshis=fee_satoshis,
+        funding_fee_output=funding_fee_output,
+        funding_fee_satoshis=funding_fee_satoshis,
     )
 
 def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
