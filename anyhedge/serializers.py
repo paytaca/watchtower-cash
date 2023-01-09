@@ -713,6 +713,8 @@ class MatchHedgePositionSerializer(serializers.Serializer):
     high_liquidation_multiplier = serializers.FloatField()
     oracle_pubkey = serializers.CharField()
 
+    similarity = serializers.FloatField(required=False, default=0.5)
+
     matching_position_offer = HedgePositionOfferSerializer(read_only=True)
     similar_position_offers = HedgePositionOfferSerializer(many=True, read_only=True)
 
@@ -743,6 +745,7 @@ class MatchHedgePositionSerializer(serializers.Serializer):
                 high_liquidation_multiplier=self.validated_data["high_liquidation_multiplier"],
                 exclude_wallet_hash=self.validated_data["wallet_hash"],
                 oracle_pubkey=self.validated_data["oracle_pubkey"],
+                similarity=self.validated_data.get("similarity", 0.5),
             )
 
         return response

@@ -1,5 +1,6 @@
 import json
 import requests
+import logging
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import OuterRef, Subquery, Sum, F, Value, Q
@@ -14,6 +15,7 @@ from ..models import (
 from .api import get_bchd_instance
 from .websocket import send_long_account_update
 
+LOGGER = logging.getLogger("main")
 
 @transaction.atomic()
 def update_hedge_position_offer_deadline():
@@ -82,7 +84,7 @@ def find_close_matching_offer_suggestion(
     high_liquidation_multiplier=10,
     exclude_wallet_hash="",
     oracle_pubkey="",
-    similarity=0.1, # a common value to be used as multipler for filter range value value between 0 to 1
+    similarity=0.5, # a common value to be used as multipler for filter range value value between 0 to 1
 ):
     update_hedge_position_offer_deadline()
     now = timezone.now()
@@ -91,25 +93,38 @@ def find_close_matching_offer_suggestion(
         _position = HedgePositionOffer.POSITION_LONG
 
     # ranges are 2 length arrays representing min & max, respectively
-    low_liquidation_multiplier_range = [low_liquidation_multiplier*(1 - similarity), low_liquidation_multiplier*(1 + similarity)]
-    high_liquidation_multiplier_range = [high_liquidation_multiplier*(1 - similarity), high_liquidation_multiplier*(1 + similarity)]
-    duration_seconds_range = [duration_seconds*(1 - similarity), duration_seconds*(1 + similarity)]
-    counter_party_sats_range = [0, 0]
+    low_liquidation_multiplier_range = [low_liquidation_multiplier*(similarity), low_liquidation_multiplier*(2 - similarity)]
+    high_liquidation_multiplier_range = [high_liquidation_multiplier*(similarity), high_liquidation_multiplier*(2 - similarity)]
+    duration_seconds_range = [duration_seconds*(similarity), duration_seconds*(2-similarity)]
 
     if position == HedgePositionOffer.POSITION_HEDGE:
         counter_party_sats = amount * (1/low_liquidation_multiplier - 1) # calculating long sats
-        counter_party_sats_range[0] = amount * (1/low_liquidation_multiplier_range[0] - 1) # calculating long sats
-        counter_party_sats_range[1] = amount * (1/low_liquidation_multiplier_range[1] - 1) # calculating long sats
+        counter_party_sats_range = [counter_party_sats*(similarity), counter_party_sats*(2-similarity)]
     else:
         counter_party_sats = amount / (1/low_liquidation_multiplier - 1) # calculating hedge sats
-        counter_party_sats_range[0] = amount / (1/low_liquidation_multiplier_range[0] - 1) # calculating hedge sats
-        counter_party_sats_range[1] = amount / (1/low_liquidation_multiplier_range[1] - 1) # calculating hedge sats
+        counter_party_sats_range = [counter_party_sats*(similarity), counter_party_sats*(2-similarity)]
+
+    # LOGGER.info(
+    #     f"find_close_matching_offer_suggestion({position}):\n" \
+    #     f"\tamount={amount}\n" \
+    #     f"\tduration_seconds={duration_seconds}\n" \
+    #     f"\tlow_liquidation_multiplier={low_liquidation_multiplier}\n" \
+    #     f"\thigh_liquidation_multiplier={high_liquidation_multiplier}\n" \
+    #     f"\texclude_wallet_hash={exclude_wallet_hash}\n" \
+    #     f"\toracle_pubkey={oracle_pubkey}\n" \
+    #     f"\tsimilarity={similarity}\n" \
+    #     f"\tlow_liquidation_multiplier_range={low_liquidation_multiplier_range}\n" \
+    #     f"\thigh_liquidation_multiplier_range={high_liquidation_multiplier_range}\n" \
+    #     f"\tduration_seconds_range={duration_seconds_range}\n" \
+    #     f"\tcounter_party_sats_range={counter_party_sats_range}\n"
+    # )
 
     # filter offers by a range of value
     queryset = HedgePositionOffer.objects.filter(
         Q(expires_at__isnull=True) | Q(expires_at__gte=now),
         position=_position,
         status=HedgePositionOffer.STATUS_PENDING,
+        oracle_pubkey=oracle_pubkey,
         satoshis__gte = counter_party_sats_range[0],
         satoshis__lte = counter_party_sats_range[1],
         duration_seconds__gte=duration_seconds_range[0],
