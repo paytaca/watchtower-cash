@@ -423,6 +423,7 @@ def complete_contract_funding(contract_address):
             return response
 
     except Exception as exception:
+        LOGGER.exception(exception)
         response["success"] = False
         response["error"] = str(exception)
         return response

@@ -302,6 +302,9 @@ class HedgePositionOfferCounterParty(models.Model):
     price_value = models.IntegerField()
     oracle_message_sequence = models.IntegerField()
 
+    settlement_service_fee = models.IntegerField(default=0)
+    settlement_service_fee_address = models.CharField(max_length=75, default='')
+
     settlement_deadline = models.DateTimeField(null=True, blank=True)
 
 class Oracle(models.Model):

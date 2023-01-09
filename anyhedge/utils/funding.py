@@ -3,6 +3,7 @@ import base64
 import requests
 from cashaddress import convert
 from hashlib import sha256
+from constance import config as constance_config
 from .contract import (
     compile_contract_from_hedge_position,
     calculate_hedge_sats,
@@ -18,10 +19,22 @@ def get_tx_hash(tx_hex):
     d.reverse()
     return d.hex()
 
+def get_p2p_settlement_service_fee():
+    DUST_LIMIT = 546
+    address = constance_config.P2P_SETTLEMENT_SERVICE_FEE_ADDRESS
+    sats = constance_config.P2P_SETTLEMENT_SERVICE_FEE
+    try:
+        convert.Address._cash_string(address)
+    except convert.InvalidAddress:
+        return
+
+    if sats < DUST_LIMIT:
+        return
+    return { "satoshis": sats, "address": address }
+
 
 def calculate_funding_amounts(contract_data, position="hedge", premium=0):
     return AnyhedgeFunctions.calculateFundingAmounts(contract_data, position, premium)
-
 
 
 def complete_funding_proposal(hedge_position_obj):

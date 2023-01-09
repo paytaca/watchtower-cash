@@ -28,6 +28,7 @@ from .utils.contract import (
     compile_contract_from_hedge_position_offer,
 )
 from .utils.funding import (
+    get_p2p_settlement_service_fee,
     get_tx_hash,
     calculate_funding_amounts,
     validate_funding_transaction,
@@ -511,6 +512,8 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
             "price_message_timestamp",
             "price_value",
             "oracle_message_sequence",
+            "settlement_service_fee",
+            "settlement_service_fee_address",
             "calculated_hedge_sats",
         ]
 
@@ -528,6 +531,12 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
                 "read_only": True,
             },
             "settlement_deadline": {
+                "read_only": True,
+            },
+            "settlement_service_fee": {
+                "read_only": True,
+            },
+            "settlement_service_fee_address": {
                 "read_only": True,
             },
             "oracle_message_sequence": {
@@ -617,6 +626,11 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
         validated_data["price_value"] = price_oracle_message.price_value
         validated_data["settlement_deadline"] = timezone.now() + timedelta(minutes=15)
         validated_data["oracle_message_sequence"] = price_oracle_message.message_sequence
+
+        settlement_service_fee = get_p2p_settlement_service_fee()
+        if settlement_service_fee and "satoshis" in settlement_service_fee and "address" in settlement_service_fee:
+            validated_data["settlement_service_fee"] = settlement_service_fee["satoshis"]
+            validated_data["settlement_service_fee_address"] = settlement_service_fee["address"]
 
         instance = super().create(validated_data)
         instance.hedge_position_offer.status = HedgePositionOffer.STATUS_ACCEPTED
@@ -831,6 +845,16 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         else:
             hedge_position.hedge_funding_proposal = counter_party_funding_proposal_obj
         hedge_position.save()
+
+        # create hedge position's fee, if available
+        settlement_service_fee = self.hedge_position_offer.counter_party_info.settlement_service_fee
+        settlement_service_fee_address = self.hedge_position_offer.counter_party_info.settlement_service_fee_address
+        if settlement_service_fee and settlement_service_fee_address:
+            HedgePositionFee.objects.create(
+                hedge_position=hedge_position,
+                satoshis=settlement_service_fee,
+                address=settlement_service_fee_address,
+            )
 
         # create hedge position's metadata
         HedgePositionMetadata.objects.create(
