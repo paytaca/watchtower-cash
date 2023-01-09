@@ -78,7 +78,7 @@ def find_matching_position_offer(
     sats_range = 10 ** 4
 
     queryset = HedgePositionOffer.objects.filter(
-        Q(expires_at__isnull=True) | Q(expires_at__lte=now),
+        Q(expires_at__isnull=True) | Q(expires_at__gte=now),
         position=_position,
         status=HedgePositionOffer.STATUS_PENDING,
         satoshis__gte = counter_party_sats - sats_range,
@@ -131,7 +131,7 @@ def find_close_matching_offer_suggestion(
 
     # filter offers by a range of value
     queryset = HedgePositionOffer.objects.filter(
-        Q(expires_at__isnull=True) | Q(expires_at__lte=now),
+        Q(expires_at__isnull=True) | Q(expires_at__gte=now),
         position=_position,
         status=HedgePositionOffer.STATUS_PENDING,
         satoshis__gte = counter_party_sats_range[0],
