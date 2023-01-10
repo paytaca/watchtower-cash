@@ -9,9 +9,11 @@ class PgpInfo(PostgresModel):
         related_name='pgp_info',
         on_delete=models.CASCADE
     )
+    user_id = models.CharField(max_length=50)
     email = models.EmailField(max_length=100)
     public_key = models.TextField()
-    user_id = models.CharField(max_length=50)
+    public_key_hash = models.CharField(max_length=50)
+    signature = models.TextField()
 
     def __str__(self):
         return self.email

@@ -6,9 +6,9 @@ class PgpInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = PgpInfo
         fields = (
-            "id",
-            "address",
+            "user_id",
             "email",
             "public_key",
-            "user_id"
+            "public_key_hash",
+            "signature"
         )
