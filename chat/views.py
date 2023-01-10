@@ -1,13 +1,17 @@
 from django.http import Http404
 from rest_framework import viewsets, mixins
-
-from chat.models import PgpInfo
-from chat.serializers import PgpInfoSerializer
+from chat.serializers import PgpInfoSerializer, CreatePgpInfoSerializer
 
 
-class PgpInfoViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin):
+class PgpInfoViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.CreateModelMixin):
     lookup_field = "address"
     serializer_class = PgpInfoSerializer
+
+    def get_serializer_class(self): 
+        serializer_class = self.serializer_class 
+        if self.request.method == 'POST': 
+            serializer_class = CreatePgpInfoSerializer 
+        return serializer_class
 
     def get_object(self):
         Model = self.serializer_class.Meta.model

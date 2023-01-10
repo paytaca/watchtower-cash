@@ -12,7 +12,7 @@ class PgpInfo(PostgresModel):
     user_id = models.CharField(max_length=50)
     email = models.EmailField(max_length=100)
     public_key = models.TextField()
-    public_key_hash = models.CharField(max_length=50)
+    public_key_hash = models.CharField(max_length=70)
     signature = models.TextField()
 
     def __str__(self):
