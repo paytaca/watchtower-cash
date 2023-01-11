@@ -774,6 +774,15 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         contract_data = compile_contract_from_hedge_position_offer(self.hedge_position_offer)
         funding_amounts = calculate_funding_amounts(contract_data, position=self.hedge_position_offer.position)
 
+        settlement_service_fee = self.hedge_position_offer.counter_party_info.settlement_service_fee
+        total_funding_amount = funding_amounts["long"] + funding_amounts["hedge"]
+        total_input_sats = contract_data["metadata"]["totalInputSats"]
+        network_fee = total_funding_amount - total_input_sats
+        if settlement_service_fee:
+            network_fee -= settlement_service_fee
+
+        data["network_fee"] = network_fee
+
         counter_party_funding_proposal_data = data["counter_party_funding_proposal"]
         funding_amount = counter_party_funding_proposal_data["tx_value"]
         expected_amount = funding_amounts["long" if self.hedge_position_offer.position == HedgePositionOffer.POSITION_HEDGE else "hedge"]
@@ -838,6 +847,7 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         HedgePositionMetadata.objects.create(
             hedge_position=hedge_position,
             position_taker=self.hedge_position_offer.position,
+            network_fee=validated_data.get("network_fee", None),
             liquidity_fee=0,
         )
 

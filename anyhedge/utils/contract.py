@@ -193,6 +193,8 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
         longPublicKey=long_pubkey,
         hedgeAddress=hedge_address,
         longAddress=long_address,
+        fee_address=hedge_position_offer_obj.counter_party_info.settlement_service_fee_address,
+        fee_satoshis=hedge_position_offer_obj.counter_party_info.settlement_service_fee,
     )
 
 
