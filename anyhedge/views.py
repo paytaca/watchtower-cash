@@ -12,12 +12,14 @@ from rest_framework.response import Response
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
+from .models import HedgePositionOffer
 from .serializers import (
     FundingProposalSerializer,
-    LongAccountSerializer,
     MutualRedemptionSerializer,
     HedgePositionSerializer,
+    HedgePositionOfferCounterPartySerializer,
     HedgePositionOfferSerializer,
+    MatchHedgePositionSerializer,
     SettleHedgePositionOfferSerializer,
     SubmitFundingTransactionSerializer,
     FundGeneralProcotolLPContractSerializer,
@@ -26,7 +28,6 @@ from .serializers import (
     PriceOracleMessageSerializer,
 )
 from .filters import (
-    LongAccountFilter,
     HedgePositionFilter,
     HedgePositionOfferFilter,
 
@@ -45,25 +46,6 @@ from .tasks import (
 )
 
 
-class LongAccountViewSet(
-    viewsets.GenericViewSet,
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.UpdateModelMixin,
-    mixins.DestroyModelMixin,
-):
-    lookup_field="wallet_hash"
-    serializer_class = LongAccountSerializer
-    pagination_class = CustomLimitOffsetPagination
-
-    filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = LongAccountFilter
-
-    def get_queryset(self):
-        return LongAccountSerializer.Meta.model.objects.all()
-
-
 # Create your views here.
 class HedgePositionViewSet(
     viewsets.GenericViewSet,
@@ -79,7 +61,16 @@ class HedgePositionViewSet(
     filterset_class = HedgePositionFilter
 
     def get_queryset(self):
-        return HedgePositionSerializer.Meta.model.objects.all()
+        return HedgePositionSerializer.Meta.model.objects.select_related(
+            "hedge_funding_proposal",
+            "long_funding_proposal",
+        ).prefetch_related(
+            "metadata",
+            "settlement",
+            "settlement_service",
+            "fee",
+            "mutual_redemption",
+        ).all()
 
 
     @decorators.action(methods=["get"], detail=False)
@@ -113,15 +104,22 @@ class HedgePositionViewSet(
         except funding_proposal_obj.__class__.hedge_position.RelatedObjectDoesNotExist: 
             hedge_obj = serializer.instance.long_position
 
+        contract_funding_status = "incomplete"
         if hedge_obj.hedge_funding_proposal and hedge_obj.long_funding_proposal:
             funding_task_response = complete_contract_funding(hedge_obj.address)
+
+            contract_funding_status = f"{funding_task_response}"
+
             funding_tx_hash = funding_task_response.get("tx_hash", None)
             if funding_tx_hash:
                 hedge_obj.funding_tx_hash = funding_tx_hash
                 hedge_obj.save()
                 validate_contract_funding.delay(hedge_obj.address)
 
-        return Response(self.serializer_class(hedge_obj).data)
+        return Response(
+            self.serializer_class(hedge_obj).data,
+            headers={ 'funding-status': contract_funding_status },
+        )
 
     @swagger_auto_schema(method="post", request_body=serializers.Serializer, responses={200: serializer_class})
     @decorators.action(methods=["post"], detail=True)
@@ -232,6 +230,8 @@ class HedgePositionOfferViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    mixins.UpdateModelMixin,
 ):
     serializer_class = HedgePositionOfferSerializer
     pagination_class = CustomLimitOffsetPagination
@@ -240,34 +240,79 @@ class HedgePositionOfferViewSet(
     filterset_class = HedgePositionOfferFilter
 
     def get_queryset(self):
-        return HedgePositionOfferSerializer.Meta.model.objects.all()
+        return HedgePositionOfferSerializer.Meta.model.objects.order_by(
+            "-created_at"
+        ).select_related(
+            "hedge_position",
+            "hedge_position__hedge_funding_proposal",
+            "hedge_position__long_funding_proposal",
+        ).prefetch_related(
+            "counter_party_info",
+            "hedge_position__metadata",
+            "hedge_position__settlement",
+            "hedge_position__settlement_service",
+            "hedge_position__fee",
+            "hedge_position__mutual_redemption",
+        ).all()
 
-    @swagger_auto_schema(method="post", request_body=openapi.Schema(type=openapi.TYPE_OBJECT), responses={201: serializer_class})
-    @decorators.action(methods=["post"], detail=True)
-    def cancel_hedge_request(self, request):
+    def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        if instance.status != HedgePositionOffer.STATUS_PENDING:
+            return Response(status=400)
+        return super().destroy(request, *args, **kwargs)
 
-        if instance.status == HedgePositionOfferSerializer.Meta.model.STATUS_SETTLED:
-            return Response(['Position offer already settled'], status=status.HTTP_400_BAD_REQUEST)
+    @swagger_auto_schema(method="post", request_body=HedgePositionOfferCounterPartySerializer, responses={200: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def accept_offer(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = HedgePositionOfferCounterPartySerializer(
+            data=request.data,
+            hedge_position_offer=instance
+        )
+        serializer.is_valid(raise_exception=True)
+        counter_party_info = serializer.save()
 
-        instance.status = HedgePositionOfferSerializer.Meta.model.STATUS_CANCELLED
+        serializer = self.get_serializer(counter_party_info.hedge_position_offer)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(method="post", responses={200: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def cancel_accept_offer(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status != HedgePositionOffer.STATUS_ACCEPTED:
+            return Response(["hedge position offer is not in accepted state"],status=400)
+        try:
+            instance.counter_party_info.delete()
+        except HedgePositionOffer.counter_party_info.RelatedObjectDoesNotExist:
+            pass
+        instance.status = HedgePositionOffer.STATUS_PENDING
         instance.save()
-        send_hedge_position_offer_update(instance, action="cancel")
+        instance.refresh_from_db()
+        send_hedge_position_offer_update(instance, action="cancel_accept")
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
-    @swagger_auto_schema(method="post", request_body=SettleHedgePositionOfferSerializer, responses={201: serializer_class})
+    @swagger_auto_schema(method="post", request_body=SettleHedgePositionOfferSerializer, responses={201: HedgePositionSerializer})
     @decorators.action(methods=["post"], detail=True)
-    def settle_offer(self, request):
+    def settle_offer(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = SettleHedgePositionOfferSerializer(
             data=request.data,
             hedge_position_offer=instance,
         )
         serializer.is_valid(raise_exception=True)
-        instance = serializer.save()
-        serializer = self.get_serializer(instance)
+        hedge_position = serializer.save()
+        serializer = HedgePositionSerializer(hedge_position)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(method="post", request_body=MatchHedgePositionSerializer, response={200: MatchHedgePositionSerializer})
+    @decorators.action(methods=["post"], detail=False)
+    def find_match(self, request, *args, **kwargs):
+        serializer = MatchHedgePositionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.find_match()
+        serializer = MatchHedgePositionSerializer(data)
         return Response(serializer.data)
 
 

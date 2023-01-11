@@ -1,10 +1,10 @@
 import pytz
 from datetime import datetime
 from django.db import models
+from django.utils import timezone
 from django_filters import rest_framework as filters
 
 from .models import (
-    LongAccount,
     HedgePosition,
     HedgePositionOffer,
 
@@ -20,13 +20,6 @@ class TimestampFilter(filters.NumberFilter):
         return super().filter(qs, value, *args, **kwargs)
 
 
-class LongAccountFilter(filters.FilterSet):
-
-    class Meta:
-        model = LongAccount
-        fields= [
-            "wallet_hash",
-        ]
 
 
 class HedgePositionFilter(filters.FilterSet):
@@ -78,11 +71,15 @@ class HedgePositionFilter(filters.FilterSet):
 class HedgePositionOfferFilter(filters.FilterSet):
     statuses = filters.CharFilter(field_name="status", method="statuses_filter")
     exclude_wallet_hash = filters.CharFilter(field_name="wallet_hash", method="exclude_wallet_hash_filter")
+    counter_party_wallet_hash = filters.CharFilter(field_name="counter_party_info__wallet_hash")
+    expired = filters.BooleanFilter(field_name="expires_at", method="expired_offers_filter")
 
     class Meta:
         model = HedgePositionOffer
         fields= [
             "wallet_hash",
+            "position",
+            "expired",
         ]
     
     def statuses_filter(self, queryset, name, value):
@@ -90,6 +87,16 @@ class HedgePositionOfferFilter(filters.FilterSet):
     
     def exclude_wallet_hash_filter(self, queryset, name, value):
         return queryset.exclude(wallet_hash=value)
+
+    def expired_offers_filter(self, queryset, name, value):
+        if isinstance(value, bool):
+            now = timezone.now()
+            if value:
+                queryset = queryset.filter(expires_at__lte=now)
+            else:
+                queryset = queryset.filter(models.Q(expires_at__gte=now) | models.Q(expires_at__isnull=True))
+        return queryset
+
 
 class OracleFilter(filters.FilterSet):
     class Meta:

@@ -1,39 +1,153 @@
 import json
 import requests
-from django.db.models import OuterRef, Subquery, Sum, F, Value
-from django.db.models.functions import Coalesce, Greatest
+import logging
+from django.utils import timezone
+from django.db import transaction
+from django.db.models import OuterRef, Subquery, Sum, F, Value, Q
+from django.db.models.functions import Coalesce, Greatest, Abs
 from ..js.runner import AnyhedgeFunctions
 from ..models import (
-    LongAccount,
     HedgePositionFunding,
     HedgePositionMetadata,
+    HedgePositionOffer,
+    HedgePositionOfferCounterParty,
 )
 from .api import get_bchd_instance
 from .websocket import send_long_account_update
 
+LOGGER = logging.getLogger("main")
 
-def get_position_offer_suggestions(amount=0, duration_seconds=0, low_liquidation_multiplier=0.9, high_liquidation_multiplier=10, exclude_wallet_hash=""):
-    # NOTE: long_amount_needed is an estimate and may be off by a bit from the actual amount needed, this is due to;
-    # missing oracle price
-    long_amount_needed = (amount / low_liquidation_multiplier) - amount
+@transaction.atomic()
+def update_hedge_position_offer_deadline():
+    hedge_position_offers = HedgePositionOffer.objects.filter(
+        status=HedgePositionOffer.STATUS_ACCEPTED,
+        counter_party_info__settlement_deadline__lte=timezone.now(),
+    )
 
-    return LongAccount.objects.filter(
-        auto_accept_allowance__gte=long_amount_needed,
-        min_auto_accept_duration__lte=duration_seconds,
-        max_auto_accept_duration__gte=duration_seconds,
-    ).exclude(
-        wallet_hash=exclude_wallet_hash,
-    ).order_by('auto_accept_allowance')
+    if not hedge_position_offers.count():
+        return
+
+    HedgePositionOfferCounterParty.objects.filter(hedge_position_offer__in=hedge_position_offers).delete()
+    return hedge_position_offers.update(status=HedgePositionOffer.STATUS_PENDING)
 
 
-def consume_long_account_allowance(long_address, long_input_sats):
-    querylist = LongAccount.objects.filter(address=long_address)
-    resp = querylist.update(auto_accept_allowance= Greatest(F("auto_accept_allowance") - long_input_sats, Value(0)))
+def find_matching_position_offer(
+    position="",
+    amount=0,
+    duration_seconds=0,
+    low_liquidation_multiplier=0.9,
+    high_liquidation_multiplier=10,
+    exclude_wallet_hash="",
+    oracle_pubkey="",
+):
+    update_hedge_position_offer_deadline()
+    now = timezone.now()
+    _position = HedgePositionOffer.POSITION_HEDGE
+    if position == HedgePositionOffer.POSITION_HEDGE:
+        _position = HedgePositionOffer.POSITION_LONG
 
-    wallet_hashes =  querylist.values_list('wallet_hash', flat=True).distinct()
-    for wallet_hash in wallet_hashes:
-        send_long_account_update(wallet_hash, action="consume_allowance")
-    return resp
+    if position == HedgePositionOffer.POSITION_HEDGE:
+        counter_party_sats = amount * (1/low_liquidation_multiplier - 1) # calculating long sats
+    else:
+        counter_party_sats = amount / (1/low_liquidation_multiplier - 1) # calculating hedge sats
+
+    # due to missing price value, there is an error in the actual sats
+    # we filter a range instead of filtering the exact sats using the value below
+    sats_range = 10 ** 4
+
+    queryset = HedgePositionOffer.objects.filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gte=now),
+        position=_position,
+        status=HedgePositionOffer.STATUS_PENDING,
+        satoshis__gte = counter_party_sats - sats_range,
+        satoshis__lte = counter_party_sats + sats_range,
+        duration_seconds=duration_seconds,
+        low_liquidation_multiplier=low_liquidation_multiplier,
+        high_liquidation_multiplier=high_liquidation_multiplier,
+        oracle_pubkey=oracle_pubkey,
+    )
+    if exclude_wallet_hash:
+        queryset = queryset.exclude(wallet_hash=exclude_wallet_hash)
+
+    queryset = queryset.annotate(
+        sats_diff = Abs(F("satoshis") - Value(counter_party_sats))
+    ).order_by("sats_diff", "created_at")
+
+    return queryset.first()
+
+
+def find_close_matching_offer_suggestion(
+    position="",
+    amount=0,
+    duration_seconds=0,
+    low_liquidation_multiplier=0.9,
+    high_liquidation_multiplier=10,
+    exclude_wallet_hash="",
+    oracle_pubkey="",
+    similarity=0.5, # a common value to be used as multipler for filter range value value between 0 to 1
+):
+    update_hedge_position_offer_deadline()
+    now = timezone.now()
+    _position = HedgePositionOffer.POSITION_HEDGE
+    if position == HedgePositionOffer.POSITION_HEDGE:
+        _position = HedgePositionOffer.POSITION_LONG
+
+    # ranges are 2 length arrays representing min & max, respectively
+    low_liquidation_multiplier_range = [low_liquidation_multiplier*(similarity), low_liquidation_multiplier*(2 - similarity)]
+    high_liquidation_multiplier_range = [high_liquidation_multiplier*(similarity), high_liquidation_multiplier*(2 - similarity)]
+    duration_seconds_range = [duration_seconds*(similarity), duration_seconds*(2-similarity)]
+
+    if position == HedgePositionOffer.POSITION_HEDGE:
+        counter_party_sats = amount * (1/low_liquidation_multiplier - 1) # calculating long sats
+        counter_party_sats_range = [counter_party_sats*(similarity), counter_party_sats*(2-similarity)]
+    else:
+        counter_party_sats = amount / (1/low_liquidation_multiplier - 1) # calculating hedge sats
+        counter_party_sats_range = [counter_party_sats*(similarity), counter_party_sats*(2-similarity)]
+
+    # LOGGER.info(
+    #     f"find_close_matching_offer_suggestion({position}):\n" \
+    #     f"\tamount={amount}\n" \
+    #     f"\tduration_seconds={duration_seconds}\n" \
+    #     f"\tlow_liquidation_multiplier={low_liquidation_multiplier}\n" \
+    #     f"\thigh_liquidation_multiplier={high_liquidation_multiplier}\n" \
+    #     f"\texclude_wallet_hash={exclude_wallet_hash}\n" \
+    #     f"\toracle_pubkey={oracle_pubkey}\n" \
+    #     f"\tsimilarity={similarity}\n" \
+    #     f"\tlow_liquidation_multiplier_range={low_liquidation_multiplier_range}\n" \
+    #     f"\thigh_liquidation_multiplier_range={high_liquidation_multiplier_range}\n" \
+    #     f"\tduration_seconds_range={duration_seconds_range}\n" \
+    #     f"\tcounter_party_sats_range={counter_party_sats_range}\n"
+    # )
+
+    # filter offers by a range of value
+    queryset = HedgePositionOffer.objects.filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gte=now),
+        position=_position,
+        status=HedgePositionOffer.STATUS_PENDING,
+        oracle_pubkey=oracle_pubkey,
+        satoshis__gte = counter_party_sats_range[0],
+        satoshis__lte = counter_party_sats_range[1],
+        duration_seconds__gte=duration_seconds_range[0],
+        duration_seconds__lte=duration_seconds_range[1],
+        high_liquidation_multiplier__gte=high_liquidation_multiplier_range[0],
+        high_liquidation_multiplier__lte=high_liquidation_multiplier_range[1],
+        low_liquidation_multiplier__gte=low_liquidation_multiplier_range[0],
+        low_liquidation_multiplier__lte=low_liquidation_multiplier_range[1],
+    )
+
+    if exclude_wallet_hash:
+        queryset = queryset.exclude(wallet_hash=exclude_wallet_hash)
+
+    # order offers by their similarity
+    queryset = queryset.annotate(
+        sats_diff = Abs(F("satoshis")/Value(counter_party_sats)),
+        duration_diff = Abs(F("duration_seconds")/Value(duration_seconds)),
+    ).annotate(
+        diff = F("sats_diff")*Value(0.7) + F("duration_diff")*Value(0.3),
+    ).order_by("diff")[:15]
+
+    return queryset
+
 
 def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence, position="hedge"):
     response = { "success": False, "fundingTransactionHash": "", "error": "" }

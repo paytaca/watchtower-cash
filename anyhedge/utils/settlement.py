@@ -11,6 +11,7 @@ from .price_oracle import (
 from ..js.runner import AnyhedgeFunctions
 from ..models import (
     HedgePosition,
+    HedgeSettlement,
     Oracle,
     PriceOracleMessage,
 )
@@ -152,3 +153,31 @@ def complete_mutual_redemption(mutual_redemption_obj):
     }
 
     return AnyhedgeFunctions.completeMutualRedemption(contract_data, mutual_redemption_data)
+
+
+def save_settlement_data_from_mutual_redemption(hedge_position_obj):
+    mutual_redemption_obj = None
+    try:
+        mutual_redemption_obj = hedge_position_obj.mutual_redemption
+    except HedgePosition.mutual_redemption.RelatedObjectDoesNotExist:
+        return
+
+    if not mutual_redemption_obj or not mutual_redemption_obj.tx_hash:
+        return
+
+    settlement_obj = None
+    try:
+        settlement_obj = hedge_position_obj.settlement
+    except HedgePosition.settlement.RelatedObjectDoesNotExist:
+        settlement_obj = HedgeSettlement(hedge_position=hedge_position_obj)
+
+    settlement_obj.spending_transaction = mutual_redemption_obj.tx_hash
+    settlement_obj.settlement_type = "mutual"
+    settlement_obj.hedge_satoshis = mutual_redemption_obj.hedge_satoshis
+    settlement_obj.long_satoshis = mutual_redemption_obj.long_satoshis
+    settlement_obj.oracle_pubkey = hedge_position_obj.oracle_pubkey
+    if mutual_redemption_obj.settlement_price:
+        settlement_obj.settlement_price = mutual_redemption_obj.settlement_price
+    settlement_obj.save()
+
+    return settlement_obj

@@ -28,19 +28,6 @@ class HedgePositionQuerySet(models.QuerySet):
         )
 
 
-class LongAccount(models.Model):
-    wallet_hash = models.CharField(max_length=100, unique=True, db_index=True)
-    address_path = models.CharField(max_length=10)
-    address = models.CharField(max_length=75)
-    pubkey = models.CharField(max_length=75)
-
-    # balance = models.BigIntegerField(null=True, blank=True)
-
-    min_auto_accept_duration = models.IntegerField(default=0)
-    max_auto_accept_duration = models.IntegerField(default=0)
-    auto_accept_allowance = models.BigIntegerField(default=0)
-
-
 class HedgeFundingProposal(models.Model):
     tx_hash = models.CharField(max_length=75)
     tx_index = models.IntegerField()
@@ -115,6 +102,16 @@ class HedgePosition(models.Model):
     @property
     def total_sats(self):
         return round(round(self.satoshis * self.start_price) / self.low_liquidation_price)
+
+    @property
+    def total_sats_with_fee(self):
+        total_sats = self.total_sats
+        try:
+            if self.fee and self.fee.satoshis:
+                total_sats += self.fee.satoshis
+        except HedgePosition.fee.RelatedObjectDoesNotExist:
+            pass
+        return total_sats
 
     @property
     def long_input_sats(self):
@@ -226,18 +223,27 @@ class MutualRedemption(models.Model):
 
 class HedgePositionOffer(models.Model):
     STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
     STATUS_SETTLED = "settled"
-    STATUS_CANCELLED = "cancelled"
 
     STATUSES = [
         STATUS_PENDING,
+        STATUS_ACCEPTED,
         STATUS_SETTLED,
-        STATUS_CANCELLED,
     ]
 
     STATUSES = [(STATUS, STATUS.replace('_', ' ').capitalize()) for STATUS in STATUSES]
+
+    POSITION_HEDGE = "hedge"
+    POSITION_LONG = "long"
+    POSITIONS = [
+        POSITION_HEDGE,
+        POSITION_LONG,
+    ]
+    POSITIONS = [(POSITION, POSITION.replace('_', ' ').capitalize()) for POSITION in POSITIONS]
     status = models.CharField(max_length=15, choices=STATUSES, default=STATUS_PENDING)
 
+    position = models.CharField(max_length=5, choices=POSITIONS, null=True, blank=True)
     wallet_hash = models.CharField(max_length=100, db_index=True)
     satoshis = models.BigIntegerField()
 
@@ -245,10 +251,10 @@ class HedgePositionOffer(models.Model):
     high_liquidation_multiplier = models.FloatField()
     low_liquidation_multiplier = models.FloatField()
 
-    oracle_pubkey = models.CharField(max_length=75, null=True, blank=True)
-    hedge_address = models.CharField(max_length=75)
-    hedge_pubkey = models.CharField(max_length=75)
-    hedge_address_path = models.CharField(max_length=10, null=True, blank=True)
+    oracle_pubkey = models.CharField(max_length=75, default='')
+    address = models.CharField(max_length=75)
+    pubkey = models.CharField(max_length=75)
+    address_path = models.CharField(max_length=10, default='')
 
     hedge_position = models.OneToOneField(
         HedgePosition,
@@ -258,9 +264,45 @@ class HedgePositionOffer(models.Model):
         db_index=True,
     )
 
-    auto_settled = models.BooleanField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def get_counter_party_info(self):
+        try:
+            return self.counter_party_info
+        except HedgePositionOffer.counter_party_info.RelatedObjectDoesNotExist:
+            pass
+
+
+class HedgePositionOfferCounterParty(models.Model):
+    """
+    Contains information that is not provided in HedgePositionOffer,
+    but is needed to create a contract
+
+    This is used during "accepted" to "settled" phase of HedgePositionOffer
+    """
+    hedge_position_offer = models.OneToOneField(
+        HedgePositionOffer,
+        on_delete=models.CASCADE,
+        related_name="counter_party_info"
+    )
+
+    contract_address = models.CharField(max_length=75, unique=True, db_index=True)
+    anyhedge_contract_version = models.CharField(max_length=20)
+
+    wallet_hash = models.CharField(max_length=100)
+    address = models.CharField(max_length=75)
+    pubkey = models.CharField(max_length=75)
+    address_path = models.CharField(max_length=10)
+
+    price_message_timestamp = models.DateTimeField()
+    price_value = models.IntegerField()
+    oracle_message_sequence = models.IntegerField()
+
+    settlement_service_fee = models.IntegerField(default=0)
+    settlement_service_fee_address = models.CharField(max_length=75, default='')
+
+    settlement_deadline = models.DateTimeField(null=True, blank=True)
 
 class Oracle(models.Model):
     pubkey = models.CharField(max_length=75, unique=True)

@@ -1,9 +1,12 @@
 import os
 import json
+import logging
 from subprocess import run, PIPE
 
 # This class gets populated with functions in the javascript after loading this file
 # Refer to code below
+
+LOGGER = logging.getLogger(__name__)
 
 class AnyhedgeFunctionsMeta(type):
     functions_loaded = False
@@ -44,7 +47,7 @@ def generate_func(func_name):
         process = run(['node', './anyhedge/js/src/main.js'], input=json.dumps(_input).encode(), stdout=PIPE, stderr=PIPE)
         result = None
 
-        print(process)
+        LOGGER.info(f"{process}")
         if process.stdout:
             try:
                 result = json.loads(process.stdout)

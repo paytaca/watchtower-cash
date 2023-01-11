@@ -59,6 +59,7 @@ INSTALLED_APPS=[
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'constance.backends.database',
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
@@ -68,8 +69,9 @@ INSTALLED_APPS=[
     'dynamic_raw_id',
     'drf_yasg',
     'channels',
-    'main',
 
+    'constance',
+    'main',
     'smartbch',
     'paytacapos',
     'anyhedge',
@@ -159,6 +161,25 @@ USE_I18N = True
 USE_L10N = True
 
 USE_TZ = True
+
+# Django constance
+# For dynamic settings
+CONSTANCE_BACKEND = 'constance.backends.database.DatabaseBackend'
+CONSTANCE_CONFIG = {
+    'P2P_SETTLEMENT_SERVICE_FEE': (
+        0, 'Settlement service fee for contracts settled by watchtower',
+    ),
+    'P2P_SETTLEMENT_SERVICE_FEE_ADDRESS': (
+        '', 'Recipient of settlement service fee of contracts settled by watchtower',
+    ),
+}
+CONSTANCE_CONFIG_FIELDSETS = {
+    'Anyhedge': (
+        'P2P_SETTLEMENT_SERVICE_FEE',
+        'P2P_SETTLEMENT_SERVICE_FEE_ADDRESS',
+    ),
+}
+
 
 DB_NUM = [0,1,2]
 if DEPLOYMENT_INSTANCE == 'staging':

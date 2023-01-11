@@ -3,7 +3,11 @@ import base64
 import requests
 from cashaddress import convert
 from hashlib import sha256
-from .contract import compile_contract_from_hedge_position
+from constance import config as constance_config
+from .contract import (
+    compile_contract_from_hedge_position,
+    calculate_hedge_sats,
+)
 from ..js.runner import AnyhedgeFunctions
 
 
@@ -15,14 +19,22 @@ def get_tx_hash(tx_hex):
     d.reverse()
     return d.hex()
 
+def get_p2p_settlement_service_fee():
+    DUST_LIMIT = 546
+    address = constance_config.P2P_SETTLEMENT_SERVICE_FEE_ADDRESS
+    sats = constance_config.P2P_SETTLEMENT_SERVICE_FEE
+    try:
+        convert.Address._cash_string(address)
+    except convert.InvalidAddress:
+        return
 
-def calculate_funding_amounts(hedge_position_obj):
-    contract_data = compile_contract_from_hedge_position(hedge_position_obj)
+    if sats < DUST_LIMIT:
+        return
+    return { "satoshis": sats, "address": address }
 
-    if contract_data["address"] != hedge_position_obj.address:
-        raise Exception(f"Contract data compilation mismatch, got '{contract_data['address']}' instead of '{hedge_position_obj.address}'")
-    
-    return AnyhedgeFunctions.calculateFundingAmounts(contract_data, "hedge")
+
+def calculate_funding_amounts(contract_data, position="hedge", premium=0):
+    return AnyhedgeFunctions.calculateFundingAmounts(contract_data, position, premium)
 
 
 def complete_funding_proposal(hedge_position_obj):
@@ -166,7 +178,3 @@ def validate_funding_transaction(tx_hash, contract_address, fee_address=None):
                 response["fee_output"] = output["e"]["i"]
 
     return response
-
-# form a task for doing the full funding processs
-# add function for searching funding tx hash of contract from blockchain
-# utxo validation function
