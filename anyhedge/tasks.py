@@ -33,6 +33,7 @@ from .utils.settlement import (
     settle_hedge_position_maturity,
     liquidate_hedge_position,
     complete_mutual_redemption,
+    save_settlement_data_from_mutual_redemption,
 )
 from .utils.websocket import (
     send_settlement_update,
@@ -511,6 +512,12 @@ def redeem_contract(contract_address):
 
     mutual_redemption_obj.tx_hash = mutual_redemption_response["settlementTxid"]
     mutual_redemption_obj.save()
+    try:
+        settlement_obj = save_settlement_data_from_mutual_redemption(mutual_redemption_obj.hedge_position)
+        if settlement_obj:
+            send_settlement_update(mutual_redemption_obj.hedge_position)
+    except Exception as error:
+        LOGGER.exception(error)
     response["success"] = True
     response["tx_hash"] = mutual_redemption_response
     return response
