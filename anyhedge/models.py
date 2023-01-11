@@ -104,6 +104,16 @@ class HedgePosition(models.Model):
         return round(round(self.satoshis * self.start_price) / self.low_liquidation_price)
 
     @property
+    def total_sats_with_fee(self):
+        total_sats = self.total_sats
+        try:
+            if self.fee and self.fee.satoshis:
+                total_sats += self.fee.satoshis
+        except HedgePosition.fee.RelatedObjectDoesNotExist:
+            pass
+        return total_sats
+
+    @property
     def long_input_sats(self):
         return self.total_sats - self.satoshis
 

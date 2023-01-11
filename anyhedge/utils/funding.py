@@ -178,7 +178,3 @@ def validate_funding_transaction(tx_hash, contract_address, fee_address=None):
                 response["fee_output"] = output["e"]["i"]
 
     return response
-
-# form a task for doing the full funding processs
-# add function for searching funding tx hash of contract from blockchain
-# utxo validation function

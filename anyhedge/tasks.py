@@ -416,6 +416,20 @@ def complete_contract_funding(contract_address):
             response["tx_hash"] = tx_hash
             response["message"] = "submitted funding transaction"
 
+            try:
+                metadata_obj = hedge_position_obj.metadata
+                metadata_obj.total_hedge_funding_sats = hedge_position_obj.hedge_funding_proposal.tx_value
+                metadata_obj.total_long_funding_sats = hedge_position_obj.long_funding_proposal.tx_value
+                if not metadata_obj.network_fee:
+                    total_funding_sats = metadata_obj.total_hedge_funding_sats + metadata_obj.total_long_funding_sats
+                    total_input_sats = hedge_position_obj.total_sats_with_fee
+                    metadata_obj.network_fee = total_funding_sats - total_input_sats
+                metadata_obj.save()
+            except HedgePosition.metadata.RelatedObjectDoesNotExist:
+                LOGGER.info(f"skipping metadata update for contract({hedge_position_obj.address}), no metadata obj found")
+            except Exception as error:
+                LOGGER.exception(error)
+
             send_funding_tx_update(hedge_position_obj, tx_hash=tx_hash)
             return response
         else:
