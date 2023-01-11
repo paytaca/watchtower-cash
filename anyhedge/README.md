@@ -121,3 +121,13 @@ List views are always paginated by limit-offset, defaults to limit=10,offset=0
   - JS functions from the `anyhedge.js.src.funcs` are loaded into `anyhedge.js.runner.AnyhedgeFunctions` class to provide an abstraction on running them.
   - Functions are loaded by running `anyhedge.js.src.load.js` which returns the function names.
   - Functions in `anyhedge.js.runner.AnyhedgeFunctions` accept will only accept _positional arguments_ that are JSON serializable
+
+### HedgePositionOffer lifecycle
+NOTE: `settled` status for `HedgePositionOffer` only implies that the offer has an `HedgePosition` created
+1. User1 creates a `HedgePositionOffer`, by default the status is `pending`
+    - The created position offer will be part of the pool in `/anyhedge/hedge-position-offers/find_match/` API
+2. Other users (e.g. User2) can accept the offer created by User1. User2 accepts User1’s offer by providing his `pubkey`, `address`, & `wallet_hash`. The server then gets the latest price of the oracle pubkey (from User1’s offer) and proceeds to construct a contract to save the contract address. After this, the status of the offer is changed to `accepted`
+3. After the offer is changed to `accepted`, a settlement deadline is set (a fixed duration after accepting the offer). The counter party(User2) can check the contract details (in the app) to verify.
+    1. If the counter party chooses to continue, the counter party(User2) must then provide a funding UTXO to settle the offer.
+    2. If not, the counter party(User2) can cancel accepting the position offer which will revert the position offer into a `pending` state(returning it back in the pool for finding match). This can be skipped & will automatically be reverted after the settlement deadline.
+4. After the counter party(User2) submits a funding UTXO, a `HedgePosition` instance is created using the offer’s data then the offer instance’s status is changed to `settled`
