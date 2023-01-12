@@ -466,6 +466,7 @@ def validate_contract_funding(contract_address, save=True):
     if not funding_tx_validation["valid"]:
         response["success"] = False
         response["error"] = "invalid funding transaction"
+        return response
 
     if save:
         defaults = {
