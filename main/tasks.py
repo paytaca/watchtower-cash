@@ -1156,11 +1156,28 @@ def find_wallet_history_missing_tx_timestamps():
         tx_timestamp__isnull=True,
     ).order_by('-date_created').values_list('txid', flat=True).distinct()[:NO_TXIDS_TO_PARSE]
 
+    # get transactions from 
+    tx_timestamps = Transaction.objects.filter(
+        txid__in=txids,
+        tx_timestamp__isnull=False
+    ).values('txid', 'tx_timestamp').union(
+        WalletHistory.objects.filter(
+            txid__in=txids,
+            tx_timestamp__isnull=False,
+        ).values('txid', 'tx_timestamp')
+    ).distinct()
+    tx_timestamps_map = {tx['txid']: tx['tx_timestamp'] for tx in tx_timestamps}
+
     bchd = BCHDQuery()
     txids_updated = []
     for txid in txids:
-        tx = bchd.get_transaction(txid)
-        _tx_timestamp = tx["timestamp"]
+        _tx_timestamp = tx_timestamps_map.get(txid)
+        if not _tx_timestamp:
+            tx = bchd.get_transaction(txid)
+            _tx_timestamp = tx.get("timestamp") if tx else None
+        if not _tx_timestamp:
+            continue
+
         tx_timestamp = datetime.fromtimestamp(_tx_timestamp).replace(tzinfo=pytz.UTC)
         WalletHistory.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
         Transaction.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
