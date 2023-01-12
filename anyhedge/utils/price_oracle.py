@@ -5,17 +5,27 @@ from ..js.runner import AnyhedgeFunctions
 
 
 def save_price_oracle_message(oracle_pubkey, price_message):
-    price_oracle_message, created = PriceOracleMessage.objects.update_or_create(
-        pubkey = oracle_pubkey,
-        signature = price_message["priceMessage"]["signature"],
-        message = price_message["priceMessage"]["message"],
-        defaults={
-            "message_timestamp": datetime.fromtimestamp(price_message["priceData"]["messageTimestamp"]).replace(tzinfo=pytz.UTC),
-            "price_value": price_message["priceData"]["priceValue"],
-            "price_sequence": price_message["priceData"]["priceSequence"],
-            "message_sequence": price_message["priceData"]["messageSequence"],
-        }
+    filter_kwargs = dict(
+        pubkey=oracle_pubkey,
+        signature=price_message["priceMessage"]["signature"],
+        message=price_message["priceMessage"]["message"],
     )
+    defaults={
+        "message_timestamp": datetime.fromtimestamp(price_message["priceData"]["messageTimestamp"]).replace(tzinfo=pytz.UTC),
+        "price_value": price_message["priceData"]["priceValue"],
+        "price_sequence": price_message["priceData"]["priceSequence"],
+        "message_sequence": price_message["priceData"]["messageSequence"],
+    }
+    try:
+        price_oracle_message, created = PriceOracleMessage.objects.update_or_create(
+            **filter_kwargs,
+            defaults=defaults,
+        )
+    except PriceOracleMessage.MultipleObjectsReturned as exception:
+        queryset = PriceOracleMessage.objects.filter(**filter_kwargs)
+        queryset.update(**defaults)
+        price_oracle_message = queryset.first()
+
     return price_oracle_message
 
 
