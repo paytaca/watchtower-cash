@@ -26,7 +26,8 @@ default_settings = {
     "START_BLOCK": None,
     "BLOCK_TO_PRELOAD": None,
     "BLOCKS_PER_TASK": 25,
-    "JSON_RPC_PROVIDER_URL": "https://smartbch.fountainhead.cash/mainnet",
+    "JSON_RPC_PROVIDER_URL": "https://rpc.smartbch.org"
+    # "JSON_RPC_PROVIDER_URL": "https://smartbch.fountainhead.cash/mainnet",
 }
 
 # In case you need to read settings from the main project settings
