@@ -1,4 +1,5 @@
 import pytz
+import logging
 from datetime import datetime, timedelta
 from django.db import transaction
 from django.utils import timezone
@@ -42,6 +43,9 @@ from .utils.price_oracle import (
     get_price_messages,
     save_price_oracle_message,
 )
+from .utils.push_notification import (
+    send_position_offer_settled,
+)
 from .utils.validators import (
     ValidAddress,
     ValidTxHash,
@@ -57,6 +61,7 @@ from .tasks import (
     parse_contract_liquidity_fee,
 )
 
+LOGGER = logging.getLogger(__name__)
 
 class TimestampField(serializers.IntegerField):
     def to_representation(self, value):
@@ -862,6 +867,12 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
                 "address": self.hedge_position_offer.hedge_position.address,
             }
         )
+
+        try:
+            send_position_offer_settled(self.hedge_position_offer)
+        except Exception as exception:
+            LOGGER.exception(exception)
+
         return hedge_position
 
 
