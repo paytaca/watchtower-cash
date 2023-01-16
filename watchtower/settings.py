@@ -76,7 +76,8 @@ INSTALLED_APPS=[
     'smartbch',
     'paytacapos',
     'anyhedge',
-    'chat'
+    'chat',
+    'pushnotifications'
 ]
 
 MIDDLEWARE=[
