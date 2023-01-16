@@ -372,6 +372,29 @@ class WalletHistory(PostgresModel):
     def __str__(self):
         return self.txid
 
+    @property
+    def fiat_value(self):
+        currency = "USD"
+        try:
+            if self.wallet and self.wallet.preferences and self.wallet.preferences.selected_currency:
+                currency = self.wallet.preferences.selected_currency
+        except Wallet.preferences.RelatedObjectDoesNotExist:
+            pass
+
+        market_price = None
+        if self.market_prices and self.market_prices.get(currency, None):
+            market_price = self.market_prices[currency]
+        elif not market_price and self.usd_price and currency == "USD":
+            market_price = self.usd_price
+        
+        if not market_price:
+            return
+
+        return {
+            "currency": currency,
+            "value": round(market_price * self.amount, 2),
+        }
+
 
 class WalletNftToken(PostgresModel):
     wallet = models.ForeignKey(
