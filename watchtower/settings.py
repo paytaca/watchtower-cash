@@ -197,8 +197,11 @@ PUSH_NOTIFICATIONS_SETTINGS = {
 
     # For Apple Push Notification Services (IOS)
     # -----------------------------------------
-    # "APNS_CERTIFICATE": "/path/to/your/certificate.pem",
-    # "APNS_TOPIC": "com.example.push_test",
+    "APNS_CERTIFICATE": os.path.join(BASE_DIR, config('APNS_CERTIFICATE_PATH', 'certificate.pem')),
+    "APNS_AUTH_KEY_ID": config('APNS_AUTH_KEY_ID', None),
+    "APNS_TEAM_ID": config('APNS_TEAM_ID', None),
+    "APNS_USE_ALTERNATIVE_PORT": config('APNS_USE_ALTERNATIVE_PORT', None),
+    "APNS_TOPIC": config('APNS_TOPIC', None),
 
     # For Webpush
     # -----------------------------------------
