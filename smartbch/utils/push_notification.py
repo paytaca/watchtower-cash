@@ -1,9 +1,9 @@
 from django.apps import apps
+from push_notifications.models import GCMDevice, APNSDevice
 
 def send_transaction_transfer_push_notification(tx_transfer_obj):
-    GCMDevice = apps.get_model("push_notifications", "GCMDevice")
-    APNSDevice = apps.get_model("push_notifications", "APNSDevice")
     Wallet = apps.get_model("main", "Wallet")
+
     recipient_wallet = Wallet.objects.filter(
         addresses__address=tx_transfer_obj.to_addr
     ).first()
@@ -23,7 +23,7 @@ def send_transaction_transfer_push_notification(tx_transfer_obj):
     response = { "sender": None, "recipient": None }
 
     is_nft = False
-    if tx_transfer_obj.token_contract and tx_transfer_obj.token_contract.token_type === 721:
+    if tx_transfer_obj.token_contract and tx_transfer_obj.token_contract.token_type == 721:
         is_nft = True
 
     # send to sender

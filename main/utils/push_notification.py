@@ -1,12 +1,7 @@
-from django.apps import apps
-
 def send_wallet_history_push_notification(wallet_history_obj):
     token_name = wallet_history_obj.token.name
     if token_name.lower() == "bch":
         token_name = "BCH"
-
-    GCMDevice = apps.get_model("push_notifications", "GCMDevice")
-    APNSDevice = apps.get_model("push_notifications", "APNSDevice")
 
     gcm_devices = GCMDevice.objects.filter(
         device_wallets__wallet_hash=wallet_history_obj.wallet.wallet_hash,

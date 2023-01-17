@@ -1,10 +1,7 @@
-from django.apps import apps
+from push_notifications.models import GCMDevice, APNSDevice
 from ..models import HedgePositionOffer
 
 def send_position_offer_settled(hedge_position_offer):
-    GCMDevice = apps.get_model("push_notifications", "GCMDevice")
-    APNSDevice = apps.get_model("push_notifications", "APNSDevice")
-
     gcm_devices = GCMDevice.objects.filter(
         device_wallets__wallet_hash=hedge_position_offer.wallet_hash,
     )
@@ -29,9 +26,6 @@ def send_position_offer_settled(hedge_position_offer):
 
 
 def send_contract_matured(hedge_position_obj):
-    GCMDevice = apps.get_model("push_notifications", "GCMDevice")
-    APNSDevice = apps.get_model("push_notifications", "APNSDevice")
-
     response = { "hedge": None, "long": None }
     title = "Anyhedge"
     extra = { "address": hedge_position_obj.address }
