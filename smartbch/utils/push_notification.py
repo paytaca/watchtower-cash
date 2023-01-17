@@ -22,10 +22,17 @@ def send_transaction_transfer_push_notification(tx_transfer_obj):
 
     response = { "sender": None, "recipient": None }
 
+    is_nft = False
+    if tx_transfer_obj.token_contract and tx_transfer_obj.token_contract.token_type === 721:
+        is_nft = True
+
     # send to sender
     if sender_wallet:
         sender_title = "Payment Sent"
         sender_message = f"SmartBCH: Sent {tx_transfer_obj.normalized_amount} {tx_transfer_obj.unit_symbol}"
+        if is_nft:
+            sender_title = "NFT Sent"
+            sender_message = f"SmartBCH: Sent NFT {tx_transfer_obj.token_contract.address}#{tx_transfer_obj.token_id} {tx_transfer_obj.unit_symbol}"
         sender_gcm_devices = GCMDevice.objects.filter(
             device_wallets__wallet_hash=sender_wallet.wallet_hash,
         )
@@ -47,6 +54,10 @@ def send_transaction_transfer_push_notification(tx_transfer_obj):
     if recipient_wallet:
         recipient_title = "Payment Received"
         recipient_message = f"SmartBCH: Received {tx_transfer_obj.normalized_amount} {tx_transfer_obj.unit_symbol}"
+
+        if is_nft:
+            recipient_title = "NFT Received"
+            recipient_message = f"SmartBCH: Received NFT {tx_transfer_obj.token_contract.address}#{tx_transfer_obj.token_id} {tx_transfer_obj.unit_symbol}"
         recipient_gcm_devices = GCMDevice.objects.filter(
             device_wallets__wallet_hash=recipient_wallet.wallet_hash,
         )
