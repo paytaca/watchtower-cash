@@ -1,5 +1,5 @@
 from django.apps import apps
-from push_notifications.models import GCMDevice, APNSDevice
+from notifications.utils.send import send_push_notification_to_wallet_hashes
 
 def send_transaction_transfer_push_notification(tx_transfer_obj):
     Wallet = apps.get_model("main", "Wallet")
@@ -33,47 +33,26 @@ def send_transaction_transfer_push_notification(tx_transfer_obj):
         if is_nft:
             sender_title = "NFT Sent"
             sender_message = f"SmartBCH: Sent NFT {tx_transfer_obj.token_contract.address}#{tx_transfer_obj.token_id} {tx_transfer_obj.unit_symbol}"
-        sender_gcm_devices = GCMDevice.objects.filter(
-            device_wallets__wallet_hash=sender_wallet.wallet_hash,
-        )
-        sender_apns_devices = APNSDevice.objects.filter(
-            device_wallets__wallet_hash=sender_wallet.wallet_hash,
-        )
-        sender_gcm_response = sender_gcm_devices.send_message(
+
+        response["sender"] = send_push_notification_to_wallet_hashes(
+            [sender_wallet.wallet_hash],
             sender_message,
             title=sender_title,
             extra=extra,
         )
-        sender_apns_response = sender_apns_devices.send_message(
-            sender_message,
-            title=sender_title,
-            extra=extra
-        )
-        response["sender"] = (sender_gcm_response, sender_apns_response)
 
     if recipient_wallet:
         recipient_title = "Payment Received"
         recipient_message = f"SmartBCH: Received {tx_transfer_obj.normalized_amount} {tx_transfer_obj.unit_symbol}"
-
         if is_nft:
             recipient_title = "NFT Received"
             recipient_message = f"SmartBCH: Received NFT {tx_transfer_obj.token_contract.address}#{tx_transfer_obj.token_id} {tx_transfer_obj.unit_symbol}"
-        recipient_gcm_devices = GCMDevice.objects.filter(
-            device_wallets__wallet_hash=recipient_wallet.wallet_hash,
-        )
-        recipient_apns_devices = APNSDevice.objects.filter(
-            device_wallets__wallet_hash=recipient_wallet.wallet_hash,
-        )
-        recipient_gcm_response = recipient_gcm_devices.send_message(
+
+        response["recipient"] = send_push_notification_to_wallet_hashes(
+            [recipient_wallet.wallet_hash],
             recipient_message,
             title=recipient_title,
             extra=extra,
         )
-        recipient_apns_response = recipient_apns_devices.send_message(
-            recipient_message,
-            title=recipient_title,
-            extra=extra
-        )
-        response["recipient"] = (recipient_gcm_response, recipient_apns_response)
 
     return response
