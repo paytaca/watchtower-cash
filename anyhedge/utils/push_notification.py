@@ -58,7 +58,7 @@ def send_contract_matured(hedge_position_obj):
             device_wallets__wallet_hash=hedge_position_obj.long_wallet_hash,
         )
 
-        response["hedge"] = (
+        response["long"] = (
             long_gcm_devices.send_message(message, title=title, extra=extra),
             long_apns_devices.send_message(message, title=title, extra=extra),
         )
