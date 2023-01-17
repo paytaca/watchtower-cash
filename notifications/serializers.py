@@ -135,7 +135,7 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
             if isinstance(device, GCMDevice):
                 filter_kwargs["gcm_device"] = device
             elif isinstance(device, APNSDevice):
-                filter_kwargs["gcm_device"] = device
+                filter_kwargs["apns_device"] = device
 
             device_wallet, _ = DeviceWallet.objects.update_or_create(
                 **filter_kwargs,
