@@ -40,6 +40,25 @@ The API expects the following payload:
 
 
 ## Sending push notifications to specific wallet
+There are a set of util functions that can be used to send push notifications to a wallet in `notifications.utils.send`:
+  - `get_wallet_hashes_devices(wallet_hash_list)`: This returns a 2-tuple queryset of (`GCMDevice`, `APNSDevice`) that are linked to a list of wallet_hash
+  - `send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)`: Sends a push notification to `GCMDevices` & `APNSDevices` given a list of wallet hashes
+
+Using utils functions:
+```
+from notifications.utils.send import send_get_wallet_hashes_devices
+
+wallet_hash = "wallet-hash-here"
+
+hidden_data = { "foo": "bar" }
+title = "Notification title"
+message = "Test notification"
+
+response = send_get_wallet_hashes_devices([wallet_hash], message, title=title, extra=hidden_data)
+(gcm_send_response, apns_send_response) = response
+```
+
+You can achieve the same results without the utils function with the following example:
 ```
 from push_notifications.models import GCMDevice, APNSDevice
 
@@ -51,6 +70,6 @@ hidden_data = { "foo": "bar" }
 title = "Notification title"
 message = "Test notification"
 
-gcm_devices.send_message(message, title=title, extra=hidden_data)
-apns_devices.send_message(message, title=title, extra=hidden_data)
+gcm_send_response = gcm_devices.send_message(message, title=title, extra=hidden_data)
+apns_send_response = apns_devices.send_message(message, title=title, extra=hidden_data)
 ```
