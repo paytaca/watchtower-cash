@@ -23,6 +23,9 @@ def get_wallet_hashes_devices(wallet_hash_list):
 def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs):
     """
     Sends a push notification to GCMDevices & APNSDevices given a list of wallet hashes
+        this function fails silently on the actual sending of push notifications; and
+        simply returns an exception for each batch send response; this is to
+        prevent stopping the send to ios devices if sending to gcm devices failes
 
     Parameters:
             wallet_hash_list (List<str>): List of wallet hash
@@ -31,10 +34,24 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
     Returns:
             gcm_send_message_response, apns_send_message_response (List, List): 
                 a 2-tuple containing response after sending push notifications to gcm_devices & apns_devices 
+                the response for each can be an exception
     """
     gcm_devices, apns_devices = get_wallet_hashes_devices(wallet_hash_list)
 
+    # catching error for 
+    gcm_send_response = None
+    apns_send_response = None
+    try:
+        gcm_send_response = gcm_devices.send_message(message, **kwargs)
+    except Exception as exception:
+        gcm_send_response = exception
+
+    try:
+        apns_send_response = apns_devices.send_message(message, **kwargs)
+    except Exception as exception:
+        apns_send_response = exception
+
     return (
-        gcm_devices.send_message(message, **kwargs),
-        apns_devices.send_message(message, **kwargs),
+        gcm_send_response,
+        apns_send_response,
     )
