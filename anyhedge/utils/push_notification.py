@@ -47,13 +47,13 @@ def send_contract_matured(hedge_position_obj):
     return response        
 
 def send_contract_require_funding(hedge_position_obj):
-    if hedge_position_obj.funding_tx_hash and False:
+    if hedge_position_obj.funding_tx_hash:
         return
 
     response = { "hedge": None, "long": None }
     title = "Anyhedge"
     extra = { "address": hedge_position_obj.address }
-    if hedge_position_obj.hedge_wallet_hash:
+    if not hedge_position_obj.hedge_funding_proposal and hedge_position_obj.hedge_wallet_hash:
         message = f"Hedge position require funding:\n{hedge_position_obj.address}"
         response["hedge"] = send_push_notification_to_wallet_hashes(
             [hedge_position_obj.hedge_wallet_hash],
@@ -62,7 +62,7 @@ def send_contract_require_funding(hedge_position_obj):
             extra=extra,
         )
 
-    if hedge_position_obj.long_wallet_hash:
+    if not hedge_position_obj.long_funding_proposal and hedge_position_obj.long_wallet_hash:
         message = f"Long position matured:\n{hedge_position_obj.address}"
         response["long"] = send_push_notification_to_wallet_hashes(
             [hedge_position_obj.long_wallet_hash],

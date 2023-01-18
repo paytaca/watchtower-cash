@@ -45,6 +45,7 @@ from .utils.price_oracle import (
 )
 from .utils.push_notification import (
     send_position_offer_settled,
+    send_contract_require_funding,
 )
 from .utils.validators import (
     ValidAddress,
@@ -137,6 +138,11 @@ class FundingProposalSerializer(serializers.Serializer):
             hedge_pos_obj.save()
 
         send_funding_tx_update(hedge_pos_obj, position=position)
+        try:
+            send_contract_require_funding(hedge_pos_obj)
+        except Exception as exception:
+            LOGGER.exception(exception)
+
         return funding_proposal
 
 
