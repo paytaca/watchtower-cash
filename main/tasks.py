@@ -778,14 +778,18 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
     record_type, amount, change_address = parser.parse()
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
     if wallet.wallet_type == 'bch':
-        txns = Transaction.objects.filter(
-            txid=txid,
-            address__address__startswith='bitcoincash:'
-        )
         # Correct the amount for outgoing, subtract the miner fee if given and maintain negative sign
         if record_type == 'outgoing':
             amount = (abs(amount) - ((tx_fee / 100000000) or 0)) * -1
             amount = round(amount, 8)
+        # Don't save a record if resulting amount is zero or dust
+        if amount == 0 or amount == abs(0.00000546):
+            return None
+
+        txns = Transaction.objects.filter(
+            txid=txid,
+            address__address__startswith='bitcoincash:'
+        )
     elif wallet.wallet_type == 'slp':
         txns = Transaction.objects.filter(
             txid=txid,
