@@ -229,8 +229,8 @@ CELERY_IMPORTS = (
 # CELERY_RESULT_BACKEND = 'rpc://'
 
 if REDIS_PASSWORD:
-    CELERY_BROKER_URL = 'redis://:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_RESULT_BACKEND = 'redis://:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
@@ -262,62 +262,62 @@ CELERYD_MAX_TASKS_PER_CHILD = 5
 
 
 CELERY_BEAT_SCHEDULE = {
-    # 'update_oracle_prices': {
-    #     'task': 'anyhedge.tasks.check_new_price_messages',
-    #     'schedule': 60,
-    # },
-    # 'update_anyhedge_contract_settlements': {
-    #     'task': 'anyhedge.tasks.update_matured_contracts',
-    #     'schedule': 60,
-    # },
-    # 'update_anyhedge_contracts_for_liquidation': {
-    #     'task': 'anyhedge.tasks.update_contracts_for_liquidation',
-    #     'schedule': 120,
-    # },
-    # 'parse_contracts_liquidity_fee': {
-    #     'task': 'anyhedge.tasks.parse_contracts_liquidity_fee',
-    #     'schedule': 5 * 60,
-    # },
-    # 'get_latest_block': {
-    #     'task': 'main.tasks.get_latest_block',
-    #     'schedule': 5
-    # },
-    # 'manage_blocks': {
-    #     'task': 'main.tasks.manage_blocks',
-    #     'schedule': 7
-    # },
-    # 'find_wallet_history_missing_tx_timestamps': {
-    #     'task': 'main.tasks.find_wallet_history_missing_tx_timestamps',
-    #     'schedule': 60 * 2,
-    # },
-    # 'resolve_wallet_history_usd_values': {
-    #     'task': 'main.tasks.resolve_wallet_history_usd_values',
-    #     'schedule': 60 * 2,
-    # },
-    # 'fetch_latest_usd_price': {
-    #     'task': 'main.tasks.fetch_latest_usd_price',
-    #     'schedule': 60 * 2,
-    # },
-    # 'preload_smartbch_blocks': {
-    #     'task': 'smartbch.tasks.preload_new_blocks_task',
-    #     'schedule': 20,
-    # },
-    # 'parse_new_smartbch_blocks': {
-    #     'task': 'smartbch.tasks.parse_blocks_task',
-    #     'schedule': 30,
-    # },
-    # 'parse_token_contract_metadata': {
-    #     'task': 'smartbch.tasks.parse_token_contract_metadata_task',
-    #     'schedule': 300,
-    # },
-    # 'save_token_icons': {
-    #     'task': 'smartbch.tasks.save_token_icons_task',
-    #     'schedule': 300,
-    # },
-    # 'parse_missing_records': {
-    #     'task': 'smartbch.tasks.parse_missed_records_task',
-    #     'schedule': 60 * 20 # run every 20 minutes.
-    # },
+    'update_oracle_prices': {
+        'task': 'anyhedge.tasks.check_new_price_messages',
+        'schedule': 60,
+    },
+    'update_anyhedge_contract_settlements': {
+        'task': 'anyhedge.tasks.update_matured_contracts',
+        'schedule': 60,
+    },
+    'update_anyhedge_contracts_for_liquidation': {
+        'task': 'anyhedge.tasks.update_contracts_for_liquidation',
+        'schedule': 120,
+    },
+    'parse_contracts_liquidity_fee': {
+        'task': 'anyhedge.tasks.parse_contracts_liquidity_fee',
+        'schedule': 5 * 60,
+    },
+    'get_latest_block': {
+        'task': 'main.tasks.get_latest_block',
+        'schedule': 5
+    },
+    'manage_blocks': {
+        'task': 'main.tasks.manage_blocks',
+        'schedule': 7
+    },
+    'find_wallet_history_missing_tx_timestamps': {
+        'task': 'main.tasks.find_wallet_history_missing_tx_timestamps',
+        'schedule': 60 * 2,
+    },
+    'resolve_wallet_history_usd_values': {
+        'task': 'main.tasks.resolve_wallet_history_usd_values',
+        'schedule': 60 * 2,
+    },
+    'fetch_latest_usd_price': {
+        'task': 'main.tasks.fetch_latest_usd_price',
+        'schedule': 60 * 2,
+    },
+    'preload_smartbch_blocks': {
+        'task': 'smartbch.tasks.preload_new_blocks_task',
+        'schedule': 20,
+    },
+    'parse_new_smartbch_blocks': {
+        'task': 'smartbch.tasks.parse_blocks_task',
+        'schedule': 30,
+    },
+    'parse_token_contract_metadata': {
+        'task': 'smartbch.tasks.parse_token_contract_metadata_task',
+        'schedule': 300,
+    },
+    'save_token_icons': {
+        'task': 'smartbch.tasks.save_token_icons_task',
+        'schedule': 300,
+    },
+    'parse_missing_records': {
+        'task': 'smartbch.tasks.parse_missed_records_task',
+        'schedule': 60 * 20 # run every 20 minutes.
+    },
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
