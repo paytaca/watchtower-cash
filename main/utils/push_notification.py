@@ -10,9 +10,9 @@ def send_wallet_history_push_notification(wallet_history_obj):
 
     extra = { "txid": wallet_history_obj.txid }
     title = "Payment Received" if incoming else "Payment Sent"
-    message = f"{'Received' if incoming else 'Sent'} {wallet_history_obj.amount} {token_name}"
+    message = f"{'Received' if incoming else 'Sent'} {abs(wallet_history_obj.amount)} {token_name}"
     if fiat_value and fiat_value.get('value', None):
-        message += f" ({fiat_value['value']} {fiat_value['currency']})"
+        message += f" ({abs(fiat_value['value'])} {fiat_value['currency']})"
 
     return send_push_notification_to_wallet_hashes(
         [wallet_history_obj.wallet.wallet_hash],
