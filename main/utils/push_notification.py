@@ -1,7 +1,7 @@
 from notifications.utils.send import send_push_notification_to_wallet_hashes
 
 def send_wallet_history_push_notification(wallet_history_obj):
-    token_name = wallet_history_obj.token.name
+    token_name = wallet_history_obj.token.token_ticker or wallet_history_obj.token.name
     if token_name.lower() == "bch":
         token_name = "BCH"
 
