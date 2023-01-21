@@ -32,7 +32,7 @@ The API expects the following payload:
     "wallet_hashes": string[],
 }
 ```
-- Passing `gcm_device` or `apns_device` object will create a `push_notifications.GCMDevice` or `push_notifications.APNSDevice` instance, respectively. The API will search for an existing record on `push_notifications.GCMDevice` or `push_notifications.APNSDevice` with the same `application_id` first before creating a new instance.
+- Passing `gcm_device` or `apns_device` object will create a `push_notifications.GCMDevice` or `push_notifications.APNSDevice` instance, respectively. The API will search for an existing record on `push_notifications.GCMDevice` or `push_notifications.APNSDevice` with the same `registration_id` first before creating a new instance.
 
 - `wallet_hashes` will create a set of `notifications.DeviceWallet` that will be linked to the created `push_notifications.GCMDevice` or `push_notifications.APNSDevice`. This will sync with the existing records (if there are any)
   - existing records that are not in `wallet_hashes` will be removed
@@ -41,8 +41,10 @@ The API expects the following payload:
 
 ## Sending push notifications to specific wallet
 There are a set of util functions that can be used to send push notifications to a wallet in `notifications.utils.send`:
-  - `get_wallet_hashes_devices(wallet_hash_list)`: This returns a 2-tuple queryset of (`GCMDevice`, `APNSDevice`) that are linked to a list of wallet_hash
+  - `get_wallet_hashes_devices(wallet_hash_list)`: This returns a 2-tuple queryset of (`GCMDevice`, `APNSDevice`) that are linked to any wallet_hash in the list provided
   - `send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)`: Sends a push notification to `GCMDevices` & `APNSDevices` given a list of wallet hashes
+    - returns a 2 tuple of responses from sending to `GCMDevices` & `APNSDevices`, respectively
+    - sending to each device types will fail silently causing one or both of the results can be an Exception. This is to not stop sending to the other device type if one fails
 
 Using utils functions:
 ```
