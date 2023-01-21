@@ -26,6 +26,9 @@ from main.utils.market_price import (
 )
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils.wallet import HistoryParser
+from main.utils.push_notification import (
+    send_wallet_history_push_notification,
+)
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
@@ -828,8 +831,9 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             )
             history.save()
             resolve_wallet_history_usd_values.delay(txid=txid)
+            parse_market_values_task = None
             if history.tx_timestamp:
-                parse_wallet_history_market_values.delay(history.id)
+                parse_market_values_task = parse_wallet_history_market_values.delay(history.id)
 
             if txn.token.token_type == 65:
                 if record_type == 'incoming':
@@ -852,6 +856,19 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                         wallet_nft_token.date_dispensed = txn.date_created
                         wallet_nft_token.dispensation_transaction = txn
                         wallet_nft_token.save()
+
+
+            try:
+                if parse_market_values_task:
+                    try:
+                        parse_market_values_task.get()
+                        history.refresh_from_db()
+                    except Exception:
+                        pass
+
+                send_wallet_history_push_notification(history)
+            except Exception as exception:
+                LOGGER.exception(exception)
 
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)

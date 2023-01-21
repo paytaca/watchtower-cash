@@ -27,6 +27,9 @@ from .utils.price_oracle import (
     parse_oracle_message,
     save_price_oracle_message,
 )
+from .utils.push_notification import (
+    send_contract_matured,
+)
 from .utils.settlement import (
     get_contracts_for_liquidation,
     search_settlement_tx,
@@ -111,6 +114,11 @@ def update_matured_contracts():
                 update_contract_settlement_from_service.delay(hedge_position.address)
         except HedgePosition.settlement_service.RelatedObjectDoesNotExist:
             settle_contract_maturity.delay(hedge_position.address)
+
+        try:
+            send_contract_matured(hedge_position)
+        except Exception as exception:
+            LOGGER.exception(exception)
 
         contract_addresses.append(hedge_position.address)
 

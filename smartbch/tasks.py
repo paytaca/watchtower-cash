@@ -19,6 +19,7 @@ from smartbch.utils import block as block_utils
 from smartbch.utils import subscription as subscription_utils
 from smartbch.utils import transaction as transaction_utils
 from smartbch.utils import contract as contract_utils
+from smartbch.utils import push_notification as push_notification_utils
 from main.tasks import download_image
 
 LOGGER = logging.getLogger(__name__)
@@ -293,6 +294,11 @@ def send_transaction_transfer_notification_task(tx_transfer_id):
 
     if not tx_transfer_obj:
         return f"transaction_transfer with id {tx_transfer_id} does not exist"
+
+    try:
+        push_notification_utils.send_transaction_transfer_push_notification(tx_transfer_obj)
+    except Exception as exception:
+        LOGGER.exception(exception)
 
     subscriptions = tx_transfer_obj.get_unsent_valid_subscriptions()
 

@@ -205,3 +205,6 @@ node_modules
 /spiceslp/slp-sdk/
 supervisord.pid
 .env_prod
+
+# exclude pem certificates
+**.pem 

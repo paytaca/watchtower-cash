@@ -69,13 +69,15 @@ INSTALLED_APPS=[
     'dynamic_raw_id',
     'drf_yasg',
     'channels',
+    'push_notifications',
 
     'constance',
     'main',
     'smartbch',
     'paytacapos',
     'anyhedge',
-    'chat'
+    'chat',
+    'notifications'
 ]
 
 MIDDLEWARE=[
@@ -179,6 +181,34 @@ CONSTANCE_CONFIG_FIELDSETS = {
         'P2P_SETTLEMENT_SERVICE_FEE',
         'P2P_SETTLEMENT_SERVICE_FEE_ADDRESS',
     ),
+}
+
+
+# Push notifications (django-push-notifications)
+# See https://github.com/jazzband/django-push-notifications
+PUSH_NOTIFICATIONS_SETTINGS = {
+    # For Firebase (Android)
+    # -----------------------------------------
+    "FCM_API_KEY": config("FIREBASE_API_KEY"),
+
+    # For Google cloud messaging (Android)
+    # -----------------------------------------
+    # "GCM_API_KEY": "[your api key]",
+
+    # For Apple Push Notification Services (IOS)
+    # -----------------------------------------
+    "APNS_CERTIFICATE": os.path.join(BASE_DIR, config('APNS_CERTIFICATE_PATH', 'certificate.pem')),
+    "APNS_AUTH_KEY_ID": config('APNS_AUTH_KEY_ID', None),
+    "APNS_TEAM_ID": config('APNS_TEAM_ID', None),
+    "APNS_USE_ALTERNATIVE_PORT": config('APNS_USE_ALTERNATIVE_PORT', None),
+    "APNS_TOPIC": config('APNS_TOPIC', None),
+
+    # For Webpush
+    # -----------------------------------------
+    # "WNS_PACKAGE_SECURITY_ID": "[your package security id, e.g: 'ms-app://e-3-4-6234...']",
+    # "WNS_SECRET_KEY": "[your app secret key, e.g.: 'KDiejnLKDUWodsjmewuSZkk']",
+    # "WP_PRIVATE_KEY": "/path/to/your/private.pem",
+    # "WP_CLAIMS": {'sub': "mailto: development@example.com"}
 }
 
 
