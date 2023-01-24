@@ -17,6 +17,9 @@ class ChatIdentity(PostgresModel):
     last_online = models.DateTimeField(blank=True, null=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        verbose_name_plural = 'Chat identities'
+
     def __str__(self):
         return self.email
 
