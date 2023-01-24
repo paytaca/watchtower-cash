@@ -10,6 +10,7 @@ from main.models import (
     Wallet
 )
 from main.tasks import get_slp_utxos, get_bch_utxos
+from chat.models import PgpInfo
 
 from smartbch.tasks import save_transactions_by_address
 import logging
@@ -47,6 +48,7 @@ def new_subscription(**kwargs):
     address_index = kwargs.get('address_index', None)
     web_url = kwargs.get('webhook_url', None)
     telegram_id = kwargs.get('telegram_id', None)
+    pgp_info = kwargs.get('pgp_info', None)
     if address or addresses:
         address_list = []
         if isinstance(address, str):
@@ -135,6 +137,20 @@ def new_subscription(**kwargs):
                     response['success'] = True
             else:
                 response['error'] = 'invalid_address'
+        
+        # Create PGP info record if the required details are provided
+        if response['success'] and pgp_info and address == pgp_info['address']:
+            pgp_info_exists = PgpInfo.objects.filter(address__address=pgp_info['bch_address']).exists()
+            if not pgp_info_exists:
+                    pgp_info = PgpInfo(
+                        address=Address.objects.get(address=pgp_info['bch_address']),
+                        user_id=pgp_info['user_id'],
+                        email=pgp_info['email'],
+                        public_key=pgp_info['public_key'],
+                        public_key_hash=pgp_info['public_key_hash'],
+                        signature=pgp_info['signature']
+                    )
+                    pgp_info.save()
 
     LOGGER.info(response)
     return response
