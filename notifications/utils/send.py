@@ -98,3 +98,12 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
         gcm_send_response,
         apns_send_response,
     )
+
+
+class NotificationTypes:
+    MAIN_TRANSACTION = "transaction"
+    SBCH_TRANSACTION = "sbch_transaction"
+
+    ANYHEDGE_OFFER_SETTLED = "anyhedge_offer_settled"
+    ANYHEDGE_MATURED = "anyhedge_matured"
+    ANYHEDGE_REQUIRE_FUNDING = "anyhedge_require_funding"
