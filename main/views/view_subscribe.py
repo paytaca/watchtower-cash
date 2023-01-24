@@ -9,12 +9,19 @@ from main import serializers
 
 
 class SubscribeViewSet(generics.GenericAPIView):
-    serializer_class = serializers.SubscriberSerializer
     permission_classes = [AllowAny,]
 
     def post(self, request, format=None):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
+        data = None
+        try:
+            serializer = serializers.SubscriberSerializerPgpInfo(data=request.data)
+            if serializer.is_valid():
+                data = serializer.data
+        except KeyError:
+            serializer = serializers.SubscriberSerializer(data=request.data)
+            if serializer.is_valid():
+                data = serializer.data
+        if data:
             response = new_subscription(**serializer.data)
             return Response(response, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

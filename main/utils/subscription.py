@@ -139,11 +139,11 @@ def new_subscription(**kwargs):
                 response['error'] = 'invalid_address'
         
         # Create PGP info record if the required details are provided
-        if response['success'] and pgp_info and address == pgp_info['address']:
-            pgp_info_exists = PgpInfo.objects.filter(address__address=pgp_info['bch_address']).exists()
+        if response['success'] and pgp_info and addresses and addresses['receiving'].split(':')[1] == pgp_info['user_id']:
+            pgp_info_exists = PgpInfo.objects.filter(address__address=addresses['receiving']).exists()
             if not pgp_info_exists:
                     pgp_info = PgpInfo(
-                        address=Address.objects.get(address=pgp_info['bch_address']),
+                        address=Address.objects.get(address=addresses['receiving']),
                         user_id=pgp_info['user_id'],
                         email=pgp_info['email'],
                         public_key=pgp_info['public_key'],
