@@ -45,6 +45,10 @@ There are a set of util functions that can be used to send push notifications to
   - `send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)`: Sends a push notification to `GCMDevices` & `APNSDevices` given a list of wallet hashes
     - returns a 2 tuple of responses from sending to `GCMDevices` & `APNSDevices`, respectively
     - sending to each device types will fail silently causing one or both of the results can be an Exception. This is to not stop sending to the other device type if one fails
+  - `NotificationTypes`: a class containing the different types of push notifications.
+    - This is helpful for devices to perform the appropriate the routing & actions when displaying the notification in app
+
+> NOTE: It is highly encouraged for every push notification sent to include a `type` key in the `extra` payload. Preferrably something from `notifications.utils.send.NotificationTypes`.
 
 Using utils functions:
 ```
