@@ -14,7 +14,7 @@ class SubscribeViewSet(generics.GenericAPIView):
     def post(self, request, format=None):
         data = None
         try:
-            serializer = serializers.SubscriberSerializerPgpInfo(data=request.data)
+            serializer = serializers.SubscriberSerializerChatIdentity(data=request.data)
             if serializer.is_valid():
                 data = serializer.data
         except KeyError:

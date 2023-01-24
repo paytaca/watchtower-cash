@@ -10,7 +10,7 @@ from main.models import (
     Wallet
 )
 from main.tasks import get_slp_utxos, get_bch_utxos
-from chat.models import PgpInfo
+from chat.models import ChatIdentity
 
 from smartbch.tasks import save_transactions_by_address
 import logging
@@ -48,7 +48,7 @@ def new_subscription(**kwargs):
     address_index = kwargs.get('address_index', None)
     web_url = kwargs.get('webhook_url', None)
     telegram_id = kwargs.get('telegram_id', None)
-    pgp_info = kwargs.get('pgp_info', None)
+    chat_identity = kwargs.get('chat_identity', None)
     if address or addresses:
         address_list = []
         if isinstance(address, str):
@@ -139,18 +139,18 @@ def new_subscription(**kwargs):
                 response['error'] = 'invalid_address'
         
         # Create PGP info record if the required details are provided
-        if response['success'] and pgp_info and addresses and addresses['receiving'].split(':')[1] == pgp_info['user_id']:
-            pgp_info_exists = PgpInfo.objects.filter(address__address=addresses['receiving']).exists()
-            if not pgp_info_exists:
-                    pgp_info = PgpInfo(
+        if response['success'] and chat_identity and addresses and addresses['receiving'].split(':')[1] == chat_identity['user_id']:
+            chat_identity_exists = ChatIdentity.objects.filter(address__address=addresses['receiving']).exists()
+            if not chat_identity_exists:
+                    chat_identity = ChatIdentity(
                         address=Address.objects.get(address=addresses['receiving']),
-                        user_id=pgp_info['user_id'],
-                        email=pgp_info['email'],
-                        public_key=pgp_info['public_key'],
-                        public_key_hash=pgp_info['public_key_hash'],
-                        signature=pgp_info['signature']
+                        user_id=chat_identity['user_id'],
+                        email=chat_identity['email'],
+                        public_key=chat_identity['public_key'],
+                        public_key_hash=chat_identity['public_key_hash'],
+                        signature=chat_identity['signature']
                     )
-                    pgp_info.save()
+                    chat_identity.save()
 
     LOGGER.info(response)
     return response

@@ -1,5 +1,5 @@
 from rest_framework import serializers, exceptions
-from chat.serializers import CreatePgpInfoSerializer
+from chat.serializers import CreateChatIdentitySerializer
 
 class SubscriberSerializer(serializers.Serializer):
     address = serializers.CharField(
@@ -17,5 +17,5 @@ class SubscriberSerializer(serializers.Serializer):
     webhook_url = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
 
-class SubscriberSerializerPgpInfo(SubscriberSerializer):
-    pgp_info = CreatePgpInfoSerializer(required=False, allow_null=True, default={}, source='*')
+class SubscriberSerializerChatIdentity(SubscriberSerializer):
+    chat_identity = CreateChatIdentitySerializer(required=False, allow_null=True, default={}, source='*')

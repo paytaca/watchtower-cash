@@ -3,10 +3,10 @@ from psqlextra.models import PostgresModel
 from main.models import Address
 
 
-class PgpInfo(PostgresModel):
+class ChatIdentity(PostgresModel):
     address = models.OneToOneField(
         Address,
-        related_name='pgp_info',
+        related_name='chat_identity',
         on_delete=models.CASCADE
     )
     user_id = models.CharField(max_length=50)
@@ -14,6 +14,26 @@ class PgpInfo(PostgresModel):
     public_key = models.TextField()
     public_key_hash = models.CharField(max_length=70)
     signature = models.TextField()
+    last_online = models.DateTimeField(blank=True, null=True)
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.email
+
+
+class Conversation(PostgresModel):
+    from_address = models.ForeignKey(
+        Address,
+        related_name='conversations',
+        on_delete=models.CASCADE
+    )
+    to_address = models.ForeignKey(
+        Address,
+        related_name='conversations',
+        on_delete=models.CASCADE
+    )
+    topic = models.TextField()
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.topic
