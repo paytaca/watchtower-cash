@@ -1,5 +1,5 @@
 from django.apps import apps
-from notifications.utils.send import send_push_notification_to_wallet_hashes
+from notifications.utils.send import send_push_notification_to_wallet_hashes, NotificationTypes
 
 def send_transaction_transfer_push_notification(tx_transfer_obj):
     Wallet = apps.get_model("main", "Wallet")
@@ -18,7 +18,11 @@ def send_transaction_transfer_push_notification(tx_transfer_obj):
     extra = {
         "txid": tx_transfer_obj.transaction.txid,
         "log_index": tx_transfer_obj.log_index,
+        "type": NotificationTypes.SBCH_TRANSACTION,
     }
+    if tx_transfer_obj.token_contract:
+        extra["token_address"] = tx_transfer_obj.token_contract.address
+        extra["token_type"] = tx_transfer_obj.token_contract.token_type
 
     response = { "sender": None, "recipient": None }
 

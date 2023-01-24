@@ -24,6 +24,7 @@ class WalletHistoryView(APIView):
             openapi.Parameter(name="page", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, default=1),
             openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
+            openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
         ]
     )
     def get(self, request, *args, **kwargs):
@@ -32,10 +33,16 @@ class WalletHistoryView(APIView):
         page = request.query_params.get('page', 1)
         record_type = request.query_params.get('type', 'all')
         posid = request.query_params.get("posid", None)
+        txids = request.query_params.get("txids", "")
+        if isinstance(txids, str):
+            txids = [txid for txid in txids.split(",") if txid]
+
 
         qs = WalletHistory.objects.filter(wallet__wallet_hash=wallet_hash)
         if record_type in ['incoming', 'outgoing']:
             qs = qs.filter(record_type=record_type)
+        if len(txids):
+            qs = qs.filter(txid__in=txids)
 
         if posid:
             try:
