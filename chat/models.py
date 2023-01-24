@@ -24,12 +24,12 @@ class ChatIdentity(PostgresModel):
 class Conversation(PostgresModel):
     from_address = models.ForeignKey(
         Address,
-        related_name='conversations',
+        related_name='conversations_started',
         on_delete=models.CASCADE
     )
     to_address = models.ForeignKey(
         Address,
-        related_name='conversations',
+        related_name='conversations_received',
         on_delete=models.CASCADE
     )
     topic = models.TextField()
