@@ -9,6 +9,7 @@ from main import serializers
 
 
 class SubscribeViewSet(generics.GenericAPIView):
+    serializer_class = serializers.SubscriberSerializer
     permission_classes = [AllowAny,]
 
     def post(self, request, format=None):
@@ -18,7 +19,7 @@ class SubscribeViewSet(generics.GenericAPIView):
             if serializer.is_valid():
                 data = serializer.data
         except KeyError:
-            serializer = serializers.SubscriberSerializer(data=request.data)
+            serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 data = serializer.data
         if data:
