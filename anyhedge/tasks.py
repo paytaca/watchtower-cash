@@ -20,6 +20,7 @@ from .utils.funding import (
     search_funding_tx,
     get_tx_hash,
     validate_funding_transaction,
+    attach_funding_tx_to_wallet_history_meta,
 )
 from .utils.liquidity import resolve_liquidity_fee
 from .utils.price_oracle import (
@@ -157,6 +158,12 @@ def __save_settlement(settlement_data, hedge_position_obj):
             hedge_settlement.settlement_message_timestamp = datetime.fromtimestamp(price_data["messageTimestamp"]).replace(tzinfo=pytz.UTC)
 
     hedge_settlement.save()
+
+    try:
+        attach_settlement_tx_to_wallet_history_meta(settlement_obj)
+    except Exception as exception:
+        LOGGER.error(f"SETTLEMENT TX META ERROR: {settlement_obj.hedge_position.address}")
+        LOGGER.exception(exception)
     return hedge_settlement
 
 
@@ -488,6 +495,11 @@ def validate_contract_funding(contract_address, save=True):
         HedgePositionFunding.objects.update_or_create(tx_hash=hedge_position_obj.funding_tx_hash, defaults=defaults)
         hedge_position_obj.funding_tx_hash_validated = True
         hedge_position_obj.save()
+        try:
+            LOGGER.error(f"FUNDING TX META ERROR: {hedge_position_obj.address}")
+            attach_funding_tx_to_wallet_history_meta(hedge_position_obj)
+        except Exception as exception:
+            LOGGER.exception(exception)
 
     response["success"] = True
     response["validation"] = funding_tx_validation

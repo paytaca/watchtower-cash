@@ -4,6 +4,7 @@ import requests
 from cashaddress import convert
 from hashlib import sha256
 from constance import config as constance_config
+from .api import TransactionMetaAttribute
 from .contract import (
     compile_contract_from_hedge_position,
     calculate_hedge_sats,
@@ -178,3 +179,35 @@ def validate_funding_transaction(tx_hash, contract_address, fee_address=None):
                 response["fee_output"] = output["e"]["i"]
 
     return response
+
+
+def attach_funding_tx_to_wallet_history_meta(hedge_position_obj, force=False):
+    if not hedge_position_obj.funding_tx_hash:
+        return
+    if not hedge_position_obj.funding_tx_hash_validated and not force:
+        return
+
+    filter_kwargs = dict(
+        txid=hedge_position_obj.funding_tx_hash,
+        wallet_hash="",
+        system_generated=True,
+        key="anyhedge_funding_tx",
+    )
+    defaults = dict(value=hedge_position_obj.address)
+
+    funding_tx_attr_obj, _ = TransactionMetaAttribute.objects.update_or_create(defaults=defaults, **filter_kwargs)
+
+    hedge_meta, long_meta = None, None
+    if hedge_position_obj.hedge_wallet_hash and hedge_position_obj.hedge_funding_proposal:
+        filter_kwargs["txid"] = hedge_position_obj.hedge_funding_proposal.tx_hash
+        filter_kwargs["wallet_hash"] = hedge_position_obj.hedge_wallet_hash
+        filter_kwargs["key"] = "anyhedge_hedge_funding_utxo"
+        hedge_meta, _ = TransactionMetaAttribute.objects.update_or_create(defaults=defaults, **filter_kwargs)
+
+    if hedge_position_obj.long_wallet_hash and hedge_position_obj.long_funding_proposal:
+        filter_kwargs["txid"] = hedge_position_obj.long_funding_proposal.tx_hash
+        filter_kwargs["key"] = "anyhedge_long_funding_utxo"
+        filter_kwargs["wallet_hash"] = hedge_position_obj.long_wallet_hash
+        long_meta, _ = TransactionMetaAttribute.objects.update_or_create(defaults=defaults, **filter_kwargs)
+
+    return (funding_tx_attr_obj, hedge_meta, long_meta)
