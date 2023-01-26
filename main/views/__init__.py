@@ -9,5 +9,6 @@ from main.views.view_blockheight import *
 from main.views.view_history import *
 from main.views.view_tokens import *
 from main.views.view_tasks import *
+from main.views.view_tx_attribute import *
 from main.views.view_wallet_preferences import *
 from main.views.view_paymentrequest import *
