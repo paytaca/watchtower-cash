@@ -772,7 +772,7 @@ def broadcast_transaction(self, transaction):
 
 
 @shared_task(bind=True, queue='wallet_history_1')
-def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[]):
+def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[], proceed_with_zero_amount=False):
     wallet_hash = wallet_handle.split('|')[1]
     parser = HistoryParser(txid, wallet_hash)
     record_type, amount, change_address = parser.parse()
@@ -783,7 +783,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             amount = (abs(amount) - ((tx_fee / 100000000) or 0)) * -1
             amount = round(amount, 8)
         # Don't save a record if resulting amount is zero or dust
-        if amount == 0 or amount == abs(0.00000546):
+        is_zero_amount = amount == 0 or amount == abs(0.00000546)
+        if is_zero_amount and not proceed_with_zero_amount:
             return None
 
         txns = Transaction.objects.filter(
@@ -1113,7 +1114,7 @@ def rescan_utxos(wallet_hash, full=False):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, source=""):
+def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False):
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
     bchd = BCHDQuery()
     bch_tx = bchd.get_transaction(txid)
@@ -1169,6 +1170,7 @@ def parse_tx_wallet_histories(txid, source=""):
             tx_fee,
             inputs,
             outputs,
+            proceed_with_zero_amount=proceed_with_zero_amount,
         )
 
     return wallet_handles
