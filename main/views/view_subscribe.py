@@ -9,17 +9,17 @@ from main import serializers
 
 
 class SubscribeViewSet(generics.GenericAPIView):
-    serializer_class = serializers.SubscriberSerializer
+    serializer_class = serializers.SubscriberSerializerChatIdentity
     permission_classes = [AllowAny,]
 
     def post(self, request, format=None):
         data = None
         try:
-            serializer = serializers.SubscriberSerializerChatIdentity(data=request.data)
+            serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 data = serializer.data
         except KeyError:
-            serializer = self.get_serializer(data=request.data)
+            serializer = serializer.SubscriberSerializer(data=request.data)
             if serializer.is_valid():
                 data = serializer.data
         if data:
