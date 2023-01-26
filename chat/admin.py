@@ -1,9 +1,9 @@
 from django.contrib import admin
 
-from chat.models import PgpInfo
+from chat.models import ChatIdentity, Conversation
 
 
-class PgpInfoAdmin(admin.ModelAdmin):
+class ChatIdentityAdmin(admin.ModelAdmin):
     search_fields = ['tokenid']
     actions = ['get_token_metadata']
 
@@ -13,4 +13,17 @@ class PgpInfoAdmin(admin.ModelAdmin):
     ]
 
 
-admin.site.register(PgpInfo, PgpInfoAdmin)
+admin.site.register(ChatIdentity, ChatIdentityAdmin)
+
+
+class ConversationAdmin(admin.ModelAdmin):
+    search_fields = ['topic']
+    list_display = [
+        'from_address',
+        'to_address',
+        'topic',
+        'date_created'
+    ]
+
+
+admin.site.register(Conversation, ConversationAdmin)
