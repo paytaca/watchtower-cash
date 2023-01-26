@@ -3,6 +3,7 @@ import base64
 import requests
 from django.db import models
 from cashaddress import convert
+from .api import TransactionMetaAttribute
 from .contract import compile_contract_from_hedge_position
 from .price_oracle import (
     save_price_oracle_message,
@@ -180,4 +181,21 @@ def save_settlement_data_from_mutual_redemption(hedge_position_obj):
         settlement_obj.settlement_price = mutual_redemption_obj.settlement_price
     settlement_obj.save()
 
+    try:
+        attach_settlement_tx_to_wallet_history_meta(settlement_obj)
+    except:
+        pass
+
     return settlement_obj
+
+
+def attach_settlement_tx_to_wallet_history_meta(settlement_obj):
+    filter_kwargs = dict(
+        txid=settlement_obj.spending_transaction,
+        wallet_hash="",
+        system_generated=True,
+        key="anyhedge_settlement_tx",
+    )
+    defaults = dict(value=settlement_obj.hedge_position.address)
+    settlement_tx_attr, _ = TransactionMetaAttribute.objects.update_or_create(defaults=defaults, **filter_kwargs)
+    return settlement_tx_attr

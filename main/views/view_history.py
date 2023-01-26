@@ -25,6 +25,7 @@ class WalletHistoryView(APIView):
             openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
             openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="attr", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True, required=False),
         ]
     )
     def get(self, request, *args, **kwargs):
@@ -34,6 +35,7 @@ class WalletHistoryView(APIView):
         record_type = request.query_params.get('type', 'all')
         posid = request.query_params.get("posid", None)
         txids = request.query_params.get("txids", "")
+        include_attrs = str(request.query_params.get("exclude_attr", "true")).strip().lower() == "true"
         if isinstance(txids, str):
             txids = [txid for txid in txids.split(",") if txid]
 
@@ -64,7 +66,14 @@ class WalletHistoryView(APIView):
 
         wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
-        
+
+        if include_attrs:
+            qs = qs.annotate_attributes(
+                Q(wallet_hash="") | Q(wallet_hash=wallet_hash),
+            )
+        else:
+            qs = qs.annotate_empty_attributes()
+
         if wallet.wallet_type == 'slp':
             qs = qs.filter(token__tokenid=token_id)
             history = qs.annotate(
@@ -83,6 +92,7 @@ class WalletHistoryView(APIView):
                 'tx_timestamp',
                 'usd_price',
                 'market_prices',
+                'attributes',
             )
         elif wallet.wallet_type == 'bch':
             history = qs.values(
@@ -96,6 +106,7 @@ class WalletHistoryView(APIView):
                 'tx_timestamp',
                 'usd_price',
                 'market_prices',
+                'attributes',
             )
         if wallet.version == 1:
             return Response(data=history, status=status.HTTP_200_OK)

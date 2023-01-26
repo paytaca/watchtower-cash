@@ -1,3 +1,4 @@
+from django.contrib.contenttypes.fields import GenericRelation, GenericForeignKey
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -311,6 +312,38 @@ class WalletHistoryQuerySet(PostgresQuerySet):
             wallet__wallet_hash=wallet_hash,
         )
 
+    def annotate_empty_attributes(self):
+        return self.annotate(
+            attributes=models.ExpressionWrapper(
+                models.Value(None),
+                output_field=ArrayField(JSONField()),
+            )
+        )
+
+    def annotate_attributes(self, *filter_args, **filter_kwargs):
+        attrs_qs = TransactionMetaAttribute.objects.filter(
+            *filter_args,
+            **filter_kwargs,
+        ).annotate(
+                raw=models.ExpressionWrapper(
+                    models.Func(
+                        models.Func(
+                            models.Value("system_generated"), "system_generated",
+                            models.Value("wallet_hash"), "wallet_hash",
+                            models.Value("key"), "key",
+                            models.Value("value"), "value",
+                            function="json_build_object",
+                        ),
+                        function="array_agg"
+                    ),
+                    output_field=ArrayField(JSONField()),
+                )
+            ).values("raw")
+
+        return self.annotate(
+            attributes=attrs_qs.filter(txid=models.OuterRef("txid"))
+        )
+
 class WalletHistory(PostgresModel):
     objects = WalletHistoryQuerySet.as_manager()
 
@@ -443,3 +476,20 @@ class AssetPriceLog(models.Model):
 class WalletPreferences(PostgresModel):
     wallet = models.OneToOneField(Wallet, on_delete=models.CASCADE, related_name="preferences")
     selected_currency = models.CharField(max_length=5, default="USD")
+
+
+class TransactionMetaAttribute(PostgresModel):
+    txid = models.CharField(max_length=70, db_index=True)
+
+    # to allow wallet scoped attributes
+    # used default empty string instead of nullable to trigger a unique_together constraint
+    wallet_hash = models.CharField(max_length=70, default="", blank=True, db_index=True)
+
+    system_generated = models.BooleanField(default=False)
+    key = models.CharField(max_length=50, db_index=True)
+    value = models.TextField()
+
+    class Meta:
+        unique_together = (
+            ("txid", "wallet_hash", "key", "system_generated"),
+        )

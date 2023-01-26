@@ -1078,6 +1078,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         hedge_position_obj.funding_tx_hash = funding_response["fundingTransactionHash"]
         hedge_position_obj.save()
 
+        validate_contract_funding.delay(hedge_position_obj.address)
         parse_contract_liquidity_fee.delay(hedge_position_obj.address, hard_update=False)
         return hedge_position_obj
 
