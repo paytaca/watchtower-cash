@@ -209,6 +209,13 @@ class MutualRedemption(models.Model):
     ]
     REDEMPTION_TYPES = [(REDEMPTION_TYPE, REDEMPTION_TYPE.replace('_', ' ').capitalize()) for REDEMPTION_TYPE in REDEMPTION_TYPES]
 
+
+    POSITION_HEDGE = "hedge"
+    POSITION_LONG = "long"
+    POSITIONS = [POSITION_HEDGE, POSITION_LONG]
+    POSITIONS = [(pos, pos) for pos in POSITIONS]
+
+    initiator = models.CharField(max_length=5, default=POSITION_HEDGE, choices=POSITIONS)
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="mutual_redemption")
     redemption_type = models.CharField(max_length=20, choices=REDEMPTION_TYPES)
     hedge_satoshis = models.BigIntegerField()
