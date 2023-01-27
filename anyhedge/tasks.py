@@ -38,6 +38,7 @@ from .utils.settlement import (
     liquidate_hedge_position,
     complete_mutual_redemption,
     save_settlement_data_from_mutual_redemption,
+    attach_settlement_tx_to_wallet_history_meta,
 )
 from .utils.websocket import (
     send_settlement_update,
@@ -160,9 +161,9 @@ def __save_settlement(settlement_data, hedge_position_obj):
     hedge_settlement.save()
 
     try:
-        attach_settlement_tx_to_wallet_history_meta(settlement_obj)
+        attach_settlement_tx_to_wallet_history_meta(hedge_settlement)
     except Exception as exception:
-        LOGGER.error(f"SETTLEMENT TX META ERROR: {settlement_obj.hedge_position.address}")
+        LOGGER.error(f"SETTLEMENT TX META ERROR: {hedge_settlement.hedge_position.address}")
         LOGGER.exception(exception)
     return hedge_settlement
 

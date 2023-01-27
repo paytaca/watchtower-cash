@@ -10,15 +10,15 @@ List views are always paginated by limit-offset, defaults to limit=10,offset=0
     - then saves the contract in the server
   - POST:`/submit_funding_proposal/`
     - Submit a utxo for the contract's funding
-    - This API will attempt to broadcast the funding transaction if funding utxo for both hedge and long are present. See `complete_contract_funding` task below.
+    - This API will attempt to broadcast the funding transaction if funding utxo for both hedge and long are present. See task `complete_contract_funding` in [Other tasks](#other-tasks---anyhedgetasks) below.
     - Used for generated contracts through P2P 
     - Fails silently, or will not return an error, if fails to broadcast funding.
   - POST:`/{address}/complete_funding/`
     - Attempts to broadcast a funding transaction from the contract's submitted funding proposal, if exists.
-    - See `complete_contract_funding` task below.
+    - See task `complete_contract_funding` in [Other tasks](#other-tasks---anyhedgetasks) below.
     - Used for generated contracts through P2P 
   - POST:`/{address}/validate_contract_funding/`
-    - See `validate_contract_funding` task below
+    - See `validate_contract_funding`in [Other tasks](#other-tasks---anyhedgetasks) task below
   - GET:`/summary/`
     - Returns aggregated data of hedge contracts, given the filter parameters provided.
     - Returns the total nominal unit of hedge side, grouped by oracle_pubkey/asset.
@@ -26,11 +26,29 @@ List views are always paginated by limit-offset, defaults to limit=10,offset=0
   - POST: `{address}/mutual_redemption/`
     - Used for creating a mutual redemption offer
     - Optionally pass signatures for the payout transaction.
-    - Will proceed to broadcast the payout transaction if signatures of both parties are present. See `redeem_contract` task below.
+    - Will proceed to broadcast the payout transaction if signatures of both parties are present. See task `redeem_contract` in [Other tasks](#other-tasks---anyhedgetasks) below
     - Currently for generated contracts through P2P only
+  - POST: `{address}/cancel_mutual_redemption/`
+    - For cancelling/declining a mutual redemption proposal, if the `initiator` is making this request, it is considered `cancelling` else it is `declining` the offer.
+    - This api requires
+      - `position`: the position that is making the API request
+      - `signature`: an edcsa signature used for authenticating the request
+    - Signature verification uses the following information depending on `position`:
+      - message = `hedge_schnorr_sig`/ `long_schnorr_sig`
+      - verifying_pubkey = `hedge_position.hedge_pubkey` / `hedge_position.long_pubkey`
   - POST: `{address}/complete_mutual_redemption/`
-    - See `redeem_contract` task below
+    - See task `redeem_contract` in [Other tasks](#other-tasks---anyhedgetasks) below
     - Currently for generated contracts through P2P only
+  - POST: `{address}/cancel/`
+    - Flags a hedge position as cancelled
+    - This api requires
+      - `position`: the position that is making the API request
+      - `signature`: an edcsa signature used for authenticating the request
+      - `timestamp`: Used as part of the message for generating/verifying the signature. used to set the cancelled_at timestamp
+      - Signature verification uses the following:
+        - message = `{unix_timestamp}:{contract_address}`
+        - verifying_pubkey = `hedge_position.hedge_pubkey` / `hedge_position.long_pubkey`
+    - This will fail if the hedge position is already cancelled or funded
 ### Oracles & Price messages
   - `/anyhedge/oracles/`
     - provide a list of oracles saved in the db. provides oracles pubkey and asset info(asset name, currency, & decimals).
@@ -39,6 +57,7 @@ List views are always paginated by limit-offset, defaults to limit=10,offset=0
   - `/anyhedge/price-messages/`
     - provides a list of oracle price messages, can be filtered by `pubkey`, `timestamp`(range), `price_sequence`(range), and/or `message_sequence`(range)
 ### HedgePositionOffer - `/anyhedge/hedge-position-offers/.*`
+More info on [HedgePositionOffer lifecycle](#hedgepositionoffer-lifecycle)
   - List view: rest-framework's default, can be filtered by `wallet_hash`, `exclude_wallet_hash`, `statuses`
   - Create view: 
     - rest-framework's default

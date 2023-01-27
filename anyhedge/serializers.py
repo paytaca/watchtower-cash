@@ -1,5 +1,6 @@
 import pytz
 import logging
+import bitcoin
 from datetime import datetime, timedelta
 from django.db import transaction
 from django.utils import timezone
@@ -45,7 +46,9 @@ from .utils.price_oracle import (
 )
 from .utils.push_notification import (
     send_position_offer_settled,
+    send_contract_cancelled,
     send_contract_require_funding,
+    send_mutual_redemption_proposal_update,
 )
 from .utils.validators import (
     ValidAddress,
@@ -53,6 +56,7 @@ from .utils.validators import (
 )
 from .utils.websocket import (
     send_offer_settlement_update,
+    send_contract_cancelled_update,
     send_funding_tx_update,
     send_mutual_redemption_update,
     send_hedge_position_offer_update,
@@ -96,6 +100,11 @@ class FundingProposalSerializer(serializers.Serializer):
             except HedgePosition.settlement.RelatedObjectDoesNotExist:
                 pass
 
+            if hedge_position_obj.maturity_timestamp >= timezone.now() + timedelta(minutes=1):
+                raise serializers.ValidationError("Hedge position has reached maturity")
+
+            if hedge_position_obj.cancelled_at:
+                raise serializers.ValidationError("Hedge position is already cancelled")
         except HedgePosition.DoesNotExist:
             raise serializers.ValidationError("Hedge position does not exist")
 
@@ -215,11 +224,77 @@ class HedgePositionFundingSerializer(serializers.ModelSerializer):
         ]
 
 
+class CancelMutualRedemptionSerializer(serializers.Serializer):
+    position = serializers.CharField()
+    signature = serializers.CharField(
+        help_text="Signature of the declining/cancelling party " \
+            "with message as 'hedge_schnorr_sig'/'long_schnorr_sig'(depends on itiator)"
+    )
+
+    def __init__(self, *args, hedge_position=None, **kwargs):
+        self.hedge_position = hedge_position
+        return super().__init__(*args, **kwargs)
+
+    def validate(self, data):
+        if not self.hedge_position:
+            raise serializers.ValidationError("Invalid hedge position")
+        try:
+            mutual_redemption = self.hedge_position.mutual_redemption
+        except HedgePosition.mutual_redemption.RelatedObjectDoesNotExist:
+            raise serializers.ValidationError("Invalid hedge position. Mutual redemption not found")
+
+        if mutual_redemption.tx_hash:
+            raise serializers.ValidationError("Invalid hedge position. Mutual redemption completed")
+
+        position = data["position"]
+        signature = data["signature"]
+
+        message = ""
+        if mutual_redemption.initiator == "hedge":
+            message = mutual_redemption.hedge_schnorr_sig
+        elif mutual_redemption.initiator == "long":
+            message = mutual_redemption.long_schnorr_sig
+
+        verifying_pubkey = ""
+        if position == "hedge":
+            verifying_pubkey = mutual_redemption.hedge_position.hedge_pubkey
+        elif position == "long":
+            verifying_pubkey = mutual_redemption.hedge_position.long_pubkey
+
+        if not bitcoin.ecdsa_verify(message, signature, verifying_pubkey):
+            raise serializers.ValidationError(f"invalid signature on: {message}")
+        return data
+
+    def save(self):
+        validated_data = self.validated_data
+        position = validated_data["position"]
+        instance = self.hedge_position.mutual_redemption
+        initiator = instance.initiator
+        redemption_type = instance.redemption_type
+        self.hedge_position.mutual_redemption.delete()
+
+        if position == initiator:
+            action = "cancelled"
+        else:
+            action = "declined"
+
+        send_mutual_redemption_update(instance, action="cancelled")
+        try:
+            send_mutual_redemption_proposal_update(
+                self.hedge_position,
+                action=action,
+                position=position,
+                redemption_type=redemption_type,
+            )
+        except:
+            pass
+
 class MutualRedemptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MutualRedemption
         fields = [
+            "initiator",
             "redemption_type",
             "hedge_satoshis",
             "long_satoshis",
@@ -233,6 +308,9 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
             "tx_hash": {
                 "read_only": True,
             },
+            "initiator": {
+                "read_only": True,
+            }
         }
 
     def __init__(self, *args, hedge_position=None, **kwargs):
@@ -293,9 +371,11 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        new_proposal = False
         instance = MutualRedemption.objects.filter(hedge_position=self.hedge_position).first()
 
         if not instance:
+            new_proposal = True
             instance = MutualRedemption(hedge_position=self.hedge_position, **validated_data)
 
         if instance.long_satoshis != validated_data["long_satoshis"] or \
@@ -304,6 +384,7 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
 
             instance.hedge_schnorr_sig = None
             instance.long_schnorr_sig = None
+            new_proposal = True
 
         instance.long_satoshis = validated_data["long_satoshis"]
         instance.hedge_satoshis = validated_data["hedge_satoshis"]
@@ -316,8 +397,25 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
         if validated_data.get("long_schnorr_sig", None):
             instance.long_schnorr_sig = validated_data["long_schnorr_sig"]
 
+        if instance.hedge_schnorr_sig and not instance.long_schnorr_sig:
+            instance.initiator = MutualRedemption.POSITION_HEDGE
+        elif instance.long_schnorr_sig and not instance.hedge_schnorr_sig:
+            instance.initiator = MutualRedemption.POSITION_LONG
+        elif not instance.long_schnorr_sig and not instance.hedge_schnorr_sig:
+            serializers.ValidationError("Unable to resolve initiator")
+
         instance.save()
         send_mutual_redemption_update(instance, action="created")
+        if new_proposal:
+            try:
+                send_mutual_redemption_proposal_update(
+                    self.hedge_position,
+                    action="proposed",
+                    position=instance.initiator,
+                    redemption_type=instance.redemption_type,
+                )
+            except:
+                pass
         return instance
 
 class HedgePositionMetadataSerializer(serializers.ModelSerializer):
@@ -331,11 +429,77 @@ class HedgePositionMetadataSerializer(serializers.ModelSerializer):
             "total_long_funding_sats",
         ]
 
+class CancelHedgePositionSerializer(serializers.Serializer):
+    position = serializers.CharField()
+    signature = serializers.CharField()
+    timestamp = TimestampField(
+        help_text="Used as a part of the message to sign in generating signature: '{unix_timestamp}:{address}'. " \
+            "Timestamp must not be more/less than 2 minutes of the current timestamp"
+    )
+
+    def __init__(self, *args, hedge_position=None, **kwargs):
+        self.hedge_position = hedge_position
+        super().__init__(*args, **kwargs)
+
+    def validate_position(self, value):
+        if value != "hedge" and value != "long":
+            raise serializers.ValidationError("Position must be \"hedge\" or \"long\"")
+        return value
+
+    def validate_timestamp(self, value):
+        if abs(timezone.now() - value) > timedelta(minutes=2):
+            raise serializers.ValidationError("timestamp too far from current timestamp")
+        return value
+
+    def validate(self, data):
+        if not isinstance(self.hedge_position, HedgePosition):
+            raise serializers.ValidationError("invalid hedge position")
+
+        if self.hedge_position.funding_tx_hash:
+            raise serializers.ValidationError("hedge position is funded")
+
+        position = data["position"]
+        signature = data["signature"]
+        timestamp = data["timestamp"]
+        unix_timestamp = int(timestamp.timestamp())
+
+        if self.hedge_position.cancelled_at is not None:
+            raise serializers.ValidationError("contract is already cancelled")
+
+        verifying_pubkey = None
+        if position == "hedge":
+            verifying_pubkey = self.hedge_position.hedge_pubkey
+        elif position == "long":
+            verifying_pubkey = self.hedge_position.long_pubkey
+
+        message = f"{unix_timestamp}:{self.hedge_position.address}"
+        if not bitcoin.ecdsa_verify(message, signature, verifying_pubkey):
+            raise serializers.ValidationError(f"invalid signature on: {message}")
+
+        return data
+
+    def save(self):
+        validated_data = self.validated_data
+        timestamp = validated_data["timestamp"]
+        position = validated_data["position"]
+        self.hedge_position.cancelled_at = timestamp
+        self.hedge_position.cancelled_by = position
+        self.hedge_position.save()
+
+        send_contract_cancelled_update(self.hedge_position)
+        try:
+            send_contract_cancelled(self.hedge_position)
+        except:
+            pass
+        return self.hedge_position
+
+
 class HedgePositionSerializer(serializers.ModelSerializer):
     hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
     long_funding_proposal = HedgeFundingProposalSerializer(required=False)
     start_timestamp = TimestampField()
     maturity_timestamp = TimestampField()
+    cancelled_at = TimestampField(read_only=True)
 
     settlement = HedgeSettlementSerializer(read_only=True)
     settlement_service = SettlementServiceSerializer()
@@ -370,6 +534,8 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "funding_tx_hash_validated",
             "hedge_funding_proposal",
             "long_funding_proposal",
+            "cancelled_at",
+            "cancelled_by",
 
             "settlement",
             "settlement_service",
@@ -401,6 +567,9 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "funding_tx_hash_validated": {
                 "read_only": True
             },
+            "cancelled_by": {
+                "read_only": True,
+            }
         }
 
     def validate(self, data):

@@ -12,10 +12,15 @@ from rest_framework.response import Response
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
-from .models import HedgePositionOffer
+from .models import (
+    HedgePositionOffer,
+    HedgePosition,
+)
 from .serializers import (
     FundingProposalSerializer,
+    CancelMutualRedemptionSerializer,
     MutualRedemptionSerializer,
+    CancelHedgePositionSerializer,
     HedgePositionSerializer,
     HedgePositionOfferCounterPartySerializer,
     HedgePositionOfferSerializer,
@@ -37,6 +42,10 @@ from .filters import (
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import (
     send_hedge_position_offer_update,
+)
+from .utils.push_notification import (
+    send_mutual_redemption_completed,
+    send_mutual_redemption_proposal_update,
 )
 from .tasks import (
     complete_contract_funding,
@@ -188,8 +197,27 @@ class HedgePositionViewSet(
                     error = redeem_contract_response["error"]
                 return Response([error], status=status.HTTP_400_BAD_REQUEST)
             update_contract_settlement.delay(instance.address)
+            try:
+                send_mutual_redemption_completed(instance)
+            except:
+                pass
 
         instance.refresh_from_db()
+        return Response(self.serializer_class(instance).data)
+
+    @swagger_auto_schema(method="post", request_body=CancelMutualRedemptionSerializer, responses={200: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def cancel_mutual_redemption(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            instance.mutual_redemption
+        except instance.__class__.mutual_redemption.RelatedObjectDoesNotExist:
+            pass
+        else:
+            serializer = CancelMutualRedemptionSerializer(data=request.data, hedge_position=instance)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            instance.refresh_from_db()
         return Response(self.serializer_class(instance).data)
 
     @swagger_auto_schema(method="post", request_body=serializers.Serializer, responses={201: serializer_class})
@@ -223,6 +251,15 @@ class HedgePositionViewSet(
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
         return Response(self.serializer_class(hedge_obj).data)
+
+    @swagger_auto_schema(method="post", request_body=CancelHedgePositionSerializer, responses={201: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def cancel(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = CancelHedgePositionSerializer(data=request.data, hedge_position=instance)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        return Response(self.serializer_class(instance).data)
 
 
 class HedgePositionOfferViewSet(

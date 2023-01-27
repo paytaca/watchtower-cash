@@ -80,6 +80,34 @@ def send_hedge_position_offer_update(hedge_position_offer_obj, action:str="", me
             { "type": "send_update", "data": data }
         )
 
+def send_contract_cancelled_update(hedge_position_obj):
+    channel_layer = get_channel_layer()
+    data = {
+        "resource": "hedge_position",
+        "action": "cancelled",
+        "meta": {
+            "address": hedge_position_obj.address,
+            "cancelled_by": hedge_position_obj.cancelled_by,
+        }
+    }
+
+    if hedge_position_obj.hedge_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
+        data["meta"]["position"] = "hedge"
+        async_to_sync(channel_layer.group_send)(
+            room_name, 
+            { "type": "send_update", "data": data }
+        )
+
+    if hedge_position_obj.long_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.long_wallet_hash}"
+        data["meta"]["position"] = "long"
+        async_to_sync(channel_layer.group_send)(
+            room_name, 
+            { "type": "send_update", "data": data }
+        )
+
+
 
 def send_funding_tx_update(hedge_position_obj, position:str="", tx_hash:str=""):
     channel_layer = get_channel_layer()
