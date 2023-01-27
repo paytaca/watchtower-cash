@@ -100,6 +100,11 @@ class FundingProposalSerializer(serializers.Serializer):
             except HedgePosition.settlement.RelatedObjectDoesNotExist:
                 pass
 
+            if hedge_position_obj.maturity_timestamp >= timezone.now() + timedelta(minutes=1):
+                raise serializers.ValidationError("Hedge position has reached maturity")
+
+            if hedge_position_obj.cancelled_at:
+                raise serializers.ValidationError("Hedge position is already cancelled")
         except HedgePosition.DoesNotExist:
             raise serializers.ValidationError("Hedge position does not exist")
 
