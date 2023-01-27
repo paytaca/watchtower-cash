@@ -38,6 +38,7 @@ from .utils.settlement import (
     liquidate_hedge_position,
     complete_mutual_redemption,
     save_settlement_data_from_mutual_redemption,
+    attach_settlement_tx_to_wallet_history_meta,
 )
 from .utils.websocket import (
     send_settlement_update,
