@@ -25,6 +25,34 @@ def send_position_offer_settled(hedge_position_offer):
         extra=extra,
     )
 
+def send_contract_cancelled(hedge_position_obj):
+    response = { "hedge": None, "long": None }
+    title = "Anyhedge"
+    extra = {
+        "address": hedge_position_obj.address,
+        "type": NotificationTypes.ANYHEDGE_CONTRACT_CANCELLED,
+    }
+
+    if hedge_position_obj.hedge_wallet_hash and hedge_position_obj.cancelled_by == "long":
+        message = f"Hedge position was cancelled:\n{hedge_position_obj.address}"
+        extra["position"] = "hedge"
+        response["hedge"] = send_push_notification_to_wallet_hashes(
+            [hedge_position_obj.hedge_wallet_hash],
+            message,
+            title=title,
+            extra=extra,
+        )
+
+    if hedge_position_obj.long_wallet_hash and hedge_position_obj.cancelled_by == "hedge":
+        message = f"Long position was cancelled:\n{hedge_position_obj.address}"
+        extra["position"] = "long"
+        response["long"] = send_push_notification_to_wallet_hashes(
+            [hedge_position_obj.long_wallet_hash],
+            message,
+            title=title,
+            extra=extra,
+        )
+
 
 def send_contract_matured(hedge_position_obj):
     response = { "hedge": None, "long": None }

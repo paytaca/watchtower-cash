@@ -46,6 +46,7 @@ from .utils.price_oracle import (
 )
 from .utils.push_notification import (
     send_position_offer_settled,
+    send_contract_cancelled,
     send_contract_require_funding,
     send_mutual_redemption_proposal_update,
 )
@@ -55,6 +56,7 @@ from .utils.validators import (
 )
 from .utils.websocket import (
     send_offer_settlement_update,
+    send_contract_cancelled_update,
     send_funding_tx_update,
     send_mutual_redemption_update,
     send_hedge_position_offer_update,
@@ -422,11 +424,77 @@ class HedgePositionMetadataSerializer(serializers.ModelSerializer):
             "total_long_funding_sats",
         ]
 
+class CancelHedgePositionSerializer(serializers.Serializer):
+    position = serializers.CharField()
+    signature = serializers.CharField()
+    timestamp = TimestampField(
+        help_text="Used as a part of the message to sign in generating signature: '{unix_timestamp}:{address}'. " \
+            "Timestamp must not be more/less than 2 minutes of the current timestamp"
+    )
+
+    def __init__(self, *args, hedge_position=None, **kwargs):
+        self.hedge_position = hedge_position
+        super().__init__(*args, **kwargs)
+
+    def validate_position(self, value):
+        if value != "hedge" and value != "long":
+            raise serializers.ValidationError("Position must be \"hedge\" or \"long\"")
+        return value
+
+    def validate_timestamp(self, value):
+        if abs(timezone.now() - value) > timedelta(minutes=2):
+            raise serializers.ValidationError("timestamp too far from current timestamp")
+        return value
+
+    def validate(self, data):
+        if not isinstance(self.hedge_position, HedgePosition):
+            raise serializers.ValidationError("invalid hedge position")
+
+        if self.hedge_position.funding_tx_hash:
+            raise serializers.ValidationError("hedge position is funded")
+
+        position = data["position"]
+        signature = data["signature"]
+        timestamp = data["timestamp"]
+        unix_timestamp = int(timestamp.timestamp())
+
+        if self.hedge_position.cancelled_at is not None:
+            raise serializers.ValidationError("contract is already cancelled")
+
+        verifying_pubkey = None
+        if position == "hedge":
+            verifying_pubkey = self.hedge_position.hedge_pubkey
+        elif position == "long":
+            verifying_pubkey = self.hedge_position.long_pubkey
+
+        message = f"{unix_timestamp}:{self.hedge_position.address}"
+        if not bitcoin.ecdsa_verify(message, signature, verifying_pubkey):
+            raise serializers.ValidationError(f"invalid signature on: {message}")
+
+        return data
+
+    def save(self):
+        validated_data = self.validated_data
+        timestamp = validated_data["timestamp"]
+        position = validated_data["position"]
+        self.hedge_position.cancelled_at = timestamp
+        self.hedge_position.cancelled_by = position
+        self.hedge_position.save()
+
+        send_contract_cancelled_update(self.hedge_position)
+        try:
+            send_contract_cancelled(self.hedge_position)
+        except:
+            pass
+        return self.hedge_position
+
+
 class HedgePositionSerializer(serializers.ModelSerializer):
     hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
     long_funding_proposal = HedgeFundingProposalSerializer(required=False)
     start_timestamp = TimestampField()
     maturity_timestamp = TimestampField()
+    cancelled_at = TimestampField(read_only=True)
 
     settlement = HedgeSettlementSerializer(read_only=True)
     settlement_service = SettlementServiceSerializer()
@@ -461,6 +529,8 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "funding_tx_hash_validated",
             "hedge_funding_proposal",
             "long_funding_proposal",
+            "cancelled_at",
+            "cancelled_by",
 
             "settlement",
             "settlement_service",
@@ -492,6 +562,9 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "funding_tx_hash_validated": {
                 "read_only": True
             },
+            "cancelled_by": {
+                "read_only": True,
+            }
         }
 
     def validate(self, data):

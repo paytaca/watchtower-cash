@@ -87,6 +87,9 @@ class HedgePosition(models.Model):
         null=True, blank=True,
     )
 
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.CharField(max_length=5, null=True, blank=True)
+
     class Meta:
         ordering = ['-start_timestamp']
 

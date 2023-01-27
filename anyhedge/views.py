@@ -20,6 +20,7 @@ from .serializers import (
     FundingProposalSerializer,
     CancelMutualRedemptionSerializer,
     MutualRedemptionSerializer,
+    CancelHedgePositionSerializer,
     HedgePositionSerializer,
     HedgePositionOfferCounterPartySerializer,
     HedgePositionOfferSerializer,
@@ -250,6 +251,15 @@ class HedgePositionViewSet(
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
         return Response(self.serializer_class(hedge_obj).data)
+
+    @swagger_auto_schema(method="post", request_body=CancelHedgePositionSerializer, responses={201: serializer_class})
+    @decorators.action(methods=["post"], detail=True)
+    def cancel(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = CancelHedgePositionSerializer(data=request.data, hedge_position=instance)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        return Response(self.serializer_class(instance).data)
 
 
 class HedgePositionOfferViewSet(
