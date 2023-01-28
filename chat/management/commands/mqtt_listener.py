@@ -1,4 +1,5 @@
 import paho.mqtt.client as mqtt
+from django.utils import timezone
 import json
 import logging
 from json.decoder import JSONDecodeError
@@ -23,12 +24,17 @@ def on_message(client, userdata, msg):
         if 'from' in payload.keys() and 'to' in payload.keys():
             LOGGER.info(f"Chat messsage received from {payload['from']} to {payload['to']}!")
             try:
-                conversation, _ = Conversation.objects.get_or_create(
+                conversation, created = Conversation.objects.get_or_create(
                     from_address=Address.objects.get(address=payload['from']),
                     to_address=Address.objects.get(address=payload['to']),
                     topic=msg.topic
                 )
-                LOGGER.info('Conversation saved: ' + str(conversation.id))
+                conversation.last_messaged = timezone.now()
+                conversation.save()
+                if created:
+                    LOGGER.info('Conversation saved: ' + str(conversation.id))
+                else:
+                    LOGGER.info('Conversation last messaged timestamp updated: ' + str(conversation.id))
             except Address.DoesNotExist:
                 pass
     except JSONDecodeError:
