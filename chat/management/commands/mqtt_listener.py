@@ -24,17 +24,21 @@ def on_message(client, userdata, msg):
         if 'from' in payload.keys() and 'to' in payload.keys():
             LOGGER.info(f"Chat messsage received from {payload['from']} to {payload['to']}!")
             try:
-                conversation, created = Conversation.objects.get_or_create(
-                    from_address=Address.objects.get(address=payload['from']),
-                    to_address=Address.objects.get(address=payload['to']),
-                    topic=msg.topic
-                )
-                conversation.last_messaged = timezone.now()
-                conversation.save()
-                if created:
-                    LOGGER.info('Conversation saved: ' + str(conversation.id))
-                else:
+                conversation_check = Conversation.objects.filter(topic=msg.topic)
+                if conversation_check.exists():
+                    conversation = conversation_check.last()
+                    conversation.last_messaged = timezone.now()
+                    conversation.save()
                     LOGGER.info('Conversation last messaged timestamp updated: ' + str(conversation.id))
+                else:
+                    conversation = Conversation(
+                        from_address=Address.objects.get(address=payload['from']),
+                        to_address=Address.objects.get(address=payload['to']),
+                        topic=msg.topic,
+                        last_messaged=timezone.now()
+                    )
+                    conversation.save()
+                    LOGGER.info('Conversation saved: ' + str(conversation.id))
             except Address.DoesNotExist:
                 pass
     except JSONDecodeError:
