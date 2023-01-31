@@ -1171,7 +1171,7 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
     oracle_message_sequence = serializers.IntegerField()
     liquidity_fee = serializers.IntegerField(required=False)
 
-    settlement_service = SettlementServiceSerializer() # do i need this here or js script will provide ?
+    settlement_service = SettlementServiceSerializer()
     funding_proposal = HedgeFundingProposalSerializer()
 
     def validate(self, data):
@@ -1233,14 +1233,35 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         start_timestamp = contract_parameters["startTimestamp"]
         # NOTE: handling old & new implementation since settlement service might be using the old one
         #       remove handling old one after stable
-        if contract_parameters.get("maturityTimestamp"):
+        if "hedgeInputInSatoshis" in contract_metadata:
+            satoshis = contract_metadata["hedgeInputInSatoshis"]
             maturity_timestamp = contract_parameters["maturityTimestamp"]
+
+            hedge_address = contract_metadata["hedgePayoutAddress"]
+            hedge_pubkey = contract_parameters["hedgeMutualRedeemPublicKey"]
+            long_address = contract_metadata["longPayoutAddress"]
+            long_pubkey = contract_parameters["longMutualRedeemPublicKey"]
+
+            starting_oracle_message = contract_metadata["startingOracleMessage"]
+            starting_oracle_signature = contract_metadata["startingOracleSignature"]
+            fees = []
+            if isinstance(contract_data.get("fees"), list):
+                for fee in contract_data["fees"]:
+                    fees.append({
+                        "address": fee["address"],
+                        "satoshis": fee["satoshis"],
+                    })
         else:
+            satoshis = contract_metadata["hedgeInputSats"]
             maturity_timestamp = start_timestamp + contract_metadata["duration"]
 
-        starting_oracle_message = contract_metadata.get("startingOracleMessage")
-        starting_oracle_signature = contract_metadata.get("startingOracleSignature")
-        if not starting_oracle_message or not starting_oracle_signature:
+            hedge_address = contract_metadata["hedgeAddress"]
+            hedge_pubkey = contract_metadata["hedgePublicKey"]
+            long_address = contract_metadata["longAddress"]
+            long_pubkey = contract_metadata["longPublicKey"]
+
+            starting_oracle_message = ""
+            starting_oracle_signature = ""
             price_oracle_message = PriceOracleMessage.objects.filter(
                 pubkey=contract_metadata["oraclePublicKey"],
                 message_sequence=oracle_message_sequence,
@@ -1249,22 +1270,27 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
                 starting_oracle_message = price_oracle_message.message
                 starting_oracle_signature = price_oracle_message.signature
 
-        # NOTE: handling old & new implementation since settlement service might be using the old one
-        #       remove handling old one after stable
+            fees = []
+            if contract_data.get("fee", None):
+                fees.append({
+                    "address": contract_data["fee"]["address"],
+                    "satoshis": contract_data["fee"]["satoshis"],
+                })
+
         hedge_position_data = dict(
             address=contract_data["address"],
             anyhedge_contract_version=contract_data["version"],
-            satoshis=contract_metadata.get("hedgeInputInSatoshis") or contract_metadata["hedgeInputSats"],
+            satoshis=satoshis,
             start_timestamp=start_timestamp,
             maturity_timestamp=maturity_timestamp,
             hedge_wallet_hash=hedge_wallet_hash or "",
-            hedge_address=contract_metadata.get("hedgePayoutAddress") or contract_metadata["hedgeAddress"],
+            hedge_address=hedge_address,
             hedge_address_path=hedge_address_path,
-            hedge_pubkey=contract_parameters.get("hedgeMutualRedeemPublicKey") or contract_metadata["hedgePublicKey"],
+            hedge_pubkey=hedge_pubkey,
             long_wallet_hash=long_wallet_hash or "",
-            long_address=contract_metadata.get("longPayoutAddress") or contract_metadata["longAddress"],
+            long_address=long_address,
             long_address_path=long_address_path,
-            long_pubkey=contract_parameters.get("longMutualRedeemPublicKey") or contract_metadata["longPublicKey"],
+            long_pubkey=long_pubkey,
             oracle_pubkey=contract_parameters["oraclePublicKey"],
             start_price=contract_metadata["startPrice"],
             low_liquidation_multiplier=contract_metadata["lowLiquidationPriceMultiplier"],
@@ -1275,30 +1301,15 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             settlement_service=settlement_service,
             check_settlement_service=False,
             metadata=dict(position_taker=position),
+            fees=fees,
         )
 
         if position == "hedge":
-            validated_data["hedge_funding_proposal"] = funding_proposal
+            hedge_position_data["hedge_funding_proposal"] = funding_proposal
             hedge_position_data["metadata"]["total_hedge_funding_sats"] = funding_proposal["tx_value"]
         elif position == "long":
-            validated_data["long_funding_proposal"] = funding_proposal
+            hedge_position_data["long_funding_proposal"] = funding_proposal
             hedge_position_data["metadata"]["total_long_funding_sats"] = funding_proposal["tx_value"]
-
-        # NOTE: handling old & new implementation since settlement service might be using the old one
-        #       remove handling old one after stable
-        fees = []
-        if contract_data.get("fee", None):
-            fees.append({
-                "address": contract_data["fee"]["address"],
-                "satoshis": contract_data["fee"]["satoshis"],
-            })
-        elif isinstance(contract_data.get("fees")):
-            for fee in contract_data["fees"]:
-                fees.append({
-                "address": fee["address"],
-                "satoshis": fee["satoshis"],
-            })
-        hedge_position_data["fees"] = fees
 
         if liquidity_fee is not None:
             hedge_position_data["metadata"]["liquidity_fee"] = liquidity_fee

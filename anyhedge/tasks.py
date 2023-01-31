@@ -131,7 +131,15 @@ def __save_settlement(settlement_data, hedge_position_obj, funding_txid=None):
 
     # NOTE: handling both new & old implementation since external settlement service might be
     #       using old one. remove old implementation after upgrade is stable
-    settlement_txid = settlement_data.get("settlementTransactionHash") or settlement_data["spendingTransaction"]
+    if "settlementTransactionHash" in settlement_data:
+        settlement_txid = settlement_data["settlementTransactionHash"]
+        hedge_satoshis = settlement_data["hedgePayoutInSatoshis"]
+        long_satoshis = settlement_data["longPayoutInSatoshis"]
+    else:
+        settlement_txid = settlement_data["spendingTransaction"]
+        hedge_satoshis = settlement_data["hedgeSatoshis"]
+        long_satoshis = settlement_data["longSatoshis"]
+
     hedge_settlement = HedgeSettlement.objects.filter(
         hedge_position=hedge_position_obj,
         spending_transaction=settlement_txid,
@@ -142,16 +150,8 @@ def __save_settlement(settlement_data, hedge_position_obj, funding_txid=None):
         hedge_settlement.spending_transaction = settlement_txid
 
     hedge_settlement.settlement_type = settlement_data["settlementType"]
-    # NOTE: handling both new & old implementation since external settlement service might be
-    #       using old one. remove old implementation after upgrade is stable
-    if "hedgePayoutInSatoshis" in settlement_data:
-        hedge_settlement.hedge_satoshis = settlement_data["hedgePayoutInSatoshis"]
-    else:
-        hedge_settlement.hedge_satoshis = settlement_data["hedgeSatoshis"]
-    if "longPayoutInSatoshis" in settlement_data:
-        hedge_settlement.long_satoshis = settlement_data["longPayoutInSatoshis"]
-    else:
-        hedge_settlement.long_satoshis = settlement_data["longSatoshis"]
+    hedge_settlement.hedge_satoshis = hedge_satoshis
+    hedge_settlement.long_satoshis = long_satoshis
 
     if "settlementMessage" in settlement_data:
         settlement_message = settlement_data["settlementMessage"]
@@ -266,9 +266,9 @@ def update_contract_settlement_from_service(contract_address):
         settlement_service.save()
 
     settlements = []
+    # NOTE: handling both new & old implementation since external settlement service might be
+    #       using old one. remove old implementation after upgrade is stable
     if "settlement" in contract_data and isinstance(contract_data["settlement"], list):
-        # this is for old implementation since external settlement service might be
-        # using an old one. remove after upgrade is stable 
         for settlement_data in contract_data["settlement"]:
             __save_settlement(settlement_data, hedge_position_obj)
         settlements = contract_data["settlement"]
