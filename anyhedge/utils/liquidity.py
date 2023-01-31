@@ -1,10 +1,12 @@
 import json
 import requests
 import logging
+from urllib.parse import urljoin
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import OuterRef, Subquery, Sum, F, Value, Q
 from django.db.models.functions import Coalesce, Greatest, Abs
+from ..conf import settings as app_settings
 from ..js.runner import AnyhedgeFunctions
 from ..models import (
     HedgePositionFunding,
@@ -165,7 +167,7 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
     }
     try:
         resp = requests.post(
-            "https://staging-liquidity.anyhedge.com/api/v1/fundContract",
+            urljoin(app_settings.ANYHEDGE_LP_BASE_URL, "/api/v1/fundContract"),
             data = json.dumps(data),
             headers = {'Content-type': 'application/json', 'Accept': 'text/plain'},
         )
