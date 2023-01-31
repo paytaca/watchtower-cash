@@ -13,6 +13,7 @@ from ..js.runner import AnyhedgeFunctions
 from ..models import (
     HedgePosition,
     HedgeSettlement,
+    HedgePositionFunding,
     Oracle,
     PriceOracleMessage,
 )
@@ -31,7 +32,7 @@ def get_contracts_for_liquidation():
 
     unsettled_contracts = HedgePosition.objects.filter(
         funding_tx_hash__isnull=False, # funded
-        settlement__isnull=True, # not settled
+        settlements__isnull=True, # not settled
     )
     unsettled_contracts_for_liquidation = unsettled_contracts.annotate(
         _low_lq_price=unsettled_contracts.Annotations.low_liquidation_price,
@@ -53,7 +54,7 @@ def search_settlement_tx(contract_address):
         "q": {
             "find": { "in.e.a": address },
             "limit": 10,
-            "project": { "tx.h": 1 },
+            "project": { "tx.h": 1, "in.e": 1 },
         }
     }
 
@@ -67,8 +68,13 @@ def search_settlement_tx(contract_address):
     tx_hashes = []
 
     txs = [*data["c"], *data["u"]]
+    funding_tx_map = {}
     for tx in txs:
         tx_hashes.append(tx["tx"]["h"])
+        for inp in tx["in"]:
+            if inp["e"]["a"] == address:
+                funding_tx_map[tx["tx"]["h"]] = inp["e"]["h"]
+
 
     if len(tx_hashes) == 0:
         return []
@@ -93,7 +99,12 @@ def search_settlement_tx(contract_address):
     for settlement in parse_settlement_txs_response["settlements"]:
         if not settlement:
             continue
-        
+
+        settlement_data = settlement["settlement"]
+        settlement_txid = settlement_data.get("settlementTransactionHash") or settlement_data.get("spendingTransaction")
+        if settlement_txid and settlement_txid in funding_tx_map:
+            settlement["funding_tx_hash"] = funding_tx_map[settlement_txid]
+
         if settlement["address"] == contract_address:
             settlements.append(settlement)
 
@@ -144,6 +155,7 @@ def liquidate_hedge_position(hedge_position_obj, message_sequence):
 
 def complete_mutual_redemption(mutual_redemption_obj):
     contract_data = compile_contract_from_hedge_position(mutual_redemption_obj.hedge_position)
+
     mutual_redemption_data = {
         "redemptionType": mutual_redemption_obj.redemption_type,
         "hedgeSatoshis": mutual_redemption_obj.hedge_satoshis,
@@ -166,10 +178,8 @@ def save_settlement_data_from_mutual_redemption(hedge_position_obj):
     if not mutual_redemption_obj or not mutual_redemption_obj.tx_hash:
         return
 
-    settlement_obj = None
-    try:
-        settlement_obj = hedge_position_obj.settlement
-    except HedgePosition.settlement.RelatedObjectDoesNotExist:
+    settlement_obj = hedge_position_obj.settlements.filter(spending_transaction=mutual_redemption_obj.tx_hash).first()
+    if not settlement_obj: 
         settlement_obj = HedgeSettlement(hedge_position=hedge_position_obj)
 
     settlement_obj.spending_transaction = mutual_redemption_obj.tx_hash
@@ -180,6 +190,12 @@ def save_settlement_data_from_mutual_redemption(hedge_position_obj):
     if mutual_redemption_obj.settlement_price:
         settlement_obj.settlement_price = mutual_redemption_obj.settlement_price
     settlement_obj.save()
+
+    if mutual_redemption_obj.funding_tx_hash:
+        HedgePositionFunding.objects.filter(
+            hedge_position=hedge_position_obj,
+            tx_hash=mutual_redemption_obj.funding_tx_hash,
+        ).update(settlement=settlement_obj)
 
     try:
         attach_settlement_tx_to_wallet_history_meta(settlement_obj)

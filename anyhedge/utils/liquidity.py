@@ -215,15 +215,10 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
     total_output =  sum([out["value"] for out in tx_data["outputs"]])
     funding_satoshis = None
     funding_output = None
-    fee_satoshis = None
-    fee_output = None
     for output in tx_data["outputs"]:
         if hedge_pos_obj.address == output["address"]:
             funding_satoshis = output["value"]
             funding_output = output["index"]
-        elif hedge_pos_obj.fee and hedge_pos_obj.fee.address == output["address"]:
-            fee_satoshis = output["value"]
-            fee_output = output["index"]
 
     # not really necessary functionality
     # validate contract funding_tx_hash since the data is already available anyway
@@ -231,12 +226,14 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         defaults={
             "funding_output": funding_output,
             "funding_satoshis": funding_satoshis,
+            "validated": True,
         }
-        if fee_output is not None and fee_satoshis is not None:
-            defaults["fee_output"] = fee_output
-            defaults["fee_satoshis"] = fee_satoshis
 
-        HedgePositionFunding.objects.update_or_create(tx_hash=hedge_pos_obj.funding_tx_hash, defaults=defaults)
+        HedgePositionFunding.objects.update_or_create(
+            hedge_position=hedge_pos_obj,
+            tx_hash=hedge_pos_obj.funding_tx_hash,
+            defaults=defaults
+        )
         hedge_pos_obj.funding_tx_hash_validated = True
         hedge_pos_obj.save()
 

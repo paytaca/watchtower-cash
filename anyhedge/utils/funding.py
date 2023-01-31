@@ -131,21 +131,14 @@ def search_funding_tx(contract_address, sats:int=None):
     return ""
 
 
-def validate_funding_transaction(tx_hash, contract_address, fee_address=None):
+def validate_funding_transaction(tx_hash, contract_address):
     response = {
         "valid": False,
         "funding_output": -1,
         "funding_satoshis": 0,
-        "fee_satoshis": 0,
-        "fee_output": -1,
     }
     cash_address = convert.to_cash_address(contract_address)
     address = cash_address.replace("bitcoincash:", "")
-
-    parsed_fee_address = None
-    if fee_address is not None:
-        cash_address = convert.to_cash_address(fee_address)
-        parsed_fee_address = cash_address.replace("bitcoincash:", "")
 
     query = {
         "v": 3,
@@ -177,9 +170,6 @@ def validate_funding_transaction(tx_hash, contract_address, fee_address=None):
                 response["funding_satoshis"] = output["e"]["v"]
                 response["funding_output"] = output["e"]["i"]
                 response["valid"] = True
-            elif output["e"]["a"] == parsed_fee_address:
-                response["fee_satoshis"] = output["e"]["v"]
-                response["fee_output"] = output["e"]["i"]
 
     return response
 
