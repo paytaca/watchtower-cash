@@ -68,6 +68,9 @@ class HedgePosition(models.Model):
     low_liquidation_multiplier = models.FloatField()
     high_liquidation_multiplier = models.FloatField()
 
+    starting_oracle_message = models.CharField(max_length=40)
+    starting_oracle_signature = models.CharField(max_length=130)
+
     # low_liquidation_price = models.IntegerField()
     # high_liquidation_price = models.IntegerField()
 
@@ -109,11 +112,8 @@ class HedgePosition(models.Model):
     @property
     def total_sats_with_fee(self):
         total_sats = self.total_sats
-        try:
-            if self.fee and self.fee.satoshis:
-                total_sats += self.fee.satoshis
-        except HedgePosition.fee.RelatedObjectDoesNotExist:
-            pass
+        for fee in self.fees.all():
+            total_sats += fee.satoshis
         return total_sats
 
     @property
@@ -138,6 +138,20 @@ class HedgePosition(models.Model):
     def funding(self):
         return self.get_hedge_position_funding()
 
+    @property
+    def price_oracle_message(self):
+        if getattr(self, "_price_oracle_message", None):
+            price_oracle_message = self._price_oracle_message
+            if price_oracle_message.pubkey == self.oracle_pubkey and price_oracle_message.message_timestamp == self.start_timestamp:
+                return price_oracle_message
+
+        self._price_oracle_message = PriceOracleMessage.objects.filter(
+            pubkey=self.oracle_pubkey,
+            message_timestamp=self.start_timestamp,
+        ).first()
+        return self._price_oracle_message
+        
+
 class HedgePositionMetadata(models.Model):
     POSITION_TAKER_HEDGE = "hedge"
     POSITION_TAKER_LONG = "long"
@@ -154,7 +168,7 @@ class HedgePositionMetadata(models.Model):
 
 
 class HedgeSettlement(models.Model):
-    hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="settlement")
+    hedge_position = models.ForeignKey(HedgePosition, on_delete=models.CASCADE, related_name="settlements")
 
     spending_transaction = models.CharField(max_length=75, db_index=True)
     settlement_type = models.CharField(max_length=20)
@@ -188,15 +202,31 @@ class SettlementService(models.Model):
 
 
 class HedgePositionFunding(models.Model):
+    # should be required but set to nullable for backward compatibility
+    hedge_position = models.ForeignKey(
+        HedgePosition,
+        on_delete=models.CASCADE,
+        related_name="fundings",
+        null=True, blank=True,
+    )
     tx_hash = models.CharField(max_length=75, db_index=True)
-    funding_output = models.IntegerField()
-    funding_satoshis = models.BigIntegerField()
-    fee_output = models.IntegerField(null=True, blank=True)
-    fee_satoshis = models.IntegerField(null=True, blank=True)
+    funding_output = models.IntegerField(default=-1)
+    funding_satoshis = models.BigIntegerField(default=-1)
+    validated = models.BooleanField(default=False)
+
+    settlement = models.OneToOneField(
+        HedgeSettlement,
+        related_name="funding",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+    )
 
 
 class HedgePositionFee(models.Model):
-    hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="fee")
+    hedge_position = models.ForeignKey(HedgePosition, on_delete=models.CASCADE, related_name="fees")
+    name = models.CharField(max_length=50, default="")
+    description = models.CharField(max_length=50, default="")
+
     address = models.CharField(max_length=75)
     satoshis = models.IntegerField()
 
@@ -229,6 +259,8 @@ class MutualRedemption(models.Model):
 
     # existence of this data would imply it is executed already
     tx_hash = models.CharField(max_length=75, null=True, blank=True)
+    # added a reference to funding tx to resolve mapping between fundings & settlements
+    funding_tx_hash = models.CharField(max_length=75, null=True, blank=True)
 
 
 class HedgePositionOffer(models.Model):
@@ -309,10 +341,29 @@ class HedgePositionOfferCounterParty(models.Model):
     price_value = models.IntegerField()
     oracle_message_sequence = models.IntegerField()
 
+    starting_oracle_message = models.CharField(max_length=40)
+    starting_oracle_signature = models.CharField(max_length=130)
+
     settlement_service_fee = models.IntegerField(default=0)
     settlement_service_fee_address = models.CharField(max_length=75, default='')
 
     settlement_deadline = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def price_oracle_message(self):
+        pubkey = self.hedge_position_offer.oracle_pubkey
+        message_sequence = self.oracle_message_sequence
+
+        if getattr(self, "_price_oracle_message", None):
+            price_oracle_message = self._price_oracle_message
+            if price_oracle_message.pubkey == pubkey and price_oracle_message.message_sequence == message_sequence:
+                return price_oracle_message
+
+        self._price_oracle_message = PriceOracleMessage.objects.filter(
+            pubkey=pubkey,
+            message_sequence=message_sequence,
+        ).first()
+        return self._price_oracle_message
 
 class Oracle(models.Model):
     pubkey = models.CharField(max_length=75, unique=True)
