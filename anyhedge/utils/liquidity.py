@@ -192,7 +192,6 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
         response["success"] = False
         response["error"] = "Encountered error in funding contract"
         return response
-    # return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence, position)
 
 
 def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
