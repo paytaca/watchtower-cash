@@ -177,14 +177,19 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
             response["fundingTransactionHash"] = response_data["fundingTransactionHash"]
             return response
         else:
+            LOGGER.error(f"FUND CONTRACT ERROR: {resp.content}")
+            response["success"] = False
             if isinstance(response_data, list) and len(response_data):
-                response["success"] = False
                 response["error"] = response_data[0]
-                return response
-            else:
-                response["success"] = False
-                response["error"] = "Encountered error in funding contract"
-                return response
+            elif "errors" in response_data:
+                errors = response_data["errors"]
+                response["errors"] = errors
+                if isinstance(errors, list) and len(errors):
+                    response["error"] = errors[0]
+
+            if not response.get("error"):
+                response["error"] = response_data
+            return response
 
     except ConnectionError:
         response["success"] = False
