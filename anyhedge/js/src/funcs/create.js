@@ -72,31 +72,32 @@ export async function create(intent, pubkeys, priceMessageConfig, priceMessageRe
  * @param {String} contractCreationParameters.hedgePayoutAddress
  * @param {String} contractCreationParameters.longPayoutAddress
  * @param {0 | 1} contractCreationParameters.enableMutualRedemption
- * @param {Object} fee
- * @param {String} fee.address
- * @param {Number} fee.satoshis
- * @param {Object} funding
- * @param {String} funding.txHash
- * @param {Number} funding.fundingOutput
- * @param {Number} funding.fundingSatoshis
+ * @param {{address: String, satoshis: Number}[]} fees
+ * @param {{txHash:String,fundingOutput:Number,fundingSatoshis:Number}[]} fundings
  * @returns 
  */
-export async function compileContract(contractCreationParameters, fee, funding) {
+export async function compileContract(contractCreationParameters, fees, fundings) {
   const manager = new AnyHedgeManager();
   const contractData = await manager.createContract(contractCreationParameters);
-  if (fee?.address && fee?.satoshis) contractData.fees = [{
-    name: '',
-    description: '',
-    address: fee.address,
-    satoshis: fee.satoshis,
-  }]
+  if (Array.isArray(fees)) {
+    contractData.fees = fees
+      .map(fee => Object({
+        name: fee?.name || '',
+        description: fee?.description || '',
+        address: fee?.address,
+        satoshis: fee?.satoshis,
+      }))
+      .filter(fee => fee?.address && fee?.satoshis)
+  }
 
-  if (funding?.txHash && funding?.fundingOutput >= 0 && funding?.fundingSatoshis) {
-    contractData.funding = [{
-      fundingTransactionHash: funding.txHash,
-      fundingOutputIndex: funding.fundingOutput,
-      fundingSatoshis: funding.fundingSatoshis,
-    }]
+  if (Array.isArray(fundings)) {
+    contractData.fundings = fundings
+      .filter(funding => funding?.txHash && funding?.fundingSatoshis)
+      .map(funding => Object({
+        fundingTransactionHash: funding.txHash,
+        fundingOutputIndex: funding.fundingOutput,
+        fundingSatoshis: funding.fundingSatoshis,
+      }))
   }
   return contractData
 }

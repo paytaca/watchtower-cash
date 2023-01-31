@@ -21,8 +21,8 @@ import { AnyHedgeManager} from '@generalprotocols/anyhedge'
  */
 export function calculateFundingAmounts(contractData, position, liquidityProviderFeeInSatoshis=0) {
   const localContractMetadata = contractData.metadata
-  const makerInputSats = position === 'long' ? localContractMetadata.hedgeInputSats : localContractMetadata.longInputSats;
-  const takerInputSats = position === 'long' ? localContractMetadata.longInputSats : localContractMetadata.hedgeInputSats;
+  const makerInputSats = position === 'long' ? localContractMetadata.hedgeInputInSatoshis : localContractMetadata.longInputInSatoshis;
+  const takerInputSats = position === 'long' ? localContractMetadata.longInputInSatoshis : localContractMetadata.hedgeInputInSatoshis;
 
   const manager = new AnyHedgeManager()
   const totalRequiredFundingSatoshis = manager.calculateTotalRequiredFundingSatoshis(contractData)
