@@ -224,8 +224,8 @@ class HedgePositionFunding(models.Model):
 
 class HedgePositionFee(models.Model):
     hedge_position = models.ForeignKey(HedgePosition, on_delete=models.CASCADE, related_name="fees")
-    name = models.CharField(max_length=50, default="")
-    description = models.CharField(max_length=50, default="")
+    name = models.CharField(max_length=100, default="")
+    description = models.TextField(default="")
 
     address = models.CharField(max_length=75)
     satoshis = models.IntegerField()
