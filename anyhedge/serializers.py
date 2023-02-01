@@ -1248,6 +1248,8 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             if isinstance(contract_data.get("fees"), list):
                 for fee in contract_data["fees"]:
                     fees.append({
+                        "name": fee["name"],
+                        "description": fee["description"],
                         "address": fee["address"],
                         "satoshis": fee["satoshis"],
                     })
