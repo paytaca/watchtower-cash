@@ -175,11 +175,29 @@ CONSTANCE_CONFIG = {
     'P2P_SETTLEMENT_SERVICE_FEE_ADDRESS': (
         '', 'Recipient of settlement service fee of contracts settled by watchtower',
     ),
+    'GP_LP_SERVICE_FEE': (
+        0, 'Service fee for contracts created with BCH bull(General Protocol LP)',
+    ),
+    'GP_LP_SERVICE_FEE_ADDRESS': (
+        '', 'Service fee address for contracts created with BCH bull(General Protocol LP)',
+    ),
+    'GP_LP_SERVICE_FEE_NAME': (
+        'Paytaca fee', 'Service fee name displayed for contracts created with BCH bull(General Protocol LP)',
+    ),
+    'GP_LP_SERVICE_FEE_DESCRIPTION': (
+        '', 'Service fee name displayed for contracts created with BCH bull(General Protocol LP)',
+    ),
 }
 CONSTANCE_CONFIG_FIELDSETS = {
-    'Anyhedge': (
+    'Anyhedge (P2P)': (
         'P2P_SETTLEMENT_SERVICE_FEE',
         'P2P_SETTLEMENT_SERVICE_FEE_ADDRESS',
+    ),
+    'Anyhedge (BCH Bull)': (
+        'GP_LP_SERVICE_FEE',
+        'GP_LP_SERVICE_FEE_ADDRESS',
+        'GP_LP_SERVICE_FEE_NAME',
+        'GP_LP_SERVICE_FEE_DESCRIPTION',
     ),
 }
 

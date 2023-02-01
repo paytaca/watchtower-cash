@@ -37,6 +37,26 @@ def get_p2p_settlement_service_fee():
     return { "satoshis": sats, "address": address }
 
 
+def get_gp_lp_service_fee():
+    DUST_LIMIT = 546
+    address = constance_config.GP_LP_SERVICE_FEE_ADDRESS
+    sats = constance_config.GP_LP_SERVICE_FEE
+    try:
+        convert.Address._cash_string(address)
+    except convert.InvalidAddress:
+        return
+
+    if sats < DUST_LIMIT:
+        return
+
+    return {
+        "name": constance_config.GP_LP_SERVICE_FEE_NAME or "Paytaca fee",
+        "description": constance_config.GP_LP_SERVICE_FEE_DESCRIPTION or "",
+        "satoshis": sats,
+        "address": address
+    }
+
+
 def calculate_funding_amounts(contract_data, position="hedge", premium=0):
     return AnyhedgeFunctions.calculateFundingAmounts(contract_data, position, premium)
 
