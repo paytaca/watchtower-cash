@@ -155,7 +155,7 @@ def __save_settlement(settlement_data, hedge_position_obj, funding_txid=None):
 
     if "settlementMessage" in settlement_data:
         settlement_message = settlement_data["settlementMessage"]
-        oracle_pubkey = settlement_data.get("oraclePublicKey", None)
+        oracle_pubkey = settlement_data.get("oraclePublicKey", None) or hedge_position_obj.oracle_pubkey
         settlement_signature = settlement_data.get("settlementSignature", None)
         parse_oracle_message_response = parse_oracle_message(
             settlement_message,

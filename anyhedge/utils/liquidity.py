@@ -191,11 +191,13 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
                 response["error"] = response_data
             return response
 
-    except ConnectionError:
+    except ConnectionError as exception:
+        LOGGER.exception(exception)
         response["success"] = False
         response["error"] = "Connection error"
         return response
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exception:
+        LOGGER.exception(exception)
         response["success"] = False
         response["error"] = "Encountered error in funding contract"
         return response

@@ -70,7 +70,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     settlementSignature: settlementPrice.priceMessage.signature,
     previousMessage: prevPrice.priceMessage.message,
     previousSignature: prevPrice.priceMessage.signature,
-    contractFunding: contractData.funding?.[0],
+    contractFunding: contractData.fundings?.[0],
     contractMetadata: contractData.metadata,
     contractParameters: contractData.parameters,
   }
@@ -82,7 +82,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     response.success = true
   } catch(error) {
     response.error = 'Encoutered error in creating maturity payout'
-    if (error?.message) response.error = error
+    if (error?.message) response.error = error?.message
     response.success = false
   }
   return response
