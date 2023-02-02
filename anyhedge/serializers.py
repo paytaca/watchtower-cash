@@ -211,6 +211,14 @@ class HedgePositionFeeSerializer(serializers.ModelSerializer):
             "address",
             "satoshis",
         ]
+        extra_kwargs = {
+            "name": {
+                "allow_blank": True,
+            },
+            "description": {
+                "allow_blank": True,
+            },
+        }
 
 class HedgePositionFundingSerializer(serializers.ModelSerializer):
     settlement_txid = serializers.CharField(read_only=True, source="settlement__spending_transaction")
