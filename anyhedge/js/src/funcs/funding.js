@@ -1,5 +1,7 @@
 import { AnyHedgeManager} from '@generalprotocols/anyhedge'
 
+export const LIQUIDITY_FEE_NAME = 'Liquidity premium'
+
 /**
  *
  * @typedef FundingProposal
@@ -34,7 +36,7 @@ export function calculateFundingAmounts(contractData, position, liquidityProvide
       // If the fee is going to the taker's address, add it to the amount that must
       // be deducted from the total that taker should pay ..
       // must check the fee name to verify that it is really the liquidity premium
-      if (fee.address === takerPayoutAddress) {
+      if (fee.name === LIQUIDITY_FEE_NAME && fee.address === takerPayoutAddress) {
         return total += fee.satoshis;
       }
 
