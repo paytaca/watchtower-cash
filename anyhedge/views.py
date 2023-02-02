@@ -18,6 +18,7 @@ from .models import (
 )
 from .serializers import (
     FundingProposalSerializer,
+    HedgePositionFeeSerializer,
     CancelMutualRedemptionSerializer,
     MutualRedemptionSerializer,
     CancelHedgePositionSerializer,
@@ -40,6 +41,7 @@ from .filters import (
     PriceOracleMessageFilter,
 )
 from .pagination import CustomLimitOffsetPagination
+from .utils.funding import get_gp_lp_service_fee
 from .utils.websocket import (
     send_hedge_position_offer_update,
 )
@@ -70,17 +72,19 @@ class HedgePositionViewSet(
     filterset_class = HedgePositionFilter
 
     def get_queryset(self):
-        return HedgePositionSerializer.Meta.model.objects.select_related(
+        queryset = HedgePositionSerializer.Meta.model.objects.select_related(
             "hedge_funding_proposal",
             "long_funding_proposal",
         ).prefetch_related(
             "metadata",
-            "settlement",
+            "settlements",
             "settlement_service",
-            "fee",
+            "fees",
+            "fundings",
             "mutual_redemption",
         ).all()
 
+        return queryset
 
     @decorators.action(methods=["get"], detail=False)
     def summary(self, request, *args, **kwargs):
@@ -171,11 +175,8 @@ class HedgePositionViewSet(
     @decorators.action(methods=["post"], detail=True)
     def mutual_redemption(self, request, *args, **kwargs):
         instance = self.get_object()
-        try:
-            if instance.settlement:
-                return Response(["Hedge position is already settled"], status=status.HTTP_400_BAD_REQUEST)
-        except instance.__class__.settlement.RelatedObjectDoesNotExist:
-            pass
+        if instance.settlements.count():
+            return Response(["Hedge position is already settled"], status=status.HTTP_400_BAD_REQUEST)
 
         try:
             if instance.mutual_redemption and instance.mutual_redemption.tx_hash:
@@ -252,6 +253,15 @@ class HedgePositionViewSet(
         hedge_obj = serializer.save()
         return Response(self.serializer_class(hedge_obj).data)
 
+    @swagger_auto_schema(method="get", responses={201: HedgePositionFeeSerializer})
+    @decorators.action(methods=["get"], detail=False)
+    def gp_lp_contract_fee(self, request):
+        gp_lp_fee = get_gp_lp_service_fee()
+        if not gp_lp_fee or "satoshis" not in gp_lp_fee or "address" not in gp_lp_fee:
+            return Response()
+
+        return Response(gp_lp_fee)
+
     @swagger_auto_schema(method="post", request_body=CancelHedgePositionSerializer, responses={201: serializer_class})
     @decorators.action(methods=["post"], detail=True)
     def cancel(self, request, *args, **kwargs):
@@ -286,9 +296,10 @@ class HedgePositionOfferViewSet(
         ).prefetch_related(
             "counter_party_info",
             "hedge_position__metadata",
-            "hedge_position__settlement",
+            "hedge_position__settlements",
             "hedge_position__settlement_service",
-            "hedge_position__fee",
+            "hedge_position__fees",
+            "hedge_position__fundings",
             "hedge_position__mutual_redemption",
         ).all()
 

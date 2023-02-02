@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from ..js.runner import AnyhedgeFunctions
 from ..models import HedgePositionOffer
 
@@ -27,6 +27,7 @@ def create_contract(
     low_price_multiplier:float=0.9,
     high_price_multiplier:float=2,
     duration_seconds:int=0,
+    taker_side:str="",
     hedge_address:str="",
     hedge_pubkey:str="",
     short_address:str="",
@@ -39,6 +40,7 @@ def create_contract(
         "lowPriceMult": low_price_multiplier,
         "highPriceMult": high_price_multiplier,
         "duration": duration_seconds,
+        "takerSide": taker_side,
     }
     pubkeys = {
         "hedgeAddress": hedge_address,
@@ -62,95 +64,132 @@ def create_contract(
     return AnyhedgeFunctions.create(intent, pubkeys, priceMessageConfig, priceMessageRequestParams)
 
 def compile_contract(
+    takerSide:str="",
     nominal_units:int=0,
-    duration:int=0,
-    startPrice:int=0,
-    startTimestamp:int=0,
     oraclePublicKey:str="",
+    startingOracleMessage:str="",
+    startingOracleSignature:str="",
+    maturityTimestamp:int=0,
     highLiquidationPriceMultiplier:float=0.0,
     lowLiquidationPriceMultiplier:float=0.0,
     hedgePublicKey:str="",
     longPublicKey:str="",
     hedgeAddress:str="",
     longAddress:str="",
-    fee_address:str="",
-    fee_satoshis:int=0,
-    funding_tx_hash:str=None,
-    funding_output:int=-1,
-    funding_satoshis:int=0,
-    funding_fee_output:int=-1,
-    funding_fee_satoshis:int=0,
+    fees:list=[],
+    fundings:list=[],
 ):
     data = {
+        "takerSide": takerSide,
+        "makerSide": "long" if takerSide == "hedge" else "hedge",
         "nominalUnits": nominal_units,
-        "duration": duration,
-        "startPrice": startPrice,
-        "startTimestamp": startTimestamp,
         "oraclePublicKey": oraclePublicKey,
+        "startingOracleMessage": startingOracleMessage,
+        "startingOracleSignature": startingOracleSignature,
+        "maturityTimestamp": maturityTimestamp,
         "highLiquidationPriceMultiplier": highLiquidationPriceMultiplier,
         "lowLiquidationPriceMultiplier": lowLiquidationPriceMultiplier,
-        "hedgePublicKey": hedgePublicKey,
-        "longPublicKey": longPublicKey,
-        "hedgeAddress": hedgeAddress,
-        "longAddress": longAddress,
+        "hedgeMutualRedeemPublicKey": hedgePublicKey,
+        "longMutualRedeemPublicKey": longPublicKey,
+        "hedgePayoutAddress": hedgeAddress,
+        "longPayoutAddress": longAddress,
+        "enableMutualRedemption": 1,
     }
-    fee = None
-    if fee_address and fee_satoshis:
-        fee = { "address": fee_address, "satoshis": fee_satoshis }
 
-    funding = None
-    if funding_tx_hash and isinstance(funding_output, int) and funding_output >= 0:
-        funding = {
-            "txHash": funding_tx_hash,
-            "fundingOutput": funding_output,
-            "fundingSatoshis": funding_satoshis,
-        }
-        if isinstance(funding_fee_output, int) and funding_fee_output >= 0:
-            funding["feeOutput"] = funding_fee_output
-            funding["feeSatoshis"] = funding_fee_satoshis
+    parsed_fees = []
+    if isinstance(fees, list):
+        for fee in fees:
+            if not isinstance(fee, dict):
+                continue
 
-    return AnyhedgeFunctions.compileContract(data, fee, funding)
+            fee_address = fee.get("address")
+            fee_satoshis = fee.get("satoshis")
+
+            if not fee_address or not fee_satoshis:
+                continue
+
+            parsed_fees.append({
+                "name": fee.get("name", ""),
+                "description": fee.get("description", ""),
+                "address": fee_address,
+                "satoshis": fee_satoshis,
+            })
+
+    parsed_fundings = []
+    if isinstance(fundings, list):
+        for funding in fundings:
+            if not isinstance(funding, dict):
+                continue
+
+            tx_hash = funding.get("tx_hash")
+            funding_output = funding.get("funding_output")
+            funding_satoshis = funding.get("funding_satoshis")
+
+            valid_funding_output = isinstance(funding_output, int) and funding_output >= 0
+            if not tx_hash or not valid_funding_output or not funding_satoshis:
+                continue
+
+            parsed_fundings.append(dict(
+                txHash=tx_hash,
+                fundingOutput=funding_output,
+                fundingSatoshis=funding_satoshis,
+            ))
+
+    return AnyhedgeFunctions.compileContract(data, parsed_fees, parsed_fundings)
 
 
 def compile_contract_from_hedge_position(hedge_position_obj):
-    fee_address = ""
-    fee_satoshis = 0
+    fees = []
+    for fee in hedge_position_obj.fees.all():
+        if not fee.address or not fee.satoshis:
+            continue
+
+        fees.append({
+            "name": fee.name,
+            "description": fee.description,
+            "address": fee.address,
+            "satoshis": fee.satoshis,
+        })
+
+    taker = ""
     try:
-        fee_address = hedge_position_obj.fee.address
-        fee_satoshis = hedge_position_obj.fee.satoshis
-    except hedge_position_obj.__class__.fee.RelatedObjectDoesNotExist:
+        if hedge_position_obj.metadata:
+            taker = hedge_position_obj.metadata.position_taker
+    except hedge_position_obj.__class__.metadata.RelatedObjectDoesNotExist:
         pass
 
-    funding_output = -1
-    funding_satoshis = 0
-    funding_fee_output = -1
-    funding_fee_satoshis = 0
-    funding = hedge_position_obj.get_hedge_position_funding()
-    if funding:
-        funding_output = funding.funding_output
-        funding_satoshis = funding.funding_satoshis
-        funding_fee_output = funding.fee_output
-        funding_fee_satoshis = funding.fee_satoshis
+    starting_oracle_message = hedge_position_obj.starting_oracle_message
+    starting_oracle_signature = hedge_position_obj.starting_oracle_signature
+    if (not starting_oracle_message or not starting_oracle_signature) and hedge_position_obj.price_oracle_message:
+        starting_oracle_message = hedge_position_obj.price_oracle_message.message
+        starting_oracle_signature = hedge_position_obj.price_oracle_message.signature
+    
+    fundings = []
+    for funding_obj in hedge_position_obj.fundings.all():
+        if not funding_obj.tx_hash or funding_obj.funding_output < 0 or not funding_obj.funding_satoshis:
+            continue
+
+        fundings.append(dict(
+            tx_hash=funding_obj.tx_hash,
+            funding_output=funding_obj.funding_output,
+            funding_satoshis=funding_obj.funding_satoshis,
+        ))
 
     return compile_contract(
+        takerSide=taker,
         nominal_units=hedge_position_obj.nominal_units,
-        duration=hedge_position_obj.duration_seconds,
-        startPrice=hedge_position_obj.start_price,
-        startTimestamp=datetime.timestamp(hedge_position_obj.start_timestamp),
         oraclePublicKey=hedge_position_obj.oracle_pubkey,
+        startingOracleMessage=starting_oracle_message,
+        startingOracleSignature=starting_oracle_signature,
+        maturityTimestamp=datetime.timestamp(hedge_position_obj.maturity_timestamp),
         highLiquidationPriceMultiplier=hedge_position_obj.high_liquidation_multiplier,
         lowLiquidationPriceMultiplier=hedge_position_obj.low_liquidation_multiplier,
         hedgePublicKey=hedge_position_obj.hedge_pubkey,
         longPublicKey=hedge_position_obj.long_pubkey,
         hedgeAddress=hedge_position_obj.hedge_address,
         longAddress=hedge_position_obj.long_address,
-        fee_address=fee_address,
-        fee_satoshis=fee_satoshis,
-        funding_tx_hash=hedge_position_obj.funding_tx_hash,
-        funding_output=funding_output,
-        funding_satoshis=funding_satoshis,
-        funding_fee_output=funding_fee_output,
-        funding_fee_satoshis=funding_fee_satoshis,
+        fees=fees,
+        fundings=fundings,
     )
 
 def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
@@ -161,6 +200,13 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
     oracle_pubkey = hedge_position_offer_obj.oracle_pubkey
     start_price = hedge_position_offer_obj.counter_party_info.price_value
     start_timestamp = hedge_position_offer_obj.counter_party_info.price_message_timestamp
+    maturity_timestamp = start_timestamp + timedelta(seconds=hedge_position_offer_obj.duration_seconds)
+    starting_oracle_message = hedge_position_offer_obj.counter_party_info.starting_oracle_message
+    starting_oracle_signature = hedge_position_offer_obj.counter_party_info.starting_oracle_signature
+    if (not starting_oracle_message or not starting_oracle_signature) and hedge_position_offer_obj.counter_party_info.price_oracle_message:
+        price_oracle_message = hedge_position_offer_obj.counter_party_info.price_oracle_message
+        starting_oracle_message = price_oracle_message.message
+        starting_oracle_signature = price_oracle_message.signature
 
     hedge_address = hedge_position_offer_obj.address
     hedge_pubkey = hedge_position_offer_obj.pubkey
@@ -181,20 +227,27 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
 
     nominal_units = contract_sats * start_price / 10 ** 8
 
+    fees =[]
+    fee_address = hedge_position_offer_obj.counter_party_info.settlement_service_fee_address
+    fee_satoshis = hedge_position_offer_obj.counter_party_info.settlement_service_fee
+    
+    if fee_address and fee_satoshis:
+        fees.append({ "address": fee_address, "satoshis": fee_satoshis })
+
     return compile_contract(
+        takerSide="long" if hedge_position_offer_obj.position == "hedge" else "hedge",
         nominal_units=nominal_units,
-        duration=duration_seconds,
-        startPrice=start_price,
-        startTimestamp=datetime.timestamp(start_timestamp),
         oraclePublicKey=oracle_pubkey,
+        startingOracleMessage=starting_oracle_message,
+        startingOracleSignature=starting_oracle_signature,
+        maturityTimestamp=maturity_timestamp.timestamp(),
         highLiquidationPriceMultiplier=high_price_mult,
         lowLiquidationPriceMultiplier=low_price_mult,
         hedgePublicKey=hedge_pubkey,
         longPublicKey=long_pubkey,
         hedgeAddress=hedge_address,
         longAddress=long_address,
-        fee_address=hedge_position_offer_obj.counter_party_info.settlement_service_fee_address,
-        fee_satoshis=hedge_position_offer_obj.counter_party_info.settlement_service_fee,
+        fees=fees,
     )
 
 

@@ -1,10 +1,12 @@
 import json
 import requests
 import logging
+from urllib.parse import urljoin
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import OuterRef, Subquery, Sum, F, Value, Q
 from django.db.models.functions import Coalesce, Greatest, Abs
+from ..conf import settings as app_settings
 from ..js.runner import AnyhedgeFunctions
 from ..models import (
     HedgePositionFunding,
@@ -165,7 +167,7 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
     }
     try:
         resp = requests.post(
-            "https://staging-liquidity.anyhedge.com/api/v1/fundContract",
+            urljoin(app_settings.ANYHEDGE_LP_BASE_URL, "/api/v1/fundContract"),
             data = json.dumps(data),
             headers = {'Content-type': 'application/json', 'Accept': 'text/plain'},
         )
@@ -175,24 +177,30 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
             response["fundingTransactionHash"] = response_data["fundingTransactionHash"]
             return response
         else:
+            LOGGER.error(f"FUND CONTRACT ERROR: {resp.content}")
+            response["success"] = False
             if isinstance(response_data, list) and len(response_data):
-                response["success"] = False
                 response["error"] = response_data[0]
-                return response
-            else:
-                response["success"] = False
-                response["error"] = "Encountered error in funding contract"
-                return response
+            elif "errors" in response_data:
+                errors = response_data["errors"]
+                response["errors"] = errors
+                if isinstance(errors, list) and len(errors):
+                    response["error"] = errors[0]
 
-    except ConnectionError:
+            if not response.get("error"):
+                response["error"] = response_data
+            return response
+
+    except ConnectionError as exception:
+        LOGGER.exception(exception)
         response["success"] = False
         response["error"] = "Connection error"
         return response
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exception:
+        LOGGER.exception(exception)
         response["success"] = False
         response["error"] = "Encountered error in funding contract"
         return response
-    # return AnyhedgeFunctions.fundHedgePosition(contract_data, funding_proposal, oracle_message_sequence, position)
 
 
 def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
@@ -215,15 +223,10 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
     total_output =  sum([out["value"] for out in tx_data["outputs"]])
     funding_satoshis = None
     funding_output = None
-    fee_satoshis = None
-    fee_output = None
     for output in tx_data["outputs"]:
         if hedge_pos_obj.address == output["address"]:
             funding_satoshis = output["value"]
             funding_output = output["index"]
-        elif hedge_pos_obj.fee and hedge_pos_obj.fee.address == output["address"]:
-            fee_satoshis = output["value"]
-            fee_output = output["index"]
 
     # not really necessary functionality
     # validate contract funding_tx_hash since the data is already available anyway
@@ -231,12 +234,14 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         defaults={
             "funding_output": funding_output,
             "funding_satoshis": funding_satoshis,
+            "validated": True,
         }
-        if fee_output is not None and fee_satoshis is not None:
-            defaults["fee_output"] = fee_output
-            defaults["fee_satoshis"] = fee_satoshis
 
-        HedgePositionFunding.objects.update_or_create(tx_hash=hedge_pos_obj.funding_tx_hash, defaults=defaults)
+        HedgePositionFunding.objects.update_or_create(
+            hedge_position=hedge_pos_obj,
+            tx_hash=hedge_pos_obj.funding_tx_hash,
+            defaults=defaults
+        )
         hedge_pos_obj.funding_tx_hash_validated = True
         hedge_pos_obj.save()
 

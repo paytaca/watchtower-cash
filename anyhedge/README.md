@@ -3,11 +3,14 @@ Watchtower's API for managing anyhedge contracts
 
 ## API
 List views are always paginated by limit-offset, defaults to limit=10,offset=0
-### HedgePosition - `/anyhedge/hedge-position/.*`
+### HedgePosition - `/anyhedge/hedge-positions/.*`
   - List, Create, & Detail view: uses rest-framework's default. Detail view accepts `address` instead of `id`
   - POST:`/fund_gp_lp_contract/`
     - performs the last step of creating hedge contracts with *General Protocol*'s liquidity provider which is to submit funding utxo to GP's API; 
     - then saves the contract in the server
+  - GET:`/gp_lp_contract_fee/`
+    - returns a fee details that is added before proceeding to propose contract to GP's liquidity provider
+    - returns an empty response if there is no fee configured
   - POST:`/submit_funding_proposal/`
     - Submit a utxo for the contract's funding
     - This API will attempt to broadcast the funding transaction if funding utxo for both hedge and long are present. See task `complete_contract_funding` in [Other tasks](#other-tasks---anyhedgetasks) below.
@@ -83,6 +86,12 @@ More info on [HedgePositionOffer lifecycle](#hedgepositionoffer-lifecycle)
     ```
     { "resource": <string>, "action": <string>, "meta": <any> }
     ```
+
+## Admin Interface
+### Anyhedge \ Oracles
+Managing oracles supported by the server
+### Constance \ Config
+Configuration for setting a fee for P2P & General Protocol's LP contracts
 
 ---------------
 

@@ -23,6 +23,11 @@ class ObjDict(dict):
 
 
 default_settings = {
+    "ANYHEDGE_LP_BASE_URL": "",
+    "ANYHEDGE_DEFAULT_ORACLE_RELAY": "",
+    "ANYHEDGE_DEFAULT_ORACLE_PORT": 0,
+    "ANYHEDGE_DEFAULT_ORACLE_PUBKEY": "",
+    "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN": "",
 }
 
 # In case you need to read settings from the main project settings

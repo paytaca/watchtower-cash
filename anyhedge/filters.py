@@ -35,7 +35,7 @@ class HedgePositionFilter(filters.FilterSet):
     ]
 
     settled = filters.BooleanFilter(
-        field_name='settlement', lookup_expr='isnull', exclude=True,
+        field_name='settlements', lookup_expr='isnull', exclude=True,
         help_text="Boolean filter for settlement state",
     )
     funding = filters.ChoiceFilter(

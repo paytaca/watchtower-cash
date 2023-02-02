@@ -104,7 +104,7 @@ def update_matured_contracts():
     matured_hedge_positions = HedgePosition.objects.filter(
         funding_tx_hash__isnull=False,
         maturity_timestamp__lte=timezone.now(),
-        settlement__isnull=True
+        settlements__isnull=True
     ).exclude(
         funding_tx_hash=""
     )
@@ -126,20 +126,36 @@ def update_matured_contracts():
 
     return contract_addresses
 
-def __save_settlement(settlement_data, hedge_position_obj):
-    hedge_settlement = HedgeSettlement.objects.filter(hedge_position=hedge_position_obj).first()
+def __save_settlement(settlement_data, hedge_position_obj, funding_txid=None):
+    LOGGER.info(f"SAVING SETTLEMENT FOR '{hedge_position_obj.address}': {funding_txid} - {settlement_data}")
+
+    # NOTE: handling both new & old implementation since external settlement service might be
+    #       using old one. remove old implementation after upgrade is stable
+    if "settlementTransactionHash" in settlement_data:
+        settlement_txid = settlement_data["settlementTransactionHash"]
+        hedge_satoshis = settlement_data["hedgePayoutInSatoshis"]
+        long_satoshis = settlement_data["longPayoutInSatoshis"]
+    else:
+        settlement_txid = settlement_data["spendingTransaction"]
+        hedge_satoshis = settlement_data["hedgeSatoshis"]
+        long_satoshis = settlement_data["longSatoshis"]
+
+    hedge_settlement = HedgeSettlement.objects.filter(
+        hedge_position=hedge_position_obj,
+        spending_transaction=settlement_txid,
+    ).first()
     if not hedge_settlement:
         hedge_settlement = HedgeSettlement()
         hedge_settlement.hedge_position = hedge_position_obj
+        hedge_settlement.spending_transaction = settlement_txid
 
-    hedge_settlement.spending_transaction = settlement_data["spendingTransaction"]
     hedge_settlement.settlement_type = settlement_data["settlementType"]
-    hedge_settlement.hedge_satoshis = settlement_data["hedgeSatoshis"]
-    hedge_settlement.long_satoshis = settlement_data["longSatoshis"]
+    hedge_settlement.hedge_satoshis = hedge_satoshis
+    hedge_settlement.long_satoshis = long_satoshis
 
     if "settlementMessage" in settlement_data:
         settlement_message = settlement_data["settlementMessage"]
-        oracle_pubkey = settlement_data.get("oraclePublicKey", None)
+        oracle_pubkey = settlement_data.get("oraclePublicKey", None) or hedge_position_obj.oracle_pubkey
         settlement_signature = settlement_data.get("settlementSignature", None)
         parse_oracle_message_response = parse_oracle_message(
             settlement_message,
@@ -159,6 +175,14 @@ def __save_settlement(settlement_data, hedge_position_obj):
             hedge_settlement.settlement_message_timestamp = datetime.fromtimestamp(price_data["messageTimestamp"]).replace(tzinfo=pytz.UTC)
 
     hedge_settlement.save()
+    if funding_txid:
+        fundings_queryset = HedgePositionFunding.objects.filter(
+            hedge_position=hedge_position_obj,
+            tx_hash=funding_txid,
+        )
+        if not fundings_queryset.count():
+            LOGGER.exception(f"Unable to find funding record '{funding_txid}' for settlement")
+        fundings_queryset.update(settlement=hedge_settlement)
 
     try:
         attach_settlement_tx_to_wallet_history_meta(hedge_settlement)
@@ -241,14 +265,29 @@ def update_contract_settlement_from_service(contract_address):
         )
         settlement_service.save()
 
+    settlements = []
+    # NOTE: handling both new & old implementation since external settlement service might be
+    #       using old one. remove old implementation after upgrade is stable
     if "settlement" in contract_data and isinstance(contract_data["settlement"], list):
         for settlement_data in contract_data["settlement"]:
             __save_settlement(settlement_data, hedge_position_obj)
+        settlements = contract_data["settlement"]
+    elif "fundings" in contract_data and isinstance(contract_data["fundings"], list):
+        for funding_data in contract_data["fundings"]:
+            if not funding_data.get("settlement"):
+                continue
+
+            settlements.append(funding_data["settlement"])
+            __save_settlement(
+                funding_data["settlement"],
+                hedge_position_obj,
+                funding_txid=funding_data["fundingTransactionHash"]
+            )
 
     send_settlement_update(hedge_position_obj)
     
     response["success"] = True
-    response["settlements"] = contract_data["settlement"]
+    response["settlements"] = settlements
     return response
 
 
@@ -271,7 +310,8 @@ def update_contract_settlement_from_chain(contract_address):
     found_settlement = False
     for settlement in settlements:
         settlement_data = settlement["settlement"]
-        hedge_settlement = __save_settlement(settlement_data, hedge_position_obj)
+        funding_tx_hash = settlement.get("funding_tx_hash")
+        hedge_settlement = __save_settlement(settlement_data, hedge_position_obj, funding_txid=funding_tx_hash)
         found_settlement = True
 
     if found_settlement:
@@ -338,13 +378,10 @@ def liquidate_contract(contract_address, message_sequence):
         response["error"] = "contract not found"
         return response
 
-    try:
-        if hedge_position_obj.settlement:
-            response["success"] = True
-            response["message"] = "contract settlement already exists"
-            return response
-    except HedgePosition.settlement.RelatedObjectDoesNotExist:
-        pass
+    if hedge_position_obj.settlements.count():
+        response["success"] = True
+        response["message"] = "contract settlement already exists"
+        return response
 
     # attempt to check if contract is settled but not yet saved in db
     settlement_search_response = update_contract_settlement(contract_address, new_task=False)
@@ -471,14 +508,7 @@ def validate_contract_funding(contract_address, save=True):
         response["error"] = "funding transaction not found"
         return response
 
-    fee_address = None
-    try:
-        if hedge_position_obj.fee and hedge_position_obj.fee.address:
-            fee_address = hedge_position_obj.fee.address
-    except HedgePosition.fee.RelatedObjectDoesNotExist:
-        pass
-
-    funding_tx_validation = validate_funding_transaction(hedge_position_obj.funding_tx_hash, hedge_position_obj.address, fee_address=fee_address)
+    funding_tx_validation = validate_funding_transaction(hedge_position_obj.funding_tx_hash, hedge_position_obj.address)
     if not funding_tx_validation["valid"]:
         response["success"] = False
         response["error"] = "invalid funding transaction"
@@ -488,12 +518,14 @@ def validate_contract_funding(contract_address, save=True):
         defaults = {
             "funding_output": funding_tx_validation["funding_output"],
             "funding_satoshis": funding_tx_validation["funding_satoshis"],
+            "validated": True,
         }
-        if funding_tx_validation["fee_output"] >= 0 and funding_tx_validation["fee_satoshis"]:
-            defaults["fee_output"] = funding_tx_validation["fee_output"]
-            defaults["fee_satoshis"] = funding_tx_validation["fee_satoshis"]
 
-        HedgePositionFunding.objects.update_or_create(tx_hash=hedge_position_obj.funding_tx_hash, defaults=defaults)
+        HedgePositionFunding.objects.update_or_create(
+            hedge_position=hedge_position_obj,
+            tx_hash=hedge_position_obj.funding_tx_hash,
+            defaults=defaults
+        )
         hedge_position_obj.funding_tx_hash_validated = True
         hedge_position_obj.save()
         try:
@@ -515,11 +547,10 @@ def redeem_contract(contract_address):
         response["error"] = "Mutual redemption not found"
         return response
 
-    try:
-        if mutual_redemption_obj.hedge_position.settlement:
-            response["success"] = False
-            response["error"] = "Contract is already settled"
-    except HedgePosition.settlement.RelatedObjectDoesNotExist:
+    if mutual_redemption_obj.hedge_position.settlements.count():
+        response["success"] = False
+        response["error"] = "Contract is already settled"
+    else:
         settlement_search_response = update_contract_settlement(contract_address, new_task=False)
         if settlement_search_response["success"] and \
             isinstance(settlement_search_response.get("settlements", None), list) and \
@@ -547,6 +578,7 @@ def redeem_contract(contract_address):
         return response
 
     mutual_redemption_obj.tx_hash = mutual_redemption_response["settlementTxid"]
+    mutual_redemption_obj.funding_tx_hash = mutual_redemption_response["fundingTxid"]
     mutual_redemption_obj.save()
     try:
         settlement_obj = save_settlement_data_from_mutual_redemption(mutual_redemption_obj.hedge_position)

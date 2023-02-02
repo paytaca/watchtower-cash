@@ -1,5 +1,7 @@
 import { AnyHedgeManager} from '@generalprotocols/anyhedge'
 
+export const LIQUIDITY_FEE_NAME = 'Liquidity premium'
+
 /**
  *
  * @typedef FundingProposal
@@ -21,12 +23,28 @@ import { AnyHedgeManager} from '@generalprotocols/anyhedge'
  */
 export function calculateFundingAmounts(contractData, position, liquidityProviderFeeInSatoshis=0) {
   const localContractMetadata = contractData.metadata
-  const makerInputSats = position === 'long' ? localContractMetadata.hedgeInputSats : localContractMetadata.longInputSats;
-  const takerInputSats = position === 'long' ? localContractMetadata.longInputSats : localContractMetadata.hedgeInputSats;
+  const takerPayoutAddress = position === 'hedge'?
+    localContractMetadata.hedgePayoutAddress : localContractMetadata.longPayoutAddress
+
+  const makerInputSats = position === 'long' ? localContractMetadata.hedgeInputInSatoshis : localContractMetadata.longInputInSatoshis;
 
   const manager = new AnyHedgeManager()
   const totalRequiredFundingSatoshis = manager.calculateTotalRequiredFundingSatoshis(contractData)
-  const takerRequiredFundingSatoshis = totalRequiredFundingSatoshis - makerInputSats + liquidityProviderFeeInSatoshis;
+
+  const takerTotalFeesAndPremiumsToDeduct = contractData.fees
+    .reduce((total, fee) => {
+      // If the fee is going to the taker's address, add it to the amount that must
+      // be deducted from the total that taker should pay ..
+      // must check the fee name to verify that it is really the liquidity premium
+      if (fee.name === LIQUIDITY_FEE_NAME && fee.address === takerPayoutAddress) {
+        return total += fee.satoshis;
+      }
+
+      // Return the previous total.
+      return total;
+    }, 0);
+
+  const takerRequiredFundingSatoshis = totalRequiredFundingSatoshis - makerInputSats - takerTotalFeesAndPremiumsToDeduct + liquidityProviderFeeInSatoshis;
 
   // Calculate the amounts necessary to fund the contract.
   const contractAmount = {

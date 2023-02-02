@@ -14,6 +14,7 @@ try {
     console.log(JSON.stringify(response))
 } catch(error) {
     if (typeof error === 'string') console.error(error)
+    else if (typeof error?.stack === 'string') console.error(error.stack)
     else if (typeof error?.message === 'string') console.error(error?.message)
     else console.error(error)
     exit(1)

@@ -8,6 +8,7 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
  * @param {Number} intent.lowPriceMult - The USD/BCH price drop percentage to trigger liquidation
  * @param {Number} intent.highPriceMult - The USD/BCH price increase percentage to trigger liquidation
  * @param {Number} intent.duration - The number of seconds from the starting time of the hedge position
+ * @param {'hedge' | 'long'} intent.takerSide - Taker of contract
  * @param {Object} pubkeys - Necessary credentials for hedge and short
  * @param {String} pubkeys.hedgeAddress - Destination address of hedger's funds on maturity/liquidation
  * @param {String} pubkeys.hedgePubkey - Public key of hedger
@@ -19,7 +20,7 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
 export async function create(intent, pubkeys, priceMessageConfig, priceMessageRequestParams) {
   try {
     const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
-    const priceData = priceMessagesResponse?.results?.[0]?.priceData
+    const { priceData, priceMessage } = priceMessagesResponse?.results?.[0]
     if (!priceData) throw 'Unable to retrieve price data'
 
     const nominalUnits = intent.amount * priceData.priceValue // BCH * (UScents / BCH)
@@ -30,18 +31,20 @@ export async function create(intent, pubkeys, priceMessageConfig, priceMessageRe
     if (intent.highPriceMult <= 1 || intent.highPriceMult > 10) throw 'Largest price rise range invalid'
 
     const contractCreationParameters = {
+      takerSide: intent.takerSide,
+      makerSide: intent.takerSide === 'hedge' ? 'long' : 'hedge',
       nominalUnits: nominalUnits,
-      duration: intent.duration,
-      startPrice: priceData.priceValue,
-      startTimestamp: priceData.messageTimestamp,
-      oraclePublicKey: priceData.oraclePubKey,
-      // enableMutualRedemption: true,
-      highLiquidationPriceMultiplier: intent.highPriceMult,
+      oraclePublicKey: priceMessage.publicKey,
+      startingOracleMessage: priceMessage.message,
+      startingOracleSignature: priceMessage.signature,
+      maturityTimestamp: priceData.messageTimestamp + intent.duration,
       lowLiquidationPriceMultiplier: intent.lowPriceMult,
-      hedgePublicKey: pubkeys.hedgePubkey,
-      longPublicKey: pubkeys.shortPubkey,
-      hedgeAddress: pubkeys.hedgeAddress,
-      longAddress: pubkeys.shortAddress,
+      highLiquidationPriceMultiplier: intent.highPriceMult,
+      hedgePayoutAddress: pubkeys.hedgeAddress,
+      longPayoutAddress: pubkeys.shortAddress,
+      hedgeMutualRedeemPublicKey: pubkeys.hedgePubkey,
+      longMutualRedeemPublicKey: pubkeys.shortPubkey,
+      enableMutualRedemption: 1,
     }
 
     const resp = await compileContract(contractCreationParameters)
@@ -55,40 +58,46 @@ export async function create(intent, pubkeys, priceMessageConfig, priceMessageRe
 /**
  * 
  * @param {Object} contractCreationParameters 
+ * @param {'hedge' | 'long'} contractCreationParameters.takerSide
+ * @param {'hedge' | 'long'} contractCreationParameters.makerSide
  * @param {Number} contractCreationParameters.nominalUnits - US cents
- * @param {Number} contractCreationParameters.duration - duration in seconds
- * @param {Number} contractCreationParameters.startPrice - US cents per BCH
- * @param {Number} contractCreationParameters.startTimestamp
  * @param {String} contractCreationParameters.oraclePublicKey
+ * @param {String} contractCreationParameters.startingOracleMessage
+ * @param {String} contractCreationParameters.startingOracleSignature
+ * @param {Number} contractCreationParameters.maturityTimestamp
  * @param {Number} contractCreationParameters.highLiquidationPriceMultiplier
  * @param {Number} contractCreationParameters.lowLiquidationPriceMultiplier
- * @param {String} contractCreationParameters.hedgePublicKey
- * @param {String} contractCreationParameters.longPublicKey
- * @param {String} contractCreationParameters.hedgeAddress
- * @param {String} contractCreationParameters.longAddress
- * @param {Object} fee
- * @param {String} fee.address
- * @param {Number} fee.satoshis
- * @param {Object} funding
- * @param {String} funding.txHash
- * @param {Number} funding.fundingOutput
- * @param {Number} funding.fundingSatoshis
- * @param {Number} funding.feeOutput
- * @param {Number} funding.feeSatoshis
+ * @param {String} contractCreationParameters.hedgeMutualRedeemPublicKey
+ * @param {String} contractCreationParameters.longMutualRedeemPublicKey
+ * @param {String} contractCreationParameters.hedgePayoutAddress
+ * @param {String} contractCreationParameters.longPayoutAddress
+ * @param {0 | 1} contractCreationParameters.enableMutualRedemption
+ * @param {{address: String, satoshis: Number}[]} fees
+ * @param {{txHash:String,fundingOutput:Number,fundingSatoshis:Number}[]} fundings
  * @returns 
  */
-export async function compileContract(contractCreationParameters, fee, funding) {
+export async function compileContract(contractCreationParameters, fees, fundings) {
   const manager = new AnyHedgeManager();
   const contractData = await manager.createContract(contractCreationParameters);
-  if (fee?.address && fee?.satoshis) contractData.fee = fee
-  if (funding?.txHash && funding?.fundingOutput >= 0 && funding?.fundingSatoshis) {
-    contractData.funding = [{
-      fundingTransaction: funding.txHash,
-      fundingOutput: funding.fundingOutput,
-      fundingSatoshis: funding.fundingSatoshis,
-      feeOutput: funding.feeOutput || undefined,
-      feeSatoshis: funding.feeSatoshis || undefined,
-    }]
+  if (Array.isArray(fees)) {
+    contractData.fees = fees
+      .map(fee => Object({
+        name: fee?.name || '',
+        description: fee?.description || '',
+        address: fee?.address,
+        satoshis: fee?.satoshis,
+      }))
+      .filter(fee => fee?.address && fee?.satoshis)
+  }
+
+  if (Array.isArray(fundings)) {
+    contractData.fundings = fundings
+      .filter(funding => funding?.txHash && funding?.fundingSatoshis)
+      .map(funding => Object({
+        fundingTransactionHash: funding.txHash,
+        fundingOutputIndex: funding.fundingOutput,
+        fundingSatoshis: funding.fundingSatoshis,
+      }))
   }
   return contractData
 }
