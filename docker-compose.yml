@@ -1,5 +1,10 @@
 version: "3"
 services:
+  docker-host:
+    image: qoomon/docker-host
+    cap_add: [ 'NET_ADMIN', 'NET_RAW' ]
+    mem_limit: 8M
+    restart: on-failure
   postgres:
     image: "postgres:11.1-alpine"
     volumes:

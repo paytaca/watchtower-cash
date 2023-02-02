@@ -35,8 +35,12 @@ class Conversation(PostgresModel):
         related_name='conversations_received',
         on_delete=models.CASCADE
     )
-    topic = models.TextField()
+    topic = models.TextField(unique=True)
     date_created = models.DateTimeField(auto_now_add=True)
+    last_messaged = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.topic
+
+    class Meta:
+        ordering = ['-last_messaged']

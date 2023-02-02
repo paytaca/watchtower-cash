@@ -418,6 +418,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False
         },
+        'chat': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False
+        },
         'django.template': {
             'handlers': ['console'],
             'level': 'INFO',

@@ -1,6 +1,11 @@
 from django.http import Http404
-from rest_framework import viewsets, mixins
-from chat.serializers import ChatIdentitySerializer, CreateChatIdentitySerializer
+from django.db.models import Q
+from rest_framework import viewsets, mixins, generics
+from chat.serializers import (
+    ChatIdentitySerializer,
+    CreateChatIdentitySerializer,
+    ConversationSerializer
+)
 
 
 class ChatIdentityViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.CreateModelMixin):
@@ -27,3 +32,12 @@ class ChatIdentityViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mi
             pass
 
         return super().get_object()
+
+
+class ConversationView(generics.ListAPIView):
+    serializer_class = ConversationSerializer
+
+    def get_queryset(self):
+        address = self.kwargs['address']
+        Model = self.serializer_class.Meta.model
+        return Model.objects.filter(Q(from_address__address=address) | Q(to_address__address=address))

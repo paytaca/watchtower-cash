@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from chat.models import ChatIdentity
+from chat.models import ChatIdentity, Conversation
 from main.models import Address
 
 class ChatIdentitySerializer(serializers.ModelSerializer):
@@ -34,3 +34,17 @@ class CreateChatIdentitySerializer(serializers.ModelSerializer):
         obj = ChatIdentity.objects.create(**validated_data)
         obj.save()
         return obj
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    creator = serializers.CharField(source='from_address.address')
+    recipient = serializers.CharField(source='to_address.address')
+
+    class Meta:
+        model = Conversation
+        fields = (
+            'creator',
+            'recipient',
+            'topic',
+            'last_messaged'
+        )
