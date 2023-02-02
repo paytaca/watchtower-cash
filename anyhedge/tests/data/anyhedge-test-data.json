@@ -1,0 +1,84 @@
+{
+    "creation_parameters": {
+        "makerSide": "long",
+        "takerSide": "hedge",
+        "nominalUnits": 33379.2,
+        "oraclePublicKey": "02e2a7f6e2df82c403f231fd9930d19fb0015174cefe5bc1e9c7b1fb6bfda833b3",
+        "startingOracleMessage": "1e31db639e0daa019b0daa01c02a0000",
+        "startingOracleSignature": "1bb941ffbcad479aaf725120b7153a3d619a0361e0a10d0cd678fffd18e1e30f992f4cca3dc936fd74d4a523c9fcb25b5f2b6122607b51c7bb91bed49aac37725b",
+        "maturityTimestamp": 1675373302,
+        "highLiquidationPriceMultiplier": 4,
+        "lowLiquidationPriceMultiplier": 0.6345000000000001,
+        "hedgeMutualRedeemPublicKey": "025b3c4f13101efb6cf800076d26b399045501f6bda4269a3807a25e074279be22",
+        "longMutualRedeemPublicKey": "0215f4d33d1fb09c2734daddbe5e012812ec1c78ce6994a9f6ba2ea7930ba61625",
+        "hedgePayoutAddress": "bitcoincash:qp447l48nfy9erwcla8l5k79vw0a84g9wcre2xcqe3",
+        "longPayoutAddress": "bitcoincash:qqnywgh0kq034pwdsecmesz8u7lgefm3eq94xrr55j",
+        "enableMutualRedemption": 1
+    },
+    "other": {
+        "bch": 3.05,
+        "duration": 63960,
+        "hedge_keys": {
+            "privkey": "257aceb15735ebfd6ffb453adb6be607114f6d160d6773770970d9a107e9d3e9",
+            "pubkey": "025b3c4f13101efb6cf800076d26b399045501f6bda4269a3807a25e074279be22",
+            "address": "bitcoincash:qp447l48nfy9erwcla8l5k79vw0a84g9wcre2xcqe3",
+            "wallet_hash": "c0e34a82df95ef3a1dd7f0a6dd705717ec306304cf7d7c0b41fe9010ce29d661"
+        },
+        "long_keys": {
+            "privkey": "dd4f34053be127df24126145bd84830114c8152bb707b292642f015eba92ca30",
+            "pubkey": "0215f4d33d1fb09c2734daddbe5e012812ec1c78ce6994a9f6ba2ea7930ba61625",
+            "address": "bitcoincash:qqnywgh0kq034pwdsecmesz8u7lgefm3eq94xrr55j",
+            "wallet_hash": "3be1740c7ecee0967e2704231d87bc42bf969baaf376a6ebdb1bdeb0c8c6c84a"
+        },
+        "price": {
+            "privkey": "d7f20d9171d58b335a1f1d592e6d0938c0d04a05c1f6ee26594863439026aa35",
+            "pubkey": "02e2a7f6e2df82c403f231fd9930d19fb0015174cefe5bc1e9c7b1fb6bfda833b3",
+            "message": "1e31db639e0daa019b0daa01c02a0000",
+            "signature": "1bb941ffbcad479aaf725120b7153a3d619a0361e0a10d0cd678fffd18e1e30f992f4cca3dc936fd74d4a523c9fcb25b5f2b6122607b51c7bb91bed49aac37725b",
+            "price_data": {
+                "message_timestamp": 1675309342,
+                "message_sequence": 27921822,
+                "price_sequence": 27921819,
+                "price": 10944
+            }
+        }
+    },
+    "contract_data": {
+        "version": "AnyHedge v0.11",
+        "address": "bitcoincash:pqsacpa7nkap30q2ghakwgg4s44265kk55hu9gg906",
+        "parameters": {
+            "maturityTimestamp": 1675373302,
+            "startTimestamp": 1675309342,
+            "highLiquidationPrice": 43776,
+            "lowLiquidationPrice": 6944,
+            "payoutSats": 480691245,
+            "nominalUnitsXSatsPerBch": 3337920000000,
+            "oraclePublicKey": "02e2a7f6e2df82c403f231fd9930d19fb0015174cefe5bc1e9c7b1fb6bfda833b3",
+            "longLockScript": "76a914264722efb01f1a85cd8671bcc047e7be8ca771c888ac",
+            "hedgeLockScript": "76a9146b5f7ea79a485c8dd8ff4ffa5bc5639fd3d5057688ac",
+            "enableMutualRedemption": 1,
+            "longMutualRedeemPublicKey": "0215f4d33d1fb09c2734daddbe5e012812ec1c78ce6994a9f6ba2ea7930ba61625",
+            "hedgeMutualRedeemPublicKey": "025b3c4f13101efb6cf800076d26b399045501f6bda4269a3807a25e074279be22"
+        },
+        "metadata": {
+            "takerSide": "hedge",
+            "makerSide": "long",
+            "hedgePayoutAddress": "bitcoincash:qp447l48nfy9erwcla8l5k79vw0a84g9wcre2xcqe3",
+            "longPayoutAddress": "bitcoincash:qqnywgh0kq034pwdsecmesz8u7lgefm3eq94xrr55j",
+            "startingOracleMessage": "1e31db639e0daa019b0daa01c02a0000",
+            "startingOracleSignature": "1bb941ffbcad479aaf725120b7153a3d619a0361e0a10d0cd678fffd18e1e30f992f4cca3dc936fd74d4a523c9fcb25b5f2b6122607b51c7bb91bed49aac37725b",
+            "durationInSeconds": 63960,
+            "highLiquidationPriceMultiplier": 4,
+            "lowLiquidationPriceMultiplier": 0.6345000000000001,
+            "startPrice": 10944,
+            "nominalUnits": 33379.2,
+            "hedgeInputInOracleUnits": 33379.2,
+            "longInputInOracleUnits": 19227.6498528,
+            "hedgeInputInSatoshis": 305000000,
+            "longInputInSatoshis": 175691245,
+            "minerCostInSatoshis": 631
+        },
+        "fundings": [],
+        "fees": []
+    }
+}

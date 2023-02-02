@@ -1,3 +1,4 @@
+import os
 import json
 import binascii
 import struct
@@ -8,9 +9,11 @@ import hashlib
 from cashaddress import convert
 from datetime import datetime
 
-from anyhedge.models import Oracle
+from django.conf import settings
+from anyhedge.utils.contract import calculate_hedge_sats
 from anyhedge.js.runner import AnyhedgeFunctions
 
+SATS_PER_BCH = 10 ** 8
 
 def sha256(message):
     sha256 = hashlib.sha256()
@@ -71,15 +74,23 @@ def generate_contract_creation_parameters():
 
     duration = 60 * random.randint(1, 60 * 24) # 1 hour to 1 day
 
-    low_liquidation_multiplier = (60 + random.randint(0, 39)) / 100
+    low_liquidation_multiplier = (60 + (random.randint(0, 3900)/100)) / 100
     high_liquidation_multiplier = 4
 
-    taker = "hedge" if random.random() > 0.5 or True else "long"
+    taker = "hedge" if random.random() > 0.5 else "long"
     maker = "long" if taker == "hedge" else "hedge"
 
     price = generate_fake_oracle_message()
 
-    nominal_units = round(bch_amount * price["price_data"]["price"])
+    hedge_sats = bch_amount * SATS_PER_BCH
+    if taker == "long":
+        hedge_sats = calculate_hedge_sats(
+            long_sats=bch_amount * SATS_PER_BCH,
+            low_price_mult=low_liquidation_multiplier,
+            price_value=price["price_data"]["price"],
+        )
+
+    nominal_units = (hedge_sats * price["price_data"]["price"]) / SATS_PER_BCH
 
     contract_creation_parameters = dict(
         makerSide=maker,
@@ -126,10 +137,16 @@ def generate_random_contract(save_to_file=None):
     data = generate_contract_creation_parameters()
     data["contract_data"] = AnyhedgeFunctions.compileContract(data["creation_parameters"])
 
-    print(data)
-
     if save_to_file:
-        with open(save_to_file, "w") as outfile:
+        file_path = os.path.join(settings.BASE_DIR, save_to_file)
+        with open(file_path, "w") as outfile:
             outfile.write(json.dumps(data, indent=4))
+        print(f"saved to: {file_path}")
 
     return data
+
+def fetch_saved_test_data():
+    file_path = os.path.join(settings.BASE_DIR, "anyhedge/tests/data/anyhedge-test-data.json")
+    test_file = open(file_path)
+    test_data = json.load(test_file)
+    return test_data

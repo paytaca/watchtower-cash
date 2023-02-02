@@ -6,15 +6,26 @@ from anyhedge.models import (
     HedgePositionOfferCounterParty,
     PriceOracleMessage,
 )
-from .factory import generate_random_contract
+from .factory import (
+    generate_random_contract,
+    fetch_saved_test_data,
+)
 
 def parse_timestamp(data):
     return datetime.fromtimestamp(data).replace(tzinfo=pytz.UTC)
 
+def load_test_data():
+    test_data = fetch_saved_test_data()
+    return save_data_to_models(test_data)
+
 def new_random():
     random_contract = generate_random_contract()
-    contract_data = random_contract["contract_data"]
-    other = random_contract["other"]
+    return save_data_to_models(random_contract)
+
+def save_data_to_models(test_data):
+    contract_data = test_data["contract_data"]
+    other = test_data["other"]
+
     if contract_data["metadata"]["takerSide"] == "hedge":
         taker = other["hedge_keys"]
         maker = other["long_keys"]

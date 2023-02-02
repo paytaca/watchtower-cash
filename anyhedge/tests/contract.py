@@ -2,6 +2,7 @@ import json
 from django.test import TestCase
 
 from anyhedge.utils.contract import (
+    calculate_hedge_sats,
     compile_contract,
     compile_contract_from_hedge_position,
     compile_contract_from_hedge_position_offer,
@@ -19,8 +20,30 @@ from .data import (
 
 # Create your tests here.
 class ContractCreationTestCase(TestCase):
-    def test_compile_contract(self):
+    def test_calculate_hedge_sats(self):
+        """
+            Tests hedge sats calculation from long sats, used when compiling contracts from
+            an hedge position offer
+        """
         data = factory.generate_random_contract()
+        contract_data = data["contract_data"]
+        contract_creation_parameters = data["creation_parameters"]
+        other = data["other"]
+        price = other["price"]
+
+        expected_hedge_sats = contract_data["metadata"]["hedgeInputInSatoshis"]
+        calculated_hedge_sats = calculate_hedge_sats(
+            long_sats=contract_data["metadata"]["longInputInSatoshis"],
+            low_price_mult=contract_data["metadata"]["lowLiquidationPriceMultiplier"],
+            price_value=contract_data["metadata"]["startPrice"],
+        )
+
+        sats_diff = abs(calculated_hedge_sats-expected_hedge_sats)
+        sats_diff_pctg = (sats_diff/expected_hedge_sats) * 100
+        self.assertTrue(0.0001 > sats_diff_pctg, f"Calculated hedge satoshis off by {sats_diff_pctg}% ({sats_diff}), expected {expected_hedge_sats} got {calculated_hedge_sats}")
+
+    def test_compile_contract(self):
+        data = factory.fetch_saved_test_data()
         self.assertIn("contract_data", data)
 
         contract_data = data["contract_data"]
@@ -31,7 +54,7 @@ class ContractCreationTestCase(TestCase):
 
 
     def test_compile_contract_from_hedge_position(self):
-        contract, _, _ = hedge_position_data.new_random()
+        contract, _, _ = hedge_position_data.load_test_data()
         contract_data = compile_contract_from_hedge_position(contract)
         contract_metadata = contract_data["metadata"]
         contract_parameters = contract_data["parameters"]
@@ -62,7 +85,7 @@ class ContractCreationTestCase(TestCase):
 
 
     def test_compile_contract_from_hedge_position_offer(self):
-        contract_position_offer, _, _ = hedge_position_offer_data.new_random()
+        contract_position_offer, _, _ = hedge_position_offer_data.load_test_data()
         contract_data = compile_contract_from_hedge_position_offer(contract_position_offer)
 
         contract_metadata = contract_data["metadata"]
