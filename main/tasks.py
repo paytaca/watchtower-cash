@@ -787,6 +787,9 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         if is_zero_amount and not proceed_with_zero_amount:
             return None
 
+        if is_zero_amount:
+            record_type = ''
+
         txns = Transaction.objects.filter(
             txid=txid,
             address__address__startswith='bitcoincash:'
