@@ -40,7 +40,7 @@ class WalletHistoryView(APIView):
             txids = [txid for txid in txids.split(",") if txid]
 
 
-        qs = WalletHistory.objects.filter(wallet__wallet_hash=wallet_hash)
+        qs = WalletHistory.objects.filter(wallet__wallet_hash=wallet_hash).exclude(amount=0)
         if record_type in ['incoming', 'outgoing']:
             qs = qs.filter(record_type=record_type)
         if len(txids):
