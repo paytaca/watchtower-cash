@@ -27,6 +27,7 @@ from .renderers import (
     BitPayPaymentRequestRenderer,
 )
 from .serializers import (
+    InvoiceVerifySerializer,
     InvoiceSerializer,
     InvoicePaymentSerializer,
     BitpayPaymentRequestSerializer,
@@ -85,7 +86,7 @@ class InvoiceBitPayView(InvoiceBaseView):
     renderer_classes = [
         BitPayPaymentOptionsRenderer,
         BitPayPaymentRequestRenderer,
-        renderers.JSONRenderer,
+        # renderers.JSONRenderer,
     ]
 
     def get(self, request, *args, **kwargs):
@@ -212,6 +213,15 @@ class InvoiceViewSet(
 
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.all()
+
+    @swagger_auto_schema(method="post", request_body=InvoiceVerifySerializer, responses={200: InvoiceVerifySerializer, 400: InvoiceVerifySerializer})
+    @decorators.action(methods=["post"], detail=True)
+    def verify(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = InvoiceVerifySerializer(data=request.data, invoice=instance)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.save()
+        return Response(serializer.data, status=200 if data["valid"] else 400)
 
     @swagger_auto_schema(method="post", request_body=InvoicePaymentSerializer, responses={200: serializer_class})
     @decorators.action(methods=["post"], detail=True)

@@ -25,6 +25,28 @@ from .utils.verify import (
     tx_exists,
 )
 
+class InvoiceVerifySerializer(serializers.Serializer):
+    raw_tx_hex = serializers.CharField(write_only=True)
+    valid = serializers.BooleanField(read_only=True)
+    error = serializers.CharField(read_only=True)
+
+    def __init__(self, *args, invoice=None, **kwargs):
+        self.invoice = invoice
+        super().__init__(*args, **kwargs)
+
+    def save(self):
+        validated_data = self.validated_data
+        raw_tx_hex = self.validated_data["raw_tx_hex"]
+        try:
+            verify_tx_hex(self.invoice, raw_tx_hex)
+            validated_data["valid"] = True
+        except VerifyError as verify_error:
+            validated_data["valid"] = False
+            validated_data["error"] = str(verify_error)
+
+        self.instance = validated_data
+        return self.instance
+
 
 class OutputSerializer(serializers.Serializer):
     amount = serializers.IntegerField()
