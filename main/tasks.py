@@ -877,8 +877,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                         history.refresh_from_db()
                     except Exception:
                         pass
-
-                send_wallet_history_push_notification(history)
+                if amount != 0:
+                    send_wallet_history_push_notification(history)
             except Exception as exception:
                 LOGGER.exception(exception)
 
