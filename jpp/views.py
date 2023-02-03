@@ -90,17 +90,25 @@ class InvoiceBitPayView(InvoiceBaseView):
         # renderers.JSONRenderer,
     ]
 
+    def get_object_url(self):
+        instance = self.get_object()
+        return instance.get_absolute_uri(
+            self.request,
+            url_type=Invoice.URL_TYPE_BITPAY
+        )
+
     def get(self, request, *args, **kwargs):
         instance = self.get_object()
+        instance_url = self.get_object_url()
         accepts = self.get_accept_list()
         if MediaTypes.BitPay.PaymentOptions in accepts:
-            data = instance.payment_options(payment_url=request.build_absolute_uri())
+            data = instance.payment_options(payment_url=instance_url)
             return Response(data=data)
         elif renderers.JSONRenderer.media_type in accepts:
             serializer = InvoiceSerializer(instance, context=self.get_context())
             return Response(serializer.data)
         elif renderers.TemplateHTMLRenderer.media_type in accepts:
-            data = { "invoice": instance, "url": request.build_absolute_uri() }
+            data = { "invoice": instance, "url": instance_url }
             return Response(data, template_name='jpp/invoice.html')
         raise exceptions.NotAcceptable()
 
@@ -125,7 +133,7 @@ class InvoiceBitPayView(InvoiceBaseView):
         if not serializer.is_valid() or serializer.validated_data["chain"] != "BCH":
             return Response("invalid payment option", status_code=400)
 
-        data = instance.as_bitpay(payment_url=self.request.build_absolute_uri())
+        data = instance.as_bitpay(payment_url=self.get_objet_url())
         LOGGER.info(f"PAYMENT REQUEST: {type(data)}: {data}")
         return Response(data)
 
@@ -163,19 +171,27 @@ class InvoiceProtobufView(InvoiceBaseView):
         renderers.TemplateHTMLRenderer,
     ]
 
+    def get_object_url(self):
+        instance = self.get_object()
+        return instance.get_absolute_uri(
+            self.request,
+            url_type=Invoice.URL_TYPE_BCOM
+        )
+
     def get(self, request, *args, **kwargs):
         accepts = self.get_accept_list()
         instance = self.get_object()
+        instance_url = self.get_object_url()
 
         if MediaTypes.BCom.PaymentRequest in accepts:
-            payment_request_pb = serialize_invoice(instance, payment_url=request.build_absolute_uri())
+            payment_request_pb = serialize_invoice(instance, payment_url=instance_url)
             data = payment_request_pb.SerializeToString()
             return Response(data=data)
         elif renderers.JSONRenderer.media_type in accepts:
             serializer = InvoiceSerializer(instance, context=self.get_context())
             return Response(serializer.data)
         elif renderers.TemplateHTMLRenderer.media_type in accepts:
-            data = { "invoice": instance, "url": request.build_absolute_uri() }
+            data = { "invoice": instance, "url": instance_url }
             return Response(data, template_name='jpp/invoice.html')
 
         raise exceptions.NotAcceptable()

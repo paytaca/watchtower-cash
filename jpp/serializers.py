@@ -183,7 +183,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def get_payment_url(self, obj):
         if self.context and "request" in self.context:
-            return self.context["request"].build_absolute_uri()
+            return obj.get_absolute_uri(self.context["request"])
         return None
 
     def validate(self, data):

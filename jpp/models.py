@@ -1,10 +1,14 @@
 import uuid
 from django.db import models
+from django.urls import reverse
 from django.contrib.postgres.fields import JSONField
 from cashaddress import convert
 
 # Create your models here.
 class Invoice(models.Model):
+    URL_TYPE_BCOM = "bitcoin.com"
+    URL_TYPE_BITPAY = "bitpay"
+
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, editable=False)
     required_fee_per_byte = models.FloatField(default=1.1)
     memo = models.TextField(null=True, blank=True)
@@ -20,6 +24,18 @@ class Invoice(models.Model):
     @property
     def currency(self):
         return "BCH"
+
+    def get_absolute_uri(self, request, url_type=None):
+        return request.build_absolute_uri(self.get_url_path(url_type=url_type))
+
+    def get_url_path(self, url_type=None):
+        view_name = "invoices-detail"
+        if url_type == self.URL_TYPE_BCOM:
+            view_name = "invoice-protobuf"
+        elif url_type == self.URL_TYPE_BITPAY:
+            view_name = "invoice-bitpay"
+
+        return reverse(view_name, kwargs={ "uuid": self.uuid.hex })
 
     def payment_options(self, payment_url=None):
         return {
