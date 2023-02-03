@@ -86,6 +86,7 @@ class InvoiceBitPayView(InvoiceBaseView):
     renderer_classes = [
         BitPayPaymentOptionsRenderer,
         BitPayPaymentRequestRenderer,
+        renderers.TemplateHTMLRenderer,
         # renderers.JSONRenderer,
     ]
 
@@ -98,6 +99,9 @@ class InvoiceBitPayView(InvoiceBaseView):
         elif renderers.JSONRenderer.media_type in accepts:
             serializer = InvoiceSerializer(instance, context=self.get_context())
             return Response(serializer.data)
+        elif renderers.TemplateHTMLRenderer.media_type in accepts:
+            data = { "invoice": instance, "url": request.build_absolute_uri() }
+            return Response(data, template_name='jpp/invoice.html')
         raise exceptions.NotAcceptable()
 
     def post(self, request, *args, **kwargs):
@@ -156,6 +160,7 @@ class InvoiceProtobufView(InvoiceBaseView):
     renderer_classes = [
         BComPaymentRequestRenderer,
         BComPaymentACKRenderer,
+        renderers.TemplateHTMLRenderer,
     ]
 
     def get(self, request, *args, **kwargs):
@@ -169,6 +174,9 @@ class InvoiceProtobufView(InvoiceBaseView):
         elif renderers.JSONRenderer.media_type in accepts:
             serializer = InvoiceSerializer(instance, context=self.get_context())
             return Response(serializer.data)
+        elif renderers.TemplateHTMLRenderer.media_type in accepts:
+            data = { "invoice": instance, "url": request.build_absolute_uri() }
+            return Response(data, template_name='jpp/invoice.html')
 
         raise exceptions.NotAcceptable()
 
