@@ -32,6 +32,7 @@ from smartbch.urls import urlpatterns as sbch_urlpatterns
 from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from chat.urls import urlpatterns as chat_urlpatterns
 from notifications.urls import urlpatterns as notifications_urlpatterns
+from jpp.urls import urlpatterns as jpp_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -57,6 +58,7 @@ urlpatterns = [
     path('api/anyhedge/', include(anyhedge_urlpatterns)),
     path('api/chat/', include(chat_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
+    path('api/jpp/', include(jpp_urlpatterns)),
     path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

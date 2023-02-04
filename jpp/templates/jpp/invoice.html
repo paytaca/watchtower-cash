@@ -1,0 +1,130 @@
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://watchtower.cash">
+  <meta property="og:site_name" content="WatchTower.Cash">
+  <meta property="og:title" content="WatchTower.Cash">
+  <meta property="og:image" content="https://watchtower.cash/static/watchtower_diagram_preview.jpg">
+  {% load static %}
+  <script src="{% static 'qrcode.min.js' %}"></script>
+  <style>
+    body {
+      font-family: 'Gilroy-Regular';
+      background-color: #efefef;
+    }
+
+    .container {
+      max-width:500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .card {
+      margin-top: 4rem;
+      background-color: #fff;
+      margin-left: 16px;
+      margin-right: 16px;
+      box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+      padding: 16px 24px;
+      border-radius: 5px;
+    }
+
+    .help-text {
+      font-size: 16px;
+      text-align: center;
+    }
+
+    .timer-container {
+      margin-top: 5px;
+      font-size: 20px;
+      text-align: center;
+    }
+
+    #qrcode {
+      display: flex;
+      justify-content: center;
+    }
+
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 10px 15px;
+    }
+    .title-container {
+      display: flex;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <p class="help-text">
+        Scan the QR code with your wallet to view payment details
+      </p>
+      <div>
+        <div id="qrcode"></div>
+      </div>
+      <div class="timer-container">
+        <span>Expires in:</span>
+        <span id="timer"></span>
+      </div>
+    </div>
+  </div>
+  <div class="footer">
+    <div class="title-container">
+      <img src="/static/watchtower_logo.png" width="50" alt="Watchtower">
+      <span style="font-size: 28px; vertical-align: middle; color: rgb(91, 186, 116)">
+        Watchtower
+      </span>
+    </div>
+  </div>
+  <script type="text/javascript">
+    new QRCode(document.getElementById("qrcode"), "{{ url }}");
+  </script>
+  <script>
+    function padNumDigits(num, digits=2) {
+      let numStr = String(num)
+      while(numStr.length < digits) {
+        numStr = "0" + numStr
+      }
+      return numStr
+    }
+    // Set the date we're counting down to
+    // var countDownDate = new Date("Jan 5, 2024 15:37:25").getTime();
+    var countDownDate = new Date('{{ invoice.expires|date:"c" }}').getTime();
+
+    // Update the count down every 1 second
+    var x = setInterval(function() {
+
+      // Get today's date and time
+      var now = new Date().getTime();
+
+      // Find the distance between now and the count down date
+      var distance = countDownDate - now;
+
+      // Time calculations for days, hours, minutes and seconds
+      var days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      // Display the result in the element with id="demo"
+      let timerText = padNumDigits(minutes) + ":" + padNumDigits(seconds);
+      if (hours) timerText = padNumDigits(hours) + ":" + timerText
+      if (days) timerText = padNumDigits(days) + ":" + timerText
+      document.getElementById("timer").innerHTML = timerText
+
+      // If the count down is finished, write some text
+      if (distance < 0) {
+        clearInterval(x);
+        document.getElementById("timer").innerHTML = "expired";
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
