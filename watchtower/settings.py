@@ -77,7 +77,8 @@ INSTALLED_APPS=[
     'paytacapos',
     'anyhedge',
     'chat',
-    'notifications'
+    'notifications',
+    'jpp'
 ]
 
 MIDDLEWARE=[
@@ -338,7 +339,11 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+from corsheaders.defaults import default_headers
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-paypro-version",
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
