@@ -38,6 +38,9 @@ class ConversationView(generics.ListAPIView):
     serializer_class = ConversationSerializer
 
     def get_queryset(self):
-        address = self.kwargs['address']
+        wallet_hash = self.kwargs['wallet_hash']
         Model = self.serializer_class.Meta.model
-        return Model.objects.filter(Q(from_address__address=address) | Q(to_address__address=address))
+        return Model.objects.filter(
+            Q(from_address__wallet__wallet_hash=wallet_hash) |
+            Q(to_address__wallet__wallet_hash=wallet_hash)
+        )

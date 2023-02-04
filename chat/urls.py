@@ -6,5 +6,5 @@ router = routers.DefaultRouter()
 router.register(r"identity", ChatIdentityViewSet, basename="chat-identity")
 
 urlpatterns = router.urls + [
-    re_path('^conversations/(?P<address>.+)/$', ConversationView.as_view())
+    re_path('^conversations/(?P<wallet_hash>.+)/$', ConversationView.as_view())
 ]
