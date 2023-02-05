@@ -212,7 +212,7 @@ def attach_funding_tx_to_wallet_history_meta(hedge_position_obj, force=False):
 
     hedge_meta, long_meta = None, None
     if hedge_position_obj.hedge_wallet_hash and hedge_position_obj.hedge_funding_proposal:
-        parse_tx_wallet_histories.delay(
+        parse_tx_wallet_histories(
             hedge_position_obj.hedge_funding_proposal.tx_hash,
             proceed_with_zero_amount=True,
         )
@@ -222,7 +222,7 @@ def attach_funding_tx_to_wallet_history_meta(hedge_position_obj, force=False):
         hedge_meta, _ = TransactionMetaAttribute.objects.update_or_create(defaults=defaults, **filter_kwargs)
 
     if hedge_position_obj.long_wallet_hash and hedge_position_obj.long_funding_proposal:
-        parse_tx_wallet_histories.delay(
+        parse_tx_wallet_histories(
             hedge_position_obj.long_funding_proposal.tx_hash,
             proceed_with_zero_amount=True,
         )
