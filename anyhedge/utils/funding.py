@@ -215,6 +215,7 @@ def attach_funding_tx_to_wallet_history_meta(hedge_position_obj, force=False):
         parse_tx_wallet_histories(
             hedge_position_obj.hedge_funding_proposal.tx_hash,
             proceed_with_zero_amount=True,
+            immediate=True
         )
         filter_kwargs["txid"] = hedge_position_obj.hedge_funding_proposal.tx_hash
         filter_kwargs["wallet_hash"] = hedge_position_obj.hedge_wallet_hash
@@ -225,6 +226,7 @@ def attach_funding_tx_to_wallet_history_meta(hedge_position_obj, force=False):
         parse_tx_wallet_histories(
             hedge_position_obj.long_funding_proposal.tx_hash,
             proceed_with_zero_amount=True,
+            immediate=True
         )
         filter_kwargs["txid"] = hedge_position_obj.long_funding_proposal.tx_hash
         filter_kwargs["key"] = "anyhedge_long_funding_utxo"

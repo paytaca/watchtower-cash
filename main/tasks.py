@@ -1117,7 +1117,7 @@ def rescan_utxos(wallet_hash, full=False):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False):
+def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False, immediate=False):
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
     bchd = BCHDQuery()
     bch_tx = bchd.get_transaction(txid)
@@ -1167,14 +1167,24 @@ def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False):
     for wallet in wallets:
         wallet_handle = f"bch|{wallet.wallet_hash}"
         wallet_handles.append(wallet_handle)
-        parse_wallet_history.delay(
-            txid,
-            wallet_handle,
-            tx_fee,
-            inputs,
-            outputs,
-            proceed_with_zero_amount=proceed_with_zero_amount,
-        )
+        if immediate:
+            parse_wallet_history(
+                txid,
+                wallet_handle,
+                tx_fee,
+                inputs,
+                outputs,
+                proceed_with_zero_amount=proceed_with_zero_amount,
+            )
+        else:
+            parse_wallet_history.delay(
+                txid,
+                wallet_handle,
+                tx_fee,
+                inputs,
+                outputs,
+                proceed_with_zero_amount=proceed_with_zero_amount,
+            )
 
     return wallet_handles
 
