@@ -41,7 +41,10 @@ from .filters import (
     PriceOracleMessageFilter,
 )
 from .pagination import CustomLimitOffsetPagination
-from .utils.funding import get_gp_lp_service_fee
+from .utils.funding import (
+    get_gp_lp_service_fee,
+    attach_funding_tx_to_wallet_history_meta,
+)
 from .utils.websocket import (
     send_hedge_position_offer_update,
 )
@@ -142,6 +145,7 @@ class HedgePositionViewSet(
         if funding_task_response["success"]:
             instance.refresh_from_db()
             validate_contract_funding.delay(instance.address)
+            attach_funding_tx_to_wallet_history_meta(instance, force=True)
             return Response(self.serializer_class(instance).data)
         else:
             error_data = funding_task_response["error"]
@@ -169,6 +173,7 @@ class HedgePositionViewSet(
         serializer = SubmitFundingTransactionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
+        attach_funding_tx_to_wallet_history_meta(hedge_obj, force=True)
         return Response(self.serializer_class(hedge_obj).data)
 
     @swagger_auto_schema(method="post", request_body=MutualRedemptionSerializer, responses={201: serializer_class})
@@ -251,6 +256,7 @@ class HedgePositionViewSet(
         serializer = FundGeneralProcotolLPContractSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
+        attach_funding_tx_to_wallet_history_meta(hedge_obj, force=True)
         return Response(self.serializer_class(hedge_obj).data)
 
     @swagger_auto_schema(method="get", responses={201: HedgePositionFeeSerializer})
