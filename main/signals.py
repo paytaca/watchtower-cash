@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
@@ -51,7 +52,9 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
         blockheight_id = instance.blockheight.id
 
     # Trigger the transaction post-save task
-    transaction_post_save_task.delay(address, instance.id, blockheight_id)
+    transaction.on_commit(
+        lambda: transaction_post_save_task.delay(address, instance.id, blockheight_id)
+    )
 
 
 @receiver(post_save, sender=WalletPreferences)
