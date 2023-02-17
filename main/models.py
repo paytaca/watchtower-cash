@@ -50,6 +50,14 @@ class Token(PostgresModel):
             return str(self.name)
 
     @property
+    def is_nft(self):
+        if self.token_type == 65:
+            return True
+        elif self.token_type == 1 and self.decimals == 0:
+            return True
+        return False
+
+    @property
     def info_id(self):
         if self.token_type:
             return 'slp/' + self.tokenid

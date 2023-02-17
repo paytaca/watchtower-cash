@@ -661,7 +661,7 @@ def download_token_metadata_image(token_id, document_url=None):
         url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
         status_code, image_file_name = download_image(token_id, url)
 
-    if token_obj.token_type == 65:
+    if token_obj.is_nft:
         # Check if NFT group/parent token has image_base_url
         if group and 'image_base_url' in group.nft_token_group_details.keys():
             image_base_url = group.nft_token_group_details['image_base_url']
@@ -844,7 +844,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             if history.tx_timestamp:
                 parse_market_values_task = parse_wallet_history_market_values.delay(history.id)
 
-            if txn.token.token_type == 65:
+            if txn.token.is_nft:
                 if record_type == 'incoming':
                     wallet_nft_token, created = WalletNftToken.objects.get_or_create(
                         wallet=wallet,
