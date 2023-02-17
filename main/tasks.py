@@ -19,6 +19,10 @@ from main.models import (
     WalletNftToken,
     AssetPriceLog,
 )
+from main.utils.ipfs import (
+    get_ipfs_cid_from_url,
+    ipfs_gateways,
+)
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -611,10 +615,10 @@ def download_image(token_id, url, resize=False):
         if content_type.split('/')[0] == 'image':
             file_ext = content_type.split('/')[1]
 
+            img = Image.open(BytesIO(resp.content))
             if resize:
                 LOGGER.info('Saving resized images...')
                 # Save medium size
-                img = Image.open(BytesIO(resp.content))
                 width, height = img.size
                 medium_width = 450
                 medium_height = medium_width * (height / width)
@@ -639,106 +643,99 @@ def download_image(token_id, url, resize=False):
             LOGGER.info(out_path)
             img.save(out_path, quality=95)
             image_file_name = f"{token_id}.{file_ext}"
+            LOGGER.info(f"Saved image for token {token_id} from {url}")
 
     return resp.status_code, image_file_name
 
 
+def download_token_metadata_image(token_id, document_url=None):
+    token_obj = Token.objects.get(tokenid=token_id)
+    group = token_obj.nft_token_group
+
+    image_file_name = None
+    image_url = None
+    status_code = 0
+
+    if token_obj.token_type == 1:
+        # Check slp-token-icons repo
+        url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
+        status_code, image_file_name = download_image(token_id, url)
+
+    if token_obj.token_type == 65:
+        # Check if NFT group/parent token has image_base_url
+        if group and 'image_base_url' in group.nft_token_group_details.keys():
+            image_base_url = group.nft_token_group_details['image_base_url']
+            image_type = group.nft_token_group_details['image_type']
+            url = f"{image_base_url}/{token_id}.{image_type}"
+            status_code, image_file_name = download_image(token_id, url, resize=True)
+
+        # Try getting image directly from document URL
+        if not image_file_name and is_url(document_url):
+            url = document_url
+            status_code, image_file_name = download_image(token_id, url, resize=True)
+
+            # We try from other ipfs gateways if document url is an ipfs link but didnt work
+            ipfs_cid = get_ipfs_cid_from_url(url)
+            if not image_file_name and ipfs_cid:
+                for ipfs_gateway in ipfs_gateway:
+                    url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
+                    status_code, image_file_name = download_image(token_id, url, resize=True)
+                    if image_file_name:
+                        break
+
+        # last fallback, juungle to resolve icon
+        # NOTE: juungle is shutting down in March 1, 2023
+        if not image_file_name:
+            url = f"https://www.juungle.net/api/v1/nfts/icon/{token_id}/{token_id}"
+            status_code, image_file_name = download_image(token_id, url, resize=True)
+
+        if status_code == 200 and image_file_name:
+            image_server_base = 'https://images.watchtower.cash'
+            image_url = f"{image_server_base}/{image_file_name}"
+            if token_obj.token_type == 1:
+                Token.objects.filter(tokenid=token_id).update(
+                    original_image_url=image_url,
+                    date_updated=timezone.now()
+                )
+            if token_obj.token_type == 65:
+                Token.objects.filter(tokenid=token_id).update(
+                    original_image_url=image_url,
+                    medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
+                    thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
+                    date_updated=timezone.now()
+                )
+
+    return image_url
+
+
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
 def get_token_meta_data(self, token_id):
-    token_obj = Token.objects.get(
-        tokenid=token_id
-    )
     try:
         LOGGER.info('Fetching token metadata from BCHD...')
         bchd = BCHDQuery()
-        txn = bchd.get_transaction(token_obj.tokenid, parse_slp=True)
-        if txn:
-            # Update token info
-            info = txn['token_info']
-            token_obj.name = info['name']
-            token_obj.token_ticker = info['ticker']
-            token_obj.token_type = info['type']
-            token_obj.decimals = info['decimals']
-            token_obj.date_updated = timezone.now()
+        txn = bchd.get_transaction(token_id, parse_slp=True)
+        if not txn:
+            return
 
-            group = None
-            if info['nft_token_group']:
-                group, _ = Token.objects.get_or_create(tokenid=info['nft_token_group'])
-                token_obj.nft_token_group = group
+        info = txn['token_info']
+        token_obj_info = dict(
+            name = info['name'],
+            token_ticker = info['ticker'],
+            token_type = info['type'],
+            decimals = info['decimals'],
+            date_updated = timezone.now(),
+        )
 
-            token_obj.save()
+        nft_token_group_obj = None
+        if info['nft_token_group']:
+            nft_token_group_obj, _ = Token.objects.get_or_create(tokenid=info['nft_token_group'])
+            token_obj_info["nft_token_group"] = nft_token_group_obj
 
-            # Get image / logo URL
-            image_file_name = None
-            image_url = None
-            status_code = 0
+        token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
+        image_url = download_token_metadata_image(token_obj.tokenid, document_url=info.get('document_url'))
 
-            if token_obj.token_type == 1:
-
-                # Check slp-token-icons repo
-                url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
-                status_code, image_file_name = download_image(token_id, url)
-
-            if token_obj.token_type == 65:
-
-                # Check if NFT group/parent token has image_base_url
-                if group:
-                    if 'image_base_url' in group.nft_token_group_details.keys():
-                        image_base_url = group.nft_token_group_details['image_base_url']
-                        image_type = group.nft_token_group_details['image_type']
-                        url = f"{image_base_url}/{token_id}.{image_type}"
-                        status_code, image_file_name = download_image(token_id, url, resize=True)
-                else:
-                    # TODO: Get group token metadata
-                    pass
-
-                if not image_file_name:
-                    # Try getting image directly from document URL
-                    url = info['document_url']
-                    if is_url(url):
-                        status_code, image_file_name = download_image(token_id, url, resize=True)
-
-                # Disable simpleledger.info, it's being deprecated
-                # if not image_file_name:
-                #     # Scrape NFT image link from simpleledger.info
-                #     url = 'http://simpleledger.info/token/' + token_id
-                #     resp = requests.get(url)
-                #     if resp.status_code == 200:
-                #         soup = BeautifulSoup(resp.text, 'html')
-                #         img_div = soup.find_all('div', {'class': 'token-icon-large'})
-                #         if img_div:
-                #             url = img_div[0].img.attrs['src']
-                #             status_code, image_file_name = download_image(token_id, url, resize=True)
-
-            if status_code == 200:
-                if image_file_name:
-                    image_server_base = 'https://images.watchtower.cash'
-                    image_url = f"{image_server_base}/{image_file_name}"
-                    if token_obj.token_type == 1:
-                        Token.objects.filter(tokenid=token_id).update(
-                            original_image_url=image_url,
-                            date_updated=timezone.now()
-                        )
-                    if token_obj.token_type == 65:
-                        Token.objects.filter(tokenid=token_id).update(
-                            original_image_url=image_url,
-                            medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
-                            thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
-                            date_updated=timezone.now()
-                        )
-
-            info_id = ''
-            if token_obj.token_type:
-                info_id = 'slp/' + token_id
-
-            return {
-                'id': info_id,
-                'name': token_obj.name,
-                'symbol': token_obj.token_ticker,
-                'token_type': token_obj.token_type,
-                'image_url': image_url or ''
-            }
-
+        token_obj.refresh_from_db()
+        return token_obj.get_info()
     except Exception as exc:
         LOGGER.error(str(exc))
         self.retry(countdown=5)
