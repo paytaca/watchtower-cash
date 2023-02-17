@@ -15,6 +15,8 @@ def get_ipfs_cid_from_url(url):
     ipfs_path_regex = "^/?ipfs/([a-zA-Z0-9]+)/?$"
     try:
         parsed_url = urlparse(url)
+        if parsed_url.scheme == 'ipfs' and parsed_url.netloc:
+            return parsed_url.netloc
         match = re.match(ipfs_path_regex, parsed_url.path)
         if match:
             return match.group(1)

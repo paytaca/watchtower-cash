@@ -677,7 +677,7 @@ def download_token_metadata_image(token_id, document_url=None):
             # We try from other ipfs gateways if document url is an ipfs link but didnt work
             ipfs_cid = get_ipfs_cid_from_url(url)
             if not image_file_name and ipfs_cid:
-                for ipfs_gateway in ipfs_gateway:
+                for ipfs_gateway in ipfs_gateways:
                     url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
                     status_code, image_file_name = download_image(token_id, url, resize=True)
                     if image_file_name:
