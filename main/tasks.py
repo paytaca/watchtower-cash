@@ -672,10 +672,11 @@ def download_token_metadata_image(token_id, document_url=None):
         # Try getting image directly from document URL
         if not image_file_name and is_url(document_url):
             url = document_url
-            status_code, image_file_name = download_image(token_id, url, resize=True)
+            ipfs_cid = get_ipfs_cid_from_url(url)
+            if not ipfs_cid or not url.startswith("ipfs://"):
+                status_code, image_file_name = download_image(token_id, url, resize=True)
 
             # We try from other ipfs gateways if document url is an ipfs link but didnt work
-            ipfs_cid = get_ipfs_cid_from_url(url)
             if not image_file_name and ipfs_cid:
                 for ipfs_gateway in ipfs_gateways:
                     url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
@@ -973,7 +974,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
             if txn_check.exists():
                 txn_obj = txn_check.last()
-                if txn_obj.token.token_type == 65:
+                if txn_obj.token.is_nft:
                     wallet_nft_token = WalletNftToken.objects.get(
                         acquisition_transaction=txn_obj
                     )
