@@ -40,6 +40,8 @@ class Token(PostgresModel):
     date_created = models.DateTimeField(default=timezone.now)
     date_updated = models.DateTimeField(null=True, blank=True)
 
+    mint_amount = models.BigIntegerField(null=True)
+
     class Meta:
         unique_together = ('name', 'tokenid',)
 
@@ -53,7 +55,7 @@ class Token(PostgresModel):
     def is_nft(self):
         if self.token_type == 65:
             return True
-        elif self.token_type == 1 and self.decimals == 0:
+        elif self.token_type == 1 and self.decimals == 0 and self.mint_amount == 1:
             return True
         return False
 

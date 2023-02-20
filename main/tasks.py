@@ -724,6 +724,7 @@ def get_token_meta_data(self, token_id):
             token_type = info['type'],
             decimals = info['decimals'],
             date_updated = timezone.now(),
+            mint_amount = info['mint_amount'] or 0,
         )
 
         nft_token_group_obj = None

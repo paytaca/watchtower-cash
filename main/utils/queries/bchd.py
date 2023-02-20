@@ -102,6 +102,7 @@ class BCHDQuery(object):
                     'ticker': genesis_info.ticker.decode(),
                     'document_url': genesis_info.document_url.decode(),
                     'nft_token_group': parent_group,
+                    'mint_amount': getattr(genesis_info, 'mint_amount', None),
                     'decimals': genesis_info.decimals or 0
                 }
             
