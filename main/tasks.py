@@ -29,6 +29,7 @@ from main.utils.market_price import (
     save_wallet_history_currency,
 )
 from celery.exceptions import MaxRetriesExceededError 
+from main.utils.nft import find_token_utxo
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
     send_wallet_history_push_notification,
@@ -746,6 +747,62 @@ def get_token_meta_data(self, token_id, async_image_download=False):
         LOGGER.error(str(exc))
         self.retry(countdown=5)
 
+@shared_task(queue='wallet_history_1')
+def update_nft_owner(tokenid):
+    response = { "success": False }
+
+    token = Token.objects.filter(tokenid=tokenid).first()
+    if not token or not token.token_type:
+        token_info = get_token_meta_data(tokenid, async_image_download=True)
+        if token_info:
+            token = Token.objects.filter(tokenid=tokenid).first()
+        else:
+            response["success"] = False
+            response["error"] = "token does not exist"
+            return response
+
+    if not token.is_nft:
+        response["success"] = False
+        response["error"] = "token is not an nft type"
+        return response
+
+    tx_output = find_token_utxo(token.tokenid)
+    if not tx_output:
+        response["success"] = False
+        response["error"] = "token output not found"
+        return response
+
+    wallet = Wallet.objects.filter(addresses__address=tx_output["address"]).first()
+    wallet_nft_token = None
+
+    # creating record is conditional since token might be owned by
+    # an address that is not subscribed
+    if wallet:
+        acquisition_tx = Transaction.objects.filter(
+            txid=tx_output["txid"],
+            index=tx_output["index"],
+            address__address=tx_output["address"]
+        ).first()
+
+        wallet_nft_token, _ = WalletNftToken.objects.update_or_create(
+            wallet=wallet,
+            token=token,
+            acquisition_transaction=acquisition_tx,
+        )
+
+    # marking wallet nft tokens as dispensed will always happen even if wallet is not found 
+    to_dispense = WalletNftToken.objects.exclude(
+        pk=wallet_nft_token.pk if wallet_nft_token else None,
+    ).filter(
+        token=token, date_dispensed__isnull=True
+    )
+    to_dispense.update(date_dispensed=timezone.now())
+    dispensed_wallets = list(
+        # .order_by() is necessary for .distinct() to function well
+        to_dispense.values_list("wallet__wallet_hash", flat=True).distinct().order_by()
+    )
+    return f"token({token}) | wallet_nft_token: ({wallet_nft_token}) | dispensed: ({dispensed_wallets})"
+
 
 @shared_task(bind=True, queue='broadcast', max_retries=3)
 def broadcast_transaction(self, transaction):
@@ -850,29 +907,6 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             if history.tx_timestamp:
                 parse_market_values_task = parse_wallet_history_market_values.delay(history.id)
 
-            if txn.token.is_nft:
-                if record_type == 'incoming':
-                    wallet_nft_token, created = WalletNftToken.objects.get_or_create(
-                        wallet=wallet,
-                        token=txn.token,
-                        acquisition_transaction=txn
-                    )
-                    if created:
-                        wallet_nft_token.acquisition_transaction = txn
-                        wallet_nft_token.save()
-                elif record_type == 'outgoing':
-                    wallet_nft_token_check = WalletNftToken.objects.filter(
-                        wallet=wallet,
-                        token=txn.token,
-                        date_dispensed__isnull=True
-                    )
-                    if wallet_nft_token_check.exists():
-                        wallet_nft_token = wallet_nft_token_check.last()
-                        wallet_nft_token.date_dispensed = txn.date_created
-                        wallet_nft_token.dispensation_transaction = txn
-                        wallet_nft_token.save()
-
-
             try:
                 if parse_market_values_task:
                     try:
@@ -884,6 +918,30 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     send_wallet_history_push_notification(history)
             except Exception as exception:
                 LOGGER.exception(exception)
+
+        if txn.token and txn.token.is_nft:
+            if record_type == 'incoming':
+                wallet_nft_token, created = WalletNftToken.objects.get_or_create(
+                    wallet=wallet,
+                    token=txn.token,
+                    acquisition_transaction=txn
+                )
+                if created:
+                    wallet_nft_token.acquisition_transaction = txn
+                    wallet_nft_token.save()
+            elif record_type == 'outgoing':
+                wallet_nft_token_check = WalletNftToken.objects.filter(
+                    wallet=wallet,
+                    token=txn.token,
+                    date_dispensed__isnull=True
+                )
+                if wallet_nft_token_check.exists():
+                    wallet_nft_token = wallet_nft_token_check.last()
+                    wallet_nft_token.date_dispensed = txn.date_created
+                    wallet_nft_token.dispensation_transaction = txn
+                    wallet_nft_token.save()
+
+            update_nft_owner.delay(txn.token.tokenid)
 
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
