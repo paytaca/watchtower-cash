@@ -648,6 +648,7 @@ def download_image(token_id, url, resize=False):
     return resp.status_code, image_file_name
 
 
+@shared_task(queue='token_metadata', max_retries=3)
 def download_token_metadata_image(token_id, document_url=None):
     token_obj = Token.objects.get(tokenid=token_id)
     group = token_obj.nft_token_group
@@ -710,7 +711,7 @@ def download_token_metadata_image(token_id, document_url=None):
 
 
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
-def get_token_meta_data(self, token_id):
+def get_token_meta_data(self, token_id, async_image_download=False):
     try:
         LOGGER.info('Fetching token metadata from BCHD...')
         bchd = BCHDQuery()
@@ -734,7 +735,10 @@ def get_token_meta_data(self, token_id):
             token_obj_info["nft_token_group"] = nft_token_group_obj
 
         token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
-        image_url = download_token_metadata_image(token_obj.tokenid, document_url=info.get('document_url'))
+        if async_image_download:
+            download_token_metadata_image.delay(token_obj.tokenid, document_url=info.get('document_url'))
+        else:
+            download_token_metadata_image(token_obj.tokenid, document_url=info.get('document_url'))
 
         token_obj.refresh_from_db()
         return token_obj.get_info()
