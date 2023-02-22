@@ -804,11 +804,19 @@ def update_nft_owner(tokenid):
             address__address=tx_output["address"]
         ).first()
 
-        wallet_nft_token, _ = WalletNftToken.objects.update_or_create(
+        wallet_nft_token_info = dict(
             wallet=wallet,
             token=token,
             acquisition_transaction=acquisition_tx,
         )
+        wallet_nft_token_defaults = dict(date_dispensed=None)
+        try:
+            wallet_nft_token, _ = WalletNftToken.objects.update_or_create(
+                **wallet_nft_token_info,
+                defaults=wallet_nft_token_defaults,
+            )
+        except WalletNftToken.MultipleObjectsReturned:
+            WalletNftToken.objects.filter(**wallet_nft_token_info).update(**wallet_nft_token_defaults)
 
     # marking wallet nft tokens as dispensed will always happen even if wallet is not found 
     to_dispense = WalletNftToken.objects.exclude(
