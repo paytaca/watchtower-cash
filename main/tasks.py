@@ -29,7 +29,10 @@ from main.utils.market_price import (
     save_wallet_history_currency,
 )
 from celery.exceptions import MaxRetriesExceededError 
-from main.utils.nft import find_token_utxo
+from main.utils.nft import (
+    find_token_utxo,
+    find_minting_baton,
+)
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
     send_wallet_history_push_notification,
@@ -736,6 +739,8 @@ def get_token_meta_data(self, token_id, async_image_download=False):
             token_obj_info["nft_token_group"] = nft_token_group_obj
 
         token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
+        if token_obj.token_type in [1, 129]:
+            update_token_minting_baton.delay(token_obj.tokenid)
         if async_image_download:
             download_token_metadata_image.delay(token_obj.tokenid, document_url=info.get('document_url'))
         else:
@@ -746,6 +751,21 @@ def get_token_meta_data(self, token_id, async_image_download=False):
     except Exception as exc:
         LOGGER.error(str(exc))
         self.retry(countdown=5)
+
+
+@shared_task(queue='token_metadata')
+def update_token_minting_baton(tokenid):
+    token = Token.objects.filter(tokenid=tokenid).first()
+    if not token:
+        return { "error": f"token '{tokenid}' not found" }
+
+    if token.token_type not in [1, 129]:
+        return { "error": f"invalid token type {token.token_type} for '{tokenid}'"}
+
+    minting_baton = find_minting_baton(tokenid)
+    token.save_minting_baton_info(minting_baton)
+    return { "tokenid": tokenid, "minting_baton": minting_baton }
+
 
 @shared_task(queue='wallet_history_1')
 def update_nft_owner(tokenid):

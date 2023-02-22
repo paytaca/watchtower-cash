@@ -76,3 +76,36 @@ def find_token_utxo(tokenid):
 
 
     return tx_output
+
+
+def find_minting_baton(tokenid):
+    data = bitdb_query({
+        "v": 3,
+        "q": {
+            "find": {
+                "$or": [
+                    { "tx.h": tokenid, "out.s3": "GENESIS" },
+                    { "out.h4": tokenid, "out.s3": "MINT" }
+                ]
+            },
+        },
+        "project": { "tx.h": 1 },
+        "limit": 1,
+    })
+
+    # results are arranged in chronological order
+    txs = [*data["u"], *data["c"]]
+    txid = txs[0]["tx"]["h"] if len(txs) else None
+
+    if not txid:
+        return
+
+    bchd = BCHDQuery()
+    tx = bchd.get_transaction(txid, parse_slp=True)
+    for tx_output in tx["outputs"]:
+        if tx_output.get("is_mint_baton", False):
+            return {
+                "txid": tx["txid"],
+                "index": tx_output["index"],
+                "address": tx_output["address"],
+            }

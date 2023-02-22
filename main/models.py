@@ -59,6 +59,12 @@ class Token(PostgresModel):
             return True
         return False
 
+    def save_minting_baton_info(self, minting_baton, save=True):
+        self.nft_token_group_details = self.nft_token_group_details or dict()
+        self.nft_token_group_details["minting_baton"] = minting_baton
+        if save:
+            self.save()
+
     @property
     def info_id(self):
         if self.token_type:
