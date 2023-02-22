@@ -172,7 +172,8 @@ class WalletTokensView(APIView):
 
         if ungrouped_tokens_count:
             token_groups_info.append(dict(
-                tokenid="ungrouped",
+                ungrouped_tokens=True,
+                token_id="",
                 name="Ungrouped",
                 symbol="",
                 type=None,
