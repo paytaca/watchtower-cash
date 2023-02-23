@@ -1,4 +1,9 @@
-from django.db.models import Q, F, Func
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+from django.db.models import Q, F, Func, OuterRef, Exists, CharField, IntegerField
+from django.db.models.functions import Cast
+from django.contrib.postgres.fields.jsonb import KeyTextTransform
+from django.contrib.postgres.fields import JSONField
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -15,8 +20,25 @@ class Round(Func):
     template = "%(function)s(%(expressions)s::numeric, 0)"
 
 
-def _get_slp_utxos(query, show_address_index=False):
+def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
     qs = Transaction.objects.filter(query)
+    if minting_baton is not None:
+        subquery = Exists(
+            Token.objects.annotate(
+                minting_baton=Cast(KeyTextTransform('minting_baton', 'nft_token_group_details'), JSONField()),
+            ).annotate(
+                minting_baton_txid=Cast(KeyTextTransform('txid', 'minting_baton'), CharField()),
+                minting_baton_index=Cast(KeyTextTransform('index', 'minting_baton'), IntegerField()),
+            ).filter(
+                minting_baton_txid=OuterRef("txid"),
+                minting_baton_index=OuterRef("index"),
+            ).values('tokenid')
+        )
+        if minting_baton:
+            qs = qs.filter(subquery)
+        else:
+            qs = qs.exclude(subquery)
+
     if show_address_index:
         utxos_values = qs.annotate(
             vout=F('index'),
@@ -101,12 +123,23 @@ def _get_bch_utxos(query, show_address_index=False):
 
 class UTXO(APIView):
 
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="baton", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
     def get(self, request, *args, **kwargs):
-
         slpaddress = kwargs.get('slpaddress', '')
         bchaddress = kwargs.get('bchaddress', '')
         tokenid = kwargs.get('tokenid', '')
         wallet_hash = kwargs.get('wallethash', '')
+        baton = request.query_params.get('baton', '').lower().strip()
+        if baton == "true":
+            baton = True
+        elif baton == "false":
+            baton = False
+        else:
+            baton = None
 
         data = { 'valid': False }
         qs = None
@@ -122,7 +155,7 @@ class UTXO(APIView):
                 query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
                 query =  Q(address__address=data['address']) & Q(spent=False)
-            utxos_values = _get_slp_utxos(query)
+            utxos_values = _get_slp_utxos(query, minting_baton=baton)
 
         if wallet_hash:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
@@ -133,12 +166,14 @@ class UTXO(APIView):
                     query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
                 else:
                     query =  Q(wallet=wallet) & Q(spent=False)
-                utxos_values = _get_slp_utxos(query, show_address_index=True)
+                utxos_values = _get_slp_utxos(query, show_address_index=True, minting_baton=baton)
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
                 utxos_values = _get_bch_utxos(query, show_address_index=True)
 
+        if baton is not None:
+            data['minting_baton'] = baton
         data['utxos'] = list(utxos_values)
         data['valid'] = True  
         return Response(data=data, status=status.HTTP_200_OK)

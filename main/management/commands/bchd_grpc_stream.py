@@ -138,6 +138,15 @@ def run():
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
+                    
+                    if output.slp_token.is_mint_baton:
+                        token_obj = Token.objects.filter(tokenid=token_id).first()
+                        if token_obj:
+                            token_obj.save_minting_baton_info({
+                                "txid": tx_hash,
+                                "index": output.index,
+                                "address": slp_address,
+                            })
                     msg = f"{source}: {tx_hash} | {slp_address} | {amount} | {token_id}"
                     LOGGER.info(msg)
 

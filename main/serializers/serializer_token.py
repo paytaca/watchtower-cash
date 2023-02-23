@@ -19,3 +19,17 @@ class TokenSerializer(serializers.ModelSerializer):
             'image_url',
             'success',
         ]
+
+
+class WalletTokenSerializer(serializers.Serializer):
+    token_id = serializers.CharField(required=False, allow_blank=True)
+    name = serializers.CharField(required=False, allow_blank=True)
+    symbol = serializers.CharField(required=False, allow_blank=True)
+    type = serializers.IntegerField(required=False)
+    nft_token_group = serializers.CharField(required=False)
+    original_image_url = serializers.CharField(required=False, allow_blank=True)
+    medium_image_url = serializers.CharField(required=False, allow_blank=True)
+    thumbnail_image_url = serializers.CharField(required=False, allow_blank=True)
+    txid = serializers.CharField(required=False, allow_blank=True)
+    date_acquired = serializers.DateTimeField(required=False)
+    count = serializers.IntegerField(required=False)

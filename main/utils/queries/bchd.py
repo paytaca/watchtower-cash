@@ -102,8 +102,11 @@ class BCHDQuery(object):
                     'ticker': genesis_info.ticker.decode(),
                     'document_url': genesis_info.document_url.decode(),
                     'nft_token_group': parent_group,
+                    'mint_amount': getattr(genesis_info, 'mint_amount', None),
                     'decimals': genesis_info.decimals or 0
                 }
+                if getattr(genesis_info, 'mint_baton_vout', None):
+                    transaction['token_info']['mint_baton_index'] = genesis_info.mint_baton_vout
             
             transaction['inputs'] = []
             txid_spent_index_pairs = []
@@ -134,6 +137,8 @@ class BCHDQuery(object):
                             'amount': amount,
                             'index': output_index
                         }
+                        if tx_output.slp_token.is_mint_baton:
+                            data['is_mint_baton'] = True
                         transaction['outputs'].append(data)
                     output_index += 1
 

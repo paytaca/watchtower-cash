@@ -40,6 +40,8 @@ class Token(PostgresModel):
     date_created = models.DateTimeField(default=timezone.now)
     date_updated = models.DateTimeField(null=True, blank=True)
 
+    mint_amount = models.BigIntegerField(null=True)
+
     class Meta:
         unique_together = ('name', 'tokenid',)
 
@@ -48,6 +50,20 @@ class Token(PostgresModel):
             return f"{self.name} | {self.tokenid[0:7]}"
         else:
             return str(self.name)
+
+    @property
+    def is_nft(self):
+        if self.token_type == 65:
+            return True
+        elif self.token_type == 1 and self.decimals == 0 and self.mint_amount == 1:
+            return True
+        return False
+
+    def save_minting_baton_info(self, minting_baton, save=True):
+        self.nft_token_group_details = self.nft_token_group_details or dict()
+        self.nft_token_group_details["minting_baton"] = minting_baton
+        if save:
+            self.save()
 
     @property
     def info_id(self):

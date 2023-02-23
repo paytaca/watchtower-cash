@@ -19,12 +19,20 @@ from main.models import (
     WalletNftToken,
     AssetPriceLog,
 )
+from main.utils.ipfs import (
+    get_ipfs_cid_from_url,
+    ipfs_gateways,
+)
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
     save_wallet_history_currency,
 )
 from celery.exceptions import MaxRetriesExceededError 
+from main.utils.nft import (
+    find_token_utxo,
+    find_minting_baton,
+)
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
     send_wallet_history_push_notification,
@@ -611,10 +619,10 @@ def download_image(token_id, url, resize=False):
         if content_type.split('/')[0] == 'image':
             file_ext = content_type.split('/')[1]
 
+            img = Image.open(BytesIO(resp.content))
             if resize:
                 LOGGER.info('Saving resized images...')
                 # Save medium size
-                img = Image.open(BytesIO(resp.content))
                 width, height = img.size
                 medium_width = 450
                 medium_height = medium_width * (height / width)
@@ -639,109 +647,189 @@ def download_image(token_id, url, resize=False):
             LOGGER.info(out_path)
             img.save(out_path, quality=95)
             image_file_name = f"{token_id}.{file_ext}"
+            LOGGER.info(f"Saved image for token {token_id} from {url}")
 
     return resp.status_code, image_file_name
 
 
+@shared_task(queue='token_metadata', max_retries=3)
+def download_token_metadata_image(token_id, document_url=None):
+    token_obj = Token.objects.get(tokenid=token_id)
+    group = token_obj.nft_token_group
+
+    image_file_name = None
+    image_url = None
+    status_code = 0
+
+    if token_obj.token_type == 1:
+        # Check slp-token-icons repo
+        url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
+        status_code, image_file_name = download_image(token_id, url)
+
+    if token_obj.is_nft:
+        # Check if NFT group/parent token has image_base_url
+        if group and 'image_base_url' in group.nft_token_group_details.keys():
+            image_base_url = group.nft_token_group_details['image_base_url']
+            image_type = group.nft_token_group_details['image_type']
+            url = f"{image_base_url}/{token_id}.{image_type}"
+            status_code, image_file_name = download_image(token_id, url, resize=True)
+
+        # Try getting image directly from document URL
+        if not image_file_name and is_url(document_url):
+            url = document_url
+            ipfs_cid = get_ipfs_cid_from_url(url)
+            if not ipfs_cid or not url.startswith("ipfs://"):
+                status_code, image_file_name = download_image(token_id, url, resize=True)
+
+            # We try from other ipfs gateways if document url is an ipfs link but didnt work
+            if not image_file_name and ipfs_cid:
+                for ipfs_gateway in ipfs_gateways:
+                    url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
+                    status_code, image_file_name = download_image(token_id, url, resize=True)
+                    if image_file_name:
+                        break
+
+        # last fallback, juungle to resolve icon
+        # NOTE: juungle is shutting down in March 1, 2023
+        if not image_file_name:
+            url = f"https://www.juungle.net/api/v1/nfts/icon/{token_id}/{token_id}"
+            status_code, image_file_name = download_image(token_id, url, resize=True)
+
+        if status_code == 200 and image_file_name:
+            image_server_base = 'https://images.watchtower.cash'
+            image_url = f"{image_server_base}/{image_file_name}"
+            if token_obj.token_type == 1:
+                Token.objects.filter(tokenid=token_id).update(
+                    original_image_url=image_url,
+                    date_updated=timezone.now()
+                )
+            if token_obj.token_type == 65:
+                Token.objects.filter(tokenid=token_id).update(
+                    original_image_url=image_url,
+                    medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
+                    thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
+                    date_updated=timezone.now()
+                )
+
+    return image_url
+
+
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
-def get_token_meta_data(self, token_id):
-    token_obj = Token.objects.get(
-        tokenid=token_id
-    )
+def get_token_meta_data(self, token_id, async_image_download=False):
     try:
         LOGGER.info('Fetching token metadata from BCHD...')
         bchd = BCHDQuery()
-        txn = bchd.get_transaction(token_obj.tokenid, parse_slp=True)
-        if txn:
-            # Update token info
-            info = txn['token_info']
-            token_obj.name = info['name']
-            token_obj.token_ticker = info['ticker']
-            token_obj.token_type = info['type']
-            token_obj.decimals = info['decimals']
-            token_obj.date_updated = timezone.now()
+        txn = bchd.get_transaction(token_id, parse_slp=True)
+        if not txn:
+            return
 
-            group = None
-            if info['nft_token_group']:
-                group, _ = Token.objects.get_or_create(tokenid=info['nft_token_group'])
-                token_obj.nft_token_group = group
+        info = txn['token_info']
+        token_obj_info = dict(
+            name = info['name'],
+            token_ticker = info['ticker'],
+            token_type = info['type'],
+            decimals = info['decimals'],
+            date_updated = timezone.now(),
+            mint_amount = info['mint_amount'] or 0,
+        )
 
-            token_obj.save()
+        nft_token_group_obj = None
+        if info['nft_token_group']:
+            nft_token_group_obj, _ = Token.objects.get_or_create(tokenid=info['nft_token_group'])
+            token_obj_info["nft_token_group"] = nft_token_group_obj
 
-            # Get image / logo URL
-            image_file_name = None
-            image_url = None
-            status_code = 0
+        token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
+        if token_obj.token_type in [1, 129]:
+            update_token_minting_baton.delay(token_obj.tokenid)
+        if async_image_download:
+            download_token_metadata_image.delay(token_obj.tokenid, document_url=info.get('document_url'))
+        else:
+            download_token_metadata_image(token_obj.tokenid, document_url=info.get('document_url'))
 
-            if token_obj.token_type == 1:
-
-                # Check slp-token-icons repo
-                url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
-                status_code, image_file_name = download_image(token_id, url)
-
-            if token_obj.token_type == 65:
-
-                # Check if NFT group/parent token has image_base_url
-                if group:
-                    if 'image_base_url' in group.nft_token_group_details.keys():
-                        image_base_url = group.nft_token_group_details['image_base_url']
-                        image_type = group.nft_token_group_details['image_type']
-                        url = f"{image_base_url}/{token_id}.{image_type}"
-                        status_code, image_file_name = download_image(token_id, url, resize=True)
-                else:
-                    # TODO: Get group token metadata
-                    pass
-
-                if not image_file_name:
-                    # Try getting image directly from document URL
-                    url = info['document_url']
-                    if is_url(url):
-                        status_code, image_file_name = download_image(token_id, url, resize=True)
-
-                # Disable simpleledger.info, it's being deprecated
-                # if not image_file_name:
-                #     # Scrape NFT image link from simpleledger.info
-                #     url = 'http://simpleledger.info/token/' + token_id
-                #     resp = requests.get(url)
-                #     if resp.status_code == 200:
-                #         soup = BeautifulSoup(resp.text, 'html')
-                #         img_div = soup.find_all('div', {'class': 'token-icon-large'})
-                #         if img_div:
-                #             url = img_div[0].img.attrs['src']
-                #             status_code, image_file_name = download_image(token_id, url, resize=True)
-
-            if status_code == 200:
-                if image_file_name:
-                    image_server_base = 'https://images.watchtower.cash'
-                    image_url = f"{image_server_base}/{image_file_name}"
-                    if token_obj.token_type == 1:
-                        Token.objects.filter(tokenid=token_id).update(
-                            original_image_url=image_url,
-                            date_updated=timezone.now()
-                        )
-                    if token_obj.token_type == 65:
-                        Token.objects.filter(tokenid=token_id).update(
-                            original_image_url=image_url,
-                            medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
-                            thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
-                            date_updated=timezone.now()
-                        )
-
-            info_id = ''
-            if token_obj.token_type:
-                info_id = 'slp/' + token_id
-
-            return {
-                'id': info_id,
-                'name': token_obj.name,
-                'symbol': token_obj.token_ticker,
-                'token_type': token_obj.token_type,
-                'image_url': image_url or ''
-            }
-
+        token_obj.refresh_from_db()
+        return token_obj.get_info()
     except Exception as exc:
         LOGGER.error(str(exc))
         self.retry(countdown=5)
+
+
+@shared_task(queue='token_metadata')
+def update_token_minting_baton(tokenid):
+    token = Token.objects.filter(tokenid=tokenid).first()
+    if not token:
+        return { "error": f"token '{tokenid}' not found" }
+
+    if token.token_type not in [1, 129]:
+        return { "error": f"invalid token type {token.token_type} for '{tokenid}'"}
+
+    minting_baton = find_minting_baton(tokenid)
+    token.save_minting_baton_info(minting_baton)
+    return { "tokenid": tokenid, "minting_baton": minting_baton }
+
+
+@shared_task(queue='wallet_history_1')
+def update_nft_owner(tokenid):
+    response = { "success": False }
+
+    token = Token.objects.filter(tokenid=tokenid).first()
+    if not token or not token.token_type:
+        token_info = get_token_meta_data(tokenid, async_image_download=True)
+        if token_info:
+            token = Token.objects.filter(tokenid=tokenid).first()
+        else:
+            response["success"] = False
+            response["error"] = "token does not exist"
+            return response
+
+    if not token.is_nft:
+        response["success"] = False
+        response["error"] = "token is not an nft type"
+        return response
+
+    tx_output = find_token_utxo(token.tokenid)
+    if not tx_output:
+        response["success"] = False
+        response["error"] = "token output not found"
+        return response
+
+    wallet = Wallet.objects.filter(addresses__address=tx_output["address"]).first()
+    wallet_nft_token = None
+
+    # creating record is conditional since token might be owned by
+    # an address that is not subscribed
+    if wallet:
+        acquisition_tx = Transaction.objects.filter(
+            txid=tx_output["txid"],
+            index=tx_output["index"],
+            address__address=tx_output["address"]
+        ).first()
+
+        wallet_nft_token_info = dict(
+            wallet=wallet,
+            token=token,
+            acquisition_transaction=acquisition_tx,
+        )
+        wallet_nft_token_defaults = dict(date_dispensed=None)
+        try:
+            wallet_nft_token, _ = WalletNftToken.objects.update_or_create(
+                **wallet_nft_token_info,
+                defaults=wallet_nft_token_defaults,
+            )
+        except WalletNftToken.MultipleObjectsReturned:
+            WalletNftToken.objects.filter(**wallet_nft_token_info).update(**wallet_nft_token_defaults)
+
+    # marking wallet nft tokens as dispensed will always happen even if wallet is not found 
+    to_dispense = WalletNftToken.objects.exclude(
+        pk=wallet_nft_token.pk if wallet_nft_token else None,
+    ).filter(
+        token=token, date_dispensed__isnull=True
+    )
+    to_dispense.update(date_dispensed=timezone.now())
+    dispensed_wallets = list(
+        # .order_by() is necessary for .distinct() to function well
+        to_dispense.values_list("wallet__wallet_hash", flat=True).distinct().order_by()
+    )
+    return f"token({token}) | wallet_nft_token: ({wallet_nft_token}) | dispensed: ({dispensed_wallets})"
 
 
 @shared_task(bind=True, queue='broadcast', max_retries=3)
@@ -847,29 +935,6 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             if history.tx_timestamp:
                 parse_market_values_task = parse_wallet_history_market_values.delay(history.id)
 
-            if txn.token.token_type == 65:
-                if record_type == 'incoming':
-                    wallet_nft_token, created = WalletNftToken.objects.get_or_create(
-                        wallet=wallet,
-                        token=txn.token,
-                        acquisition_transaction=txn
-                    )
-                    if created:
-                        wallet_nft_token.acquisition_transaction = txn
-                        wallet_nft_token.save()
-                elif record_type == 'outgoing':
-                    wallet_nft_token_check = WalletNftToken.objects.filter(
-                        wallet=wallet,
-                        token=txn.token,
-                        date_dispensed__isnull=True
-                    )
-                    if wallet_nft_token_check.exists():
-                        wallet_nft_token = wallet_nft_token_check.last()
-                        wallet_nft_token.date_dispensed = txn.date_created
-                        wallet_nft_token.dispensation_transaction = txn
-                        wallet_nft_token.save()
-
-
             try:
                 if parse_market_values_task:
                     try:
@@ -881,6 +946,30 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     send_wallet_history_push_notification(history)
             except Exception as exception:
                 LOGGER.exception(exception)
+
+        if txn.token and txn.token.is_nft:
+            if record_type == 'incoming':
+                wallet_nft_token, created = WalletNftToken.objects.get_or_create(
+                    wallet=wallet,
+                    token=txn.token,
+                    acquisition_transaction=txn
+                )
+                if created:
+                    wallet_nft_token.acquisition_transaction = txn
+                    wallet_nft_token.save()
+            elif record_type == 'outgoing':
+                wallet_nft_token_check = WalletNftToken.objects.filter(
+                    wallet=wallet,
+                    token=txn.token,
+                    date_dispensed__isnull=True
+                )
+                if wallet_nft_token_check.exists():
+                    wallet_nft_token = wallet_nft_token_check.last()
+                    wallet_nft_token.date_dispensed = txn.date_created
+                    wallet_nft_token.dispensation_transaction = txn
+                    wallet_nft_token.save()
+
+            update_nft_owner.delay(txn.token.tokenid)
 
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
@@ -975,7 +1064,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
             if txn_check.exists():
                 txn_obj = txn_check.last()
-                if txn_obj.token.token_type == 65:
+                if txn_obj.token.is_nft:
                     wallet_nft_token = WalletNftToken.objects.get(
                         acquisition_transaction=txn_obj
                     )
