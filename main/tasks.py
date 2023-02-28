@@ -947,6 +947,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             except Exception as exception:
                 LOGGER.exception(exception)
 
+        # for older token records 
+        if txn.token and txn.token.tokenid and (txn.token.token_type is None or txn.token.mint_amount is None):
+            get_token_meta_data(txn.token.tokenid, async_image_download=True)
+            txn.token.refresh_from_db()
+
         if txn.token and txn.token.is_nft:
             if record_type == 'incoming':
                 wallet_nft_token, created = WalletNftToken.objects.get_or_create(
@@ -1065,12 +1070,12 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
             if txn_check.exists():
                 txn_obj = txn_check.last()
                 if txn_obj.token.is_nft:
-                    wallet_nft_token = WalletNftToken.objects.get(
-                        acquisition_transaction=txn_obj
-                    )
-                    wallet_nft_token.date_dispensed = timezone.now()
-                    wallet_nft_token.dispensation_transaction = transaction
-                    wallet_nft_token.save()
+                    wallet_nft_tokens = WalletNftToken.objects.filter(acquisition_transaction=txn_obj)
+                    if wallet_nft_tokens.exists():
+                        wallet_nft_tokens.update(
+                            date_dispensed = timezone.now(),
+                            dispensation_transaction = transaction,
+                        )
 
         # Parse SLP tx outputs
         if slp_tx['valid']:
