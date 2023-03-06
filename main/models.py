@@ -434,14 +434,31 @@ class WalletHistory(PostgresModel):
         if self.market_prices and self.market_prices.get(currency, None):
             market_price = self.market_prices[currency]
         elif not market_price and self.usd_price and currency == "USD":
-            market_price = self.usd_price
-        
+            market_price = float(self.usd_price)
+
         if not market_price:
             return
 
         return {
             "currency": currency,
             "value": round(market_price * self.amount, 2),
+        }
+
+    @property
+    def usd_value(self):
+        default_currency = "USD"
+        usd_price = None
+        if self.usd_price:
+            usd_price = float(self.usd_price)
+        elif self.market_prices and self.market_prices.get(default_currency, None):
+            usd_price = self.market_prices[default_currency]
+
+        if not usd_price:
+            return
+
+        return {
+            "currency": default_currency,
+            "value": round(usd_price * self.amount, 2),
         }
 
 
