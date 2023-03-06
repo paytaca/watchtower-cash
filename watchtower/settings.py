@@ -46,6 +46,11 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 DEBUG = False
 
 DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
+DOMAIN = 'https://watchtower.cash'
+
+if DEPLOYMENT_INSTANCE == 'local':
+    DEBUG = True
+    DOMAIN = 'http://localhost:8000'
 
 ALLOWED_HOSTS = [
     '*'

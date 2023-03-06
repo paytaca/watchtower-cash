@@ -71,6 +71,7 @@ class Token(PostgresModel):
             return 'slp/' + self.tokenid
         else:
             return self.name.lower()
+            
     @property
     def image_url(self):
         if self.thumbnail_image_url:
@@ -83,9 +84,11 @@ class Token(PostgresModel):
             info_id = 'slp/' + self.tokenid
         else:
             info_id = self.name.lower()
+
         image_url = self.original_image_url
         if self.thumbnail_image_url:
             image_url = self.thumbnail_image_url
+
         return {
             'id': info_id,
             'name': self.name,
@@ -203,7 +206,7 @@ class Address(PostgresModel):
         if wallet and not wallet.wallet_type:
             if self.address.startswith('simpleledger:'):
                 wallet.wallet_type = 'slp'
-            elif self.address.startswith('bitcoincash:'):
+            elif self.address.startswith('bitcoincash:') or self.address.startswith('bchtest:'):
                 wallet.wallet_type = 'bch'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'

@@ -19,6 +19,7 @@ from main.models import (
     WalletNftToken,
     AssetPriceLog,
 )
+from bcmr.models import Token as BcmrToken
 from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
@@ -338,58 +339,121 @@ def save_record(
         return transaction_obj.id, transaction_created
 
 
-@shared_task(queue='bchdquery_transaction')
-def bchdquery_transaction(txid, block_id, alert=True):
-    source ='bchd'
-    index = 0
-    bchd = BCHDQuery()
-    transaction = bchd._get_raw_transaction(txid)
+@shared_task(queue='query_transaction')
+def query_transaction(txid, block_id, alert=True):
+    if NODE.is_chipnet():
+        index = 0
+        transaction = NODE._get_raw_transaction(txid)
 
-    for output in transaction.outputs:
-        if output.address:
-            # save bch transaction
-            amount = output.value / (10 ** 8)
-            obj_id, created = save_record(
-                'bch',
-                'bitcoincash:%s' % output.address,
-                txid,
-                amount,
-                source,
-                blockheightid=block_id,
-                tx_timestamp=transaction.timestamp,
-                index=index
-            )
-            if created and alert:
-                third_parties = client_acknowledgement(obj_id)
-                for platform in third_parties:
-                    if 'telegram' in platform:
-                        message = platform[1]
-                        chat_id = platform[2]
-                        send_telegram_message(message, chat_id)
+        if 'coinbase' in transaction['vin'][0].keys():
+            return
 
-        if output.slp_token.token_id:
-            token_id = bytearray(output.slp_token.token_id).hex()
-            amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
-            # save slp transaction
-            obj_id, created = save_record(
-                token_id,
-                'simpleledger:%s' % output.slp_token.address,
-                txid,
-                amount,
-                source,
-                blockheightid=block_id,
-                tx_timestamp=transaction.timestamp,
-                index=index
-            )            
-            if created and alert:
-                third_parties = client_acknowledgement(obj_id)
-                for platform in third_parties:
-                    if 'telegram' in platform:
-                        message = platform[1]
-                        chat_id = platform[2]
-                        send_telegram_message(message, chat_id)
+        for output in transaction['vout']:
+            if 'addresses' in output['scriptPubKey'].keys():
+                address = output['scriptPubKey']['addresses'][0]
+                
+                if 'tokenData' in output.keys():
+                    token_data = output['tokenData']
+                    token_id = token_data['category']
+                    # TODO: convert address to token address here
 
-        index += 1
+                    # save nft transaction
+                    if 'nft' in token_data.keys():
+                        # TODO: handle nft
+                        capability = token_data['capability']
+                        commitment = token_data['commitment']
+                    else:
+                        # save fungible token transaction
+                        amount = int(token_data['amount']) # / (10 ** output.slp_token.decimals)
+                        obj_id, created = save_record(
+                            token_id,
+                            address,
+                            txid,
+                            amount,
+                            source,
+                            blockheightid=block_id,
+                            tx_timestamp=transaction['time'],
+                            index=index
+                        )            
+                        if created and alert:
+                            third_parties = client_acknowledgement(obj_id)
+                            for platform in third_parties:
+                                if 'telegram' in platform:
+                                    message = platform[1]
+                                    chat_id = platform[2]
+                                    send_telegram_message(message, chat_id)
+                else:
+                    # save bch transaction
+                    obj_id, created = save_record(
+                        'bch',
+                        output['scriptPubKey']['addresses'][0],
+                        txid,
+                        output['value'],
+                        NODE.source,
+                        blockheightid=block_id,
+                        tx_timestamp=transaction['time'],
+                        index=index
+                    )
+                    if created and alert:
+                        third_parties = client_acknowledgement(obj_id)
+                        for platform in third_parties:
+                            if 'telegram' in platform:
+                                message = platform[1]
+                                chat_id = platform[2]
+                                send_telegram_message(message, chat_id)
+
+            index += 1
+    else:
+        source = 'bchd'
+        index = 0
+        bchd = BCHDQuery()
+        transaction = bchd._get_raw_transaction(txid)
+
+        for output in transaction.outputs:
+            if output.address:
+                # save bch transaction
+                amount = output.value / (10 ** 8)
+                obj_id, created = save_record(
+                    'bch',
+                    'bitcoincash:%s' % output.address,
+                    txid,
+                    amount,
+                    source,
+                    blockheightid=block_id,
+                    tx_timestamp=transaction.timestamp,
+                    index=index
+                )
+                if created and alert:
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)
+
+            if output.slp_token.token_id:
+                token_id = bytearray(output.slp_token.token_id).hex()
+                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                # save slp transaction
+                obj_id, created = save_record(
+                    token_id,
+                    'simpleledger:%s' % output.slp_token.address,
+                    txid,
+                    amount,
+                    source,
+                    blockheightid=block_id,
+                    tx_timestamp=transaction.timestamp,
+                    index=index
+                )            
+                if created and alert:
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)
+
+            index += 1
 
 
 @shared_task(bind=True, queue='manage_blocks')
@@ -443,12 +507,10 @@ def manage_blocks(self):
         if not discard_block:
             REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
             REDIS_STORAGE.set('READY', 0)
-            bchd = BCHDQuery()
-            transactions = bchd.get_block(block.number, full_transactions=False)
+            transactions = NODE.get_block(block.number)
             subtasks = []
-            for tr in transactions:
-                txid = bytearray(tr.transaction_hash[::-1]).hex()
-                subtasks.append(bchdquery_transaction.si(txid, block.id))
+            for txid in transactions:
+                subtasks.append(query_transaction.si(txid, block.id))
             callback = ready_to_accept.si(block.number, len(subtasks))
             if subtasks:
                 # Execute the workflow
@@ -656,7 +718,6 @@ def download_image(token_id, url, resize=False):
 @shared_task(queue='token_metadata', max_retries=3)
 def download_token_metadata_image(token_id, document_url=None):
     token_obj = Token.objects.get(tokenid=token_id)
-    group = token_obj.nft_token_group
 
     image_file_name = None
     image_url = None
@@ -668,6 +729,8 @@ def download_token_metadata_image(token_id, document_url=None):
         status_code, image_file_name = download_image(token_id, url)
 
     if token_obj.is_nft:
+        group = token_obj.nft_token_group
+
         # Check if NFT group/parent token has image_base_url
         if group and 'image_base_url' in group.nft_token_group_details.keys():
             image_base_url = group.nft_token_group_details['image_base_url']
@@ -718,34 +781,59 @@ def download_token_metadata_image(token_id, document_url=None):
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
 def get_token_meta_data(self, token_id, async_image_download=False):
     try:
-        LOGGER.info('Fetching token metadata from BCHD...')
-        bchd = BCHDQuery()
-        txn = bchd.get_transaction(token_id, parse_slp=True)
-        if not txn:
-            return
+        if NODE.is_chipnet():
+            LOGGER.info(f'Fetching token metadata from {NODE.source}...')
+            # TODO: handle nfts
+            bcmr_token = BcmrToken.objects.filter(category=token_id)
 
-        info = txn['token_info']
-        token_obj_info = dict(
-            name = info['name'],
-            token_ticker = info['ticker'],
-            token_type = info['type'],
-            decimals = info['decimals'],
-            date_updated = timezone.now(),
-            mint_amount = info['mint_amount'] or 0,
-        )
+            if not bcmr_token.exists():
+                return
 
-        nft_token_group_obj = None
-        if info['nft_token_group']:
-            nft_token_group_obj, _ = Token.objects.get_or_create(tokenid=info['nft_token_group'])
-            token_obj_info["nft_token_group"] = nft_token_group_obj
+            bcmr_token = bcmr_token.first()
+            token_obj_info = dict(
+                name = bcmr_token.name,
+                token_ticker = bcmr_token.symbol,
+                token_type = None,
+                decimals = bcmr_token.decimals,
+                date_updated = timezone.now(),
+                mint_amount = None,
+            )
 
-        token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
-        if token_obj.token_type in [1, 129]:
-            update_token_minting_baton.delay(token_obj.tokenid)
-        if async_image_download:
-            download_token_metadata_image.delay(token_obj.tokenid, document_url=info.get('document_url'))
+            token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
+            doc_url = settings.DOMAIN + bcmr_token.icon.url
         else:
-            download_token_metadata_image(token_obj.tokenid, document_url=info.get('document_url'))
+            LOGGER.info('Fetching token metadata from BCHD...')
+
+            bchd = BCHDQuery()
+            txn = bchd.get_transaction(token_id, parse_slp=True)
+            if not txn:
+                return
+
+            info = txn['token_info']
+            token_obj_info = dict(
+                name = info['name'],
+                token_ticker = info['ticker'],
+                token_type = info['type'],
+                decimals = info['decimals'],
+                date_updated = timezone.now(),
+                mint_amount = info['mint_amount'] or 0,
+            )
+
+            nft_token_group_obj = None
+            if info['nft_token_group']:
+                nft_token_group_obj, _ = Token.objects.get_or_create(tokenid=info['nft_token_group'])
+                token_obj_info["nft_token_group"] = nft_token_group_obj
+
+            token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
+            if token_obj.token_type in [1, 129]:
+                update_token_minting_baton.delay(token_obj.tokenid)
+
+            doc_url = info.get('document_url')
+
+        if async_image_download:
+            download_token_metadata_image.delay(token_obj.tokenid, document_url=doc_url)
+        else:
+            download_token_metadata_image(token_obj.tokenid, document_url=doc_url)
 
         token_obj.refresh_from_db()
         return token_obj.get_info()
