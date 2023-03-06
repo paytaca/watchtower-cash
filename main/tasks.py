@@ -46,6 +46,7 @@ from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.queries.bchd import BCHDQuery
+from main.utils.queries.node import get_node
 from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
@@ -53,6 +54,7 @@ from celery import chord
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
+NODE = get_node()
 
 
 # NOTIFICATIONS
@@ -460,8 +462,7 @@ def manage_blocks(self):
 def get_latest_block(self):
     # This task is intended to check new blockheight every 5 seconds through BCHD @ fountainhead.cash
     LOGGER.info('CHECKING THE LATEST BLOCK')
-    bchd = BCHDQuery()
-    number = bchd.get_latest_block()
+    number = NODE.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created: return f'*** NEW BLOCK { obj.number } ***'
 
