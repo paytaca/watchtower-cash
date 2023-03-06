@@ -931,21 +931,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             )
             history.save()
             resolve_wallet_history_usd_values.delay(txid=txid)
-            parse_market_values_task = None
-            if history.tx_timestamp:
-                parse_market_values_task = parse_wallet_history_market_values.delay(history.id)
-
-            try:
-                if parse_market_values_task:
-                    try:
-                        parse_market_values_task.get()
-                        history.refresh_from_db()
-                    except Exception:
-                        pass
-                if amount != 0:
-                    send_wallet_history_push_notification(history)
-            except Exception as exception:
-                LOGGER.exception(exception)
+            send_wallet_history_push_notification_task.delay(history.id)
 
         # for older token records 
         if txn.token and txn.token.tokenid and (txn.token.token_type is None or txn.token.mint_amount is None):
@@ -975,6 +961,23 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     wallet_nft_token.save()
 
             update_nft_owner.delay(txn.token.tokenid)
+
+@shared_task(queue='client_acknowledgement')
+def send_wallet_history_push_notification_task(wallet_history_id):
+    LOGGER.info(f"PUSH_NOTIF: wallet_history:{wallet_history_id}")
+    history = WalletHistory.objects.get(id=wallet_history_id)
+    try:
+        if not history.fiat_value:
+            try:
+                parse_wallet_history_market_values(history.id)
+                history.refresh_from_db()
+            except Exception as exception:
+                LOGGER.exception(exception)
+        LOGGER.info(f"PUSH_NOTIF CURRENCY: wallet_history:{history.txid} | {history.amount} | {history.fiat_value} | {history.usd_value} | {history.market_prices}")
+        if history.amount != 0:
+            return send_wallet_history_push_notification(history)
+    except Exception as exception:
+        LOGGER.exception(exception)
 
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
