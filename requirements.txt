@@ -57,6 +57,7 @@ psycopg2==2.8.4
 ptyprocess==0.6.0
 py==1.9.0
 Pillow==8.3.2
+python-bitcoinrpc==1.0
 Pygments==2.5.2
 PyJWT==1.7.1
 pyparsing==2.4.7

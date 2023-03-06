@@ -248,8 +248,12 @@ CELERY_IMPORTS = (
 # CELERY_RESULT_BACKEND = 'rpc://'
 
 if REDIS_PASSWORD:
-    CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    redis_prefix = ''
+    if DEPLOYMENT_INSTANCE == 'prod':
+        redis_prefix = 'user'
+        
+    CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
@@ -485,3 +489,8 @@ ANYHEDGE = {
     "ANYHEDGE_DEFAULT_ORACLE_PUBKEY": config("ANYHEDGE_DEFAULT_ORACLE_PUBKEY", ""),
     "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN": config("ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN", ""),
 }
+
+RPC_USER = decipher(config('RPC_USER'))
+RPC_PASSWORD = decipher(config('RPC_PASSWORD'))
+
+BCH_NETWORK = decipher(config('BCH_NETWORK'))
