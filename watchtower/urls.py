@@ -33,6 +33,8 @@ from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from chat.urls import urlpatterns as chat_urlpatterns
 from notifications.urls import urlpatterns as notifications_urlpatterns
 from jpp.urls import urlpatterns as jpp_urlpatterns
+from django.conf.urls.static import static
+from django.conf import settings
 
 from main.views import TelegramBotView
 
@@ -59,9 +61,10 @@ urlpatterns = [
     path('api/chat/', include(chat_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
     path('api/jpp/', include(jpp_urlpatterns)),
+    path('api/bcmr/', include('bcmr.urls')),
     path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui')
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

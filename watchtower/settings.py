@@ -78,7 +78,8 @@ INSTALLED_APPS=[
     'anyhedge',
     'chat',
     'notifications',
-    'jpp'
+    'jpp',
+    'bcmr',
 ]
 
 MIDDLEWARE=[
@@ -276,6 +277,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 TOKEN_IMAGES_DIR = config('TOKEN_IMAGES_DIR', default='/images')
 
 CELERY_TASK_ACKS_LATE = True
@@ -361,6 +365,9 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.MultiPartParser',
         'rest_framework.parsers.JSONParser',
     ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer'
+    ]
 }
 
 SWAGGER_SETTINGS = {
@@ -492,5 +499,3 @@ ANYHEDGE = {
 
 RPC_USER = decipher(config('RPC_USER'))
 RPC_PASSWORD = decipher(config('RPC_PASSWORD'))
-
-BCH_NETWORK = decipher(config('BCH_NETWORK'))
