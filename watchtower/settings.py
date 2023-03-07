@@ -75,6 +75,7 @@ INSTALLED_APPS=[
     'drf_yasg',
     'channels',
     'push_notifications',
+    'django_filters',
 
     'constance',
     'main',

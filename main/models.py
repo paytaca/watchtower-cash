@@ -14,6 +14,11 @@ import web3
 
 
 class Token(PostgresModel):
+    class Capability(models.TextChoices):
+        MUTABLE = 'mutable'
+        MINTING = 'minting'
+        NONE = 'none'  # immutable
+
     name = models.CharField(max_length=200, blank=True)
     tokenid = models.CharField(
         max_length=70,
@@ -42,6 +47,16 @@ class Token(PostgresModel):
 
     mint_amount = models.BigIntegerField(null=True)
 
+    # cashtoken (FT & NFT only) fields
+    is_cashtoken = models.BooleanField(default=False)
+    commitment = models.CharField(max_length=255, null=True, blank=True)
+    capability = models.CharField(
+        max_length=30,
+        choices=Capability.choices,
+        null=True,
+        blank=True
+    )
+
     class Meta:
         unique_together = ('name', 'tokenid',)
 
@@ -67,10 +82,14 @@ class Token(PostgresModel):
 
     @property
     def info_id(self):
-        if self.token_type:
-            return 'slp/' + self.tokenid
+        if self.is_cashtoken:
+            ct_prefix = 'ct/'
+            return ct_prefix + self.tokenid
         else:
-            return self.name.lower()
+            if self.token_type:
+                return 'slp/' + self.tokenid
+            else:
+                return self.name.lower()
             
     @property
     def image_url(self):
@@ -80,22 +99,14 @@ class Token(PostgresModel):
         return self.original_image_url
 
     def get_info(self):
-        if self.token_type:
-            info_id = 'slp/' + self.tokenid
-        else:
-            info_id = self.name.lower()
-
-        image_url = self.original_image_url
-        if self.thumbnail_image_url:
-            image_url = self.thumbnail_image_url
-
         return {
-            'id': info_id,
+            'id': self.info_id,
             'name': self.name,
             'symbol': self.token_ticker,
+            'is_cashtoken': self.is_cashtoken,
             'decimals': self.decimals,
             'token_type': self.token_type,
-            'image_url': image_url
+            'image_url': self.image_url
         }
 
 
