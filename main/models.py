@@ -8,6 +8,8 @@ from psqlextra.query import PostgresQuerySet
 from django.contrib.postgres.fields import ArrayField
 from django.conf import settings
 
+from main.utils.address_validator import *
+
 import re
 import uuid
 import web3
@@ -215,10 +217,12 @@ class Address(PostgresModel):
     def save(self, *args, **kwargs):
         wallet = self.wallet
         if wallet and not wallet.wallet_type:
-            if self.address.startswith('simpleledger:'):
+            if is_slp_address(self.address):
                 wallet.wallet_type = 'slp'
-            elif self.address.startswith('bitcoincash:') or self.address.startswith('bchtest:'):
+            elif is_bch_address(self.address):
                 wallet.wallet_type = 'bch'
+            elif is_token_address(self.address):
+                wallet.wallet_type = 'ct'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'
             elif web3.Web3.isAddress(self.address):

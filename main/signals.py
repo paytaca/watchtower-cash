@@ -4,7 +4,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
-from main.utils import block_setter
+from main.utils.redis_block_setter import *
 from main.models import (
     BlockHeight,
     Transaction,

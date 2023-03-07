@@ -5,6 +5,7 @@ from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
+from main.utils.address_validator import *
 from main import serializers
 from main.utils.tx_fee import (
     get_tx_fee_sats,
@@ -38,6 +39,10 @@ def _get_slp_balance(query, multiple_tokens=False):
     else:
         qs_balance = qs.aggregate(Sum('amount'))
     return qs_balance
+
+
+def _get_ct_balance(query, multiple_tokens=False):
+    return _get_slp_balance(query, multiple_tokens)
 
 
 def _get_bch_balance(query):
@@ -79,6 +84,7 @@ class Balance(APIView):
     def get(self, request, *args, **kwargs):
         slpaddress = kwargs.get('slpaddress', '')
         bchaddress = kwargs.get('bchaddress', '')
+        tokenaddress = kwargs.get('tokenaddress', '')
         tokenid = kwargs.get('tokenid', '')
         wallet_hash = kwargs.get('wallethash', '')
 
@@ -86,8 +92,11 @@ class Balance(APIView):
         balance = 0
         qs = None
 
-        if slpaddress.startswith('simpleledger:'):
+        if is_slp_address(slpaddress) or is_token_address(tokenaddress):
             data['address'] = slpaddress
+            if is_token_address(tokenaddress):
+                data['address'] = tokenaddress
+
             if tokenid:
                 multiple = False
                 query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
@@ -103,7 +112,7 @@ class Balance(APIView):
             data['spendable'] = balance
             data['valid'] = True
         
-        if bchaddress.startswith('bitcoincash:'):
+        if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance, qs_count = _get_bch_balance(query)
@@ -121,7 +130,7 @@ class Balance(APIView):
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
             data['wallet'] = wallet_hash
 
-            if wallet.wallet_type == 'slp':
+            if wallet.wallet_type == 'slp' or wallet.wallet_type == 'ct':
                 if tokenid:
                     multiple = False
                     query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
@@ -172,7 +181,7 @@ class SpendableBalance(APIView):
 
         qs_balance = 0
         qs_count = 0
-        if bchaddress.startswith('bitcoincash:'):
+        if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=bchaddress) & Q(spent=False)
             qs_balance, qs_count = _get_bch_balance(query)
