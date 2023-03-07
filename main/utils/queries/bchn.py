@@ -8,7 +8,7 @@ class BCHN(object):
     def __init__(self):
         url = f"http://{settings.RPC_USER}:{settings.RPC_PASSWORD}@docker-host:8332"
         self.rpc_connection = AuthServiceProxy(url)
-        self.source = f'bchn-{self.get_chain()}'
+        self.source = 'bchn'
 
     def get_latest_block(self):
         return self.rpc_connection.getblockcount()

@@ -3,8 +3,17 @@ from django.db.models import Q
 from django.db.models import Exists, OuterRef
 from rest_framework.compat import coreapi, coreschema
 from rest_framework.filters import BaseFilterBackend
+from django_filters import rest_framework as filters
 
-from main.models import Transaction
+from main.models import Transaction, Token
+
+class TokenTypeIsNullFilter(filters.FilterSet):
+    class Meta:
+        model = Token
+        fields = {
+            'token_type': ['isnull'],
+            'is_cashtoken': ['exact']
+        }
 
 class TokensViewSetFilter(BaseFilterBackend):
     WALLET_HASH_QUERY_NAME = "wallet_hash"
