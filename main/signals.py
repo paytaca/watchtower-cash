@@ -8,7 +8,6 @@ from main.utils import block_setter
 from main.models import (
     BlockHeight,
     Transaction,
-    Token,
     WalletPreferences,
 )
 from main.tasks import (

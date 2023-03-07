@@ -212,6 +212,7 @@ def save_record(
     spending_txid=None,
     tx_timestamp=None,
     force_create=False,
+    is_cashtoken=False,
 ):
     """
         token                : can be tokenid (slp token) or token name (bch)
@@ -231,6 +232,7 @@ def save_record(
                                     "outpoint_txid": "",
                                     "outpoint_index": 0,
                                 }
+        is_cashtoken         : determines if a fungible token or NFT is CashToken (True) or SLP (False)
     """
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
@@ -253,9 +255,15 @@ def save_record(
         transaction_created = False
 
         if token.lower() == 'bch':
-            token_obj, _ = Token.objects.get_or_create(name=token)
+            token_obj, _ = Token.objects.get_or_create(
+                name=token,
+                is_cashtoken=is_cashtoken
+            )
         else:
-            token_obj, created = Token.objects.get_or_create(tokenid=token)
+            token_obj, created = Token.objects.get_or_create(
+                tokenid=token,
+                is_cashtoken=is_cashtoken
+            )
             if created:
                 get_token_meta_data.delay(token)
 
@@ -341,59 +349,39 @@ def save_record(
 
 @shared_task(queue='query_transaction')
 def query_transaction(txid, block_id, alert=True):
-    if NODE.is_chipnet():
-        index = 0
-        transaction = NODE._get_raw_transaction(txid)
+    index = 0
+    transaction = NODE._get_raw_transaction(txid)
 
-        if 'coinbase' in transaction['vin'][0].keys():
-            return
+    if 'coinbase' in transaction['vin'][0].keys():
+        return
 
-        for output in transaction['vout']:
-            if 'addresses' in output['scriptPubKey'].keys():
-                address = output['scriptPubKey']['addresses'][0]
-                
-                if 'tokenData' in output.keys():
-                    token_data = output['tokenData']
-                    token_id = token_data['category']
-                    # TODO: convert address to token address here
+    for output in transaction['vout']:
+        if 'addresses' in output['scriptPubKey'].keys():
+            address = output['scriptPubKey']['addresses'][0]
+            
+            if 'tokenData' in output.keys():
+                token_data = output['tokenData']
+                token_id = token_data['category']
+                # TODO: convert address to token address here
 
-                    # save nft transaction
-                    if 'nft' in token_data.keys():
-                        # TODO: handle nft
-                        capability = token_data['capability']
-                        commitment = token_data['commitment']
-                    else:
-                        # save fungible token transaction
-                        amount = int(token_data['amount']) # / (10 ** output.slp_token.decimals)
-                        obj_id, created = save_record(
-                            token_id,
-                            address,
-                            txid,
-                            amount,
-                            source,
-                            blockheightid=block_id,
-                            tx_timestamp=transaction['time'],
-                            index=index
-                        )            
-                        if created and alert:
-                            third_parties = client_acknowledgement(obj_id)
-                            for platform in third_parties:
-                                if 'telegram' in platform:
-                                    message = platform[1]
-                                    chat_id = platform[2]
-                                    send_telegram_message(message, chat_id)
+                # save nft transaction
+                if 'nft' in token_data.keys():
+                    capability = token_data['capability']
+                    commitment = token_data['commitment']
                 else:
-                    # save bch transaction
+                    # save fungible token transaction
+                    amount = int(token_data['amount']) # / (10 ** output.slp_token.decimals)
                     obj_id, created = save_record(
-                        'bch',
-                        output['scriptPubKey']['addresses'][0],
+                        token_id,
+                        address,
                         txid,
-                        output['value'],
-                        NODE.source,
+                        amount,
+                        source,
                         blockheightid=block_id,
                         tx_timestamp=transaction['time'],
-                        index=index
-                    )
+                        index=index,
+                        is_cashtoken=True
+                    )            
                     if created and alert:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -401,26 +389,16 @@ def query_transaction(txid, block_id, alert=True):
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
-
-            index += 1
-    else:
-        source = 'bchd'
-        index = 0
-        bchd = BCHDQuery()
-        transaction = bchd._get_raw_transaction(txid)
-
-        for output in transaction.outputs:
-            if output.address:
+            else:
                 # save bch transaction
-                amount = output.value / (10 ** 8)
                 obj_id, created = save_record(
                     'bch',
-                    'bitcoincash:%s' % output.address,
+                    address,
                     txid,
-                    amount,
-                    source,
+                    output['value'],
+                    NODE.source,
                     blockheightid=block_id,
-                    tx_timestamp=transaction.timestamp,
+                    tx_timestamp=transaction['time'],
                     index=index
                 )
                 if created and alert:
@@ -431,29 +409,30 @@ def query_transaction(txid, block_id, alert=True):
                             chat_id = platform[2]
                             send_telegram_message(message, chat_id)
 
-            if output.slp_token.token_id:
-                token_id = bytearray(output.slp_token.token_id).hex()
-                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
-                # save slp transaction
-                obj_id, created = save_record(
-                    token_id,
-                    'simpleledger:%s' % output.slp_token.address,
-                    txid,
-                    amount,
-                    source,
-                    blockheightid=block_id,
-                    tx_timestamp=transaction.timestamp,
-                    index=index
-                )            
-                if created and alert:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+        index += 1
 
-            index += 1
+        # TODO: implement SLP
+        # if output.slp_token.token_id:
+        #     token_id = bytearray(output.slp_token.token_id).hex()
+        #     amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+        #     # save slp transaction
+        #     obj_id, created = save_record(
+        #         token_id,
+        #         'simpleledger:%s' % output.slp_token.address,
+        #         txid,
+        #         amount,
+        #         source,
+        #         blockheightid=block_id,
+        #         tx_timestamp=transaction.timestamp,
+        #         index=index
+        #     )            
+        #     if created and alert:
+        #         third_parties = client_acknowledgement(obj_id)
+        #         for platform in third_parties:
+        #             if 'telegram' in platform:
+        #                 message = platform[1]
+        #                 chat_id = platform[2]
+        #                 send_telegram_message(message, chat_id)
 
 
 @shared_task(bind=True, queue='manage_blocks')
@@ -719,61 +698,71 @@ def download_image(token_id, url, resize=False):
 def download_token_metadata_image(token_id, document_url=None):
     token_obj = Token.objects.get(tokenid=token_id)
 
+    image_server_base = 'https://images.watchtower.cash'
     image_file_name = None
     image_url = None
     status_code = 0
 
-    if token_obj.token_type == 1:
-        # Check slp-token-icons repo
-        url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
-        status_code, image_file_name = download_image(token_id, url)
-
-    if token_obj.is_nft:
-        group = token_obj.nft_token_group
-
-        # Check if NFT group/parent token has image_base_url
-        if group and 'image_base_url' in group.nft_token_group_details.keys():
-            image_base_url = group.nft_token_group_details['image_base_url']
-            image_type = group.nft_token_group_details['image_type']
-            url = f"{image_base_url}/{token_id}.{image_type}"
-            status_code, image_file_name = download_image(token_id, url, resize=True)
-
-        # Try getting image directly from document URL
-        if not image_file_name and is_url(document_url):
-            url = document_url
-            ipfs_cid = get_ipfs_cid_from_url(url)
-            if not ipfs_cid or not url.startswith("ipfs://"):
-                status_code, image_file_name = download_image(token_id, url, resize=True)
-
-            # We try from other ipfs gateways if document url is an ipfs link but didnt work
-            if not image_file_name and ipfs_cid:
-                for ipfs_gateway in ipfs_gateways:
-                    url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
-                    status_code, image_file_name = download_image(token_id, url, resize=True)
-                    if image_file_name:
-                        break
-
-        # last fallback, juungle to resolve icon
-        # NOTE: juungle is shutting down in March 1, 2023
-        if not image_file_name:
-            url = f"https://www.juungle.net/api/v1/nfts/icon/{token_id}/{token_id}"
-            status_code, image_file_name = download_image(token_id, url, resize=True)
+    if token_obj.is_cashtoken:
+        status_code, image_file_name = download_image(token_id, doc_url)
 
         if status_code == 200 and image_file_name:
-            image_server_base = 'https://images.watchtower.cash'
             image_url = f"{image_server_base}/{image_file_name}"
-            if token_obj.token_type == 1:
-                Token.objects.filter(tokenid=token_id).update(
-                    original_image_url=image_url,
-                    date_updated=timezone.now()
-                )
-            if token_obj.token_type == 65:
-                Token.objects.filter(tokenid=token_id).update(
-                    original_image_url=image_url,
-                    medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
-                    thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
-                    date_updated=timezone.now()
-                )
+            Token.objects.filter(tokenid=token_id).update(
+                original_image_url=image_url,
+                date_updated=timezone.now()
+            )
+    else:
+        if token_obj.token_type == 1:
+            # Check slp-token-icons repo
+            url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
+            status_code, image_file_name = download_image(token_id, url)
+
+        if token_obj.is_nft:
+            group = token_obj.nft_token_group
+
+            # Check if NFT group/parent token has image_base_url
+            if group and 'image_base_url' in group.nft_token_group_details.keys():
+                image_base_url = group.nft_token_group_details['image_base_url']
+                image_type = group.nft_token_group_details['image_type']
+                url = f"{image_base_url}/{token_id}.{image_type}"
+                status_code, image_file_name = download_image(token_id, url, resize=True)
+
+            # Try getting image directly from document URL
+            if not image_file_name and is_url(document_url):
+                url = document_url
+                ipfs_cid = get_ipfs_cid_from_url(url)
+                if not ipfs_cid or not url.startswith("ipfs://"):
+                    status_code, image_file_name = download_image(token_id, url, resize=True)
+
+                # We try from other ipfs gateways if document url is an ipfs link but didnt work
+                if not image_file_name and ipfs_cid:
+                    for ipfs_gateway in ipfs_gateways:
+                        url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
+                        status_code, image_file_name = download_image(token_id, url, resize=True)
+                        if image_file_name:
+                            break
+
+            # last fallback, juungle to resolve icon
+            # NOTE: juungle is shutting down in March 1, 2023
+            if not image_file_name:
+                url = f"https://www.juungle.net/api/v1/nfts/icon/{token_id}/{token_id}"
+                status_code, image_file_name = download_image(token_id, url, resize=True)
+
+            if status_code == 200 and image_file_name:
+                image_url = f"{image_server_base}/{image_file_name}"
+                if token_obj.token_type == 1:
+                    Token.objects.filter(tokenid=token_id).update(
+                        original_image_url=image_url,
+                        date_updated=timezone.now()
+                    )
+                if token_obj.token_type == 65:
+                    Token.objects.filter(tokenid=token_id).update(
+                        original_image_url=image_url,
+                        medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
+                        thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
+                        date_updated=timezone.now()
+                    )
 
     return image_url
 
@@ -781,9 +770,11 @@ def download_token_metadata_image(token_id, document_url=None):
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
 def get_token_meta_data(self, token_id, async_image_download=False):
     try:
-        if NODE.is_chipnet():
+        t = Token.objects.get(tokenid=token_id)
+
+        if t.is_cashtoken:
             LOGGER.info(f'Fetching token metadata from {NODE.source}...')
-            # TODO: handle nfts
+            
             bcmr_token = BcmrToken.objects.filter(category=token_id)
 
             if not bcmr_token.exists():

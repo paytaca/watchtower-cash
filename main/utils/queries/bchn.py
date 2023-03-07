@@ -9,16 +9,6 @@ class BCHN(object):
         url = f"http://{settings.RPC_USER}:{settings.RPC_PASSWORD}@docker-host:8332"
         self.rpc_connection = AuthServiceProxy(url)
         self.source = f'bchn-{self.get_chain()}'
-    
-    def is_chipnet(self):
-        return self.get_chain() == 'chip'
-
-    def is_mainnet(self):
-        return self.get_chain() == 'main'
-
-    def get_chain(self):
-        info = self.rpc_connection.getblockchaininfo()
-        return info['chain']
 
     def get_latest_block(self):
         return self.rpc_connection.getblockcount()
