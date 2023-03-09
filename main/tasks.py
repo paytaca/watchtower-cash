@@ -1291,10 +1291,11 @@ def rescan_utxos(wallet_hash, full=False):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False, immediate=False):
+def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False, immediate=False, is_bchd=True):
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
-    bchd = BCHDQuery()
-    bch_tx = bchd.get_transaction(txid)
+    
+    node = BCHDQuery() if is_bchd else NODE
+    bch_tx = node.get_transaction(txid)
 
     tx_fee = bch_tx['tx_fee']
     tx_timestamp = bch_tx['timestamp']
