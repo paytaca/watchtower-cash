@@ -78,7 +78,8 @@ INSTALLED_APPS=[
     'anyhedge',
     'chat',
     'notifications',
-    'jpp'
+    'jpp',
+    'ramp'
 ]
 
 MIDDLEWARE=[
@@ -247,10 +248,10 @@ CELERY_IMPORTS = (
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 # CELERY_RESULT_BACKEND = 'rpc://'
 
-if REDIS_PASSWORD:
+if REDIS_PASSWORD:   
     CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
     CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
-    REDISKV = redis.StrictRedis(
+    REDISKV = redis.StrictRedis(    
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
         port=6379,
