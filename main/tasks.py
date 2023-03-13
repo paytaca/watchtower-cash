@@ -1290,18 +1290,27 @@ def rescan_utxos(wallet_hash, full=False):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False, immediate=False, is_bchd=True):
+def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=False):
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
-    
-    node = BCHDQuery() if is_bchd else NODE
-    bch_tx = node.get_transaction(txid)
 
-    tx_fee = bch_tx['tx_fee']
-    tx_timestamp = bch_tx['timestamp']
+    bch_tx = NODE.get_transaction(txid)
+
+    tx_fee = bch_tx['fee']
+    tx_timestamp = bch_tx['time']
 
     # parse inputs and outputs to desired structure
-    inputs = [(i['address'], i['value']) for i in bch_tx['inputs']]
-    outputs = [(i['address'], i['value']) for i in bch_tx['outputs']]
+    inputs = [
+        (
+            i['scriptPubKey']['addresses'][0],
+            i['value']
+        ) for i in bch_tx['vin']
+    ]
+    outputs = [
+        (
+            i['scriptPubKey']['addresses'][0],
+            i['value']
+        ) for i in bch_tx['vout']
+    ]
 
     # get bch wallets with addresses that are in inputs and outputs
     input_addresses = [i[0] for i in inputs]
@@ -1328,8 +1337,8 @@ def parse_tx_wallet_histories(txid, source="", proceed_with_zero_amount=False, i
             'bch',
             output_address,
             txid,
-            outputs[output_index][1] /  (10 ** 8),
-            source,
+            outputs[output_index][1],
+            NODE.source,
             None,
             index=output_index,
             tx_timestamp=tx_timestamp,
@@ -1387,7 +1396,7 @@ def find_wallet_history_missing_tx_timestamps():
         _tx_timestamp = tx_timestamps_map.get(txid)
         if not _tx_timestamp:
             tx = NODE.get_transaction(txid)
-            _tx_timestamp = tx.get("timestamp") if tx else None
+            _tx_timestamp = tx["time"] if tx else None
         if not _tx_timestamp:
             continue
 
