@@ -5,7 +5,7 @@ services:
     cap_add: [ 'NET_ADMIN', 'NET_RAW' ]
     mem_limit: 8M
     restart: on-failure
-    zmq:
+  zmq:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
       - $HOME/.ssh:/root/ssh:ro

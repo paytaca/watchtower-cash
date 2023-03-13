@@ -501,7 +501,7 @@ def manage_blocks(self):
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
-    # This task is intended to check new blockheight every 5 seconds through BCHD @ fountainhead.cash
+    # This task is intended to check new blockheight every 5 seconds
     LOGGER.info('CHECKING THE LATEST BLOCK')
     number = NODE.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
@@ -1383,12 +1383,11 @@ def find_wallet_history_missing_tx_timestamps():
     ).distinct()
     tx_timestamps_map = {tx['txid']: tx['tx_timestamp'] for tx in tx_timestamps}
 
-    bchd = BCHDQuery()
     txids_updated = []
     for txid in txids:
         _tx_timestamp = tx_timestamps_map.get(txid)
         if not _tx_timestamp:
-            tx = bchd.get_transaction(txid)
+            tx = NODE.get_transaction(txid)
             _tx_timestamp = tx.get("timestamp") if tx else None
         if not _tx_timestamp:
             continue
