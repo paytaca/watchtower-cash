@@ -70,3 +70,6 @@ class BCHN(object):
 
         transaction['tx_fee'] = txn['fee'] ** (10 ** 8)
         return transaction
+
+    def broadcast_transaction(self, hex_str):
+        return self.rpc_connection.sendrawtransaction(hex_str)

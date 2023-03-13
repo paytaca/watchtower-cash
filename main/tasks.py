@@ -923,9 +923,8 @@ def broadcast_transaction(self, transaction):
         return success, txid
     else:
         try:
-            obj = BCHDQuery()
             try:
-                txid = obj.broadcast_transaction(transaction)
+                txid = NODE.broadcast_transaction(transaction)
                 if txid:
                     success = True
                     return success, txid
