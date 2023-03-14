@@ -433,6 +433,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False
+        },
+        'ramp': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False    
         }
     },
 }

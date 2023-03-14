@@ -1,6 +1,5 @@
 from rest_framework import routers
-from django.urls import path
-
+from django.urls import re_path
 from .views import (
     RampWebhookView
 )
@@ -8,5 +7,5 @@ from .views import (
 router = routers.DefaultRouter()
 
 urlpatterns = router.urls + [
-     path('webhooks/', RampWebhookView.as_view(), name="ramp-webhook")
+    re_path('webhooks', RampWebhookView.as_view(), name="ramp-webhook")
 ]
