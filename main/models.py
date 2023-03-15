@@ -9,6 +9,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.conf import settings
 
 from main.utils.address_validator import *
+from main.utils.address_converter import *
 
 import re
 import uuid
@@ -221,8 +222,6 @@ class Address(PostgresModel):
                 wallet.wallet_type = 'slp'
             elif is_bch_address(self.address):
                 wallet.wallet_type = 'bch'
-            elif is_token_address(self.address):
-                wallet.wallet_type = 'ct'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'
             elif web3.Web3.isAddress(self.address):
@@ -230,6 +229,11 @@ class Address(PostgresModel):
             wallet.save()
         super(Address, self).save(*args, **kwargs)
 
+    @property
+    def token_address(self):
+        if is_bch_address(self.address):
+            return bch_address_converter(self.address)
+        return None
 
 class Transaction(PostgresModel):
     txid = models.CharField(max_length=70, db_index=True)
