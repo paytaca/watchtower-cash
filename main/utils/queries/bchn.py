@@ -1,6 +1,7 @@
 from bitcoinrpc.authproxy import AuthServiceProxy
 
 from django.conf import settings
+from django.utils import timezone
 
 
 class BCHN(object):
@@ -28,48 +29,52 @@ class BCHN(object):
 
     def _parse_transaction(self, txn):
         tx_hash = txn['hash']
+        
+        # NOTE: very new transactions doesnt have timestamp
+        time = timezone.now().timestamp()
+        if 'time' in txn.keys():
+            time = txn['time']
+
         transaction = {
             'txid': tx_hash,
-            'timestamp': txn['time'],
+            'timestamp': time,
             'valid': True
         }
-        total_input_sats = 0
-        total_output_sats = 0
         transaction['inputs'] = []
 
         for tx_input in txn['vin']:
             value = tx_input['value'] ** (10 ** 8)
-            total_input_sats += value
             input_txid = tx_input['txid']
-
-            ancestor_tx = self._get_raw_transaction(input_txid)
-            ancestor_spubkey = ancestor_tx['vout'][tx_input['vout']]['scriptPubKey']
-
             data = {
                 'txid': input_txid,
-                'spent_index': len(ancestor_tx['vout']) - 1,
+                'spent_index': tx_input['vout'],
                 'value': value,
-                'address': ancestor_spubkey['addresses'][0]
+                'address': self.get_input_address(input_txid, tx_input['vout'])
             }
             transaction['inputs'].append(data)
 
         transaction['outputs'] = []
         outputs = txn['vout']
-        output_index = 0
 
         for tx_output in outputs:
             if 'value' in tx_output.keys() and 'addresses' in tx_output['scriptPubKey'].keys():
                 sats_value = tx_output['value'] ** (10 ** 8)
                 data = {
-                    'address': tx_output['addresses'],
+                    'address': tx_output['scriptPubKey']['addresses'][0],
                     'value': sats_value,
-                    'index': output_index
+                    'index': tx_output['n']
                 }
+                if 'tokenData' in tx_output.keys():
+                    data['tokenData'] = tx_output['tokenData']
                 transaction['outputs'].append(data)
-            output_index += 1
 
         transaction['tx_fee'] = txn['fee'] ** (10 ** 8)
         return transaction
 
     def broadcast_transaction(self, hex_str):
         return self.rpc_connection.sendrawtransaction(hex_str)
+    
+    def get_input_address(self, txid, vout_index):
+        previous_tx = self._get_raw_transaction(txid)
+        previous_out = previous_tx['vout'][vout_index]
+        return previous_out['scriptPubKey']['addresses'][0]

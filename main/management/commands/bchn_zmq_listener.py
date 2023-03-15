@@ -17,6 +17,7 @@ from main.tasks import (
     client_acknowledgement,
     send_telegram_message,
     parse_tx_wallet_histories,
+    process_cashtoken_tx,
 )
 
 import logging
@@ -72,22 +73,20 @@ class ZMQHandler():
                     for _input in inputs:
                         txid = _input['txid']
                         amount = _input['value']
-                        vout = _input['vout']
+                        index = _input['vout']
 
                         ancestor_tx = self.BCHN._get_raw_transaction(txid)
-                        ancestor_spubkey = ancestor_tx['vout'][vout]['scriptPubKey']
+                        ancestor_spubkey = ancestor_tx['vout'][index]['scriptPubKey']
 
                         if 'addresses' in ancestor_spubkey.keys():
                             address = ancestor_spubkey['addresses'][0]
-                            index = len(outputs) - 1
-
                             spent_transactions = Transaction.objects.filter(txid=txid, index=index)
                             spent_transactions.update(spent=True, spending_txid=tx_hash)
                             has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
                             has_subscribed_input = has_subscribed_input or has_existing_wallet
 
                             subscription = Subscription.objects.filter(
-                                address__address=address             
+                                address__address=address
                             )
                             if subscription.exists():
                                 inputs_data.append({
@@ -105,28 +104,37 @@ class ZMQHandler():
                             bchaddress = scriptPubKey['addresses'][0]
                             amount = output['value']
                             source = self.BCHN.source
+                            index = output['n']
 
-                            args = (
-                                'bch',
-                                bchaddress,
-                                tx_hash,
-                                amount,
-                                source,
-                                None,
-                                output['n']
-                            )
-                            now = timezone.now().timestamp()
-                            obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
-                            has_updated_output = has_updated_output or created
-                            if created:
-                                third_parties = client_acknowledgement(obj_id)
-                                for platform in third_parties:
-                                    if 'telegram' in platform:
-                                        message = platform[1]
-                                        chat_id = platform[2]
-                                        send_telegram_message(message, chat_id)
-                            msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
-                            LOGGER.info(msg)
+                            if 'tokenData' in output.keys():
+                                process_cashtoken_tx(
+                                    output['tokenData'],
+                                    output['scriptPubKey']['addresses'][0],
+                                    tx_hash,
+                                    index=index
+                                )
+                            else:
+                                args = (
+                                    'bch',
+                                    bchaddress,
+                                    tx_hash,
+                                    amount,
+                                    source,
+                                    None,
+                                    index
+                                )
+                                now = timezone.now().timestamp()
+                                obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
+                                has_updated_output = has_updated_output or created
+                                if created:
+                                    third_parties = client_acknowledgement(obj_id)
+                                    for platform in third_parties:
+                                        if 'telegram' in platform:
+                                            message = platform[1]
+                                            chat_id = platform[2]
+                                            send_telegram_message(message, chat_id)
+                                msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
+                                LOGGER.info(msg)
                     
                     if has_subscribed_input and not has_updated_output:
                         LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")

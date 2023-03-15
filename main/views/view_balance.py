@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 from main.utils.address_validator import *
+from main.utils.address_converter import *
 from main import serializers
 from main.utils.tx_fee import (
     get_tx_fee_sats,
@@ -49,7 +50,7 @@ def _get_bch_balance(query):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
     dust = 546 / (10 ** 8)
-    query = query & Q(amount__gt=dust)
+    query = query & Q(amount__gt=dust) & Q(token__name='bch')
     qs = Transaction.objects.filter(query)
     qs_count = qs.count()
     qs_balance = qs.aggregate(
@@ -92,10 +93,12 @@ class Balance(APIView):
         balance = 0
         qs = None
 
-        if is_slp_address(slpaddress) or is_token_address(tokenaddress):
+        is_token_addr = is_token_address(tokenaddress)
+
+        if is_slp_address(slpaddress) or is_token_addr:
             data['address'] = slpaddress
-            if is_token_address(tokenaddress):
-                data['address'] = tokenaddress
+            if is_token_addr:
+                data['address'] = bch_address_converter(tokenaddress, to_token_addr=False)
 
             if tokenid:
                 multiple = False
@@ -103,7 +106,12 @@ class Balance(APIView):
             else:
                 multiple = True
                 query =  Q(address__address=data['address']) & Q(spent=False)
-            qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
+
+            if is_token_addr:
+                qs_balance = _get_ct_balance(query, multiple_tokens=multiple)
+            else:
+                qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
+
             token = Token.objects.get(tokenid=tokenid)
             balance = qs_balance['amount__sum'] or 0
             if balance > 0 and token.decimals:
@@ -130,7 +138,7 @@ class Balance(APIView):
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
             data['wallet'] = wallet_hash
 
-            if wallet.wallet_type == 'slp' or wallet.wallet_type == 'ct':
+            if wallet.wallet_type == 'slp':
                 if tokenid:
                     multiple = False
                     query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
@@ -151,6 +159,7 @@ class Balance(APIView):
                     data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
+                # TODO: add cashtokens balance
                 query = Q(wallet=wallet) & Q(spent=False)
                 qs_balance, qs_count = _get_bch_balance(query)
                 bch_balance = qs_balance['balance']

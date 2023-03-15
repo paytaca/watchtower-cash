@@ -47,9 +47,11 @@ DEBUG = False
 
 DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
 DOMAIN = 'https://watchtower.cash'
+BCH_NETWORK = 'mainnet'
 
 if DEPLOYMENT_INSTANCE == 'local':
     DEBUG = True
+    BCH_NETWORK = 'chipnet'
     DOMAIN = 'http://localhost:8000'
 
 ALLOWED_HOSTS = [
