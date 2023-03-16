@@ -1,3 +1,4 @@
+from django.core.management.base import BaseCommand
 import paho.mqtt.client as mqtt
 from django.utils import timezone
 import json
@@ -48,10 +49,14 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect("docker-host", 1883, 60)
+client.connect('docker-host', 1883, 60)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
-client.loop_forever()
+class Command(BaseCommand):
+    help = 'Run the MQTT listener'
+
+    def handle(self, *args, **options):
+        client.loop_forever()
