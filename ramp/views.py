@@ -1,6 +1,9 @@
 from django.shortcuts import render
-from rest_framework.views import APIView
+from rest_framework.views import APIView, View
 from rest_framework.response import Response
+from rest_framework import generics, status
+from django.db.models import Q
+
 from datetime import datetime
 
 import json
@@ -16,15 +19,23 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-# Create your views here.
+# add deposit create
 class RampWebhookView(APIView):
 
     def post(self, request):
         logger.info("Ramp Webhook")
-        ramp_data = request.data
+        data = request.data
+        # logger.info(data)
         
+        ramp_data = data['payload']
         logger.info(ramp_data)
-        return Response({"success": True, "data": ramp_data}, status=200)
+
+        type = data['type']
+        logger.info(ramp_data['orderId'])
+
+        shift_id = Shift.objects.filter(shift_id=ramp_data['orderId'])
+        logger.info(shift_id)
+        return Response({"success": True}, status=200)
 
 class RampShiftView(APIView):
 
@@ -38,11 +49,23 @@ class RampShiftView(APIView):
         serializer.save()
 
         logger.info(serializer.data)
+        shift_id = serializer.data['shift_id']
+        logger.info(shift_id)
 
         return Response({"success": True}, status=200)
 
 
 
-# class RampShiftHistoryView():
+class RampShiftHistoryView(generics.ListAPIView):
+    serializer_class = RampShiftSerializer
 
-#     def get(self, request):
+    def get_queryset(self):
+        wallet_hash = self.kwargs['wallet_hash']
+        Model = self.serializer_class.Meta.model  
+
+        list = Model.objects.filter(wallet_hash=wallet_hash)
+
+        # logger.info(list)
+        # logger.info(wallet_hash)
+        
+        return list
