@@ -243,6 +243,7 @@ CELERY_IMPORTS = (
     'main.tasks',
     'smartbch.tasks',
     'anyhedge.tasks',
+    'ramp.tasks'
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -338,6 +339,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.
     },
+    'update_shift_status': {
+        'task': 'ramp.tasks.update_shift_status',
+        'schedule': 30
+    }
 }
 
 from corsheaders.defaults import default_headers

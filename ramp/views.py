@@ -4,11 +4,16 @@ from rest_framework.response import Response
 from rest_framework import generics, status
 from django.db.models import Q
 
+from django.core.paginator import Paginator
 from datetime import datetime
 
 import json
 import requests
 import logging
+
+from .tasks import (
+    update_shift_status
+)
 
 from .models import (
     Shift
@@ -41,6 +46,7 @@ class RampWebhookView(APIView):
 
     def post(self, request):
         logger.info("Ramp Webhook")
+        # update_shift_status()
         data = request.data
         # logger.info(data)
         
@@ -96,13 +102,15 @@ class RampShiftHistoryView(APIView):
 
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs['wallet_hash']
-        Model = self.serializer_class.Meta.model  
+        page = request.query_params.get('page', 1)
+        Model = self.serializer_class.Meta.model 
+
+        # logger.info('page:')
+        # logger.info(page)
 
         qs = Model.objects.filter(wallet_hash=wallet_hash)
 
-        list = qs.values(
-            "wallet_hash",
-            "bch_address",
+        list = qs.values(                
             "ramp_type",
             "shift_id",
             "quote_id",
@@ -112,4 +120,14 @@ class RampShiftHistoryView(APIView):
             "shift_status"
         )
         # logger.info(new_list)
-        return Response(list, status=200) 
+
+        pages = Paginator(list, 10)
+        page_obj = pages.page(int(page))
+        data = {
+            'history': page_obj.object_list,
+            'page': page,
+            'num_pages': pages.num_pages,
+            'has_next': page_obj.has_next()
+        }
+
+        return Response(data, status=200) 
