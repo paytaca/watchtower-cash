@@ -3,6 +3,10 @@ from bitcoinrpc.authproxy import AuthServiceProxy
 from django.conf import settings
 from django.utils import timezone
 
+import socket
+import ssl
+import json
+
 
 class BCHN(object):
 
@@ -10,6 +14,10 @@ class BCHN(object):
         url = f"http://{settings.RPC_USER}:{settings.RPC_PASSWORD}@docker-host:8332"
         self.rpc_connection = AuthServiceProxy(url)
         self.source = 'bchn'
+        self.fulcrum = {
+            'host': 'fulcrum',
+            'port': 60001
+        }
 
     def get_latest_block(self):
         return self.rpc_connection.getblockcount()
@@ -78,3 +86,17 @@ class BCHN(object):
         previous_tx = self._get_raw_transaction(txid)
         previous_out = previous_tx['vout'][vout_index]
         return previous_out['scriptPubKey']['addresses'][0]
+
+    def get_utxos(self, address):
+        data = '{ "id": 194, "method": "blockchain.address.listunspent",'
+        data += '"params": ["%s", "include_tokens"] }' % (address)
+
+        with socket.create_connection((
+            self.fulcrum['host'],
+            self.fulcrum['port']
+        )) as sock:
+            sock.send(data.encode('utf-8')+b'\n')
+            response_byte = sock.recv(99999999)
+            response = response_byte.decode()
+            response = json.loads(response)
+            return response['result']

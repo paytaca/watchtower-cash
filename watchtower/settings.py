@@ -45,13 +45,12 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
+BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
 DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
 DOMAIN = 'https://watchtower.cash'
-BCH_NETWORK = 'mainnet'
 
 if DEPLOYMENT_INSTANCE == 'local':
     DEBUG = True
-    BCH_NETWORK = 'chipnet'
     DOMAIN = 'http://localhost:8000'
 
 ALLOWED_HOSTS = [

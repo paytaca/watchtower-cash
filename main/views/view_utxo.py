@@ -13,6 +13,8 @@ from drf_yasg.utils import swagger_auto_schema
 from main.models import Transaction, Wallet, Token
 from main.tasks import rescan_utxos
 from main.throttles import ScanUtxoThrottle
+from main.utils.address_validator import *
+from main.utils.address_converter import *
 
 
 class Round(Func):
@@ -49,7 +51,8 @@ def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
             token_type=F('token__token_type'),
             block=F('blockheight__number'),
             wallet_index=F('address__wallet_index'),
-            address_path=F('address__address_path')
+            address_path=F('address__address_path'),
+            is_cashtoken=F('token__is_cashtoken')
         ).values(
             'txid',
             'vout',
@@ -61,7 +64,8 @@ def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
             'token_type',
             'block',
             'wallet_index',
-            'address_path'
+            'address_path',
+            'is_cashtoken'
         )
     else:
         utxos_values = qs.annotate(
@@ -72,6 +76,7 @@ def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
             token_ticker=F('token__token_ticker'),
             token_type=F('token__token_type'),
             block=F('blockheight__number'),
+            is_cashtoken=F('token__is_cashtoken')
         ).values(
             'txid',
             'vout',
@@ -81,16 +86,21 @@ def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
             'token_ticker',
             'decimals',
             'token_type',
-            'block'
+            'block',
+            'is_cashtoken'
         )
     return utxos_values
+
+
+def _get_ct_utxos(query, show_address_index=False):
+    return _get_slp_utxos(query, show_address_index=show_address_index)
 
 
 def _get_bch_utxos(query, show_address_index=False):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
     dust = 546 / (10 ** 8)
-    query = query & Q(amount__gt=dust)
+    query = query & Q(amount__gt=dust) & Q(token__name='bch')
     qs = Transaction.objects.filter(query)
     if show_address_index:
         utxos_values = qs.annotate(
@@ -131,6 +141,7 @@ class UTXO(APIView):
     def get(self, request, *args, **kwargs):
         slpaddress = kwargs.get('slpaddress', '')
         bchaddress = kwargs.get('bchaddress', '')
+        tokenaddress = kwargs.get('tokenaddress', '')
         tokenid = kwargs.get('tokenid', '')
         wallet_hash = kwargs.get('wallethash', '')
         baton = request.query_params.get('baton', '').lower().strip()
@@ -143,19 +154,28 @@ class UTXO(APIView):
 
         data = { 'valid': False }
         qs = None
+
+        is_token_addr = is_token_address(tokenaddress)
         
-        if bchaddress.startswith('bitcoincash:'):
+        if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
             utxos_values = _get_bch_utxos(query)
         
-        if slpaddress.startswith('simpleledger:'):
+        if is_slp_address(slpaddress) or is_token_addr:
             data['address'] = slpaddress
+            if is_token_addr:
+                data['address'] = bch_address_converter(tokenaddress, to_token_addr=False)
+
             if tokenid:
                 query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
-                query =  Q(address__address=data['address']) & Q(spent=False)
-            utxos_values = _get_slp_utxos(query, minting_baton=baton)
+                query = Q(address__address=data['address']) & Q(spent=False) & Q(token__is_cashtoken=is_token_addr)
+
+            if is_token_addr:
+                utxos_values = _get_ct_utxos(query)
+            else:
+                utxos_values = _get_slp_utxos(query, minting_baton=baton)
 
         if wallet_hash:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
@@ -165,15 +185,21 @@ class UTXO(APIView):
                 if tokenid:
                     query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
                 else:
-                    query =  Q(wallet=wallet) & Q(spent=False)
+                    query = Q(wallet=wallet) & Q(spent=False)
+
                 utxos_values = _get_slp_utxos(query, show_address_index=True, minting_baton=baton)
 
             elif wallet.wallet_type == 'bch':
-                query = Q(wallet=wallet) & Q(spent=False)
-                utxos_values = _get_bch_utxos(query, show_address_index=True)
+                if tokenid:
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
+                    utxos_values = _get_ct_utxos(query, show_address_index=True)
+                else:
+                    query = Q(wallet=wallet) & Q(spent=False)
+                    utxos_values = _get_bch_utxos(query, show_address_index=True)
 
         if baton is not None:
             data['minting_baton'] = baton
+
         data['utxos'] = list(utxos_values)
         data['valid'] = True  
         return Response(data=data, status=status.HTTP_200_OK)

@@ -347,7 +347,7 @@ def save_record(
         return transaction_obj.id, transaction_created
 
 
-def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, timestamp=None):
+def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, timestamp=None, force_create=False):
     token_id = token_data['category']
 
     # save nft transaction
@@ -366,7 +366,8 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
             blockheightid=block_id,
             tx_timestamp=timestamp,
             index=index,
-            is_cashtoken=True
+            is_cashtoken=True,
+            force_create=force_create
         ) 
         if created:
             third_parties = client_acknowledgement(obj_id)
@@ -519,17 +520,27 @@ def get_latest_block(self):
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_bch_utxos(self, address):
     try:
-        obj = BCHDQuery()
-        outputs = obj.get_utxos(address)
-        source = 'bchd-query'
+        outputs = NODE.get_utxos(address)
         saved_utxo_ids = []
+        
         for output in outputs:
-            hash = output.outpoint.hash 
-            index = output.outpoint.index
-            block = output.block_height
-            tx_hash = bytearray(hash[::-1]).hex()
-            amount = output.value / (10 ** 8)
-            
+            index = output['tx_pos']
+            block = output['height']
+            tx_hash = output['tx_hash']
+            is_cashtoken = False
+
+            if 'token_data' in output.keys():
+                token_data = output['token_data']
+                if 'nft' in token_data.keys():
+                    continue
+                else:
+                    amount = int(token_data['amount'])
+                    token_id = token_data['category']
+                    is_cashtoken = True
+            else:
+                amount = output['value'] / (10 ** 8)
+                token_id = 'bch'
+
             block, created = BlockHeight.objects.get_or_create(number=block)
             transaction_obj = Transaction.objects.filter(
                 txid=tx_hash,
@@ -538,17 +549,17 @@ def get_bch_utxos(self, address):
                 index=index
             )
             if not transaction_obj.exists():
-                args = (
-                    'bch',
+                txn_id, created = save_record(
+                    token_id,
                     address,
                     tx_hash,
                     amount,
-                    source,
-                    block.id,
-                    index,
-                    True
+                    NODE.source,
+                    blockheightid=block.id,
+                    index=index,
+                    new_subscription=True,
+                    is_cashtoken=is_cashtoken
                 )
-                txn_id, created = save_record(*args)
                 transaction_obj = Transaction.objects.filter(id=txn_id)
 
                 if created:
@@ -1332,22 +1343,25 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
 
     bch_tx = NODE.get_transaction(txid)
 
-    tx_fee = bch_tx['fee']
-    tx_timestamp = bch_tx['time']
+    tx_fee = bch_tx['tx_fee']
+    tx_timestamp = bch_tx['timestamp']
 
     # parse inputs and outputs to desired structure
     inputs = [
         (
-            NODE.get_input_address(i['txid'], i['vout']),
+            i['address'],
             i['value']
-        ) for i in bch_tx['vin']
+        ) for i in bch_tx['inputs']
     ]
-    outputs = [
-        (
-            i['scriptPubKey']['addresses'][0],
-            i['value']
-        ) for i in bch_tx['vout']
-    ]
+    outputs = []
+    for i in bch_tx['outputs']:
+        outputs.append(
+            (
+                i['address'],
+                i['value'],
+                None if 'tokenData' not in i.keys() else i['tokenData']
+            )
+        )
 
     # get bch wallets with addresses that are in inputs and outputs
     input_addresses = [i[0] for i in inputs]
@@ -1370,17 +1384,27 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
             output_address = output_addresses[0]
             output_index = 0
 
-        save_record(
-            'bch',
-            output_address,
-            txid,
-            outputs[output_index][1],
-            NODE.source,
-            None,
-            index=output_index,
-            tx_timestamp=tx_timestamp,
-            force_create=True
-        )
+        if outputs[output_index][2]:
+            process_cashtoken_tx(
+                outputs[output_index][2],
+                output_address,
+                txid,
+                index=output_index,
+                timestamp=tx_timestamp,
+                force_create=True
+            )
+        else:
+            save_record(
+                'bch',
+                output_address,
+                txid,
+                outputs[output_index][1],
+                NODE.source,
+                None,
+                index=output_index,
+                tx_timestamp=tx_timestamp,
+                force_create=True
+            )
 
     # parse wallet history of bch wallets
     wallet_handles = []
@@ -1433,7 +1457,7 @@ def find_wallet_history_missing_tx_timestamps():
         _tx_timestamp = tx_timestamps_map.get(txid)
         if not _tx_timestamp:
             tx = NODE.get_transaction(txid)
-            _tx_timestamp = tx["time"] if tx else None
+            _tx_timestamp = tx["timestamp"] if tx else None
         if not _tx_timestamp:
             continue
 

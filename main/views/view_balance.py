@@ -105,7 +105,7 @@ class Balance(APIView):
                 query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
                 multiple = True
-                query =  Q(address__address=data['address']) & Q(spent=False)
+                query = Q(address__address=data['address']) & Q(spent=False) & Q(token__is_cashtoken=is_token_addr)
 
             if is_token_addr:
                 qs_balance = _get_ct_balance(query, multiple_tokens=multiple)
@@ -114,6 +114,7 @@ class Balance(APIView):
 
             token = Token.objects.get(tokenid=tokenid)
             balance = qs_balance['amount__sum'] or 0
+
             if balance > 0 and token.decimals:
                 balance = self.truncate(balance, token.decimals)
             data['balance'] = balance
@@ -145,7 +146,9 @@ class Balance(APIView):
                 else:
                     multiple = True
                     query =  Q(wallet=wallet) & Q(spent=False)
+
                 qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
+
                 if multiple:
                     pass
                 else:
@@ -159,18 +162,37 @@ class Balance(APIView):
                     data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
-                # TODO: add cashtokens balance
-                query = Q(wallet=wallet) & Q(spent=False)
-                qs_balance, qs_count = _get_bch_balance(query)
-                bch_balance = qs_balance['balance']
+                if tokenid:
+                    multiple = False
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
+                    qs_balance = _get_ct_balance(query, multiple_tokens=multiple)
+                else:
+                    multiple = True
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__is_cashtoken=is_token_addr)
+                
+                if multiple:
+                    if is_token_addr:
+                        pass
+                    else:
+                        qs_balance, qs_count = _get_bch_balance(query)
+                        bch_balance = qs_balance['balance']
 
-                data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
-                data['spendable'] = satoshi_to_bch(data['spendable'])
-                data['spendable'] = max(data['spendable'], 0)
-                data['spendable'] = self.truncate(data['spendable'], 8)
+                        data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+                        data['spendable'] = satoshi_to_bch(data['spendable'])
+                        data['spendable'] = max(data['spendable'], 0)
+                        data['spendable'] = self.truncate(data['spendable'], 8)
 
-                data['balance'] = self.truncate(qs_balance['balance'], 8)
-                data['valid'] = True
+                        data['balance'] = self.truncate(qs_balance['balance'], 8)
+                        data['valid'] = True
+                else:
+                    token = Token.objects.get(tokenid=tokenid)
+                    balance = qs_balance['amount__sum'] or 0
+                    if balance > 0 and token.decimals:
+                        balance = self.truncate(balance, token.decimals)
+                    data['balance'] = balance
+                    data['spendable'] = balance
+                    data['token_id'] = tokenid
+                    data['valid'] = True
 
         return Response(data=data, status=status.HTTP_200_OK)
 

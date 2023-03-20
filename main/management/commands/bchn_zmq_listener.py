@@ -57,8 +57,6 @@ class ZMQHandler():
 
                 elif topic == "hashtx":
                     tx_hash = binascii.hexlify(body).decode()
-                    LOGGER.info(f'HASH TX ({tx_hash})')
-
                     tx = self.BCHN._get_raw_transaction(tx_hash)
                     inputs = tx['vin']
                     outputs = tx['vout']
@@ -138,7 +136,7 @@ class ZMQHandler():
                     
                     if has_subscribed_input and not has_updated_output:
                         LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
-                        parse_tx_wallet_histories.delay(tx_hash, is_bchd=False)
+                        parse_tx_wallet_histories.delay(tx_hash)
 
                 elif topic == "rawblock":
                     pass
