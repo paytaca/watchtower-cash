@@ -264,8 +264,7 @@ def save_record(
                 tokenid=token,
                 is_cashtoken=is_cashtoken
             )
-            if created:
-                get_token_meta_data.delay(token)
+            get_token_meta_data.delay(token)
 
         # try:
 
@@ -352,11 +351,12 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
 
     # save nft transaction
     if 'nft' in token_data.keys():
-        capability = token_data['capability']
-        commitment = token_data['commitment']
+        nft_data = token_data['nft']
+        capability = nft_data['capability']
+        commitment = nft_data['commitment']
     else:
         # save fungible token transaction
-        amount = int(token_data['amount']) # / (10 ** output.slp_token.decimals)
+        amount = int(token_data['amount'])
         obj_id, created = save_record(
             token_id,
             address,
@@ -379,39 +379,67 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
 
 
 @shared_task(queue='query_transaction')
-def query_transaction(txid, block_id):
-    transaction = NODE._get_raw_transaction(txid)
+def query_transaction(txid, block_id, for_slp=False):
+    if not for_slp:
+        transaction = NODE._get_raw_transaction(txid)
 
-    if 'coinbase' in transaction['vin'][0].keys():
-        return
+        if 'coinbase' in transaction['vin'][0].keys():
+            return
 
-    for output in transaction['vout']:
-        index = output['n']
+        for output in transaction['vout']:
+            index = output['n']
 
-        if 'addresses' in output['scriptPubKey'].keys():
-            address = output['scriptPubKey']['addresses'][0]
-            
-            if 'tokenData' in output.keys():
-                process_cashtoken_tx(
-                    output['tokenData'],
-                    address,
-                    txid,
-                    block_id=block_id,
-                    index=index,
-                    timestamp=transaction['time']
-                )
-            else:
-                # save bch transaction
+            if 'addresses' in output['scriptPubKey'].keys():
+                address = output['scriptPubKey']['addresses'][0]
+                
+                if 'tokenData' in output.keys():
+                    process_cashtoken_tx(
+                        output['tokenData'],
+                        address,
+                        txid,
+                        block_id=block_id,
+                        index=index,
+                        timestamp=transaction['time']
+                    )
+                else:
+                    # save bch transaction
+                    obj_id, created = save_record(
+                        'bch',
+                        address,
+                        txid,
+                        output['value'],
+                        NODE.source,
+                        blockheightid=block_id,
+                        tx_timestamp=transaction['time'],
+                        index=index
+                    )
+                    if created:
+                        third_parties = client_acknowledgement(obj_id)
+                        for platform in third_parties:
+                            if 'telegram' in platform:
+                                message = platform[1]
+                                chat_id = platform[2]
+                                send_telegram_message(message, chat_id)
+    else:
+        # NOTE: temporary fetching of SLP txns using BCHD
+        bchd = BCHDQuery()
+        transaction = bchd._get_raw_transaction(txid)
+
+        for output in transaction.outputs:
+            if output.slp_token.token_id:
+                token_id = bytearray(output.slp_token.token_id).hex()
+                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                # save slp transaction
                 obj_id, created = save_record(
-                    'bch',
-                    address,
+                    token_id,
+                    'simpleledger:%s' % output.slp_token.address,
                     txid,
-                    output['value'],
-                    NODE.source,
+                    amount,
+                    source,
                     blockheightid=block_id,
-                    tx_timestamp=transaction['time'],
+                    tx_timestamp=transaction.timestamp,
                     index=index
-                )
+                )            
                 if created:
                     third_parties = client_acknowledgement(obj_id)
                     for platform in third_parties:
@@ -419,29 +447,6 @@ def query_transaction(txid, block_id):
                             message = platform[1]
                             chat_id = platform[2]
                             send_telegram_message(message, chat_id)
-
-        # TODO: implement SLP
-        # if output.slp_token.token_id:
-        #     token_id = bytearray(output.slp_token.token_id).hex()
-        #     amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
-        #     # save slp transaction
-        #     obj_id, created = save_record(
-        #         token_id,
-        #         'simpleledger:%s' % output.slp_token.address,
-        #         txid,
-        #         amount,
-        #         source,
-        #         blockheightid=block_id,
-        #         tx_timestamp=transaction.timestamp,
-        #         index=index
-        #     )            
-        #     if created:
-        #         third_parties = client_acknowledgement(obj_id)
-        #         for platform in third_parties:
-        #             if 'telegram' in platform:
-        #                 message = platform[1]
-        #                 chat_id = platform[2]
-        #                 send_telegram_message(message, chat_id)
 
 
 @shared_task(bind=True, queue='manage_blocks')
@@ -497,8 +502,17 @@ def manage_blocks(self):
             REDIS_STORAGE.set('READY', 0)
             transactions = NODE.get_block(block.number)
             subtasks = []
+
+            # NOTE: temporary fetching of SLP txns using BCHD
+            bchd = BCHDQuery()
+            transactions = bchd.get_block(block.number, full_transactions=False)
+            for tr in transactions:
+                txid = bytearray(tr.transaction_hash[::-1]).hex()
+                subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
+
             for txid in transactions:
                 subtasks.append(query_transaction.si(txid, block.id))
+
             callback = ready_to_accept.si(block.number, len(subtasks))
             if subtasks:
                 # Execute the workflow
@@ -811,6 +825,23 @@ def get_token_meta_data(self, token_id, async_image_download=False):
 
             token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
             doc_url = settings.DOMAIN + bcmr_token.icon.url
+
+            # update token's decimal places in transaction amounts
+            # (cant update upon block data fetching since token metadata are only registered on BCMRs)
+            Transaction.objects.filter(
+                token__decimals__isnull=False
+            ).update(
+                amount=models.Subquery(
+                    Transaction.objects.filter(
+                        id=models.OuterRef('id')
+                    ).annotate(
+                        adjusted_amount=models.ExpressionWrapper(
+                            ( models.F('amount') / ( 10 ** models.F('token__decimals') ) ),
+                            output_field=models.FloatField()
+                        )
+                    ).values('adjusted_amount')
+                )
+            )
         else:
             LOGGER.info('Fetching token metadata from BCHD...')
 

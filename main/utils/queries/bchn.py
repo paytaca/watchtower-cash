@@ -96,6 +96,7 @@ class BCHN(object):
             self.fulcrum['port']
         )) as sock:
             sock.send(data.encode('utf-8')+b'\n')
+            # TODO: accomodate data if it goes beyond max bytes of python socket
             response_byte = sock.recv(99999999)
             response = response_byte.decode()
             response = json.loads(response)
