@@ -108,7 +108,7 @@ class RampShiftHistoryView(APIView):
         # logger.info('page:')
         # logger.info(page)
 
-        qs = Model.objects.filter(wallet_hash=wallet_hash)
+        qs = Model.objects.filter(wallet_hash=wallet_hash).order_by('-date_shift_created')
 
         list = qs.values(                
             "ramp_type",
@@ -119,7 +119,7 @@ class RampShiftHistoryView(APIView):
             "shift_info",
             "shift_status"
         )
-        # logger.info(new_list)
+        # logger.info(list)
 
         pages = Paginator(list, 10)
         page_obj = pages.page(int(page))
