@@ -98,7 +98,6 @@ class Token(PostgresModel):
     def image_url(self):
         if self.thumbnail_image_url:
             return self.thumbnail_image_url
-
         return self.original_image_url
 
     def get_info(self):
@@ -220,7 +219,9 @@ class Address(PostgresModel):
         if wallet and not wallet.wallet_type:
             if is_slp_address(self.address):
                 wallet.wallet_type = 'slp'
-            elif is_bch_address(self.address):
+            elif is_bch_address(self.address) or is_token_address(self.address):
+                if is_token_address(self.address):
+                    self.address = bch_address_converter(self.address, to_token_addr=False)
                 wallet.wallet_type = 'bch'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'
@@ -437,7 +438,8 @@ class WalletHistory(PostgresModel):
         ordering = ['-tx_timestamp', '-date_created']
         unique_together = [
             'wallet',
-            'txid'
+            'txid',
+            'token',
         ]
 
     def __str__(self):

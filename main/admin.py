@@ -169,6 +169,7 @@ class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
     list_display = [
         'address',
+        'token_address',
         'wallet',
         'wallet_index',
         'address_path',

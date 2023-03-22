@@ -74,7 +74,7 @@ class WalletHistoryView(APIView):
         else:
             qs = qs.annotate_empty_attributes()
 
-        if wallet.wallet_type == 'slp':
+        if token_id:
             qs = qs.filter(token__tokenid=token_id)
             history = qs.annotate(
                 _token=F('token__tokenid')
@@ -94,7 +94,8 @@ class WalletHistoryView(APIView):
                 'market_prices',
                 'attributes',
             )
-        elif wallet.wallet_type == 'bch':
+        else:
+            qs = qs.filter(token__name='bch')
             history = qs.values(
                 'record_type',
                 'txid',
@@ -108,6 +109,7 @@ class WalletHistoryView(APIView):
                 'market_prices',
                 'attributes',
             )
+
         if wallet.version == 1:
             return Response(data=history, status=status.HTTP_200_OK)
         else:

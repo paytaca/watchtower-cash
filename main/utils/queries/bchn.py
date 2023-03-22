@@ -51,12 +51,13 @@ class BCHN(object):
         transaction['inputs'] = []
 
         for tx_input in txn['vin']:
-            value = tx_input['value'] ** (10 ** 8)
+            value = int(float(tx_input['value'] * (10 ** 8)))
             input_txid = tx_input['txid']
             data = {
                 'txid': input_txid,
                 'spent_index': tx_input['vout'],
                 'value': value,
+                'token_data': self.get_input_token_data(input_txid, tx_input['vout']),
                 'address': self.get_input_address(input_txid, tx_input['vout'])
             }
             transaction['inputs'].append(data)
@@ -66,17 +67,18 @@ class BCHN(object):
 
         for tx_output in outputs:
             if 'value' in tx_output.keys() and 'addresses' in tx_output['scriptPubKey'].keys():
-                sats_value = tx_output['value'] ** (10 ** 8)
+                sats_value = int(float(tx_output['value'] * (10 ** 8)))
                 data = {
                     'address': tx_output['scriptPubKey']['addresses'][0],
                     'value': sats_value,
-                    'index': tx_output['n']
+                    'index': tx_output['n'],
+                    'token_data': None
                 }
                 if 'tokenData' in tx_output.keys():
-                    data['tokenData'] = tx_output['tokenData']
+                    data['token_data'] = tx_output['tokenData']
                 transaction['outputs'].append(data)
 
-        transaction['tx_fee'] = txn['fee'] ** (10 ** 8)
+        transaction['tx_fee'] = txn['fee'] * (10 ** 8)
         return transaction
 
     def broadcast_transaction(self, hex_str):
@@ -86,6 +88,14 @@ class BCHN(object):
         previous_tx = self._get_raw_transaction(txid)
         previous_out = previous_tx['vout'][vout_index]
         return previous_out['scriptPubKey']['addresses'][0]
+
+    def get_input_token_data(self, txid, vout_index):
+        previous_tx = self._get_raw_transaction(txid)
+        previous_out = previous_tx['vout'][vout_index]
+
+        if 'tokenData' in previous_out.keys():
+            return previous_out['tokenData']
+        return None
 
     def get_utxos(self, address):
         data = '{ "id": 194, "method": "blockchain.address.listunspent",'
