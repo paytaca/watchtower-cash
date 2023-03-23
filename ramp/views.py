@@ -48,10 +48,10 @@ class RampWebhookView(APIView):
         logger.info("Ramp Webhook")
         # update_shift_status()
         data = request.data
-        # logger.info(data)
+        logger.info(data)
         
         ramp_data = data['payload']
-        # logger.info(ramp_data)
+        logger.info(ramp_data)
 
         type = data['type']
         logger.info(type)
@@ -82,8 +82,8 @@ class RampShiftView(APIView):
         date_text = data['date_shift_created']
 
         date = datetime.strptime(date_text, "%Y-%m-%dT%H:%M:%S.%fZ")
-        logger.info(date.time())
-        logger.info(date.date())
+        # logger.info(date.time())
+        # logger.info(date.date())
         data['date_shift_created'] = date
 
 
@@ -94,6 +94,31 @@ class RampShiftView(APIView):
         shift_id = serializer.data['shift_id']        
 
         return Response({"success": True}, status=200)
+    
+class RampShiftExpireView(APIView):
+    serializer_class = RampShiftSerializer
+
+    def post(self, request):
+        data = request.data
+
+        logger.info(data)
+        # wallet_hash = data['wallet_hash']
+        shift_id = data['shift_id']
+        logger.info(shift_id)
+        Model = self.serializer_class.Meta.model
+
+        shift = Model.objects.filter(shift_id=shift_id)
+        if shift:
+            shift = shift.first()
+            shift.shift_status = 'expired'
+            shift.save()
+
+            # logger.info(shift.shift_status)
+
+            return Response({"success": True}, status=200)
+        else:
+            return Response({"success": False}, status=200)
+
 
 
 
