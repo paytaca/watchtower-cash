@@ -87,30 +87,35 @@ class RampShiftHistoryView(APIView):
     serializer_class = RampShiftSerializer
 
     def get(self, request, *args, **kwargs):
-        update_shift_status()
+        # update_shift_status()
         
         wallet_hash = kwargs['wallet_hash']
         page = request.query_params.get('page', 1)
+        address = request.query_params.get('address', '')
         Model = self.serializer_class.Meta.model 
+        data = {}
 
-        qs = Model.objects.filter(wallet_hash=wallet_hash).order_by('-date_shift_created')
+        qs = Model.objects.filter(wallet_hash=wallet_hash, bch_address=address).order_by('-date_shift_created')
 
-        list = qs.values(                
-            "ramp_type",
-            "shift_id",
-            "quote_id",
-            "date_shift_created",
-            "date_shift_completed",
-            "shift_info",
-            "shift_status"
-        )
+        if qs:
+            list = qs.values(                
+                "ramp_type",
+                "shift_id",
+                "quote_id",
+                "date_shift_created",
+                "date_shift_completed",
+                "shift_info",
+                "shift_status"
+            )
 
-        pages = Paginator(list, 10)
-        page_obj = pages.page(int(page))
-        data = {
-            'history': page_obj.object_list,
-            'page': page,
-            'num_pages': pages.num_pages,
-            'has_next': page_obj.has_next()
-        }
+            pages = Paginator(list, 10)
+            page_obj = pages.page(int(page))
+            data = {
+                'history': page_obj.object_list,
+                'page': page,
+                'num_pages': pages.num_pages,
+                'has_next': page_obj.has_next()
+            }
+        else:
+            logger.info('no such address')
         return Response(data, status=200) 

@@ -12,11 +12,10 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, queue='ramp__shift_expiration')
 def update_shift_status(self):
 
-    logger.info('Checking for expired Shift')
+    logger.info('CHECKING FOR EXPIRED SHIFTS')
     # get waiting
     qs = Shift.objects.filter(shift_status='waiting')
 
-    logger.info('check shift')
     for shift in qs:
         date = shift.shift_info['shift_expiration']
 
