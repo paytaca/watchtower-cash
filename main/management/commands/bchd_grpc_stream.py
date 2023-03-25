@@ -113,17 +113,18 @@ def run():
                     )
                     obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
                     has_updated_output = has_updated_output or created
+
+                    # Publish MQTT message
+                    data = {
+                        'txid': tx_hash,
+                        'recipient': bchaddress,
+                        'amount': amount
+                    }
+                    LOGGER.info('Sending MQTT message: ' + str(data))
+                    msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                    LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+
                     if created:
-                        # Publish MQTT message
-                        data = {
-                            'txid': tx_hash,
-                            'recipient': bchaddress,
-                            'amount': amount
-                        }
-                        LOGGER.info('Sending MQTT message: ' + str(data))
-                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
-                        LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
-                        
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
                             if 'telegram' in platform:
