@@ -3,6 +3,7 @@ from rest_framework.views import APIView, View
 from rest_framework.response import Response
 from rest_framework import generics, status
 from django.db.models import Q
+from django.conf import settings 
 
 from django.core.paginator import Paginator
 from datetime import datetime
@@ -10,10 +11,6 @@ from datetime import datetime
 import json
 import requests
 import logging
-
-from .tasks import (
-    update_shift_status
-)
 
 from .models import (
     Shift
@@ -44,21 +41,56 @@ class RampWebhookView(APIView):
 class RampShiftView(APIView):
 
     def post(self, request):
+        logger.info('Hello World')
+
         data = request.data
+        # logger.info(data)
+
+        # get quote
+        info = {
+            'depositCoin': data['deposit']['coin'],
+            'depositNetwork': data['deposit']['network'],
+            'settleCoin': data['settle']['coin'],
+            'settleNetwork': data['settle']['network'],
+            'depositAmount': data['amount']
+        }
+        params = json.dumps(info)
+        headers = {
+            'Content-Type': 'application/json',
+            'x-sideshift-secret': settings.SIDESHIFT_SECRET_KEY,
+            'x-user-ip': data['ramp_settings']['user_ip']
+        }
+        # Get Quote    
+        quote_url = "https://sideshift.ai/api/v2/quotes"
+        quote = requests.post(
+            quote_url,
+            data = params,
+            headers = headers
+        )
         
-        date_text = data['date_shift_created']
+        logger.info(quote.json())
 
-        date = datetime.strptime(date_text, "%Y-%m-%dT%H:%M:%S.%fZ")
-        data['date_shift_created'] = date
+        if quote.status_code == 200 or quote.status_code == 201:
+            # Fixed Shift 
+            shift_url = "https://sideshift.ai/api/v2/shifts/fixed"
+            info = {
+                'settleAddress': data['settle_address'],
+                'quoteId': quote.json()['id'],
+                'refundAddress': data['refund_address']
+            }
+            params = json.dumps(info)
 
+            fixed_shift = requests.post(
+                shift_url,
+                data = params,
+                headers = headers
+            )            
 
-        serializer = RampShiftSerializer(data=data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        
-        shift_id = serializer.data['shift_id']        
+            if fixed_shift.status_code == 200 or fixed_shift.status_code == 201:
+                logger.info(fixed_shift.json())
+                return Response(fixed_shift.json(), status=200)
 
-        return Response({"success": True}, status=200)
+        return Response({"failed": True}, status=500)
     
 class RampShiftExpireView(APIView):
     serializer_class = RampShiftSerializer
@@ -114,4 +146,4 @@ class RampShiftHistoryView(APIView):
             }
         else:
             logger.info('no such address')
-        return Response(data, status=200) 
+        return Response(data, status=200)
