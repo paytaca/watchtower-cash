@@ -32,4 +32,5 @@ services:
       - /code/anyhedge/js/node_modules
 volumes:
   watchtower_db_data:
-    external: true
+    # external: true
+    driver: 'local'

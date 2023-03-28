@@ -237,7 +237,7 @@ if DEPLOYMENT_INSTANCE == 'staging':
     DB_NUM = [3,4,5]
 
 REDIS_HOST = decipher(config('REDIS_HOST'))
-REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
+REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', ''))
 REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = (
     'main.tasks',
@@ -250,9 +250,13 @@ CELERY_IMPORTS = (
 # CELERY_RESULT_BACKEND = 'rpc://'
 
 if REDIS_PASSWORD:   
-    CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
-    REDISKV = redis.StrictRedis(    
+    redis_prefix = ''
+    if DEPLOYMENT_INSTANCE == 'prod':
+        redis_prefix = 'user'
+        
+    CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
         port=6379,
