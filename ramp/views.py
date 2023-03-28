@@ -41,7 +41,6 @@ class RampWebhookView(APIView):
         
 
 
-
 class RampShiftView(APIView):
 
     def post(self, request):
@@ -80,14 +79,11 @@ class RampShiftExpireView(APIView):
         else:
             return Response({"success": False}, status=200)
 
-
-
-
+    
 class RampShiftHistoryView(APIView):
     serializer_class = RampShiftSerializer
 
     def get(self, request, *args, **kwargs):
-        # update_shift_status()
         
         wallet_hash = kwargs['wallet_hash']
         page = request.query_params.get('page', 1)

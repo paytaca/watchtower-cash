@@ -341,7 +341,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'update_shift_status': {
         'task': 'ramp.tasks.update_shift_status',
-        'schedule': 60
+        'schedule': 30
     }
 }
 
