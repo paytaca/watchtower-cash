@@ -78,7 +78,8 @@ INSTALLED_APPS=[
     'anyhedge',
     'chat',
     'notifications',
-    'jpp'
+    'jpp',
+    'ramp'
 ]
 
 MIDDLEWARE=[
@@ -242,15 +243,16 @@ CELERY_IMPORTS = (
     'main.tasks',
     'smartbch.tasks',
     'anyhedge.tasks',
+    'ramp.tasks'
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 # CELERY_RESULT_BACKEND = 'rpc://'
 
-if REDIS_PASSWORD:
+if REDIS_PASSWORD:   
     CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
     CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
-    REDISKV = redis.StrictRedis(
+    REDISKV = redis.StrictRedis(    
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
         port=6379,
@@ -337,6 +339,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.
     },
+    'update_shift_status': {
+        'task': 'ramp.tasks.update_shift_status',
+        'schedule': 30
+    }
 }
 
 from corsheaders.defaults import default_headers
@@ -432,6 +438,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False
+        },
+        'ramp': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False    
         }
     },
 }
