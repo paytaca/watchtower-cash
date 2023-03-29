@@ -134,6 +134,9 @@ def get_latest_bch_rates(currencies=[]):
                 response_timestamp,
                 "coingecko",
             )
+
+            if currency == "ars":
+                currencies_to_convert.append(currency)
         else:
             currencies_to_convert.append(currency)
 
