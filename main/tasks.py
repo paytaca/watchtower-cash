@@ -1314,8 +1314,10 @@ def find_wallet_history_missing_tx_timestamps():
             _tx_timestamp = tx.get("timestamp") if tx else None
         if not _tx_timestamp:
             continue
-
-        tx_timestamp = datetime.fromtimestamp(_tx_timestamp).replace(tzinfo=pytz.UTC)
+        try:
+            tx_timestamp = datetime.fromtimestamp(_tx_timestamp).replace(tzinfo=pytz.UTC)
+        except TypeError:
+            tx_timestamp = _tx_timestamp.replace(tzinfo=pytz.UTC)
         WalletHistory.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
         Transaction.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
         txids_updated.append([txid, _tx_timestamp])
