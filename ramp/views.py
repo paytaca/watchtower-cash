@@ -25,15 +25,14 @@ logger = logging.getLogger(__name__)
 # add deposit create
 class RampWebhookView(APIView):
 
-    def post(self, request):
-        logger.info("Ramp Webhook")
-        # update_shift_status()
+    def post(self, request):        
         data = request.data
+        type = data['type']
+        logger.info("Ramp Webhook: " + type.upper())
         logger.info(data)
         
         # ramp_data = data['payload']
-        # type = data['type']
-
+    
         return Response({"success": True}, status=200)
         
 
@@ -41,12 +40,8 @@ class RampWebhookView(APIView):
 class RampShiftView(APIView):
 
     def post(self, request):
-        logger.info('Hello World')
-
         data = request.data
-        # logger.info(data)
 
-        # get quote
         info = {
             'depositCoin': data['deposit']['coin'],
             'depositNetwork': data['deposit']['network'],
@@ -67,8 +62,6 @@ class RampShiftView(APIView):
             data = params,
             headers = headers
         )
-        
-        logger.info(quote.json())
 
         if quote.status_code == 200 or quote.status_code == 201:
             # Fixed Shift 
@@ -87,8 +80,44 @@ class RampShiftView(APIView):
             )            
 
             if fixed_shift.status_code == 200 or fixed_shift.status_code == 201:
-                logger.info(fixed_shift.json())
-                return Response(fixed_shift.json(), status=200)
+                # Save To DB
+                shift_data = fixed_shift.json()
+                date_text = shift_data['createdAt']
+                date = datetime.strptime(date_text, "%Y-%m-%dT%H:%M:%S.%fZ")
+
+                # stage data
+                info = {
+                    'wallet_hash': data['ramp_settings']['wallet_hash'],
+                    'bch_address': data['ramp_settings']['bch_address'],
+                    'ramp_type': data['ramp_settings']['type'],
+                    'shift_id': shift_data['id'],
+                    'quote_id': shift_data['quoteId'],
+                    'date_shift_created': date,
+                    'shift_status': shift_data['status'],
+                    'shift_info': {
+                        'deposit': {
+                            'address': shift_data['depositAddress'],
+                            'amount': shift_data['depositAmount'],
+                            'coin': shift_data['depositCoin'],
+                            'network': shift_data['depositNetwork'],
+                            'icon': data['deposit']['icon']
+                        },
+                        'settle': {
+                            'address': shift_data['settleAddress'],
+                            'amount': shift_data['settleAmount'],
+                            'coin': shift_data['settleCoin'],
+                            'network': shift_data['settleNetwork'],
+                            'icon': data['settle']['icon']
+                        },
+                        'shift_expiration': shift_data['expiresAt']
+                    }
+                }
+
+                serializer = RampShiftSerializer(data=info)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                
+                return Response(fixed_shift.json(), status=200)  
 
         return Response({"failed": True}, status=500)
     
