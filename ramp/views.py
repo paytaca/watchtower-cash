@@ -64,7 +64,7 @@ class RampShiftView(APIView):
         )
 
         if quote.status_code == 200 or quote.status_code == 201:
-            # Fixed Shift 
+            # Fixed Shift
             shift_url = "https://sideshift.ai/api/v2/shifts/fixed"
             info = {
                 'settleAddress': data['settle_address'],
@@ -78,7 +78,10 @@ class RampShiftView(APIView):
                 data = params,
                 headers = headers
             )            
-
+            
+            if 'error' in fixed_shift.json():
+                logger.info(fixed_shift.json())
+                return Response({'error': fixed_shift.json()['error']}, status=200)
             if fixed_shift.status_code == 200 or fixed_shift.status_code == 201:
                 # Save To DB
                 shift_data = fixed_shift.json()
