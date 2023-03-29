@@ -6,6 +6,7 @@ from .models.feedback import ArbiterFeedback, PeerFeedback
 from .models.order import Order, Status
 from .models.payment import PaymentType, PaymentMethod
 from .models.peer import Peer
+from .models.status import Status
 
 # additional models can be imported here as needed
 
@@ -23,5 +24,6 @@ __all__ = [
   'PaymentType',
   'PaymentMethod',
   'Peer',
+  'Status',
   # Add additional models here
 ]
