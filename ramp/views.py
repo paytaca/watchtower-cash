@@ -15,6 +15,8 @@ import logging
 from .models import (
     Shift
 )
+from django.core import serializers
+
 from .serializers import (
     RampShiftSerializer
 )
@@ -24,15 +26,32 @@ logger = logging.getLogger(__name__)
 
 # add deposit create
 class RampWebhookView(APIView):
+    serializer_class = RampShiftSerializer
 
     def post(self, request):        
         data = request.data
         type = data['type']
         logger.info("Ramp Webhook: " + type.upper())
         logger.info(data)
+
         
-        # ramp_data = data['payload']
-    
+        # process deposits
+        if type != 'order:create':
+            Model = self.serializer_class.Meta.model
+            payload = data['payload']
+            shift = Model.objects.filter(shift_id=payload['orderId']).first()
+            status = shift.shift_status
+            # ramp_data = data['payload']
+            if shift:
+                if status != 'settled':
+                    if type == 'deposit:create' or type == 'deposit:update':                        
+                        shift.shift_status = payload['status']                 
+
+                    if payload['status'] == 'settled':
+                        shift.shift_info['txn_details'] = payload['settleTx']
+                        shift.date_shift_completed = datetime.now()
+                    
+                    shift.save()
         return Response({"success": True}, status=200)
         
 
@@ -120,7 +139,7 @@ class RampShiftView(APIView):
                 serializer.is_valid(raise_exception=True)
                 serializer.save()
                 
-                return Response(fixed_shift.json(), status=200)  
+                return Response(serializer.data, status=200)  
 
         return Response({"failed": True}, status=500)
     
