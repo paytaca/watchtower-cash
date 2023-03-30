@@ -1,6 +1,6 @@
 from .models.ad import Ad
 from .models.arbiter import Arbiter
-from .models.conversation import Conversation, Message
+from .models.chat import Chat, Message
 from .models.currency import FiatCurrency, CryptoCurrency
 from .models.feedback import ArbiterFeedback, PeerFeedback
 from .models.order import Order, Status
@@ -13,7 +13,7 @@ from .models.status import Status
 __all__ = [
   'Ad',
   'Arbiter',
-  'Conversation',
+  'Chat',
   'Message',
   'FiatCurrency',
   'CryptoCurrency',

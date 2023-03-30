@@ -10,8 +10,9 @@ class Status(models.Model):
     APPEALED  = 'APL', _('Appealed')
     RELEASED  = 'RLS', _('Released')
     REFUNDED  = 'RFN', _('Refunded')
+    CANCELED  = 'CNCL', _('Canceled')
 
-  status = models.CharField(max_length=3, choices=StatusType.choices, editable=False)
+  status = models.CharField(max_length=5, choices=StatusType.choices, editable=False)
   order = models.ForeignKey('Order', on_delete=models.CASCADE, editable=False)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
