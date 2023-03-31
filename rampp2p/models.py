@@ -1,9 +1,8 @@
 from .models.ad import Ad
-from .models.arbiter import Arbiter
-from .models.chat import Chat, Message
+from .models.chat import Chat, Message, Image
 from .models.currency import FiatCurrency, CryptoCurrency
-from .models.feedback import ArbiterFeedback, PeerFeedback
-from .models.order import Order, Status
+from .models.feedback import Feedback
+from .models.order import Order
 from .models.payment import PaymentType, PaymentMethod
 from .models.peer import Peer
 from .models.status import Status
@@ -12,13 +11,12 @@ from .models.status import Status
 
 __all__ = [
   'Ad',
-  'Arbiter',
   'Chat',
   'Message',
+  'Image',
   'FiatCurrency',
   'CryptoCurrency',
-  'ArbiterFeedback',
-  'PeerFeedback',
+  'Feedback',
   'Order',
   'Status',
   'PaymentType',
