@@ -212,7 +212,7 @@ class PosDeviceViewSet(
 
 class MerchantViewSet(
     viewsets.GenericViewSet,
-    # mixins.ListModelMixin,
+    mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
     mixins.DestroyModelMixin,
@@ -222,7 +222,11 @@ class MerchantViewSet(
     pagination_class = CustomLimitOffsetPagination
 
     def get_queryset(self):
-        return self.serializer_class.Meta.model.objects.all()
+        queryset = self.serializer_class.Meta.model.objects.all()
+        name = self.request.query_params.get('name')
+        if name is not None:
+            queryset = queryset.filter(name=name)
+        return queryset
 
 
 class BranchViewSet(viewsets.ModelViewSet):
