@@ -1,5 +1,10 @@
 from main.utils.queries.bchn import *
+from main.utils.queries.bchd import *
 
 
-def get_node():
-    return BCHN()
+class Node(object):
+
+    def __init__(self):
+        self.BCH = BCHN()  # cashtokens too
+        self.SLP = BCHDQuery()
+    

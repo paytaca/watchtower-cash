@@ -47,8 +47,7 @@ from celery import Celery
 from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from main.utils.queries.bchd import BCHDQuery
-from main.utils.queries.node import get_node
+from main.utils.queries.node import Node
 from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
@@ -56,7 +55,7 @@ from celery import chord
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
-NODE = get_node()
+NODE = Node()
 
 
 # NOTIFICATIONS
@@ -362,7 +361,7 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
             address,
             txid,
             amount,
-            NODE.source,
+            NODE.BCH.source,
             blockheightid=block_id,
             tx_timestamp=timestamp,
             index=index,
@@ -380,8 +379,33 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
 
 @shared_task(queue='query_transaction')
 def query_transaction(txid, block_id, for_slp=False):
-    if not for_slp:
-        transaction = NODE._get_raw_transaction(txid)
+    if for_slp:
+        transaction = NODE.SLP._get_raw_transaction(txid)
+
+        for output in transaction.outputs:
+            if output.slp_token.token_id:
+                token_id = bytearray(output.slp_token.token_id).hex()
+                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                # save slp transaction
+                obj_id, created = save_record(
+                    token_id,
+                    'simpleledger:%s' % output.slp_token.address,
+                    txid,
+                    amount,
+                    NODE.SLP.source,
+                    blockheightid=block_id,
+                    tx_timestamp=transaction.timestamp,
+                    index=output.index
+                )            
+                if created:
+                    third_parties = client_acknowledgement(obj_id)
+                    for platform in third_parties:
+                        if 'telegram' in platform:
+                            message = platform[1]
+                            chat_id = platform[2]
+                            send_telegram_message(message, chat_id)
+    else:
+        transaction = NODE.BCH._get_raw_transaction(txid)
 
         if 'coinbase' in transaction['vin'][0].keys():
             return
@@ -408,7 +432,7 @@ def query_transaction(txid, block_id, for_slp=False):
                         address,
                         txid,
                         output['value'],
-                        NODE.source,
+                        NODE.BCH.source,
                         blockheightid=block_id,
                         tx_timestamp=transaction['time'],
                         index=index
@@ -420,33 +444,6 @@ def query_transaction(txid, block_id, for_slp=False):
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
-    else:
-        # NOTE: temporary fetching of SLP txns using BCHD
-        bchd = BCHDQuery()
-        transaction = bchd._get_raw_transaction(txid)
-
-        for output in transaction.outputs:
-            if output.slp_token.token_id:
-                token_id = bytearray(output.slp_token.token_id).hex()
-                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
-                # save slp transaction
-                obj_id, created = save_record(
-                    token_id,
-                    'simpleledger:%s' % output.slp_token.address,
-                    txid,
-                    amount,
-                    source,
-                    blockheightid=block_id,
-                    tx_timestamp=transaction.timestamp,
-                    index=index
-                )            
-                if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
 
 
 @shared_task(bind=True, queue='manage_blocks')
@@ -502,14 +499,15 @@ def manage_blocks(self):
             REDIS_STORAGE.set('READY', 0)
             subtasks = []
 
-            # NOTE: temporary fetching of SLP txns using BCHD
-            bchd = BCHDQuery()
-            transactions = bchd.get_block(block.number, full_transactions=False)
-            for tr in transactions:
-                txid = bytearray(tr.transaction_hash[::-1]).hex()
-                subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
+            # TODO: handle block tracking for SLP testnet when BCH_NETWORK=chipnet
+            # (testnet has different block count with chipnet)
+            if settings.BCH_NETWORK == 'mainnet':
+                transactions = NODE.SLP.get_block(block.number, full_transactions=False)
+                for tr in transactions:
+                    txid = bytearray(tr.transaction_hash[::-1]).hex()
+                    subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
 
-            transactions = NODE.get_block(block.number)
+            transactions = NODE.BCH.get_block(block.number)
             for txid in transactions:
                 subtasks.append(query_transaction.si(txid, block.id))
 
@@ -526,7 +524,7 @@ def manage_blocks(self):
 def get_latest_block(self):
     # This task is intended to check new blockheight every 5 seconds
     LOGGER.info('CHECKING THE LATEST BLOCK')
-    number = NODE.get_latest_block()
+    number = NODE.BCH.get_latest_block()
     obj, created = BlockHeight.objects.get_or_create(number=number)
     if created: return f'*** NEW BLOCK { obj.number } ***'
 
@@ -534,7 +532,7 @@ def get_latest_block(self):
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_bch_utxos(self, address):
     try:
-        outputs = NODE.get_utxos(address)
+        outputs = NODE.BCH.get_utxos(address)
         saved_utxo_ids = []
         
         for output in outputs:
@@ -568,7 +566,7 @@ def get_bch_utxos(self, address):
                     address,
                     tx_hash,
                     amount,
-                    NODE.source,
+                    NODE.BCH.source,
                     blockheightid=block.id,
                     index=index,
                     new_subscription=True,
@@ -609,10 +607,9 @@ def get_bch_utxos(self, address):
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_slp_utxos(self, address):
     try:
-        obj = BCHDQuery()
-        outputs = obj.get_utxos(address)
-        source = 'bchd-query'
+        outputs = NODE.SLP.get_utxos(address)
         saved_utxo_ids = []
+
         for output in outputs:
             if output.slp_token.token_id:
                 hash = output.outpoint.hash 
@@ -639,7 +636,7 @@ def get_slp_utxos(self, address):
                         address,
                         tx_hash,
                         amount,
-                        source,
+                        NODE.SLP.source,
                         block.id,
                         index,
                         True
@@ -807,7 +804,7 @@ def get_token_meta_data(self, token_id, async_image_download=False):
         t = Token.objects.get(tokenid=token_id)
 
         if t.is_cashtoken:
-            LOGGER.info(f'Fetching token metadata from {NODE.source}...')
+            LOGGER.info(f'Fetching token metadata from {NODE.BCH.source}...')
             
             bcmr_token = BcmrToken.objects.filter(category=token_id)
 
@@ -844,10 +841,9 @@ def get_token_meta_data(self, token_id, async_image_download=False):
                 )
             )
         else:
-            LOGGER.info('Fetching token metadata from BCHD...')
+            LOGGER.info(f'Fetching token metadata from {NODE.SLP.source}...')
 
-            bchd = BCHDQuery()
-            txn = bchd.get_transaction(token_id, parse_slp=True)
+            txn = NODE.SLP.get_transaction(token_id, parse_slp=True)
             if not txn:
                 return
 
@@ -966,16 +962,18 @@ def update_nft_owner(tokenid):
 @shared_task(bind=True, queue='broadcast', max_retries=3)
 def broadcast_transaction(self, transaction):
     txid = calc_txid(transaction)
-    LOGGER.info(f'Broadcasting {txid}:  {transaction}')
+    LOGGER.info(f'Broadcasting {txid}: {transaction}')
+
     txn_check = Transaction.objects.filter(txid=txid)
     success = False
+
     if txn_check.exists():
         success = True
         return success, txid
     else:
         try:
             try:
-                txid = NODE.broadcast_transaction(transaction)
+                txid = NODE.BCH.broadcast_transaction(transaction)
                 if txid:
                     success = True
                     return success, txid
@@ -1010,8 +1008,6 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
                 bch/slp amount,
                 ct category/token ID, (can be None)
                 ct amount,            (can be None)
-                ct (nft) capability,  (can be None)
-                ct (nft) commitment   (can be None)
             ]'''
             for x in range(0, 6 - len(elem)):
                 elem.append(None)
@@ -1051,16 +1047,15 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             # Don't save a record if resulting amount is zero or dust
             is_zero_amount = amount == 0 or amount == abs(0.00000546)
             if is_zero_amount and not proceed_with_zero_amount:
-                return None
+                return
 
             if is_zero_amount:
                 record_type = ''
 
             bch_prefix = 'bitcoincash:'
-            if settings.BCH_NETWORK == 'chipnet':
+            if settings.BCH_NETWORK != 'mainnet':
                 bch_prefix = 'bchtest:'
 
-            
             txns = Transaction.objects.filter(
                 txid=txid,
                 address__address__startswith=bch_prefix
@@ -1071,6 +1066,9 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 txns = txns.exclude(token__name='bch')
 
         elif wallet.wallet_type == 'slp':
+            if key != BCH_OR_SLP:
+                return
+
             txns = Transaction.objects.filter(
                 txid=txid,
                 address__address__startswith='simpleledger:'
@@ -1201,12 +1199,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         'slp': []
     }
 
-    bchd = BCHDQuery()
     parse_slp = is_slp_address(address)
 
     if parse_slp:
         # Parse SLP senders and recipients
-        slp_tx = bchd.get_transaction(txid, parse_slp=True)
+        slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
         if not slp_tx:
             self.retry(countdown=5)
             return
@@ -1226,7 +1223,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     recipients['slp'] = [(i['address'], i['amount']) for i in slp_tx['outputs']]
 
     # Parse BCH senders and recipients
-    bch_tx = NODE.get_transaction(txid)
+    bch_tx = NODE.BCH.get_transaction(txid)
     if not bch_tx:
         self.retry(countdown=5)
         return
@@ -1259,7 +1256,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     if parse_slp:
         if slp_tx is None:
-            slp_tx = bchd.get_transaction(txid, parse_slp=True)
+            slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
 
         # Mark SLP tx inputs as spent
         for tx_input in slp_tx['inputs']:
@@ -1311,7 +1308,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         tx_output['address'],
                         slp_tx['txid'],
                         tx_output['amount'],
-                        'bchd-query',
+                        NODE.SLP.source,
                         blockheight_id,
                         tx_output['index']
                     )
@@ -1326,7 +1323,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     # Parse BCH inputs
     if bch_tx is None:
-        bch_tx = NODE.get_transaction(txid)
+        bch_tx = NODE.BCH.get_transaction(txid)
 
     # Mark BCH tx inputs as spent
     for tx_input in bch_tx['inputs']:
@@ -1366,7 +1363,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
             if blockheight:
                 blockheight_id = blockheight.id
 
-            if 'token_data' in tx_output.keys():
+            if tx_output['token_data']:
                 process_cashtoken_tx(
                     tx_output['token_data'],
                     tx_output['address'],
@@ -1382,7 +1379,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     tx_output['address'],
                     bch_tx['txid'],
                     value,
-                    NODE.source,
+                    NODE.BCH.source,
                     blockheight_id,
                     tx_output['index']
                 )
@@ -1395,7 +1392,10 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                             message = platform[1]
                             chat_id = platform[2]
                             send_telegram_message(message, chat_id)
-
+    
+    if not recipients['slp']:
+        LOGGER.info('JUMBO')
+        LOGGER.info(recipients['slp'])
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
         if wallet_handle.split('|')[0] == 'slp':
@@ -1439,7 +1439,7 @@ def rescan_utxos(wallet_hash, full=False):
 def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=False):
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
 
-    bch_tx = NODE.get_transaction(txid)
+    bch_tx = NODE.BCH.get_transaction(txid)
 
     tx_fee = bch_tx['tx_fee']
     tx_timestamp = bch_tx['timestamp']
@@ -1498,7 +1498,7 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
                 output_address,
                 txid,
                 outputs[output_index][1],
-                NODE.source,
+                NODE.BCH.source,
                 None,
                 index=output_index,
                 tx_timestamp=tx_timestamp,
@@ -1555,7 +1555,7 @@ def find_wallet_history_missing_tx_timestamps():
     for txid in txids:
         _tx_timestamp = tx_timestamps_map.get(txid)
         if not _tx_timestamp:
-            tx = NODE.get_transaction(txid)
+            tx = NODE.BCH.get_transaction(txid)
             _tx_timestamp = tx["timestamp"] if tx else None
         if not _tx_timestamp:
             continue

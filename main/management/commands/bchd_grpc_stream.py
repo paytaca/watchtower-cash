@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.utils import timezone as tz
 from django.core.management.base import BaseCommand
 from main.utils.bchd import bchrpc_pb2 as pb
@@ -5,7 +6,6 @@ from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
 from main.models import Token, Transaction, Subscription
 import grpc
 import time
-import random
 import logging
 import ssl
 from main.tasks import (
@@ -18,13 +18,9 @@ from main.tasks import (
 LOGGER = logging.getLogger(__name__)
 
 
-
 def run():
     source = 'bchd-grpc-stream'
-    nodes = [
-        'bchd.paytaca.com:8335'
-    ]
-    bchd_node = random.choice(nodes)
+    bchd_node = settings.BCHD_NODE
 
     cert = ssl.get_server_certificate(bchd_node.split(':'))
     creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))

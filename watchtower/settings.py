@@ -44,8 +44,6 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-
-BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
 DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
 DOMAIN = 'https://watchtower.cash'
 
@@ -504,5 +502,14 @@ ANYHEDGE = {
     "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN": config("ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN", ""),
 }
 
+
+BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
+
 RPC_USER = decipher(config('RPC_USER'))
-RPC_PASSWORD = decipher(config('RPC_PASSWORD'))
+BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
+
+# BCHD_TESTNET_RPC_PASSWORD = decipher(config('BCHD_TESTNET_RPC_PASSWORD'))
+BCHD_NODE = 'bchd.paytaca.com:8335'
+
+# if BCH_NETWORK != 'mainnet':
+#     BCHD_NODE = f'http://{RPC_USER}:{BCHD_TESTNET_RPC_PASSWORD}@docker-host:18334'

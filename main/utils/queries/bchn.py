@@ -11,7 +11,9 @@ import json
 class BCHN(object):
 
     def __init__(self):
-        url = f"http://{settings.RPC_USER}:{settings.RPC_PASSWORD}@docker-host:8332"
+        credentials = f'{settings.RPC_USER}:{settings.BCHN_RPC_PASSWORD}'
+        url = f'http://{credentials}@docker-host:8332'
+
         self.rpc_connection = AuthServiceProxy(url)
         self.source = 'bchn'
         self.fulcrum = {
@@ -106,7 +108,7 @@ class BCHN(object):
             self.fulcrum['port']
         )) as sock:
             sock.send(data.encode('utf-8')+b'\n')
-            # TODO: accomodate data if it goes beyond max bytes of python socket
+            # TODO: accomodate data if it goes beyond max bytes of python socket (99999999)
             response_byte = sock.recv(99999999)
             response = response_byte.decode()
             response = json.loads(response)

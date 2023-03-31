@@ -208,3 +208,4 @@ supervisord.pid
 
 # exclude pem certificates
 **.pem 
+images
