@@ -93,6 +93,9 @@ class Merchant(models.Model):
         null=True, blank=True,
         related_name="merchant",
     )
+    verified = models.BooleanField(default=False)
+    active = models.BooleanField(default=False)
+
 
     def __str__(self):
         return f"Merchant ({self.name})"
