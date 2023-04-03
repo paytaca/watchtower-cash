@@ -94,7 +94,7 @@ class Merchant(models.Model):
         related_name="merchant",
     )
     verified = models.BooleanField(default=False)
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=False)
 
 
     def __str__(self):

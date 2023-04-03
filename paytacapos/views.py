@@ -223,7 +223,7 @@ class MerchantViewSet(
 
     @swagger_auto_schema(
         manual_parameters=[
-            openapi.Parameter(name="active", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True),
+            openapi.Parameter(name="active", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
             openapi.Parameter(name="verified", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
             openapi.Parameter(name="name", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
         ]
