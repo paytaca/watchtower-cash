@@ -1,7 +1,6 @@
 from django.db import models
 
 from .peer import Peer
-from .chat import Chat, Message
 
 class Chat(models.Model):
   members = models.ManyToManyField(Peer)

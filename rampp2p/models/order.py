@@ -6,7 +6,7 @@ from .currency import FiatCurrency, CryptoCurrency
 from .chat import Chat
 from .payment import PaymentMethod
 
-class Order(models.Order):
+class Order(models.Model):
   ad = models.ForeignKey(Ad, on_delete=models.PROTECT, editable=False)
   creator = models.ForeignKey(Peer, on_delete=models.PROTECT, editable=False)
   crypto_currency = models.ForeignKey(CryptoCurrency, on_delete=models.PROTECT, editable=False)
@@ -19,4 +19,4 @@ class Order(models.Order):
   chat = models.ForeignKey(Chat, on_delete=models.SET_NULL, null=True)
   is_appealed = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
-  # TODO: should not be deletable
+  
