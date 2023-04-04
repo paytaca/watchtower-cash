@@ -33,6 +33,10 @@ class Command(BaseCommand):
         daily_average = round(wallets_week / 7)
         print('Last 7 days: {} (average {} daily)'.format(str(wallets_week), str(daily_average)))
 
+        yesterday = timezone.now() - timedelta(days=1)
+        wallets_yesterday = qs.filter(date_created__date=yesterday.date()).count()
+        print('Yesterday: ' + str(wallets_yesterday))
+
         wallets_today = qs.filter(date_created__date=timezone.now().date()).count()
         print('Today: ' + str(wallets_today))
 
@@ -53,6 +57,10 @@ class Command(BaseCommand):
         transactions_week = qs.filter(date_created__date__gte=week_diff).count()
         daily_average = round(transactions_week / 7)
         print('Last 7 days: {} (average {} daily)'.format(str(transactions_week), str(daily_average)))
+
+        yesterday = timezone.now() - timedelta(days=1)
+        transactions_yesterday = qs.filter(date_created__date=yesterday.date()).count()
+        print('Yesterday: ' + str(transactions_yesterday))
 
         transactions_today = qs.filter(date_created__date=timezone.now().date()).count()
         print('Today: ' + str(transactions_today))
