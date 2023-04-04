@@ -3,13 +3,16 @@ from ..models.order import Order
 from ..models.currency import CryptoCurrency, FiatCurrency
 from ..models.peer import Peer
 from ..models.payment import PaymentMethod
-from ..models.chat import Chat
+from ..models.ad import Ad
 
 class OrderSerializer(serializers.ModelSerializer):
+  ad = serializers.PrimaryKeyRelatedField(queryset=Ad.objects.all())
+  creator = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
   crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
   fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
   arbiter = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
   payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
+  
   class Meta:
     model = Order
     fields = [

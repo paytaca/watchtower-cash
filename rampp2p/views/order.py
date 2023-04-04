@@ -1,13 +1,26 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.views import APIView
+from rest_framework.response import Response
 from ..serializers.order import OrderSerializer
 from ..serializers.status import StatusSerializer
 from ..models.order import Order
 from ..models.status import Status
 
-class OrderListCreate(generics.ListCreateAPIView):
-  queryset = Order.objects.all()
-  serializer_class = OrderSerializer
+class OrderListCreate(APIView):
+  def post(self, request):
+    serializer = OrderSerializer(data=request.data)
+    if serializer.is_valid():
+      serializer.save()
+      return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.data, status=status.HTTP_400_BAD_REQUEST)
+
+  def get(self, request):
+    queryset = Order.objects.all()
+    creator = request.query_params.get("creator", None)
+    if creator is not None:
+      queryset = queryset.filter(creator=creator)
+    serializer = OrderSerializer(queryset, many=True)
+    return Response(serializer.data, status.HTTP_200_OK)
 
   # TODO override .create method to create a Status=SUBMITTED status
 
