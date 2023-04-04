@@ -1,9 +1,11 @@
 from django.db import models
 
 from .peer import Peer
+from .order import Order
 
 class Chat(models.Model):
   members = models.ManyToManyField(Peer)
+  order = models.ForeignKey(Order, on_delete=models.CASCADE, editable=False)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
   # TODO: should not be deletable

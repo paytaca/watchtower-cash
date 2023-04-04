@@ -24,7 +24,11 @@ from .views.currency import (
   CryptoDetailView
 )
 
-from .views.status import StatusList
+from .views.order import (
+  OrderListCreate,
+  OrderDetail,
+  OrderStatusList
+)
 
 urlpatterns = [
   path('ad/', AdListCreate.as_view(), name='ad-list'),
@@ -39,5 +43,7 @@ urlpatterns = [
   path('currency/fiat/<int:pk>', FiatDetailView.as_view(), name='fiat-detail'),
   path('currency/crypto/', CryptoListCreateView.as_view(), name='crypto-list-create'),
   path('currency/crypto/<int:pk>', CryptoDetailView.as_view(), name='crypto-detail'),
-  path('order/<int:pk>/status', StatusList.as_view(), name='status-list'),
+  path('order/', OrderListCreate.as_view(), name='order-list-create'),
+  path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
+  path('order/<int:pk>/status', OrderStatusList.as_view(), name='order-status-list'),
 ]

@@ -1,11 +1,14 @@
 from rest_framework import serializers
-from .currency import FiatSerializer, CryptoSerializer
 from ..models.ad import Ad
+from ..models.peer import Peer
+from ..models.currency import FiatCurrency, CryptoCurrency
+from ..models.payment import PaymentMethod
 
 class AdSerializer(serializers.ModelSerializer):
-  fiat_currency = FiatSerializer()
-  crypto_currency = CryptoSerializer()
-  payment_methods = serializers.StringRelatedField(many=True)
+  owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
+  fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
+  crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
+  payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
 
   class Meta:
     model = Ad
@@ -23,4 +26,10 @@ class AdSerializer(serializers.ModelSerializer):
       'time_limit',
       'payment_methods',
       'modified_at',
+    ]
+    read_only_fields = [
+      'owner',
+      'fiat_currency',
+      'crypto_currency',
+      'payment_methods',
     ]
