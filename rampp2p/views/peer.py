@@ -1,13 +1,12 @@
+from rest_framework import generics
 from rest_framework.views import APIView
+from ..models.peer import Peer
+from ..serializers.peer import PeerSerializer
 
-# PeerListView
-class PeerListView(APIView):
-  """
-  List Peer instances
-  """
+class PeerListCreate(generics.ListCreateAPIView):
+  queryset = Peer.objects.all()
+  serializer_class = PeerSerializer
 
-# PeerDetailsView
-class PeerDetailsView(APIView):
-  """
-  CRUD a Peer instance
-  """
+class PeerDetail(generics.RetrieveUpdateAPIView):
+  queryset = Peer.objects.all()
+  serializer_class = PeerSerializer

@@ -34,6 +34,7 @@ from chat.urls import urlpatterns as chat_urlpatterns
 from notifications.urls import urlpatterns as notifications_urlpatterns
 from jpp.urls import urlpatterns as jpp_urlpatterns
 from ramp.urls import urlpatterns as ramp_urlpatterns
+from rampp2p.urls import urlpatterns as ramp_p2p_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -61,6 +62,7 @@ urlpatterns = [
     path('api/push-notifications/', include(notifications_urlpatterns)),
     path('api/jpp/', include(jpp_urlpatterns)),
     path('api/ramp/', include(ramp_urlpatterns)),
+    path('api/ramp-p2p/', include(ramp_p2p_urlpatterns)),
     path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

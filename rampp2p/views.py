@@ -1,3 +1,6 @@
-from django.shortcuts import render
+from .views.ad import AdListCreate, AdDetail
 
-# Create your views here.
+__all__ = [
+  'AdListCreate',
+  'AdDetail',
+]

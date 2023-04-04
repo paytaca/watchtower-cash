@@ -79,7 +79,8 @@ INSTALLED_APPS=[
     'chat',
     'notifications',
     'jpp',
-    'ramp'
+    'ramp',
+    'rampp2p'
 ]
 
 MIDDLEWARE=[

@@ -1,19 +1,22 @@
 from django.db import models
 
+from .peer import Peer
+from .chat import Chat, Message
+
 class Chat(models.Model):
-  members = models.ManyToManyField('Peer')
+  members = models.ManyToManyField(Peer)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
   # TODO: should not be deletable
 
 class Message(models.Model):
-  from_peer = models.ForeignKey('Peer', on_delete=models.CASCADE, editable=False)
-  chat = models.ForeignKey('Chat', on_delete=models.CASCADE, related_name="messages", editable=False)
+  from_peer = models.ForeignKey(Peer, on_delete=models.CASCADE, editable=False)
+  chat = models.ForeignKey(Chat, on_delete=models.CASCADE, related_name="messages", editable=False)
   message = models.CharField(max_length=4000, editable=False)
   sent_at = models.DateTimeField(auto_now_add=True, editable=False)
 
 class Image(models.Model):
-  message = models.ForeignKey('Message', on_delete=models.CASCADE, related_name="images", editable=False)
+  message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="images", editable=False)
   url = models.CharField(max_length=100, editable=False)
   uploaded_at = models.DateTimeField(auto_now_add=True)
 
