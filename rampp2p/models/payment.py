@@ -9,7 +9,7 @@ class PaymentType(models.Model):
   modified_at = models.DateTimeField(auto_now=True)
 
   def __str__(self):
-    return self.id
+    return self.name
 
 class PaymentMethod(models.Model):
   payment_type = models.ForeignKey(PaymentType, on_delete=models.PROTECT, editable=False)

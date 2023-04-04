@@ -1,25 +1,19 @@
-from rest_framework.views import APIView
+from rest_framework import generics
+from ..models.currency import FiatCurrency, CryptoCurrency
+from ..serializers.currency import FiatSerializer, CryptoSerializer
 
-# FiatListView
-class FiatListView(APIView):
-  """
-  List fiat currencies.
-  """
+class FiatListCreateView(generics.ListCreateAPIView):
+  queryset = FiatCurrency.objects.all()
+  serializer_class = FiatSerializer
 
-# CryptoListView
-class CryptoListView(APIView):
-  """
-  List crypto currencies.
-  """
+class FiatDetailView(generics.RetrieveUpdateDestroyAPIView):
+  queryset = FiatCurrency.objects.all()
+  serializer_class = FiatSerializer
 
-# FiatDetailView
-class FiatDetailView(APIView):
-  """
-  CRUD a FiatCurrency instance.
-  """
+class CryptoListCreateView(generics.ListCreateAPIView):
+  queryset = CryptoCurrency.objects.all()
+  serializer_class = CryptoSerializer
 
-# CryptoDetailView
-class CryptoDetailView(APIView):
-  """
-  CRUD a CryptoCurrency instance.
-  """
+class CryptoDetailView(generics.RetrieveUpdateDestroyAPIView):
+  queryset = CryptoCurrency.objects.all()
+  serializer_class = CryptoSerializer
