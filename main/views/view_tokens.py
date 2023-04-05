@@ -4,10 +4,9 @@ from rest_framework import viewsets, mixins
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import F, Subquery, OuterRef, Count, Q
-from django_filters import rest_framework as filters
 from rest_framework import status
 
-from main.filters import TokensViewSetFilter, TokenTypeIsNullFilter
+from main.filters import TokensViewSetFilter
 from main.models import (
     Token,
     WalletHistory,
@@ -31,9 +30,7 @@ class TokensViewSet(
 
     filter_backends = [
         TokensViewSetFilter,
-        filters.DjangoFilterBackend,
     ]
-    filterset_class = TokenTypeIsNullFilter
 
     def get_queryset(self):
         return Token.objects.all()

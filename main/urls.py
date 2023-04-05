@@ -8,12 +8,17 @@ app_name = "main"
 
 
 router = routers.DefaultRouter()
+
 router.register(r"tokens", views.TokensViewSet, basename="tokens")
+router.register(r"cashtokens/fungible", views.CashFungibleTokensViewSet, basename="cashtokens-ft")
+router.register(r"cashtokens/nft", views.CashNftsViewSet, basename="cashtokens-nft")
 router.register(r"wallet/address-scan", views.WalletAddressScanViewSet, basename="address-scan")
 router.register(r"wallet/preferences", views.WalletPreferencesViewSet, basename="wallet-preferences")
 router.register(r"payment-requests", views.PaymentRequestViewSet, basename="payment-requests")
 
+
 main_urls = router.urls
+
 
 main_urls += [
     re_path(r"^task/(?P<task_id>[\w+:-]+)/$", views.TaskStatusView.as_view(), name='task-status'),
@@ -23,11 +28,9 @@ main_urls += [
     re_path(r"^blockheight/latest/$", views.BlockHeightViewSet.as_view(), name='blockheight'),
 
     re_path(r"^balance/bch/(?P<bchaddress>[\w+:]+)/$", views.Balance.as_view(),name='bch-balance'),
-
     re_path(r"^balance/ct/(?P<tokenaddress>[\w+:]+)/$", views.Balance.as_view(),name='ct-balances'),
     re_path(r"^balance/ct/(?P<tokenaddress>[\w+:]+)/(?P<category>[\w+]+)/$", views.Balance.as_view(),name='ct-ft-balance'),
     re_path(r"^balance/ct/(?P<tokenaddress>[\w+:]+)/(?P<category>[\w+]+)/(?P<txid>[\w+]+)/(?P<index>[\w+]+)/$", views.Balance.as_view(),name='ct-nft-balance'),
-
     re_path(r"^balance/slp/(?P<slpaddress>[\w+:]+)/$", views.Balance.as_view(),name='slp-token-balances'),
     re_path(r"^balance/slp/(?P<slpaddress>[\w+:]+)/(?P<tokenid>[\w+]+)/$", views.Balance.as_view(),name='slp-token-balance'),
     re_path(r"^balance/wallet/(?P<wallethash>[\w+:]+)/$", views.Balance.as_view(),name='wallet-balance'),
