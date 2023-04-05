@@ -11,7 +11,12 @@ from django.conf import settings
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
-from main.models import Transaction, Wallet, Token
+from main.models import (
+    Transaction,
+    Wallet,
+    Token,
+    CashNonFungibleToken,
+)
 from main.tasks import rescan_utxos
 from main.throttles import ScanUtxoThrottle
 from main.utils.address_validator import *
@@ -25,7 +30,7 @@ class Round(Func):
 
 def _get_slp_utxos(query, is_cashtoken=False, show_address_index=False, minting_baton=None):
     qs = Transaction.objects.filter(query)
-    if minting_baton is not None:
+    if minting_baton is not None and not is_cashtoken:
         subquery = Exists(
             Token.objects.annotate(
                 minting_baton=Cast(KeyTextTransform('minting_baton', 'nft_token_group_details'), JSONField()),
@@ -50,6 +55,8 @@ def _get_slp_utxos(query, is_cashtoken=False, show_address_index=False, minting_
                 F('cashtoken_nft__category') or 
                 F('token__tokenid')
             ),
+            capability=(F('cashtoken_nft__capability')),
+            commitment=(F('cashtoken_nft__commitment')),
             token_name=(
                 F('cashtoken_ft__info__name') or
                 F('cashtoken_nft__info__name') or 
@@ -79,6 +86,8 @@ def _get_slp_utxos(query, is_cashtoken=False, show_address_index=False, minting_
             'token_ticker',
             'decimals',
             'token_type',
+            'capability',
+            'commitment',
             'block',
             'wallet_index',
             'address_path',
@@ -97,6 +106,9 @@ def _get_slp_utxos(query, is_cashtoken=False, show_address_index=False, minting_
                 F('cashtoken_nft__info__name') or 
                 F('token__name')
             ),
+            capability=F('cashtoken_nft__capability'),
+            commitment=F('cashtoken_nft__commitment'),
+            cashtoken_nft_details=F('cashtoken_nft__info__nft_details'),
             decimals=(
                 F('cashtoken_ft__info__decimals') or
                 F('cashtoken_nft__info__decimals') or
@@ -119,6 +131,9 @@ def _get_slp_utxos(query, is_cashtoken=False, show_address_index=False, minting_
             'token_ticker',
             'decimals',
             'token_type',
+            'capability',
+            'commitment',
+            'cashtoken_nft_details',
             'block',
             'is_cashtoken'
         )
@@ -173,6 +188,7 @@ class UTXO(APIView):
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter(name="baton", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="is_cashtoken_nft", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
         ]
     )
     def get(self, request, *args, **kwargs):
@@ -180,14 +196,25 @@ class UTXO(APIView):
         bchaddress = kwargs.get('bchaddress', '')
         tokenaddress = kwargs.get('tokenaddress', '')
         tokenid = kwargs.get('tokenid', '')
+        tokenid_or_category = kwargs.get('tokenid_or_category', '')
+        category = kwargs.get('category', '')
         wallet_hash = kwargs.get('wallethash', '')
         baton = request.query_params.get('baton', '').lower().strip()
+        is_cashtoken_nft = request.query_params.get('is_cashtoken_nft', '').lower().strip()
+
         if baton == "true":
             baton = True
         elif baton == "false":
             baton = False
         else:
             baton = None
+
+        if is_cashtoken_nft == "true":
+            is_cashtoken_nft = True
+        elif is_cashtoken_nft == "false":
+            is_cashtoken_nft = False
+        else:
+            is_cashtoken_nft = None
 
         data = { 'valid': False }
         qs = None
@@ -204,15 +231,46 @@ class UTXO(APIView):
             if is_token_addr:
                 data['address'] = bch_address_converter(tokenaddress, to_token_addr=False)
 
-            if tokenid:
+            if tokenid or category:
+                query = Q(address__address=data['address']) & Q(spent=False)
+
                 if is_token_addr:
-                    query = Q(address__address=data['address']) & Q(spent=False) & Q(cashtoken_ft__category=tokenid)
+                    if is_cashtoken_nft:
+                        query = query & Q(cashtoken_nft__category=category)
+
+                        if baton:
+                            query = query & Q(
+                                cashtoken_nft__capability=CashNonFungibleToken.Capability.MINTING
+                            )
+                        else:
+                            if baton is not None:
+                                query = query & (
+                                    Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.MUTABLE) |
+                                    Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.NONE)
+                                )
+                    else:
+                        query = query & Q(cashtoken_ft__category=category)
                 else:
-                    query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
+                    query = query & Q(token__tokenid=tokenid)
             else:
                 query = Q(address__address=data['address']) & Q(spent=False)
                 if is_token_addr:
                     query = query & Q(token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+
+                    if is_cashtoken_nft:
+                        query = query & Q(cashtoken_nft__isnull=False)
+
+                        if baton:
+                            query = query & Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.MINTING)
+                        else:
+                            if baton is not None:
+                                query = query & (
+                                    Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.MUTABLE) |
+                                    Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.NONE)
+                                )
+                    else:
+                        if is_cashtoken_nft is not None:
+                            query = query & Q(cashtoken_ft__isnull=False)
 
             if is_token_addr:
                 utxos_values = _get_ct_utxos(query)
@@ -224,20 +282,46 @@ class UTXO(APIView):
             data['wallet'] = wallet_hash
             
             if wallet.wallet_type == 'slp':
-                if tokenid:
-                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
+                if tokenid_or_category:
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid_or_category)
                 else:
                     query = Q(wallet=wallet) & Q(spent=False)
 
                 utxos_values = _get_slp_utxos(query, show_address_index=True, minting_baton=baton)
 
             elif wallet.wallet_type == 'bch':
-                if tokenid:
-                    query = Q(wallet=wallet) & Q(spent=False) & Q(cashtoken_ft__category=tokenid)
-                    utxos_values = _get_ct_utxos(query, show_address_index=True)
+                query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+
+                if is_cashtoken_nft:
+                    if tokenid_or_category:
+                        query = query & Q(cashtoken_nft__category=tokenid_or_category)
+                    else:
+                        query = query & Q(cashtoken_nft__isnull=False)
+
+                    if baton:
+                        query = query & Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.MINTING)
+                    else:
+                        if baton is not None:
+                            query = query & (
+                                Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.MUTABLE) |
+                                Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.NONE)
+                            )
                 else:
-                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__name='bch')
-                    utxos_values = _get_bch_utxos(query, show_address_index=True)
+                    if tokenid_or_category:
+                        query = query & Q(cashtoken_ft__category=tokenid_or_category)
+                    else:
+                        if is_cashtoken_nft is not None:
+                            query = query & Q(cashtoken_ft__isnull=False)
+
+                utxos_values = _get_ct_utxos(query, show_address_index=True)
+                
+                if (
+                    (is_cashtoken_nft is None or not is_cashtoken_nft) and
+                    (baton is None or not baton)
+                ):
+                    query = Q(wallet=wallet) & Q(spent=False)
+                    utxos_values = list(utxos_values)
+                    utxos_values += list(_get_bch_utxos(query, show_address_index=True))
 
         if baton is not None:
             data['minting_baton'] = baton
