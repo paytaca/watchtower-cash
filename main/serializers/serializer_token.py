@@ -14,7 +14,6 @@ class TokenSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'symbol',
-            'is_cashtoken',
             'decimals',
             'token_type',
             'image_url',

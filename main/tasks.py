@@ -7,18 +7,7 @@ from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
-from main.models import (
-    BlockHeight, 
-    Token, 
-    Transaction,
-    Recipient,
-    Subscription,
-    Address,
-    Wallet,
-    WalletHistory,
-    WalletNftToken,
-    AssetPriceLog,
-)
+from main.models import *
 from bcmr.models import Token as BcmrToken
 from main.utils.address_validator import *
 from main.utils.ipfs import (
@@ -200,6 +189,103 @@ def client_acknowledgement(self, txid):
     return third_parties
 
 
+# is_nft = supply param in case there is no record of NFT yet on BCMR
+def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', capability=''):
+    LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
+
+    IS_NFT = False
+    bcmr_token = BcmrToken.objects.filter(category=category)
+
+    if bcmr_token.exists():
+        bcmr_token = bcmr_token.first()
+        image_url = ''
+
+        if bcmr_token.icon:
+            image_url = settings.DOMAIN + bcmr_token.icon.url
+
+        if bcmr_token.is_nft:
+            IS_NFT = True
+            nft_details = {
+                'name': '',
+                'description': '',
+                'image_url': ''
+            }
+
+            if commitment and bcmr.nft_types:
+                nft_sub_data = bcmr.nft_types[commitment]
+
+                if nft_sub_data:
+                    if 'name' in nft_sub_data.keys():
+                        nft_details['name'] = nft_sub_data['name']
+                    if 'description' in nft_sub_data.keys():
+                        nft_details['description'] = nft_sub_data['description']
+                    if 'uris' in nft_sub_data.keys():
+                        uri_data = nft_sub_data['uris']
+                        if 'icon' in uri_data.keys():
+                            nft_details['uris'] = uri_data['icon']
+
+            data = {
+                'name': bcmr_token.name,
+                'description': bcmr_token.nft_description,
+                'symbol': bcmr_token.symbol,
+                'decimals': bcmr_token.decimals,
+                'image_url': image_url,
+                'nft_details': nft_details
+            }
+        else:
+            data = {
+                'name': bcmr_token.name,
+                'description': bcmr_token.description,
+                'symbol': bcmr_token.symbol,
+                'decimals': bcmr_token.decimals,
+                'image_url': image_url
+            }
+        
+        # did not use get_or_create bec of async multiple objects returned error
+        cashtoken_infos = CashTokenInfo.objects.filter(**data)
+        if cashtoken_infos.exists():
+            cashtoken_info = cashtoken_infos.first()
+        else:
+            cashtoken_info = CashTokenInfo(**data)
+            cashtoken_info.save()
+    else:
+        # save as default metadata/info if there is no record of metadata from BCMR
+        if is_nft:
+            IS_NFT = True
+            name = 'Watchtower Cashtoken NFT'
+            symbol = 'WT-CT-NFT'
+        else:
+            name = 'Watchtower Cashtoken'
+            symbol = 'WT-CT'
+            
+        # did not use get_or_create bec of async multiple objects returned error
+        cashtoken_infos = CashTokenInfo.objects.filter(name=name, symbol=symbol)
+        if cashtoken_infos.exists():
+            cashtoken_info = cashtoken_infos.first()
+        else:
+            cashtoken_info = CashTokenInfo(name=name, symbol=symbol)
+            cashtoken_info.save()
+
+    cashtoken_info.date_updated = timezone.now()
+    cashtoken_info.save()
+
+    if IS_NFT:
+        cashtoken, _ = CashNonFungibleToken.objects.get_or_create(
+            current_index=index,
+            current_txid=txid
+        )
+        cashtoken.category = category
+        cashtoken.commitment = commitment
+        cashtoken.capability = capability
+    else:
+        cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
+
+    cashtoken.info = cashtoken_info
+    cashtoken.save()
+
+    return cashtoken
+
+
 @shared_task(queue='save_record')
 def save_record(
     token, transaction_address, transactionid, amount, source,
@@ -212,9 +298,12 @@ def save_record(
     tx_timestamp=None,
     force_create=False,
     is_cashtoken=False,
+    is_cashtoken_nft=False,
+    capability='',
+    commitment=''
 ):
     """
-        token                : can be tokenid (slp token) or token name (bch)
+        token                : can be tokenid (slp token) or token name (bch) or category (cashtoken)
         transaction_address  : the destination address where token had been deposited.
         transactionid        : transaction id generated over blockchain.
         amount               : the amount being transacted.
@@ -232,7 +321,11 @@ def save_record(
                                     "outpoint_index": 0,
                                 }
         is_cashtoken         : determines if a fungible token or NFT is CashToken (True) or SLP (False)
+        is_cashtoken_nft     : supply this param if is_cashtoken is True
+        capability           : minting/mutable/immutable for cashtoken NFTs
+        commitment           : special hex/embedded string for cashtoken NFTs
     """
+
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
     )
@@ -250,20 +343,28 @@ def save_record(
         index = 0
 
     with trans.atomic():
-        
         transaction_created = False
+        cashtoken = None
 
         if token.lower() == 'bch':
-            token_obj, _ = Token.objects.get_or_create(
-                name=token,
-                is_cashtoken=is_cashtoken
-            )
+            token_obj, _ = Token.objects.get_or_create(name=token)
         else:
-            token_obj, created = Token.objects.get_or_create(
-                tokenid=token,
-                is_cashtoken=is_cashtoken
-            )
-            get_token_meta_data.delay(token)
+            if is_cashtoken:
+                token_obj, created = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+                
+                # get cashtoken metadata always in case there are changes on BCMR
+                cashtoken = get_cashtoken_meta_data(
+                    token,
+                    transactionid,
+                    index,
+                    commitment=commitment,
+                    capability=capability,
+                    is_nft=is_cashtoken_nft
+                )
+            else:
+                token_obj, created = Token.objects.get_or_create(tokenid=token)
+                if created:
+                    get_token_meta_data.delay(token)
 
         # try:
 
@@ -291,13 +392,28 @@ def save_record(
         #     return None, None
 
         try:
-            transaction_obj, transaction_created = Transaction.objects.get_or_create(
-                txid=transactionid,
-                address=address_obj,
-                token=token_obj,
-                amount=amount,
-                index=index
-            )
+            if is_cashtoken:
+                txn_data = {
+                    'txid': transactionid,
+                    'address': address_obj,
+                    'token': token_obj,
+                    'amount': amount,
+                    'index': index
+                }
+                if is_cashtoken_nft:
+                    txn_data['cashtoken_nft'] = CashNonFungibleToken.objects.get(id=cashtoken.id)
+                else:
+                    txn_data['cashtoken_ft'] = CashFungibleToken.objects.get(category=cashtoken.category)
+            else:
+                txn_data = {
+                    'txid': transactionid,
+                    'address': address_obj,
+                    'token': token_obj,
+                    'amount': amount,
+                    'index': index
+                }
+
+            transaction_obj, transaction_created = Transaction.objects.get_or_create(**txn_data)
 
             if spending_txid:
                 transaction_obj.spending_txid = spending_txid
@@ -340,7 +456,7 @@ def save_record(
                     source,
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
-                    force_create=True,
+                    force_create=True
                 )
         return transaction_obj.id, transaction_created
 
@@ -353,6 +469,23 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
         nft_data = token_data['nft']
         capability = nft_data['capability']
         commitment = nft_data['commitment']
+        amount = 1
+
+        obj_id, created = save_record(
+            token_id,
+            address,
+            txid,
+            amount,
+            NODE.BCH.source,
+            blockheightid=block_id,
+            tx_timestamp=timestamp,
+            index=index,
+            is_cashtoken=True,
+            is_cashtoken_nft=True,
+            capability=capability,
+            commitment=commitment,
+            force_create=force_create
+        )
     else:
         # save fungible token transaction
         amount = int(token_data['amount'])
@@ -367,14 +500,15 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
             index=index,
             is_cashtoken=True,
             force_create=force_create
-        ) 
-        if created:
-            third_parties = client_acknowledgement(obj_id)
-            for platform in third_parties:
-                if 'telegram' in platform:
-                    message = platform[1]
-                    chat_id = platform[2]
-                    send_telegram_message(message, chat_id)
+        )
+
+    if created:
+        third_parties = client_acknowledgement(obj_id)
+        for platform in third_parties:
+            if 'telegram' in platform:
+                message = platform[1]
+                chat_id = platform[2]
+                send_telegram_message(message, chat_id)
 
 
 @shared_task(queue='query_transaction')
@@ -539,16 +673,23 @@ def get_bch_utxos(self, address):
             index = output['tx_pos']
             block = output['height']
             tx_hash = output['tx_hash']
+            is_nft = False
             is_cashtoken = False
+            commitment = ''
+            capability = ''
 
             if 'token_data' in output.keys():
                 token_data = output['token_data']
+                token_id = token_data['category']
+                is_cashtoken = True
+
                 if 'nft' in token_data.keys():
-                    continue
+                    is_nft = True
+                    amount = 1
+                    capability = token_data['nft']['capability']
+                    commitment = token_data['nft']['commitment']
                 else:
                     amount = int(token_data['amount'])
-                    token_id = token_data['category']
-                    is_cashtoken = True
             else:
                 amount = output['value'] / (10 ** 8)
                 token_id = 'bch'
@@ -570,7 +711,10 @@ def get_bch_utxos(self, address):
                     blockheightid=block.id,
                     index=index,
                     new_subscription=True,
-                    is_cashtoken=is_cashtoken
+                    is_cashtoken=is_cashtoken,
+                    is_cashtoken_nft=is_nft,
+                    commitment=commitment,
+                    capability=capability
                 )
                 transaction_obj = Transaction.objects.filter(id=txn_id)
 
@@ -733,67 +877,56 @@ def download_token_metadata_image(token_id, document_url=None):
     image_url = None
     status_code = 0
 
-    if token_obj.is_cashtoken:
-        # TODO: save local media image to image_server_base (can't use requests)
-        # status_code, image_file_name = download_image(token_id, document_url)
+    if token_obj.token_type == 1:
+        # Check slp-token-icons repo
+        url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
+        status_code, image_file_name = download_image(token_id, url)
 
-        # if status_code == 200 and image_file_name:
-        #     image_url = f"{image_server_base}/{image_file_name}"
-        Token.objects.filter(tokenid=token_id).update(
-            original_image_url=document_url,
-            date_updated=timezone.now()
-        )
-    else:
-        if token_obj.token_type == 1:
-            # Check slp-token-icons repo
-            url = f"https://raw.githubusercontent.com/kosinusbch/slp-token-icons/master/128/{token_id}.png"
-            status_code, image_file_name = download_image(token_id, url)
+    if token_obj.is_nft:
+        group = token_obj.nft_token_group
 
-        if token_obj.is_nft:
-            group = token_obj.nft_token_group
+        # Check if NFT group/parent token has image_base_url
+        if group and 'image_base_url' in group.nft_token_group_details.keys():
+            image_base_url = group.nft_token_group_details['image_base_url']
+            image_type = group.nft_token_group_details['image_type']
+            url = f"{image_base_url}/{token_id}.{image_type}"
+            status_code, image_file_name = download_image(token_id, url, resize=True)
 
-            # Check if NFT group/parent token has image_base_url
-            if group and 'image_base_url' in group.nft_token_group_details.keys():
-                image_base_url = group.nft_token_group_details['image_base_url']
-                image_type = group.nft_token_group_details['image_type']
-                url = f"{image_base_url}/{token_id}.{image_type}"
+        # Try getting image directly from document URL
+        if not image_file_name and is_url(document_url):
+            url = document_url
+            ipfs_cid = get_ipfs_cid_from_url(url)
+            if not ipfs_cid or not url.startswith("ipfs://"):
                 status_code, image_file_name = download_image(token_id, url, resize=True)
 
-            # Try getting image directly from document URL
-            if not image_file_name and is_url(document_url):
-                url = document_url
-                ipfs_cid = get_ipfs_cid_from_url(url)
-                if not ipfs_cid or not url.startswith("ipfs://"):
+            # We try from other ipfs gateways if document url is an ipfs link but didnt work
+            if not image_file_name and ipfs_cid:
+                for ipfs_gateway in ipfs_gateways:
+                    url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
                     status_code, image_file_name = download_image(token_id, url, resize=True)
+                    if image_file_name:
+                        break
 
-                # We try from other ipfs gateways if document url is an ipfs link but didnt work
-                if not image_file_name and ipfs_cid:
-                    for ipfs_gateway in ipfs_gateways:
-                        url = f"https://{ipfs_gateway}/ipfs/{ipfs_cid}"
-                        status_code, image_file_name = download_image(token_id, url, resize=True)
-                        if image_file_name:
-                            break
+        # last fallback, juungle to resolve icon
+        # NOTE: juungle is shutting down in March 1, 2023
+        if not image_file_name:
+            url = f"https://www.juungle.net/api/v1/nfts/icon/{token_id}/{token_id}"
+            status_code, image_file_name = download_image(token_id, url, resize=True)
 
-            # last fallback, juungle to resolve icon
-            # NOTE: juungle is shutting down in March 1, 2023
-            if not image_file_name:
-                url = f"https://www.juungle.net/api/v1/nfts/icon/{token_id}/{token_id}"
-                status_code, image_file_name = download_image(token_id, url, resize=True)
-
-            if status_code == 200 and image_file_name:
-                image_url = f"{image_server_base}/{image_file_name}"
-                if token_obj.token_type == 1:
-                    Token.objects.filter(tokenid=token_id).update(
-                        original_image_url=image_url,
-                        date_updated=timezone.now()
-                    )
-                if token_obj.token_type == 65:
-                    Token.objects.filter(tokenid=token_id).update(
-                        original_image_url=image_url,
-                        medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
-                        thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
-                        date_updated=timezone.now()
-                    )
+        if status_code == 200 and image_file_name:
+            image_url = f"{image_server_base}/{image_file_name}"
+            if token_obj.token_type == 1:
+                Token.objects.filter(tokenid=token_id).update(
+                    original_image_url=image_url,
+                    date_updated=timezone.now()
+                )
+            if token_obj.token_type == 65:
+                Token.objects.filter(tokenid=token_id).update(
+                    original_image_url=image_url,
+                    medium_image_url=image_url.replace(token_id + '.', token_id + '_medium.'),
+                    thumbnail_image_url=image_url.replace(token_id + '.', token_id + '_thumbnail.'),
+                    date_updated=timezone.now()
+                )
 
     return image_url
 
@@ -801,46 +934,9 @@ def download_token_metadata_image(token_id, document_url=None):
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
 def get_token_meta_data(self, token_id, async_image_download=False):
     try:
-        t = Token.objects.get(tokenid=token_id)
+        if token_id != settings.WT_DEFAULT_CASHTOKEN_ID:
+            t = Token.objects.get(tokenid=token_id)
 
-        if t.is_cashtoken:
-            LOGGER.info(f'Fetching token metadata from {NODE.BCH.source}...')
-            
-            bcmr_token = BcmrToken.objects.filter(category=token_id)
-
-            if not bcmr_token.exists():
-                return
-
-            bcmr_token = bcmr_token.first()
-            token_obj_info = dict(
-                name = bcmr_token.name,
-                token_ticker = bcmr_token.symbol,
-                token_type = None,
-                decimals = bcmr_token.decimals,
-                date_updated = timezone.now(),
-                mint_amount = None,
-            )
-
-            token_obj, _ = Token.objects.update_or_create(tokenid=token_id, defaults=token_obj_info)
-            doc_url = settings.DOMAIN + bcmr_token.icon.url
-
-            # update token's decimal places in transaction amounts
-            # (cant update upon block data fetching since token metadata are only registered on BCMRs)
-            Transaction.objects.filter(
-                token__decimals__isnull=False
-            ).update(
-                amount=models.Subquery(
-                    Transaction.objects.filter(
-                        id=models.OuterRef('id')
-                    ).annotate(
-                        adjusted_amount=models.ExpressionWrapper(
-                            ( models.F('amount') / ( 10 ** models.F('token__decimals') ) ),
-                            output_field=models.FloatField()
-                        )
-                    ).values('adjusted_amount')
-                )
-            )
-        else:
             LOGGER.info(f'Fetching token metadata from {NODE.SLP.source}...')
 
             txn = NODE.SLP.get_transaction(token_id, parse_slp=True)
@@ -868,13 +964,13 @@ def get_token_meta_data(self, token_id, async_image_download=False):
 
             doc_url = info.get('document_url')
 
-        if async_image_download:
-            download_token_metadata_image.delay(token_obj.tokenid, document_url=doc_url)
-        else:
-            download_token_metadata_image(token_obj.tokenid, document_url=doc_url)
+            if async_image_download:
+                download_token_metadata_image.delay(token_obj.tokenid, document_url=doc_url)
+            else:
+                download_token_metadata_image(token_obj.tokenid, document_url=doc_url)
 
-        token_obj.refresh_from_db()
-        return token_obj.get_info()
+            token_obj.refresh_from_db()
+            return token_obj.get_info()
     except Exception as exc:
         LOGGER.error(str(exc))
         self.retry(countdown=5)
@@ -1001,6 +1097,11 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
                 if cashtoken_data:
                     elem.append(cashtoken_data['category'])
                     elem.append(cashtoken_data['amount'])
+
+                    if 'nft' in cashtoken_data.keys():
+                        nft_data = cashtoken_data['nft']
+                        elem.append(nft_data['capability'])
+                        elem.append(nft_data['commitment'])
             
             '''mask remaining fields with None (incurs Django error for non-uniform ArrayField(ArrayField) length for senders/recipients)
             [
@@ -1008,6 +1109,8 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
                 bch/slp amount,
                 ct category/token ID, (can be None)
                 ct amount,            (can be None)
+                ct capability         (can be None)
+                ct commitment         (can be None)
             ]'''
             for x in range(0, 6 - len(elem)):
                 elem.append(None)
@@ -1087,13 +1190,17 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             history_check = WalletHistory.objects.filter(
                 wallet=wallet,
                 txid=txid,
-                token=txn.token
+                token=txn.token,
+                cashtoken_ft=txn.cashtoken_ft,
+                cashtoken_nft=txn.cashtoken_nft
             )
             if history_check.exists():
                 history_check.update(
                     record_type=record_type,
                     amount=amount,
-                    token=txn.token
+                    token=txn.token,
+                    cashtoken_ft=txn.cashtoken_ft,
+                    cashtoken_nft=txn.cashtoken_nft
                 )
                 if tx_fee and processed_senders and processed_recipients:
                     history_check.update(
@@ -1115,6 +1222,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     record_type=record_type,
                     amount=amount,
                     token=txn.token,
+                    cashtoken_ft=txn.cashtoken_ft,
+                    cashtoken_nft=txn.cashtoken_nft,
                     tx_fee=tx_fee,
                     senders=processed_senders,
                     recipients=processed_recipients,
@@ -1122,8 +1231,10 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     tx_timestamp=tx_timestamp,
                 )
                 history.save()
+
                 resolve_wallet_history_usd_values.delay(txid=txid)
                 parse_market_values_task = None
+                
                 if history.tx_timestamp:
                     parse_market_values_task = parse_wallet_history_market_values.delay(history.id)
 
@@ -1140,7 +1251,12 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     LOGGER.exception(exception)
 
             # for older token records 
-            if txn.token and txn.token.tokenid and (txn.token.token_type is None or txn.token.mint_amount is None):
+            if (
+                txn.token and
+                txn.token.tokenid and
+                txn.token.tokenid != settings.WT_DEFAULT_CASHTOKEN_ID and
+                (txn.token.token_type is None or txn.token.mint_amount is None)
+            ):
                 get_token_meta_data(txn.token.tokenid, async_image_download=True)
                 txn.token.refresh_from_db()
 
@@ -1393,9 +1509,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                             chat_id = platform[2]
                             send_telegram_message(message, chat_id)
     
-    if not recipients['slp']:
-        LOGGER.info('JUMBO')
-        LOGGER.info(recipients['slp'])
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
         if wallet_handle.split('|')[0] == 'slp':

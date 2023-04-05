@@ -21,7 +21,6 @@ from main.tasks import (
 )
 
 import logging
-import array
 import binascii
 import zmq
 

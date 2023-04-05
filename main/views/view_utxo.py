@@ -1,12 +1,13 @@
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from django.db.models import Q, F, Func, OuterRef, Exists, CharField, IntegerField
+from django.db.models import Q, F, Func, OuterRef, Exists, CharField, IntegerField, BooleanField, Value
 from django.db.models.functions import Cast
 from django.contrib.postgres.fields.jsonb import KeyTextTransform
 from django.contrib.postgres.fields import JSONField
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.conf import settings
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
@@ -22,7 +23,7 @@ class Round(Func):
     template = "%(function)s(%(expressions)s::numeric, 0)"
 
 
-def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
+def _get_slp_utxos(query, is_cashtoken=False, show_address_index=False, minting_baton=None):
     qs = Transaction.objects.filter(query)
     if minting_baton is not None:
         subquery = Exists(
@@ -44,15 +45,31 @@ def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
     if show_address_index:
         utxos_values = qs.annotate(
             vout=F('index'),
-            tokenid=F('token__tokenid'),
-            token_name=F('token__name'),
-            decimals=F('token__decimals'),
-            token_ticker=F('token__token_ticker'),
+            tokenid=(
+                F('cashtoken_ft__category') or 
+                F('cashtoken_nft__category') or 
+                F('token__tokenid')
+            ),
+            token_name=(
+                F('cashtoken_ft__info__name') or
+                F('cashtoken_nft__info__name') or 
+                F('token__name')
+            ),
+            decimals=(
+                F('cashtoken_ft__info__decimals') or
+                F('cashtoken_nft__info__decimals') or
+                F('token__decimals')
+            ),
+            token_ticker=(
+                F('cashtoken_ft__info__symbol') or 
+                F('cashtoken__nft__info__symbol') or 
+                F('token__token_ticker')
+            ),
             token_type=F('token__token_type'),
             block=F('blockheight__number'),
             wallet_index=F('address__wallet_index'),
             address_path=F('address__address_path'),
-            is_cashtoken=F('token__is_cashtoken')
+            is_cashtoken=Value(is_cashtoken, BooleanField())
         ).values(
             'txid',
             'vout',
@@ -70,13 +87,29 @@ def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
     else:
         utxos_values = qs.annotate(
             vout=F('index'),
-            tokenid=F('token__tokenid'),
-            token_name=F('token__name'),
-            decimals=F('token__decimals'),
-            token_ticker=F('token__token_ticker'),
+            tokenid=(
+                F('cashtoken_ft__category') or 
+                F('cashtoken_nft__category') or 
+                F('token__tokenid')
+            ),
+            token_name=(
+                F('cashtoken_ft__info__name') or
+                F('cashtoken_nft__info__name') or 
+                F('token__name')
+            ),
+            decimals=(
+                F('cashtoken_ft__info__decimals') or
+                F('cashtoken_nft__info__decimals') or
+                F('token__decimals')
+            ),
+            token_ticker=(
+                F('cashtoken_ft__info__symbol') or 
+                F('cashtoken__nft__info__symbol') or 
+                F('token__token_ticker')
+            ),
             token_type=F('token__token_type'),
             block=F('blockheight__number'),
-            is_cashtoken=F('token__is_cashtoken')
+            is_cashtoken=Value(is_cashtoken, BooleanField())
         ).values(
             'txid',
             'vout',
@@ -93,7 +126,11 @@ def _get_slp_utxos(query, show_address_index=False, minting_baton=None):
 
 
 def _get_ct_utxos(query, show_address_index=False):
-    return _get_slp_utxos(query, show_address_index=show_address_index)
+    return _get_slp_utxos(
+        query,
+        is_cashtoken=True,
+        show_address_index=show_address_index
+    )
 
 
 def _get_bch_utxos(query, show_address_index=False):
@@ -168,9 +205,14 @@ class UTXO(APIView):
                 data['address'] = bch_address_converter(tokenaddress, to_token_addr=False)
 
             if tokenid:
-                query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
+                if is_token_addr:
+                    query = Q(address__address=data['address']) & Q(spent=False) & Q(cashtoken_ft__category=tokenid)
+                else:
+                    query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
-                query = Q(address__address=data['address']) & Q(spent=False) & Q(token__is_cashtoken=is_token_addr)
+                query = Q(address__address=data['address']) & Q(spent=False)
+                if is_token_addr:
+                    query = query & Q(token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
 
             if is_token_addr:
                 utxos_values = _get_ct_utxos(query)
@@ -191,10 +233,10 @@ class UTXO(APIView):
 
             elif wallet.wallet_type == 'bch':
                 if tokenid:
-                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(cashtoken_ft__category=tokenid)
                     utxos_values = _get_ct_utxos(query, show_address_index=True)
                 else:
-                    query = Q(wallet=wallet) & Q(spent=False)
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__name='bch')
                     utxos_values = _get_bch_utxos(query, show_address_index=True)
 
         if baton is not None:

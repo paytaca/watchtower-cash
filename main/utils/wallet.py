@@ -1,40 +1,47 @@
 from main.models import Transaction
 from django.db.models import Sum
+from django.conf import settings
 
 
 class HistoryParser(object):
 
-    def __init__(self, txid, wallet_hash):
+    def __init__(self, txid, wallet_hash, recipients):
         self.txid = txid
         self.wallet_hash = wallet_hash
+        self.recipients = recipients
 
     def get_relevant_inputs(self):
         inputs = Transaction.objects.filter(
             spending_txid=self.txid,
             wallet__wallet_hash=self.wallet_hash
         ).exclude(
-            token__is_cashtoken=True
+            token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
         )
-        ct_inputs = Transaction.objects.filter(
+        ct_fungible_inputs = Transaction.objects.filter(
             spending_txid=self.txid,
             wallet__wallet_hash=self.wallet_hash,
-            token__is_cashtoken=True
+            cashtoken_ft__isnull=False
         )
-        return inputs, ct_inputs
+        return inputs, ct_fungible_inputs
 
     def get_relevant_outputs(self):
         outputs = Transaction.objects.filter(
             txid=self.txid,
             wallet__wallet_hash=self.wallet_hash
         ).exclude(
-            token__is_cashtoken=True
+            token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
         )
-        ct_outputs = Transaction.objects.filter(
+        ct_fungible_outputs = Transaction.objects.filter(
             txid=self.txid,
             wallet__wallet_hash=self.wallet_hash,
-            token__is_cashtoken=True
+            cashtoken_ft__isnull=False
         )
-        return outputs, ct_outputs
+        ct_nft_outputs = Transaction.objects.filter(
+            txid=self.txid,
+            wallet__wallet_hash=self.wallet_hash,
+            cashtoken_nft__isnull=False
+        )
+        return outputs, ct_fungible_outputs, ct_nft_outputs
 
     def get_total_amount(self, qs):
         return qs.aggregate(Sum('amount'))['amount__sum']
@@ -69,7 +76,7 @@ class HistoryParser(object):
         total_inputs = 0
         total_ct_inputs = 0
 
-        outputs, ct_outputs = self.get_relevant_outputs()
+        outputs, ct_outputs, ct_nft_outputs = self.get_relevant_outputs()
         inputs, ct_inputs = self.get_relevant_inputs()
         
         if outputs.exists():

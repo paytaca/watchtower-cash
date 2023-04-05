@@ -11,8 +11,7 @@ class TokenTypeIsNullFilter(filters.FilterSet):
     class Meta:
         model = Token
         fields = {
-            'token_type': ['isnull'],
-            'is_cashtoken': ['exact']
+            'token_type': ['isnull']
         }
 
 class TokensViewSetFilter(BaseFilterBackend):

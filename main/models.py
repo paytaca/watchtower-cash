@@ -50,16 +50,6 @@ class Token(PostgresModel):
 
     mint_amount = models.BigIntegerField(null=True)
 
-    # cashtoken (FT & NFT only) fields
-    is_cashtoken = models.BooleanField(default=False)
-    commitment = models.CharField(max_length=255, null=True, blank=True)
-    capability = models.CharField(
-        max_length=30,
-        choices=Capability.choices,
-        null=True,
-        blank=True
-    )
-
     class Meta:
         unique_together = ('name', 'tokenid',)
 
@@ -85,14 +75,10 @@ class Token(PostgresModel):
 
     @property
     def info_id(self):
-        if self.is_cashtoken:
-            ct_prefix = 'ct/'
-            return ct_prefix + self.tokenid
+        if self.token_type:
+            return 'slp/' + self.tokenid
         else:
-            if self.token_type:
-                return 'slp/' + self.tokenid
-            else:
-                return self.name.lower()
+            return self.name.lower()
             
     @property
     def image_url(self):
@@ -105,7 +91,6 @@ class Token(PostgresModel):
             'id': self.info_id,
             'name': self.name,
             'symbol': self.token_ticker,
-            'is_cashtoken': self.is_cashtoken,
             'decimals': self.decimals,
             'token_type': self.token_type,
             'image_url': self.image_url
@@ -236,6 +221,110 @@ class Address(PostgresModel):
             return bch_address_converter(self.address)
         return None
 
+class CashTokenInfo(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    symbol = models.CharField(max_length=100)
+    decimals = models.PositiveIntegerField(default=0)
+    image_url = models.URLField(blank=True, null=True)
+    date_created = models.DateTimeField(default=timezone.now)
+    date_updated = models.DateTimeField(null=True, blank=True)
+    
+    nft_details = JSONField(default=dict)
+    '''
+        {
+           name: string,
+           description: string,
+           image_url: string (url)
+        }
+    '''
+
+class CashFungibleToken(models.Model):
+    category = models.CharField(
+        max_length=100,
+        unique=True,
+        primary_key=True,
+        db_index=True
+    )
+    info = models.ForeignKey(
+        CashTokenInfo,
+        related_name='fungible_tokens',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        verbose_name_plural = 'CashToken Fungible Tokens'
+
+    def __str__(self):
+        return f'{self.info.name} | {self.category[:7]}'
+
+    @property
+    def token_id(self):
+        return f'ct/{self.category}'
+
+    def get_info(self):
+        info = self.info
+        return {
+            'id': self.token_id,
+            'name': info.name,
+            'symbol': info.symbol,
+            'decimals': info.decimals,
+            'image_url': info.image_url,
+            'is_cashtoken': True
+        }
+
+class CashNonFungibleToken(models.Model):
+    class Capability(models.TextChoices):
+        MUTABLE = 'mutable'
+        MINTING = 'minting'
+        NONE = 'none'  # immutable
+
+    category = models.CharField(max_length=100, db_index=True)
+    commitment = models.CharField(max_length=255, default='', blank=True)
+    capability = models.CharField(
+        max_length=10,
+        choices=Capability.choices,
+        default='',
+        blank=True
+    )
+    info = models.ForeignKey(
+        CashTokenInfo,
+        related_name='nfts',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True
+    )
+    current_txid = models.CharField(max_length=70)
+    current_index = models.PositiveIntegerField()
+
+    class Meta:
+        verbose_name_plural = 'CashToken NFTs'
+        unique_together = (
+            'current_index',
+            'current_txid',
+        )
+
+    def __str__(self):
+        return f'{self.info.name} | {self.category[:7]}'
+        
+    @property
+    def token_id(self):
+        return f'ct/{self.category}/{self.current_txid}/{self.current_index}'
+
+    def get_info(self):
+        info = self.info
+        return {
+            'id': self.token_id,
+            'name': info.name,
+            'symbol': info.symbol,
+            'decimals': info.decimals,
+            'image_url': info.image_url,
+            'nft_details': info.nft_details,
+            'is_cashtoken': True
+        }
+
 class Transaction(PostgresModel):
     txid = models.CharField(max_length=70, db_index=True)
     address = models.ForeignKey(
@@ -258,6 +347,18 @@ class Transaction(PostgresModel):
     token = models.ForeignKey(
         Token,
         on_delete=models.CASCADE
+    )
+    cashtoken_ft = models.ForeignKey(
+        CashFungibleToken,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    cashtoken_nft = models.ForeignKey(
+        CashNonFungibleToken,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
     )
     index = models.IntegerField(default=0, db_index=True)
     spent = models.BooleanField(default=False, db_index=True)
@@ -425,6 +526,20 @@ class WalletHistory(PostgresModel):
         null=True,
         blank=True
     )
+    cashtoken_ft = models.ForeignKey(
+        CashFungibleToken,
+        on_delete=models.CASCADE,
+        related_name='wallet_history_records',
+        null=True,
+        blank=True
+    )
+    cashtoken_nft = models.ForeignKey(
+        CashNonFungibleToken,
+        on_delete=models.CASCADE,
+        related_name='wallet_history_records',
+        null=True,
+        blank=True
+    )
     tx_fee = models.FloatField(null=True, blank=True)
     tx_timestamp = models.DateTimeField(null=True,blank=True)
     date_created = models.DateTimeField(default=timezone.now)
@@ -440,6 +555,8 @@ class WalletHistory(PostgresModel):
             'wallet',
             'txid',
             'token',
+            'cashtoken_ft',
+            'cashtoken_nft',
         ]
 
     def __str__(self):

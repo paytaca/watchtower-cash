@@ -510,6 +510,7 @@ BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
 
 # BCHD_TESTNET_RPC_PASSWORD = decipher(config('BCHD_TESTNET_RPC_PASSWORD'))
 BCHD_NODE = 'bchd.paytaca.com:8335'
-
 # if BCH_NETWORK != 'mainnet':
 #     BCHD_NODE = f'http://{RPC_USER}:{BCHD_TESTNET_RPC_PASSWORD}@docker-host:18334'
+
+WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
