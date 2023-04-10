@@ -12,7 +12,3 @@ class Feedback(models.Model):
     comment = models.CharField(max_length=4000, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
-
-    # TODO restriction on which peers are allowed to create feedbacks for trade (order) participants:
-    # buyer - can create 1 feedback for seller & arbiter
-    # seller - can create 1 feedback for buyer & arbiter

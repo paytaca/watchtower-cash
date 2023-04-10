@@ -16,6 +16,7 @@ class OrderSerializer(serializers.ModelSerializer):
   class Meta:
     model = Order
     fields = [
+      "id",
       "ad",
       "creator",
       "crypto_currency",
