@@ -32,7 +32,8 @@ from .views.order import (
 
 from .views.feedback import (
   ArbiterFeedbackListCreate,
-  FeedbackDetail
+  PeerFeedbackListCreate,
+  FeedbackDetail,
 )
 
 urlpatterns = [
@@ -53,4 +54,5 @@ urlpatterns = [
   path('order/<int:pk>/status', OrderStatusList.as_view(), name='order-status-list'),
   path('feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
   path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
+  path('feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
 ]

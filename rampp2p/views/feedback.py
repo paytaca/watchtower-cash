@@ -124,7 +124,10 @@ class PeerFeedbackListCreate(APIView):
 
       # to_peer must be arbiter
       try:
-        self.validate_counterparty(serializer.validated_data['to_peer'], serializer.validated_data['order'])
+        self.validate_counterparty(
+          serializer.validated_data['from_peer'], 
+          serializer.validated_data['to_peer'], 
+          serializer.validated_data['order'])
       except ValidationError as err:
         return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -156,8 +159,13 @@ class PeerFeedbackListCreate(APIView):
     if to_peer == from_peer:
       raise ValidationError('to_peer must be order counterparty')
     
-    if to_peer != order.to_peer:
-      raise ValidationError('to_peer must be order counterparty')
+    if from_peer == order.creator:
+      if to_peer != order.ad.owner:
+        raise ValidationError('to_peer must be order counterparty')
+    
+    if from_peer == order.ad.owner:
+      if to_peer != order.creator:
+        raise ValidationError('to_peer must be order counterparty')
     
   def validate_limit(self, from_peer, to_peer, order):
     '''
