@@ -10,8 +10,7 @@ from .views.payment import (
   PaymentTypeList,
   PaymentTypeDetail,
   PaymentMethodListCreate,
-  PaymentMethodDetail,
-  TestAPI
+  PaymentMethodDetail
 )
 
 from .views.peer import (
@@ -21,10 +20,10 @@ from .views.peer import (
 )
 
 from .views.currency import (
-  FiatListCreateView,
-  FiatDetailView,
-  CryptoListCreateView,
-  CryptoDetailView
+  FiatCurrencyList,
+  FiatCurrencyDetail,
+  CryptoCurrencyList,
+  CryptoCurrencyDetail
 )
 
 from .views.order import (
@@ -49,10 +48,10 @@ urlpatterns = [
   path('peer/', PeerCreate.as_view(), name='peer-create'),
   path('peer/', PeerList.as_view(), name='peer-list'),
   path('peer/<int:pk>', PeerDetail.as_view(), name='peer-detail'),
-  path('currency/fiat/', FiatListCreateView.as_view(), name='fiat-list-create'),
-  path('currency/fiat/<int:pk>', FiatDetailView.as_view(), name='fiat-detail'),
-  path('currency/crypto/', CryptoListCreateView.as_view(), name='crypto-list-create'),
-  path('currency/crypto/<int:pk>', CryptoDetailView.as_view(), name='crypto-detail'),
+  path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list-create'),
+  path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),
+  path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list-create'),
+  path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view(), name='crypto-detail'),
   path('order/', OrderListCreate.as_view(), name='order-list-create'),
   path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
   path('order/<int:pk>/status', OrderStatusList.as_view(), name='order-status-list'),
