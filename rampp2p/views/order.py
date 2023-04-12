@@ -23,21 +23,16 @@ class OrderList(APIView):
     serializer = OrderSerializer(data=request.data)
     if serializer.is_valid():
       ad = Ad.objects.get(pk=request.data.get('ad'))
-      order = Order.objects.create(
-        ad = ad,
-        creator = serializer.validated_data['creator'],
-        fiat_amount = serializer.validated_data['fiat_amount'],
-        locked_price = serializer.validated_data['locked_price'],
-        crypto_currency = ad.crypto_currency,
-        fiat_currency = ad.fiat_currency,
-        arbiter = serializer.validated_data['arbiter']
-      )
-      payment_methods = PaymentMethod.objects.filter(id__in=request.data.get('payment_methods'))
-      order.payment_methods.set(payment_methods)
+      serializer.validated_data['ad'] = ad
+      serializer.validated_data['crypto_currency'] = ad.crypto_currency
+      serializer.validated_data['fiat_currency'] = ad.fiat_currency
+      serializer.save()
+
       Status.objects.create(
         status=StatusType.SUBMITTED,
-        order=order
+        order=Order.objects.get(pk=serializer.data['id'])
       )
+      
       return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -46,7 +41,6 @@ class OrderStatusList(APIView):
     queryset = Status.objects.filter(order=order_id)
     serializer = StatusSerializer(queryset, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 class OrderDetail(APIView):
   def get_object(self, pk):
