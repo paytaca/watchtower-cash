@@ -26,7 +26,7 @@ from .views.currency import (
 )
 
 from .views.order import (
-  OrderListCreate,
+  OrderList,
   OrderDetail,
   OrderStatusList
 )
@@ -38,7 +38,7 @@ from .views.feedback import (
 )
 
 urlpatterns = [
-  path('ad/', AdList.as_view(), name='ad-list'),
+  path('ad/', AdList.as_view(), name='ad-list-create'),
   path('ad/<int:pk>/', AdDetail.as_view(), name='ad-detail'),
   path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list-create'),
   path('payment-type/<int:pk>', PaymentTypeDetail.as_view(), name='payment-type-detail'),
@@ -50,9 +50,11 @@ urlpatterns = [
   path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),
   path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list-create'),
   path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view(), name='crypto-detail'),
-  path('order/', OrderListCreate.as_view(), name='order-list-create'),
+
+  path('order/', OrderList.as_view(), name='order-list-create'),
   path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
-  path('order/<int:pk>/status', OrderStatusList.as_view(), name='order-status-list'),
+  path('order/<int:order_id>/status', OrderStatusList.as_view(), name='order-status-list'),
+  
   path('feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
   path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
   path('feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),

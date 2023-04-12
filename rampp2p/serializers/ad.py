@@ -5,10 +5,10 @@ from ..models.currency import FiatCurrency, CryptoCurrency
 from ..models.payment import PaymentMethod
 
 class AdSerializer(serializers.ModelSerializer):
-  # owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
-  # fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
-  # crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
-  # payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
+  owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
+  fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
+  crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
+  payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
 
   class Meta:
     model = Ad

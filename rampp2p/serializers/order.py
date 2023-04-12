@@ -28,4 +28,5 @@ class OrderSerializer(serializers.ModelSerializer):
       "payment_methods",
       "is_appealed"
     ]
-    read_only_fields = ["crypto_currency", "fiat_currency", "arbiter", "payment_methods", "chat"]
+    read_only_fields = ["crypto_currency", "fiat_currency", "arbiter", "payment_methods"]
+    depth = 1

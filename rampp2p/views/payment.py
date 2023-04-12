@@ -58,15 +58,15 @@ class PaymentTypeDetail(APIView):
 class PaymentMethodListCreate(APIView):
   def post(self, request):
 
-    # verify signature
-    try:
-      verify_signature(request)
-    except ValidationError as err:
-      return Response(err.args[0], status=status.HTTP_403_FORBIDDEN)
+    # TODO: verify signature
+    # try:
+    #   verify_signature(request)
+    # except ValidationError as err:
+    #   return Response(err.args[0], status=status.HTTP_403_FORBIDDEN)
 
     serializer = PaymentMethodSerializer(data=request.data)
     if serializer.is_valid():
-      serializer.owner = Peer.objects.get(wallet_hash=request.data['wallet_hash'])
+      # serializer.owner = Peer.objects.get(wallet_hash=request.data['wallet_hash'])
       serializer.save()
       return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
