@@ -19,4 +19,5 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
       'account_name',
       'account_number'
     ]
+    read_only_fields = ['owner']
     depth = 1

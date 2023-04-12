@@ -3,8 +3,11 @@ from django.db import models
 from .currency import FiatCurrency
 
 class Peer(models.Model):
-  nickname = models.CharField(max_length=100, unique=True)
-  wallet_address = models.CharField(max_length=100, blank=True, null=True) # required if is_arbiter=True
+  nickname = models.CharField(max_length=100)
+  wallet_hash = models.CharField(
+    max_length=100,
+    unique=True
+  )
   default_fiat = models.ForeignKey(
     FiatCurrency, 
     on_delete=models.SET_NULL, 
