@@ -11,8 +11,6 @@ def verify_signature(request):
   try:
     signed_data = signer.unsign(signature)
     if signed_data != data:
-      print('Signature is invalid')
-      raise ValidationError
+      raise ValidationError('Signature is invalid')
   except:
-    print('Signature is invalid')
-    raise ValidationError
+    raise ValidationError('Signature is invalid')

@@ -7,7 +7,7 @@ class PeerSerializer(serializers.ModelSerializer):
     fields = [
       'id', 
       'nickname', 
-      'wallet_address',
+      'wallet_hash',
       'is_arbiter',
       'is_disabled',
       'created_at',
