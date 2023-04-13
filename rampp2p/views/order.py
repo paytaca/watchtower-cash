@@ -106,10 +106,11 @@ class ConfirmOrder(APIView):
     # TODO: escrow funds
     # escrow_funds(request.data)
 
-    # check: status count must be 1
-    status_count = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.CONFIRMED)).count()
-    if status_count > 0:
-      return Response({'error': 'order has already been confirmed'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        # validate status instance count
+        validate_status_inst_count(StatusType.CONFIRMED, order_id)
+    except ValidationError as err:
+      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     # update the order status to CONFIRMED
     status_data = {
@@ -296,3 +297,8 @@ def validate_status_confirmed(order_id):
   current_status = Status.objects.filter(order=order_id).latest('created_at')
   if current_status.status != StatusType.CONFIRMED:
     raise ValidationError('action not allowed')
+  
+def validate_status_inst_count(status, order_id):
+    status_count = Status.objects.filter(Q(order=order_id) & Q(status=status)).count()
+    if status_count > 0:
+      raise ValidationError('duplicate status')
