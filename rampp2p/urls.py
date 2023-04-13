@@ -28,7 +28,11 @@ from .views.currency import (
 from .views.order import (
   OrderList,
   OrderDetail,
-  OrderStatusList
+  OrderStatusList,
+  AppealCancel,
+  AppealRefund,
+  AppealRelease,
+  ConfirmOrder
 )
 
 from .views.feedback import (
@@ -54,8 +58,13 @@ urlpatterns = [
   path('order/', OrderList.as_view(), name='order-list-create'),
   path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
   path('order/<int:order_id>/status', OrderStatusList.as_view(), name='order-status-list'),
+  path('order/confirm', ConfirmOrder.as_view(), name='confirm-order'),
   
   path('feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
   path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
   path('feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
+
+  path('order/appeal/cancel', AppealCancel.as_view(), name='appeal-cancel'),
+  path('order/appeal/release', AppealRelease.as_view(), name='appeal-release'),
+  path('order/appeal/refund', AppealRefund.as_view(), name='appeal-refund'),
 ]

@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 # Register your models here.
-from .models_base import *
+from .base_models import *
 
 
 admin.site.register(Ad)

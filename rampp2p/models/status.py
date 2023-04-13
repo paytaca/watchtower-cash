@@ -13,6 +13,6 @@ class StatusType(models.TextChoices):
   CANCELED  = 'CNCL', _('Canceled')
 
 class Status(models.Model):
-  status = models.CharField(max_length=5, choices=StatusType.choices, editable=False)
+  status = models.CharField(max_length=5, choices=StatusType.choices, editable=False, blank=False)
   order = models.ForeignKey(Order, on_delete=models.CASCADE, editable=False)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
