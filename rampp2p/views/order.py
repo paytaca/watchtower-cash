@@ -2,7 +2,7 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import Http404
-from ..serializers.order import OrderSerializer
+from ..serializers.order import OrderSerializer, OrderWriteSerializer
 from ..serializers.status import StatusSerializer
 from ..models.order import Order
 from ..models.status import Status, StatusType
@@ -20,19 +20,29 @@ class OrderList(APIView):
     return Response(serializer.data, status.HTTP_200_OK)
 
   def post(self, request):
-    serializer = OrderSerializer(data=request.data)
+
+    # TODO: verify signature
+    # TODO: autofill order creator
+
+    data = request.data
+    ad_id = data.get('ad', None)
+    if ad_id is None:
+      return Response({'error': 'ad_id field is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    ad = Ad.objects.get(pk=ad_id)
+    data['crypto_currency'] = ad.crypto_currency.id
+    data['fiat_currency'] = ad.fiat_currency.id
+    serializer = OrderWriteSerializer(data=data)
+    
     if serializer.is_valid():
-      ad = Ad.objects.get(pk=request.data.get('ad'))
-      serializer.validated_data['ad'] = ad
-      serializer.validated_data['crypto_currency'] = ad.crypto_currency
-      serializer.validated_data['fiat_currency'] = ad.fiat_currency
-      serializer.save()
+      order = serializer.save()
 
       Status.objects.create(
         status=StatusType.SUBMITTED,
-        order=Order.objects.get(pk=serializer.data['id'])
+        order=Order.objects.get(pk=order.id)
       )
       
+      serializer = OrderSerializer(order)
       return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -56,11 +66,12 @@ class OrderDetail(APIView):
 
   def put(self, request, pk):
 
-    # TODO: verify the signature
+    # TODO: verify signature    
     # try:
     #   verify_signature(request)
     # except ValidationError as err:
     #   return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+    # TODO: verify permission
 
     order = self.get_object(pk)
     serializer = OrderSerializer(order, data=request.data)
@@ -72,11 +83,20 @@ class OrderDetail(APIView):
 class ConfimOrder(APIView):
 
   def post(self, request):
-    # TODO self.escrow_funds(data=data)
-    # TODO update Order status to Status=CONFIRMED
-    pass
+
+    # TODO: verify signature
+    # TODO: verify permission
+
+    self.escrow_funds(request.data)
+    Status.objects.create(
+      status=StatusType.SUBMITTED,
+      order=Order.objects.get(pk=serializer.data['id'])
+    )
+      
+    
   
   def escrow_funds(self, data):
+    # TODO: frontend must 
     pass
 
 '''
