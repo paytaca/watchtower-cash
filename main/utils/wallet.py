@@ -5,10 +5,9 @@ from django.conf import settings
 
 class HistoryParser(object):
 
-    def __init__(self, txid, wallet_hash, recipients):
+    def __init__(self, txid, wallet_hash):
         self.txid = txid
         self.wallet_hash = wallet_hash
-        self.recipients = recipients
 
     def get_relevant_inputs(self):
         inputs = Transaction.objects.filter(

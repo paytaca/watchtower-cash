@@ -513,6 +513,10 @@ class WalletHistory(PostgresModel):
         max_length=70,
         db_index=True
     )
+    # unlike SLP tokens, cashtoken NFTs and fungible tokens can be on the same txn
+    # unlike SLP tokens, a single cashtoken txn can have multiple tokens of diff category (token ID)
+    # thus, [wallet, txid] is not enough to make this model unique
+    # token_index = models.PositiveIntegerField(default=0)
     record_type = models.CharField(
         max_length=10,
         blank=True,
@@ -554,6 +558,7 @@ class WalletHistory(PostgresModel):
         unique_together = [
             'wallet',
             'txid',
+            # 'token_index',
             'token',
             'cashtoken_ft',
             'cashtoken_nft',
