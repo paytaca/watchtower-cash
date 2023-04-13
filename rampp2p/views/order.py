@@ -112,18 +112,18 @@ class ConfirmOrder(APIView):
     except ValidationError as err:
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    # update the order status to CONFIRMED
-    status_data = {
+    # create CONFIRMED status for order
+    serializer = StatusSerializer(data={
       'status': StatusType.CONFIRMED,
       'order': order_id
-    }
-    serializer = StatusSerializer(data=status_data)
+    })
+
     if serializer.is_valid():
       stat = StatusSerializer(serializer.save())
       return Response(stat.data, status=status.HTTP_200_OK)        
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
-class ConfimPayment(APIView):
+class ConfirmPayment(APIView):
   def post(self, request):
     # TODO: verify signature
     # TODO: verify permission
@@ -131,12 +131,23 @@ class ConfimPayment(APIView):
     order_id = request.data.get('order_id', None)
     if order_id is None:
       raise Http404
+    
+    try:
+        # validate status instance count
+        validate_status_inst_count(StatusType.PAID, order_id)
+    except ValidationError as err:
+      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    # update the order status to PAID
-    Status.objects.create(
-      status=StatusType.PAID,
-      order=Order.objects.get(pk=order_id)
-    )
+    # create PAID status for order
+    serializer = StatusSerializer(data={
+      'status': StatusType.PAID,
+      'order': order_id
+    })
+
+    if serializer.is_valid():
+      stat = StatusSerializer(serializer.save())
+      return Response(stat.data, status=status.HTTP_200_OK)        
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # ReleaseCrypto is called by the crypto seller or arbiter.
 class ReleaseCrypto(APIView):
@@ -150,11 +161,22 @@ class ReleaseCrypto(APIView):
     
     # TODO escrow_release()
 
-    # change order status to RELEASED
-    Status.objects.create(
-      status=StatusType.RELEASED,
-      order=Order.objects.get(pk=order_id)
-    )
+    try:
+        # validate status instance count
+        validate_status_inst_count(StatusType.RELEASED, order_id)
+    except ValidationError as err:
+      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+  
+    # create RELEASED status for order
+    serializer = StatusSerializer(data={
+      'status': StatusType.RELEASED,
+      'order': order_id
+    })
+
+    if serializer.is_valid():
+      stat = StatusSerializer(serializer.save())
+      return Response(stat.data, status=status.HTTP_200_OK)        
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # RefundCrypto is callable only by the arbiter
 class RefundCrypto(APIView):
@@ -164,15 +186,26 @@ class RefundCrypto(APIView):
 
     order_id = request.data.get('order_id', None)
     if order_id is None:
-      raise Http404
+        raise Http404
     
     # TODO escrow_refund()
 
-    # change order status to REFUNDED
-    Status.objects.create(
-      status=StatusType.REFUNDED,
-      order=Order.objects.get(pk=order_id)
-    )
+    try:
+        # validate status instance count
+        validate_status_inst_count(StatusType.REFUNDED, order_id)
+    except ValidationError as err:
+        return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+  
+    # create REFUNDED status for order
+    serializer = StatusSerializer(data={
+        'status': StatusType.REFUNDED,
+        'order': order_id
+    })
+
+    if serializer.is_valid():
+        stat = StatusSerializer(serializer.save())
+        return Response(stat.data, status=status.HTTP_200_OK)        
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # AppealCancel is callable by either party
 # AppealCancel creates an Appeal instance with field type=CANCEL
