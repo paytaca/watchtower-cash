@@ -162,8 +162,8 @@ class ReleaseCrypto(APIView):
     # TODO escrow_release()
 
     try:
-        # validate status instance count
         validate_status_inst_count(StatusType.RELEASED, order_id)
+        validate_exclusive_stats(StatusType.RELEASED, order_id)
     except ValidationError as err:
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
@@ -191,8 +191,8 @@ class RefundCrypto(APIView):
     # TODO escrow_refund()
 
     try:
-        # validate status instance count
         validate_status_inst_count(StatusType.REFUNDED, order_id)
+        validate_exclusive_stats(StatusType.REFUNDED, order_id)
     except ValidationError as err:
         return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
@@ -326,12 +326,23 @@ def escrow_funds(self, data):
 '''
 
 def validate_status_confirmed(order_id):
-  # check: current order status must be CONFIRMED
-  current_status = Status.objects.filter(order=order_id).latest('created_at')
-  if current_status.status != StatusType.CONFIRMED:
-    raise ValidationError('action not allowed')
+    # check: current order status must be CONFIRMED
+    current_status = Status.objects.filter(order=order_id).latest('created_at')
+    if current_status.status != StatusType.CONFIRMED:
+        raise ValidationError('action not allowed')
   
 def validate_status_inst_count(status, order_id):
     status_count = Status.objects.filter(Q(order=order_id) & Q(status=status)).count()
     if status_count > 0:
-      raise ValidationError('duplicate status')
+        raise ValidationError('duplicate status')
+    
+def validate_exclusive_stats(status, order_id):
+    if status == StatusType.RELEASED:
+        stat_count = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.REFUNDED)).count()
+        if stat_count > 0:
+            raise ValidationError('cannot release what is already refunded')
+    
+    if status == StatusType.REFUNDED:
+        stat_count = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.RELEASED)).count()
+        if stat_count > 0:
+            raise ValidationError('cannot refund what is already released')
