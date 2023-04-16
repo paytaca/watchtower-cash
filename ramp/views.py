@@ -170,11 +170,10 @@ class RampShiftHistoryView(APIView):
         
         wallet_hash = kwargs['wallet_hash']
         page = request.query_params.get('page', 1)
-        address = request.query_params.get('address', '')
         Model = self.serializer_class.Meta.model 
         data = {}
 
-        qs = Model.objects.filter(wallet_hash=wallet_hash, bch_address=address).order_by('-date_shift_created')
+        qs = Model.objects.filter(wallet_hash=wallet_hash).order_by('-date_shift_created')
 
         if qs:
             list = qs.values(                
