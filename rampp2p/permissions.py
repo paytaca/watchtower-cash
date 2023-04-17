@@ -43,6 +43,32 @@ def validate_confirm_order_perm(wallet_hash, order_id):
     else:
         raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
     
+def validate_buyer_confirm_payment_perm(wallet_hash, order_id):
+    '''
+    Only buyers can set order status to PAID_PENDING
+    '''
+
+    # if ad.trade_type is SELL
+    #   buyer is the BUY order creator
+    # else (ad.trade_type is BUY)
+    #   buyer is the ad creator
+    # require(caller = buyer)
+
+    try:
+        caller = Peer.objects.get(wallet_hash=wallet_hash)
+        order = Order.objects.get(pk=order_id)
+    except Peer.DoesNotExist or Order.DoesNotExist:
+        raise ValidationError('Peer/Order DoesNotExist')
+    
+    buyer = None
+    if order.ad.trade_type == TradeType.SELL:
+       buyer = order.creator
+    else:
+       buyer = order.ad.owner
+
+    if caller.wallet_hash != buyer.wallet_hash:
+        raise ValidationError('caller must be buyer')
+
 
 def is_order_owner(peer_id, order_id):
     pass

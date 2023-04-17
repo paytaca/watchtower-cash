@@ -40,7 +40,7 @@ def validate_status_progression(new_status, order_id):
             raise ValidationError(error_msg + 'SUBMITTED orders can only be CONFIRMED | CANCELED')
 
     if current_status.status == StatusType.CONFIRMED:
-       if (new_status != StatusType.PAID and 
+       if (new_status != StatusType.PAID_PENDING and 
            new_status != StatusType.CANCEL_APPEALED):
           raise ValidationError(error_msg + 'CONFIRMED orders can only be PAID_PENDING | CANCEL_APPEALED')
     
