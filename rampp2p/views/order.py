@@ -107,40 +107,66 @@ class OrderDetail(APIView):
 
 class ConfirmOrder(APIView):
 
-  def post(self, request):
+    def post(self, request):
 
-    # TODO: verify signature
+        # TODO: verify signature
 
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-        raise Http404
+        order_id = request.data.get('order_id', None)
+        if order_id is None:
+            raise Http404
+        
+        wallet_hash = request.data.get('wallet_hash', None)
+        if order_id is None:
+            raise Http404
+
+        try:
+            # validate permissions
+            self.validate_permissions(wallet_hash, order_id)
+            # status validations
+            validate_status_inst_count(StatusType.CONFIRMED, order_id)
+            validate_status_progression(StatusType.CONFIRMED, order_id)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # TODO: escrow funds
+        # escrow_funds(request.data)
+
+        # create CONFIRMED status for order
+        serializer = StatusSerializer(data={
+            'status': StatusType.CONFIRMED,
+            'order': order_id
+        })
+
+        if serializer.is_valid():
+            stat = StatusSerializer(serializer.save())
+            return Response(stat.data, status=status.HTTP_200_OK)        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    wallet_hash = request.data.get('wallet_hash', None)
-    if order_id is None:
-      raise Http404
+    def validate_permissions(self, wallet_hash, order_id):
+        '''
+        Only owners of SELL ads can set order statuses to CONFIRMED.
+        Creators of SELL orders skip the order status to CONFIRMED on creation.
+        '''
 
-    try:
-        # validate permissions
-        validate_confirm_order_perm(wallet_hash, order_id)
-        # status validations
-        validate_status_inst_count(StatusType.CONFIRMED, order_id)
-        validate_status_progression(StatusType.CONFIRMED, order_id)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        # check if ad type is SELL
+        # if ad type is SELL:
+        #    require caller = ad owner
+        # else
+        #    raise error
 
-    # TODO: escrow funds
-    # escrow_funds(request.data)
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=order_id)
+        except Peer.DoesNotExist or Order.DoesNotExist:
+            raise ValidationError('Peer/Order DoesNotExist')
 
-    # create CONFIRMED status for order
-    serializer = StatusSerializer(data={
-      'status': StatusType.CONFIRMED,
-      'order': order_id
-    })
-
-    if serializer.is_valid():
-      stat = StatusSerializer(serializer.save())
-      return Response(stat.data, status=status.HTTP_200_OK)        
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if order.ad.trade_type == TradeType.SELL:
+            seller = order.ad.owner
+            # require caller is seller
+            if caller.wallet_hash != seller.wallet_hash:
+                raise ValidationError('caller must be seller')
+        else:
+            raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
   
 class CryptoBuyerConfirmPayment(APIView):
   def post(self, request):
@@ -156,8 +182,7 @@ class CryptoBuyerConfirmPayment(APIView):
       raise Http404
     
     try:
-        # validate permission
-        validate_buyer_confirm_payment_perm(wallet_hash, order_id)
+        self.validate_permissions(wallet_hash, order_id)
         # status validations
         validate_status_inst_count(StatusType.PAID_PENDING, order_id)
         validate_status_progression(StatusType.PAID_PENDING, order_id)
@@ -174,42 +199,94 @@ class CryptoBuyerConfirmPayment(APIView):
       stat = StatusSerializer(serializer.save())
       return Response(stat.data, status=status.HTTP_200_OK)        
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+  
+  def validate_permissions(self, wallet_hash, order_id):
+    '''
+    Only buyers can set order status to PAID_PENDING
+    '''
 
-class CryptoSellerConfirmPayment(APIView):
-  def post(self, request):
-    # TODO: verify signature
+    # if ad.trade_type is SELL
+    #   buyer is the BUY order creator
+    # else (ad.trade_type is BUY)
+    #   buyer is the ad creator
+    # require(caller = buyer)
 
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-      raise Http404
-    
-    wallet_hash = request.data.get('wallet_hash', None)
-    if wallet_hash is None:
-      raise Http404
-    
     try:
-        # TODO: verify permission
-        validate_seller_confirm_payment_perm(wallet_hash, order_id)
-        # status validations
-        validate_status_inst_count(StatusType.PAID, order_id)
-        validate_status_progression(StatusType.PAID, order_id)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        caller = Peer.objects.get(wallet_hash=wallet_hash)
+        order = Order.objects.get(pk=order_id)
+    except Peer.DoesNotExist or Order.DoesNotExist:
+        raise ValidationError('Peer/Order DoesNotExist')
+    
+    buyer = None
+    if order.ad.trade_type == TradeType.SELL:
+       buyer = order.creator
+    else:
+       buyer = order.ad.owner
 
-    # create PAID status for order
-    serializer = StatusSerializer(data={
-      'status': StatusType.PAID,
-      'order': order_id
-    })
+    if caller.wallet_hash != buyer.wallet_hash:
+        raise ValidationError('caller must be buyer')
+    
+class CryptoSellerConfirmPayment(APIView):
+    def post(self, request):
+        # TODO: verify signature
 
-    if serializer.is_valid():
-      stat = StatusSerializer(serializer.save())
-      return Response(stat.data, status=status.HTTP_200_OK)        
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        order_id = request.data.get('order_id', None)
+        if order_id is None:
+            raise Http404
+        
+        wallet_hash = request.data.get('wallet_hash', None)
+        if wallet_hash is None:
+            raise Http404
+        
+        try:
+            self.validate_permissions(wallet_hash, order_id)
+            # status validations
+            validate_status_inst_count(StatusType.PAID, order_id)
+            validate_status_progression(StatusType.PAID, order_id)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # create PAID status for order
+        serializer = StatusSerializer(data={
+        'status': StatusType.PAID,
+        'order': order_id
+        })
+
+        if serializer.is_valid():
+            stat = StatusSerializer(serializer.save())
+            return Response(stat.data, status=status.HTTP_200_OK)        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+  
+    def validate_permissions(self, wallet_hash, order_id):
+        '''
+        Only the seller can set the order status to PAID
+        '''
+
+        # if ad.trade_type is SELL:
+        #      seller is ad creator
+        # else 
+        #      seller is order creator
+        # require(caller == seller)
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=order_id)
+        except Peer.DoesNotExist or Order.DoesNotExist:
+            raise ValidationError('Peer/Order DoesNotExist')
+        
+        seller = None
+        if order.ad.trade_type == TradeType.SELL:
+            seller = order.ad.owner
+        else:
+            seller = order.creator
+
+        if caller.wallet_hash != seller.wallet_hash:
+            raise ValidationError('caller must be seller')
 
 # ReleaseCrypto is called by the crypto seller or arbiter.
 class ReleaseCrypto(APIView):
   def post(self, request):
+    
     # TODO verify signature
     # TODO verify permissions
 
