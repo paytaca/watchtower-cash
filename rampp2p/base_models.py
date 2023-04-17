@@ -1,4 +1,4 @@
-from .models.ad import Ad
+from .models.ad import Ad, TradeType, PriceType
 from .models.chat import Chat, Message, Image
 from .models.currency import FiatCurrency, CryptoCurrency
 from .models.feedback import Feedback
@@ -12,6 +12,8 @@ from .models.appeal import Appeal, AppealType
 
 __all__ = [
   'Ad',
+  'TradeType', 
+  'PriceType',
   'Chat',
   'Message',
   'Image',

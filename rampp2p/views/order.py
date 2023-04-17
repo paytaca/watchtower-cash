@@ -5,6 +5,7 @@ from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
+from ..permissions import *
 from ..validators import *
 from ..base_serializers import (
   OrderSerializer, 
@@ -16,7 +17,8 @@ from ..base_models import (
   Ad,
   StatusType,
   Status,
-  Order
+  Order,
+  Peer
 )
 
 '''
@@ -108,17 +110,29 @@ class ConfirmOrder(APIView):
   def post(self, request):
 
     # TODO: verify signature
-    # TODO verify permissions: 
-    #   - only crypto sellers can CONFIRM an order
 
     order_id = request.data.get('order_id', None)
     if order_id is None:
       raise Http404
     
+    wallet_hash = request.data.get('wallet_hash', None)
+    if order_id is None:
+      raise Http404
+    
+    try:
+        caller = Peer.objects.get(wallet_hash=wallet_hash)
+        order = Order.objects.get(pk=order_id)
+    except Peer.DoesNotExist or Order.DoesNotExist:
+        raise Http404
+    
+    
     # TODO: escrow funds
     # escrow_funds(request.data)
 
     try:
+        # verify permissions
+        validate_confirm_order_perm(caller, order)
+        # validations
         validate_status_inst_count(StatusType.CONFIRMED, order_id)
         validate_status_progression(StatusType.CONFIRMED, order_id)
     except ValidationError as err:
