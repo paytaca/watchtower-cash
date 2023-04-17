@@ -285,34 +285,75 @@ class CryptoSellerConfirmPayment(APIView):
 
 # ReleaseCrypto is called by the crypto seller or arbiter.
 class ReleaseCrypto(APIView):
-  def post(self, request):
+    def post(self, request):
+
+        # TODO verify signature
+
+        order_id = request.data.get('order_id', None)
+        if order_id is None:
+            raise Http404
+
+        wallet_hash = request.data.get('wallet_hash', None)
+        if wallet_hash is None:
+            raise Http404
+
+        try:
+            # status validations
+            validate_status_inst_count(StatusType.RELEASED, order_id)
+            validate_exclusive_stats(StatusType.RELEASED, order_id)
+            validate_status_progression(StatusType.RELEASED, order_id)
+            # validate permissions
+            self.validate_permissions(wallet_hash, order_id)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
-    # TODO verify signature
-    # TODO verify permissions
+        # TODO escrow_release()
 
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-      raise Http404
+        # create RELEASED status for order
+        serializer = StatusSerializer(data={
+            'status': StatusType.RELEASED,
+            'order': order_id
+        })
+
+        if serializer.is_valid():
+            stat = StatusSerializer(serializer.save())
+            return Response(stat.data, status=status.HTTP_200_OK)        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    # TODO escrow_release()
+    def validate_permissions(self, wallet_hash, order_id):
+        '''
+        ReleaseCrypto must only be callable by seller
+        or arbiter if order's status is RELEASE_APPEALED or REFUND_APPEALED
+        '''
 
-    try:
-        validate_status_inst_count(StatusType.RELEASED, order_id)
-        validate_exclusive_stats(StatusType.RELEASED, order_id)
-        validate_status_progression(StatusType.RELEASED, order_id)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-  
-    # create RELEASED status for order
-    serializer = StatusSerializer(data={
-      'status': StatusType.RELEASED,
-      'order': order_id
-    })
+        # if caller == order.arbiter
+        #   require(order.status is RELEASE_APPEALED or REFUND_APPEALED)
+        # else if order.trade_type is SELL
+        #   seller is ad creator
+        # else
+        #   seller is order creator
+        # require(caller = seller)
 
-    if serializer.is_valid():
-      stat = StatusSerializer(serializer.save())
-      return Response(stat.data, status=status.HTTP_200_OK)        
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=order_id)
+            curr_status = Status.objects.filter(order=order).latest('created_at')
+        except Peer.DoesNotExist or Order.DoesNotExist:
+            raise ValidationError('Peer/Order DoesNotExist')
+        
+        seller = None
+        if caller.wallet_hash == order.arbiter.wallet_hash:
+           if (curr_status.status != StatusType.RELEASE_APPEALED and 
+               curr_status.status != StatusType.REFUND_APPEALED):
+              raise ValidationError('arbiter intervention but no order release/refund appeal')
+        elif order.ad.trade_type == TradeType.SELL:
+            seller = order.ad.owner
+        else:
+            seller = order.creator
+        
+        if seller is not None and seller.wallet_hash != caller.wallet_hash:
+           raise ValidationError('caller must be seller')
+           
 
 # RefundCrypto is callable only by the arbiter
 class RefundCrypto(APIView):
