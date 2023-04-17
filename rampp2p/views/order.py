@@ -178,13 +178,19 @@ class CryptoBuyerConfirmPayment(APIView):
 class CryptoSellerConfirmPayment(APIView):
   def post(self, request):
     # TODO: verify signature
-    # TODO: verify permission
 
     order_id = request.data.get('order_id', None)
     if order_id is None:
       raise Http404
     
+    wallet_hash = request.data.get('wallet_hash', None)
+    if wallet_hash is None:
+      raise Http404
+    
     try:
+        # TODO: verify permission
+        validate_seller_confirm_payment_perm(wallet_hash, order_id)
+        # status validations
         validate_status_inst_count(StatusType.PAID, order_id)
         validate_status_progression(StatusType.PAID, order_id)
     except ValidationError as err:
