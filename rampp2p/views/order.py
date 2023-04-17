@@ -5,21 +5,32 @@ from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
+from ..validators import *
 from ..base_serializers import (
   OrderSerializer, 
   OrderWriteSerializer, 
-  StatusSerializer, 
-  AppealSerializer
+  StatusSerializer
 )
 
 from ..base_models import (
   Ad,
   StatusType,
-  AppealType,
-  Peer,
   Status,
   Order
 )
+
+'''
+  SUBMITTED         = at Order creation
+  CONFIRMED         = when crypto is escrowed
+  PAID_PENDING      = when crypto buyer clicks "confirm payment"
+  PAID              = when crypto seller clicks on "confirm payment"
+  CANCEL_APPEALED   = on cancel appeal
+  RELEASE_APPEALED  = on release appeal
+  REFUND_APPEALED   = on refund appeal
+  RELEASED          = on arbiter "release"
+  REFUNDED          = on arbiter "refunded"
+  CANCELED          = on "cancel order" before status=CONFIRMED || on arbiter "mark canceled, refund"
+'''
 
 class OrderList(APIView):
 
@@ -92,24 +103,13 @@ class OrderDetail(APIView):
       return Response(serializer.data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-'''
-  SUBMITTED = at Order creation
-  CONFIRMED = when crypto is escrowed
-  PAID      = on "confirm payment"
-  CANCEL_APPEALED  = on cancel appeal
-  RELEASE_APPEALED = on release appeal
-  REFUND_APPEALED = on refund appeal
-  RELEASED  = on arbiter "release"
-  REFUNDED  = on arbiter "refunded"
-  CANCELED  = on "cancel order" before status=CONFIRMED || on arbiter "mark canceled, refund"
-'''
-
 class ConfirmOrder(APIView):
 
   def post(self, request):
 
     # TODO: verify signature
-    # TODO: verify permission
+    # TODO verify permissions: 
+    #   - only crypto sellers can CONFIRM an order
 
     order_id = request.data.get('order_id', None)
     if order_id is None:
@@ -135,7 +135,33 @@ class ConfirmOrder(APIView):
       return Response(stat.data, status=status.HTTP_200_OK)        
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
-class ConfirmPayment(APIView):
+class CryptoBuyerConfirmPayment(APIView):
+  def post(self, request):
+    # TODO: verify signature
+    # TODO: verify permission
+
+    order_id = request.data.get('order_id', None)
+    if order_id is None:
+      raise Http404
+    
+    try:
+        validate_status_inst_count(StatusType.PAID_PENDING, order_id)
+        validate_status_progression(StatusType.PAID_PENDING, order_id)
+    except ValidationError as err:
+      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    # create PAID_PENDING status for order
+    serializer = StatusSerializer(data={
+      'status': StatusType.PAID_PENDING,
+      'order': order_id
+    })
+
+    if serializer.is_valid():
+      stat = StatusSerializer(serializer.save())
+      return Response(stat.data, status=status.HTTP_200_OK)        
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class CryptoSellerConfirmPayment(APIView):
   def post(self, request):
     # TODO: verify signature
     # TODO: verify permission
@@ -220,168 +246,3 @@ class RefundCrypto(APIView):
         stat = StatusSerializer(serializer.save())
         return Response(stat.data, status=status.HTTP_200_OK)        
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-# AppealCancel is callable by either party
-# AppealCancel creates an Appeal instance with field type=CANCEL
-# RESTRICTION: parties cannot appeal-cancel when an order is not marked as CONFIRMED
-class AppealCancel(APIView):
-  def post(self, request):
-    # TODO: verify signature
-    # TODO: verify permission
-
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-      raise Http404
-    
-    wallet_hash = request.data.get('wallet_hash', None)
-    if wallet_hash is None:
-      return Response({'error': 'wallet_hash field is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-      validate_status_confirmed(order_id)
-      validate_status_progression(StatusType.CANCEL_APPEALED, order_id)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-    # create and Appeal record with type=CANCEL
-    submit_appeal(AppealType.CANCEL, wallet_hash, order_id)
-
-    # update the order status to CANCEL_APPEALED
-    Status.objects.create(
-      status=StatusType.CANCEL_APPEALED,
-      order=Order.objects.get(pk=order_id)
-    )
-
-# AppealRelease is callable only by the crypto buyer.
-# AppealRelease creates an Appeal instance with field type=RELEASE
-# RESTRICTION: parties cannot appeal-release when an order is not marked as CONFIRMED
-class AppealRelease(APIView):
-  def post(self, request):
-    # TODO: verify signature
-    # TODO: verify permission
-
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-      raise Http404
-    
-    wallet_hash = request.data.get('wallet_hash', None)
-    if wallet_hash is None:
-      return Response({'error': 'wallet_hash field is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-      validate_status_confirmed(order_id)
-      validate_status_progression(StatusType.RELEASE_APPEALED, order_id)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-    # create and Appeal record with type=RELEASE
-    submit_appeal(AppealType.RELEASE, wallet_hash, order_id)
-
-    # update the order status to RELEASE_APPEALED
-    Status.objects.create(
-      status=StatusType.RELEASE_APPEALED,
-      order=Order.objects.get(pk=order_id)
-    )
-
-# AppealRefund is callable only by the crypto seller.
-# AppealRefund creates an Appeal instance with field type=REFUND
-# RESTRICTION: parties cannot appeal-refund when an order is not marked as CONFIRMED
-class AppealRefund(APIView):
-  def post(self, request):
-    # TODO: verify signature
-    # TODO: verify permission
-
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-      raise Http404
-    
-    wallet_hash = request.data.get('wallet_hash', None)
-    if wallet_hash is None:
-      return Response({'error': 'wallet_hash field is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-      validate_status_confirmed(order_id)
-      validate_status_progression(StatusType.REFUND_APPEALED, order_id)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-    # create and Appeal record with type=REFUND
-    submit_appeal(AppealType.REFUND, wallet_hash, order_id)
-
-    # update the order status to REFUND_APPEALED
-    Status.objects.create(
-      status=StatusType.REFUND_APPEALED,
-      order=Order.objects.get(pk=order_id)
-    )
-
-def submit_appeal(type, wallet_hash, order_id):
-  peer = Peer.objects.get(wallet_hash=wallet_hash)
-  data = {
-    'type': type, 
-    'creator': peer.id,
-    'order': order_id
-  }
-  serializer = AppealSerializer(data=data)
-  if serializer.is_valid():
-    appeal = serializer.save()
-    return appeal
-  return None
-
-def escrow_funds(self, data):
-  pass
-
-def validate_status_confirmed(order_id):
-    # check: current order status must be CONFIRMED
-    current_status = Status.objects.filter(order=order_id).latest('created_at')
-    if current_status.status != StatusType.CONFIRMED:
-        raise ValidationError('action not allowed')
-  
-def validate_status_inst_count(status, order_id):
-    status_count = Status.objects.filter(Q(order=order_id) & Q(status=status)).count()
-    if status_count > 0:
-        raise ValidationError('duplicate status')
-    
-def validate_exclusive_stats(status, order_id):
-    if status == StatusType.RELEASED:
-        stat_count = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.REFUNDED)).count()
-        if stat_count > 0:
-            raise ValidationError('cannot release what is already refunded')
-    
-    if status == StatusType.REFUNDED:
-        stat_count = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.RELEASED)).count()
-        if stat_count > 0:
-            raise ValidationError('cannot refund what is already released')
-        
-def validate_status_progression(new_status, order_id):
-    current_status = Status.objects.filter(Q(order=order_id)).latest('created_at')
-    error_msg = 'ValidationError: '
-    if (current_status.status == StatusType.RELEASED or 
-        current_status.status == StatusType.REFUNDED or
-        current_status.status == StatusType.CANCELED):
-       raise ValidationError(error_msg + 'Cannot change a completed order\'s status')
-
-    if current_status.status == StatusType.SUBMITTED:
-        if new_status != StatusType.CONFIRMED:
-            raise ValidationError(error_msg + 'SUBMITTED orders can only be CONFIRMED')
-
-    if current_status.status == StatusType.CONFIRMED:
-       if (new_status != StatusType.PAID and 
-           new_status != StatusType.CANCEL_APPEALED):
-          raise ValidationError(error_msg + 'CONFIRMED orders can only be PAID|CANCEL_APPEALED')
-       
-    if current_status.status == StatusType.PAID:
-       if (new_status != StatusType.RELEASED and 
-           new_status != StatusType.RELEASE_APPEALED #and
-           #new_status != StatusType.REFUND_APPEALED
-           ):
-          raise ValidationError(error_msg + 'PAID orders can only be RELEASED|RELEASE_APPEALED')
-    
-    if current_status.status == StatusType.CANCEL_APPEALED:
-       if new_status != StatusType.CANCELED:
-          raise ValidationError(error_msg + 'CANCEL_APPEALED orders can only be CANCELED')
-    
-    if (current_status.status == StatusType.RELEASE_APPEALED or 
-        current_status.status == StatusType.REFUND_APPEALED):
-       if (new_status != StatusType.RELEASED and 
-           new_status != StatusType.REFUNDED):
-          raise ValidationError(error_msg + 'RELEASE_APPEALED|REFUND_APPEALED orders can only be RELEASED|REFUNDED')

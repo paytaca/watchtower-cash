@@ -1,7 +1,13 @@
 from rest_framework import serializers
-from ..base_models import Appeal
+from ..base_models import (
+    Appeal, 
+    Peer, 
+    Order
+)
 
 class AppealSerializer(serializers.ModelSerializer):
+    creator = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
+    order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
     class Meta:
         model = Appeal
         fields = [

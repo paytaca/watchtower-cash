@@ -6,9 +6,10 @@ from .order import Order
 class StatusType(models.TextChoices):
   SUBMITTED = 'SBM', _('Submitted')
   CONFIRMED = 'CNF', _('Confirmed')
-  PAID      = 'PD', _('Paid')
+  PAID_PENDING     = 'PD_PN', _('Paid Pending')
+  PAID             = 'PD', _('Paid')
   CANCEL_APPEALED  = 'CNCL_APL', _('Appealed for Cancel')
-  RELEASE_APPEALED  = 'RLS_APL', _('Appealed for Release')
+  RELEASE_APPEALED = 'RLS_APL', _('Appealed for Release')
   REFUND_APPEALED  = 'RFN_APL', _('Appealed for Refund')
   RELEASED  = 'RLS', _('Released')
   REFUNDED  = 'RFN', _('Refunded')

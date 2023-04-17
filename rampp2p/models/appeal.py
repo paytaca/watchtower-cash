@@ -13,7 +13,7 @@ class AppealType(models.TextChoices):
 
 class Appeal(models.Model):
     type = models.CharField(
-        max_length=5, 
+        max_length=10, 
         choices=AppealType.choices, 
         editable=False
     )
