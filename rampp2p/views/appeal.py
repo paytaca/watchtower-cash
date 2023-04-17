@@ -19,7 +19,7 @@ from ..validators import *
 
 # AppealCancel is callable by either party
 # AppealCancel creates an Appeal instance with field type=CANCEL
-# RESTRICTION: parties cannot appeal-cancel when an order is not marked as CONFIRMED
+# RESTRICTION: parties cannot appeal-cancel when an order status is not CONFIRMED
 class AppealCancel(APIView):
   def post(self, request):
     # TODO: verify signature
@@ -57,7 +57,7 @@ class AppealCancel(APIView):
 
 # AppealRelease is callable only by the crypto buyer.
 # AppealRelease creates an Appeal instance with field type=RELEASE
-# RESTRICTION: parties cannot appeal-release when an order is not marked as CONFIRMED
+# RESTRICTION: parties cannot appeal-release when an order status is not PAID_PENDING | PAID
 class AppealRelease(APIView):
   def post(self, request):
     # TODO: verify signature
@@ -73,7 +73,6 @@ class AppealRelease(APIView):
     
     try:
       validate_status_inst_count(StatusType.RELEASED, order_id)
-      validate_status_confirmed(order_id)
       validate_status_progression(StatusType.RELEASE_APPEALED, order_id)
     except ValidationError as err:
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -94,7 +93,7 @@ class AppealRelease(APIView):
 
 # AppealRefund is callable only by the crypto seller.
 # AppealRefund creates an Appeal instance with field type=REFUND
-# RESTRICTION: parties cannot appeal-refund when an order is not marked as CONFIRMED
+# RESTRICTION: parties cannot appeal-refund when an order status is not PAID_PENDING | PAID
 class AppealRefund(APIView):
   def post(self, request):
     # TODO: verify signature
@@ -110,7 +109,6 @@ class AppealRefund(APIView):
     
     try:
       validate_status_inst_count(StatusType.RELEASED, order_id)
-      validate_status_confirmed(order_id)
       validate_status_progression(StatusType.REFUND_APPEALED, order_id)
     except ValidationError as err:
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

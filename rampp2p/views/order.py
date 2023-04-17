@@ -357,30 +357,63 @@ class ReleaseCrypto(APIView):
 
 # RefundCrypto is callable only by the arbiter
 class RefundCrypto(APIView):
-  def post(self, request):
-    # TODO verify signature
-    # TODO verify permissions
+    def post(self, request):
+        # TODO verify signature    
 
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-        raise Http404
+        order_id = request.data.get('order_id', None)
+        if order_id is None:
+            raise Http404
+        
+        wallet_hash = request.data.get('wallet_hash', None)
+        if wallet_hash is None:
+            raise Http404
+
+        try:
+            # status validations
+            validate_status_inst_count(StatusType.REFUNDED, order_id)
+            validate_exclusive_stats(StatusType.REFUNDED, order_id)
+            validate_status_progression(StatusType.REFUNDED, order_id)
+            # validate permissions
+            self.validate_permissions(wallet_hash, order_id)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
-    # TODO escrow_refund()
+        # TODO escrow_refund()
 
-    try:
-        validate_status_inst_count(StatusType.REFUNDED, order_id)
-        validate_exclusive_stats(StatusType.REFUNDED, order_id)
-        validate_status_progression(StatusType.REFUNDED, order_id)
-    except ValidationError as err:
-        return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-  
-    # create REFUNDED status for order
-    serializer = StatusSerializer(data={
-        'status': StatusType.REFUNDED,
-        'order': order_id
-    })
+        # create REFUNDED status for order
+        serializer = StatusSerializer(data={
+            'status': StatusType.REFUNDED,
+            'order': order_id
+        })
 
-    if serializer.is_valid():
-        stat = StatusSerializer(serializer.save())
-        return Response(stat.data, status=status.HTTP_200_OK)        
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if serializer.is_valid():
+            stat = StatusSerializer(serializer.save())
+            return Response(stat.data, status=status.HTTP_200_OK)        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def validate_permissions(self, wallet_hash, order_id):
+        '''
+        RefundCrypto should be callable only by the arbiter when
+        order status is CANCEL_APPEALED, RELEASE_APPEALED, or REFUND_APPEALED
+        '''
+
+        # if caller is not arbiter
+        #     raise error
+        # else:
+        #    require(status = CANCEL_APPEALED | RELEASE_APPEALED | REFUND_APPEALED)
+
+        
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=order_id)
+            curr_status = Status.objects.filter(order=order).latest('created_at')
+        except Peer.DoesNotExist or Order.DoesNotExist:
+            raise ValidationError('Peer/Order DoesNotExist')
+        
+        if caller.wallet_hash != order.arbiter.wallet_hash:
+           raise ValidationError('caller must be arbiter')
+        else:
+           if (curr_status.status != StatusType.CANCEL_APPEALED and
+               curr_status.status != StatusType.RELEASE_APPEALED and
+               curr_status.status != StatusType.REFUND_APPEALED):
+              raise ValidationError('status must be CANCEL_APPEALED | RELEASE_APPEALED | REFUND_APPEALED for this action')

@@ -46,8 +46,9 @@ def validate_status_progression(new_status, order_id):
     
     if current_status.status == StatusType.PAID_PENDING:
        if (new_status != StatusType.PAID and 
+           new_status != StatusType.RELEASE_APPEALED and
            new_status != StatusType.REFUND_APPEALED):
-          raise ValidationError(error_msg + 'PAID_PENDING orders can only be PAID | REFUND_APPEALED')
+          raise ValidationError(error_msg + 'PAID_PENDING orders can only be PAID | RELEASE_APPEALED | REFUND_APPEALED')
        
     if current_status.status == StatusType.PAID:
        if (new_status != StatusType.RELEASED and 
@@ -58,8 +59,17 @@ def validate_status_progression(new_status, order_id):
        if new_status != StatusType.REFUNDED:
           raise ValidationError(error_msg + 'CANCEL_APPEALED orders can only be REFUNDED')
     
-    if (current_status.status == StatusType.RELEASE_APPEALED or 
-        current_status.status == StatusType.REFUND_APPEALED):
+    if (current_status.status == StatusType.REFUND_APPEALED):
        if (new_status != StatusType.RELEASED and 
            new_status != StatusType.REFUNDED):
-          raise ValidationError(error_msg + 'RELEASE_APPEALED | REFUND_APPEALED orders can only be RELEASED | REFUNDED')
+          raise ValidationError(error_msg + 'REFUND_APPEALED orders can only be RELEASED | REFUNDED')
+
+    if (current_status.status == StatusType.RELEASE_APPEALED):
+        was_marked_paid = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.PAID)).count() > 0
+        if was_marked_paid:
+            if (new_status != StatusType.RELEASED):
+                raise ValidationError(error_msg + 'RELEASE_APPEALED orders previously marked as PAID can only be RELEASED')
+        else:
+            if (new_status != StatusType.RELEASED and 
+                new_status != StatusType.REFUNDED):
+                raise ValidationError(error_msg + 'RELEASE_APPEALED orders can only be RELEASED | REFUNDED')
