@@ -113,30 +113,23 @@ class ConfirmOrder(APIView):
 
     order_id = request.data.get('order_id', None)
     if order_id is None:
-      raise Http404
+        raise Http404
     
     wallet_hash = request.data.get('wallet_hash', None)
     if order_id is None:
       raise Http404
-    
-    try:
-        caller = Peer.objects.get(wallet_hash=wallet_hash)
-        order = Order.objects.get(pk=order_id)
-    except Peer.DoesNotExist or Order.DoesNotExist:
-        raise Http404
-    
-    
-    # TODO: escrow funds
-    # escrow_funds(request.data)
 
     try:
-        # verify permissions
-        validate_confirm_order_perm(caller, order)
-        # validations
+        # validate permissions
+        validate_confirm_order_perm(wallet_hash, order_id)
+        # status validations
         validate_status_inst_count(StatusType.CONFIRMED, order_id)
         validate_status_progression(StatusType.CONFIRMED, order_id)
     except ValidationError as err:
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    # TODO: escrow funds
+    # escrow_funds(request.data)
 
     # create CONFIRMED status for order
     serializer = StatusSerializer(data={

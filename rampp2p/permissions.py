@@ -17,25 +17,32 @@ class IsAdminOrReadOnly(BasePermission):
       return True
     return request.user and request.user.is_staff
   
-def validate_confirm_order_perm(caller: Peer, order: Order):
+def validate_confirm_order_perm(wallet_hash, order_id):
     '''
-    only sellers can CONFIRM orders
+    Only owners of SELL ads can set order statuses to CONFIRMED.
+    Creators of SELL orders skip the order status to CONFIRMED on creation.
     '''
 
     # check if ad type is SELL
     # if ad type is SELL:
-        # ad owner is seller
-    # else order owner is seller
+    #    require caller = ad owner
+    # else
+    #    raise error
 
-    seller = None
+    try:
+        caller = Peer.objects.get(wallet_hash=wallet_hash)
+        order = Order.objects.get(pk=order_id)
+    except Peer.DoesNotExist or Order.DoesNotExist:
+        raise ValidationError('Peer/Order DoesNotExist')
+
     if order.ad.trade_type == TradeType.SELL:
-       seller = order.ad.owner
+        seller = order.ad.owner
+        # require caller is seller
+        if caller.wallet_hash != seller.wallet_hash:
+          raise ValidationError('caller must be seller')
     else:
-       seller = order.creator
+        raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
     
-    # require caller is seller
-    if caller.wallet_hash != seller.wallet_hash:
-       raise ValidationError('caller must be seller')
 
 def is_order_owner(peer_id, order_id):
     pass
