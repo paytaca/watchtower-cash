@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from typing import List
 
 from ..permissions import *
 from ..validators import *
@@ -18,7 +19,8 @@ from ..base_models import (
   StatusType,
   Status,
   Order,
-  Peer
+  Peer,
+  PaymentMethod
 )
 
 '''
@@ -36,40 +38,99 @@ from ..base_models import (
 
 class OrderList(APIView):
 
-  def get(self, request):
-    queryset = Order.objects.all()
-    creator = request.query_params.get("creator", None)
-    if creator is not None:
-      queryset = queryset.filter(creator=creator)
-    serializer = OrderSerializer(queryset, many=True)
-    return Response(serializer.data, status.HTTP_200_OK)
+    def get(self, request):
+        queryset = Order.objects.all()
+        creator = request.query_params.get("creator", None)
+        if creator is not None:
+            queryset = queryset.filter(creator=creator)
+        serializer = OrderSerializer(queryset, many=True)
+        return Response(serializer.data, status.HTTP_200_OK)
 
-  def post(self, request):
+    def post(self, request):
 
-    # TODO: verify signature
-    # TODO: autofill order creator
+        # TODO: verify signature
 
-    data = request.data
-    ad_id = data.get('ad', None)
-    if ad_id is None:
-      return Response({'error': 'ad_id field is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    ad = Ad.objects.get(pk=ad_id)
-    data['crypto_currency'] = ad.crypto_currency.id
-    data['fiat_currency'] = ad.fiat_currency.id
-    serializer = OrderWriteSerializer(data=data)
-    
-    if serializer.is_valid():
-      order = serializer.save()
+        ad_id = request.data.get('ad', None)
+        if ad_id is None:
+            return Response({'error': 'ad_id field is None'}, status=status.HTTP_400_BAD_REQUEST)
 
-      Status.objects.create(
-        status=StatusType.SUBMITTED,
-        order=Order.objects.get(pk=order.id)
-      )
-      
-      serializer = OrderSerializer(order)
-      return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        wallet_hash = request.data.get('wallet_hash', None)
+        if wallet_hash is None:
+            return Response({'error': 'wallet_hash field is None'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        payment_method_ids = request.data.get('payment_methods', None)
+        if wallet_hash is None:
+            return Response({'error': 'payment_methods field is None'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # validate permissions
+            self.validate_permissions(wallet_hash, ad_id)
+            self.validate_payment_methods(wallet_hash, payment_method_ids)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        ad = Ad.objects.get(pk=ad_id)
+        creator = Peer.objects.get(wallet_hash=wallet_hash)
+
+        data = request.data
+        data['creator'] = creator.id
+        data['crypto_currency'] = ad.crypto_currency.id
+        data['fiat_currency'] = ad.fiat_currency.id
+        serializer = OrderWriteSerializer(data=data)
+
+        if serializer.is_valid():
+            order = serializer.save()
+
+            Status.objects.create(
+                status=StatusType.SUBMITTED,
+                order=Order.objects.get(pk=order.id)
+            )
+            
+            serializer = OrderSerializer(order)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def validate_permissions(self, wallet_hash, ad_id):
+        '''
+        Ad owners cannot create orders for their ad
+        Arbiters cannot create orders
+        '''
+
+        # if caller is arbiter
+        #   raise error
+        # else if caller is ad owner
+        #   raise error
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            ad = Ad.objects.get(pk=ad_id)
+        except Peer.DoesNotExist or Ad.DoesNotExist:
+            raise ValidationError('peer or ad DoesNotExist')
+        
+        if caller.is_arbiter:
+            raise ValidationError('caller must not be an arbiter')
+        
+        if ad.owner.wallet_hash == caller.wallet_hash:
+            raise ValidationError('ad owner not allowed to create order for this ad')
+
+    def validate_payment_methods(self, wallet_hash, payment_method_ids: List[int]):
+        '''
+        Validates if caller owns the payment methods
+        '''
+
+        # for payment_method in  payment_methods:
+        #    if payment_method.owner != caller
+        #           raise error
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+        except Peer.DoesNotExist:
+            raise ValidationError('peer DoesNotExist')
+
+        payment_methods = PaymentMethod.objects.filter(Q(id__in=payment_method_ids))
+        for payment_method in payment_methods:
+            if payment_method.owner.wallet_hash != caller.wallet_hash:
+                raise ValidationError('invalid payment method, not caller owned')
 
 class OrderStatusList(APIView):
   def get(self, request, order_id):
@@ -110,7 +171,6 @@ class ConfirmOrder(APIView):
     def post(self, request):
 
         # TODO: verify signature
-
         order_id = request.data.get('order_id', None)
         if order_id is None:
             raise Http404
@@ -129,7 +189,6 @@ class ConfirmOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # TODO: escrow funds
-        # escrow_funds(request.data)
 
         # create CONFIRMED status for order
         serializer = StatusSerializer(data={
@@ -283,7 +342,6 @@ class CryptoSellerConfirmPayment(APIView):
         if caller.wallet_hash != seller.wallet_hash:
             raise ValidationError('caller must be seller')
 
-# ReleaseCrypto is called by the crypto seller or arbiter.
 class ReleaseCrypto(APIView):
     def post(self, request):
 
@@ -354,8 +412,6 @@ class ReleaseCrypto(APIView):
         if seller is not None and seller.wallet_hash != caller.wallet_hash:
            raise ValidationError('caller must be seller')
            
-
-# RefundCrypto is callable only by the arbiter
 class RefundCrypto(APIView):
     def post(self, request):
         # TODO verify signature    
