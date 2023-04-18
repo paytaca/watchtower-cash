@@ -21,8 +21,7 @@ class OrderSerializer(serializers.ModelSerializer):
       "locked_price",
       "arbiter",
       "contract_address",
-      "payment_methods",
-      "is_appealed"
+      "payment_methods"
     ]
 
 class OrderWriteSerializer(serializers.ModelSerializer):

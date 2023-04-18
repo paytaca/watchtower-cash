@@ -25,6 +25,5 @@ class Order(models.Model):
     related_name="arbitrated_orders")
   contract_address = models.CharField(max_length=50, blank=True, null=True)
   payment_methods = models.ManyToManyField(PaymentMethod)
-  is_appealed = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
   
