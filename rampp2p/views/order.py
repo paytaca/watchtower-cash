@@ -79,10 +79,18 @@ class OrderList(APIView):
         serializer = OrderWriteSerializer(data=data)
 
         if serializer.is_valid():
-            order = serializer.save()
+            
+            # if ad type is BUY:
+            #   bch is escrowed and order skips to status CONFIRMED
+            
+            statusType = StatusType.SUBMITTED
+            if ad.trade_type == TradeType.BUY:
+                # TODO escrow funds
+                statusType = StatusType.CONFIRMED
 
+            order = serializer.save()
             Status.objects.create(
-                status=StatusType.SUBMITTED,
+                status=statusType,
                 order=Order.objects.get(pk=order.id)
             )
             
