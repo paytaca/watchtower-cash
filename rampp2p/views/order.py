@@ -158,22 +158,6 @@ class OrderDetail(APIView):
     serializer = OrderSerializer(order)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
-  def put(self, request, pk):
-
-    # TODO: verify signature    
-    # try:
-    #   verify_signature(request)
-    # except ValidationError as err:
-    #   return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-    # TODO: verify permission
-
-    order = self.get_object(pk)
-    serializer = OrderSerializer(order, data=request.data)
-    if serializer.is_valid():
-      serializer.save()
-      return Response(serializer.data, status=status.HTTP_200_OK)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 class ConfirmOrder(APIView):
 
     def post(self, request):
