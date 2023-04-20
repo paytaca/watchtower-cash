@@ -76,7 +76,7 @@ class PaymentMethodListCreate(APIView):
     def post(self, request):
 
         # TODO: verify signature
-        wallet_hash = request.headers.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
            return Response({'error': 'wallet_hash is None'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -104,7 +104,7 @@ class PaymentMethodDetail(APIView):
             raise Http404
     
     def get(self, request, pk):
-        wallet_hash = request.headers.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
            return Response({'error': 'wallet_hash is None'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -122,7 +122,7 @@ class PaymentMethodDetail(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
-        wallet_hash = request.headers.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
            return Response({'error': 'wallet_hash is None'}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -151,7 +151,7 @@ class PaymentMethodDetail(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request, pk):
-        wallet_hash = request.headers.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
            return Response({'error': 'wallet_hash is None'}, status=status.HTTP_400_BAD_REQUEST)
     

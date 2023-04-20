@@ -54,7 +54,7 @@ class OrderList(APIView):
         if ad_id is None:
             return Response({'error': 'ad_id field is None'}, status=status.HTTP_400_BAD_REQUEST)
 
-        wallet_hash = request.data.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
             return Response({'error': 'wallet_hash field is None'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -167,7 +167,7 @@ class ConfirmOrder(APIView):
         if order_id is None:
             raise Http404
         
-        wallet_hash = request.data.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
             raise Http404
 
@@ -228,7 +228,7 @@ class CryptoBuyerConfirmPayment(APIView):
     if order_id is None:
       raise Http404
     
-    wallet_hash = request.data.get('wallet_hash', None)
+    wallet_hash = request.headers.get('wallet-hash', None)
     if wallet_hash is None:
       raise Http404
     
@@ -285,7 +285,7 @@ class CryptoSellerConfirmPayment(APIView):
         if order_id is None:
             raise Http404
         
-        wallet_hash = request.data.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
             raise Http404
         
@@ -343,7 +343,7 @@ class ReleaseCrypto(APIView):
         if order_id is None:
             raise Http404
 
-        wallet_hash = request.data.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
             raise Http404
 
@@ -412,7 +412,7 @@ class RefundCrypto(APIView):
         if order_id is None:
             raise Http404
         
-        wallet_hash = request.data.get('wallet_hash', None)
+        wallet_hash = request.headers.get('wallet-hash', None)
         if wallet_hash is None:
             raise Http404
 
