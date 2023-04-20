@@ -20,7 +20,7 @@ from ..base_models import (
 
 class AdListCreate(APIView):
   def get(self, request):
-    queryset = Ad.objects.filter(Q(is_deleted=False))
+    queryset = Ad.objects.filter(is_deleted=False)
 
     # TODO pagination
 
@@ -175,6 +175,7 @@ class AdDetail(APIView):
     ad = self.get_object(pk)
     ad.is_deleted = True
     ad.deleted_at = timezone.now()
+    ad.save()
     return Response(status=status.HTTP_204_NO_CONTENT)
   
   def validate_permissions(self, wallet_hash, ad_id):
