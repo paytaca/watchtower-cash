@@ -1,4 +1,4 @@
-from .serializers.ad import AdSerializer
+from .serializers.ad import AdSerializer, AdWriteSerializer
 from .serializers.peer import PeerSerializer
 from .serializers.payment import PaymentMethodSerializer, PaymentTypeSerializer
 from .serializers.currency import CryptoSerializer, FiatSerializer
@@ -9,6 +9,7 @@ from .serializers.appeal import AppealSerializer
 
 __all__ = [
   'AdSerializer',
+  'AdWriteSerializer',
   'PeerSerializer',
   'PaymentMethodSerializer',
   'PaymentTypeSerializer',

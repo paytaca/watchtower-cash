@@ -168,7 +168,7 @@ class ConfirmOrder(APIView):
             raise Http404
         
         wallet_hash = request.data.get('wallet_hash', None)
-        if order_id is None:
+        if wallet_hash is None:
             raise Http404
 
         try:

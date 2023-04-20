@@ -1,8 +1,8 @@
 from django.urls import path
 
 from .views.ad import (
-  # AdListCreate,
-  AdList,
+  AdListCreate,
+#   AdList,
   AdDetail
 )
 
@@ -49,8 +49,8 @@ from .views.feedback import (
 )
 
 urlpatterns = [
-  path('ad/', AdList.as_view(), name='ad-list-create'),
-  path('ad/<int:pk>/', AdDetail.as_view(), name='ad-detail'),
+  path('ad/', AdListCreate.as_view(), name='ad-list-create'),
+  path('ad/<int:pk>', AdDetail.as_view(), name='ad-detail'),
   path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list-create'),
   path('payment-type/<int:pk>', PaymentTypeDetail.as_view(), name='payment-type-detail'),
   path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),

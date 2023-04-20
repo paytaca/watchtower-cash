@@ -56,29 +56,30 @@ class PaymentTypeDetail(APIView):
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 class PaymentMethodListCreate(APIView):
-  def post(self, request):
-
-    # TODO: verify signature
-    # try:
-    #   verify_signature(request)
-    # except ValidationError as err:
-    #   return Response(err.args[0], status=status.HTTP_403_FORBIDDEN)
-
-    serializer = PaymentMethodSerializer(data=request.data)
-    if serializer.is_valid():
-      # serializer.owner = Peer.objects.get(wallet_hash=request.data['wallet_hash'])
-      serializer.save()
-      return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-  
-  def get(self, request):
     
-    queryset = PaymentMethod.objects.all()
-    owner = request.query_params.get("owner", None)
-    if owner is not None:
-      queryset = queryset.filter(owner=owner)
-    serializer = PaymentMethodSerializer(queryset, many=True)
-    return Response(serializer.data, status.HTTP_200_OK)
+    def get(self, request):
+        
+        queryset = PaymentMethod.objects.all()
+        owner = request.query_params.get("owner", None)
+        if owner is not None:
+            queryset = queryset.filter(owner=owner)
+        serializer = PaymentMethodSerializer(queryset, many=True)
+        return Response(serializer.data, status.HTTP_200_OK)
+
+    def post(self, request):
+
+        # TODO: verify signature
+        # try:
+        #   verify_signature(request)
+        # except ValidationError as err:
+        #   return Response(err.args[0], status=status.HTTP_403_FORBIDDEN)
+
+        serializer = PaymentMethodSerializer(data=request.data)
+        if serializer.is_valid():
+            # serializer.owner = Peer.objects.get(wallet_hash=request.data['wallet_hash'])
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
 class PaymentMethodDetail(generics.RetrieveUpdateDestroyAPIView):
   # TODO only valid users can perform this action. i.e. owner of payment method

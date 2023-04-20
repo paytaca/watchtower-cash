@@ -1,7 +1,7 @@
 from django.core.signing import Signer
 from django.core.exceptions import ValidationError
 
-def verify_signature(request):
+def verify_signature(pub_key, signature, message):
 
   public_key = request.META.get('PUBLIC_KEY')
   signature = request.META.get('SIGNATURE')
