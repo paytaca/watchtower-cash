@@ -6,6 +6,9 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from typing import List
 
+from ..utils import verify_signature, get_verification_headers
+from ..viewcodes import ViewCode
+
 from ..permissions import *
 from ..validators import *
 from ..base_serializers import (
@@ -48,31 +51,30 @@ class OrderList(APIView):
 
     def post(self, request):
 
-        # TODO: verify signature
-
         ad_id = request.data.get('ad', None)
         if ad_id is None:
             return Response({'error': 'ad_id field is None'}, status=status.HTTP_400_BAD_REQUEST)
-
-        wallet_hash = request.headers.get('wallet-hash', None)
-        if wallet_hash is None:
-            return Response({'error': 'wallet_hash field is None'}, status=status.HTTP_400_BAD_REQUEST)
         
         payment_method_ids = request.data.get('payment_methods', None)
-        if wallet_hash is None:
+        if payment_method_ids is None:
             return Response({'error': 'payment_methods field is None'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
+            # validate signature
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_CREATE.value + '::' + timestamp
+            verify_signature(wallet_hash, pubkey, signature, message)
+
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)
-            self.validate_payment_methods(wallet_hash, payment_method_ids)
+            self.validate_payment_methods_ownership(wallet_hash, payment_method_ids)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         ad = Ad.objects.get(pk=ad_id)
         creator = Peer.objects.get(wallet_hash=wallet_hash)
 
-        data = request.data
+        data = request.data.copy()
         data['creator'] = creator.id
         data['crypto_currency'] = ad.crypto_currency.id
         data['fiat_currency'] = ad.fiat_currency.id
@@ -82,7 +84,6 @@ class OrderList(APIView):
             
             # if ad type is BUY:
             #   bch is escrowed and order skips to status CONFIRMED
-            
             statusType = StatusType.SUBMITTED
             if ad.trade_type == TradeType.BUY:
                 # TODO escrow funds
@@ -98,7 +99,7 @@ class OrderList(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def validate_permissions(self, wallet_hash, ad_id):
+    def validate_permissions(self, wallet_hash, pk):
         '''
         Ad owners cannot create orders for their ad
         Arbiters cannot create orders
@@ -111,7 +112,7 @@ class OrderList(APIView):
 
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
-            ad = Ad.objects.get(pk=ad_id)
+            ad = Ad.objects.get(pk=pk)
         except Peer.DoesNotExist or Ad.DoesNotExist:
             raise ValidationError('peer or ad DoesNotExist')
         
@@ -121,7 +122,7 @@ class OrderList(APIView):
         if ad.owner.wallet_hash == caller.wallet_hash:
             raise ValidationError('ad owner not allowed to create order for this ad')
 
-    def validate_payment_methods(self, wallet_hash, payment_method_ids: List[int]):
+    def validate_payment_methods_ownership(self, wallet_hash, payment_method_ids: List[int]):
         '''
         Validates if caller owns the payment methods
         '''
@@ -162,19 +163,23 @@ class ConfirmOrder(APIView):
 
     def post(self, request):
 
-        # TODO: verify signature
         order_id = request.data.get('order_id', None)
         if order_id is None:
             raise Http404
         
-        wallet_hash = request.headers.get('wallet-hash', None)
-        if wallet_hash is None:
-            raise Http404
-
         try:
+            # validate signature
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
+            verify_signature(wallet_hash, pubkey, signature, message)
+
             # validate permissions
             self.validate_permissions(wallet_hash, order_id)
-            # status validations
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # validations
             validate_status_inst_count(StatusType.CONFIRMED, order_id)
             validate_status_progression(StatusType.CONFIRMED, order_id)
         except ValidationError as err:
@@ -193,7 +198,7 @@ class ConfirmOrder(APIView):
             return Response(stat.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def validate_permissions(self, wallet_hash, order_id):
+    def validate_permissions(self, wallet_hash, pk):
         '''
         Only owners of SELL ads can set order statuses to CONFIRMED.
         Creators of SELL orders skip the order status to CONFIRMED on creation.
@@ -207,7 +212,7 @@ class ConfirmOrder(APIView):
 
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
-            order = Order.objects.get(pk=order_id)
+            order = Order.objects.get(pk=pk)
         except Peer.DoesNotExist or Order.DoesNotExist:
             raise ValidationError('Peer/Order DoesNotExist')
 
@@ -222,19 +227,23 @@ class ConfirmOrder(APIView):
 class CryptoBuyerConfirmPayment(APIView):
   def post(self, request):
 
-    # TODO: verify signature
-
     order_id = request.data.get('order_id', None)
     if order_id is None:
       raise Http404
-    
-    wallet_hash = request.headers.get('wallet-hash', None)
-    if wallet_hash is None:
-      raise Http404
+
+    try:
+        # validate signature
+        pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+        message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
+        verify_signature(wallet_hash, pubkey, signature, message)
+
+        # validate permissions
+        self.validate_permissions(wallet_hash, order_id)
+    except ValidationError as err:
+        return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
     
     try:
-        self.validate_permissions(wallet_hash, order_id)
-        # status validations
+        # validations
         validate_status_inst_count(StatusType.PAID_PENDING, order_id)
         validate_status_progression(StatusType.PAID_PENDING, order_id)
     except ValidationError as err:
@@ -251,7 +260,7 @@ class CryptoBuyerConfirmPayment(APIView):
       return Response(stat.data, status=status.HTTP_200_OK)        
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
-  def validate_permissions(self, wallet_hash, order_id):
+  def validate_permissions(self, wallet_hash, pk):
     '''
     Only buyers can set order status to PAID_PENDING
     '''
@@ -264,7 +273,7 @@ class CryptoBuyerConfirmPayment(APIView):
 
     try:
         caller = Peer.objects.get(wallet_hash=wallet_hash)
-        order = Order.objects.get(pk=order_id)
+        order = Order.objects.get(pk=pk)
     except Peer.DoesNotExist or Order.DoesNotExist:
         raise ValidationError('Peer/Order DoesNotExist')
     
@@ -279,18 +288,23 @@ class CryptoBuyerConfirmPayment(APIView):
     
 class CryptoSellerConfirmPayment(APIView):
     def post(self, request):
-        # TODO: verify signature
-
+        
         order_id = request.data.get('order_id', None)
         if order_id is None:
             raise Http404
         
-        wallet_hash = request.headers.get('wallet-hash', None)
-        if wallet_hash is None:
-            raise Http404
+        try:
+            # validate signature
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_SELLER_CONF_PAYMENT.value + '::' + timestamp
+            verify_signature(wallet_hash, pubkey, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, order_id)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
-            self.validate_permissions(wallet_hash, order_id)
             # status validations
             validate_status_inst_count(StatusType.PAID, order_id)
             validate_status_progression(StatusType.PAID, order_id)
@@ -337,23 +351,26 @@ class CryptoSellerConfirmPayment(APIView):
 class ReleaseCrypto(APIView):
     def post(self, request):
 
-        # TODO verify signature
-
         order_id = request.data.get('order_id', None)
         if order_id is None:
             raise Http404
+    
+        try:
+            # validate signature
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
+            verify_signature(wallet_hash, pubkey, signature, message)
 
-        wallet_hash = request.headers.get('wallet-hash', None)
-        if wallet_hash is None:
-            raise Http404
+            # validate permissions
+            self.validate_permissions(wallet_hash, order_id)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # status validations
             validate_status_inst_count(StatusType.RELEASED, order_id)
             validate_exclusive_stats(StatusType.RELEASED, order_id)
             validate_status_progression(StatusType.RELEASED, order_id)
-            # validate permissions
-            self.validate_permissions(wallet_hash, order_id)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -406,23 +423,27 @@ class ReleaseCrypto(APIView):
            
 class RefundCrypto(APIView):
     def post(self, request):
-        # TODO verify signature    
 
         order_id = request.data.get('order_id', None)
         if order_id is None:
             raise Http404
-        
-        wallet_hash = request.headers.get('wallet-hash', None)
-        if wallet_hash is None:
-            raise Http404
+
+        try:
+            # validate signature
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_REFUND.value + '::' + timestamp
+            verify_signature(wallet_hash, pubkey, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, order_id)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # status validations
             validate_status_inst_count(StatusType.REFUNDED, order_id)
             validate_exclusive_stats(StatusType.REFUNDED, order_id)
             validate_status_progression(StatusType.REFUNDED, order_id)
-            # validate permissions
-            self.validate_permissions(wallet_hash, order_id)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     

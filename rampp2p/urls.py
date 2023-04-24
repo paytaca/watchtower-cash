@@ -14,7 +14,7 @@ from .views.payment import (
 )
 
 from .views.peer import (
-  PeerList,
+  PeerListCreate,
   PeerDetail,
 )
 
@@ -55,7 +55,7 @@ urlpatterns = [
   path('payment-type/<int:pk>', PaymentTypeDetail.as_view(), name='payment-type-detail'),
   path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
   path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
-  path('peer/', PeerList.as_view(), name='peer-list-create'),
+  path('peer/', PeerListCreate.as_view(), name='peer-list-create'),
   path('peer/<int:pk>', PeerDetail.as_view(), name='peer-detail'),
   path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list-create'),
   path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),

@@ -9,8 +9,7 @@ from ..serializers.peer import PeerSerializer, PeerWriteSerializer
 from ..viewcodes import ViewCode
 from ..utils import verify_signature, get_verification_headers
 
-class PeerList(APIView):
-  # list peers
+class PeerListCreate(APIView):
   def get(self, request):
     queryset = Peer.objects.all()
     
@@ -21,13 +20,12 @@ class PeerList(APIView):
     serializer = PeerSerializer(queryset, many=True)
     return Response(serializer.data, status.HTTP_200_OK)
 
-  # create peer
   def post(self, request):
 
     try:
         pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-        # TODO: verify the signature
-        # verify_signature(wallet_hash, pubkey, signature, message)
+        message = ViewCode.POST_PEER.value + '::' + timestamp
+        verify_signature(wallet_hash, pubkey, signature, message)
     except ValidationError as err:
        return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
     
@@ -42,26 +40,22 @@ class PeerList(APIView):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PeerDetail(APIView):
-  # get object
   def get_object(self, pk):
     try:
       return Peer.objects.get(pk=pk)
     except Peer.DoesNotExist:
       raise Http404
 
-  # get peer
   def get(self, request, pk):
     peer = self.get_object(pk)
     serializer = PeerSerializer(peer)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
-  # update peer
   def put(self, request, pk):
-
     try:
         pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-        # TODO: verify the signature
-        # verify_signature(wallet_hash, pubkey, signature, ViewCode.PUT_PEER + '::' + timestamp)
+        message = ViewCode.PUT_PEER.value + '::' + timestamp
+        verify_signature(wallet_hash, pubkey, signature, message)
     except ValidationError as err:
        return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
     
