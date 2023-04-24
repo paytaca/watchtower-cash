@@ -7,6 +7,12 @@ from django.http import Http404
 from django.core.exceptions import ValidationError
 from typing import List
 
+from ..viewcodes import ViewCode
+from ..utils import (
+   verify_signature,
+   get_verification_headers
+)
+
 from ..base_serializers import (
     AdSerializer,
     AdWriteSerializer
@@ -32,28 +38,28 @@ class AdListCreate(APIView):
     return Response(serializer.data, status.HTTP_200_OK)
 
   def post(self, request):
-    
+
     payment_method_ids = request.data.get('payment_methods', None)
     if payment_method_ids is None:
-      return Response({'error': 'payment_method_ids is None'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    wallet_hash = request.data.get('wallet_hash', None)
-    if wallet_hash is None:
-      return Response({'error': 'wallet_hash is None'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'payment_method_ids is None'}, status=status.HTTP_400_BAD_REQUEST)
 
+    try:
+        # validate signature
+        pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+        message = ViewCode.PUT_PEER.value + '::' + timestamp
+        verify_signature(wallet_hash, pubkey, signature, message)
+
+        # validate permissions
+        self.validate_payment_methods_ownership(wallet_hash, payment_method_ids)
+    except ValidationError as err:
+       return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+  
     try:
         caller = Peer.objects.get(wallet_hash=wallet_hash)
     except Peer.DoesNotExist:
-      raise Http404
+        return Response({'error': 'no such Peer with wallet_hash'}, status=status.HTTP_400_BAD_REQUEST)
     
-    # TODO: verify the signature
-
-    try:
-      self.validate_payment_methods(wallet_hash, payment_method_ids)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-    
-    data = request.data
+    data = request.data.copy()
     data['owner'] = caller.id
 
     serializer = AdWriteSerializer(data=data)
@@ -62,7 +68,7 @@ class AdListCreate(APIView):
       return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
-  def validate_payment_methods(self, wallet_hash, payment_method_ids: List[int]):
+  def validate_payment_methods_ownership(self, wallet_hash, payment_method_ids: List[int]):
 
     '''
     Validates if caller owns the payment methods
@@ -85,29 +91,29 @@ class AdListCreate(APIView):
 class AdDetail(APIView):
   def get_object(self, pk):
     try:
-      return Ad.objects.get(pk=pk)
+        return Ad.objects.get(pk=pk)
     except Ad.DoesNotExist:
-      raise Http404
+        raise Http404
 
   def get(self, request, pk):
     ad = self.get_object(pk)
     if ad.is_deleted:
-      return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
     serializer = AdSerializer(ad)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
   def put(self, request, pk):
 
-    # TODO: verify the signature
-
-    wallet_hash = request.data.get('wallet_hash', None)
-    if wallet_hash is None:
-        return Response({'error': 'wallet_hash is None'}, status=status.HTTP_400_BAD_REQUEST)
-
     try:
-      self.validate_permissions(wallet_hash, pk)
+        # validate signature
+        pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+        message = ViewCode.PUT_PEER.value + '::' + timestamp
+        verify_signature(wallet_hash, pubkey, signature, message)
+
+        # validate permissions
+        self.validate_permissions(wallet_hash, pk)
     except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+       return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
     # get payload
     price_type = request.data.get('price_type', None)
@@ -137,25 +143,25 @@ class AdDetail(APIView):
             )
     
     if trade_floor is not None:
-      ad.trade_floor = trade_floor
+        ad.trade_floor = trade_floor
     
     if trade_ceiling is not None:
-      ad.trade_ceiling = trade_ceiling
+        ad.trade_ceiling = trade_ceiling
 
     if price_type is not None:
-      ad.price_type = price_type
+        ad.price_type = price_type
 
     if fixed_price is not None:
-      ad.fixed_price = fixed_price
+        ad.fixed_price = fixed_price
 
     if floating_price is not None:
-      ad.floating_price = floating_price
+        ad.floating_price = floating_price
 
     if crypto_amount is not None:
-      ad.crypto_amount = crypto_amount
+        ad.crypto_amount = crypto_amount
 
     if time_limit is not None:
-      ad.time_limit = time_limit
+        ad.time_limit = time_limit
 
     ad.save()
     serializer = AdSerializer(ad)
@@ -163,14 +169,16 @@ class AdDetail(APIView):
   
   def delete(self, request, pk):
 
-    wallet_hash = request.data.get('wallet_hash', None)
-    if wallet_hash is None:
-        return Response({'error': 'wallet_hash is None'}, status=status.HTTP_400_BAD_REQUEST)
-  
     try:
-      self.validate_permissions(wallet_hash, pk)
+        # validate signature
+        pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+        message = ViewCode.PUT_PEER.value + '::' + timestamp
+        verify_signature(wallet_hash, pubkey, signature, message)
+
+        # validate permissions
+        self.validate_permissions(wallet_hash, pk)
     except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+       return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
     
     ad = self.get_object(pk)
     ad.is_deleted = True
