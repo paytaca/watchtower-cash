@@ -1,19 +1,26 @@
 from django.core.signing import Signer
 from django.core.exceptions import ValidationError
 
-def verify_signature(pub_key, signature, message):
+def verify_signature(wallet_hash, pubkey, signature, message):
+    signer = Signer(pubkey)
+    try:
+        signed_message = signer.unsign(signature)
+        if signed_message != message:
+            raise ValidationError('Signature is invalid')
+    except:
+        raise ValidationError('Signature is invalid')  
 
-  public_key = request.META.get('PUBLIC_KEY')
-  signature = request.META.get('SIGNATURE')
-  data = request.data
+    # TODO: derive the address from the public key
+    # TODO: address must be registered under the Wallet with field wallet_hash=wallet_hash
 
-  signer = Signer(public_key)
-  try:
-    signed_data = signer.unsign(signature)
-    if signed_data != data:
-      raise ValidationError('Signature is invalid')
-  except:
-    raise ValidationError('Signature is invalid')
+def get_verification_headers(request):
+  pubkey = request.headers.get('pubkey', None)
+  signature = request.headers.get('signature', None)
+  timestamp = request.headers.get('timestamp', None)
+  wallet_hash = request.headers.get('wallet-hash', None)
+  if  wallet_hash is None: #or pubkey is None or signature is None or timestamp is None:
+    raise ValidationError('credentials incomplete')
+  return pubkey, signature, timestamp, wallet_hash
 
 def escrow_funds(data):
   pass

@@ -5,11 +5,18 @@ class PeerSerializer(serializers.ModelSerializer):
   class Meta:
     model = Peer
     fields = [
-      'id', 
-      'nickname', 
-      'wallet_hash',
+      'nickname',
       'is_arbiter',
       'is_disabled',
       'created_at',
       'modified_at'
+    ]
+
+class PeerWriteSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = Peer
+    fields = [
+        'nickname',
+        'wallet_hash',
+        'is_arbiter'
     ]
