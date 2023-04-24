@@ -78,7 +78,7 @@ urlpatterns = [
   path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
   path('feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
 
-  path('order/appeal/cancel', AppealCancel.as_view(), name='appeal-cancel'),
-  path('order/appeal/release', AppealRelease.as_view(), name='appeal-release'),
-  path('order/appeal/refund', AppealRefund.as_view(), name='appeal-refund'),
+  path('order/appeal/<int:pk>/cancel', AppealCancel.as_view(), name='appeal-cancel'),
+  path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
+  path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
 ]
