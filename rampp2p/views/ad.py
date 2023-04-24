@@ -46,7 +46,7 @@ class AdListCreate(APIView):
     try:
         # validate signature
         pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-        message = ViewCode.PUT_PEER.value + '::' + timestamp
+        message = ViewCode.AD_CREATE.value + '::' + timestamp
         verify_signature(wallet_hash, pubkey, signature, message)
 
         # validate permissions
@@ -107,7 +107,7 @@ class AdDetail(APIView):
     try:
         # validate signature
         pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-        message = ViewCode.PUT_PEER.value + '::' + timestamp
+        message = ViewCode.AD_UPDATE.value + '::' + timestamp
         verify_signature(wallet_hash, pubkey, signature, message)
 
         # validate permissions
@@ -172,7 +172,7 @@ class AdDetail(APIView):
     try:
         # validate signature
         pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-        message = ViewCode.PUT_PEER.value + '::' + timestamp
+        message = ViewCode.AD_DELETE.value + '::' + timestamp
         verify_signature(wallet_hash, pubkey, signature, message)
 
         # validate permissions
