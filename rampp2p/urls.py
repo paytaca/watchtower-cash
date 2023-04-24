@@ -33,7 +33,8 @@ from .views.order import (
   CryptoBuyerConfirmPayment,
   CryptoSellerConfirmPayment,
   ReleaseCrypto,
-  RefundCrypto
+  RefundCrypto,
+  CancelOrder
 )
 
 from .views.appeal import (
@@ -64,12 +65,14 @@ urlpatterns = [
 
   path('order/', OrderList.as_view(), name='order-list-create'),
   path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
-  path('order/<int:order_id>/status', OrderStatusList.as_view(), name='order-status-list'),
-  path('order/confirm', ConfirmOrder.as_view(), name='confirm-order'),
-  path('order/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
-  path('order/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
-  path('order/release', ReleaseCrypto.as_view(), name='release'),
-  path('order/refund', RefundCrypto.as_view(), name='refund'),
+  path('order/<int:pk>/status', OrderStatusList.as_view(), name='order-status-list'),
+  path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),
+  path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
+  path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
+  path('order/<int:pk>/release', ReleaseCrypto.as_view(), name='release-order'),
+  path('order/<int:pk>/refund', RefundCrypto.as_view(), name='refund-order'),
+  path('order/<int:pk>/cancel', CancelOrder.as_view(), name='cancel-order'),
+
   
   path('feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
   path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),

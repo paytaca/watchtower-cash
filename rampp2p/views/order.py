@@ -142,8 +142,8 @@ class OrderList(APIView):
                 raise ValidationError('invalid payment method, not caller owned')
 
 class OrderStatusList(APIView):
-  def get(self, request, order_id):
-    queryset = Status.objects.filter(order=order_id)
+  def get(self, request, pk):
+    queryset = Status.objects.filter(order=pk)
     serializer = StatusSerializer(queryset, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -160,12 +160,7 @@ class OrderDetail(APIView):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
-
-    def post(self, request):
-
-        order_id = request.data.get('order_id', None)
-        if order_id is None:
-            raise Http404
+    def post(self, request, pk):
         
         try:
             # validate signature
@@ -174,14 +169,14 @@ class ConfirmOrder(APIView):
             verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
-            self.validate_permissions(wallet_hash, order_id)
+            self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # validations
-            validate_status_inst_count(StatusType.CONFIRMED, order_id)
-            validate_status_progression(StatusType.CONFIRMED, order_id)
+            validate_status_inst_count(StatusType.CONFIRMED, pk)
+            validate_status_progression(StatusType.CONFIRMED, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -190,7 +185,7 @@ class ConfirmOrder(APIView):
         # create CONFIRMED status for order
         serializer = StatusSerializer(data={
             'status': StatusType.CONFIRMED,
-            'order': order_id
+            'order': pk
         })
 
         if serializer.is_valid():
@@ -225,11 +220,7 @@ class ConfirmOrder(APIView):
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
   
 class CryptoBuyerConfirmPayment(APIView):
-  def post(self, request):
-
-    order_id = request.data.get('order_id', None)
-    if order_id is None:
-      raise Http404
+  def post(self, request, pk):
 
     try:
         # validate signature
@@ -238,21 +229,21 @@ class CryptoBuyerConfirmPayment(APIView):
         verify_signature(wallet_hash, pubkey, signature, message)
 
         # validate permissions
-        self.validate_permissions(wallet_hash, order_id)
+        self.validate_permissions(wallet_hash, pk)
     except ValidationError as err:
         return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
     
     try:
         # validations
-        validate_status_inst_count(StatusType.PAID_PENDING, order_id)
-        validate_status_progression(StatusType.PAID_PENDING, order_id)
+        validate_status_inst_count(StatusType.PAID_PENDING, pk)
+        validate_status_progression(StatusType.PAID_PENDING, pk)
     except ValidationError as err:
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     # create PAID_PENDING status for order
     serializer = StatusSerializer(data={
       'status': StatusType.PAID_PENDING,
-      'order': order_id
+      'order': pk
     })
 
     if serializer.is_valid():
@@ -287,11 +278,7 @@ class CryptoBuyerConfirmPayment(APIView):
         raise ValidationError('caller must be buyer')
     
 class CryptoSellerConfirmPayment(APIView):
-    def post(self, request):
-        
-        order_id = request.data.get('order_id', None)
-        if order_id is None:
-            raise Http404
+    def post(self, request, pk):
         
         try:
             # validate signature
@@ -300,21 +287,21 @@ class CryptoSellerConfirmPayment(APIView):
             verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
-            self.validate_permissions(wallet_hash, order_id)
+            self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
             # status validations
-            validate_status_inst_count(StatusType.PAID, order_id)
-            validate_status_progression(StatusType.PAID, order_id)
+            validate_status_inst_count(StatusType.PAID, pk)
+            validate_status_progression(StatusType.PAID, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # create PAID status for order
         serializer = StatusSerializer(data={
         'status': StatusType.PAID,
-        'order': order_id
+        'order': pk
         })
 
         if serializer.is_valid():
@@ -322,7 +309,7 @@ class CryptoSellerConfirmPayment(APIView):
             return Response(stat.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
-    def validate_permissions(self, wallet_hash, order_id):
+    def validate_permissions(self, wallet_hash, pk):
         '''
         Only the seller can set the order status to PAID
         '''
@@ -335,7 +322,7 @@ class CryptoSellerConfirmPayment(APIView):
 
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
-            order = Order.objects.get(pk=order_id)
+            order = Order.objects.get(pk=pk)
         except Peer.DoesNotExist or Order.DoesNotExist:
             raise ValidationError('Peer/Order DoesNotExist')
         
@@ -349,12 +336,8 @@ class CryptoSellerConfirmPayment(APIView):
             raise ValidationError('caller must be seller')
 
 class ReleaseCrypto(APIView):
-    def post(self, request):
+    def post(self, request, pk):
 
-        order_id = request.data.get('order_id', None)
-        if order_id is None:
-            raise Http404
-    
         try:
             # validate signature
             pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
@@ -362,15 +345,15 @@ class ReleaseCrypto(APIView):
             verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
-            self.validate_permissions(wallet_hash, order_id)
+            self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # status validations
-            validate_status_inst_count(StatusType.RELEASED, order_id)
-            validate_exclusive_stats(StatusType.RELEASED, order_id)
-            validate_status_progression(StatusType.RELEASED, order_id)
+            validate_status_inst_count(StatusType.RELEASED, pk)
+            validate_exclusive_stats(StatusType.RELEASED, pk)
+            validate_status_progression(StatusType.RELEASED, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -379,7 +362,7 @@ class ReleaseCrypto(APIView):
         # create RELEASED status for order
         serializer = StatusSerializer(data={
             'status': StatusType.RELEASED,
-            'order': order_id
+            'order': pk
         })
 
         if serializer.is_valid():
@@ -387,7 +370,7 @@ class ReleaseCrypto(APIView):
             return Response(stat.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def validate_permissions(self, wallet_hash, order_id):
+    def validate_permissions(self, wallet_hash, pk):
         '''
         ReleaseCrypto must only be callable by seller
         or arbiter if order's status is RELEASE_APPEALED or REFUND_APPEALED
@@ -403,7 +386,7 @@ class ReleaseCrypto(APIView):
 
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
-            order = Order.objects.get(pk=order_id)
+            order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
         except Peer.DoesNotExist or Order.DoesNotExist:
             raise ValidationError('Peer/Order DoesNotExist')
@@ -422,11 +405,7 @@ class ReleaseCrypto(APIView):
            raise ValidationError('caller must be seller')
            
 class RefundCrypto(APIView):
-    def post(self, request):
-
-        order_id = request.data.get('order_id', None)
-        if order_id is None:
-            raise Http404
+    def post(self, request, pk):
 
         try:
             # validate signature
@@ -435,15 +414,15 @@ class RefundCrypto(APIView):
             verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
-            self.validate_permissions(wallet_hash, order_id)
+            self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # status validations
-            validate_status_inst_count(StatusType.REFUNDED, order_id)
-            validate_exclusive_stats(StatusType.REFUNDED, order_id)
-            validate_status_progression(StatusType.REFUNDED, order_id)
+            validate_status_inst_count(StatusType.REFUNDED, pk)
+            validate_exclusive_stats(StatusType.REFUNDED, pk)
+            validate_status_progression(StatusType.REFUNDED, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -452,7 +431,7 @@ class RefundCrypto(APIView):
         # create REFUNDED status for order
         serializer = StatusSerializer(data={
             'status': StatusType.REFUNDED,
-            'order': order_id
+            'order': pk
         })
 
         if serializer.is_valid():
@@ -460,7 +439,7 @@ class RefundCrypto(APIView):
             return Response(stat.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def validate_permissions(self, wallet_hash, order_id):
+    def validate_permissions(self, wallet_hash, pk):
         '''
         RefundCrypto should be callable only by the arbiter when
         order status is CANCEL_APPEALED, RELEASE_APPEALED, or REFUND_APPEALED
@@ -474,7 +453,7 @@ class RefundCrypto(APIView):
         
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
-            order = Order.objects.get(pk=order_id)
+            order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
         except Peer.DoesNotExist or Order.DoesNotExist:
             raise ValidationError('Peer/Order DoesNotExist')
@@ -486,3 +465,52 @@ class RefundCrypto(APIView):
                curr_status.status != StatusType.RELEASE_APPEALED and
                curr_status.status != StatusType.REFUND_APPEALED):
               raise ValidationError('status must be CANCEL_APPEALED | RELEASE_APPEALED | REFUND_APPEALED for this action')
+
+class CancelOrder(APIView):
+    def post(self, request, pk):
+
+        try:
+            # validate signature
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_CANCEL.value + '::' + timestamp
+            verify_signature(wallet_hash, pubkey, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, pk)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # status validations
+            validate_status_inst_count(StatusType.CANCELED, pk)
+            validate_status_progression(StatusType.CANCELED, pk)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # create CANCELED status for order
+        serializer = StatusSerializer(data={
+            'status': StatusType.CANCELED,
+            'order': pk
+        })
+
+        if serializer.is_valid():
+            stat = StatusSerializer(serializer.save())
+            return Response(stat.data, status=status.HTTP_200_OK)        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        CancelOrder must only be callable by the order creator
+        '''
+
+        # if caller is not order creator
+        #     raise error
+        
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+        except Peer.DoesNotExist or Order.DoesNotExist:
+            raise ValidationError('Peer/Order DoesNotExist')
+        
+        if caller.wallet_hash != order.creator.wallet_hash:
+           raise ValidationError('caller must be order creator')
