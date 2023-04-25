@@ -17,46 +17,22 @@ from ..utils import verify_signature, get_verification_headers
 # TODO Add permission to PaymentTypes's write endpoints
 
 class PaymentTypeList(APIView):
-  # permission_classes = [IsAuthenticatedOrReadOnly]
-
-  def get(self, request):
-    queryset = PaymentType.objects.all()
-    serializer = PaymentTypeSerializer(queryset, many=True)
-    return Response(serializer.data, status.HTTP_200_OK)
-
-  def post(self, request):
-    serializer = PaymentTypeSerializer(data=request.data)
-    if serializer.is_valid():
-      serializer.save()
-      return Response(serializer.data, status=status.HTTP_200_OK)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def get(self, request):
+        queryset = PaymentType.objects.all()
+        serializer = PaymentTypeSerializer(queryset, many=True)
+        return Response(serializer.data, status.HTTP_200_OK)
 
 class PaymentTypeDetail(APIView):
-  # permission_classes = [IsAuthenticatedOrReadOnly]
+    def get_object(self, pk):
+        try:
+            return PaymentType.objects.get(pk=pk)
+        except PaymentType.DoesNotExist:
+            raise Http404
 
-  def get_object(self, pk):
-    try:
-      payment_type = PaymentType.objects.get(pk=pk)
-    except PaymentType.DoesNotExist:
-      raise Http404
-
-  def get(self, request, pk):
-    payment_type = self.get_object(pk)
-    serializer = PaymentTypeSerializer(payment_type)
-    return Response(serializer.data, status=status.HTTP_200_OK)
-
-  def put(self, request, pk):
-    payment_type = self.get_object(pk)
-    serializer = PaymentTypeSerializer(payment_type, data=request.data)
-    if serializer.is_valid():
-      serializer.save()
-      return Response(serializer.data, status=status.HTTP_200_OK)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-  def delete(self, request, pk):
-    payment_type = self.get_object(pk)
-    payment_type.delete()
-    return Response(status=status.HTTP_204_NO_CONTENT)
+    def get(self, request, pk):
+        payment_type = self.get_object(pk)
+        serializer = PaymentTypeSerializer(payment_type)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class PaymentMethodListCreate(APIView):
     
