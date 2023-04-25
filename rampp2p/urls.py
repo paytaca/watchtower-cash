@@ -49,6 +49,11 @@ from .views.feedback import (
   FeedbackDetail,
 )
 
+from .views.arbiter import (
+    ArbiterList,
+    ArbiterDetail
+)
+
 urlpatterns = [
   path('ad/', AdListCreate.as_view(), name='ad-list-create'),
   path('ad/<int:pk>', AdDetail.as_view(), name='ad-detail'),
@@ -58,7 +63,7 @@ urlpatterns = [
 
   path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
   path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
-  
+
   path('peer/', PeerListCreate.as_view(), name='peer-list-create'),
   path('peer/<int:pk>', PeerDetail.as_view(), name='peer-detail'),
 

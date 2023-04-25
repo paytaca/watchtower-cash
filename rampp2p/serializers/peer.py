@@ -5,7 +5,7 @@ class PeerSerializer(serializers.ModelSerializer):
   class Meta:
     model = Peer
     fields = [
-      'id'
+      'id',
       'nickname',
       'is_arbiter',
       'is_disabled',
