@@ -58,9 +58,10 @@ urlpatterns = [
   path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
   path('peer/', PeerListCreate.as_view(), name='peer-list-create'),
   path('peer/<int:pk>', PeerDetail.as_view(), name='peer-detail'),
-  path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list-create'),
+
+  path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list'),
   path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),
-  path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list-create'),
+  path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list'),
   path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view(), name='crypto-detail'),
 
   path('order/', OrderList.as_view(), name='order-list-create'),
