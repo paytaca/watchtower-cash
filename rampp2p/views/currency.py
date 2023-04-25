@@ -21,13 +21,6 @@ class FiatCurrencyList(UserPassesTestMixin, APIView):
         serializer = FiatSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-    def post(self, request):
-        serializer = FiatSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 class FiatCurrencyDetail(UserPassesTestMixin, APIView):
     # Require admin authentication or read-only access
     def test_func(self):
@@ -48,19 +41,6 @@ class FiatCurrencyDetail(UserPassesTestMixin, APIView):
         serializer = FiatSerializer(fiat)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def put(self, request, pk):
-        fiat = self.get_object(pk)
-        serializer = FiatSerializer(fiat, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request, pk):
-        fiat = self.get_object(pk)
-        fiat.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
 class CryptoCurrencyList(UserPassesTestMixin, APIView):
      # Require admin authentication or read-only access
     def test_func(self):
@@ -74,13 +54,6 @@ class CryptoCurrencyList(UserPassesTestMixin, APIView):
         queryset = CryptoCurrency.objects.all()
         serializer = CryptoSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
-
-    def post(self, request):
-        serializer = CryptoSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class CryptoCurrencyDetail(APIView):
     # Require admin authentication or read-only access
@@ -101,16 +74,3 @@ class CryptoCurrencyDetail(APIView):
         crypto = self.get_object(pk)
         serializer = CryptoSerializer(crypto)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def put(self, request, pk):
-        crypto = self.get_object(pk)
-        serializer = CryptoSerializer(crypto, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request, pk):
-        crypto = self.get_object(pk)
-        crypto.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
