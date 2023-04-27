@@ -1,0 +1,118 @@
+pragma cashscript ^0.7.5;
+
+ /**
+ * @title Escrow Contract
+ * An escrow is a financial arrangement where a third party holds and regulates the payment 
+ * of funds required for two parties involved in a transaction. The funds are held by the 
+ * escrow service until it is confirmed that all of the terms of an agreement between the buyer 
+ * and seller have been met, at which point the funds are released.
+ * @dev The arbiter is a person or entity that is appointed or selected to act as a neutral and 
+ * impartial third party in a dispute or conflict.
+ * @dev The arbiter can transfer funds to only either the seller or buyer.
+ * @dev The seller has the authority to 'release' the funds directly to the buyer.
+ * @dev The seller can only 'release' the funds to the buyer and not to any other address.
+ * @dev The buyer cannot interact with the contract.
+ * @param arbiter The public key hash of arbiter.
+ * @param buyer The public key hash of buyer.
+ * @param seller The public key hash of seller.
+ * @param servicer The public key hash of the servicer (trading fee recipient).
+ * @param tradingFee The trade fee.
+ * @param arbitrationFee The arbiter's fee.
+ */
+
+contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer, int tradingFee, int arbitrationFee) {
+
+    /**
+     * Releases the funds to the buyer.
+     *
+     * @dev Limits the number of transaction input to 1.
+     * @dev Limits the number of transaction outputs to 3.
+     * @dev Fails if the caller is neither the arbiter nor the seller.
+     * @dev Fails if the transaction amount of output[0] (trade amount) is incorrect.
+     * @dev Fails if the transaction amount of output[1] (tradingFee) is incorrect.
+     * @dev Fails if the transaction amount of output[2] (arbitrationFee) is incorrect.
+     * @dev Fails if the recipient of output[0] is not the buyer.
+     * @dev Fails if the recipient of output[1] is not the servicer.
+     * @dev Fails if the recipient of output[2] is not the arbiter.
+     * @param pk The public key of the arbiter.
+     * @param s The signature of the arbiter.
+     */
+    function release(pubkey pk, sig s) {
+        // Requires that caller is only either the arbiter or the seller
+        require(hash160(pk) == arbiter || hash160(pk) == seller);
+        require(checkSig(s, pk));
+
+        // Limits the transaction input to 1 & output to 3
+        require(tx.inputs.length == 1);
+        require(tx.outputs.length == 3);
+
+        // Checks that the correct amounts are sent
+        int minerFee = 1000; // hardcoded miner fee
+        int fees = minerFee + tradingFee + arbitrationFee;
+        int amount = tx.inputs[this.activeInputIndex].value - fees;        
+        
+        bool correctAmount = tx.outputs[0].value == amount;
+        bool correctTradingFee = tx.outputs[1].value == tradingFee;
+        bool correctArbitrationFee = tx.outputs[2].value == arbitrationFee;
+        
+        require(correctAmount && correctTradingFee && correctArbitrationFee);
+
+        // Requires that outputs send to buyer, servicer, and arbiter
+        bytes25 buyerLock = new LockingBytecodeP2PKH(buyer);
+        bytes25 servicerLock = new LockingBytecodeP2PKH(servicer);
+        bytes25 arbiterLock = new LockingBytecodeP2PKH(arbiter);
+        
+        bool sendsToBuyer = tx.outputs[0].lockingBytecode == buyerLock;
+        bool sendsToServicer = tx.outputs[1].lockingBytecode == servicerLock;
+        bool sendsToArbiter = tx.outputs[2].lockingBytecode == arbiterLock;
+        
+        require(sendsToBuyer && sendsToServicer && sendsToArbiter);
+    }
+
+    /**
+     * Refunds the funds back to the seller.
+     * 
+     * @dev Limits the number of transaction input to 1.
+     * @dev Limits the number of transaction outputs to 3.
+     * @dev Fails if the caller is not the arbiter.
+     * @dev Fails if the transaction amount of output[0] (trade amount) is incorrect.
+     * @dev Fails if the transaction amount of output[1] (tradingFee) is incorrect.
+     * @dev Fails if the transaction amount of output[2] (arbitrationFee) is incorrect.
+     * @dev Fails if the recipient of output[0] is not the seller.
+     * @dev Fails if the recipient of output[1] is not the servicer (trading fee recipient).
+     * @dev Fails if the recipient of output[2] is not the arbiter.
+     * @param pk The public key of the arbiter.
+     * @param s The signature of the arbiter.
+     */
+    function refund(pubkey pk, sig s) {
+        // Requires that caller is the arbiter 
+        require(hash160(pk) == arbiter);
+        require(checkSig(s, pk));
+
+        // Limits the transaction input to 1 & output to 3
+        require(tx.inputs.length == 1);
+        require(tx.outputs.length == 3);
+
+        // Checks that the correct amounts are sent
+        int minerFee = 1000; // hardcoded miner fee
+        int fees = minerFee + tradingFee + arbitrationFee;
+        int amount = tx.inputs[this.activeInputIndex].value - fees;        
+        
+        bool correctAmount = tx.outputs[0].value == amount;
+        bool correctTradingFee = tx.outputs[1].value == tradingFee;
+        bool correctArbitrationFee = tx.outputs[2].value == arbitrationFee;
+
+        require(correctAmount && correctTradingFee && correctArbitrationFee);
+
+        // Requires that outputs send to seller, servicer, and arbiter
+        bytes25 sellerLock = new LockingBytecodeP2PKH(seller);
+        bytes25 servicerLock = new LockingBytecodeP2PKH(servicer);
+        bytes25 arbiterLock = new LockingBytecodeP2PKH(arbiter);
+        
+        bool sendsToSeller = tx.outputs[0].lockingBytecode == sellerLock;
+        bool sendsToServicer = tx.outputs[1].lockingBytecode == servicerLock;
+        bool sendsToArbiter = tx.outputs[2].lockingBytecode == arbiterLock;
+        
+        require(sendsToSeller && sendsToServicer && sendsToArbiter);
+    }
+}
