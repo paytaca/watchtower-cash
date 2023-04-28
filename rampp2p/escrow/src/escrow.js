@@ -9,13 +9,11 @@ const ACTION = process.argv[2]; // 'contract' | 'release' | 'arbiter-release' | 
 const ARBITR_PUBKEY = process.argv[3]
 const SELLER_PUBKEY = process.argv[4]
 const BUYER_PUBKEY = process.argv[5]
+const SERVCR_PUBKEY = process.argv[6]
+const TRADING_FEE = parseInt(process.argv[7])
+const ARBITRATION_FEE = parseInt(process.argv[8])
 
 const HARDCODED_FEE = 1000;
-const TRADING_FEE = 1000;
-const ARBITRATION_FEE = 1000;
-
-const SERVCR_PUBKEY = process.env.SERVCR_PUBKEY
-const SERVCR_ADDR = process.env.SERVCR_ADDR
 
 const bchjs = new BCHJS({
     restURL: 'https://bchn.fullstack.cash/v5/',
@@ -43,19 +41,20 @@ async function run() {
     const contract = new Contract(artifact, contractParams, provider);
 
     if (ACTION == 'contract') {
-        return contract.address
+        process.stdout.write(contract.address)
+        return
     }
 
     if (ACTION == 'balance') {
-        await getContractBalance(contract)
+        return await getContractBalance(contract)
     }
 
-    const callerPubkey = process.argv[6]
-    const callerSig = process.argv[7]
-    const recipientAddr = process.argv[8]
-    const arbiterAddr = process.argv[9]
-    const servicerAddr = SERVCR_ADDR
-    const amount = process.argv[10]
+    const callerPubkey = process.argv[9]
+    const callerSig = process.argv[10]
+    const recipientAddr = process.argv[11]
+    const arbiterAddr = process.argv[12]
+    const servicerAddr = process.argv[13]
+    const amount = process.argv[14]
 
     if (ACTION == 'release') {
         await release(contract, callerPubkey, callerSig, recipientAddr, servicerAddr, arbiterAddr, amount)
@@ -76,9 +75,8 @@ function getPubKeyHash() {
 }
 
 async function getContractBalance(contract) {
-    const rawBal = await contract.getBalance();
-    const contractBal = bchjs.BitcoinCash.toBitcoinCash(Number(rawBal));
-    console.log(`contract address: ${contract.address} ${contractBal}`);
+    const balance = await contract.getBalance();
+    return bchjs.BitcoinCash.toBitcoinCash(Number(balance))
 
     // const arbiterBal = await getBCHBalance(wallet.arbiter.address);
     // console.log(`arbiter address: ${wallet.arbiter.address} ${arbiterBal}`);

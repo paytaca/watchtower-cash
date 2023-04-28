@@ -18,6 +18,9 @@ RUN sudo apt install nodejs -y
 COPY ./anyhedge/js/package*.json /code/anyhedge/js/
 RUN npm install --prefix /code/anyhedge/js --legacy-peer-deps
 
+COPY ./rampp2p/escrow/package*.json /code/rampp2p/escrow/
+RUN npm install --prefix /code/rampp2p/escrow --legacy-peer-deps
+
 COPY . /code
 WORKDIR /code
 

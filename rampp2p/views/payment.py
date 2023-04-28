@@ -14,8 +14,6 @@ from ..viewcodes import ViewCode
 
 from ..utils import verify_signature, get_verification_headers
 
-# TODO Add permission to PaymentTypes's write endpoints
-
 class PaymentTypeList(APIView):
     def get(self, request):
         queryset = PaymentType.objects.all()

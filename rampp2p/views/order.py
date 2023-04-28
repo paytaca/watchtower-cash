@@ -4,9 +4,15 @@ from rest_framework.response import Response
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.shortcuts import render
 from typing import List
 
-from ..utils import verify_signature, get_verification_headers
+from ..utils import (
+    verify_signature, 
+    get_verification_headers, 
+    Contract, 
+    ContractError
+)
 from ..viewcodes import ViewCode
 
 from ..permissions import *
@@ -14,7 +20,8 @@ from ..validators import *
 from ..base_serializers import (
   OrderSerializer, 
   OrderWriteSerializer, 
-  StatusSerializer
+  StatusSerializer,
+  ReceiptSerializer
 )
 
 from ..base_models import (
@@ -23,7 +30,8 @@ from ..base_models import (
   Status,
   Order,
   Peer,
-  PaymentMethod
+  PaymentMethod,
+  Receipt
 )
 
 '''
@@ -177,21 +185,27 @@ class ConfirmOrder(APIView):
             # validations
             validate_status_inst_count(StatusType.CONFIRMED, pk)
             validate_status_progression(StatusType.CONFIRMED, pk)
+            arbiterPubkey, sellerPubkey, buyerPubkey = self.getKeys(request)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # TODO: escrow funds
+        try:
+            contract = Contract(arbiterPubkey, sellerPubkey, buyerPubkey)
+        except ContractError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'contract_address': contract.address}, status=status.HTTP_200_OK)
 
-        # create CONFIRMED status for order
-        serializer = StatusSerializer(data={
-            'status': StatusType.CONFIRMED,
-            'order': pk
-        })
+    def getKeys(self, request):
+        arbiterPubkey = request.data.get('arbiter_pubkey', None)
+        sellerPubkey = request.data.get('seller_pubkey', None)
+        buyerPubkey = request.data.get('buyer_pubkey', None)
 
-        if serializer.is_valid():
-            stat = StatusSerializer(serializer.save())
-            return Response(stat.data, status=status.HTTP_200_OK)        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if (arbiterPubkey is None or 
+            sellerPubkey is None or 
+            buyerPubkey is None):
+            raise ValidationError('arbiter, seller and buyer public keys are required')
+        
+        return arbiterPubkey, sellerPubkey, buyerPubkey
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -218,7 +232,85 @@ class ConfirmOrder(APIView):
                 raise ValidationError('caller must be seller')
         else:
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
-  
+
+class EscrowFunds(APIView):
+    def post(self, request, pk):
+        
+        try:
+            # validate signature
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
+            verify_signature(wallet_hash, pubkey, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, pk)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # validations
+            validate_status_inst_count(StatusType.CONFIRMED, pk)
+            validate_status_progression(StatusType.CONFIRMED, pk)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        txid = request.data.get('txid', None)
+        if txid is None:
+            return Response({'error': 'txid is None'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # TODO: verify that smart contract address is one of the TXID outputs
+
+        receipt_serializer = ReceiptSerializer(data={
+            'txid': txid,
+            'order': pk
+        })
+        
+        receipt = None
+        if receipt_serializer.is_valid():
+            receipt = ReceiptSerializer(receipt_serializer.save())
+        else:
+            return Response(receipt_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # create CONFIRMED status for order
+        stat_serializer = StatusSerializer(data={
+            'status': StatusType.CONFIRMED,
+            'order': pk
+        })
+
+        stat = None
+        if stat_serializer.is_valid():
+            stat = StatusSerializer(stat_serializer.save())  
+        else:
+            return Response(stat_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({'status': stat.data, 'receipt': receipt.data}, status=status.HTTP_200_OK)  
+
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        Only owners of SELL ads can set order statuses to CONFIRMED.
+        Creators of SELL orders skip the order status to CONFIRMED on creation.
+        '''
+
+        # check if ad type is SELL
+        # if ad type is SELL:
+        #    require caller = ad owner
+        # else
+        #    raise error
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+        except Peer.DoesNotExist or Order.DoesNotExist:
+            raise ValidationError('Peer/Order DoesNotExist')
+
+        if order.ad.trade_type == TradeType.SELL:
+            seller = order.ad.owner
+            # require caller is seller
+            if caller.wallet_hash != seller.wallet_hash:
+                raise ValidationError('caller must be seller')
+        else:
+            raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
+
 class CryptoBuyerConfirmPayment(APIView):
   def post(self, request, pk):
 
