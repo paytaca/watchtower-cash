@@ -4,15 +4,16 @@ const path = require('path');
 const BCHJS = require('@psf/bch-js');
 
 // params
-const ACTION = process.argv[2]; // 'contract' | 'release' | 'arbiter-release' | 'seller-release'
+const ACTION = process.argv[2]; // 'contract' | 'seller-release' | 'arbiter-release' | 'refund'
 
 const ARBITR_PUBKEY = process.argv[3]
 const SELLER_PUBKEY = process.argv[4]
 const BUYER_PUBKEY = process.argv[5]
-const SERVCR_PUBKEY = process.argv[6]
-const TRADING_FEE = parseInt(process.argv[7])
-const ARBITRATION_FEE = parseInt(process.argv[8])
 
+const SERVCR_PUBKEY = process.env.SERVICER_PK
+const SERVCR_ADDR = process.env.SERVICER_ADDR
+const TRADING_FEE = parseInt(process.env.TRADING_FEE)
+const ARBITRATION_FEE = parseInt(process.env.ARBITRATION_FEE)
 const HARDCODED_FEE = 1000;
 
 const bchjs = new BCHJS({
@@ -49,19 +50,21 @@ async function run() {
         return await getContractBalance(contract)
     }
 
-    const callerPubkey = process.argv[9]
-    const callerSig = process.argv[10]
-    const recipientAddr = process.argv[11]
-    const arbiterAddr = process.argv[12]
-    const servicerAddr = process.argv[13]
-    const amount = process.argv[14]
+    const callerSig = process.argv[6]
+    const recipientAddr = process.argv[7]
+    const arbiterAddr = process.argv[8]
+    const amount = process.argv[9]
 
-    if (ACTION == 'release') {
-        await release(contract, callerPubkey, callerSig, recipientAddr, servicerAddr, arbiterAddr, amount)
+    if (ACTION == 'seller-release') {
+        await release(contract, SELLER_PUBKEY, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
+    }
+
+    if (ACTION == 'arbiter-release') {
+        await release(contract, ARBITR_PUBKEY, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
     }
 
     if (ACTION == 'refund') {
-        await refund(contract, callerPubkey, callerSig, recipientAddr, amount);
+        await refund(contract, SELLER_PUBKEY, callerSig, recipientAddr, amount);
     }
 }
 
@@ -120,27 +123,27 @@ async function release(contract, callerPk, callerSig, buyer, servicer, arbiter, 
          * output[2]: {to: `arbiter address`, amount: `arbitration fee`}
          * */ 
         const outputs = [
-        {to: buyer, amount: sats},
-        {to: servicer, amount: TRADING_FEE},
-        {to: arbiter, amount: ARBITRATION_FEE}
+            {to: buyer, amount: sats},
+            {to: servicer, amount: TRADING_FEE},
+            {to: arbiter, amount: ARBITRATION_FEE}
         ]
 
         txInfo = await contract.functions
-        .release(callerPk, callerSig)
-        .to(outputs)
-        .withHardcodedFee(HARDCODED_FEE)
-        .send();
+            .release(callerPk, callerSig)
+            .to(outputs)
+            .withHardcodedFee(HARDCODED_FEE)
+            .send();
         
         result = {
-        success: true,
-        txInfo
+            success: true,
+            txInfo
         };
 
     } catch(err) {
         result = {
-        success: false,
-        reason: String(err),
-        txInfo
+            success: false,
+            reason: String(err),
+            txInfo
         };
     }  
     console.log('result:', JSON.stringify(result));
@@ -178,27 +181,27 @@ async function refund(contract, arbiterPk, arbiterSig, recipient, amount) {
          * output[2]: {to: `arbiter address`, amount: `arbitration fee`}
          * */ 
         const outputs = [
-        {to: recipient, amount: sats},
-        {to: wallet.servicer.address, amount: TRADING_FEE},
-        {to: wallet.arbiter.address, amount: ARBITRATION_FEE}
+            {to: recipient, amount: sats},
+            {to: wallet.servicer.address, amount: TRADING_FEE},
+            {to: wallet.arbiter.address, amount: ARBITRATION_FEE}
         ]
         
         txInfo = await contract.functions
-        .refund(arbiterPk, arbiterSig)
-        .to(outputs)
-        .withHardcodedFee(HARDCODED_FEE)
-        .send();
+            .refund(arbiterPk, arbiterSig)
+            .to(outputs)
+            .withHardcodedFee(HARDCODED_FEE)
+            .send();
 
         result = {
-        success: true,
-        txInfo
+            success: true,
+            txInfo
         };
 
     } catch(err) {
         result = {
-        success: false,
-        reason: String(err),
-        txInfo
+            success: false,
+            reason: String(err),
+            txInfo
         };
     }
     console.log('result:', JSON.stringify(result));

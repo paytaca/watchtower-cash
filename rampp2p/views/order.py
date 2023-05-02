@@ -7,12 +7,7 @@ from django.db.models import Q
 from django.shortcuts import render
 from typing import List
 
-from ..utils import (
-    verify_signature, 
-    get_verification_headers, 
-    Contract, 
-    ContractError
-)
+from ..utils import *
 from ..viewcodes import ViewCode
 
 from ..permissions import *
@@ -182,30 +177,60 @@ class ConfirmOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
+            order = Order.objects.get(pk=pk)
+        except:
+            raise ValidationError('Order DoesNotExist')
+        
+        try:
             # validations
             validate_status_inst_count(StatusType.CONFIRMED, pk)
             validate_status_progression(StatusType.CONFIRMED, pk)
-            arbiterPubkey, sellerPubkey, buyerPubkey = self.getKeys(request)
+            params = self.get_params(request)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            contract = Contract(arbiterPubkey, sellerPubkey, buyerPubkey)
+            contract = Contract(params['arbiterPubkey'], params['sellerPubkey'], params['buyerPubkey'])
         except ContractError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'contract_address': contract.address}, status=status.HTTP_200_OK)
+        
+        order.contract_address = contract.address
+        order.arbiter_address = order.arbiter.arbiter_address
+        order.buyer_address = params['buyerAddr']
+        order.seller_address = params['sellerAddr']
+        order.save()
 
-    def getKeys(self, request):
+        resp = {
+            'contract_address': order.contract_address,
+            'arbiter_address': order.arbiter_address,
+            'buyer_address': order.buyer_address,
+            'seller_address': order.seller_address
+        }
+        return Response(resp, status=status.HTTP_200_OK)
+
+    def get_params(self, request):
         arbiterPubkey = request.data.get('arbiter_pubkey', None)
         sellerPubkey = request.data.get('seller_pubkey', None)
         buyerPubkey = request.data.get('buyer_pubkey', None)
+        sellerAddr = request.data.get('seller_addr', None)
+        buyerAddr = request.data.get('buyer_addr', None)
 
         if (arbiterPubkey is None or 
             sellerPubkey is None or 
-            buyerPubkey is None):
-            raise ValidationError('arbiter, seller and buyer public keys are required')
+            buyerPubkey is None or
+            sellerAddr is None or
+            buyerAddr is None):
+            raise ValidationError('contract parameters are required')
         
-        return arbiterPubkey, sellerPubkey, buyerPubkey
+        params = {
+            'arbiterPubkey': arbiterPubkey,
+            'sellerPubkey': sellerPubkey,
+            'buyerPubkey': buyerPubkey,
+            'sellerAddr': sellerAddr,
+            'buyerAddr': buyerAddr
+        }
+
+        return params
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -446,17 +471,35 @@ class ReleaseCrypto(APIView):
             validate_status_inst_count(StatusType.RELEASED, pk)
             validate_exclusive_stats(StatusType.RELEASED, pk)
             validate_status_progression(StatusType.RELEASED, pk)
+            
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
-        # TODO escrow_release()
+        try:
+            order = self.get_object(pk)
+            params = self.get_params(request)
+
+            # create contract
+            contract = self.get_contract(
+                order, 
+                arbiterPubkey=params['arbiterPubkey'],
+                sellerPubkey=params['sellerPubkey'],
+                buyerPubkey=params['buyerPubkey']
+            )
+            
+            # release crypto
+            contract.release(
+                params['callerPubkey'], 
+                params['callerSig'], 
+                order.buyer_address, 
+                order.arbiter_address,
+                order.crypto_amount
+            )
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # create RELEASED status for order
-        serializer = StatusSerializer(data={
-            'status': StatusType.RELEASED,
-            'order': pk
-        })
-
+        serializer = StatusSerializer(data={'status': StatusType.RELEASED, 'order': pk})
         if serializer.is_valid():
             stat = StatusSerializer(serializer.save())
             return Response(stat.data, status=status.HTTP_200_OK)        
@@ -495,7 +538,44 @@ class ReleaseCrypto(APIView):
         
         if seller is not None and seller.wallet_hash != caller.wallet_hash:
            raise ValidationError('caller must be seller')
-           
+
+    def get_object(self, pk):
+        try:
+            return Order.objects.get(pk=pk)
+        except Order.DoesNotExist as err:
+            raise err
+
+    def get_contract(self, order: Order, **kwargs):
+        arbiterPubkey = kwargs.get('arbiterPubkey')
+        sellerPubkey = kwargs.get('sellerPubkey')
+        buyerPubkey = kwargs.get('buyerPubkey')
+
+        contract = Contract(arbiterPubkey, sellerPubkey, buyerPubkey)
+        if order.contract_address != contract.address:
+            raise ValidationError('order contract address mismatch')
+        return contract
+
+    def get_params(self, request):
+        arbiterPubkey = request.data.get('arbiter_pubkey', None)
+        sellerPubkey = request.data.get('seller_pubkey', None)
+        buyerPubkey = request.data.get('buyer_pubkey', None)
+        callerPubkey = request.data.get('caller_pubkey', None)
+        callerSig = request.data.get('caller_sig', None)
+
+        if (arbiterPubkey is None or 
+                sellerPubkey is None or 
+                    buyerPubkey is None):
+            raise ValidationError('arbiter, seller and buyer public keys are required')
+        
+        params = {
+            'arbiterPubKey': arbiterPubkey,
+            'sellerPubkey': sellerPubkey,
+            'buyerPubkey': buyerPubkey,
+            'callerPubkey': callerPubkey,
+            'callerSig': callerSig
+        }
+        return params
+    
 class RefundCrypto(APIView):
     def post(self, request, pk):
 
@@ -518,7 +598,25 @@ class RefundCrypto(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
-        # TODO escrow_refund()
+        try:
+            order = self.get_object(pk)
+            params = self.get_params(request)
+            # create contract
+            contract = self.get_contract(
+                order, 
+                arbiterPubkey=params['arbiterPubkey'],
+                sellerPubkey=params['sellerPubkey'],
+                buyerPubkey=params['buyerPubkey']
+            )
+            # refund crypto
+            contract.refund(
+                params['arbiterPubkey'], 
+                params['arbiterSig'], 
+                order.seller_address, 
+                order.crypto_amount
+            )
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # create REFUNDED status for order
         serializer = StatusSerializer(data={
@@ -542,7 +640,6 @@ class RefundCrypto(APIView):
         # else:
         #    require(status = CANCEL_APPEALED | RELEASE_APPEALED | REFUND_APPEALED)
 
-        
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
@@ -557,6 +654,41 @@ class RefundCrypto(APIView):
                curr_status.status != StatusType.RELEASE_APPEALED and
                curr_status.status != StatusType.REFUND_APPEALED):
               raise ValidationError('status must be CANCEL_APPEALED | RELEASE_APPEALED | REFUND_APPEALED for this action')
+
+    def get_object(self, pk):
+        try:
+            return Order.objects.get(pk=pk)
+        except Order.DoesNotExist as err:
+            raise err
+
+    def get_contract(self, order: Order, **kwargs):
+        arbiterPubkey = kwargs.get('arbiterPubkey')
+        sellerPubkey = kwargs.get('sellerPubkey')
+        buyerPubkey = kwargs.get('buyerPubkey')
+
+        contract = Contract(arbiterPubkey, sellerPubkey, buyerPubkey)
+        if order.contract_address != contract.address:
+            raise ValidationError('order contract address mismatch')
+        return contract
+
+    def get_params(self, request):
+        arbiterPubkey = request.data.get('arbiter_pubkey', None)
+        sellerPubkey = request.data.get('seller_pubkey', None)
+        buyerPubkey = request.data.get('buyer_pubkey', None)
+        arbiterSig = request.data.get('arbiter_sig', None)
+
+        if (arbiterPubkey is None or 
+                sellerPubkey is None or 
+                    buyerPubkey is None):
+            raise ValidationError('arbiter, seller and buyer public keys are required')
+        
+        params = {
+            'arbiterPubKey': arbiterPubkey,
+            'sellerPubkey': sellerPubkey,
+            'buyerPubkey': buyerPubkey,
+            'arbiterSig': arbiterSig
+        }
+        return params
 
 class CancelOrder(APIView):
     def post(self, request, pk):

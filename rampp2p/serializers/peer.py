@@ -8,6 +8,7 @@ class PeerSerializer(serializers.ModelSerializer):
       'id',
       'nickname',
       'is_arbiter',
+      'arbiter_address',
       'is_disabled',
       'created_at',
       'modified_at'
@@ -19,5 +20,6 @@ class PeerWriteSerializer(serializers.ModelSerializer):
     fields = [
         'nickname',
         'wallet_hash',
-        'is_arbiter'
+        'is_arbiter',
+        'arbiter_address'
     ]

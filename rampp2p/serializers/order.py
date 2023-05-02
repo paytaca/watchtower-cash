@@ -17,7 +17,7 @@ class OrderSerializer(serializers.ModelSerializer):
       "creator",
       "crypto_currency",
       "fiat_currency",
-      "fiat_amount",
+      "crypto_amount",
       "locked_price",
       "arbiter",
       "contract_address",
@@ -37,7 +37,7 @@ class OrderWriteSerializer(serializers.ModelSerializer):
       'creator',
       "crypto_currency",
       "fiat_currency",
-      'fiat_amount',
+      'crypto_amount',
       'locked_price',
       'arbiter',
       'payment_methods'

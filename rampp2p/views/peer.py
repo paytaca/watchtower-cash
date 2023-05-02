@@ -33,6 +33,14 @@ class PeerListCreate(APIView):
     data = request.data.copy()
     data['wallet_hash'] = wallet_hash
 
+    if bool(data.get('is_arbiter')) == True:
+        arbiter_addr = data.get('arbiter_address')
+        if (arbiter_addr is None or len(arbiter_addr) == 0):
+            return Response(
+               {'error': 'arbiter_address is required for arbiter'}, 
+               status=status.HTTP_400_BAD_REQUEST
+            )
+    
     serializer = PeerWriteSerializer(data=data)
     if serializer.is_valid():
       serializer = PeerSerializer(serializer.save())
