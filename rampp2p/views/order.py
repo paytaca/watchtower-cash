@@ -462,7 +462,7 @@ class ReleaseCrypto(APIView):
             verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
-            self.validate_permissions(wallet_hash, pk)
+            caller_id = self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -487,8 +487,13 @@ class ReleaseCrypto(APIView):
                 buyerPubkey=params['buyerPubkey']
             )
             
+            action = 'seller-release'
+            if caller_id == 'ARBITER':
+                action = 'arbiter-release'
+
             # release crypto
             contract.release(
+                action,
                 params['callerPubkey'], 
                 params['callerSig'], 
                 order.buyer_address, 
@@ -527,7 +532,9 @@ class ReleaseCrypto(APIView):
             raise ValidationError('Peer/Order DoesNotExist')
         
         seller = None
+        caller_id = 'SELLER'
         if caller.wallet_hash == order.arbiter.wallet_hash:
+           caller_id = 'ARBITER'
            if (curr_status.status != StatusType.RELEASE_APPEALED and 
                curr_status.status != StatusType.REFUND_APPEALED):
               raise ValidationError('arbiter intervention but no order release/refund appeal')
@@ -538,6 +545,8 @@ class ReleaseCrypto(APIView):
         
         if seller is not None and seller.wallet_hash != caller.wallet_hash:
            raise ValidationError('caller must be seller')
+        
+        return caller_id
 
     def get_object(self, pk):
         try:

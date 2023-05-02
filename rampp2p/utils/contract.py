@@ -34,38 +34,31 @@ class Contract():
         )
         return self.execute(command)
 
-    def release(self, callerPubkey, callerSig, recipientAddr, arbiterAddr, amount):        
+    def release(self, action, callerPubkey, callerSig, recipientAddr, arbiterAddr, amount):        
         path = './rampp2p/escrow/src/'
-        command = 'node {}escrow.js release {} {} {} {} {} {} {} {} {} {} {} {}'.format(
+        command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
             path,
+            action,
             self.arbiterPk, 
             self.sellerPk, 
             self.buyerPk,
-            self.servicerPk,
-            self.tradingFee,
-            self.arbitrationFee,
-            callerPubkey,
             callerSig,
             recipientAddr,
             arbiterAddr,
-            self.servicerAddr,
             amount,
         )
         return self.execute(command)
 
-    def refund(self, arbiterPk, arbiterSig, recipient, amount):
+    def refund(self, arbiterPk, arbiterSig, recipientAddr, arbiterAddr, amount):
         path = './rampp2p/escrow/src/'
         command = 'node {}escrow.js refund {} {} {} {} {} {} {} {} {} {}'.format(
             path,
             self.arbiterPk, 
             self.sellerPk, 
             self.buyerPk,
-            self.servicerPk,
-            self.tradingFee,
-            self.arbitrationFee,
-            arbiterPk, 
             arbiterSig, 
-            recipient, 
+            recipientAddr,
+            arbiterAddr, 
             amount
         )
         return self.execute(command)
