@@ -84,7 +84,11 @@ INSTALLED_APPS=[
     'chat',
     'notifications',
     'jpp',
+<<<<<<< HEAD
     'bcmr',
+=======
+    'ramp'
+>>>>>>> master
 ]
 
 MIDDLEWARE=[
@@ -248,6 +252,7 @@ CELERY_IMPORTS = (
     'main.tasks',
     'smartbch.tasks',
     'anyhedge.tasks',
+    'ramp.tasks'
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -350,6 +355,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.
     },
+    'update_shift_status': {
+        'task': 'ramp.tasks.update_shift_status',
+        'schedule': 60
+    }
 }
 
 from corsheaders.defaults import default_headers
@@ -409,6 +418,9 @@ MAX_BITSOCKET_DURATION = 10
 BITDB_QUERY_LIMIT_PER_PAGE = 1000
 TRANSACTIONS_PER_CHUNK=100
 
+# Sideshift credentials
+SIDESHIFT_SECRET_KEY = config('SIDESHIFT_SECRET_KEY')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -448,6 +460,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False
+        },
+        'ramp': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False    
         }
     },
 }

@@ -211,8 +211,8 @@ def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', 
                 'image_url': ''
             }
 
-            if commitment and bcmr.nft_types:
-                nft_sub_data = bcmr.nft_types[commitment]
+            if commitment and bcmr_token.nft_types:
+                nft_sub_data = bcmr_token.nft_types[commitment]
 
                 if nft_sub_data:
                     if 'name' in nft_sub_data.keys():
@@ -1284,6 +1284,23 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
                 update_nft_owner.delay(txn.token.tokenid)
 
+@shared_task(queue='client_acknowledgement')
+def send_wallet_history_push_notification_task(wallet_history_id):
+    LOGGER.info(f"PUSH_NOTIF: wallet_history:{wallet_history_id}")
+    history = WalletHistory.objects.get(id=wallet_history_id)
+    try:
+        if not history.fiat_value:
+            try:
+                parse_wallet_history_market_values(history.id)
+                history.refresh_from_db()
+            except Exception as exception:
+                LOGGER.exception(exception)
+        LOGGER.info(f"PUSH_NOTIF CURRENCY: wallet_history:{history.txid} | {history.amount} | {history.fiat_value} | {history.usd_value} | {history.market_prices}")
+        if history.amount != 0:
+            return send_wallet_history_push_notification(history)
+    except Exception as exception:
+        LOGGER.exception(exception)
+
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
@@ -1672,8 +1689,10 @@ def find_wallet_history_missing_tx_timestamps():
             _tx_timestamp = tx["timestamp"] if tx else None
         if not _tx_timestamp:
             continue
-
-        tx_timestamp = datetime.fromtimestamp(_tx_timestamp).replace(tzinfo=pytz.UTC)
+        try:
+            tx_timestamp = datetime.fromtimestamp(_tx_timestamp).replace(tzinfo=pytz.UTC)
+        except TypeError:
+            tx_timestamp = _tx_timestamp.replace(tzinfo=pytz.UTC)
         WalletHistory.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
         Transaction.objects.filter(txid=txid).update(tx_timestamp=tx_timestamp)
         txids_updated.append([txid, _tx_timestamp])

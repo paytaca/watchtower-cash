@@ -16,8 +16,14 @@ class BlockHeightViewSet(generics.GenericAPIView):
 
     def get(self, request, format=None):
         get_latest_block()
-        block = BlockHeight.objects.order_by('-number').first()
+
+        # NOTE: fetched second highest number (since first is a mysterious block w/ number that matches max int value)
+        block = BlockHeight.objects.order_by('-number').filter(
+            number__lt=1000000000
+        ).first()
+
         serializer = self.get_serializer(data={'number': block.number})
+
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)            
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

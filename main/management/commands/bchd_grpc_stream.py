@@ -5,7 +5,6 @@ from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
 from main.models import Token, Transaction, Subscription
 import grpc
-import time
 import logging
 import ssl
 from main.tasks import (
@@ -14,7 +13,15 @@ from main.tasks import (
     send_telegram_message,
     parse_tx_wallet_histories,
 )
+import paho.mqtt.client as mqtt
 
+
+mqtt_client = mqtt.Client()
+mqtt_client.connect("docker-host", 1883, 10)
+mqtt_client.loop_start()
+
+
+# Logger
 LOGGER = logging.getLogger(__name__)
 
 
@@ -101,13 +108,26 @@ def run():
                     )
                     obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
                     has_updated_output = has_updated_output or created
+
                     if created:
+                        # Publish MQTT message
+                        data = {
+                            'txid': tx_hash,
+                            'recipient': bchaddress,
+                            'amount': amount
+                        }
+                        LOGGER.info('Sending MQTT message: ' + str(data))
+                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                        LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+
+
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
                             if 'telegram' in platform:
                                 message = platform[1]
                                 chat_id = platform[2]
                                 send_telegram_message(message, chat_id)
+
                     msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
                     LOGGER.info(msg)
 
@@ -128,6 +148,16 @@ def run():
                     has_updated_output = has_updated_output or created
 
                     if created:
+                        # Publish MQTT message
+                        data = {
+                            'txid': tx_hash,
+                            'recipient': slp_address,
+                            'amount': amount,
+                            'token_type': 'slp',
+                            'token_id': token_id
+                        }
+                        mqtt_client.publish(f"transactions/{slp_address}", json.dumps(data), qos=1)
+
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
                             if 'telegram' in platform:

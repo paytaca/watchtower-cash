@@ -5,7 +5,7 @@ def send_wallet_history_push_notification(wallet_history_obj):
     if token_name.lower() == "bch":
         token_name = "BCH"
 
-    fiat_value = wallet_history_obj.fiat_value
+    fiat_value = wallet_history_obj.fiat_value or wallet_history_obj.usd_value
     incoming = wallet_history_obj.amount >= 0
 
     extra = {
