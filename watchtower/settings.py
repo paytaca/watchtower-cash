@@ -84,11 +84,8 @@ INSTALLED_APPS=[
     'chat',
     'notifications',
     'jpp',
-<<<<<<< HEAD
     'bcmr',
-=======
     'ramp'
->>>>>>> master
 ]
 
 MIDDLEWARE=[

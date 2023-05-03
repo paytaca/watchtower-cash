@@ -25,6 +25,8 @@ services:
       SSH_DEBUG: "-v"
       # TUNNEL_HOST: bchn-mainnet
       # REMOTE_HOST: ec2-13-251-63-215.ap-southeast-1.compute.amazonaws.com
+      # LOCAL_PORT: 50001
+      # REMOTE_PORT: 50001
       TUNNEL_HOST: bchn-chipnet
       REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
       LOCAL_PORT: 60001
@@ -32,7 +34,7 @@ services:
   postgres:
     image: "postgres:11.1-alpine"
     volumes:
-      - watchtower_db_data:/var/lib/postgresql/data
+      - watchtower_dbdata:/var/lib/postgresql/data
     env_file:
       - .env_dev
     expose:
@@ -41,6 +43,8 @@ services:
     image: "redis:alpine"
     env_file:
       - .env_dev
+    command: >
+      --requirepass reid_password
   backend:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
@@ -54,6 +58,17 @@ services:
     volumes:
       - ./:/code
       - /code/anyhedge/js/node_modules
+      - ./images:/images
+  adminer:
+    image: adminer
+    depends_on: 
+      - postgres
+    environment:
+      ADMINER_DEFAULT_DB_DRIVER: pgsql
+      ADMINER_DEFAULT_DB_HOST: postgres
+      ADMINER_DEFAULT_DB_NAME: $POSTGRES_DB
+    ports:
+      - 3000:8080
 volumes:
-  watchtower_db_data:
-    external: true
+  watchtower_dbdata:
+    driver: 'local'
