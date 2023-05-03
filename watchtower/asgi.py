@@ -18,7 +18,7 @@ from channels.security.websocket import AllowedHostsOriginValidator
 from channels.routing import ProtocolTypeRouter, URLRouter
 import main.routing
 import anyhedge.routing
-
+import rampp2p.routing
 
 application = ProtocolTypeRouter({
   "http": django_asgi_app,
@@ -26,7 +26,8 @@ application = ProtocolTypeRouter({
     AuthMiddlewareStack(
         URLRouter(
           anyhedge.routing.websocket_urlpatterns +
-          main.routing.websocket_urlpatterns
+          main.routing.websocket_urlpatterns +
+          rampp2p.routing.websocket_urlpatterns
         )
     )
   )

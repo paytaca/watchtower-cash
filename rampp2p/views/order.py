@@ -194,19 +194,18 @@ class ConfirmOrder(APIView):
         except ContractError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        order.contract_address = contract.address
-        order.arbiter_address = order.arbiter.arbiter_address
-        order.buyer_address = params['buyerAddr']
-        order.seller_address = params['sellerAddr']
-        order.save()
+        if contract.address is not None or len(contract.address) > 0:
+            order.contract_address = contract.address
+            order.arbiter_address = order.arbiter.arbiter_address
+            order.buyer_address = params['buyerAddr']
+            order.seller_address = params['sellerAddr']
+            order.save()
 
-        resp = {
-            'contract_address': order.contract_address,
-            'arbiter_address': order.arbiter_address,
-            'buyer_address': order.buyer_address,
-            'seller_address': order.seller_address
-        }
-        return Response(resp, status=status.HTTP_200_OK)
+        # send a message to the WebSocket group
+        data = {'action': 'contract', 'contract_address': order.contract_address}
+        notify_subprocess_completion(wallet_hash, data)
+        
+        return Response(status=status.HTTP_200_OK)
 
     def get_params(self, request):
         arbiterPubkey = request.data.get('arbiter_pubkey', None)
@@ -501,7 +500,7 @@ class ReleaseCrypto(APIView):
                 order.crypto_amount
             )
         except Exception as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': err.args[0], 'params': params}, status=status.HTTP_400_BAD_REQUEST)
 
         # create RELEASED status for order
         serializer = StatusSerializer(data={'status': StatusType.RELEASED, 'order': pk})
@@ -577,7 +576,7 @@ class ReleaseCrypto(APIView):
             raise ValidationError('arbiter, seller and buyer public keys are required')
         
         params = {
-            'arbiterPubKey': arbiterPubkey,
+            'arbiterPubkey': arbiterPubkey,
             'sellerPubkey': sellerPubkey,
             'buyerPubkey': buyerPubkey,
             'callerPubkey': callerPubkey,
@@ -617,14 +616,21 @@ class RefundCrypto(APIView):
                 sellerPubkey=params['sellerPubkey'],
                 buyerPubkey=params['buyerPubkey']
             )
-            # refund crypto
-            contract.refund(
+
+            # execute the JavaScript script to refund crypto
+            stdout = contract.refund(
                 params['arbiterPubkey'], 
                 params['arbiterSig'], 
                 order.seller_address, 
+                order.arbiter_address,
                 order.crypto_amount
             )
-        except Exception as err:
+
+            # send a message to the WebSocket group
+            action='refund'
+            send_contract_update(wallet_hash, action)
+                    
+        except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # create REFUNDED status for order
@@ -692,7 +698,7 @@ class RefundCrypto(APIView):
             raise ValidationError('arbiter, seller and buyer public keys are required')
         
         params = {
-            'arbiterPubKey': arbiterPubkey,
+            'arbiterPubkey': arbiterPubkey,
             'sellerPubkey': sellerPubkey,
             'buyerPubkey': buyerPubkey,
             'arbiterSig': arbiterSig

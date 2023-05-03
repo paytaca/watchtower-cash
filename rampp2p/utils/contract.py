@@ -1,5 +1,6 @@
 from django.conf import settings
 import subprocess
+import json
 
 class Contract():
     def __init__(self, arbiterPk, buyerPk, sellerPk):
@@ -17,13 +18,15 @@ class Contract():
         )
     
     def execute(self, command):
-        process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+        process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # capture the output and errors
-        output, error = process.communicate()  
-        if error is not None:
-           raise ContractError(error.decode('utf-8'))
-        return output.decode('utf-8')
-    
+        stdout, stderr = process.communicate() 
+        stdout = stdout.decode('utf-8')
+        stdout = stdout.rstrip().replace('\n', '')
+        stdout = stdout.replace('\\', '')
+        stdout = json.loads(stdout)
+        return stdout, stderr
+
     def generate_contract(self, arbiterPk, buyerPk, sellerPk):
         path = './rampp2p/escrow/src/'
         command = 'node {}escrow.js contract {} {} {}'.format(
@@ -32,7 +35,8 @@ class Contract():
            sellerPk, 
            buyerPk
         )
-        return self.execute(command)
+        output, error = self.execute(command)
+        return output.get('contract_address')
 
     def release(self, action, callerPubkey, callerSig, recipientAddr, arbiterAddr, amount):        
         path = './rampp2p/escrow/src/'
@@ -51,7 +55,7 @@ class Contract():
 
     def refund(self, arbiterPk, arbiterSig, recipientAddr, arbiterAddr, amount):
         path = './rampp2p/escrow/src/'
-        command = 'node {}escrow.js refund {} {} {} {} {} {} {} {} {} {}'.format(
+        command = 'node {}escrow.js refund {} {} {} {} {} {} {}'.format(
             path,
             self.arbiterPk, 
             self.sellerPk, 

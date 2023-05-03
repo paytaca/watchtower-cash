@@ -42,12 +42,9 @@ async function run() {
     const contract = new Contract(artifact, contractParams, provider);
 
     if (ACTION == 'contract') {
-        process.stdout.write(contract.address)
-        return
-    }
-
-    if (ACTION == 'balance') {
-        return await getContractBalance(contract)
+        data = "{\"contract_address\" : \"" + contract.address + "\"}"
+        console.log(data)
+        return 
     }
 
     const callerSig = process.argv[6]
@@ -55,16 +52,28 @@ async function run() {
     const arbiterAddr = process.argv[8]
     const amount = process.argv[9]
 
-    if (ACTION == 'seller-release') {
-        await release(contract, SELLER_PUBKEY, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
-    }
-
-    if (ACTION == 'arbiter-release') {
-        await release(contract, ARBITR_PUBKEY, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
-    }
-
     if (ACTION == 'refund') {
-        await refund(contract, SELLER_PUBKEY, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
+        // await refund(contract, SELLER_PUBKEY, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
+        await getBalances(contract, arbiterAddr, recipientAddr)
+        return
+    }
+
+    callerWIF = null
+    callerPk = null
+    if (ACTION == 'seller-release') {
+        callerWIF = process.env.SELLER_WIF
+        callerPk = SELLER_PUBKEY
+    }
+    
+    if (ACTION == 'arbiter-release') {
+        callerWIF = process.env.ARBITER_WIF        
+        callerPk = ARBITR_PUBKEY    
+    }
+
+    if (callerWIF == null || callerPk == null) {
+        await release(contract, callerPk, callerWIF, /*callerSig,*/ recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
+        await getBalances(contract, arbiterAddr, recipientAddr)
+        return
     }
 }
 
@@ -77,9 +86,20 @@ function getPubKeyHash() {
     return [arbiterPkh, buyerPkh, sellerPkh, servicerPkh];
 }
 
-async function getContractBalance(contract) {
-    const balance = await contract.getBalance();
-    return bchjs.BitcoinCash.toBitcoinCash(Number(balance))
+async function getBalances(contract, arbiterAddr, recipientAddr) {
+    // Get contract balance & output address + balance
+    const rawBal = await contract.getBalance();
+    const contractBal = bchjs.BitcoinCash.toBitcoinCash(Number(rawBal));
+    console.log(`contract address: ${contract.address} ${contractBal}`);
+
+    const arbiterBal = await getBCHBalance(arbiterAddr);
+    console.log(`arbiter address: ${arbiterAddr} ${arbiterBal}`);
+    
+    const recipientBal = await getBCHBalance(recipientAddr);
+    console.log(`recipient address: ${recipientAddr} ${recipientBal}`);
+    
+    const servicerBal = await getBCHBalance(SERVCR_ADDR);
+    console.log(`servicer address: ${SERVCR_ADDR} ${servicerBal}`);
 }
 
 /**
@@ -97,9 +117,11 @@ async function getContractBalance(contract) {
  * @param {string} arbiter - The cash address of the arbiter.
  * @param {number} amount - The transaction amount in BCH.
  */
-async function release(contract, callerPk, callerSig, recipient, servicer, arbiter, amount) {
+async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, servicer, arbiter, amount) {
     let result = {}
     let txInfo;
+
+    callerSig = getSig(callerWIF)
 
     try {
         // convert amount from BCH to satoshi
@@ -195,4 +217,31 @@ async function refund(contract, arbiterPk, arbiterSig, recipient, servicer, arbi
         };
     }
     console.log('result:', JSON.stringify(result));
+}
+
+function getSig(wif) {
+    // generate signature
+    const keyPair = bchjs.ECPair.fromWIF(wif);
+    const signature = new SignatureTemplate(keyPair);
+    return signature
+}
+
+// Get the balance in BCH of a BCH address.
+async function getBCHBalance (addr, verbose) {
+    try {
+        const result = await bchjs.Electrumx.balance(addr)
+
+        if (verbose) console.log(result)
+
+        // The total balance is the sum of the confirmed and unconfirmed balances.
+        const satBalance = Number(result.balance.confirmed) + Number(result.balance.unconfirmed)
+
+        // Convert the satoshi balance to a BCH balance
+        const bchBalance = bchjs.BitcoinCash.toBitcoinCash(satBalance)
+
+        return bchBalance
+    } catch (err) {
+        console.error('Error in getBCHBalance: ', err)
+        console.log(`addr: ${addr}`)
+    }
 }
