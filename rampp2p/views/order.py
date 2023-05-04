@@ -1,3 +1,4 @@
+from rampp2p.serializers.contract import ContractSerializer
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -285,23 +286,20 @@ class EscrowFunds(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        txid = request.data.get('txid', None)
-        if txid is None:
-            return Response({'error': 'txid is None'}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data
+
+        if data.get('txid') is None or data.get('contract_id') is None:
+            return Response({'error': 'txid or contract_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # TODO: verify that smart contract address is one of the TXID outputs
 
-        # contract = Contract.objects.filter(order___id=pk).first()
-        receipt_serializer = ReceiptSerializer(data={
-            'txid': txid,
-            'order': pk
-        })
-        
-        receipt = None
-        if receipt_serializer.is_valid():
-            receipt = ReceiptSerializer(receipt_serializer.save())
-        else:
-            return Response(receipt_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            contract = Contract.objects.get(pk=data.get('contract_id'))
+            contract.txid = data.get('txid')
+            contract.save()
+            contract = ContractSerializer(contract)
+        except (Contract.DoesNotExist, Exception) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # create CONFIRMED status for order
         stat_serializer = StatusSerializer(data={
@@ -315,7 +313,7 @@ class EscrowFunds(APIView):
         else:
             return Response(stat_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response({'status': stat.data, 'receipt': receipt.data}, status=status.HTTP_200_OK)  
+        return Response({'status': stat.data, 'contract': contract.data}, status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''

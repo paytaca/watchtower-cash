@@ -15,8 +15,8 @@ class Order(models.Model):
     )
     crypto_currency = models.ForeignKey(CryptoCurrency, on_delete=models.PROTECT, editable=False)
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT, editable=False)
-    locked_price = models.FloatField(editable=False)
-    crypto_amount = models.FloatField(editable=False)
+    locked_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, editable=False)
+    crypto_amount = models.DecimalField(max_digits=10, decimal_places=8, default=0, editable=False)
     arbiter = models.ForeignKey(
         Peer, 
         on_delete=models.PROTECT, 
