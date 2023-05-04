@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from django.core.exceptions import ValidationError
-from .base_models import (
+from rampp2p.models import (
     Ad, 
     TradeType, 
     Order, 

@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 # Register your models here.
-from .base_models import *
+from rampp2p.models import *
 
 
 admin.site.register(Ad)

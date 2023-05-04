@@ -15,18 +15,22 @@ class Order(models.Model):
     )
     crypto_currency = models.ForeignKey(CryptoCurrency, on_delete=models.PROTECT, editable=False)
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT, editable=False)
-    crypto_amount = models.FloatField()
-    locked_price = models.FloatField()
+    locked_price = models.FloatField(editable=False)
+    crypto_amount = models.FloatField(editable=False)
     arbiter = models.ForeignKey(
         Peer, 
         on_delete=models.PROTECT, 
         blank=True, 
         null=True, 
         related_name="arbitrated_orders")
+    payment_methods = models.ManyToManyField(PaymentMethod)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+class Contract(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, editable=False)
+    txid = models.CharField(max_length=100, unique=True, blank=True, null=True)
     contract_address = models.CharField(max_length=100, blank=True, null=True)
     arbiter_address = models.CharField(max_length=100, blank=True, null=True)
     buyer_address = models.CharField(max_length=100, blank=True, null=True)
     seller_address = models.CharField(max_length=100, blank=True, null=True)
-    payment_methods = models.ManyToManyField(PaymentMethod)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    

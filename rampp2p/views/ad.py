@@ -18,7 +18,7 @@ from ..base_serializers import (
     AdWriteSerializer
 )
 
-from ..base_models import (
+from rampp2p.models import (
     Ad,
     Peer,
     PaymentMethod

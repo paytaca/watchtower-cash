@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from .base_models import (
+from rampp2p.models import (
     Status, StatusType
 )
 

@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.http import Http404
 from django.core.exceptions import ValidationError
 
-from ..base_models import (
+from rampp2p.models import (
     TradeType,
     AppealType,
     StatusType,

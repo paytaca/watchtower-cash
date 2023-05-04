@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from ..base_models import (
+from rampp2p.models import (
   Order,
   CryptoCurrency, 
   FiatCurrency,

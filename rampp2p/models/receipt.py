@@ -1,5 +1,5 @@
 from django.db import models
-from ..base_models import Order
+from rampp2p.models import Order
 
 class Receipt(models.Model):
     txid = models.CharField(max_length=100, unique=True)

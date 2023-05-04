@@ -2,7 +2,7 @@ from django.conf import settings
 import subprocess
 import json
 
-class Contract():
+class SmartContract():
     def __init__(self, arbiterPk, buyerPk, sellerPk):
         self.arbiterPk = arbiterPk
         self.buyerPk = buyerPk

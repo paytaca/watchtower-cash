@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..base_models import Receipt, Order
+from rampp2p.models import Receipt, Order
 
 class ReceiptSerializer(serializers.ModelSerializer):
     order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())

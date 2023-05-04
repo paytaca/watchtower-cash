@@ -19,14 +19,15 @@ from ..base_serializers import (
   ReceiptSerializer
 )
 
-from ..base_models import (
+from rampp2p.models import (
   Ad,
   StatusType,
   Status,
   Order,
   Peer,
   PaymentMethod,
-  Receipt
+  Receipt,
+  Contract
 )
 
 '''
@@ -190,19 +191,25 @@ class ConfirmOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            contract = Contract(params['arbiterPubkey'], params['sellerPubkey'], params['buyerPubkey'])
+            scontract = SmartContract(params['arbiterPubkey'], params['sellerPubkey'], params['buyerPubkey'])
         except ContractError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        if contract.address is not None or len(contract.address) > 0:
-            order.contract_address = contract.address
-            order.arbiter_address = order.arbiter.arbiter_address
-            order.buyer_address = params['buyerAddr']
-            order.seller_address = params['sellerAddr']
-            order.save()
+        args = {}
+        if scontract.address is not None or len(scontract.address) > 0:
+            args = {
+                'order': order,
+                'contract_address': scontract.address,
+                'arbiter_address': order.arbiter.arbiter_address,
+                'buyer_address': params['buyerAddr'],
+                'seller_address': params['sellerAddr']
+            }
+            contract = Contract.objects.create(**args)
+            args['contract_id'] = contract.id
+            args['order'] = order.id
 
         # send a message to the WebSocket group
-        data = {'action': 'contract', 'contract_address': order.contract_address}
+        data = {'action': 'create-contract', 'data': args}
         notify_subprocess_completion(wallet_hash, data)
         
         return Response(status=status.HTTP_200_OK)
@@ -284,6 +291,7 @@ class EscrowFunds(APIView):
         
         # TODO: verify that smart contract address is one of the TXID outputs
 
+        # contract = Contract.objects.filter(order___id=pk).first()
         receipt_serializer = ReceiptSerializer(data={
             'txid': txid,
             'order': pk

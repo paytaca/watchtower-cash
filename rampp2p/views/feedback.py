@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from ..serializers.feedback import FeedbackSerializer
 
 from ..models.feedback import Feedback
-from ..base_models import (
+from rampp2p.models import (
     Peer,
     Order
 )
