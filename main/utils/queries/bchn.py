@@ -11,10 +11,7 @@ import json
 class BCHN(object):
 
     def __init__(self):
-        credentials = f'{settings.RPC_USER}:{settings.BCHN_RPC_PASSWORD}'
-        url = f'http://{credentials}@docker-host:8332'
-
-        self.rpc_connection = AuthServiceProxy(url)
+        self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE)
         self.source = 'bchn'
         self.fulcrum = {
             'host': 'fulcrum',

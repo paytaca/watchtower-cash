@@ -10,7 +10,7 @@ services:
     build: /root/watchtower
     image: watchtower_web
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
-    env_file: /root/watchtower/compose/.env_prod
+    env_file: /root/watchtower/compose/.env_chipnet
     volumes:
       - /var/www/images:/images
       - /code/anyhedge/js/node_modules
