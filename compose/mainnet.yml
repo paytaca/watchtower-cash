@@ -7,10 +7,10 @@ services:
     restart: on-failure
   web:
     container_name: watchtower_web
-    build: /root/watchtower
+    build: /home/ubuntu/watchtower
     image: watchtower_web
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
-    env_file: /root/watchtower/compose/.env_mainnet
+    env_file: /home/ubuntu/watchtower/compose/.env_mainnet
     volumes:
       - /var/www/images:/images
       - /code/anyhedge/js/node_modules

@@ -521,9 +521,10 @@ BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
 RPC_USER = decipher(config('RPC_USER'))
 
 BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
-BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@docker-host:8332'
+BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@bchn:8332'
 
-BCHD_RPC_PASSWORD = decipher(config('BCHD_RPC_PASSWORD'))
-BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@docker-host:18334'
+# BCHD_RPC_PASSWORD = decipher(config('BCHD_RPC_PASSWORD'))
+# BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@bchd:18334'
+BCHD_NODE = 'bchd.paytaca.com:8335'
 
 WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
