@@ -19,8 +19,9 @@ from ..base_serializers import (
   OrderSerializer, 
   OrderWriteSerializer, 
   StatusSerializer,
-  ReceiptSerializer
+  ReceiptSerializer,
 )
+from rampp2p.serializers.contract import ContractSerializer
 
 from rampp2p.models import (
   Ad,
@@ -166,8 +167,16 @@ class OrderDetail(APIView):
 
   def get(self, request, pk):
     order = self.get_object(pk)
-    serializer = OrderSerializer(order)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    response = {
+        'order': OrderSerializer(order).data
+    }
+
+    order_contract = Contract.objects.filter(order__pk=pk)
+    if order_contract.count() > 0:
+        order_contract = order_contract.first()
+        response['contract'] = ContractSerializer(order_contract).data
+
+    return Response(response, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
     def post(self, request, pk):
@@ -183,14 +192,6 @@ class ConfirmOrder(APIView):
 
             params = self.get_params(request)
             order = Order.objects.get(pk=pk)
-
-            # execute subprocess
-            contract.create(
-                wallet_hash,
-                arbiterPubkey=params['arbiterPubkey'], 
-                sellerPubkey=params['sellerPubkey'], 
-                buyerPubkey=params['buyerPubkey']
-            )
             
         except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -202,9 +203,23 @@ class ConfirmOrder(APIView):
             'seller_address': params['sellerAddr']
         }
 
-        contract_obj = Contract.objects.create(**args)
+        contract_obj = Contract.objects.filter(order__pk=pk)
+        if contract_obj.count() == 0:
+            contract_obj = Contract.objects.create(**args)
+        else:
+            contract_obj = contract_obj.first()
+        
         args['contract_id'] = contract_obj.id
         args['order'] = order.id
+
+        # execute subprocess
+        contract.create(
+            contract_obj.id,
+            wallet_hash,
+            arbiterPubkey=params['arbiterPubkey'], 
+            sellerPubkey=params['sellerPubkey'], 
+            buyerPubkey=params['buyerPubkey']
+        )
 
         return Response(args, status=status.HTTP_200_OK)
 

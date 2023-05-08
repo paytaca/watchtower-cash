@@ -5,7 +5,8 @@ from rampp2p.utils import websocket
 import logging
 logger = logging.getLogger(__name__)
 
-def create(wallet_hash: str, **kwargs):
+def create(contract_id: int, wallet_hash: str, **kwargs):
+    action = 'create'
     path = './rampp2p/escrow/src/'
     command = 'node {}escrow.js contract {} {} {}'.format(
         path,
@@ -13,7 +14,14 @@ def create(wallet_hash: str, **kwargs):
         kwargs.get('buyerPubkey'), 
         kwargs.get('sellerPubkey')
     )
-    return tasks.execute_subprocess.apply_async((command,), link=tasks.notify_subprocess_completion.s(wallet_hash=wallet_hash))
+    return tasks.execute_subprocess.apply_async(
+                (command,), 
+                link=tasks.notify_subprocess_completion.s(
+                        action=action, 
+                        contract_id=contract_id, 
+                        wallet_hash=wallet_hash
+                    )
+            )
 
 def release(**kwargs):        
     path = './rampp2p/escrow/src/'

@@ -27,7 +27,7 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
 class Contract(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.PROTECT, editable=False)
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, editable=False, unique=True)
     txid = models.CharField(max_length=100, unique=True, blank=True, null=True)
     contract_address = models.CharField(max_length=100, blank=True, null=True)
     arbiter_address = models.CharField(max_length=100, blank=True, null=True)
