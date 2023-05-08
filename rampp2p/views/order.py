@@ -8,7 +8,9 @@ from django.db.models import Q
 from django.shortcuts import render
 from typing import List
 
-from ..utils import *
+import rampp2p.tasks as tasks
+from rampp2p.utils import websocket, contract, common
+
 from ..viewcodes import ViewCode
 
 from ..permissions import *
@@ -30,6 +32,9 @@ from rampp2p.models import (
   Receipt,
   Contract
 )
+
+import logging
+logger = logging.getLogger(__name__)
 
 '''
   SUBMITTED         = at Order creation
@@ -66,9 +71,9 @@ class OrderList(APIView):
 
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_CREATE.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)
@@ -169,51 +174,39 @@ class ConfirmOrder(APIView):
         
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
-        try:
-            order = Order.objects.get(pk=pk)
-        except:
-            raise ValidationError('Order DoesNotExist')
-        
-        try:
-            # validations
-            validate_status_inst_count(StatusType.CONFIRMED, pk)
-            validate_status_progression(StatusType.CONFIRMED, pk)
             params = self.get_params(request)
-        except ValidationError as err:
+            order = Order.objects.get(pk=pk)
+
+            # execute subprocess
+            contract.create(
+                wallet_hash,
+                arbiterPubkey=params['arbiterPubkey'], 
+                sellerPubkey=params['sellerPubkey'], 
+                buyerPubkey=params['buyerPubkey']
+            )
+            
+        except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            scontract = SmartContract(params['arbiterPubkey'], params['sellerPubkey'], params['buyerPubkey'])
-        except ContractError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        args = {}
-        if scontract.address is not None or len(scontract.address) > 0:
-            args = {
-                'order': order,
-                'contract_address': scontract.address,
-                'arbiter_address': order.arbiter.arbiter_address,
-                'buyer_address': params['buyerAddr'],
-                'seller_address': params['sellerAddr']
-            }
-            contract = Contract.objects.create(**args)
-            args['contract_id'] = contract.id
-            args['order'] = order.id
+        args = {
+            'order': order,
+            'arbiter_address': order.arbiter.arbiter_address,
+            'buyer_address': params['buyerAddr'],
+            'seller_address': params['sellerAddr']
+        }
 
-        # send a message to the WebSocket group
-        data = {'action': 'create-contract', 'data': args}
-        notify_subprocess_completion(wallet_hash, data)
-        
-        return Response(status=status.HTTP_200_OK)
+        contract_obj = Contract.objects.create(**args)
+        args['contract_id'] = contract_obj.id
+        args['order'] = order.id
+
+        return Response(args, status=status.HTTP_200_OK)
 
     def get_params(self, request):
         arbiterPubkey = request.data.get('arbiter_pubkey', None)
@@ -270,9 +263,9 @@ class EscrowFunds(APIView):
         
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -346,9 +339,9 @@ class CryptoBuyerConfirmPayment(APIView):
 
     try:
         # validate signature
-        pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+        pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
         message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
-        verify_signature(wallet_hash, pubkey, signature, message)
+        common.verify_signature(wallet_hash, pubkey, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)
@@ -404,9 +397,9 @@ class CryptoSellerConfirmPayment(APIView):
         
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_SELLER_CONF_PAYMENT.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -462,9 +455,9 @@ class ReleaseCrypto(APIView):
 
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             caller_id = self.validate_permissions(wallet_hash, pk)
@@ -595,47 +588,37 @@ class RefundCrypto(APIView):
 
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
+        
             # status validations
             validate_status_inst_count(StatusType.REFUNDED, pk)
             validate_exclusive_stats(StatusType.REFUNDED, pk)
             validate_status_progression(StatusType.REFUNDED, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-    
-        try:
+
             order = self.get_object(pk)
+            contract = Contract.objects.filter(order__id=pk).first()
             params = self.get_params(request)
-            # create contract
-            contract = self.get_contract(
-                order, 
-                arbiterPubkey=params['arbiterPubkey'],
-                sellerPubkey=params['sellerPubkey'],
-                buyerPubkey=params['buyerPubkey']
-            )
 
             # execute the JavaScript script to refund crypto
-            stdout = contract.refund(
-                params['arbiterPubkey'], 
-                params['arbiterSig'], 
-                order.seller_address, 
-                order.arbiter_address,
-                order.crypto_amount
+            result = tasks.contract_refund(
+                arbiterPubkey=params['arbiterPubkey'], 
+                sellerPubkey=params['sellerPubkey'], 
+                buyerPubkey=params['buyerPubkey'],
+                callerSig=params['callerSig'], 
+                recipientAddr=contract.seller_address, 
+                arbiterAddr=contract.arbiter_address,
+                amount=order.crypto_amount
             )
+            logger.warning(f'result: {result}')
 
             # send a message to the WebSocket group
-            action='refund'
-            send_contract_update(wallet_hash, action)
-                    
+            websocket.notify_subprocess_completion(wallet_hash, result)
+
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -644,7 +627,7 @@ class RefundCrypto(APIView):
             'status': StatusType.REFUNDED,
             'order': pk
         })
-
+        
         if serializer.is_valid():
             stat = StatusSerializer(serializer.save())
             return Response(stat.data, status=status.HTTP_200_OK)        
@@ -682,21 +665,21 @@ class RefundCrypto(APIView):
         except Order.DoesNotExist as err:
             raise err
 
-    def get_contract(self, order: Order, **kwargs):
+    def get_contract(self, contract: Contract, **kwargs):
         arbiterPubkey = kwargs.get('arbiterPubkey')
         sellerPubkey = kwargs.get('sellerPubkey')
         buyerPubkey = kwargs.get('buyerPubkey')
 
-        contract = Contract(arbiterPubkey, sellerPubkey, buyerPubkey)
-        if order.contract_address != contract.address:
+        scontract = SmartContract(arbiterPubkey, sellerPubkey, buyerPubkey)
+        if contract.contract_address != scontract.address:
             raise ValidationError('order contract address mismatch')
-        return contract
+        return scontract
 
     def get_params(self, request):
         arbiterPubkey = request.data.get('arbiter_pubkey', None)
         sellerPubkey = request.data.get('seller_pubkey', None)
         buyerPubkey = request.data.get('buyer_pubkey', None)
-        arbiterSig = request.data.get('arbiter_sig', None)
+        callerSig = request.data.get('arbiter_sig', None)
 
         if (arbiterPubkey is None or 
                 sellerPubkey is None or 
@@ -707,7 +690,7 @@ class RefundCrypto(APIView):
             'arbiterPubkey': arbiterPubkey,
             'sellerPubkey': sellerPubkey,
             'buyerPubkey': buyerPubkey,
-            'arbiterSig': arbiterSig
+            'callerSig': callerSig
         }
         return params
 
@@ -716,9 +699,9 @@ class CancelOrder(APIView):
 
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_CANCEL.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -759,3 +742,17 @@ class CancelOrder(APIView):
         
         if caller.wallet_hash != order.creator.wallet_hash:
            raise ValidationError('caller must be order creator')
+        
+class TestView(APIView):
+    def post(self, request):
+        wallet_hash = request.data.get('wallet_hash')
+        arbiter_pubkey = request.data.get('arbiter_pubkey')
+        seller_pubkey = request.data.get('seller_pubkey')
+        buyer_pubkey = request.data.get('buyer_pubkey')
+        contract.contract_create(
+            wallet_hash,
+            arbiter_pubkey,
+            seller_pubkey,
+            buyer_pubkey
+        )
+        return Response(status=status.HTTP_200_OK)

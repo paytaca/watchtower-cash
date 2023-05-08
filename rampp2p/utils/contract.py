@@ -1,71 +1,48 @@
 from django.conf import settings
-import subprocess
-import json
+import rampp2p.tasks as tasks
+from rampp2p.utils import websocket
 
-class SmartContract():
-    def __init__(self, arbiterPk, buyerPk, sellerPk):
-        self.arbiterPk = arbiterPk
-        self.buyerPk = buyerPk
-        self.sellerPk = sellerPk
-        self.servicerPk = settings.SERVICER_PK
-        self.servicerAddr = settings.SERVICER_ADDR
-        self.tradingFee = int(settings.TRADING_FEE)
-        self.arbitrationFee = int(settings.ARBITRATION_FEE)
-        self.address = self.generate_contract(
-            self.arbiterPk, 
-            self.buyerPk, 
-            self.sellerPk
-        )
-    
-    def execute(self, command):
-        process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # capture the output and errors
-        stdout, stderr = process.communicate() 
-        stdout = stdout.decode('utf-8')
-        stdout = stdout.rstrip().replace('\n', '')
-        stdout = stdout.replace('\\', '')
-        stdout = json.loads(stdout)
-        return stdout, stderr
+import logging
+logger = logging.getLogger(__name__)
 
-    def generate_contract(self, arbiterPk, buyerPk, sellerPk):
-        path = './rampp2p/escrow/src/'
-        command = 'node {}escrow.js contract {} {} {}'.format(
-           path,
-           arbiterPk, 
-           sellerPk, 
-           buyerPk
-        )
-        output, error = self.execute(command)
-        return output.get('contract_address')
+def create(wallet_hash: str, **kwargs):
+    path = './rampp2p/escrow/src/'
+    command = 'node {}escrow.js contract {} {} {}'.format(
+        path,
+        kwargs.get('arbiterPubkey'), 
+        kwargs.get('buyerPubkey'), 
+        kwargs.get('sellerPubkey')
+    )
+    return tasks.execute_subprocess.apply_async((command,), link=tasks.notify_subprocess_completion.s(wallet_hash=wallet_hash))
 
-    def release(self, action, callerPubkey, callerSig, recipientAddr, arbiterAddr, amount):        
-        path = './rampp2p/escrow/src/'
-        command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
-            path,
-            action,
-            self.arbiterPk, 
-            self.sellerPk, 
-            self.buyerPk,
-            callerSig,
-            recipientAddr,
-            arbiterAddr,
-            amount,
-        )
-        return self.execute(command)
+def release(**kwargs):        
+    path = './rampp2p/escrow/src/'
+    command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
+        path,
+        kwargs.get('action'),
+        kwargs.get('arbiterPubkey'), 
+        kwargs.get('sellerPubkey'), 
+        kwargs.get('buyerPubkey'),
+        kwargs.get('callerSig'),
+        kwargs.get('recipientAddr'),
+        kwargs.get('arbiterAddr'),
+        kwargs.get('amount'),
+    )
+    return tasks.execute_subprocess(command)
 
-    def refund(self, arbiterPk, arbiterSig, recipientAddr, arbiterAddr, amount):
-        path = './rampp2p/escrow/src/'
-        command = 'node {}escrow.js refund {} {} {} {} {} {} {}'.format(
-            path,
-            self.arbiterPk, 
-            self.sellerPk, 
-            self.buyerPk,
-            arbiterSig, 
-            recipientAddr,
-            arbiterAddr, 
-            amount
-        )
-        return self.execute(command)
+def refund(**kwargs):
+    path = './rampp2p/escrow/src/'
+    command = 'node {}escrow.js refund {} {} {} {} {} {} {}'.format(
+        path,
+        kwargs.get('arbiterPubkey'), 
+        kwargs.get('sellerPubkey'), 
+        kwargs.get('buyerPubkey'),
+        kwargs.get('callerSig'),
+        kwargs.get('recipientAddr'),
+        kwargs.get('arbiterAddr'),
+        kwargs.get('amount'),
+    )
+    return tasks.execute_subprocess(command)
 
 class ContractError(Exception):
     def __init__(self, message):

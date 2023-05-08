@@ -35,7 +35,8 @@ from .views.order import (
   ReleaseCrypto,
   RefundCrypto,
   CancelOrder,
-  EscrowFunds
+  EscrowFunds,
+  TestView
 )
 
 from .views.appeal import (
@@ -87,4 +88,5 @@ urlpatterns = [
   path('order/appeal/<int:pk>/cancel', AppealCancel.as_view(), name='appeal-cancel'),
   path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
   path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
+
 ]
