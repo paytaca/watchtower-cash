@@ -238,9 +238,9 @@ PUSH_NOTIFICATIONS_SETTINGS = {
 }
 
 
-DB_NUM = [0,1,2]
-if DEPLOYMENT_INSTANCE == 'staging':
-    DB_NUM = [3,4,5]
+DB_NUM = [3,4,5]
+if DEPLOYMENT_INSTANCE == 'prod':
+    DB_NUM = [0,1,2]
 
 REDIS_HOST = decipher(config('REDIS_HOST'))
 REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
