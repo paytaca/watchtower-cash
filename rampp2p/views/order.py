@@ -178,17 +178,25 @@ class OrderDetail(APIView):
 
     return Response(response, status=status.HTTP_200_OK)
 
-class ConfirmOrder(APIView):
+class GenerateContract(APIView):
     def post(self, request, pk):
         
         try:
-            # validate signature
+            # signature validation
             pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
             common.verify_signature(wallet_hash, pubkey, signature, message)
 
-            # validate permissions
+            # permission validations
             self.validate_permissions(wallet_hash, pk)
+
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            # no need to generate contract address 
+            # when order is already >= CONFIRMED 
+            validate_status(pk, StatusType.SUBMITTED)
 
             params = self.get_params(request)
             order = Order.objects.get(pk=pk)
@@ -203,24 +211,26 @@ class ConfirmOrder(APIView):
             'seller_address': params['sellerAddr']
         }
 
-        contract_obj = Contract.objects.filter(order__pk=pk)
+        contract_obj = Contract.objects.filter(order__id=pk)
         if contract_obj.count() == 0:
             contract_obj = Contract.objects.create(**args)
+
+            # execute subprocess
+            contract.create(
+                contract_obj.id,
+                wallet_hash,
+                arbiterPubkey=params['arbiterPubkey'], 
+                sellerPubkey=params['sellerPubkey'], 
+                buyerPubkey=params['buyerPubkey']
+            )
+
         else:
             contract_obj = contract_obj.first()
+            args['contract_address'] = contract_obj.contract_address
         
         args['contract_id'] = contract_obj.id
         args['order'] = order.id
-
-        # execute subprocess
-        contract.create(
-            contract_obj.id,
-            wallet_hash,
-            arbiterPubkey=params['arbiterPubkey'], 
-            sellerPubkey=params['sellerPubkey'], 
-            buyerPubkey=params['buyerPubkey']
-        )
-
+        
         return Response(args, status=status.HTTP_200_OK)
 
     def get_params(self, request):
@@ -273,7 +283,7 @@ class ConfirmOrder(APIView):
         else:
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
 
-class EscrowFunds(APIView):
+class ConfirmOrder(APIView):
     def post(self, request, pk):
         
         try:
@@ -284,6 +294,7 @@ class EscrowFunds(APIView):
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
+
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -616,23 +627,22 @@ class RefundCrypto(APIView):
             validate_status_progression(StatusType.REFUNDED, pk)
 
             order = self.get_object(pk)
-            contract = Contract.objects.filter(order__id=pk).first()
+            contract_obj = Contract.objects.filter(order__id=pk).first()
             params = self.get_params(request)
 
             # execute the JavaScript script to refund crypto
-            result = tasks.contract_refund(
+            parties = self.get_parties(order)
+            contract.refund(
+                contract_obj.id,
+                parties,
                 arbiterPubkey=params['arbiterPubkey'], 
                 sellerPubkey=params['sellerPubkey'], 
                 buyerPubkey=params['buyerPubkey'],
                 callerSig=params['callerSig'], 
-                recipientAddr=contract.seller_address, 
-                arbiterAddr=contract.arbiter_address,
+                recipientAddr=contract_obj.seller_address, 
+                arbiterAddr=contract_obj.arbiter_address,
                 amount=order.crypto_amount
             )
-            logger.warning(f'result: {result}')
-
-            # send a message to the WebSocket group
-            websocket.notify_subprocess_completion(wallet_hash, result)
 
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -644,8 +654,8 @@ class RefundCrypto(APIView):
         })
         
         if serializer.is_valid():
-            stat = StatusSerializer(serializer.save())
-            return Response(stat.data, status=status.HTTP_200_OK)        
+            # stat = serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def validate_permissions(self, wallet_hash, pk):
@@ -653,18 +663,12 @@ class RefundCrypto(APIView):
         RefundCrypto should be callable only by the arbiter when
         order status is CANCEL_APPEALED, RELEASE_APPEALED, or REFUND_APPEALED
         '''
-
-        # if caller is not arbiter
-        #     raise error
-        # else:
-        #    require(status = CANCEL_APPEALED | RELEASE_APPEALED | REFUND_APPEALED)
-
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except Peer.DoesNotExist or Order.DoesNotExist:
-            raise ValidationError('Peer/Order DoesNotExist')
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
         
         if caller.wallet_hash != order.arbiter.wallet_hash:
            raise ValidationError('caller must be arbiter')
@@ -680,15 +684,15 @@ class RefundCrypto(APIView):
         except Order.DoesNotExist as err:
             raise err
 
-    def get_contract(self, contract: Contract, **kwargs):
-        arbiterPubkey = kwargs.get('arbiterPubkey')
-        sellerPubkey = kwargs.get('sellerPubkey')
-        buyerPubkey = kwargs.get('buyerPubkey')
-
-        scontract = SmartContract(arbiterPubkey, sellerPubkey, buyerPubkey)
-        if contract.contract_address != scontract.address:
-            raise ValidationError('order contract address mismatch')
-        return scontract
+    def get_parties(self, order: Order):
+        '''
+        Returns the wallet hash of the order's seller, buyer and arbiter.
+        '''
+        party_a = order.ad.owner.wallet_hash
+        party_b = order.creator.wallet_hash
+        arbiter = order.arbiter.wallet_hash
+        
+        return [party_a, party_b, arbiter]
 
     def get_params(self, request):
         arbiterPubkey = request.data.get('arbiter_pubkey', None)

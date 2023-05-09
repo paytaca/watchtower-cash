@@ -30,12 +30,12 @@ from .views.order import (
   OrderDetail,
   OrderStatusList,
   ConfirmOrder,
+  GenerateContract,
   CryptoBuyerConfirmPayment,
   CryptoSellerConfirmPayment,
   ReleaseCrypto,
   RefundCrypto,
   CancelOrder,
-  EscrowFunds,
   TestView
 )
 
@@ -72,8 +72,8 @@ urlpatterns = [
   path('order/', OrderList.as_view(), name='order-list-create'),
   path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
   path('order/<int:pk>/status', OrderStatusList.as_view(), name='order-status-list'),
+  path('order/<int:pk>/generate-contract', GenerateContract.as_view(), name='gen-contract'),
   path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),
-  path('order/<int:pk>/escrow-funds', EscrowFunds.as_view(), name='escrow-funds'),
   path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
   path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
   path('order/<int:pk>/release', ReleaseCrypto.as_view(), name='release-order'),

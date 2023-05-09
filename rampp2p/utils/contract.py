@@ -1,6 +1,6 @@
 from django.conf import settings
 import rampp2p.tasks as tasks
-from rampp2p.utils import websocket
+from typing import List
 
 import logging
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def create(contract_id: int, wallet_hash: str, **kwargs):
                 link=tasks.notify_subprocess_completion.s(
                         action=action, 
                         contract_id=contract_id, 
-                        wallet_hash=wallet_hash
+                        wallet_hashes=[wallet_hash]
                     )
             )
 
@@ -28,9 +28,9 @@ def release(**kwargs):
     command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
         path,
         kwargs.get('action'),
-        kwargs.get('arbiterPubkey'), 
-        kwargs.get('sellerPubkey'), 
+        kwargs.get('arbiterPubkey'),  
         kwargs.get('buyerPubkey'),
+        kwargs.get('sellerPubkey'),
         kwargs.get('callerSig'),
         kwargs.get('recipientAddr'),
         kwargs.get('arbiterAddr'),
@@ -38,19 +38,29 @@ def release(**kwargs):
     )
     return tasks.execute_subprocess(command)
 
-def refund(**kwargs):
+def refund(contract_id: int, wallet_hashes: List, **kwargs):
+    action = 'refund'
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js refund {} {} {} {} {} {} {}'.format(
+    command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
         path,
-        kwargs.get('arbiterPubkey'), 
+        action,
+        kwargs.get('arbiterPubkey'),
+        kwargs.get('buyerPubkey'), 
         kwargs.get('sellerPubkey'), 
-        kwargs.get('buyerPubkey'),
         kwargs.get('callerSig'),
         kwargs.get('recipientAddr'),
         kwargs.get('arbiterAddr'),
         kwargs.get('amount'),
     )
-    return tasks.execute_subprocess(command)
+
+    return tasks.execute_subprocess.apply_async(
+                (command,), 
+                link=tasks.notify_subprocess_completion.s(
+                    action=action, 
+                    contract_id=contract_id, 
+                    wallet_hashes=wallet_hashes
+                )
+            )
 
 class ContractError(Exception):
     def __init__(self, message):

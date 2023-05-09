@@ -4,11 +4,15 @@ from rampp2p.models import (
     Status, StatusType
 )
 
+def validate_status(order_id: int, status: StatusType):
+    current_status = Status.objects.filter(order__id=order_id).latest('created_at')
+    if current_status.status != status:
+        raise ValidationError(f'action requires order status={status}')
+
 def validate_status_confirmed(order_id):
-    # check: current order status must be CONFIRMED
     current_status = Status.objects.filter(order=order_id).latest('created_at')
     if current_status.status != StatusType.CONFIRMED:
-        raise ValidationError('ValidationError: action requires order\'s current status is CONFIRMED')
+        raise ValidationError('action requires order status=CONFIRMED')
   
 def validate_status_inst_count(status, order_id):
     status_count = Status.objects.filter(Q(order=order_id) & Q(status=status)).count()

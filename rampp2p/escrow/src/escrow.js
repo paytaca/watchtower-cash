@@ -7,8 +7,8 @@ const BCHJS = require('@psf/bch-js');
 const ACTION = process.argv[2]; // 'contract' | 'seller-release' | 'arbiter-release' | 'refund'
 
 const ARBITR_PUBKEY = process.argv[3]
-const SELLER_PUBKEY = process.argv[4]
-const BUYER_PUBKEY = process.argv[5]
+const BUYER_PUBKEY = process.argv[4]
+const SELLER_PUBKEY = process.argv[5]
 
 const SERVCR_PUBKEY = process.env.SERVICER_PK
 const SERVCR_ADDR = process.env.SERVICER_ADDR
@@ -42,7 +42,7 @@ async function run() {
     const contract = new Contract(artifact, contractParams, provider);
 
     if (ACTION == 'contract') {
-        data = "{\"contract_address\" : \"" + contract.address + "\"}"
+        data = `{"contract_address" : "${contract.address}"}`
         console.log(data)
         return 
     }
@@ -88,7 +88,6 @@ function getPubKeyHash() {
 
 async function getBalances(contract, arbiterAddr, recipientAddr) {
     // Get contract balance & output address + balance
-
     /**
      * {
      *      "contract": {
@@ -111,21 +110,19 @@ async function getBalances(contract, arbiterAddr, recipientAddr) {
      */
     const rawBal = await contract.getBalance();
     const contractBal = bchjs.BitcoinCash.toBitcoinCash(Number(rawBal));
-    contract = `{\"contract\": { \"address\":${contract.address},\"balance\": ${contractBal}}`
-    console.log(contract)
-    const arbiterBal = await getBCHBalance(arbiterAddr);
-    // console.log(`arbiter address: ${arbiterAddr} ${arbiterBal}`);
-    arbiter = `\"arbiter\": { \"address\":${arbiterAddr},\"balance\": ${arbiterBal}`
+    contract = `{ "address": "${contract.address}", "balance": ${contractBal}}`
+    
+    const arbiterBal = await getBCHBalance(arbiterAddr);    
+    arbiter = `{ "address": "${arbiterAddr}", "balance": ${arbiterBal}}`
     
     const recipientBal = await getBCHBalance(recipientAddr);
-    // console.log(`recipient address: ${recipientAddr} ${recipientBal}`);
-    recipient = `\"recipient\": { \"address\":${recipientAddr},\"balance\": ${recipientBal}`
+    recipientInfo = `{ "address": "${recipientAddr}", "balance": ${recipientBal}}`
 
     const servicerBal = await getBCHBalance(SERVCR_ADDR);
-    // console.log(`servicer address: ${SERVCR_ADDR} ${servicerBal}`);
-    servicer = `\"servicer\": { \"address\":${SERVCR_ADDR},\"balance\": ${servicerBal}`
+    servicer = `{ "address": "${SERVCR_ADDR}", "balance": ${servicerBal}}`
 
-    // console.log("{", contract, ", ", arbiter, "," ,recipient, ",", servicer, "}")
+    // console.log(`{"contract": ${contract}, "arbiter": ${arbiter}, "recipient": ${recipientInfo}, "servicer": ${servicer}}`)
+    console.log(`{"contract": ${contract}}`)
 }
 
 /**
