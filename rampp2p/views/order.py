@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
 
@@ -286,6 +287,8 @@ class GenerateContract(APIView):
 class ConfirmOrder(APIView):
     def post(self, request, pk):
         
+        data = request.data
+
         try:
             # validate signature
             pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
@@ -299,52 +302,45 @@ class ConfirmOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            # validations
             validate_status_inst_count(StatusType.CONFIRMED, pk)
             validate_status_progression(StatusType.CONFIRMED, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        data = request.data
 
-        if data.get('txid') is None or data.get('contract_id') is None:
-            return Response({'error': 'txid or contract_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            if data.get('txid') is None:
+                raise ValidationError('txid is required')
+            
+            # contract.contract_address must be set first through GenerateContract endpoint
+            contract = Contract.objects.filter(order_id=pk)
+            if (contract.count() == 0 or contract.first().contract_address is None):
+                raise ValidationError('order contract does not exist')
+
+            contract = contract.first()
+            contract.txid = data.get('txid')
+            contract = ContractSerializer(contract.save())
+
+        except (ValidationError, IntegrityError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # TODO: verify that smart contract address is one of the TXID outputs
 
-        try:
-            contract = Contract.objects.get(pk=data.get('contract_id'))
-            contract.txid = data.get('txid')
-            contract.save()
-            contract = ContractSerializer(contract)
-        except (Contract.DoesNotExist, Exception) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
         # create CONFIRMED status for order
-        stat_serializer = StatusSerializer(data={
+        serializer = StatusSerializer(data={
             'status': StatusType.CONFIRMED,
             'order': pk
         })
 
-        stat = None
-        if stat_serializer.is_valid():
-            stat = StatusSerializer(stat_serializer.save())  
+        orderstat = None
+        if serializer.is_valid():
+            orderstat = StatusSerializer(serializer.save())  
         else:
-            return Response(stat_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response({'status': stat.data, 'contract': contract.data}, status=status.HTTP_200_OK)  
+        return Response({'status': orderstat.data}, status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
         Only owners of SELL ads can set order statuses to CONFIRMED.
         Creators of SELL orders skip the order status to CONFIRMED on creation.
         '''
-
-        # check if ad type is SELL
-        # if ad type is SELL:
-        #    require caller = ad owner
-        # else
-        #    raise error
 
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
