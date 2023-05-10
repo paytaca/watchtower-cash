@@ -17,7 +17,7 @@ daphne==3.0.1
 decorator==4.4.1
 distlib==0.3.1
 Django==3.0.14
-django-bcmr==0.1.8
+django-bcmr==0.1.9
 django-constance==2.9.1
 django-cors-headers==3.7.0
 django-filter==2.4.0

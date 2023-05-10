@@ -23,15 +23,34 @@ class CashTokenInfoSerializer(serializers.ModelSerializer):
 
 
 class CashFungibleTokenSerializer(serializers.ModelSerializer):
-    info = CashTokenInfoSerializer()
+    id = serializers.CharField(read_only=True, source='token_id')
+    name = serializers.SerializerMethodField()
+    symbol = serializers.SerializerMethodField()
+    decimals = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = CashFungibleToken
         fields = [
-            'category',
-            'info',
+            'id',
+            'name',
+            'symbol',
+            'decimals',
+            'image_url',
         ]
 
+    def get_name(self, obj):
+        return obj.info.name
+
+    def get_symbol(self, obj):
+        return obj.info.symbol
+
+    def get_decimals(self, obj):
+        return obj.info.decimals
+
+    def get_image_url(self, obj):
+        return obj.info.image_url
+        
 
 class CashNonFungibleTokenSerializer(serializers.ModelSerializer):
     info = CashTokenInfoSerializer()

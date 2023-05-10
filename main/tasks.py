@@ -347,7 +347,13 @@ def save_record(
         cashtoken = None
 
         if token.lower() == 'bch':
-            token_obj, _ = Token.objects.get_or_create(name=token)
+            token_obj, created = Token.objects.get_or_create(name=token)
+            
+            if created:
+                token_obj.token_ticker = 'bch'
+                token_obj.decimals = 8
+                token_obj.token_type = 1
+                token_obj.save()
         else:
             if is_cashtoken:
                 token_obj, created = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
