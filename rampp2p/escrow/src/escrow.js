@@ -29,15 +29,11 @@ async function run() {
 
     // Compile the escrow contract to an artifact object
     const artifact = compileFile(path.join(__dirname, 'escrow.cash'));
-
     // Initialise a network provider for network operations on TESTNET3
     const provider = new ElectrumNetworkProvider(NETWORK);
-
     const [arbiterPkh, buyerPkh, sellerPkh, servicerPkh] = getPubKeyHash();
     
     // Instantiate a new contract providing the constructor parameters
-    // { arbiter: arbiterPkh, buyer: buyerPkh, seller, sellerPkh, 
-    // servicer: servicerPkh, tradingFee: tradingFee, arbitrationFee: arbitrationFee }
     const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE];
     const contract = new Contract(artifact, contractParams, provider);
 
@@ -52,12 +48,6 @@ async function run() {
     const arbiterAddr = process.argv[8]
     const amount = process.argv[9]
 
-    if (ACTION == 'refund') {
-        // await refund(contract, SELLER_PUBKEY, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
-        await getBalances(contract, arbiterAddr, recipientAddr)
-        return
-    }
-
     callerWIF = null
     callerPk = null
     if (ACTION == 'seller-release') {
@@ -65,9 +55,15 @@ async function run() {
         callerPk = SELLER_PUBKEY
     }
     
-    if (ACTION == 'arbiter-release') {
+    if (ACTION == 'arbiter-release' || ACTION == 'refund') {
         callerWIF = process.env.ARBITER_WIF        
         callerPk = ARBITR_PUBKEY    
+    }
+
+    if (ACTION == 'refund') {
+        await refund(contract, callerPk, callerWIF/*callerSig*/, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
+        // await getBalances(contract, arbiterAddr, recipientAddr)
+        return
     }
 
     if (callerWIF == null || callerPk == null) {
@@ -197,18 +193,21 @@ async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, 
  * @param {string} arbiter - The cash address of the arbiter.
  * @param {number} amount - The transaction amount in BCH
  */
-async function refund(contract, arbiterPk, arbiterSig, recipient, servicer, arbiter, amount) {
+async function refund(contract, callerPk, callerWIF, /*callerSig,*/ recipient, servicer, arbiter, amount) {
     let result = {}
     let txInfo;
 
     try {
+
+        callerSig = getSig(callerWIF)
+
         // convert amount from BCH to satoshi
         const sats = Math.floor(bchjs.BitcoinCash.toSatoshi(Number(amount)));
 
-        console.log("sending to:")
-        console.log(`${sats} to recipient: ${recipient}`)
-        console.log(`${TRADING_FEE} to servicer: ${wallet.servicer.address}`)
-        console.log(`${ARBITRATION_FEE} to arbiter: ${wallet.arbiter.address}`)
+        // console.log("sending to:")
+        // console.log(`${sats} to recipient: ${recipient}`)
+        // console.log(`${TRADING_FEE} to servicer: ${wallet.servicer.address}`)
+        // console.log(`${ARBITRATION_FEE} to arbiter: ${wallet.arbiter.address}`)
 
         /** 
          * output[0]: {to: `seller address`, amount: `trade amount`}
@@ -222,24 +221,17 @@ async function refund(contract, arbiterPk, arbiterSig, recipient, servicer, arbi
         ]
         
         txInfo = await contract.functions
-            .refund(arbiterPk, arbiterSig)
+            .refund(callerPk, callerSig)
             .to(outputs)
             .withHardcodedFee(HARDCODED_FEE)
             .send();
 
-        result = {
-            success: true,
-            txInfo
-        };
+        result = `{"success": "True", "tx_info": "${txInfo}"}`
 
     } catch(err) {
-        result = {
-            success: false,
-            reason: String(err),
-            txInfo
-        };
+        result = `{"success": "False", "reason": "${String(err)}", "tx_info": "${txInfo}"}`
     }
-    console.log('result:', JSON.stringify(result));
+    console.log(result)
 }
 
 function getSig(wif) {

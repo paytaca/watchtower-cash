@@ -631,6 +631,7 @@ class RefundCrypto(APIView):
             contract.refund(
                 contract_obj.id,
                 parties,
+                order_id=pk,
                 arbiterPubkey=params['arbiterPubkey'], 
                 sellerPubkey=params['sellerPubkey'], 
                 buyerPubkey=params['buyerPubkey'],
@@ -642,17 +643,8 @@ class RefundCrypto(APIView):
 
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        # create REFUNDED status for order
-        serializer = StatusSerializer(data={
-            'status': StatusType.REFUNDED,
-            'order': pk
-        })
         
-        if serializer.is_valid():
-            # stat = serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''

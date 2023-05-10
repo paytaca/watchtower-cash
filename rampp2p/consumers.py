@@ -22,5 +22,5 @@ class RampP2PUpdatesConsumer(AsyncWebsocketConsumer):
         )
 
     async def notify(self, event):
-        message = event['message']
-        await self.send(text_data=json.dumps(message))
+        data = event['data']
+        await self.send(text_data=json.dumps(data))
