@@ -5,12 +5,14 @@ from django.utils import timezone
 
 import socket
 import ssl
+import time
 import json
 
 
 class BCHN(object):
 
     def __init__(self):
+        self.max_retries = 20
         self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE)
         self.source = 'bchn'
         self.fulcrum = {
@@ -27,12 +29,26 @@ class BCHN(object):
         return block_data['tx']
 
     def _get_raw_transaction(self, txid):
-        return self.rpc_connection.getrawtransaction(txid, 2)
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                txn = self.rpc_connection.getrawtransaction(txid, 2)
+                return txn
+            except:
+                retries += 1
+                time.sleep(1)
 
     def get_transaction(self, tx_hash):
-        txn = self._get_raw_transaction(tx_hash)
-        if txn:
-            return self._parse_transaction(txn)
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                txn = self._get_raw_transaction(tx_hash)
+                if txn:
+                    return self._parse_transaction(txn)
+                break
+            except:
+                retries += 1
+                time.sleep(1)
 
     def _parse_transaction(self, txn):
         tx_hash = txn['hash']
@@ -81,7 +97,13 @@ class BCHN(object):
         return transaction
 
     def broadcast_transaction(self, hex_str):
-        return self.rpc_connection.sendrawtransaction(hex_str)
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                return self.rpc_connection.sendrawtransaction(hex_str)
+            except:
+                retries += 1
+                time.sleep(1)
     
     def get_input_address(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)

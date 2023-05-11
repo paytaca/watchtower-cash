@@ -290,6 +290,16 @@ class WalletNftTokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet__wallet_hash'
     ]
 
+
+class CashTokenInfoAdmin(admin.ModelAdmin):
+    list_display = [
+        'name',
+        'symbol',
+        'decimals',
+        'date_created',
+    ]
+
+
 class CashFungibleTokenAdmin(admin.ModelAdmin):
     list_display = [
         'category',
@@ -351,6 +361,7 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
 admin.site.unregister(User)
 admin.site.unregister(Group)
 
+admin.site.register(CashTokenInfo, CashTokenInfoAdmin)
 admin.site.register(CashFungibleToken, CashFungibleTokenAdmin)
 admin.site.register(CashNonFungibleToken, CashNonFungibleTokenAdmin)
 
