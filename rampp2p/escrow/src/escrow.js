@@ -226,10 +226,10 @@ async function refund(contract, callerPk, callerWIF, /*callerSig,*/ recipient, s
             .withHardcodedFee(HARDCODED_FEE)
             .send();
 
-        result = `{"success": "True", "tx_info": "${txInfo}"}`
+        result = `{"success": "True", "tx_info": "${String(txInfo)}"}`
 
     } catch(err) {
-        result = `{"success": "False", "reason": "${String(err)}", "tx_info": "${txInfo}"}`
+        result = `{"success": "False", "reason": "${String(err)}", "tx_info": "${String(txInfo)}"}`
     }
     console.log(result)
 }

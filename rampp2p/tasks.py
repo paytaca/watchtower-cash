@@ -37,7 +37,7 @@ def notify_subprocess_completion(cmd_resp: Dict, **kwargs):
         }
     }
     logger.warning(f'data: {data}')
-    
+
     action = kwargs.get('action')
     contract_id = kwargs.get('contract_id')
     wallet_hashes = kwargs.get('wallet_hashes')
@@ -51,18 +51,17 @@ def notify_subprocess_completion(cmd_resp: Dict, **kwargs):
     
     if action == 'refund':
         success = cmd_resp.get('result').get('success')
-        logger.warning(f'success: {success}')
-        if success:
+        if bool(success) == True:
             # create REFUNDED status for order
             order_id = kwargs.get('order_id')
             serializer = StatusSerializer(data={
                 'status': StatusType.REFUNDED,
                 'order': order_id
             })
-
+            
             if serializer.is_valid():
                 status = StatusSerializer(serializer.save())
-                data.get('result')['status'] = status
+                data.get('result')['status'] = status.data
 
     data['action'] = action
     data['contract_id'] = contract_id

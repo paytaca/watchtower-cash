@@ -58,7 +58,8 @@ def refund(contract_id: int, wallet_hashes: List, **kwargs):
                 link=tasks.notify_subprocess_completion.s(
                     action=action, 
                     contract_id=contract_id, 
-                    wallet_hashes=wallet_hashes
+                    wallet_hashes=wallet_hashes,
+                    order_id=kwargs.get('order_id')
                 )
             )
 
