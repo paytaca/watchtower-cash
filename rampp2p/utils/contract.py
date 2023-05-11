@@ -23,11 +23,12 @@ def create(contract_id: int, wallet_hash: str, **kwargs):
                     )
             )
 
-def release(**kwargs):        
+def release(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):     
+    action = kwargs.get('action')
     path = './rampp2p/escrow/src/'
     command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
         path,
-        kwargs.get('action'),
+        action,
         kwargs.get('arbiterPubkey'),  
         kwargs.get('buyerPubkey'),
         kwargs.get('sellerPubkey'),
@@ -36,9 +37,17 @@ def release(**kwargs):
         kwargs.get('arbiterAddr'),
         kwargs.get('amount'),
     )
-    return tasks.execute_subprocess(command)
+    return tasks.execute_subprocess.apply_async(
+                (command,), 
+                link=tasks.notify_subprocess_completion.s(
+                    action=action, 
+                    order_id=order_id,
+                    contract_id=contract_id, 
+                    wallet_hashes=wallet_hashes,
+                )
+            )
 
-def refund(contract_id: int, wallet_hashes: List, **kwargs):
+def refund(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
     action = 'refund'
     path = './rampp2p/escrow/src/'
     command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
@@ -57,9 +66,9 @@ def refund(contract_id: int, wallet_hashes: List, **kwargs):
                 (command,), 
                 link=tasks.notify_subprocess_completion.s(
                     action=action, 
+                    order_id=order_id,
                     contract_id=contract_id, 
                     wallet_hashes=wallet_hashes,
-                    order_id=kwargs.get('order_id')
                 )
             )
 

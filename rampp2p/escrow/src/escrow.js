@@ -53,9 +53,7 @@ async function run() {
     if (ACTION == 'seller-release') {
         callerWIF = process.env.SELLER_WIF
         callerPk = SELLER_PUBKEY
-    }
-    
-    if (ACTION == 'arbiter-release' || ACTION == 'refund') {
+    } else if (ACTION == 'arbiter-release' || ACTION == 'refund') {
         callerWIF = process.env.ARBITER_WIF        
         callerPk = ARBITR_PUBKEY    
     }
@@ -66,9 +64,9 @@ async function run() {
         return
     }
 
-    if (callerWIF == null || callerPk == null) {
+    if (ACTION == 'arbiter-release' || ACTION == 'seller-release') {
         await release(contract, callerPk, callerWIF, /*callerSig,*/ recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
-        await getBalances(contract, arbiterAddr, recipientAddr)
+        // await getBalances(contract, arbiterAddr, recipientAddr)
         return
     }
 }
@@ -83,27 +81,6 @@ function getPubKeyHash() {
 }
 
 async function getBalances(contract, arbiterAddr, recipientAddr) {
-    // Get contract balance & output address + balance
-    /**
-     * {
-     *      "contract": {
-     *          "address": "contract-address",
-     *          "balance": 0
-     *       },
-     *      "arbiter": {
-     *          "address": "arbiter-address",
-     *          "balance": 0
-     *      },
-     *      "recipient": {
-     *          "address": "recipient-address",
-     *          "balance": 0
-     *      },
-     *      "servicer": {
-     *          "address": "servicer-address",
-     *          "balance": 0
-     *      },
-     * }
-     */
     const rawBal = await contract.getBalance();
     const contractBal = bchjs.BitcoinCash.toBitcoinCash(Number(rawBal));
     contract = `{ "address": "${contract.address}", "balance": ${contractBal}}`
@@ -138,7 +115,6 @@ async function getBalances(contract, arbiterAddr, recipientAddr) {
  */
 async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, servicer, arbiter, amount) {
     let result = {}
-    let txInfo;
 
     callerSig = getSig(callerWIF)
 
@@ -157,25 +133,18 @@ async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, 
             {to: arbiter, amount: ARBITRATION_FEE}
         ]
 
-        txInfo = await contract.functions
-            .release(callerPk, callerSig)
-            .to(outputs)
-            .withHardcodedFee(HARDCODED_FEE)
-            .send();
+        await contract.functions
+        .release(callerPk, callerSig)
+        .to(outputs)
+        .withHardcodedFee(HARDCODED_FEE)
+        .send();
         
-        result = {
-            success: true,
-            txInfo
-        };
+        result = `{"success": "True"}`
 
     } catch(err) {
-        result = {
-            success: false,
-            reason: String(err),
-            txInfo
-        };
+        result = `{"success": "False", "reason": "${String(err)}"}`
     }  
-    console.log('result:', JSON.stringify(result));
+    console.log(result)
 }
 
 /**
@@ -195,7 +164,6 @@ async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, 
  */
 async function refund(contract, callerPk, callerWIF, /*callerSig,*/ recipient, servicer, arbiter, amount) {
     let result = {}
-    let txInfo;
 
     try {
 
@@ -220,16 +188,16 @@ async function refund(contract, callerPk, callerWIF, /*callerSig,*/ recipient, s
             {to: arbiter, amount: ARBITRATION_FEE}
         ]
         
-        txInfo = await contract.functions
-            .refund(callerPk, callerSig)
-            .to(outputs)
-            .withHardcodedFee(HARDCODED_FEE)
-            .send();
+        await contract.functions
+        .refund(callerPk, callerSig)
+        .to(outputs)
+        .withHardcodedFee(HARDCODED_FEE)
+        .send();
 
-        result = `{"success": "True", "tx_info": "${String(txInfo)}"}`
+        result = `{"success": "True"}`
 
     } catch(err) {
-        result = `{"success": "False", "reason": "${String(err)}", "tx_info": "${String(txInfo)}"}`
+        result = `{"success": "False", "reason": "${String(err)}"}`
     }
     console.log(result)
 }

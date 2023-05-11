@@ -492,43 +492,34 @@ class ReleaseCrypto(APIView):
             validate_exclusive_stats(StatusType.RELEASED, pk)
             validate_status_progression(StatusType.RELEASED, pk)
             
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-    
-        try:
             order = self.get_object(pk)
+            contract_obj = Contract.objects.filter(order__id=pk).first()
             params = self.get_params(request)
-
-            # create contract
-            contract = self.get_contract(
-                order, 
-                arbiterPubkey=params['arbiterPubkey'],
-                sellerPubkey=params['sellerPubkey'],
-                buyerPubkey=params['buyerPubkey']
-            )
             
             action = 'seller-release'
             if caller_id == 'ARBITER':
                 action = 'arbiter-release'
 
-            # release crypto
+            # execute subprocess
+            parties = self.get_parties(order)
             contract.release(
-                action,
-                params['callerPubkey'], 
-                params['callerSig'], 
-                order.buyer_address, 
-                order.arbiter_address,
-                order.crypto_amount
+                order.id,
+                contract_obj.id,
+                parties,
+                action=action,
+                arbiterPubkey=params['arbiterPubkey'], 
+                sellerPubkey=params['sellerPubkey'], 
+                buyerPubkey=params['buyerPubkey'],
+                callerSig=params['callerSig'], 
+                recipientAddr=contract_obj.buyer_address, 
+                arbiterAddr=contract_obj.arbiter_address,
+                amount=order.crypto_amount
             )
+            
         except Exception as err:
-            return Response({'error': err.args[0], 'params': params}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # create RELEASED status for order
-        serializer = StatusSerializer(data={'status': StatusType.RELEASED, 'order': pk})
-        if serializer.is_valid():
-            stat = StatusSerializer(serializer.save())
-            return Response(stat.data, status=status.HTTP_200_OK)        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_200_OK)        
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -605,6 +596,16 @@ class ReleaseCrypto(APIView):
         }
         return params
     
+    def get_parties(self, order: Order):
+        '''
+        Returns the wallet hash of the order's seller, buyer and arbiter.
+        '''
+        party_a = order.ad.owner.wallet_hash
+        party_b = order.creator.wallet_hash
+        arbiter = order.arbiter.wallet_hash
+        
+        return [party_a, party_b, arbiter]
+    
 class RefundCrypto(APIView):
     def post(self, request, pk):
 
@@ -626,12 +627,12 @@ class RefundCrypto(APIView):
             contract_obj = Contract.objects.filter(order__id=pk).first()
             params = self.get_params(request)
 
-            # execute the JavaScript script to refund crypto
+            # execute subprocess
             parties = self.get_parties(order)
             contract.refund(
+                order.id,
                 contract_obj.id,
                 parties,
-                order_id=pk,
                 arbiterPubkey=params['arbiterPubkey'], 
                 sellerPubkey=params['sellerPubkey'], 
                 buyerPubkey=params['buyerPubkey'],
