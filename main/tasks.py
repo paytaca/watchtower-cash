@@ -100,11 +100,22 @@ def client_acknowledgement(self, txid):
                     if address.date_created >= v2_rollout_date:
                         wallet_version = 2
 
+
+                token_name = transaction.token.name
+                token_id = transaction.token.info_id
+                token_symbol = transaction.token.token_ticker.lower()
+
+                if transaction.cashtoken_ft:
+                    token = transaction.cashtoken_ft
+                    token_name = token.info.name
+                    token_id = token.token_id
+                    token_symbol = token.info.symbol
+
                 if wallet_version == 2:
                     data = {
-                        'token_name': transaction.token.name,
-                        'token_id':  transaction.token.info_id,
-                        'token_symbol': transaction.token.token_ticker.lower(),
+                        'token_name': token_name,
+                        'token_id':  token_id,
+                        'token_symbol': token_symbol,
                         'amount': transaction.amount,
                         'address': transaction.address.address,
                         'source': 'WatchTower',
@@ -147,8 +158,8 @@ def client_acknowledgement(self, txid):
                             if transaction.token.name != 'bch':
                                 message=f"""<b>WatchTower Notification</b> ℹ️
                                     \n Address: {transaction.address.address}
-                                    \n Token: {transaction.token.name}
-                                    \n Token ID: {transaction.token.tokenid}
+                                    \n Token: {token_name}
+                                    \n Token ID: {token_id.split('/')[1]}
                                     \n Amount: {transaction.amount}
                                     \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
                                 """
@@ -252,11 +263,11 @@ def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', 
         # save as default metadata/info if there is no record of metadata from BCMR
         if is_nft:
             IS_NFT = True
-            name = 'Watchtower Cashtoken NFT'
-            symbol = 'WT-CT-NFT'
+            name = 'CashToken NFT'
+            symbol = 'CASH-NFT'
         else:
-            name = 'Watchtower Cashtoken'
-            symbol = 'WT-CT'
+            name = 'CashToken'
+            symbol = 'CASH'
             
         # did not use get_or_create bec of async multiple objects returned error
         cashtoken_infos = CashTokenInfo.objects.filter(name=name, symbol=symbol)
@@ -357,6 +368,11 @@ def save_record(
         else:
             if is_cashtoken:
                 token_obj, created = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+                
+                if created:
+                    token_obj.name = 'CashToken'
+                    token_obj.token_ticker = 'CASH'
+                    token_obj.save()
                 
                 # get cashtoken metadata always in case there are changes on BCMR
                 cashtoken = get_cashtoken_meta_data(
