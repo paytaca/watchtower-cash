@@ -3,6 +3,8 @@ from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q
 from main.utils.recipient_handler import RecipientHandler
+from main.utils.address_validator import *
+from main.utils.address_converter import *
 from main.models import (
     Subscription,
     Address,
@@ -50,6 +52,7 @@ def new_subscription(**kwargs):
     web_url = kwargs.get('webhook_url', None)
     telegram_id = kwargs.get('telegram_id', None)
     chat_identity = kwargs.get('chat_identity', None)
+
     if address or addresses:
         address_list = []
         if isinstance(address, str):
@@ -58,8 +61,14 @@ def new_subscription(**kwargs):
             address_list.append([addresses['receiving'], '0/' + str(address_index)])
             if 'change' in addresses.keys():
                 address_list.append([addresses['change'], '1/' + str(address_index)])
+
         for address, path in address_list:
-            if address.startswith('bitcoincash:') or address.startswith('simpleledger:') or web3.Web3.isAddress(address):
+            if (
+                is_bch_address(address) or 
+                is_token_address(address) or
+                is_slp_address(address) or
+                web3.Web3.isAddress(address)
+            ):
                 proceed = False
                 project = None
                 if project_id:
@@ -83,6 +92,9 @@ def new_subscription(**kwargs):
                         # Renew validity.
                         recipient.valid = True
                         recipient.save()
+
+                    if is_token_address(address):
+                        address = bch_address_converter(address, to_token_addr=False)
                             
                     address_obj, _ = Address.objects.get_or_create(address=address)
                     if project:
@@ -126,9 +138,9 @@ def new_subscription(**kwargs):
                             address=address_obj
                         )
 
-                        if address.startswith('simpleledger'):
+                        if is_slp_address(address):
                             get_slp_utxos.delay(address)
-                        elif address.startswith('bitcoincash'):
+                        elif is_bch_address(address):
                             get_bch_utxos.delay(address)
                         elif web3.Web3.isAddress(address):
                             save_transactions_by_address.delay(address)

@@ -1,5 +1,6 @@
-FROM bitnami/python:3.6-prod
+FROM nikolaik/python-nodejs:python3.7-nodejs15-slim
 
+RUN apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
 RUN apt-get update -y
 RUN apt-get -y install build-essential sudo postgresql libpq-dev postgresql-client curl \
     postgresql-client-common libncurses5-dev libjpeg-dev zlib1g-dev git wget redis-server && \
@@ -14,7 +15,7 @@ RUN pip install -r requirements.txt
 # For running javascript
 RUN sudo apt install -y curl
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-RUN sudo apt install nodejs -y
+RUN sudo apt install nodejs -y --allow-change-held-packages
 COPY ./anyhedge/js/package*.json /code/anyhedge/js/
 RUN npm install --prefix /code/anyhedge/js --legacy-peer-deps
 

@@ -44,8 +44,12 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-
 DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
+DOMAIN = 'https://watchtower.cash'
+
+if DEPLOYMENT_INSTANCE == 'local':
+    DEBUG = True
+    DOMAIN = 'http://localhost:8000'
 
 ALLOWED_HOSTS = [
     '*'
@@ -70,6 +74,7 @@ INSTALLED_APPS=[
     'drf_yasg',
     'channels',
     'push_notifications',
+    'django_filters',
 
     'constance',
     'main',
@@ -79,6 +84,7 @@ INSTALLED_APPS=[
     'chat',
     'notifications',
     'jpp',
+    'bcmr',
     'ramp'
 ]
 
@@ -232,9 +238,9 @@ PUSH_NOTIFICATIONS_SETTINGS = {
 }
 
 
-DB_NUM = [0,1,2]
-if DEPLOYMENT_INSTANCE == 'staging':
-    DB_NUM = [3,4,5]
+DB_NUM = [3,4,5]
+if DEPLOYMENT_INSTANCE == 'prod':
+    DB_NUM = [0,1,2]
 
 REDIS_HOST = decipher(config('REDIS_HOST'))
 REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
@@ -249,10 +255,14 @@ CELERY_IMPORTS = (
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 # CELERY_RESULT_BACKEND = 'rpc://'
 
-if REDIS_PASSWORD:   
-    CELERY_BROKER_URL = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_RESULT_BACKEND = 'redis://user:%s@%s:%s/%s' % (REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
-    REDISKV = redis.StrictRedis(    
+if REDIS_PASSWORD:
+    redis_prefix = ''
+    if DEPLOYMENT_INSTANCE == 'prod':
+        redis_prefix = 'user'
+        
+    CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
         port=6379,
@@ -273,6 +283,9 @@ else:
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 TOKEN_IMAGES_DIR = config('TOKEN_IMAGES_DIR', default='/images')
 
@@ -363,6 +376,9 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.MultiPartParser',
         'rest_framework.parsers.JSONParser',
     ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer'
+    ]
 }
 
 SWAGGER_SETTINGS = {
@@ -499,3 +515,16 @@ ANYHEDGE = {
     "ANYHEDGE_DEFAULT_ORACLE_PUBKEY": config("ANYHEDGE_DEFAULT_ORACLE_PUBKEY", ""),
     "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN": config("ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN", ""),
 }
+
+
+BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
+RPC_USER = decipher(config('RPC_USER'))
+
+BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
+BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@bchn:8332'
+
+# BCHD_RPC_PASSWORD = decipher(config('BCHD_RPC_PASSWORD'))
+# BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@bchd:18334'
+BCHD_NODE = 'bchd.paytaca.com:8335'
+
+WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'

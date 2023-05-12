@@ -1,0 +1,77 @@
+version: "3.7"
+services:
+  docker-host:
+    image: qoomon/docker-host
+    cap_add: [ 'NET_ADMIN', 'NET_RAW' ]
+    mem_limit: 8M
+    restart: on-failure
+  bchn:
+    image: cagataygurturk/docker-ssh-tunnel
+    volumes:
+      - /home/ubuntu/.ssh:/root/ssh:ro
+    environment:
+      SSH_DEBUG: "-v"
+      TUNNEL_HOST: bchn-chipnet
+      REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
+      LOCAL_PORT: 8332
+      REMOTE_PORT: 8332
+  zmq:
+    image: cagataygurturk/docker-ssh-tunnel
+    volumes:
+      - /home/ubuntu/.ssh:/root/ssh:ro
+    environment:
+      SSH_DEBUG: "-v"
+      TUNNEL_HOST: bchn-chipnet
+      REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
+      LOCAL_PORT: 28332
+      REMOTE_PORT: 28332
+  fulcrum:
+    image: cagataygurturk/docker-ssh-tunnel
+    volumes:
+      - /home/ubuntu/.ssh:/root/ssh:ro
+    environment:
+      SSH_DEBUG: "-v"
+      TUNNEL_HOST: bchn-chipnet
+      REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
+      LOCAL_PORT: 60001
+      REMOTE_PORT: 60001
+  bchd:
+    image: cagataygurturk/docker-ssh-tunnel
+    volumes:
+      - /home/ubuntu/.ssh:/root/ssh:ro
+    environment:
+      SSH_DEBUG: "-v"
+      TUNNEL_HOST: bchd-chipnet
+      REMOTE_HOST: ec2-18-139-219-0.ap-southeast-1.compute.amazonaws.com
+      LOCAL_PORT: 8335
+      REMOTE_PORT: 8335
+  postgres:
+    image: "postgres:11.1-alpine"
+    volumes:
+      - watchtower_db_data:/var/lib/postgresql/data
+    env_file:
+      - /home/ubuntu/watchtower/compose/.env_chipnet
+    expose:
+      - "5432"
+  redis:
+    image: "redis:alpine"
+    env_file:
+      - /home/ubuntu/watchtower/compose/.env_chipnet
+  backend:
+    container_name: watchtower_backend
+    build: /home/ubuntu/watchtower
+    image: watchtower_web
+    command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
+    env_file: /home/ubuntu/watchtower/compose/.env_chipnet
+    volumes:
+      - /var/www/images:/images
+      - /code/anyhedge/js/node_modules
+    ports:
+      - 8000:8000
+      - 9000:9000
+    depends_on:
+      - postgres
+      - redis
+volumes:
+  watchtower_db_data:
+    external: true
