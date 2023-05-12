@@ -12,7 +12,7 @@ services:
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-chipnet
-      REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
+      REMOTE_HOST: "${BCHN_CHIPNET_HOST}"
       LOCAL_PORT: 8332
       REMOTE_PORT: 8332
   zmq:
@@ -22,7 +22,7 @@ services:
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-chipnet
-      REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
+      REMOTE_HOST: "${BCHN_CHIPNET_HOST}"
       LOCAL_PORT: 28332
       REMOTE_PORT: 28332
   fulcrum:
@@ -32,19 +32,19 @@ services:
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-chipnet
-      REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
+      REMOTE_HOST: "${BCHN_CHIPNET_HOST}"
       LOCAL_PORT: 60001
       REMOTE_PORT: 60001
-  bchd:
-    image: cagataygurturk/docker-ssh-tunnel
-    volumes:
-      - /home/ubuntu/.ssh:/root/ssh:ro
-    environment:
-      SSH_DEBUG: "-v"
-      TUNNEL_HOST: bchd-chipnet
-      REMOTE_HOST: ec2-18-139-219-0.ap-southeast-1.compute.amazonaws.com
-      LOCAL_PORT: 8335
-      REMOTE_PORT: 8335
+  # bchd:
+  #   image: cagataygurturk/docker-ssh-tunnel
+  #   volumes:
+  #     - /home/ubuntu/.ssh:/root/ssh:ro
+  #   environment:
+  #     SSH_DEBUG: "-v"
+  #     TUNNEL_HOST: bchd-chipnet
+  #     REMOTE_HOST: "${BCHD_CHIPNET_HOST}"
+  #     LOCAL_PORT: 8335
+  #     REMOTE_PORT: 8335
   postgres:
     image: "postgres:11.1-alpine"
     volumes:

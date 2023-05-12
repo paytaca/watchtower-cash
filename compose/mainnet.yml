@@ -5,6 +5,36 @@ services:
     cap_add: [ 'NET_ADMIN', 'NET_RAW' ]
     mem_limit: 8M
     restart: on-failure
+  bchn:
+    image: cagataygurturk/docker-ssh-tunnel
+    volumes:
+      - /home/ubuntu/.ssh:/root/ssh:ro
+    environment:
+      SSH_DEBUG: "-v"
+      TUNNEL_HOST: bchn-mainnet
+      REMOTE_HOST: "${MAINNET_SERVER_HOST}"
+      LOCAL_PORT: 8332
+      REMOTE_PORT: 8332
+  zmq:
+    image: cagataygurturk/docker-ssh-tunnel
+    volumes:
+      - /home/ubuntu/.ssh:/root/ssh:ro
+    environment:
+      SSH_DEBUG: "-v"
+      TUNNEL_HOST: bchn-mainnet
+      REMOTE_HOST: "${MAINNET_SERVER_HOST}"
+      LOCAL_PORT: 28332
+      REMOTE_PORT: 28332
+  fulcrum:
+    image: cagataygurturk/docker-ssh-tunnel
+    volumes:
+      - /home/ubuntu/.ssh:/root/ssh:ro
+    environment:
+      SSH_DEBUG: "-v"
+      TUNNEL_HOST: bchn-mainnet
+      REMOTE_HOST: "${MAINNET_SERVER_HOST}"
+      LOCAL_PORT: 60001
+      REMOTE_PORT: 60001
   web:
     container_name: watchtower_web
     build: /home/ubuntu/watchtower
