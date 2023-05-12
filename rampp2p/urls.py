@@ -35,8 +35,7 @@ from .views.order import (
   CryptoSellerConfirmPayment,
   ReleaseCrypto,
   RefundCrypto,
-  CancelOrder,
-  TestView
+  CancelOrder
 )
 
 from .views.appeal import (

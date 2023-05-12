@@ -60,13 +60,11 @@ async function run() {
 
     if (ACTION == 'refund') {
         await refund(contract, callerPk, callerWIF/*callerSig*/, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
-        // await getBalances(contract, arbiterAddr, recipientAddr)
         return
     }
 
     if (ACTION == 'arbiter-release' || ACTION == 'seller-release') {
         await release(contract, callerPk, callerWIF, /*callerSig,*/ recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
-        // await getBalances(contract, arbiterAddr, recipientAddr)
         return
     }
 }

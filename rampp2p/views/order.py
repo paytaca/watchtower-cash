@@ -314,13 +314,22 @@ class ConfirmOrder(APIView):
                 raise ValidationError('order contract does not exist')
 
             contract = contract.first()
+            
+            # # Verify that tx exists, its recipient is contract address, and tx amount is correct
+            # order = Order.objects.get(pk=pk)
+            # transaction = Transaction.objects.filter(txid=contract.txid).first()
+            # if transaction is None:
+            #     raise ValidationError('transaction with txid DoesNotExist')
+            # if transaction.address != contract.contract_address:
+            #     raise ValidationError('transaction.address does not match contract address')
+            # if transaction.amount != order.crypto_amount:
+            #     raise ValidationError('transaction.amount does not match contract order amount')
+
             contract.txid = data.get('txid')
             contract = ContractSerializer(contract.save())
 
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # TODO: verify that smart contract address is one of the TXID outputs
 
         # create CONFIRMED status for order
         serializer = StatusSerializer(data={
@@ -750,17 +759,3 @@ class CancelOrder(APIView):
         
         if caller.wallet_hash != order.creator.wallet_hash:
            raise ValidationError('caller must be order creator')
-        
-class TestView(APIView):
-    def post(self, request):
-        wallet_hash = request.data.get('wallet_hash')
-        arbiter_pubkey = request.data.get('arbiter_pubkey')
-        seller_pubkey = request.data.get('seller_pubkey')
-        buyer_pubkey = request.data.get('buyer_pubkey')
-        contract.contract_create(
-            wallet_hash,
-            arbiter_pubkey,
-            seller_pubkey,
-            buyer_pubkey
-        )
-        return Response(status=status.HTTP_200_OK)
