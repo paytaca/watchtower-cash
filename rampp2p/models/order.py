@@ -7,7 +7,7 @@ from .payment import PaymentMethod
 
 class Order(models.Model):
     ad = models.ForeignKey(Ad, on_delete=models.PROTECT, editable=False)
-    creator = models.ForeignKey(
+    owner = models.ForeignKey(
         Peer, 
         on_delete=models.PROTECT, 
         editable=False, 

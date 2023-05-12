@@ -36,15 +36,3 @@ class Ad(models.Model):
         self.is_deleted = True
         self.deleted_at = timezone.now()
         self.save()
-
-    # class Meta:
-    #   # Exclude deleted records by default
-    #   # Use `MyModel.all_objects` to retrieve all records
-    #   default_manager_name = 'objects'
-    #   ordering = ['-id']
-
-    # objects = models.Manager()
-    # all_objects = models.Manager.with_deleted()
-
-
-

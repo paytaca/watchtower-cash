@@ -190,10 +190,10 @@ class PeerFeedbackListCreate(APIView):
         if (to_peer.wallet_hash == from_peer.wallet_hash):
             raise ValidationError('to_peer must be order counterparty')
         
-        if (from_peer == order.creator and to_peer != order.ad.owner):
+        if (from_peer == order.owner and to_peer != order.ad.owner):
             raise ValidationError('to_peer must be order counterparty')
         
-        if (from_peer == order.ad.owner and to_peer != order.creator):
+        if (from_peer == order.ad.owner and to_peer != order.owner):
             raise ValidationError('to_peer must be order counterparty')
         
     def validate_limit(self, from_peer, to_peer, order):
@@ -225,7 +225,7 @@ def validate_permissions(from_peer, order_id):
     except Order.DoesNotExist:
         raise ValidationError('order does not exist')
   
-    order_creator = order.creator.id == from_peer
+    order_creator = order.owner.id == from_peer
     order_ad_creator = order.ad.owner.id == from_peer
 
     if not (order_creator or order_ad_creator):

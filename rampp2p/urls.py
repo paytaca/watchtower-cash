@@ -1,54 +1,6 @@
 from django.urls import path
 
-from .views.ad import (
-  AdListCreate,
-#   AdList,
-  AdDetail
-)
-
-from .views.payment import (
-  PaymentTypeList,
-  PaymentTypeDetail,
-  PaymentMethodListCreate,
-  PaymentMethodDetail
-)
-
-from .views.peer import (
-  PeerListCreate,
-  PeerDetail,
-)
-
-from .views.currency import (
-  FiatCurrencyList,
-  FiatCurrencyDetail,
-  CryptoCurrencyList,
-  CryptoCurrencyDetail
-)
-
-from .views.order import (
-  OrderList,
-  OrderDetail,
-  OrderStatusList,
-  ConfirmOrder,
-  GenerateContract,
-  CryptoBuyerConfirmPayment,
-  CryptoSellerConfirmPayment,
-  ReleaseCrypto,
-  RefundCrypto,
-  CancelOrder
-)
-
-from .views.appeal import (
-    AppealCancel,
-    AppealRefund,
-    AppealRelease,
-)
-
-from .views.feedback import (
-  ArbiterFeedbackListCreate,
-  PeerFeedbackListCreate,
-  FeedbackDetail,
-)
+from rampp2p.views import *
 
 urlpatterns = [
   path('ad/', AdListCreate.as_view(), name='ad-list-create'),
@@ -68,10 +20,10 @@ urlpatterns = [
   path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list'),
   path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view(), name='crypto-detail'),
 
-  path('order/', OrderList.as_view(), name='order-list-create'),
+  path('order/', OrderListCreate.as_view(), name='order-list-create'),
   path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
-  path('order/<int:pk>/status', OrderStatusList.as_view(), name='order-status-list'),
-  path('order/<int:pk>/generate-contract', GenerateContract.as_view(), name='gen-contract'),
+  path('order/<int:pk>/status', OrderListStatus.as_view(), name='order-list-status'),
+  path('order/<int:pk>/generate-contract', CreateContract.as_view(), name='generate-contract'),
   path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),
   path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
   path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
