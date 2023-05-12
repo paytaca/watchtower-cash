@@ -10,9 +10,9 @@ def create(contract_id: int, wallet_hash: str, **kwargs):
     path = './rampp2p/escrow/src/'
     command = 'node {}escrow.js contract {} {} {}'.format(
         path,
-        kwargs.get('arbiterPubkey'), 
-        kwargs.get('buyerPubkey'), 
-        kwargs.get('sellerPubkey')
+        kwargs.get('arbiter_pubkey'), 
+        kwargs.get('buyer_pubkey'), 
+        kwargs.get('seller_pubkey')
     )
     return tasks.execute_subprocess.apply_async(
                 (command,), 
@@ -26,15 +26,16 @@ def create(contract_id: int, wallet_hash: str, **kwargs):
 def release(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):     
     action = kwargs.get('action')
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
+    command = 'node {}escrow.js {} {} {} {} {} {} {} {} {}'.format(
         path,
         action,
-        kwargs.get('arbiterPubkey'),  
-        kwargs.get('buyerPubkey'),
-        kwargs.get('sellerPubkey'),
-        kwargs.get('callerSig'),
-        kwargs.get('recipientAddr'),
-        kwargs.get('arbiterAddr'),
+        kwargs.get('arbiter_pubkey'),  
+        kwargs.get('buyer_pubkey'),
+        kwargs.get('seller_pubkey'),
+        kwargs.get('caller_pubkey'),
+        kwargs.get('caller_sig'),
+        kwargs.get('recipient_address'),
+        kwargs.get('arbiter_address'),
         kwargs.get('amount'),
     )
     return tasks.execute_subprocess.apply_async(
@@ -50,15 +51,16 @@ def release(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
 def refund(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
     action = 'refund'
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js {} {} {} {} {} {} {} {}'.format(
+    command = 'node {}escrow.js {} {} {} {} {} {} {} {} {}'.format(
         path,
         action,
-        kwargs.get('arbiterPubkey'),
-        kwargs.get('buyerPubkey'), 
-        kwargs.get('sellerPubkey'), 
-        kwargs.get('callerSig'),
-        kwargs.get('recipientAddr'),
-        kwargs.get('arbiterAddr'),
+        kwargs.get('arbiter_pubkey'),
+        kwargs.get('buyer_pubkey'), 
+        kwargs.get('seller_pubkey'), 
+        kwargs.get('caller_pubkey'),
+        kwargs.get('caller_sig'),
+        kwargs.get('recipient_address'),
+        kwargs.get('arbiter_address'),
         kwargs.get('amount'),
     )
 

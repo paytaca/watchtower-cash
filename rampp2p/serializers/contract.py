@@ -13,8 +13,5 @@ class ContractSerializer(serializers.ModelSerializer):
             'txid',
             'order',
             'contract_address',
-            'arbiter_address',
-            'buyer_address',
-            'seller_address',
             'created_at'
         ]

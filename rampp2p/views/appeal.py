@@ -76,7 +76,7 @@ class AppealCancel(APIView):
         if order.ad.trade_type == TradeType.BUY:
            buyer = order.ad.owner
         else:
-           buyer = order.creator
+           buyer = order.owner
 
         if buyer.wallet_hash != caller.wallet_hash:
            raise ValidationError('caller must be buyer')
@@ -135,7 +135,7 @@ class AppealRelease(APIView):
         if order.ad.trade_type == TradeType.BUY:
            buyer = order.ad.owner
         else:
-           buyer = order.creator
+           buyer = order.owner
 
         if buyer.wallet_hash != caller.wallet_hash:
            raise ValidationError('caller must be buyer')
@@ -194,7 +194,7 @@ class AppealRefund(APIView):
         if order.ad.trade_type == TradeType.SELL:
            seller = order.ad.owner
         else:
-           seller = order.creator
+           seller = order.owner
 
         if seller.wallet_hash != caller.wallet_hash:
            raise ValidationError('caller must be seller')

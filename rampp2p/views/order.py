@@ -20,7 +20,6 @@ from ..base_serializers import (
   OrderSerializer, 
   OrderWriteSerializer, 
   StatusSerializer,
-  ReceiptSerializer,
 )
 from rampp2p.serializers.contract import ContractSerializer
 
@@ -31,7 +30,6 @@ from rampp2p.models import (
     Order,
     Peer,
     PaymentMethod,
-    Receipt,
     Contract
 )
 
@@ -84,10 +82,10 @@ class OrderListCreate(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         ad = Ad.objects.get(pk=ad_id)
-        creator = Peer.objects.get(wallet_hash=wallet_hash)
+        owner = Peer.objects.get(wallet_hash=wallet_hash)
 
         data = request.data.copy()
-        data['creator'] = creator.id
+        data['owner'] = owner.id
         data['crypto_currency'] = ad.crypto_currency.id
         data['fiat_currency'] = ad.fiat_currency.id
         serializer = OrderWriteSerializer(data=data)
@@ -264,8 +262,8 @@ class CryptoBuyerConfirmPayment(APIView):
 
     # create PAID_PENDING status for order
     serializer = StatusSerializer(data={
-      'status': StatusType.PAID_PENDING,
-      'order': pk
+        'status': StatusType.PAID_PENDING,
+        'order': pk
     })
 
     if serializer.is_valid():
@@ -277,12 +275,6 @@ class CryptoBuyerConfirmPayment(APIView):
     '''
     Only buyers can set order status to PAID_PENDING
     '''
-
-    # if ad.trade_type is SELL
-    #   buyer is the BUY order creator
-    # else (ad.trade_type is BUY)
-    #   buyer is the ad creator
-    # require(caller = buyer)
 
     try:
         caller = Peer.objects.get(wallet_hash=wallet_hash)

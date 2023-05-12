@@ -43,19 +43,22 @@ async function run() {
         return 
     }
 
-    const callerSig = process.argv[6]
-    const recipientAddr = process.argv[7]
-    const arbiterAddr = process.argv[8]
-    const amount = process.argv[9]
+    const callerPk = process.argv[6]
+    const callerSig = process.argv[7]
+    const recipientAddr = process.argv[8]
+    const arbiterAddr = process.argv[9]
+    const amount = process.argv[10]
 
     callerWIF = null
-    callerPk = null
     if (ACTION == 'seller-release') {
+
         callerWIF = process.env.SELLER_WIF
-        callerPk = SELLER_PUBKEY
+        // callerPk = SELLER_PUBKEY
+
     } else if (ACTION == 'arbiter-release' || ACTION == 'refund') {
+        
         callerWIF = process.env.ARBITER_WIF        
-        callerPk = ARBITR_PUBKEY    
+        // callerPk = ARBITR_PUBKEY    
     }
 
     if (ACTION == 'refund') {

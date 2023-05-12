@@ -32,90 +32,85 @@ class CreateContract(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
-            # no need to generate contract address 
-            # when order is already >= CONFIRMED 
             validate_status(pk, StatusType.SUBMITTED)
+
             order = Order.objects.get(pk=pk)
             params = self.get_params(order)
-            
-        except Exception as err:
+
+        except (Order.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        args = {
-            'order': order,
-            'arbiter_address': order.arbiter.arbiter_address,
-            'buyer_address': params['buyerAddr'],
-            'seller_address': params['sellerAddr']
+        response = {
+            'order': order.id
         }
 
         contract_obj = Contract.objects.filter(order__id=pk)
         if contract_obj.count() == 0:
-            contract_obj = Contract.objects.create(**args)
+            # create contract if not existing
+            contract_obj = Contract.objects.create(order=order)
 
             # execute subprocess
             contract.create(
                 contract_obj.id,
                 wallet_hash,
-                arbiterPubkey=params['arbiterPubkey'], 
-                sellerPubkey=params['sellerPubkey'], 
-                buyerPubkey=params['buyerPubkey']
+                arbiter_pubkey=params['arbiter_pubkey'], 
+                seller_pubkey=params['seller_pubkey'], 
+                buyer_pubkey=params['buyer_pubkey']
             )
 
         else:
+            # return contract if already existing
             contract_obj = contract_obj.first()
-            args['contract_address'] = contract_obj.contract_address
+            response['contract_address'] = contract_obj.contract_address
         
-        args['contract_id'] = contract_obj.id
-        args['order'] = order.id
+        response['contract_id'] = contract_obj.id
+        response['arbiter_address'] = order.arbiter.address
+        response['buyer_address'] = params['buyer_address']
+        response['seller_address'] = params['seller_address']
         
-        return Response(args, status=status.HTTP_200_OK)
+        return Response(response, status=status.HTTP_200_OK)
 
     def get_params(self, order: Order):
-        arbiterPubkey = order.arbiter.public_key
-        sellerPubkey = None
-        buyerPubkey = None
-        sellerAddr = None
-        buyerAddr = None
+
+        arbiter_pubkey = order.arbiter.public_key
+        seller_pubkey = None
+        buyer_pubkey = None
+        seller_address = None
+        buyer_address = None
 
         if order.ad.trade_type == TradeType.SELL:
-            sellerPubkey = order.ad.owner.public_key
-            buyerPubkey = order.owner.public_key
-            sellerAddr = order.ad.owner.address
-            buyerAddr = order.owner.address
+            seller_pubkey = order.ad.owner.public_key
+            buyer_pubkey = order.owner.public_key
+            seller_address = order.ad.owner.address
+            buyer_address = order.owner.address
         else:
-            sellerPubkey = order.owner.public_key
-            buyerPubkey = order.ad.owner.public_key
-            sellerAddr = order.owner.address
-            buyerAddr = order.ad.owner.address
+            seller_pubkey = order.owner.public_key
+            buyer_pubkey = order.ad.owner.public_key
+            seller_address = order.owner.address
+            buyer_address = order.ad.owner.address
 
-        if (arbiterPubkey is None or 
-            sellerPubkey is None or 
-            buyerPubkey is None or
-            sellerAddr is None or
-            buyerAddr is None):
+        if (arbiter_pubkey is None or 
+            seller_pubkey is None or 
+            buyer_pubkey is None or
+            seller_address is None or
+            buyer_address is None):
             raise ValidationError('contract parameters are required')
         
         params = {
-            'arbiterPubkey': arbiterPubkey,
-            'sellerPubkey': sellerPubkey,
-            'buyerPubkey': buyerPubkey,
-            'sellerAddr': sellerAddr,
-            'buyerAddr': buyerAddr
+            'arbiter_pubkey': arbiter_pubkey,
+            'seller_pubkey': seller_pubkey,
+            'buyer_pubkey': buyer_pubkey,
+            'seller_address': seller_address,
+            'buyer_address': buyer_address
         }
 
         return params
     
     def validate_permissions(self, wallet_hash, pk):
         '''
-        Only owners of SELL ads can set order statuses to CONFIRMED.
-        Creators of SELL orders skip the order status to CONFIRMED on creation.
+        Owners of SELL ads can set order statuses to CONFIRMED.
+        Owners of orders for sell ads can set order statuses to CONFIRMED.
         '''
-
-        # check if ad type is SELL
-        # if ad type is SELL:
-        #    require caller = ad owner
-        # else
-        #    raise error
 
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
@@ -123,13 +118,15 @@ class CreateContract(APIView):
         except Peer.DoesNotExist or Order.DoesNotExist:
             raise ValidationError('Peer/Order DoesNotExist')
 
+        seller = None
         if order.ad.trade_type == TradeType.SELL:
             seller = order.ad.owner
-            # require caller is seller
-            if caller.wallet_hash != seller.wallet_hash:
-                raise ValidationError('caller must be seller')
         else:
-            raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
+            seller = order.owner
+    
+        # require caller is seller
+        if caller.wallet_hash != seller.wallet_hash:
+            raise ValidationError('caller must be seller')
 
 class ReleaseCrypto(APIView):
     def post(self, request, pk):
@@ -152,26 +149,27 @@ class ReleaseCrypto(APIView):
             validate_status_progression(StatusType.RELEASED, pk)
             
             order = self.get_object(pk)
-            contract_obj = Contract.objects.filter(order__id=pk).first()
-            params = self.get_params(request)
+            contract_instance = Contract.objects.filter(order__id=pk).first()
+            params = self.get_params(request, order, caller_id)
             
             action = 'seller-release'
             if caller_id == 'ARBITER':
                 action = 'arbiter-release'
 
             # execute subprocess
-            parties = self.get_parties(order)
+            participants = self.get_order_participants(order)
             contract.release(
                 order.id,
-                contract_obj.id,
-                parties,
+                contract_instance.id,
+                participants,
                 action=action,
-                arbiterPubkey=params['arbiterPubkey'], 
-                sellerPubkey=params['sellerPubkey'], 
-                buyerPubkey=params['buyerPubkey'],
-                callerSig=params['callerSig'], 
-                recipientAddr=contract_obj.buyer_address, 
-                arbiterAddr=contract_obj.arbiter_address,
+                arbiter_pubkey=params['arbiter_pubkey'], 
+                seller_pubkey=params['seller_pubkey'], 
+                buyer_pubkey=params['buyer_pubkey'],
+                caller_pubkey=params['caller_pubkey'],
+                caller_sig=params['caller_sig'], 
+                recipient_address=params['recipient_address'], 
+                arbiter_address=params['arbiter_address'],
                 amount=order.crypto_amount
             )
             
@@ -224,38 +222,57 @@ class ReleaseCrypto(APIView):
         except Order.DoesNotExist as err:
             raise err
 
-    def get_contract(self, order: Order, **kwargs):
-        arbiterPubkey = kwargs.get('arbiterPubkey')
-        sellerPubkey = kwargs.get('sellerPubkey')
-        buyerPubkey = kwargs.get('buyerPubkey')
+    def get_params(self, request, order: Order, caller_id: str):
+        '''
+        caller_sig for release must only be the arbiter or the seller's signature,
+        otherwise the smart contract will fail.
+        '''
+        caller_sig = request.data.get('caller_sig', None)
+        arbiter_pubkey = order.arbiter.public_key
+        arbiter_address = order.arbiter.address
+        seller_pubkey = None
+        buyer_pubkey = None
+        caller_pubkey = None
+        recipient_address = None
 
-        contract = Contract(arbiterPubkey, sellerPubkey, buyerPubkey)
-        if order.contract_address != contract.address:
-            raise ValidationError('order contract address mismatch')
-        return contract
+        if caller_id == 'ARBITER':
+            caller_pubkey = arbiter_pubkey
+        elif caller_id == 'SELLER':
+            caller_pubkey = seller_pubkey
+        else:
+            raise ValidationError('invalid caller_id')
+        
+        if order.ad.trade_type == TradeType.SELL:
+            seller_pubkey = order.ad.owner.public_key
+            buyer_pubkey = order.owner.public_key
 
-    def get_params(self, request):
-        arbiterPubkey = request.data.get('arbiter_pubkey', None)
-        sellerPubkey = request.data.get('seller_pubkey', None)
-        buyerPubkey = request.data.get('buyer_pubkey', None)
-        callerPubkey = request.data.get('caller_pubkey', None)
-        callerSig = request.data.get('caller_sig', None)
+            # The recipient of release is always the buyer.
+            # If ad trade type is SELL, the buyer is the order owner
+            recipient_address = order.owner.address
 
-        if (arbiterPubkey is None or 
-                sellerPubkey is None or 
-                    buyerPubkey is None):
-            raise ValidationError('arbiter, seller and buyer public keys are required')
+        else:
+            seller_pubkey = order.owner.public_key
+            buyer_pubkey = order.ad.owner.public_key
+
+            # The recipient of release is always the buyer.
+            # If ad trade type is BUY, the buyer is the ad owner
+            recipient_address = order.ad.owner.address
+
+        # if caller_sig is None:
+        #     raise ValidationError('caller_sig field is required')
         
         params = {
-            'arbiterPubkey': arbiterPubkey,
-            'sellerPubkey': sellerPubkey,
-            'buyerPubkey': buyerPubkey,
-            'callerPubkey': callerPubkey,
-            'callerSig': callerSig
+            'arbiter_pubkey': arbiter_pubkey,
+            'seller_pubkey': seller_pubkey,
+            'buyer_pubkey': buyer_pubkey,
+            'caller_pubkey': caller_pubkey,
+            'caller_sig': caller_sig,
+            'arbiter_address': arbiter_address,
+            'recipient_address': recipient_address
         }
         return params
     
-    def get_parties(self, order: Order):
+    def get_order_participants(self, order: Order):
         '''
         Returns the wallet hash of the order's seller, buyer and arbiter.
         '''
@@ -283,21 +300,22 @@ class RefundCrypto(APIView):
             validate_status_progression(StatusType.REFUNDED, pk)
 
             order = self.get_object(pk)
-            contract_obj = Contract.objects.filter(order__id=pk).first()
-            params = self.get_params(request)
+            contract_instance = Contract.objects.filter(order__id=pk).first()
+            params = self.get_params(request, order)
 
             # execute subprocess
-            parties = self.get_parties(order)
+            participants = self.get_order_participants(order)
             contract.refund(
                 order.id,
-                contract_obj.id,
-                parties,
-                arbiterPubkey=params['arbiterPubkey'], 
-                sellerPubkey=params['sellerPubkey'], 
-                buyerPubkey=params['buyerPubkey'],
-                callerSig=params['callerSig'], 
-                recipientAddr=contract_obj.seller_address, 
-                arbiterAddr=contract_obj.arbiter_address,
+                contract_instance.id,
+                participants,
+                arbiter_pubkey=params['arbiter_pubkey'], 
+                seller_pubkey=params['seller_pubkey'], 
+                buyer_pubkey=params['buyer_pubkey'],
+                caller_pubkey=params['arbiter_pubkey'],  # caller of refund is always the arbiter
+                caller_sig=params['caller_sig'], 
+                recipient_address=params['recipient_address'], 
+                arbiter_address=params['arbiter_address'],
                 amount=order.crypto_amount
             )
 
@@ -332,7 +350,7 @@ class RefundCrypto(APIView):
         except Order.DoesNotExist as err:
             raise err
 
-    def get_parties(self, order: Order):
+    def get_order_participants(self, order: Order):
         '''
         Returns the wallet hash of the order's seller, buyer and arbiter.
         '''
@@ -342,21 +360,43 @@ class RefundCrypto(APIView):
         
         return [party_a, party_b, arbiter]
 
-    def get_params(self, request):
-        arbiterPubkey = request.data.get('arbiter_pubkey', None)
-        sellerPubkey = request.data.get('seller_pubkey', None)
-        buyerPubkey = request.data.get('buyer_pubkey', None)
-        callerSig = request.data.get('arbiter_sig', None)
+    def get_params(self, request, order: Order):
+        '''
+        caller_sig for refund must only be the arbiter's signature,
+        otherwise the smart contract will fail.
+        '''
+        caller_sig = request.data.get('arbiter_sig', None)
+        arbiter_pubkey = order.arbiter.public_key
+        arbiter_address = order.arbiter.address
+        seller_pubkey = None
+        buyer_pubkey = None
+        recipient_address = None
 
-        if (arbiterPubkey is None or 
-                sellerPubkey is None or 
-                    buyerPubkey is None):
-            raise ValidationError('arbiter, seller and buyer public keys are required')
+        if order.ad.trade_type == TradeType.SELL:
+            seller_pubkey = order.ad.owner.public_key
+            buyer_pubkey = order.owner.public_key
+
+            # The recipient of the refund is always the seller.
+            # If ad trade type is SELL, the seller is the ad owner
+            recipient_address = order.ad.owner.address
+        else:
+            seller_pubkey = order.owner.public_key
+            buyer_pubkey = order.ad.owner.public_key
+
+            # The recipient of the refund is always the seller.
+            # If ad trade type is BUY, the seller is the order owner
+            recipient_address = order.owner.address
+
+        # if (caller_sig is None):
+        #     raise ValidationError('caller_sig field is required')
         
         params = {
-            'arbiterPubkey': arbiterPubkey,
-            'sellerPubkey': sellerPubkey,
-            'buyerPubkey': buyerPubkey,
-            'callerSig': callerSig
+            'caller_sig': caller_sig,
+            'arbiter_pubkey': arbiter_pubkey,
+            'arbiter_address': arbiter_address,
+            'seller_pubkey': seller_pubkey,
+            'buyer_pubkey': buyer_pubkey,
+            'recipient_address': recipient_address
         }
+
         return params
