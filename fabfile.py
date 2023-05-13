@@ -75,7 +75,7 @@ def up(ctx):
 def down(ctx):
     conn = ctx.config.run.env['conn']
     with conn.cd(ctx.config.project_dir):
-        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env down')
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env down --remove-orphans')
 
 
 @task
