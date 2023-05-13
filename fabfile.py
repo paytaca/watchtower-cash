@@ -11,6 +11,7 @@ project = "watchtower"
 @task
 def chipnet(ctx):
     ctx.config.network = 'chipnet'
+    ctx.config.project_dir = f'/home/ubuntu/{project}'
     ctx.config.run.env['conn'] = Connection(
         config['CHIPNET_SERVER_HOST'],
         user=config['CHIPNET_SERVER_USER'],
@@ -20,13 +21,11 @@ def chipnet(ctx):
 
 @task
 def mainnet(ctx):
-    server = config['MAINNET_SERVER']
     ctx.config.network = 'mainnet'
-    user = server.split('@')[0]
-    host = server.split('@')[1]
+    ctx.config.project_dir = f'/root/{project}'
     ctx.config.run.env['conn'] = Connection(
-        host,
-        user=user
+        config['MAINNET_SERVER_HOST'],
+        user=config['MAINNET_SERVER_USER']
     )
 
 
@@ -42,7 +41,7 @@ def sync(ctx):
     rsync(
         conn,
         '.',
-        f'/home/ubuntu/{project}',
+        ctx.config.project_dir,
         exclude=[
             '.venv',
             '.git',
@@ -54,29 +53,29 @@ def sync(ctx):
             '*.pid'
         ]
     )
-    with conn.cd(f'/home/ubuntu/{project}'):
-        conn.run(f'sudo cat compose/.env_{ctx.config.network} >> .env')
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'cat compose/.env_{ctx.config.network} >> .env')
 
 
 @task
 def build(ctx):
     conn = ctx.config.run.env['conn']
-    with conn.cd(f'/home/ubuntu/{project}'):
-        conn.run(f'sudo docker-compose -f compose/{ctx.config.network}.yml --env-file /home/ubuntu/{project}/.env build')
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env build')
 
 
 @task
 def up(ctx):
     conn = ctx.config.run.env['conn']
-    with conn.cd(f'/home/ubuntu/{project}'):
-        conn.run(f'sudo docker-compose -f compose/{ctx.config.network}.yml --env-file /home/ubuntu/{project}/.env up -d')
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env up -d')
 
 
 @task
 def down(ctx):
     conn = ctx.config.run.env['conn']
-    with conn.cd(f'/home/ubuntu/{project}'):
-        conn.run(f'sudo docker-compose -f compose/{ctx.config.network}.yml --env-file /home/ubuntu/{project}/.env down')
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env down')
 
 
 @task
@@ -91,7 +90,7 @@ def deploy(ctx):
 def nginx(ctx):
     sync(ctx)
     conn = ctx.config.run.env['conn']
-    with conn.cd(f'/home/ubuntu/{project}/compose'):
+    with conn.cd(f'{ctx.config.project_dir}/compose'):
         nginx_conf = f"/etc/nginx/sites-available/{project}"
         nginx_slink = f"/etc/nginx/sites-enabled/{project}"
 
@@ -110,13 +109,12 @@ def nginx(ctx):
 @task
 def logs(ctx):
     conn = ctx.config.run.env['conn']
-    with conn.cd(f'/home/ubuntu/{project}'):
-        conn.run(f'sudo docker-compose -f compose/{ctx.config.network}.yml --env-file /home/ubuntu/{project}/.env logs  -f web')
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env logs  -f web')
 
 
 @task
 def reports(ctx):
     conn = ctx.config.run.env['conn']
-    with conn.cd(f'/home/ubuntu/{project}'):
-        conn.run(f'sudo docker-compose -f compose/{ctx.config.network}.yml --env-file /home/ubuntu/{project}/.env exec -T web python manage.py reports -p paytaca')
-
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py reports -p paytaca')

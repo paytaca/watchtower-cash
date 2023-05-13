@@ -8,39 +8,39 @@ services:
   bchn:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
-      - /home/ubuntu/.ssh:/root/ssh:ro
+      - /root/.ssh:/root/ssh:ro
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-mainnet
-      REMOTE_HOST: "${MAINNET_SERVER_HOST}"
+      REMOTE_HOST: "${BCHN_MAINNET_HOST}"
       LOCAL_PORT: 8332
       REMOTE_PORT: 8332
   zmq:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
-      - /home/ubuntu/.ssh:/root/ssh:ro
+      - /root/.ssh:/root/ssh:ro
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-mainnet
-      REMOTE_HOST: "${MAINNET_SERVER_HOST}"
+      REMOTE_HOST: "${BCHN_MAINNET_HOST}"
       LOCAL_PORT: 28332
       REMOTE_PORT: 28332
   fulcrum:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
-      - /home/ubuntu/.ssh:/root/ssh:ro
+      - /root/.ssh:/root/ssh:ro
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-mainnet
-      REMOTE_HOST: "${MAINNET_SERVER_HOST}"
+      REMOTE_HOST: "${BCHN_MAINNET_HOST}"
       LOCAL_PORT: 60001
       REMOTE_PORT: 60001
   web:
     container_name: watchtower_web
-    build: /home/ubuntu/watchtower
+    build: /root/watchtower
     image: watchtower_web
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
-    env_file: /home/ubuntu/watchtower/compose/.env_mainnet
+    env_file: /root/watchtower/compose/.env_mainnet
     volumes:
       - /var/www/images:/images
       - /code/anyhedge/js/node_modules

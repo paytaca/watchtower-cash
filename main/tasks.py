@@ -1204,7 +1204,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         
         if txn:
             if change_address:
-                recipients = [(x, y) for x, y in recipients if x != change_address]
+                recipients = [(info[0], info[1]) for info in recipients if info[0] != change_address]
 
             processed_recipients = process_history_recpts_or_senders(recipients, key, BCH_OR_SLP)
             processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)

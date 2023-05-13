@@ -5,6 +5,7 @@ from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
 from main.models import Token, Transaction, Subscription
 import grpc
+import json
 import logging
 import ssl
 from main.tasks import (
