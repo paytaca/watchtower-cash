@@ -6,6 +6,7 @@
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from django.conf import settings
 
 from main.utils.queries.bchn import *
 from main.models import (
@@ -24,7 +25,6 @@ import logging
 import binascii
 import zmq
 import requests
-import json
 
 
 LOGGER = logging.getLogger(__name__)
@@ -34,8 +34,12 @@ class ZMQHandler():
 
     def __init__(self):
         self.url = "tcp://zmq:28332"
-        self.BCMR_WEBHOOK_URL = 'https://bcmr.paytaca.com/api/webhook/'
         self.BCHN = BCHN()
+
+        bcmr_url_type = ''
+        if settings.BCH_NETWORK == 'chipnet':
+            bcmr_url_type = f'-chipnet'
+        self.BCMR_WEBHOOK_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api/webhook/'
 
         self.zmqContext = zmq.Context()
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)
