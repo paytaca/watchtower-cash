@@ -229,15 +229,7 @@ class CashTokenInfo(models.Model):
     image_url = models.URLField(blank=True, null=True)
     date_created = models.DateTimeField(default=timezone.now)
     date_updated = models.DateTimeField(null=True, blank=True)
-    
     nft_details = JSONField(default=dict)
-    '''
-        {
-           name: string,
-           description: string,
-           image_url: string (url)
-        }
-    '''
 
 class CashFungibleToken(models.Model):
     category = models.CharField(

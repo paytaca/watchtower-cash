@@ -8,7 +8,6 @@ from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
 from main.models import *
-from bcmr.models import Token as BcmrToken
 from main.utils.address_validator import *
 from main.utils.ipfs import (
     get_ipfs_cid_from_url,
@@ -205,50 +204,49 @@ def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', 
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     IS_NFT = False
-    bcmr_token = BcmrToken.objects.filter(category=category)
+    METADATA = None
+    PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/{category}/latest/'
 
-    if bcmr_token.exists():
-        bcmr_token = bcmr_token.first()
+    response = requests.get(PAYTACA_BCMR_URL)
+
+    if response.status_code == 200:
+        response = response.json()
+        identities = response['identities']
+        category_dict = list(identities.values())[0]
+        METADATA = list(category_dict.values())[0]
+
+    if METADATA:
         image_url = ''
+        symbol = ''
+        decimals = 0
+        token_data = METADATA['token']
+        token_keys = token_data.keys()
 
-        if bcmr_token.icon:
-            image_url = settings.DOMAIN + bcmr_token.icon.url
+        if 'icon' in METADATA['uris'].keys():
+            image_url = METADATA['uris']['icon']
 
-        if bcmr_token.is_nft:
+        if 'symbol' in token_keys:
+            symbol = token_data['symbol']
+        if 'decimals' in token_keys:
+            decimals = token_data['decimals']
+
+        if 'nfts' in token_keys:
             IS_NFT = True
-            nft_details = {
-                'name': '',
-                'description': '',
-                'image_url': ''
-            }
-
-            if commitment and bcmr_token.nft_types:
-                nft_sub_data = bcmr_token.nft_types[commitment]
-
-                if nft_sub_data:
-                    if 'name' in nft_sub_data.keys():
-                        nft_details['name'] = nft_sub_data['name']
-                    if 'description' in nft_sub_data.keys():
-                        nft_details['description'] = nft_sub_data['description']
-                    if 'uris' in nft_sub_data.keys():
-                        uri_data = nft_sub_data['uris']
-                        if 'icon' in uri_data.keys():
-                            nft_details['uris'] = uri_data['icon']
 
             data = {
-                'name': bcmr_token.name,
-                'description': bcmr_token.nft_description,
-                'symbol': bcmr_token.symbol,
-                'decimals': bcmr_token.decimals,
+                'name': METADATA['name'],
+                'description': METADATA['description'],
+                'symbol': symbol,
+                'decimals': decimals,
                 'image_url': image_url,
-                'nft_details': nft_details
+                'nft_details': token_data['nfts']
             }
         else:
             data = {
-                'name': bcmr_token.name,
-                'description': bcmr_token.description,
-                'symbol': bcmr_token.symbol,
-                'decimals': bcmr_token.decimals,
+                'name': METADATA['name'],
+                'description': METADATA['description'],
+                'symbol': symbol,
+                'decimals': decimals,
                 'image_url': image_url
             }
         

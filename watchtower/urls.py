@@ -62,7 +62,6 @@ urlpatterns = [
     path('api/chat/', include(chat_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
     path('api/jpp/', include(jpp_urlpatterns)),
-    path('api/bcmr/', include('bcmr.urls')),
     path('api/ramp/', include(ramp_urlpatterns)),
     path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
