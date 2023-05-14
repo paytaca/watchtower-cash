@@ -178,7 +178,7 @@ class ZMQHandler():
                 op_rets = op_return.split(' ')
 
                 if len(op_rets) == 4:
-                    if op_rets[1] == '1380795202': # BCMR
+                    if op_rets[1] == '0442434d52': # BCMR
                         json_hash = op_rets[2]
                         bcmr_url_encoded = op_rets[3]
                         
