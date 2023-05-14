@@ -528,4 +528,8 @@ BCHD_NODE = 'bchd.paytaca.com:8335'
 
 WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
 
-PAYTACA_BCMR_URL = 'https://bcmr.paytaca.com/api/registries'
+bcmr_url_type = ''
+if BCH_NETWORK == 'chipnet':
+    bcmr_url_type = f'-chipnet'
+
+PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api/registries'
