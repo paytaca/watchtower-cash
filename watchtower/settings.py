@@ -84,7 +84,6 @@ INSTALLED_APPS=[
     'chat',
     'notifications',
     'jpp',
-    'bcmr',
     'ramp'
 ]
 
@@ -528,3 +527,5 @@ BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@bchn:8332'
 BCHD_NODE = 'bchd.paytaca.com:8335'
 
 WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
+
+PAYTACA_BCMR_URL = 'https://bcmr.paytaca.com/api/registries'
