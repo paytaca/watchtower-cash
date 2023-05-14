@@ -23,6 +23,8 @@ from main.tasks import (
 import logging
 import binascii
 import zmq
+import requests
+import json
 
 
 LOGGER = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ class ZMQHandler():
 
     def __init__(self):
         self.url = "tcp://zmq:28332"
+        self.BCMR_WEBHOOK_URL = 'https://bcmr.paytaca.com/api/webhook/'
         self.BCHN = BCHN()
 
         self.zmqContext = zmq.Context()
@@ -62,6 +65,9 @@ class ZMQHandler():
 
                     if 'coinbase' in inputs[0].keys():
                         return
+
+                    bcmr_data = self.process_tx_for_bcmr(tx)
+                    response = requests.post(self.BCMR_WEBHOOK_URL, json=bcmr_data)
 
                     has_subscribed_input = False
                     has_updated_output = False
@@ -149,7 +155,39 @@ class ZMQHandler():
 
         except KeyboardInterrupt:
             zmqContext.destroy()
+    
+    def process_tx_for_bcmr(self, tx):
+        inputs = tx['vin']
+        outputs = tx['vout']
+        processed_outputs = []
+        identity_output = {}
 
+        for o in outputs:
+            scriptPubKey = o['scriptPubKey']
+            output_type = scriptPubKey['type']
+
+            if output_type == 'pubkeyhash':
+                if 'tokenData' in o.keys():
+                    final_output = {
+                        'category': o['tokenData']['category']
+                    }
+                    processed_outputs.append(final_output)
+                
+            elif output_type == 'nulldata':
+                op_return = scriptPubKey['asm']
+                op_rets = op_return.split(' ')
+
+                if len(op_rets) == 4:
+                    if op_rets[1] == '1380795202': # BCMR
+                        json_hash = op_rets[2]
+                        bcmr_url_encoded = op_rets[3]
+                        
+                        final_io = processed_outputs[0]
+                        final_io['json_hash'] = json_hash
+                        final_io['bcmr_url_encoded'] = bcmr_url_encoded
+                        identity_output = final_io
+
+        return identity_output
 
 class Command(BaseCommand):
     help = "Start mempool tracker using ZMQ"
