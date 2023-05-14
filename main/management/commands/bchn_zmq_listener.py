@@ -66,8 +66,13 @@ class ZMQHandler():
                     if 'coinbase' in inputs[0].keys():
                         return
 
-                    bcmr_data = self.process_tx_for_bcmr(tx)
-                    response = requests.post(self.BCMR_WEBHOOK_URL, json=bcmr_data)
+                    try:
+                        bcmr_data = self.process_tx_for_bcmr(tx)
+                        _ = requests.post(self.BCMR_WEBHOOK_URL, json=bcmr_data)
+                    except:
+                        # TODO - This needs to be handled better at some point.
+                        # For now, we just have to make sure failure in the request does terminate the zmq listener.
+                        pass
 
                     has_subscribed_input = False
                     has_updated_output = False
