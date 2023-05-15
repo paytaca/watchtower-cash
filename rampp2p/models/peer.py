@@ -1,5 +1,4 @@
 from django.db import models
-
 from .currency import FiatCurrency
 
 class Peer(models.Model):

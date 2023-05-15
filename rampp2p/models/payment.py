@@ -1,5 +1,4 @@
 from django.db import models
-
 from .peer import Peer
 
 class PaymentType(models.Model):

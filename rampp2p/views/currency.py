@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.http import Http404
 
-from ..models.currency import FiatCurrency, CryptoCurrency
-from ..serializers.currency import FiatSerializer, CryptoSerializer
+from rampp2p.models import FiatCurrency, CryptoCurrency
+from rampp2p.serializers import FiatSerializer, CryptoSerializer
 
 class FiatCurrencyList(APIView):
     def get(self, request):

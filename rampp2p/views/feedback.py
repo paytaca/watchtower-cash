@@ -3,15 +3,11 @@ from rest_framework.response import Response
 from rest_framework import status, generics
 from django.db.models import Q
 from django.core.exceptions import ValidationError
-from ..serializers.feedback import FeedbackSerializer
 
-from ..models.feedback import Feedback
-from rampp2p.models import (
-    Peer,
-    Order
-)
-from ..viewcodes import ViewCode
-from ..utils import *
+from rampp2p.models import Feedback, Peer, Order
+from rampp2p.serializers import FeedbackSerializer
+from rampp2p.viewcodes import ViewCode
+from rampp2p.utils import *
 
 class ArbiterFeedbackListCreate(APIView):
     def get(self, request):

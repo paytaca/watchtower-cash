@@ -7,22 +7,10 @@ from django.http import Http404
 from django.core.exceptions import ValidationError
 from typing import List
 
-from ..viewcodes import ViewCode
-from ..utils import (
-   verify_signature,
-   get_verification_headers
-)
-
-from ..base_serializers import (
-    AdSerializer,
-    AdWriteSerializer
-)
-
-from rampp2p.models import (
-    Ad,
-    Peer,
-    PaymentMethod
-)
+from rampp2p.viewcodes import ViewCode
+from rampp2p.utils import verify_signature, get_verification_headers
+from rampp2p.serializers import AdSerializer, AdWriteSerializer
+from rampp2p.models import Ad, Peer, PaymentMethod
 
 class AdListCreate(APIView):
   def get(self, request):

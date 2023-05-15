@@ -7,4 +7,3 @@ from .feedback import *
 from .order import *
 from .payment import *
 from .peer import *
-from .receipts import *

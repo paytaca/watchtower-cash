@@ -1,8 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from rampp2p.models import (
-    Status, StatusType
-)
+from rampp2p.models import Status, StatusType
 
 def validate_status(order_id: int, status: StatusType):
     current_status = Status.objects.filter(order__id=order_id).latest('created_at')

@@ -9,20 +9,16 @@ from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
 
-import rampp2p.tasks as tasks
-from rampp2p.utils import websocket, contract, common
-
-from ..viewcodes import ViewCode
-
-from ..permissions import *
-from ..validators import *
-from ..base_serializers import (
-  OrderSerializer, 
-  OrderWriteSerializer, 
-  StatusSerializer,
+from rampp2p.utils import common
+from rampp2p.viewcodes import ViewCode
+from rampp2p.permissions import *
+from rampp2p.validators import *
+from rampp2p.serializers import (
+    OrderSerializer, 
+    OrderWriteSerializer, 
+    StatusSerializer, 
+    ContractSerializer
 )
-from rampp2p.serializers.contract import ContractSerializer
-
 from rampp2p.models import (
     Ad,
     StatusType,

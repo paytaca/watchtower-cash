@@ -12,14 +12,10 @@ from rampp2p.models import (
     Order
 )
 
-from ..base_serializers import (
-  StatusSerializer,
-  AppealSerializer
-)
-
-from ..validators import *
-from ..utils import *
-from ..viewcodes import ViewCode
+from rampp2p.serializers import StatusSerializer, AppealSerializer
+from rampp2p.viewcodes import ViewCode
+from rampp2p.validators import *
+from rampp2p.utils import *
 
 class AppealCancel(APIView):
     def post(self, request, pk):

@@ -1,10 +1,8 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from rampp2p.models import (
-    Peer,
-    Order
-)
+from .peer import Peer
+from .order import Order
 
 class AppealType(models.TextChoices):
     CANCEL = 'CNCL', _('Cancel')

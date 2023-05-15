@@ -1,4 +1,3 @@
-from django.conf import settings
 import rampp2p.tasks as tasks
 from typing import List
 

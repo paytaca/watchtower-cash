@@ -1,6 +1,5 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
 from .order import Order
 
 class StatusType(models.TextChoices):

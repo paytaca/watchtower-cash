@@ -4,10 +4,10 @@ from rest_framework.response import Response
 from django.http import Http404
 from django.core.exceptions import ValidationError
 
-from ..models.peer import Peer
-from ..serializers.peer import PeerSerializer, PeerWriteSerializer
-from ..viewcodes import ViewCode
-from ..utils import verify_signature, get_verification_headers
+from rampp2p.models import Peer
+from rampp2p.serializers import PeerSerializer, PeerWriteSerializer
+from rampp2p.viewcodes import ViewCode
+from rampp2p.utils import verify_signature, get_verification_headers
 
 class PeerListCreate(APIView):
     def get(self, request):

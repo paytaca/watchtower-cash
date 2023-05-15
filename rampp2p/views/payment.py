@@ -1,18 +1,14 @@
-from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework import status
 from django.utils import timezone
 from django.http import Http404
-from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import ValidationError
-from ..models.payment import PaymentType, PaymentMethod
-from ..models.peer import Peer
-from ..serializers.payment import PaymentTypeSerializer, PaymentMethodSerializer
-from ..viewcodes import ViewCode
 
-from ..utils import verify_signature, get_verification_headers
+from rampp2p.models import PaymentType, PaymentMethod, Peer
+from rampp2p.serializers import PaymentTypeSerializer, PaymentMethodSerializer
+from rampp2p.viewcodes import ViewCode
+from rampp2p.utils import verify_signature, get_verification_headers
 
 class PaymentTypeList(APIView):
     def get(self, request):

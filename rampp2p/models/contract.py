@@ -1,5 +1,5 @@
 from django.db import models
-from rampp2p.models import Order
+from .order import Order
 
 class Contract(models.Model):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, editable=False, unique=True)
