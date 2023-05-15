@@ -532,4 +532,4 @@ bcmr_url_type = ''
 if BCH_NETWORK == 'chipnet':
     bcmr_url_type = f'-chipnet'
 
-PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api/registries'
+PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api'

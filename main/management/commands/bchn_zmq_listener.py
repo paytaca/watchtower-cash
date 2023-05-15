@@ -34,12 +34,8 @@ class ZMQHandler():
 
     def __init__(self):
         self.url = "tcp://zmq:28332"
+        self.BCMR_WEBHOOK_URL = f'{settings.PAYTACA_BCMR_URL}/webhook/'
         self.BCHN = BCHN()
-
-        bcmr_url_type = ''
-        if settings.BCH_NETWORK == 'chipnet':
-            bcmr_url_type = f'-chipnet'
-        self.BCMR_WEBHOOK_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api/webhook/'
 
         self.zmqContext = zmq.Context()
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)

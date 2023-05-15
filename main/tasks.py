@@ -200,55 +200,42 @@ def client_acknowledgement(self, txid):
 
 
 # is_nft = supply param in case there is no record of NFT yet on BCMR
-def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', capability=''):
+@shared_task(bind=True, queue='token_metadata', max_retries=3)
+def get_cashtoken_meta_data(category):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     IS_NFT = False
     METADATA = None
-    PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/{category}/latest/'
+    PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
 
-    response = requests.get(PAYTACA_BCMR_URL)
+    try:
+        response = requests.get(PAYTACA_BCMR_URL)
 
-    if response.status_code == 200:
-        response = response.json()
-        identities = response['identities']
-        category_dict = list(identities.values())[0]
-        METADATA = list(category_dict.values())[0]
+        if response.status_code == 200:
+            METADATA = response.json()
+    except:
+        LOGGER.error('Retrying fetching of token metadata from BCMR...')
+        self.retry(countdown=3)
 
     if METADATA:
-        image_url = ''
-        symbol = ''
-        decimals = 0
-        token_data = METADATA['token']
-        token_keys = token_data.keys()
+        name = METADATA['name']
+        description = METADATA['description']
+        symbol = METADATA['symbol']
+        decimals = METADATA['decimals']
+        image_url = METADATA['icon']
+        nfts = METADATA['nfts']
 
-        if 'icon' in METADATA['uris'].keys():
-            image_url = METADATA['uris']['icon']
+        data = {
+            'name': name,
+            'description': description,
+            'symbol': symbol,
+            'decimals': decimals,
+            'image_url': image_url
+        }
 
-        if 'symbol' in token_keys:
-            symbol = token_data['symbol']
-        if 'decimals' in token_keys:
-            decimals = token_data['decimals']
-
-        if 'nfts' in token_keys:
+        if nfts:
             IS_NFT = True
-
-            data = {
-                'name': METADATA['name'],
-                'description': METADATA['description'],
-                'symbol': symbol,
-                'decimals': decimals,
-                'image_url': image_url,
-                'nft_details': token_data['nfts']
-            }
-        else:
-            data = {
-                'name': METADATA['name'],
-                'description': METADATA['description'],
-                'symbol': symbol,
-                'decimals': decimals,
-                'image_url': image_url
-            }
+            data['nft_details'] = nfts
         
         # did not use get_or_create bec of async multiple objects returned error
         cashtoken_infos = CashTokenInfo.objects.filter(**data)
