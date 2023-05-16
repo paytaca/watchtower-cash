@@ -71,8 +71,10 @@ class ZMQHandler():
                         return
 
                     try:
-                        bcmr_data = self.process_tx_for_bcmr(tx)
-                        _ = requests.post(self.BCMR_WEBHOOK_URL, json=bcmr_data)
+                        #TODO: Apply this only to chipnet for now
+                        if settings.BCH_NETWORK == 'chipnet':
+                            bcmr_data = self.process_tx_for_bcmr(tx)
+                            _ = requests.post(self.BCMR_WEBHOOK_URL, json=bcmr_data)
                     except:
                         # TODO - This needs to be handled better at some point.
                         # For now, we just have to make sure failure in the request does terminate the zmq listener.
