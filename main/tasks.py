@@ -201,7 +201,7 @@ def client_acknowledgement(self, txid):
 
 # is_nft = supply param in case there is no record of NFT yet on BCMR
 @shared_task(bind=True, queue='token_metadata', max_retries=3)
-def get_cashtoken_meta_data(category):
+def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', capability=''):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     IS_NFT = False
