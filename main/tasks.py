@@ -200,7 +200,6 @@ def client_acknowledgement(self, txid):
 
 
 # is_nft = supply param in case there is no record of NFT yet on BCMR
-@shared_task(bind=True, queue='token_metadata', max_retries=3)
 def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', capability=''):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
@@ -208,14 +207,10 @@ def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', 
     METADATA = None
     PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
 
-    try:
-        response = requests.get(PAYTACA_BCMR_URL)
+    response = requests.get(PAYTACA_BCMR_URL)
 
-        if response.status_code == 200:
-            METADATA = response.json()
-    except:
-        LOGGER.error('Retrying fetching of token metadata from BCMR...')
-        self.retry(countdown=3)
+    if response.status_code == 200:
+        METADATA = response.json()
 
     if METADATA:
         name = METADATA['name']
