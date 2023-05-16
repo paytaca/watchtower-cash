@@ -4,33 +4,35 @@ from typing import List
 import logging
 logger = logging.getLogger(__name__)
 
-def create(contract_id: int, wallet_hash: str, **kwargs):
+def create(contract_id: int, wallet_hashes: List, **kwargs):
     action = 'create'
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js contract {} {} {}'.format(
+    command = 'node {}escrow.js contract {} {} {} {}'.format(
         path,
         kwargs.get('arbiter_pubkey'), 
         kwargs.get('buyer_pubkey'), 
-        kwargs.get('seller_pubkey')
+        kwargs.get('seller_pubkey'),
+        kwargs.get('contract_hash')
     )
     return tasks.execute_subprocess.apply_async(
                 (command,), 
                 link=tasks.notify_subprocess_completion.s(
                         action=action, 
                         contract_id=contract_id, 
-                        wallet_hashes=[wallet_hash]
+                        wallet_hashes=wallet_hashes
                     )
             )
 
 def release(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):     
     action = kwargs.get('action')
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js {} {} {} {} {} {} {} {} {}'.format(
+    command = 'node {}escrow.js {} {} {} {} {} {} {} {} {} {}'.format(
         path,
         action,
         kwargs.get('arbiter_pubkey'),  
         kwargs.get('buyer_pubkey'),
         kwargs.get('seller_pubkey'),
+        kwargs.get('contract_hash'),
         kwargs.get('caller_pubkey'),
         kwargs.get('caller_sig'),
         kwargs.get('recipient_address'),
@@ -50,12 +52,13 @@ def release(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
 def refund(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
     action = 'refund'
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js {} {} {} {} {} {} {} {} {}'.format(
+    command = 'node {}escrow.js {} {} {} {} {} {} {} {} {} {}'.format(
         path,
         action,
         kwargs.get('arbiter_pubkey'),
         kwargs.get('buyer_pubkey'), 
-        kwargs.get('seller_pubkey'), 
+        kwargs.get('seller_pubkey'),
+        kwargs.get('contract_hash'), 
         kwargs.get('caller_pubkey'),
         kwargs.get('caller_sig'),
         kwargs.get('recipient_address'),

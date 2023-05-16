@@ -9,7 +9,7 @@ const ACTION = process.argv[2]; // 'contract' | 'seller-release' | 'arbiter-rele
 const ARBITR_PUBKEY = process.argv[3]
 const BUYER_PUBKEY = process.argv[4]
 const SELLER_PUBKEY = process.argv[5]
-
+const CONTRACT_HASH = process.argv[6]
 const SERVCR_PUBKEY = process.env.SERVICER_PK
 const SERVCR_ADDR = process.env.SERVICER_ADDR
 const TRADING_FEE = parseInt(process.env.TRADING_FEE)
@@ -34,7 +34,7 @@ async function run() {
     const [arbiterPkh, buyerPkh, sellerPkh, servicerPkh] = getPubKeyHash();
     
     // Instantiate a new contract providing the constructor parameters
-    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE];
+    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE, CONTRACT_HASH];
     const contract = new Contract(artifact, contractParams, provider);
 
     if (ACTION == 'contract') {
@@ -43,31 +43,20 @@ async function run() {
         return 
     }
 
-    const callerPk = process.argv[6]
-    const callerSig = process.argv[7]
-    const recipientAddr = process.argv[8]
-    const arbiterAddr = process.argv[9]
-    const amount = process.argv[10]
+    const callerPk = process.argv[7]
+    const callerSig = process.argv[8]
+    const recipientAddr = process.argv[9]
+    const arbiterAddr = process.argv[10]
+    const amount = process.argv[12]
 
-    callerWIF = null
-    if (ACTION == 'seller-release') {
-
-        callerWIF = process.env.SELLER_WIF
-        // callerPk = SELLER_PUBKEY
-
-    } else if (ACTION == 'arbiter-release' || ACTION == 'refund') {
-        
-        callerWIF = process.env.ARBITER_WIF        
-        // callerPk = ARBITR_PUBKEY    
-    }
 
     if (ACTION == 'refund') {
-        await refund(contract, callerPk, callerWIF/*callerSig*/, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
+        await refund(contract, callerPk, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
         return
     }
 
     if (ACTION == 'arbiter-release' || ACTION == 'seller-release') {
-        await release(contract, callerPk, callerWIF, /*callerSig,*/ recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
+        await release(contract, callerPk, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount)
         return
     }
 }
@@ -86,14 +75,14 @@ async function getBalances(contract, arbiterAddr, recipientAddr) {
     const contractBal = bchjs.BitcoinCash.toBitcoinCash(Number(rawBal));
     contract = `{ "address": "${contract.address}", "balance": ${contractBal}}`
     
-    const arbiterBal = await getBCHBalance(arbiterAddr);    
-    arbiter = `{ "address": "${arbiterAddr}", "balance": ${arbiterBal}}`
+    // const arbiterBal = await getBCHBalance(arbiterAddr);    
+    // arbiter = `{ "address": "${arbiterAddr}", "balance": ${arbiterBal}}`
     
-    const recipientBal = await getBCHBalance(recipientAddr);
-    recipientInfo = `{ "address": "${recipientAddr}", "balance": ${recipientBal}}`
+    // const recipientBal = await getBCHBalance(recipientAddr);
+    // recipientInfo = `{ "address": "${recipientAddr}", "balance": ${recipientBal}}`
 
-    const servicerBal = await getBCHBalance(SERVCR_ADDR);
-    servicer = `{ "address": "${SERVCR_ADDR}", "balance": ${servicerBal}}`
+    // const servicerBal = await getBCHBalance(SERVCR_ADDR);
+    // servicer = `{ "address": "${SERVCR_ADDR}", "balance": ${servicerBal}}`
 
     // console.log(`{"contract": ${contract}, "arbiter": ${arbiter}, "recipient": ${recipientInfo}, "servicer": ${servicer}}`)
     console.log(`{"contract": ${contract}}`)
@@ -114,10 +103,8 @@ async function getBalances(contract, arbiterAddr, recipientAddr) {
  * @param {string} arbiter - The cash address of the arbiter.
  * @param {number} amount - The transaction amount in BCH.
  */
-async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, servicer, arbiter, amount) {
+async function release(contract, callerPk, callerSig, recipient, servicer, arbiter, amount) {
     let result = {}
-
-    callerSig = getSig(callerWIF)
 
     try {
         // convert amount from BCH to satoshi
@@ -135,7 +122,7 @@ async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, 
         ]
 
         await contract.functions
-        .release(callerPk, callerSig)
+        .release(callerPk, callerSig, CONTRACT_HASH)
         .to(outputs)
         .withHardcodedFee(HARDCODED_FEE)
         .send();
@@ -157,26 +144,18 @@ async function release(contract, callerPk, callerWIF, /*callerSig,*/ recipient, 
  * The contract should fail if the output[2] is not the arbiter.
  * @param {Contract} contract - The instance of escrow contract.
  * @param {string} arbiterPk - The public key of arbiter.
- * @param {string} arbiterSig - The signature of arbiter.
+ * @param {string} callerSig - The signature of arbiter.
  * @param {string} recipient - The cash address of the recipient (seller).
  * @param {string} servicer - The cash address of the servicer.
  * @param {string} arbiter - The cash address of the arbiter.
  * @param {number} amount - The transaction amount in BCH
  */
-async function refund(contract, callerPk, callerWIF, /*callerSig,*/ recipient, servicer, arbiter, amount) {
+async function refund(contract, callerPk, callerSig, recipient, servicer, arbiter, amount) {
     let result = {}
-
     try {
-
-        callerSig = getSig(callerWIF)
 
         // convert amount from BCH to satoshi
         const sats = Math.floor(bchjs.BitcoinCash.toSatoshi(Number(amount)));
-
-        // console.log("sending to:")
-        // console.log(`${sats} to recipient: ${recipient}`)
-        // console.log(`${TRADING_FEE} to servicer: ${wallet.servicer.address}`)
-        // console.log(`${ARBITRATION_FEE} to arbiter: ${wallet.arbiter.address}`)
 
         /** 
          * output[0]: {to: `seller address`, amount: `trade amount`}
@@ -190,24 +169,16 @@ async function refund(contract, callerPk, callerWIF, /*callerSig,*/ recipient, s
         ]
         
         await contract.functions
-        .refund(callerPk, callerSig)
+        .refund(callerPk, callerSig, CONTRACT_HASH)
         .to(outputs)
         .withHardcodedFee(HARDCODED_FEE)
         .send();
 
         result = `{"success": "True"}`
-
     } catch(err) {
         result = `{"success": "False", "reason": "${String(err)}"}`
     }
     console.log(result)
-}
-
-function getSig(wif) {
-    // generate signature
-    const keyPair = bchjs.ECPair.fromWIF(wif);
-    const signature = new SignatureTemplate(keyPair);
-    return signature
 }
 
 // Get the balance in BCH of a BCH address.

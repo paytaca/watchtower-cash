@@ -2,8 +2,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
-
-from rampp2p.utils import contract, common
+from django.conf import settings
+from rampp2p.utils import contract, common, hash
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -15,6 +15,15 @@ from rampp2p.models import (
     Peer,
     Contract
 )
+
+import logging
+logger = logging.getLogger(__name__)
+import json
+
+class TestView(APIView):
+    def get(self, request):
+        sha256_hash = hash.calculate_sha256("./rampp2p/escrow/src/escrow.cash")
+        return Response({'sha256_hash': sha256_hash}, status=status.HTTP_200_OK)
 
 class CreateContract(APIView):
     def post(self, request, pk):
@@ -33,7 +42,6 @@ class CreateContract(APIView):
         
         try:
             validate_status(pk, StatusType.SUBMITTED)
-
             order = Order.objects.get(pk=pk)
             params = self.get_params(order)
 
@@ -48,14 +56,15 @@ class CreateContract(APIView):
         if contract_obj.count() == 0:
             # create contract if not existing
             contract_obj = Contract.objects.create(order=order)
-
             # execute subprocess
+            participants = self.get_order_participants(order)
             contract.create(
                 contract_obj.id,
-                wallet_hash,
+                participants,
                 arbiter_pubkey=params['arbiter_pubkey'], 
                 seller_pubkey=params['seller_pubkey'], 
-                buyer_pubkey=params['buyer_pubkey']
+                buyer_pubkey=params['buyer_pubkey'],
+                contract_hash=params['contract_hash']
             )
 
         else:
@@ -72,6 +81,7 @@ class CreateContract(APIView):
 
     def get_params(self, order: Order):
 
+        contract_hash = hash.calculate_sha256(settings.SMART_CONTRACT_PATH)
         arbiter_pubkey = order.arbiter.public_key
         seller_pubkey = None
         buyer_pubkey = None
@@ -101,7 +111,8 @@ class CreateContract(APIView):
             'seller_pubkey': seller_pubkey,
             'buyer_pubkey': buyer_pubkey,
             'seller_address': seller_address,
-            'buyer_address': buyer_address
+            'buyer_address': buyer_address,
+            'contract_hash': contract_hash
         }
 
         return params
@@ -128,6 +139,16 @@ class CreateContract(APIView):
         if caller.wallet_hash != seller.wallet_hash:
             raise ValidationError('caller must be seller')
 
+    def get_order_participants(self, order: Order):
+        '''
+        Returns the wallet hash of the order's seller, buyer and arbiter.
+        '''
+        party_a = order.ad.owner.wallet_hash
+        party_b = order.owner.wallet_hash
+        arbiter = order.arbiter.wallet_hash
+        
+        return [party_a, party_b, arbiter]
+    
 class ReleaseCrypto(APIView):
     def post(self, request, pk):
 
@@ -151,6 +172,7 @@ class ReleaseCrypto(APIView):
             order = self.get_object(pk)
             contract_instance = Contract.objects.filter(order__id=pk).first()
             params = self.get_params(request, order, caller_id)
+            logger.warning(f'params: {params}')
             
             action = 'seller-release'
             if caller_id == 'ARBITER':
@@ -170,7 +192,8 @@ class ReleaseCrypto(APIView):
                 caller_sig=params['caller_sig'], 
                 recipient_address=params['recipient_address'], 
                 arbiter_address=params['arbiter_address'],
-                amount=order.crypto_amount
+                amount=order.crypto_amount,
+                contract_hash=params['contract_hash']
             )
             
         except Exception as err:
@@ -227,6 +250,7 @@ class ReleaseCrypto(APIView):
         caller_sig for release must only be the arbiter or the seller's signature,
         otherwise the smart contract will fail.
         '''
+        contract_hash = request.data.get('contract_hash', None)
         caller_sig = request.data.get('caller_sig', None)
         arbiter_pubkey = order.arbiter.public_key
         arbiter_address = order.arbiter.address
@@ -234,13 +258,6 @@ class ReleaseCrypto(APIView):
         buyer_pubkey = None
         caller_pubkey = None
         recipient_address = None
-
-        if caller_id == 'ARBITER':
-            caller_pubkey = arbiter_pubkey
-        elif caller_id == 'SELLER':
-            caller_pubkey = seller_pubkey
-        else:
-            raise ValidationError('invalid caller_id')
         
         if order.ad.trade_type == TradeType.SELL:
             seller_pubkey = order.ad.owner.public_key
@@ -257,9 +274,18 @@ class ReleaseCrypto(APIView):
             # The recipient of release is always the buyer.
             # If ad trade type is BUY, the buyer is the ad owner
             recipient_address = order.ad.owner.address
-
-        # if caller_sig is None:
-        #     raise ValidationError('caller_sig field is required')
+        
+        if caller_id == 'ARBITER':
+            caller_pubkey = arbiter_pubkey
+        elif caller_id == 'SELLER':
+            caller_pubkey = seller_pubkey
+        else:
+            raise ValidationError('invalid caller_id')
+        
+        if caller_sig is None:
+            raise ValidationError('caller_sig field is required')
+        if contract_hash is None:
+            raise ValidationError('contract_hash field is required')
         
         params = {
             'arbiter_pubkey': arbiter_pubkey,
@@ -268,7 +294,8 @@ class ReleaseCrypto(APIView):
             'caller_pubkey': caller_pubkey,
             'caller_sig': caller_sig,
             'arbiter_address': arbiter_address,
-            'recipient_address': recipient_address
+            'recipient_address': recipient_address,
+            'contract_hash': contract_hash
         }
         return params
     
@@ -316,7 +343,8 @@ class RefundCrypto(APIView):
                 caller_sig=params['caller_sig'], 
                 recipient_address=params['recipient_address'], 
                 arbiter_address=params['arbiter_address'],
-                amount=order.crypto_amount
+                amount=order.crypto_amount,
+                contract_hash=params['contract_hash']
             )
 
         except ValidationError as err:
@@ -365,6 +393,7 @@ class RefundCrypto(APIView):
         caller_sig for refund must only be the arbiter's signature,
         otherwise the smart contract will fail.
         '''
+        contract_hash = request.data.get('contract_hash', None)
         caller_sig = request.data.get('arbiter_sig', None)
         arbiter_pubkey = order.arbiter.public_key
         arbiter_address = order.arbiter.address
@@ -387,16 +416,21 @@ class RefundCrypto(APIView):
             # If ad trade type is BUY, the seller is the order owner
             recipient_address = order.owner.address
 
-        # if (caller_sig is None):
-        #     raise ValidationError('caller_sig field is required')
+        if (caller_sig is None):
+            raise ValidationError('caller_sig field is required')
+        if (contract_hash is None):
+            raise ValidationError('contract_hash field is required')
         
+        logger.warn(f'caller_sig: {caller_sig}')
+
         params = {
             'caller_sig': caller_sig,
             'arbiter_pubkey': arbiter_pubkey,
             'arbiter_address': arbiter_address,
             'seller_pubkey': seller_pubkey,
             'buyer_pubkey': buyer_pubkey,
-            'recipient_address': recipient_address
+            'recipient_address': recipient_address,
+            'contract_hash': contract_hash
         }
 
         return params

@@ -1,5 +1,6 @@
 from django.core.signing import Signer
 from django.core.exceptions import ValidationError
+from rampp2p.models import Order, Peer, TradeType
 
 def verify_signature(wallet_hash, pubkey, signature, message):
     print('verify_signature')
@@ -22,3 +23,18 @@ def get_verification_headers(request):
     if  wallet_hash is None or pubkey is None or signature is None or timestamp is None:
         raise ValidationError('credentials not provided')
     return pubkey, signature, timestamp, wallet_hash
+
+def get_order_peers(order: Order):
+    # if order.ad is SELL, ad owner is seller
+    # else order owner is seller
+    seller = None
+    buyer = None
+    arbiter = order.arbiter
+    if order.ad.trade_type == TradeType.SELL:
+        seller = order.ad.owner
+        buyer = order.owner
+    else:
+        seller = order.owner
+        buyer = order.ad.owner
+    
+    return arbiter, buyer, seller
