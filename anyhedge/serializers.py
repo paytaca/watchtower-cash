@@ -1360,6 +1360,7 @@ class OracleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Oracle
         fields = [
+            "active",
             "pubkey",
             "asset_name",
             "asset_currency",
