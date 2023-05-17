@@ -9,7 +9,7 @@ from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
 
-from rampp2p.utils import common
+from rampp2p.utils import common, auth
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -67,9 +67,9 @@ class OrderListCreate(APIView):
 
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_CREATE.value + '::' + timestamp
-            common.verify_signature(wallet_hash, pubkey, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)

@@ -2,6 +2,7 @@ const { ElectrumNetworkProvider, Contract, SignatureTemplate } = require('cashsc
 const { compileFile } = require('cashc');
 const path = require('path');
 const BCHJS = require('@psf/bch-js');
+const { ec: EC } = require('elliptic');
 
 // params
 const ACTION = process.argv[2]; // 'contract' | 'seller-release' | 'arbiter-release' | 'refund'
@@ -199,4 +200,15 @@ async function getBCHBalance (addr, verbose) {
         console.error('Error in getBCHBalance: ', err)
         console.log(`addr: ${addr}`)
     }
+}
+
+function verifySignature(publicKeyHex, derSignatureHex, message){
+    const ec = new EC('secp256k1');
+
+    // Load the public key from the hex representation
+    const publicKey = ec.keyFromPublic(publicKeyHex, 'hex');
+  
+    // Verify the DER-encoded signature
+    const isVerified = publicKey.verify(message, derSignatureHex, 'hex');
+    console.log('isVerified: ', isVerified)
 }

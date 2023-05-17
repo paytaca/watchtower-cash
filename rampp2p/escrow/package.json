@@ -6,6 +6,7 @@
     "bitcore-lib-cash": "^8.25.46",
     "cashc": "^0.7.5",
     "cashscript": "^0.7.5",
+    "elliptic": "^6.5.4",
     "request": "^2.88.2"
   },
   "devDependencies": {

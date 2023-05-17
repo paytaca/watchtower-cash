@@ -40,5 +40,6 @@ urlpatterns = [
     path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
     path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
     path('test', TestView.as_view(), name='test'),
+    path('verify-signature', VerifySignature.as_view(), name='verify-signature'),
     
 ]
