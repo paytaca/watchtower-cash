@@ -200,7 +200,7 @@ def client_acknowledgement(self, txid):
 
 
 # is_nft = supply param in case there is no record of NFT yet on BCMR
-def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', capability=''):
+def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commitment='', capability=''):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     IS_NFT = False
@@ -256,9 +256,6 @@ def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', 
         else:
             cashtoken_info = CashTokenInfo(name=name, symbol=symbol)
             cashtoken_info.save()
-
-    cashtoken_info.date_updated = timezone.now()
-    cashtoken_info.save()
 
     if IS_NFT:
         cashtoken, _ = CashNonFungibleToken.objects.get_or_create(
@@ -357,8 +354,8 @@ def save_record(
                 # get cashtoken metadata always in case there are changes on BCMR
                 cashtoken = get_cashtoken_meta_data(
                     token,
-                    transactionid,
-                    index,
+                    txid=transactionid,
+                    index=index,
                     commitment=commitment,
                     capability=capability,
                     is_nft=is_cashtoken_nft

@@ -227,8 +227,6 @@ class CashTokenInfo(models.Model):
     symbol = models.CharField(max_length=100)
     decimals = models.PositiveIntegerField(default=0)
     image_url = models.URLField(blank=True, null=True)
-    date_created = models.DateTimeField(default=timezone.now)
-    date_updated = models.DateTimeField(null=True, blank=True)
     nft_details = JSONField(default=dict)
 
 class CashFungibleToken(models.Model):

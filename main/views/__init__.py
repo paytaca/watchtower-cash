@@ -13,3 +13,4 @@ from main.views.view_tx_attribute import *
 from main.views.view_wallet_preferences import *
 from main.views.view_paymentrequest import *
 from main.views.view_cashtokens import *
+from main.views.view_webhook import *

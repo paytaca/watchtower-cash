@@ -9,6 +9,7 @@ app_name = "main"
 
 router = routers.DefaultRouter()
 
+router.register(r"", views.BcmrWebhookViewSet, basename="webhook")
 router.register(r"tokens", views.TokensViewSet, basename="tokens")
 router.register(r"cashtokens/fungible", views.CashFungibleTokensViewSet, basename="cashtokens-ft")
 router.register(r"cashtokens/nft", views.CashNftsViewSet, basename="cashtokens-nft")

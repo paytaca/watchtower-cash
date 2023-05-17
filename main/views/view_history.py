@@ -9,6 +9,7 @@ from django.db.models import (
     BigIntegerField,
 )
 from django.db.models.functions import Substr, Cast, Floor
+from django.db.models import ExpressionWrapper, FloatField
 from rest_framework import status
 from main.models import Wallet, Address, WalletHistory
 from django.core.paginator import Paginator
@@ -98,7 +99,11 @@ class WalletHistoryView(APIView):
                 else:
                     qs = qs.filter(cashtoken_ft__category=token_id_or_category)
                     history = qs.annotate(
-                        _token=F('cashtoken_ft__category')
+                        _token=F('cashtoken_ft__category'),
+                        amount=ExpressionWrapper(
+                            F('amount') / (10 ** F('cashtoken_ft__info__decimals')),
+                            output_field=FloatField()
+                        )
                     )
 
                 history = history.rename_annotations(
