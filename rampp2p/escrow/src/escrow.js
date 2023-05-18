@@ -1,4 +1,4 @@
-const { ElectrumNetworkProvider, Contract, SignatureTemplate } = require('cashscript');
+const { ElectrumNetworkProvider, Contract } = require('cashscript');
 const { compileFile } = require('cashc');
 const path = require('path');
 const BCHJS = require('@psf/bch-js');
@@ -45,14 +45,13 @@ async function run() {
     }
 
     const callerPk = process.argv[7]
-    const callerSig = process.argv[8]
+    const callerSig = convertDERtoSignature(process.argv[8])
     const recipientAddr = process.argv[9]
     const arbiterAddr = process.argv[10]
-    const amount = process.argv[12]
-
+    const amount = process.argv[11]
 
     if (ACTION == 'refund') {
-        await refund(contract, callerPk, callerSig, recipientAddr, SERVCR_ADDR, arbiterAddr, amount);
+        await refund(contract, callerPk, callerSig, recipientAddr, arbiterAddr, amount);
         return
     }
 
@@ -151,7 +150,7 @@ async function release(contract, callerPk, callerSig, recipient, servicer, arbit
  * @param {string} arbiter - The cash address of the arbiter.
  * @param {number} amount - The transaction amount in BCH
  */
-async function refund(contract, callerPk, callerSig, recipient, servicer, arbiter, amount) {
+async function refund(contract, callerPk, callerSig, recipient, arbiter, amount) {
     let result = {}
     try {
 
@@ -165,7 +164,7 @@ async function refund(contract, callerPk, callerSig, recipient, servicer, arbite
          * */ 
         const outputs = [
             {to: recipient, amount: sats},
-            {to: servicer, amount: TRADING_FEE},
+            {to: SERVCR_ADDR, amount: TRADING_FEE},
             {to: arbiter, amount: ARBITRATION_FEE}
         ]
         

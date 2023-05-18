@@ -13,15 +13,16 @@ def verify_signature(wallet_hash, signature, message):
 
     # execute the subprocess
     path = './rampp2p/escrow/src/'
-    command = 'node {}signature.js {} {} {}'.format(
+    command = 'node {}signature.js verify {} {} {}'.format(
         path,
         public_key, 
         signature, 
         message
     )
-    result = tasks.execute_subprocess(command)
-    logger.warning(f'result: {result}')
-    return result
+    response = tasks.execute_subprocess(command)
+    is_verified = response.get('result').get('is_verified')
+    if not is_verified:
+        raise ValidationError('Signature is invalid')
 
 def get_verification_headers(request):
     signature = request.headers.get('signature', None)

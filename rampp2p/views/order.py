@@ -9,6 +9,7 @@ from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
 
+from rampp2p import utils
 from rampp2p.utils import common, auth
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
@@ -17,7 +18,8 @@ from rampp2p.serializers import (
     OrderSerializer, 
     OrderWriteSerializer, 
     StatusSerializer, 
-    ContractSerializer
+    ContractSerializer,
+    TransactionSerializer
 )
 from rampp2p.models import (
     Ad,
@@ -26,7 +28,8 @@ from rampp2p.models import (
     Order,
     Peer,
     PaymentMethod,
-    Contract
+    Contract,
+    Transaction
 )
 
 import logging
@@ -156,14 +159,11 @@ class OrderDetail(APIView):
 
 class ConfirmOrder(APIView):
     def post(self, request, pk):
-        
-        data = request.data
-
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            common.verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -175,7 +175,8 @@ class ConfirmOrder(APIView):
             validate_status_inst_count(StatusType.CONFIRMED, pk)
             validate_status_progression(StatusType.CONFIRMED, pk)
 
-            if data.get('txid') is None:
+            txid = request.data.get('txid')
+            if txid is None:
                 raise ValidationError('txid is required')
             
             # contract.contract_address must be set first through GenerateContract endpoint
@@ -185,7 +186,7 @@ class ConfirmOrder(APIView):
 
             contract = contract.first()
             
-            # # Verify that tx exists, its recipient is contract address, and tx amount is correct
+            # TODO: Verify that tx exists, its recipient is contract address, and tx amount is correct
             # order = Order.objects.get(pk=pk)
             # transaction = Transaction.objects.filter(txid=contract.txid).first()
             # if transaction is None:
@@ -195,25 +196,28 @@ class ConfirmOrder(APIView):
             # if transaction.amount != order.crypto_amount:
             #     raise ValidationError('transaction.amount does not match contract order amount')
 
-            contract.txid = data.get('txid')
-            contract = ContractSerializer(contract.save())
+            txdata = {
+                "contract": contract,
+                "action": Transaction.ActionType.FUND,
+                "txid": txid,
+            }
+            tx_serializer = TransactionSerializer(data=txdata)
+            if tx_serializer.is_valid():
+                tx_serializer = TransactionSerializer(tx_serializer.save())
+            
+            # create CONFIRMED status for order
+            status_serializer = utils.common.update_order_status(pk,  StatusType.CONFIRMED)
+
+            # TODO: notify order participants
 
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        # create CONFIRMED status for order
-        serializer = StatusSerializer(data={
-            'status': StatusType.CONFIRMED,
-            'order': pk
-        })
-
-        orderstat = None
-        if serializer.is_valid():
-            orderstat = StatusSerializer(serializer.save())  
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response({'status': orderstat.data}, status=status.HTTP_200_OK)  
+        response = {
+            "tx": tx_serializer.data,
+            "status": status_serializer.data
+        }
+        return Response(response, status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -240,9 +244,9 @@ class CryptoBuyerConfirmPayment(APIView):
 
     try:
         # validate signature
-        pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
+        signature, timestamp, wallet_hash = common.get_verification_headers(request)
         message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
-        common.verify_signature(wallet_hash, pubkey, signature, message)
+        common.verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)
@@ -292,9 +296,9 @@ class CryptoSellerConfirmPayment(APIView):
         
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_SELLER_CONF_PAYMENT.value + '::' + timestamp
-            common.verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -350,9 +354,9 @@ class CancelOrder(APIView):
 
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_CANCEL.value + '::' + timestamp
-            common.verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)

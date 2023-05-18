@@ -3,7 +3,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from django.conf import settings
-from rampp2p.utils import contract, common, hash
+
+from rampp2p import utils
+from rampp2p.utils import contract, common
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -13,8 +15,11 @@ from rampp2p.models import (
     Status,
     Order,
     Peer,
-    Contract
+    Contract,
+    Transaction
 )
+
+from rampp2p.serializers import TransactionSerializer
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,14 +35,14 @@ class CreateContract(APIView):
         
         try:
             # signature validation
-            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
-            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            common.verify_signature(wallet_hash, pubkey, signature, message)
+            signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            # message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
+            # common.verify_signature(wallet_hash, signature, message)
 
             # permission validations
             self.validate_permissions(wallet_hash, pk)
 
-        except Exception as err:
+        except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
@@ -47,15 +52,21 @@ class CreateContract(APIView):
 
         except (Order.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        response = {
-            'order': order.id
-        }
 
         contract_obj = Contract.objects.filter(order__id=pk)
+        gen_contract_address = False
         if contract_obj.count() == 0:
-            # create contract if not existing
+            
             contract_obj = Contract.objects.create(order=order)
+            gen_contract_address = True
+        else:
+            # return contract if already existing
+            contract_obj = contract_obj.first()
+            if contract_obj.contract_address is None:
+                gen_contract_address = True
+            response['contract_address'] = contract_obj.contract_address
+        
+        if gen_contract_address:
             # execute subprocess
             participants = self.get_order_participants(order)
             contract.create(
@@ -63,25 +74,24 @@ class CreateContract(APIView):
                 participants,
                 arbiter_pubkey=params['arbiter_pubkey'], 
                 seller_pubkey=params['seller_pubkey'], 
-                buyer_pubkey=params['buyer_pubkey'],
-                contract_hash=params['contract_hash']
+                buyer_pubkey=params['buyer_pubkey']
             )
-
-        else:
-            # return contract if already existing
-            contract_obj = contract_obj.first()
-            response['contract_address'] = contract_obj.contract_address
         
-        response['contract_id'] = contract_obj.id
-        response['arbiter_address'] = order.arbiter.address
-        response['buyer_address'] = params['buyer_address']
-        response['seller_address'] = params['seller_address']
+        response = {
+            'success': True,
+            'data': {
+                'order': order.id,
+                'contract_id': contract_obj.id,
+                'arbiter_address': order.arbiter.address,
+                'buyer_address': params['buyer_address'],
+                'seller_address': params['seller_address']
+            }
+        }
         
         return Response(response, status=status.HTTP_200_OK)
 
     def get_params(self, order: Order):
 
-        contract_hash = hash.calculate_sha256(settings.SMART_CONTRACT_PATH)
         arbiter_pubkey = order.arbiter.public_key
         seller_pubkey = None
         buyer_pubkey = None
@@ -112,7 +122,7 @@ class CreateContract(APIView):
             'buyer_pubkey': buyer_pubkey,
             'seller_address': seller_address,
             'buyer_address': buyer_address,
-            'contract_hash': contract_hash
+            # 'contract_hash': contract_hash
         }
 
         return params
@@ -154,14 +164,14 @@ class ReleaseCrypto(APIView):
 
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            common.verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             caller_id = self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             # status validations
@@ -170,36 +180,49 @@ class ReleaseCrypto(APIView):
             validate_status_progression(StatusType.RELEASED, pk)
             
             order = self.get_object(pk)
-            contract_instance = Contract.objects.filter(order__id=pk).first()
+            contract_id = Contract.objects.values('id').filter(order__id=pk).first()['id']
             params = self.get_params(request, order, caller_id)
             logger.warning(f'params: {params}')
+
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid field is required')
+
+            # TODO: verify txid
+            # 1) tx recipients must be correct
+            # 2) tx sender must be correct
+            # 3) tx amount must be correct
+            # 4) record tx recipients
+            # 5) tentative: record sender
             
-            action = 'seller-release'
+            action = Transaction.ActionType.SELLER_RELEASE
             if caller_id == 'ARBITER':
-                action = 'arbiter-release'
+                action = Transaction.ActionType.ARBITER_RELEASE
 
-            # execute subprocess
-            participants = self.get_order_participants(order)
-            contract.release(
-                order.id,
-                contract_instance.id,
-                participants,
-                action=action,
-                arbiter_pubkey=params['arbiter_pubkey'], 
-                seller_pubkey=params['seller_pubkey'], 
-                buyer_pubkey=params['buyer_pubkey'],
-                caller_pubkey=params['caller_pubkey'],
-                caller_sig=params['caller_sig'], 
-                recipient_address=params['recipient_address'], 
-                arbiter_address=params['arbiter_address'],
-                amount=order.crypto_amount,
-                contract_hash=params['contract_hash']
-            )
+            txdata = {
+                "contract": contract_id,
+                "action": action,
+                "txid": txid,
+            }
+            tx_serializer = TransactionSerializer(data=txdata)
+            if tx_serializer.is_valid():
+                tx_serializer = TransactionSerializer(tx_serializer.save())
+
+            # create RELEASED status for order
+            status_serializer = utils.common.update_order_status(pk,  StatusType.RELEASED)
+
+            # TODO: notify order participants
+            # participants = self.get_order_participants(order)
             
-        except Exception as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(status=status.HTTP_200_OK)        
+        response = {
+            "success": True,
+            "tx": tx_serializer.data,
+            "status": status_serializer.data
+        }
+        return Response(response, status=status.HTTP_200_OK)  
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -311,12 +334,12 @@ class ReleaseCrypto(APIView):
     
 class RefundCrypto(APIView):
     def post(self, request, pk):
-
+        
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = common.get_verification_headers(request)
             message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            common.verify_signature(wallet_hash, pubkey, signature, message)
+            common.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -327,30 +350,44 @@ class RefundCrypto(APIView):
             validate_status_progression(StatusType.REFUNDED, pk)
 
             order = self.get_object(pk)
-            contract_instance = Contract.objects.filter(order__id=pk).first()
+            contract_id = Contract.objects.values('id').filter(order__id=pk).first()['id']
             params = self.get_params(request, order)
 
-            # execute subprocess
-            participants = self.get_order_participants(order)
-            contract.refund(
-                order.id,
-                contract_instance.id,
-                participants,
-                arbiter_pubkey=params['arbiter_pubkey'], 
-                seller_pubkey=params['seller_pubkey'], 
-                buyer_pubkey=params['buyer_pubkey'],
-                caller_pubkey=params['arbiter_pubkey'],  # caller of refund is always the arbiter
-                caller_sig=params['caller_sig'], 
-                recipient_address=params['recipient_address'], 
-                arbiter_address=params['arbiter_address'],
-                amount=order.crypto_amount,
-                contract_hash=params['contract_hash']
-            )
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid field is required')
 
+            # TODO: verify txid
+            # 1) tx recipients must be correct
+            # 2) tx sender must be correct
+            # 3) tx amount must be correct
+            # 4) record tx recipients
+            # 5) tentative: record sender
+
+            txdata = {
+                "contract": contract_id,
+                "action": Transaction.ActionType.REFUND,
+                "txid": txid,
+            }
+            tx_serializer = TransactionSerializer(data=txdata)
+            if tx_serializer.is_valid():
+                tx_serializer = TransactionSerializer(tx_serializer.save())
+
+            # create REFUNDED status for order
+            status_serializer = utils.common.update_order_status(pk,  StatusType.REFUNDED)
+
+            # TODO: notify order participants
+            # participants = self.get_order_participants(order)
+            
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response(status=status.HTTP_200_OK)
+        response = {
+            "success": True,
+            "tx": tx_serializer.data,
+            "status": status_serializer.data
+        }
+        return Response(response, status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''

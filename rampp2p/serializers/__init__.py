@@ -8,3 +8,4 @@ from .payment import *
 from .peer import *
 from .receipt import *
 from .status import *
+from .transaction import *

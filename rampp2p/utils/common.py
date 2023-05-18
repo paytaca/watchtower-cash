@@ -1,6 +1,21 @@
-from django.core.signing import Signer
 from django.core.exceptions import ValidationError
 from rampp2p.models import Order, Peer, TradeType
+from rampp2p.serializers import StatusSerializer
+
+import logging
+logger = logging.getLogger(__name__)
+
+def update_order_status(order_id, status):
+    serializer = StatusSerializer(data={
+        'status': status,
+        'order': order_id
+    })
+    
+    if not serializer.is_valid():
+        raise ValidationError('invalid status')
+    
+    serializer = StatusSerializer(serializer.save())
+    return serializer
 
 def get_order_peers(order: Order):
     # if order.ad is SELL, ad owner is seller
@@ -17,8 +32,8 @@ def get_order_peers(order: Order):
     
     return arbiter, buyer, seller
 
-def verify_signature(wallet_hash, pubkey, signature, message):
-    pass
+def verify_signature(wallet_hash, signature, message):
+    logging.warning("inside verify_signature")
     # pubkey = Peer.objects.values('public_key').get(wallet_hash=wallet_hash)['public_key']
     # signer = Signer(pubkey)
     # try:

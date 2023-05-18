@@ -1,7 +1,7 @@
 from celery import shared_task
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from typing import Dict
+from typing import Dict, List
 
 from rampp2p.serializers import StatusSerializer
 from rampp2p.models import Contract, StatusType
@@ -51,39 +51,21 @@ def notify_subprocess_completion(cmd_resp: Dict, **kwargs):
     wallet_hashes = kwargs.get('wallet_hashes')
     success_str = cmd_resp.get('result').get('success')
     success = False if success_str == "False" else bool(success_str)
-
-    if action == 'create':
-        # update contract address
-        contract_address = cmd_resp.get('result').get('contract_address')
-        contract_obj = Contract.objects.get(pk=contract_id)
-        contract_obj.contract_address = contract_address
-        contract_obj.save()
     
-    if action == 'refund':
-        if bool(success) == True:
+    if bool(success) == True:
+        if action == 'create':
+            # update contract address
+            update_contract_address(contract_id, cmd_resp)
+    
+        if action == 'refund':
             # create REFUNDED status for order
-            order_id = kwargs.get('order_id')
-            serializer = StatusSerializer(data={
-                'status': StatusType.REFUNDED,
-                'order': order_id
-            })
-            
-            if serializer.is_valid():
-                status = StatusSerializer(serializer.save())
-                data.get('result')['status'] = status.data
+            status = update_order_status(kwargs.get('order_id'), StatusType.REFUNDED)
+            data.get('result')['status'] = status.data
 
-    if action == 'seller-release'  or action == 'arbiter-release':
-        # create RELEASED status for order
-        logger.warning(f'success: {success}, bool(success): {bool(success)}')
-        if bool(success) == True:
-            order_id = kwargs.get('order_id')
-            serializer = StatusSerializer(data={
-                'status': StatusType.RELEASED, 
-                'order': order_id
-            })
-            if serializer.is_valid():
-                status = StatusSerializer(serializer.save())
-                data.get('result')['status'] = status.data
+        if action == 'seller-release'  or action == 'arbiter-release':
+            # create RELEASED status for order
+            status = update_order_status(kwargs.get('order_id'), StatusType.RELEASED)
+            data.get('result')['status'] = status.data
     
     data['action'] = action
     data['contract_id'] = contract_id
@@ -98,3 +80,30 @@ def notify_subprocess_completion(cmd_resp: Dict, **kwargs):
                 'data': data
             }
         )
+
+@shared_task(queue='rampp2p__contract_execution')
+def generate_contract(contract_hash: Dict, **kwargs):
+    hash = contract_hash.get('result').get('contract_hash')
+    action = 'create'
+    path = './rampp2p/escrow/src/'
+    command = 'node {}escrow.js contract {} {} {} {}'.format(
+        path,
+        kwargs.get('arbiter_pubkey'), 
+        kwargs.get('buyer_pubkey'), 
+        kwargs.get('seller_pubkey'),
+        hash
+    )
+    return execute_subprocess.apply_async(
+                (command,), 
+                link=notify_subprocess_completion.s(
+                        action=action, 
+                        contract_id=kwargs.get('contract_id'), 
+                        wallet_hashes=kwargs.get('wallet_hashes')
+                    )
+            )
+
+def update_contract_address(contract_id, data):
+    contract_address = data.get('result').get('contract_address')
+    contract = Contract.objects.get(pk=contract_id)
+    contract.contract_address = contract_address
+    contract.save()
