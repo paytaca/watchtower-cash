@@ -4,7 +4,6 @@ from django.conf import settings
 from django.utils import timezone
 
 import socket
-import ssl
 import time
 import json
 
