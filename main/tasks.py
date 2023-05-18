@@ -206,7 +206,7 @@ def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commi
     IS_NFT = False
     METADATA = None
     PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
-
+    
     response = requests.get(PAYTACA_BCMR_URL)
 
     if response.status_code == 200:
@@ -635,10 +635,13 @@ def manage_blocks(self):
             # TODO: handle block tracking for SLP testnet when BCH_NETWORK=chipnet
             # (testnet has different block count with chipnet)
             if settings.BCH_NETWORK == 'mainnet':
-                transactions = NODE.SLP.get_block(block.number, full_transactions=False)
-                for tr in transactions:
-                    txid = bytearray(tr.transaction_hash[::-1]).hex()
-                    subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
+                pass
+                
+                #TODO: Disable block scanning in SLP, for now
+                # transactions = NODE.SLP.get_block(block.number, full_transactions=False)
+                # for tr in transactions:
+                #     txid = bytearray(tr.transaction_hash[::-1]).hex()
+                #     subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
 
             transactions = NODE.BCH.get_block(block.number)
             for txid in transactions:
@@ -1083,7 +1086,7 @@ def broadcast_transaction(self, transaction):
 
 
 def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
-    processed_list = None
+    processed_list = []
     if _list:
         processed_list = []
         for index, val in enumerate(_list):
