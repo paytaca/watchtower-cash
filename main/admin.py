@@ -296,7 +296,6 @@ class CashTokenInfoAdmin(admin.ModelAdmin):
         'name',
         'symbol',
         'decimals',
-        'date_created',
     ]
 
 
@@ -306,8 +305,6 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
         'name',
         'symbol',
         'decimals',
-        'date_created',
-        'date_updated'
     ]
 
     def name(self, obj):
@@ -319,12 +316,6 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
     def decimals(self, obj):
         return obj.info.decimals
 
-    def date_created(self, obj):
-        return obj.info.date_created
-    
-    def date_updated(self, obj):
-        return obj.info.date_updated
-
 
 class CashNonFungibleTokenAdmin(admin.ModelAdmin):
     list_display = [
@@ -335,8 +326,6 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
         'symbol',
         'decimals',
         'nft_details',
-        'date_created',
-        'date_updated'
     ]
 
     def name(self, obj):
@@ -350,12 +339,6 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
 
     def nft_details(self, obj):
         return obj.info.nft_details
-
-    def date_created(self, obj):
-        return obj.info.date_created
-    
-    def date_updated(self, obj):
-        return obj.info.date_updated
 
 
 admin.site.unregister(User)

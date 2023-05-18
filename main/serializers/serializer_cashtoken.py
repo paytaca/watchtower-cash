@@ -16,8 +16,6 @@ class CashTokenInfoSerializer(serializers.ModelSerializer):
             'symbol',
             'decimals',
             'image_url',
-            'date_created',
-            'date_updated',
             'nft_details',
         ]
 

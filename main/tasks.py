@@ -200,56 +200,37 @@ def client_acknowledgement(self, txid):
 
 
 # is_nft = supply param in case there is no record of NFT yet on BCMR
-def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', capability=''):
+def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commitment='', capability=''):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     IS_NFT = False
     METADATA = None
-    PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/{category}/latest/'
+    PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
+    
+    response = requests.get(PAYTACA_BCMR_URL)
 
-    if settings.BCH_NETWORK == 'chipnet':
-        response = requests.get(PAYTACA_BCMR_URL)
-
-        if response.status_code == 200:
-            response = response.json()
-            identities = response['identities']
-            category_dict = list(identities.values())[0]
-            METADATA = list(category_dict.values())[0]
+    if response.status_code == 200:
+        METADATA = response.json()
 
     if METADATA:
-        image_url = ''
-        symbol = ''
-        decimals = 0
-        token_data = METADATA['token']
-        token_keys = token_data.keys()
+        name = METADATA['name']
+        description = METADATA['description']
+        symbol = METADATA['symbol']
+        decimals = METADATA['decimals']
+        image_url = METADATA['icon']
+        nfts = METADATA['nfts']
 
-        if 'icon' in METADATA['uris'].keys():
-            image_url = METADATA['uris']['icon']
+        data = {
+            'name': name,
+            'description': description,
+            'symbol': symbol,
+            'decimals': decimals,
+            'image_url': image_url
+        }
 
-        if 'symbol' in token_keys:
-            symbol = token_data['symbol']
-        if 'decimals' in token_keys:
-            decimals = token_data['decimals']
-
-        if 'nfts' in token_keys:
+        if nfts:
             IS_NFT = True
-
-            data = {
-                'name': METADATA['name'],
-                'description': METADATA['description'],
-                'symbol': symbol,
-                'decimals': decimals,
-                'image_url': image_url,
-                'nft_details': token_data['nfts']
-            }
-        else:
-            data = {
-                'name': METADATA['name'],
-                'description': METADATA['description'],
-                'symbol': symbol,
-                'decimals': decimals,
-                'image_url': image_url
-            }
+            data['nft_details'] = nfts
         
         # did not use get_or_create bec of async multiple objects returned error
         cashtoken_infos = CashTokenInfo.objects.filter(**data)
@@ -275,9 +256,6 @@ def get_cashtoken_meta_data(category, txid, index, is_nft=False, commitment='', 
         else:
             cashtoken_info = CashTokenInfo(name=name, symbol=symbol)
             cashtoken_info.save()
-
-    cashtoken_info.date_updated = timezone.now()
-    cashtoken_info.save()
 
     if IS_NFT:
         cashtoken, _ = CashNonFungibleToken.objects.get_or_create(
@@ -376,8 +354,8 @@ def save_record(
                 # get cashtoken metadata always in case there are changes on BCMR
                 cashtoken = get_cashtoken_meta_data(
                     token,
-                    transactionid,
-                    index,
+                    txid=transactionid,
+                    index=index,
                     commitment=commitment,
                     capability=capability,
                     is_nft=is_cashtoken_nft

@@ -34,19 +34,12 @@ class ZMQHandler():
 
     def __init__(self):
         self.url = "tcp://zmq:28332"
+        self.BCMR_WEBHOOK_URL = f'{settings.PAYTACA_BCMR_URL}/webhook/'
         self.BCHN = BCHN()
-
-        bcmr_url_type = ''
-        if settings.BCH_NETWORK == 'chipnet':
-            bcmr_url_type = f'-chipnet'
-        self.BCMR_WEBHOOK_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api/webhook/'
 
         self.zmqContext = zmq.Context()
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)
-        self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "hashblock")
         self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "hashtx")
-        self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "rawblock")
-        self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "rawtx")
         self.zmqSubSocket.connect(self.url)
 
     def start(self):
@@ -56,12 +49,7 @@ class ZMQHandler():
                 topic = msg[0].decode()
                 body = msg[1]
 
-                if topic == "hashblock":
-                    pass
-                    # print('- HASH BLOCK -')
-                    # print(binascii.hexlify(body))
-
-                elif topic == "hashtx":
+                if topic == "hashtx":
                     tx_hash = binascii.hexlify(body).decode()
                     tx = self.BCHN._get_raw_transaction(tx_hash)
                     inputs = tx['vin']
@@ -71,10 +59,7 @@ class ZMQHandler():
                         return
 
                     try:
-                        #TODO: Apply this only to chipnet for now
-                        if settings.BCH_NETWORK == 'chipnet':
-                            bcmr_data = self.process_tx_for_bcmr(tx)
-                            _ = requests.post(self.BCMR_WEBHOOK_URL, json=bcmr_data)
+                        _ = requests.post(self.BCMR_WEBHOOK_URL, json={ 'tx_hash': tx_hash })
                     except:
                         # TODO - This needs to be handled better at some point.
                         # For now, we just have to make sure failure in the request does terminate the zmq listener.
@@ -154,51 +139,8 @@ class ZMQHandler():
                         LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
                         parse_tx_wallet_histories.delay(tx_hash)
 
-                elif topic == "rawblock":
-                    pass
-                    # print('- RAW BLOCK HEADER -')
-                    # print(binascii.hexlify(body[:80]))
-
-                elif topic == "rawtx":
-                    pass
-                    # print('- RAW TX -')
-                    # print(binascii.hexlify(body))
-
         except KeyboardInterrupt:
             zmqContext.destroy()
-    
-    def process_tx_for_bcmr(self, tx):
-        inputs = tx['vin']
-        outputs = tx['vout']
-        processed_outputs = []
-        identity_output = {}
-
-        for o in outputs:
-            scriptPubKey = o['scriptPubKey']
-            output_type = scriptPubKey['type']
-
-            if output_type == 'pubkeyhash':
-                if 'tokenData' in o.keys():
-                    final_output = {
-                        'category': o['tokenData']['category']
-                    }
-                    processed_outputs.append(final_output)
-                
-            elif output_type == 'nulldata':
-                op_return = scriptPubKey['asm']
-                op_rets = op_return.split(' ')
-
-                if len(op_rets) == 4:
-                    if op_rets[1] == '0442434d52': # BCMR
-                        json_hash = op_rets[2]
-                        bcmr_url_encoded = op_rets[3]
-                        
-                        final_io = processed_outputs[0]
-                        final_io['json_hash'] = json_hash
-                        final_io['bcmr_url_encoded'] = bcmr_url_encoded
-                        identity_output = final_io
-
-        return identity_output
 
 class Command(BaseCommand):
     help = "Start mempool tracker using ZMQ"
