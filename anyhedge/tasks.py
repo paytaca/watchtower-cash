@@ -58,7 +58,7 @@ LOGGER = logging.getLogger(__name__)
 
 @shared_task(queue=_QUEUE_PRICE_ORACLE, time_limit=_TASK_TIME_LIMIT)
 def check_new_price_messages():
-    pubkeys = Oracle.objects.values_list("pubkey", flat=True).distinct()
+    pubkeys = Oracle.objects.filter(active=True).values_list("pubkey", flat=True).distinct()
     LOGGER.info(f"Updating oracles: {pubkeys}")
     for pubkey in pubkeys:
         check_new_oracle_price_messages.delay(pubkey)
@@ -84,7 +84,19 @@ def check_new_oracle_price_messages(oracle_pubkey):
         count = max(1, count)
         count = min(count, 10) # setup a hard limit
 
-    price_messages = get_price_messages(oracle_pubkey, min_message_timestamp=latest_timestamp, count=count)
+    relay = None
+    port = None
+    oracle = Oracle.objects.filter(pubkey=oracle_pubkey).first()
+    if oracle:
+        relay = oracle.relay
+        port = oracle.port
+
+    price_messages = get_price_messages(
+        oracle_pubkey,
+        relay=relay, port=port,
+        min_message_timestamp=latest_timestamp, count=count,
+    )
+
     for price_message in price_messages:
         save_price_oracle_message(oracle_pubkey, price_message)
 

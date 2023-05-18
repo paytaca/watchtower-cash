@@ -3,8 +3,22 @@
     "model": "anyhedge.oracle",
     "pk": 1,
     "fields": {
+      "active": false,
       "pubkey": "02d3c1de9d4bc77d6c3608cbe44d10138c7488e592dc2b1e10a6cf0e92c2ecb047",
       "relay": "staging-oracles.generalprotocols.com",
+      "port": 7083,
+      "asset_name": "US Dollars",
+      "asset_currency": "USD",
+      "asset_decimals": 2
+    }
+  },
+  {
+    "model": "anyhedge.oracle",
+    "pk": 2,
+    "fields": {
+      "active": true,
+      "pubkey": "02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818",
+      "relay": "oracles.generalprotocols.com",
       "port": 7083,
       "asset_name": "US Dollars",
       "asset_currency": "USD",
