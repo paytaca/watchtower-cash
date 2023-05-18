@@ -8,12 +8,18 @@ const { ec: EC } = require('elliptic');
 })();
 
 function verifySignature(publicKeyHex, derSignatureHex, message){
-    const ec = new EC('secp256k1');
 
-    // Load the public key from the hex representation
-    const publicKey = ec.keyFromPublic(publicKeyHex, 'hex');
-  
-    // Verify the DER-encoded signature
-    const isVerified = publicKey.verify(message, derSignatureHex, 'hex');
-    console.log(`{"is_verified": ${isVerified}}`)
+    try {
+        const ec = new EC('secp256k1');
+
+        // Load the public key from the hex representation
+        const publicKey = ec.keyFromPublic(publicKeyHex, 'hex');
+    
+        // Verify the DER-encoded signature
+        const isVerified = publicKey.verify(message, derSignatureHex, 'hex');
+        console.log(`{"is_verified": ${isVerified}}`)
+
+    } catch (error) {
+        console.log(`{"is_verified": false, "error": "${error}"}`)
+    }
 }

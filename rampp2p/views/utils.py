@@ -9,15 +9,15 @@ logger = logging.getLogger(__name__)
 class VerifySignature(APIView):
     def post(self, request):
         pubkey_hex = request.data.get('pubkey_hex')
-        sig_hex = request.data.get('sig_hex')
+        signature_hex = request.data.get('signature_hex')
         message = request.data.get('message')
 
-        if (sig_hex is None or message is None or pubkey_hex is None):
+        if (signature_hex is None or message is None or pubkey_hex is None):
             return Response(status=status.HTTP_400_BAD_REQUEST)
         
-        logger.warning(f'message: "{message}", pubkey_hex: "{pubkey_hex}", sig_hex: "{sig_hex}"')
-        sig_valid = self.verify_signature(pubkey_hex, sig_hex, message)
-        return Response({'sig_valid': sig_valid}, status=status.HTTP_200_OK)
+        logger.warning(f'message: "{message}", pubkey_hex: "{pubkey_hex}", signature_hex: "{signature_hex}"')
+        result, error = self.verify_signature(pubkey_hex, signature_hex, message)
+        return Response({'is_verified': result.get('is_verified')}, status=status.HTTP_200_OK)
 
     def verify_signature(self, public_key, signature, message):
         path = './rampp2p/escrow/src/'
@@ -27,4 +27,7 @@ class VerifySignature(APIView):
             signature, 
             message
         )
-        return tasks.execute_subprocess(command)
+        response = tasks.execute_subprocess(command)
+        result = response.get('result')
+        error = response.get('error')
+        return result, error
