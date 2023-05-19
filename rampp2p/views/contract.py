@@ -2,10 +2,9 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
-from django.conf import settings
 
 from rampp2p import utils
-from rampp2p.utils import contract, common
+from rampp2p.utils import contract, auth
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -25,19 +24,14 @@ import logging
 logger = logging.getLogger(__name__)
 import json
 
-class TestView(APIView):
-    def get(self, request):
-        sha256_hash = hash.calculate_sha256("./rampp2p/escrow/src/escrow.cash")
-        return Response({'sha256_hash': sha256_hash}, status=status.HTTP_200_OK)
-
 class CreateContract(APIView):
     def post(self, request, pk):
         
         try:
             # signature validation
-            signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             # message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            # common.verify_signature(wallet_hash, signature, message)
+            # auth.verify_signature(wallet_hash, signature, message)
 
             # permission validations
             self.validate_permissions(wallet_hash, pk)
@@ -164,9 +158,9 @@ class ReleaseCrypto(APIView):
 
         try:
             # validate signature
-            signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            common.verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             caller_id = self.validate_permissions(wallet_hash, pk)
@@ -337,9 +331,9 @@ class RefundCrypto(APIView):
         
         try:
             # validate signature
-            signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            common.verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)

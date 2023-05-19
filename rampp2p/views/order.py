@@ -10,7 +10,7 @@ from django.shortcuts import render
 from typing import List
 
 from rampp2p import utils
-from rampp2p.utils import common, auth
+from rampp2p.utils import auth
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -161,9 +161,9 @@ class ConfirmOrder(APIView):
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            common.verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -244,9 +244,9 @@ class CryptoBuyerConfirmPayment(APIView):
 
     try:
         # validate signature
-        signature, timestamp, wallet_hash = common.get_verification_headers(request)
+        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
         message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
-        common.verify_signature(wallet_hash, signature, message)
+        auth.verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)
@@ -296,9 +296,9 @@ class CryptoSellerConfirmPayment(APIView):
         
         try:
             # validate signature
-            signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_SELLER_CONF_PAYMENT.value + '::' + timestamp
-            common.verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -354,9 +354,9 @@ class CancelOrder(APIView):
 
         try:
             # validate signature
-            signature, timestamp, wallet_hash = common.get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_CANCEL.value + '::' + timestamp
-            common.verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)

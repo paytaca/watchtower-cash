@@ -92,3 +92,4 @@ channels==3.0.4
 cashaddress==1.0.6
 paho-mqtt==1.6.1
 cryptography==40.0.2
+bitcoincash==0.1.5

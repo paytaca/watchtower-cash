@@ -39,7 +39,9 @@ urlpatterns = [
     path('order/appeal/<int:pk>/cancel', AppealCancel.as_view(), name='appeal-cancel'),
     path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
     path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
-    path('test', TestView.as_view(), name='test'),
+
+    path('hash-contract', HashContract.as_view(), name='hash-contract'),
     path('verify-signature', VerifySignature.as_view(), name='verify-signature'),
+    path('transaction-detail', TransactionDetail.as_view(), name='transaction-detail'),
     
 ]

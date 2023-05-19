@@ -2,10 +2,25 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.http import Http404
+from rampp2p.utils import transaction
 from rampp2p import tasks
 
 import logging
 logger = logging.getLogger(__name__)
+
+class TransactionDetail(APIView):
+    def get(self, request):
+        txid = request.data.get('txid')
+        if txid is None:
+            return Response({"error": "txid field is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        output_addresses = transaction.verify_transaction(txid)
+        return Response({"outputs": output_addresses}, status=status.HTTP_200_OK)
+
+class HashContract(APIView):
+    def get(self, request):
+        sha256_hash = hash.calculate_sha256("./rampp2p/escrow/src/escrow.cash")
+        return Response({'sha256_hash': sha256_hash}, status=status.HTTP_200_OK)
 
 class VerifySignature(APIView):
     def post(self, request):

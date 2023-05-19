@@ -15,15 +15,15 @@ from rampp2p.models import (
 from rampp2p.serializers import StatusSerializer, AppealSerializer
 from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
-from rampp2p.utils import *
+from rampp2p.utils import auth
 
 class AppealCancel(APIView):
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.APPEAL_CANCEL.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -81,9 +81,9 @@ class AppealRelease(APIView):
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.APPEAL_RELEASE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -140,9 +140,9 @@ class AppealRefund(APIView):
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.APPEAL_REFUND.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
