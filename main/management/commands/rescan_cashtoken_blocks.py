@@ -5,7 +5,7 @@ from main.tasks import query_transaction, ready_to_accept
 from main.utils.queries.node import Node
 
 from celery import chord
-import requests, logging
+import requests, logging, time
 
 
 LOGGER = logging.getLogger(__name__)
@@ -20,10 +20,11 @@ class Command(BaseCommand):
         latest_block = NODE.BCH.get_latest_block()
 
         curr_block = 792773
+        max_retries = 10
         key = 0
 
         if settings.BCH_NETWORK == 'chipnet':
-            curr_block = 147214
+            curr_block = 100000
             
         while curr_block < latest_block:
             subtasks = []
@@ -32,7 +33,16 @@ class Command(BaseCommand):
             transactions = NODE.BCH.get_block(curr_block)
 
             for txid in transactions:
-                requests.post(f'{settings.PAYTACA_BCMR_URL}/webhook/', json={'tx_hash': txid})
+                retries = 0
+
+                while retries < max_retries:
+                    response = requests.post(f'{settings.PAYTACA_BCMR_URL}/webhook/', json={'tx_hash': txid})
+                    if response.status_code == 200:
+                        break
+                        
+                    retries += 1
+                    time.sleep(1)
+                
                 subtasks.append(query_transaction.si(txid, key))
 
             if subtasks:
