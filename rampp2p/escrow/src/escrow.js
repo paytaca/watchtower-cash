@@ -10,7 +10,7 @@ const ACTION = process.argv[2]; // 'contract' | 'seller-release' | 'arbiter-rele
 const ARBITR_PUBKEY = process.argv[3]
 const BUYER_PUBKEY = process.argv[4]
 const SELLER_PUBKEY = process.argv[5]
-const CONTRACT_HASH = process.argv[6]
+// const CONTRACT_HASH = process.argv[6]
 const SERVCR_PUBKEY = process.env.SERVICER_PK
 const SERVCR_ADDR = process.env.SERVICER_ADDR
 const TRADING_FEE = parseInt(process.env.TRADING_FEE)
@@ -35,7 +35,7 @@ async function run() {
     const [arbiterPkh, buyerPkh, sellerPkh, servicerPkh] = getPubKeyHash();
     
     // Instantiate a new contract providing the constructor parameters
-    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE, CONTRACT_HASH];
+    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE];
     const contract = new Contract(artifact, contractParams, provider);
 
     if (ACTION == 'contract') {
@@ -44,11 +44,12 @@ async function run() {
         return 
     }
 
-    const callerPk = process.argv[7]
-    const callerSig = convertDERtoSignature(process.argv[8])
-    const recipientAddr = process.argv[9]
-    const arbiterAddr = process.argv[10]
-    const amount = process.argv[11]
+    const callerPk = process.argv[6]
+    let callerSig = process.argv[7]
+    callerSig = JSON.parse(process.argv[7])
+    const recipientAddr = process.argv[8]
+    const arbiterAddr = process.argv[9]
+    const amount = process.argv[10]
 
     if (ACTION == 'refund') {
         await refund(contract, callerPk, callerSig, recipientAddr, arbiterAddr, amount);
@@ -169,7 +170,7 @@ async function refund(contract, callerPk, callerSig, recipient, arbiter, amount)
         ]
         
         await contract.functions
-        .refund(callerPk, callerSig, CONTRACT_HASH)
+        .refund(callerPk, callerSig)
         .to(outputs)
         .withHardcodedFee(HARDCODED_FEE)
         .send();

@@ -5,6 +5,7 @@ from typing import Dict, List
 
 from rampp2p.serializers import StatusSerializer
 from rampp2p.models import Contract, StatusType
+from rampp2p.utils import common
 import subprocess
 import json
 import re
@@ -59,12 +60,12 @@ def notify_subprocess_completion(cmd_resp: Dict, **kwargs):
     
         if action == 'refund':
             # create REFUNDED status for order
-            status = update_order_status(kwargs.get('order_id'), StatusType.REFUNDED)
+            status = common.update_order_status(kwargs.get('order_id'), StatusType.REFUNDED)
             data.get('result')['status'] = status.data
 
         if action == 'seller-release'  or action == 'arbiter-release':
             # create RELEASED status for order
-            status = update_order_status(kwargs.get('order_id'), StatusType.RELEASED)
+            status = common.update_order_status(kwargs.get('order_id'), StatusType.RELEASED)
             data.get('result')['status'] = status.data
     
     data['action'] = action

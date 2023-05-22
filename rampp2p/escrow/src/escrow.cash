@@ -20,7 +20,7 @@ pragma cashscript ^0.7.5;
  * @param arbitrationFee The arbiter's fee.
  */
 
-contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer, int tradingFee, int arbitrationFee, bytes32 contractHash) {
+contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer, int tradingFee, int arbitrationFee) {
 
     /**
      * Releases the funds to the buyer.
@@ -37,11 +37,10 @@ contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer
      * @param pk The public key of the arbiter.
      * @param s The signature of the arbiter.
      */
-    function release(pubkey pk, sig s, bytes32 hash) {
+    function release(pubkey pk, sig s) {
         // Requires that caller is only either the arbiter or the seller
         require(hash160(pk) == arbiter || hash160(pk) == seller);
         require(checkSig(s, pk));
-        require(hash == contractHash);
 
         // Limits the transaction input to 1 & output to 3
         require(tx.inputs.length == 1);
@@ -85,11 +84,10 @@ contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer
      * @param pk The public key of the arbiter.
      * @param s The signature of the arbiter.
      */
-    function refund(pubkey pk, sig s, bytes32 hash) {
+    function refund(pubkey pk, sig s) {
         // Requires that caller is the arbiter 
         require(hash160(pk) == arbiter);
         require(checkSig(s, pk));
-        require(hash == contractHash);
 
         // Limits the transaction input to 1 & output to 3
         require(tx.inputs.length == 1);

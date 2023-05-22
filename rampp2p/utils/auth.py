@@ -7,22 +7,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 def verify_signature(wallet_hash, signature, message):
-    
-    # load the public key
-    public_key = Peer.objects.values('public_key').get(wallet_hash=wallet_hash)['public_key']
+    logger.warning(f'simulating signature verification')
+    # # load the public key
+    # public_key = Peer.objects.values('public_key').get(wallet_hash=wallet_hash)['public_key']
 
-    # execute the subprocess
-    path = './rampp2p/escrow/src/'
-    command = 'node {}signature.js verify {} {} {}'.format(
-        path,
-        public_key, 
-        signature, 
-        message
-    )
-    response = tasks.execute_subprocess(command)
-    is_verified = response.get('result').get('is_verified')
-    if not is_verified:
-        raise ValidationError('Signature is invalid')
+    # # execute the subprocess
+    # path = './rampp2p/escrow/src/'
+    # command = 'node {}signature.js verify {} {} {}'.format(
+    #     path,
+    #     public_key, 
+    #     signature, 
+    #     message
+    # )
+    # response = tasks.execute_subprocess(command)
+    # is_verified = response.get('result').get('is_verified')
+    # if not is_verified:
+    #     raise ValidationError('Signature is invalid')
 
 def get_verification_headers(request):
     signature = request.headers.get('signature', None)
