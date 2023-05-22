@@ -471,7 +471,7 @@ def process_cashtoken_tx(
         nft_data = token_data['nft']
         capability = nft_data['capability']
         commitment = nft_data['commitment']
-        amount = 1
+        amount = int(token_data['amount'])
 
         obj_id, created = save_record(
             token_id,
