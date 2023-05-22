@@ -199,11 +199,9 @@ def client_acknowledgement(self, txid):
     return third_parties
 
 
-# is_nft = supply param in case there is no record of NFT yet on BCMR
 def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commitment='', capability=''):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
-    IS_NFT = False
     METADATA = None
     PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
     
@@ -229,7 +227,6 @@ def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commi
         }
 
         if nfts:
-            IS_NFT = True
             data['nft_details'] = nfts
         
         # did not use get_or_create bec of async multiple objects returned error
@@ -242,7 +239,6 @@ def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commi
     else:
         # save as default metadata/info if there is no record of metadata from BCMR
         if is_nft:
-            IS_NFT = True
             name = 'CashToken NFT'
             symbol = 'CASH-NFT'
         else:
@@ -257,7 +253,7 @@ def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commi
             cashtoken_info = CashTokenInfo(name=name, symbol=symbol)
             cashtoken_info.save()
 
-    if IS_NFT:
+    if is_nft:
         cashtoken, _ = CashNonFungibleToken.objects.get_or_create(
             current_index=index,
             current_txid=txid
@@ -288,7 +284,8 @@ def save_record(
     is_cashtoken=False,
     is_cashtoken_nft=False,
     capability='',
-    commitment=''
+    commitment='',
+    value=0
 ):
     """
         token                : can be tokenid (slp token) or token name (bch) or category (cashtoken)
@@ -312,7 +309,11 @@ def save_record(
         is_cashtoken_nft     : supply this param if is_cashtoken is True
         capability           : minting/mutable/immutable for cashtoken NFTs
         commitment           : special hex/embedded string for cashtoken NFTs
+        value                : value of transaction (amount = value in BCH, value = varies on tokens)
     """
+    
+    if value <= 0:
+        value = amount * (10 ** 8)
 
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
@@ -391,28 +392,21 @@ def save_record(
         #     return None, None
 
         try:
+            txn_data = {
+                'txid': transactionid,
+                'address': address_obj,
+                'token': token_obj,
+                'amount': amount,
+                'index': index
+            }
             if is_cashtoken:
-                txn_data = {
-                    'txid': transactionid,
-                    'address': address_obj,
-                    'token': token_obj,
-                    'amount': amount,
-                    'index': index
-                }
                 if is_cashtoken_nft:
                     txn_data['cashtoken_nft'] = CashNonFungibleToken.objects.get(id=cashtoken.id)
                 else:
                     txn_data['cashtoken_ft'] = CashFungibleToken.objects.get(category=cashtoken.category)
-            else:
-                txn_data = {
-                    'txid': transactionid,
-                    'address': address_obj,
-                    'token': token_obj,
-                    'amount': amount,
-                    'index': index
-                }
 
             transaction_obj, transaction_created = Transaction.objects.get_or_create(**txn_data)
+            transaction_obj.value = int(value)
 
             if spending_txid:
                 transaction_obj.spending_txid = spending_txid
@@ -460,7 +454,16 @@ def save_record(
         return transaction_obj.id, transaction_created
 
 
-def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, timestamp=None, force_create=False):
+def process_cashtoken_tx(
+    token_data,
+    address,
+    txid,
+    block_id=None,
+    index=0,
+    timestamp=None,
+    force_create=False,
+    value=0
+):
     token_id = token_data['category']
 
     # save nft transaction
@@ -483,7 +486,8 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
             is_cashtoken_nft=True,
             capability=capability,
             commitment=commitment,
-            force_create=force_create
+            force_create=force_create,
+            value=value
         )
     else:
         # save fungible token transaction
@@ -498,7 +502,8 @@ def process_cashtoken_tx(token_data, address, txid, block_id=None, index=0, time
             tx_timestamp=timestamp,
             index=index,
             is_cashtoken=True,
-            force_create=force_create
+            force_create=force_create,
+            value=value
         )
 
     if created:
@@ -556,7 +561,8 @@ def query_transaction(txid, block_id, for_slp=False):
                         txid,
                         block_id=block_id,
                         index=index,
-                        timestamp=transaction['time']
+                        timestamp=transaction['time'],
+                        value=(output['value'] * (10 ** 8))
                     )
                 else:
                     # save bch transaction
@@ -1505,7 +1511,8 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     bch_tx['txid'],
                     block_id=blockheight_id,
                     index=tx_output['index'],
-                    timestamp=bch_tx['timestamp']
+                    timestamp=bch_tx['timestamp'],
+                    value=tx_output['value']
                 )
             else:
                 value = tx_output['value'] / 10 ** 8
@@ -1622,7 +1629,8 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
                 txid,
                 index=output_index,
                 timestamp=tx_timestamp,
-                force_create=True
+                force_create=True,
+                value=outputs[output_index][1]
             )
         else:
             save_record(

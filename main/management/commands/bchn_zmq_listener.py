@@ -102,7 +102,8 @@ class ZMQHandler():
                                     output['tokenData'],
                                     output['scriptPubKey']['addresses'][0],
                                     tx_hash,
-                                    index=index
+                                    index=index,
+                                    value=(output['value'] * (10 ** 8))
                                 )
                             else:
                                 args = (
