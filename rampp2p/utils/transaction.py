@@ -1,19 +1,22 @@
-# import bitcoincash.rpc
-# from bitcoincash.core import lx
-# from bitcoincash.wallet import CBitcoinAddress
+from django.conf import settings
+from rampp2p import tasks, utils
+from typing import List
 
 import logging
 logger = logging.getLogger(__name__)
 
-def verify_transaction(txid):
-    # rpc = bitcoincash.rpc.Proxy()
-    # tx = rpc.getrawtransaction(lx(txid))
-    # logger.warning(f'tx.vout: {tx.vout}')
-    
-    # outputs = []
-    # for o in tx.vout:
-    #     address = str(CBitcoinAddress.from_scriptPubKey(o.scriptPubKey))
-    #     outputs.append(address)
-
-    # logger.warning(f'outputs: {outputs}')
-    return "outputs"
+def validate_transaction(txid: str, **kwargs):
+    path = './rampp2p/escrow/src/'
+    command = 'node {}transaction.js {}'.format(
+        path,
+        txid
+    )
+    return tasks.execute_subprocess.apply_async(
+                (command,), 
+                link=tasks.verify_tx_out.s(
+                    txid=txid,
+                    action=kwargs.get('action'),
+                    contract_id=kwargs.get('contract_id'),
+                    wallet_hashes=kwargs.get('wallet_hashes'),
+                )
+            )

@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 
 from rampp2p import utils
-from rampp2p.utils import contract, auth
+from rampp2p.utils import contract, auth, transaction
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -58,7 +58,6 @@ class CreateContract(APIView):
             contract_obj = contract_obj.first()
             if contract_obj.contract_address is None:
                 gen_contract_address = True
-            response['contract_address'] = contract_obj.contract_address
         
         if gen_contract_address:
             # execute subprocess
@@ -174,7 +173,7 @@ class ReleaseCrypto(APIView):
             validate_status_progression(StatusType.RELEASED, pk)
             
             order = self.get_object(pk)
-            contract_id = Contract.objects.values('id').filter(order__id=pk).first()['id']
+            contract_inst = Contract.objects.filter(order__id=pk).first()
             params = self.get_params(request, order, caller_id)
             logger.warning(f'params: {params}')
 
@@ -204,6 +203,9 @@ class ReleaseCrypto(APIView):
             if txid is None:
                 raise ValidationError('txid field is required')
 
+            participants = self.get_order_participants(order)
+            utils.validate_transaction(txid, contract=contract_inst, wallet_hashes=participants)
+
             # TODO: verify txid
             # 1) tx recipients must be correct
             # 2) tx sender must be correct
@@ -211,35 +213,20 @@ class ReleaseCrypto(APIView):
             # 4) record tx recipients
             # 5) tentative: record sender
             
-            action = Transaction.ActionType.SELLER_RELEASE
-            if caller_id == 'ARBITER':
-                action = Transaction.ActionType.ARBITER_RELEASE
-
-            txdata = {
-                "contract": contract_id,
-                "action": action,
-                "txid": txid,
-            }
-            tx_serializer = TransactionSerializer(data=txdata)
-            if tx_serializer.is_valid():
-                tx_serializer = TransactionSerializer(tx_serializer.save())
-
-            # create RELEASED status for order
-            status_serializer = utils.common.update_order_status(pk,  StatusType.RELEASED)
 
             # TODO: notify order participants
-            # participants = self.get_order_participants(order)
+            
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        response = {
-            "success": True,
-            "tx": tx_serializer.data,
-            "status": status_serializer.data
-        }
-        return Response(response, status=status.HTTP_200_OK)  
-        # return Response(status=status.HTTP_200_OK)
+        # response = {
+        #     "success": True,
+        #     "tx": tx_serializer.data,
+        #     "status": status_serializer.data
+        # }
+        # return Response(response, status=status.HTTP_200_OK)  
+        return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''

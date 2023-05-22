@@ -6,8 +6,9 @@ class Transaction(models.Model):
     class ActionType(models.TextChoices):
         FUND = 'FUND'
         REFUND = 'REFUND'
-        ARBITER_RELEASE = 'ARBITER_RELEASE'
-        SELLER_RELEASE = 'SELLER_RELEASE'
+        RELEASE = 'RELEASE'
+        # ARBITER_RELEASE = 'ARBITER_RELEASE'
+        # SELLER_RELEASE = 'SELLER_RELEASE'
 
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, editable=False)
     action = models.CharField(max_length=50, choices=ActionType.choices)

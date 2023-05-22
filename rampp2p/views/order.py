@@ -185,39 +185,18 @@ class ConfirmOrder(APIView):
                 raise ValidationError('order contract does not exist')
 
             contract = contract.first()
-            
-            # TODO: Verify that tx exists, its recipient is contract address, and tx amount is correct
-            # order = Order.objects.get(pk=pk)
-            # transaction = Transaction.objects.filter(txid=contract.txid).first()
-            # if transaction is None:
-            #     raise ValidationError('transaction with txid DoesNotExist')
-            # if transaction.address != contract.contract_address:
-            #     raise ValidationError('transaction.address does not match contract address')
-            # if transaction.amount != order.crypto_amount:
-            #     raise ValidationError('transaction.amount does not match contract order amount')
-
-            txdata = {
-                "contract": contract,
-                "action": Transaction.ActionType.FUND,
-                "txid": txid,
-            }
-            tx_serializer = TransactionSerializer(data=txdata)
-            if tx_serializer.is_valid():
-                tx_serializer = TransactionSerializer(tx_serializer.save())
-            
-            # create CONFIRMED status for order
-            status_serializer = utils.common.update_order_status(pk,  StatusType.CONFIRMED)
-
-            # TODO: notify order participants
+            participants = self.get_order_participants(contract.order)
+            utils.validate_transaction(
+                txid, 
+                action=Transaction.ActionType.FUND,
+                contract_id=contract.id, 
+                wallet_hashes=participants
+            )
 
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        response = {
-            "tx": tx_serializer.data,
-            "status": status_serializer.data
-        }
-        return Response(response, status=status.HTTP_200_OK)  
+        return Response(status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -239,6 +218,16 @@ class ConfirmOrder(APIView):
         else:
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
 
+    def get_order_participants(self, order: Order):
+        '''
+        Returns the wallet hash of the order's seller, buyer and arbiter.
+        '''
+        party_a = order.ad.owner.wallet_hash
+        party_b = order.owner.wallet_hash
+        arbiter = order.arbiter.wallet_hash
+        
+        return [party_a, party_b, arbiter]
+    
 class CryptoBuyerConfirmPayment(APIView):
   def post(self, request, pk):
 

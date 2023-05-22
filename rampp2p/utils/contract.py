@@ -1,6 +1,7 @@
 import rampp2p.tasks as tasks
 from typing import List
-
+from django.conf import settings
+import decimal
 import logging
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ def create(contract_id: int, wallet_hashes: List, **kwargs):
     #         )
     action = 'create'
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js contract {} {} {} {}'.format(
+    command = 'node {}escrow.js contract {} {} {}'.format(
         path,
         kwargs.get('arbiter_pubkey'), 
         kwargs.get('buyer_pubkey'), 
@@ -25,7 +26,7 @@ def create(contract_id: int, wallet_hashes: List, **kwargs):
     )
     return tasks.execute_subprocess.apply_async(
                 (command,), 
-                link=tasks.notify_subprocess_completion.s(
+                link=tasks.handle_subprocess_completion.s(
                         action=action, 
                         contract_id=contract_id, 
                         wallet_hashes=wallet_hashes
@@ -50,7 +51,7 @@ def release(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
     )
     return tasks.execute_subprocess.apply_async(
                 (command,), 
-                link=tasks.notify_subprocess_completion.s(
+                link=tasks.handle_subprocess_completion.s(
                     action=action, 
                     order_id=order_id,
                     contract_id=contract_id, 
@@ -77,7 +78,7 @@ def refund(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
 
     return tasks.execute_subprocess.apply_async(
                 (command,), 
-                link=tasks.notify_subprocess_completion.s(
+                link=tasks.handle_subprocess_completion.s(
                     action=action, 
                     order_id=order_id,
                     contract_id=contract_id, 
@@ -85,9 +86,10 @@ def refund(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
                 )
             )
 
-class ContractError(Exception):
-    def __init__(self, message):
-        self.message = message
-    
-    def __str__(self):
-        return self.message
+def get_contract_fees():
+    hardcoded_fee = decimal.Decimal(settings.HARDCODED_FEE)
+    arbitration_fee = decimal.Decimal(settings.ARBITRATION_FEE)
+    trading_fee = decimal.Decimal(settings.TRADING_FEE)
+    total_fee = hardcoded_fee + arbitration_fee + trading_fee
+    decimal_fee = total_fee/100000000
+    return decimal_fee

@@ -39,7 +39,7 @@ async function run() {
     const contract = new Contract(artifact, contractParams, provider);
 
     if (ACTION == 'contract') {
-        data = `{"contract_address" : "${contract.address}"}`
+        data = `{"success": "True", "contract_address" : "${contract.address}"}`
         console.log(data)
         return 
     }

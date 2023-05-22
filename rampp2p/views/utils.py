@@ -11,11 +11,12 @@ logger = logging.getLogger(__name__)
 class TransactionDetail(APIView):
     def get(self, request):
         txid = request.data.get('txid')
+        wallet_hash = request.data.get('wallet_hash')
         if txid is None:
             return Response({"error": "txid field is required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        output_addresses = transaction.verify_transaction(txid)
-        return Response({"outputs": output_addresses}, status=status.HTTP_200_OK)
+        transaction.get_transaction_out(txid, wallet_hashes=[wallet_hash])
+        return Response(status=status.HTTP_200_OK)
 
 class HashContract(APIView):
     def get(self, request):

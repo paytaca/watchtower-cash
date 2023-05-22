@@ -10,7 +10,6 @@ class ContractSerializer(serializers.ModelSerializer):
         model = Contract
         fields = [
             'id',
-            'txid',
             'order',
             'contract_address',
             'created_at'
