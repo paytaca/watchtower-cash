@@ -325,6 +325,7 @@ class Transaction(PostgresModel):
         blank=True
     )
     amount = models.FloatField(default=0, db_index=True)
+    value = models.PositiveIntegerField(default=0)
     acknowledged = models.BooleanField(null=True, default=None)
     blockheight = models.ForeignKey(
         BlockHeight,

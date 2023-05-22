@@ -107,6 +107,7 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'address',
         'project',
         'amount',
+        'value',
         'source',
         'blockheight',
         'token',
