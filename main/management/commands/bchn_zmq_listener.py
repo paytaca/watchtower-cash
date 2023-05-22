@@ -34,7 +34,6 @@ class ZMQHandler():
 
     def __init__(self):
         self.url = "tcp://zmq:28332"
-        self.BCMR_WEBHOOK_URL = f'{settings.PAYTACA_BCMR_URL}/webhook/'
         self.BCHN = BCHN()
 
         self.zmqContext = zmq.Context()
@@ -57,13 +56,6 @@ class ZMQHandler():
 
                     if 'coinbase' in inputs[0].keys():
                         return
-
-                    try:
-                        _ = requests.post(self.BCMR_WEBHOOK_URL, json={ 'tx_hash': tx_hash })
-                    except:
-                        # TODO - This needs to be handled better at some point.
-                        # For now, we just have to make sure failure in the request does terminate the zmq listener.
-                        pass
 
                     has_subscribed_input = False
                     has_updated_output = False
