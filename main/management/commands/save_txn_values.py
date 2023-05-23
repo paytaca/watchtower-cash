@@ -30,6 +30,11 @@ class Command(BaseCommand):
 
         for txn in cashtoken_txns:
             self.stdout.write(f'Processing {counter} out of {total} cashtoken transactions...')
+            raw_txn = bchn._get_raw_transaction(txn.txid)
+            output = raw_txn['vout'][txn.index]
+            value = output['value']
+            value *= (10 ** 8)
+            amount = int(output['tokenData']['amount'])
 
             if txn.cashtoken_ft:
                 token = txn.cashtoken_ft
@@ -46,10 +51,6 @@ class Command(BaseCommand):
                     'capability': token.capability,
                     'commitment': token.commitment
                 }
-
-            raw_txn = bchn._get_raw_transaction(txn.txid)
-            value = raw_txn['vout'][txn.index]['value']
-            value *= (10 ** 8)
 
             process_cashtoken_tx(
                 token_data,
