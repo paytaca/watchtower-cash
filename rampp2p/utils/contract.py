@@ -1,21 +1,14 @@
-import rampp2p.tasks as tasks
-from typing import List
 from django.conf import settings
+from typing import List
 import decimal
+
+import rampp2p.tasks as tasks
+from rampp2p.models import Contract
+
 import logging
 logger = logging.getLogger(__name__)
 
 def create(contract_id: int, wallet_hashes: List, **kwargs):
-    # path = './rampp2p/escrow/src/'
-    # command = 'node {}hash.js'.format(path)
-    # return tasks.execute_subprocess.apply_async(
-    #             (command,), 
-    #             link=tasks.generate_contract.s(
-    #                     contract_id=contract_id,
-    #                     wallet_hashes=wallet_hashes,
-    #                     **kwargs
-    #                 )
-    #         )
     action = 'create'
     path = './rampp2p/escrow/src/'
     command = 'node {}escrow.js contract {} {} {}'.format(
@@ -42,7 +35,6 @@ def release(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
         kwargs.get('arbiter_pubkey'),  
         kwargs.get('buyer_pubkey'),
         kwargs.get('seller_pubkey'),
-        # kwargs.get('contract_hash'),
         kwargs.get('caller_pubkey'),
         kwargs.get('caller_sig'),
         kwargs.get('recipient_address'),
@@ -68,7 +60,6 @@ def refund(order_id: int, contract_id: int, wallet_hashes: List, **kwargs):
         kwargs.get('arbiter_pubkey'),
         kwargs.get('buyer_pubkey'), 
         kwargs.get('seller_pubkey'),
-        # kwargs.get('contract_hash'), 
         kwargs.get('caller_pubkey'),
         kwargs.get('caller_sig'),
         kwargs.get('recipient_address'),
@@ -93,3 +84,10 @@ def get_contract_fees():
     total_fee = hardcoded_fee + arbitration_fee + trading_fee
     decimal_fee = total_fee/100000000
     return decimal_fee
+
+
+def update_contract_address(contract_id, data):
+    contract_address = data.get('result').get('contract_address')
+    contract = Contract.objects.get(pk=contract_id)
+    contract.contract_address = contract_address
+    contract.save()

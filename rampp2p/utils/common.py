@@ -6,6 +6,12 @@ from django.conf import settings
 import logging
 logger = logging.getLogger(__name__)
 
+def update_contract_address(contract_id, data):
+    contract_address = data.get('result').get('contract_address')
+    contract = Contract.objects.get(pk=contract_id)
+    contract.contract_address = contract_address
+    contract.save()
+
 def update_order_status(order_id, status):
     serializer = StatusSerializer(data={
         'status': status,

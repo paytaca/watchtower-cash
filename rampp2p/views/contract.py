@@ -173,59 +173,24 @@ class ReleaseCrypto(APIView):
             validate_status_progression(StatusType.RELEASED, pk)
             
             order = self.get_object(pk)
-            contract_inst = Contract.objects.filter(order__id=pk).first()
-            params = self.get_params(request, order, caller_id)
-            logger.warning(f'params: {params}')
-
-            # action = 'seller-release'
-            # if caller_id == 'ARBITER':
-            #     action = 'arbiter-release'
-
-            # # execute subprocess
-            # participants = self.get_order_participants(order)
-            # contract.release(
-            #     order.id,
-            #     contract_id,
-            #     participants,
-            #     action=action,
-            #     arbiter_pubkey=params['arbiter_pubkey'], 
-            #     seller_pubkey=params['seller_pubkey'], 
-            #     buyer_pubkey=params['buyer_pubkey'],
-            #     caller_pubkey=params['caller_pubkey'],
-            #     caller_sig=params['caller_sig'], 
-            #     recipient_address=params['recipient_address'], 
-            #     arbiter_address=params['arbiter_address'],
-            #     amount=order.crypto_amount,
-            #     contract_hash=params['contract_hash']
-            # )
-
+            contract_id = Contract.objects.values('id').filter(order__id=pk).first()['id']
+            
             txid = request.data.get('txid')
             if txid is None:
                 raise ValidationError('txid field is required')
 
+            # verify txid
             participants = self.get_order_participants(order)
-            utils.validate_transaction(txid, contract=contract_inst, wallet_hashes=participants)
-
-            # TODO: verify txid
-            # 1) tx recipients must be correct
-            # 2) tx sender must be correct
-            # 3) tx amount must be correct
-            # 4) record tx recipients
-            # 5) tentative: record sender
-            
-
-            # TODO: notify order participants
-            
+            utils.validate_transaction(
+                txid, 
+                action=Transaction.ActionType.RELEASE,
+                contract_id=contract_id, 
+                wallet_hashes=participants
+            )
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        # response = {
-        #     "success": True,
-        #     "tx": tx_serializer.data,
-        #     "status": status_serializer.data
-        # }
-        # return Response(response, status=status.HTTP_200_OK)  
+  
         return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
@@ -264,60 +229,6 @@ class ReleaseCrypto(APIView):
         except Order.DoesNotExist as err:
             raise err
 
-    def get_params(self, request, order: Order, caller_id: str):
-        '''
-        caller_sig for release must only be the arbiter or the seller's signature,
-        otherwise the smart contract will fail.
-        '''
-        # contract_hash = request.data.get('contract_hash', None)
-        caller_sig = request.data.get('caller_sig', None)
-        arbiter_pubkey = order.arbiter.public_key
-        arbiter_address = order.arbiter.address
-        seller_pubkey = None
-        buyer_pubkey = None
-        caller_pubkey = None
-        recipient_address = None
-        
-        if order.ad.trade_type == TradeType.SELL:
-            seller_pubkey = order.ad.owner.public_key
-            buyer_pubkey = order.owner.public_key
-
-            # The recipient of release is always the buyer.
-            # If ad trade type is SELL, the buyer is the order owner
-            recipient_address = order.owner.address
-
-        else:
-            seller_pubkey = order.owner.public_key
-            buyer_pubkey = order.ad.owner.public_key
-
-            # The recipient of release is always the buyer.
-            # If ad trade type is BUY, the buyer is the ad owner
-            recipient_address = order.ad.owner.address
-        
-        if caller_id == 'ARBITER':
-            caller_pubkey = arbiter_pubkey
-        elif caller_id == 'SELLER':
-            caller_pubkey = seller_pubkey
-        else:
-            raise ValidationError('invalid caller_id')
-        
-        if caller_sig is None:
-            raise ValidationError('caller_sig field is required')
-        # if contract_hash is None:
-        #     raise ValidationError('contract_hash field is required')
-        
-        params = {
-            'arbiter_pubkey': arbiter_pubkey,
-            'seller_pubkey': seller_pubkey,
-            'buyer_pubkey': buyer_pubkey,
-            'caller_pubkey': caller_pubkey,
-            'caller_sig': caller_sig,
-            'arbiter_address': arbiter_address,
-            'recipient_address': recipient_address,
-            # 'contract_hash': contract_hash
-        }
-        return params
-    
     def get_order_participants(self, order: Order):
         '''
         Returns the wallet hash of the order's seller, buyer and arbiter.
@@ -347,61 +258,24 @@ class RefundCrypto(APIView):
 
             order = self.get_object(pk)
             contract_id = Contract.objects.values('id').filter(order__id=pk).first()['id']
-            params = self.get_params(request, order)
-
-            # execute subprocess
-            # participants = self.get_order_participants(order)
-            # contract.refund(
-            #     order.id,
-            #     contract_id,
-            #     participants,
-            #     arbiter_pubkey=params['arbiter_pubkey'], 
-            #     seller_pubkey=params['seller_pubkey'], 
-            #     buyer_pubkey=params['buyer_pubkey'],
-            #     caller_pubkey=params['arbiter_pubkey'],  # caller of refund is always the arbiter
-            #     caller_sig=params['caller_sig'], 
-            #     recipient_address=params['recipient_address'], 
-            #     arbiter_address=params['arbiter_address'],
-            #     amount=order.crypto_amount,
-            #     # contract_hash=params['contract_hash']
-            # )
 
             txid = request.data.get('txid')
             if txid is None:
                 raise ValidationError('txid field is required')
 
-            # TODO: verify txid
-            # 1) tx recipients must be correct
-            # 2) tx sender must be correct
-            # 3) tx amount must be correct
-            # 4) record tx recipients
-            # 5) tentative: record sender
-
-            txdata = {
-                "contract": contract_id,
-                "action": Transaction.ActionType.REFUND,
-                "txid": txid,
-            }
-            tx_serializer = TransactionSerializer(data=txdata)
-            if tx_serializer.is_valid():
-                tx_serializer = TransactionSerializer(tx_serializer.save())
-
-            # create REFUNDED status for order
-            status_serializer = utils.common.update_order_status(pk,  StatusType.REFUNDED)
-
-            # TODO: notify order participants
-            # participants = self.get_order_participants(order)
+            # verify txid
+            participants = self.get_order_participants(order)
+            utils.validate_transaction(
+                txid, 
+                action=Transaction.ActionType.REFUND,
+                contract_id=contract_id, 
+                wallet_hashes=participants
+            )
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        response = {
-            "success": True,
-            "tx": tx_serializer.data,
-            "status": status_serializer.data
-        }
-        return Response(response, status=status.HTTP_200_OK)
-        # return Response(status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -438,57 +312,3 @@ class RefundCrypto(APIView):
         arbiter = order.arbiter.wallet_hash
         
         return [party_a, party_b, arbiter]
-
-    def get_params(self, request, order: Order):
-        '''
-        caller_sig for refund must only be the arbiter's signature,
-        otherwise the smart contract will fail.
-        '''
-        # contract_hash = request.data.get('contract_hash', None)
-        # raw_sig = request.data.get('signature')
-        # logger.warning(f'raw_sig: {raw_sig}')
-        # raw_sig = json.dumps(raw_sig)
-        # caller_sig = raw_sig.replace("'", '"').replace(" ", "").rstrip()
-        # logger.warning(f'caller_sig: {caller_sig}, type: {type(caller_sig)}')
-        # if caller_sig is None:
-        #     raise ValidationError('signature field is required')
-                
-        arbiter_pubkey = order.arbiter.public_key
-        arbiter_address = order.arbiter.address
-        seller_pubkey = None
-        buyer_pubkey = None
-        recipient_address = None
-
-        if order.ad.trade_type == TradeType.SELL:
-            seller_pubkey = order.ad.owner.public_key
-            buyer_pubkey = order.owner.public_key
-
-            # The recipient of the refund is always the seller.
-            # If ad trade type is SELL, the seller is the ad owner
-            recipient_address = order.ad.owner.address
-        else:
-            seller_pubkey = order.owner.public_key
-            buyer_pubkey = order.ad.owner.public_key
-
-            # The recipient of the refund is always the seller.
-            # If ad trade type is BUY, the seller is the order owner
-            recipient_address = order.owner.address
-
-        # if (caller_sig is None):
-        #     raise ValidationError('caller_sig field is required')
-        # if (contract_hash is None):
-        #     raise ValidationError('contract_hash field is required')
-        
-        # logger.warn(f'caller_sig: {caller_sig}')
-
-        params = {
-            # 'caller_sig': caller_sig,
-            'arbiter_pubkey': arbiter_pubkey,
-            'arbiter_address': arbiter_address,
-            'seller_pubkey': seller_pubkey,
-            'buyer_pubkey': buyer_pubkey,
-            'recipient_address': recipient_address,
-            # 'contract_hash': contract_hash
-        }
-
-        return params
