@@ -164,7 +164,6 @@ def _get_bch_utxos(query, show_address_index=False):
         )
     else:
         utxos_values = qs.annotate(
-            value=Round(F('amount') * (10 ** 8)),
             vout=F('index'),
             block=F('blockheight__number'),
         ).values(
