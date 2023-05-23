@@ -395,8 +395,6 @@ def save_record(
             txn_data = {
                 'txid': transactionid,
                 'address': address_obj,
-                'token': token_obj,
-                'amount': amount,
                 'index': index
             }
             if is_cashtoken:
@@ -407,6 +405,8 @@ def save_record(
 
             transaction_obj, transaction_created = Transaction.objects.get_or_create(**txn_data)
             transaction_obj.value = int(value)
+            transaction_obj.amount = amount
+            transaction_obj.token = token_obj
 
             if spending_txid:
                 transaction_obj.spending_txid = spending_txid
