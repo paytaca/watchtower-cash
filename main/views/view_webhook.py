@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 
 from main.serializers import BcmrWebhookSerializer
-from main.models import CashFungibleToken, CashTokenInfo
+from main.tasks import get_cashtoken_meta_data
 
 
 class BcmrWebhookViewSet(viewsets.GenericViewSet):
@@ -13,27 +13,16 @@ class BcmrWebhookViewSet(viewsets.GenericViewSet):
     def webhook(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
-        info_dict = {
-            'name': serializer.validated_data['name'],
-            'description': serializer.validated_data['description'],
-            'symbol': serializer.validated_data['symbol'],
-            'decimals': serializer.validated_data['decimals'],
-            'image_url': serializer.validated_data['image_url']
-        }
-
-        info = CashTokenInfo.objects.filter(**info_dict)
-        cashtoken, _ = CashFungibleToken.objects.get_or_create(
-            category=serializer.validated_data['category']
+        get_cashtoken_meta_data(
+            data['category'],
+            txid=data['txid'],
+            index=data['index'],
+            is_nft=data['is_nft'],
+            commitment=data['commitment'],
+            capability=data['capability'],
+            from_bcmr_webhook=True
         )
-
-        if info.exists():
-            cashtoken.info = info.first()
-        else:
-            info = CashTokenInfo(**info_dict)
-            info.save()
-            cashtoken.info = info
-            
-        cashtoken.save()
 
         return Response(serializer.data, status=status.HTTP_200_OK)
