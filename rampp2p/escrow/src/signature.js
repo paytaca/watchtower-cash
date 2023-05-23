@@ -1,6 +1,6 @@
 const { ec: EC } = require('elliptic');
 const { padTo32Bytes } = require('elliptic').utils;
-const ACTION = process.argv[2]
+const ACTION = process.argv[2];
 
 (async () => {
     if (ACTION == 'verify') {
@@ -38,9 +38,9 @@ function verifySignature(publicKeyHex, derSignatureHex, message){
     
         // Verify the DER-encoded signature
         const isVerified = publicKey.verify(message, derSignatureHex, 'hex');
-        console.log(`{"is_verified": ${isVerified}}`)
+        console.log(`{"is_valid": ${isVerified}}`)
 
     } catch (error) {
-        console.log(`{"is_verified": false, "error": "${error}"}`)
+        console.log(`{"is_valid": false, "error": "${error}"}`)
     }
 }

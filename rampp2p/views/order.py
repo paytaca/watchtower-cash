@@ -60,28 +60,33 @@ class OrderListCreate(APIView):
 
     def post(self, request):
 
-        ad_id = request.data.get('ad', None)
-        if ad_id is None:
-            return Response({'error': 'ad_id field is None'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        payment_method_ids = request.data.get('payment_methods', None)
-        if payment_method_ids is None:
-            return Response({'error': 'payment_methods field is None'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ad_id = request.data.get('ad', None)
+            if ad_id is None:
+                raise ValidationError('ad_id field is required')
+            
+            payment_method_ids = request.data.get('payment_methods', None)
+            if payment_method_ids is None:
+                raise ValidationError('payment_methods field is required')
+                    
+            ad = Ad.objects.get(pk=ad_id)
+
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            owner = Peer.objects.get(wallet_hash=wallet_hash)
+
+        except (Ad.DoesNotExist, Peer.DoesNotExist, ValidationError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_CREATE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            auth.verify_signature(owner.public_key, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)
             self.validate_payment_methods_ownership(wallet_hash, payment_method_ids)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        ad = Ad.objects.get(pk=ad_id)
-        owner = Peer.objects.get(wallet_hash=wallet_hash)
 
         data = request.data.copy()
         data['owner'] = owner.id
