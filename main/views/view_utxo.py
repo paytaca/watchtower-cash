@@ -99,7 +99,6 @@ def _get_slp_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addres
             'txid',
             'vout',
             'amount',
-            'value',
             'tokenid',
             'token_name',
             'token_ticker',
@@ -118,7 +117,6 @@ def _get_slp_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addres
             'txid',
             'vout',
             'amount',
-            'value',
             'tokenid',
             'token_name',
             'token_ticker',
@@ -150,6 +148,7 @@ def _get_bch_utxos(query, show_address_index=False):
     qs = Transaction.objects.filter(query)
     if show_address_index:
         utxos_values = qs.annotate(
+            value=Round(F('amount') * (10 ** 8)),
             vout=F('index'),
             block=F('blockheight__number'),
             wallet_index=F('address__wallet_index'),
@@ -164,6 +163,7 @@ def _get_bch_utxos(query, show_address_index=False):
         )
     else:
         utxos_values = qs.annotate(
+            value=Round(F('amount') * (10 ** 8)),
             vout=F('index'),
             block=F('blockheight__number'),
         ).values(
