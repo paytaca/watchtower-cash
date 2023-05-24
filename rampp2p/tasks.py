@@ -144,7 +144,7 @@ def verify_tx_out(data: Dict, **kwargs):
                 break
 
         # amount must be correct
-        if match_amount < amount:
+        if match_amount != amount:
             valid = False
     
     else:
@@ -180,8 +180,6 @@ def verify_tx_out(data: Dict, **kwargs):
             output_amount = decimal.Decimal(out.get('amount')).quantize(decimal.Decimal('0.00000000'))
 
             # checking for arbiter
-            logger.warn(f'output_address: {output_address}, arbiter: {arbiter}')
-            logger.warn(f'output_address == arbiter: {output_address == arbiter}')
             if output_address == arbiter:
                 if output_amount != arbitration_fee:
                     # found address but incorrect fee
@@ -224,15 +222,15 @@ def verify_tx_out(data: Dict, **kwargs):
             (action == Transaction.ActionType.REFUND and not seller_exists))):
             valid = False
 
-    txdata = None
+    txdata = {
+        "action": action,
+        "contract_id": contract.id,
+        "txid": kwargs.get('txid'),
+    }
     status = None
     if valid:
         # update status
-        txdata = {
-            "action": action,
-            "contract_id": contract.id,
-            "txid": kwargs.get('txid'),
-        }
+        
         tx_serializer = TransactionSerializer(data=txdata)
         if tx_serializer.is_valid():
             tx_serializer = TransactionSerializer(tx_serializer.save())
