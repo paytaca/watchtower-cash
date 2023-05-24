@@ -153,12 +153,7 @@ class ZMQHandler():
                                 msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
                                 LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
-                                third_parties = client_acknowledgement(obj_id)
-                                for platform in third_parties:
-                                    if 'telegram' in platform:
-                                        message = platform[1]
-                                        chat_id = platform[2]
-                                        send_telegram_message(message, chat_id)
+                                client_acknowledgement(obj_id)
 
                             LOGGER.info(data)
                     

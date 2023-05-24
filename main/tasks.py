@@ -152,25 +152,6 @@ def client_acknowledgement(self, txid):
                                 LOGGER.error(resp)
                                 self.retry(countdown=3)
 
-                        if recipient.telegram_id:
-
-                            if transaction.token.name != 'bch':
-                                message=f"""<b>WatchTower Notification</b> ℹ️
-                                    \n Address: {transaction.address.address}
-                                    \n Token: {token_name}
-                                    \n Token ID: {token_id.split('/')[1]}
-                                    \n Amount: {transaction.amount}
-                                    \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
-                                """
-                            else:
-                                message=f"""<b>WatchTower Notification</b> ℹ️
-                                    \n Address: {transaction.address.address}
-                                    \n Amount: {transaction.amount} BCH
-                                    \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
-                                """
-
-                            args = ('telegram' , message, recipient.telegram_id)
-                            third_parties.append(args)
                             this_transaction.update(acknowledged=True)
 
                 if websocket:
@@ -536,12 +517,7 @@ def process_cashtoken_tx(
         txn_obj = Transaction.objects.get(id=obj_id)
         decimals = txn_obj.get_token_decimals()
 
-        third_parties = client_acknowledgement(obj_id)
-        for platform in third_parties:
-            if 'telegram' in platform:
-                message = platform[1]
-                chat_id = platform[2]
-                send_telegram_message(message, chat_id)
+        client_acknowledgement(obj_id)
     
     return {
         'created': created,
@@ -571,12 +547,8 @@ def query_transaction(txid, block_id, for_slp=False):
                     index=output.index
                 )            
                 if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+                    client_acknowledgement(obj_id)
+                
     else:
         transaction = NODE.BCH._get_raw_transaction(txid)
 
@@ -612,12 +584,7 @@ def query_transaction(txid, block_id, for_slp=False):
                         index=index
                     )
                     if created:
-                        third_parties = client_acknowledgement(obj_id)
-                        for platform in third_parties:
-                            if 'telegram' in platform:
-                                message = platform[1]
-                                chat_id = platform[2]
-                                send_telegram_message(message, chat_id)
+                        client_acknowledgement(obj_id)
 
 
 @shared_task(bind=True, queue='manage_blocks')
@@ -1497,12 +1464,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         tx_timestamp=tx_timestamp
                     )
                     if created:
-                        third_parties = client_acknowledgement(obj_id)
-                        for platform in third_parties:
-                            if 'telegram' in platform:
-                                message = platform[1]
-                                chat_id = platform[2]
-                                send_telegram_message(message, chat_id)
+                        client_acknowledgement(obj_id)
 
     # Parse BCH inputs
     if bch_tx is None:
@@ -1573,12 +1535,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     tx_timestamp=bch_tx['timestamp']
                 )
                 if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+                    client_acknowledgement(obj_id)
     
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
