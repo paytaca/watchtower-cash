@@ -30,8 +30,8 @@ class CreateContract(APIView):
         try:
             # signature validation
             signature, timestamp, wallet_hash = auth.get_verification_headers(request)
-            # message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            # auth.verify_signature(wallet_hash, signature, message)
+            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
+            auth.verify_signature(wallet_hash, signature, message)
 
             # permission validations
             self.validate_permissions(wallet_hash, pk)

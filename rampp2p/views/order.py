@@ -68,19 +68,15 @@ class OrderListCreate(APIView):
             payment_method_ids = request.data.get('payment_methods', None)
             if payment_method_ids is None:
                 raise ValidationError('payment_methods field is required')
-                    
-            ad = Ad.objects.get(pk=ad_id)
 
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
-            owner = Peer.objects.get(wallet_hash=wallet_hash)
-
-        except (Ad.DoesNotExist, Peer.DoesNotExist, ValidationError) as err:
+        except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         try:
             # validate signature
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
             message = ViewCode.ORDER_CREATE.value + '::' + timestamp
-            auth.verify_signature(owner.public_key, signature, message)
+            auth.verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)
@@ -88,6 +84,12 @@ class OrderListCreate(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
+        try:
+            ad = Ad.objects.get(pk=ad_id)
+            owner = Peer.objects.get(wallet_hash=wallet_hash)
+        except (Ad.DoesNotExist, Peer.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
         data = request.data.copy()
         data['owner'] = owner.id
         data['crypto_currency'] = ad.crypto_currency.id

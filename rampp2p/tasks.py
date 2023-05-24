@@ -117,20 +117,23 @@ def verify_tx_out(data: Dict, **kwargs):
     logger.warning(f'data: {data}')
     logger.warning(f'kwargs: {kwargs}')
 
+    inputs = data.get('result').get('inputs')
     outputs = data.get('result').get('outputs')
-    if outputs is None:
+    if inputs is None or outputs is None:
+        error = data.get('result').get('error')
         return notify_result(
-            {'error': 'rate limit: please try again'},
+            error,
             kwargs.get('wallet_hashes')
         )
     
     action = kwargs.get('action')
     contract = Contract.objects.get(pk=kwargs.get('contract_id'))
-    fees = utils.get_contract_fees()
-    amount = contract.order.crypto_amount + fees
     valid = True
 
     if action == Transaction.ActionType.FUND:
+        fees = utils.get_contract_fees()
+        amount = contract.order.crypto_amount + fees
+
         # one of the outputs must be the contract address
         match_amount = None
         for out in outputs:
@@ -145,10 +148,27 @@ def verify_tx_out(data: Dict, **kwargs):
             valid = False
     
     else:
+        # sender must be the contract address
+        sender_is_contract = False
+        for input in inputs:
+            if input.get('address') == contract.contract_address:
+                sender_is_contract = True
+                break
+        
+        if sender_is_contract == False:
+            result = {
+                "success": False,
+                "error": "contract address not found in tx inputs"
+            }
+            return notify_result(
+                result, 
+                kwargs.get('wallet_hashes')
+            )
+        
         arbiter, buyer, seller, servicer = utils.get_order_peer_addresses(contract.order)
-        arbitration_fee = decimal.Decimal(settings.ARBITRATION_FEE).quantize(decimal.Decimal('0.00000000'))
-        trading_fee = decimal.Decimal(settings.TRADING_FEE).quantize(decimal.Decimal('0.00000000'))
-        logger.warning(f'arbitration_fee: {arbitration_fee}, trading_fee: {trading_fee}')
+        arbitration_fee = decimal.Decimal(settings.ARBITRATION_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
+        trading_fee = decimal.Decimal(settings.TRADING_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
+        amount = contract.order.crypto_amount
 
         arbiter_exists = False
         servicer_exists = False
@@ -158,12 +178,14 @@ def verify_tx_out(data: Dict, **kwargs):
         for out in outputs:
             output_address = out.get('address')
             output_amount = decimal.Decimal(out.get('amount')).quantize(decimal.Decimal('0.00000000'))
-            logger.warning(f'output_amount: {output_amount}')
 
             # checking for arbiter
-            if output_address == arbiter:    
+            logger.warn(f'output_address: {output_address}, arbiter: {arbiter}')
+            logger.warn(f'output_address == arbiter: {output_address == arbiter}')
+            if output_address == arbiter:
                 if output_amount != arbitration_fee:
                     # found address but incorrect fee
+                    logger.warn('arbiter incorrect output_amount')
                     valid = False
                     break
                 arbiter_exists = True
@@ -172,6 +194,7 @@ def verify_tx_out(data: Dict, **kwargs):
             if output_address == servicer:    
                 if output_amount != trading_fee:
                     # found address but incorrect fee
+                    logger.warn('servicer incorrect output_amount')
                     valid = False
                     break
                 servicer_exists = True
@@ -181,6 +204,7 @@ def verify_tx_out(data: Dict, **kwargs):
                 if output_address == buyer:
                     if output_amount != amount:
                         # found address but incorrect fee
+                        logger.warn('buyer incorrect output_amount')
                         valid = False
                         break
                     buyer_exists = True
@@ -190,6 +214,7 @@ def verify_tx_out(data: Dict, **kwargs):
                 if output_address == seller:
                     if output_amount != amount:
                         # found address but incorrect fee
+                        logger.warn('seller incorrect output_amount')
                         valid = False
                         break
                     seller_exists = True
@@ -198,7 +223,7 @@ def verify_tx_out(data: Dict, **kwargs):
             ((action == Transaction.ActionType.RELEASE and not buyer_exists) or 
             (action == Transaction.ActionType.REFUND and not seller_exists))):
             valid = False
-    
+
     txdata = None
     status = None
     if valid:
