@@ -199,21 +199,41 @@ def client_acknowledgement(self, txid):
     return third_parties
 
 
-def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commitment='', capability=''):
+def get_cashtoken_meta_data(
+    category,
+    txid=None,
+    index=None,
+    is_nft=False,
+    commitment='',
+    capability='',
+    from_bcmr_webhook=False
+):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     METADATA = None
     PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
-    
+    DEFAULT_TOKEN_DETAILS = {
+        'nft': {
+            'name': 'CashToken NFT',
+            'symbol': 'CASH-NFT'
+        },
+        'fungible': {
+            'name': 'CashToken',
+            'symbol': 'CASH'
+        }
+    }
+    detail_key = 'nft' if is_nft else 'fungible'
+    default_details = DEFAULT_TOKEN_DETAILS[detail_key]
+
     response = requests.get(PAYTACA_BCMR_URL)
 
     if response.status_code == 200:
         METADATA = response.json()
 
     if METADATA:
-        name = METADATA['name']
+        name = METADATA['name'] or default_details['name']
         description = METADATA['description']
-        symbol = METADATA['symbol']
+        symbol = METADATA['symbol'] or default_details['symbol']
         decimals = METADATA['decimals']
         image_url = METADATA['icon']
         nfts = METADATA['nfts']
@@ -238,12 +258,8 @@ def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commi
             cashtoken_info.save()
     else:
         # save as default metadata/info if there is no record of metadata from BCMR
-        if is_nft:
-            name = 'CashToken NFT'
-            symbol = 'CASH-NFT'
-        else:
-            name = 'CashToken'
-            symbol = 'CASH'
+        name = default_details['name']
+        symbol = default_details['symbol']
             
         # did not use get_or_create bec of async multiple objects returned error
         cashtoken_infos = CashTokenInfo.objects.filter(name=name, symbol=symbol)
@@ -254,6 +270,10 @@ def get_cashtoken_meta_data(category, txid=None, index=None, is_nft=False, commi
             cashtoken_info.save()
 
     if is_nft:
+        if from_bcmr_webhook:
+            nfts = CashNonFungibleToken.objects.filter(category=category)
+            nfts.update(info=cashtoken_info)
+
         cashtoken, _ = CashNonFungibleToken.objects.get_or_create(
             current_index=index,
             current_txid=txid
@@ -407,9 +427,6 @@ def save_record(
                     txn_data['cashtoken_ft'] = CashFungibleToken.objects.get(category=cashtoken.category)
 
             transaction_obj, transaction_created = Transaction.objects.get_or_create(**txn_data)
-            # transaction_obj.value = int(value)
-            # transaction_obj.amount = amount
-            # transaction_obj.token = token_obj
 
             if spending_txid:
                 transaction_obj.spending_txid = spending_txid
