@@ -32,6 +32,7 @@ def verify_signature(wallet_hash, signature, message):
     #         raise ValidationError('invalid signature')
     # except Exception as err:
     #     raise ValidationError(err.args[0])
+    return
 
 def get_verification_headers(request):
     signature = request.headers.get('signature', None)

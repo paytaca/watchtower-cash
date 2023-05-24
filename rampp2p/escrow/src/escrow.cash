@@ -1,8 +1,9 @@
 pragma cashscript ^0.7.5;
 
-contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer, int tradingFee, int arbitrationFee) {
+contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer, int tradingFee, int arbitrationFee, bytes32 contractHash) {
 
-    function release(pubkey pk, sig s) {
+    function release(pubkey pk, sig s, bytes32 hash) {
+        require(hash == contractHash);
         require(hash160(pk) == arbiter || hash160(pk) == seller);
         require(checkSig(s, pk));
 
@@ -30,8 +31,8 @@ contract Escrow(bytes20 arbiter, bytes20 buyer, bytes20 seller, bytes20 servicer
         require(sendsToBuyer && sendsToServicer && sendsToArbiter);
     }
 
-    function refund(pubkey pk, sig s) {
-        
+    function refund(pubkey pk, sig s, bytes32 hash) {
+        require(hash == contractHash);
         require(hash160(pk) == arbiter);
         require(checkSig(s, pk));
 

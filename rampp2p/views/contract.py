@@ -49,6 +49,7 @@ class CreateContract(APIView):
 
         contract_obj = Contract.objects.filter(order__id=pk)
         gen_contract_address = False
+        contract_address = None
         if contract_obj.count() == 0:
             
             contract_obj = Contract.objects.create(order=order)
@@ -58,16 +59,21 @@ class CreateContract(APIView):
             contract_obj = contract_obj.first()
             if contract_obj.contract_address is None:
                 gen_contract_address = True
+            else:
+                contract_address = contract_obj.contract_address
         
+        timestamp = contract_obj.created_at.timestamp()
         if gen_contract_address:
             # execute subprocess
+            logger.warning('generating contract address')
             participants = self.get_order_participants(order)
             contract.create(
                 contract_obj.id,
                 participants,
                 arbiter_pubkey=params['arbiter_pubkey'], 
                 seller_pubkey=params['seller_pubkey'], 
-                buyer_pubkey=params['buyer_pubkey']
+                buyer_pubkey=params['buyer_pubkey'],
+                timestamp=timestamp
             )
         
         response = {
@@ -75,11 +81,15 @@ class CreateContract(APIView):
             'data': {
                 'order': order.id,
                 'contract_id': contract_obj.id,
+                'timestamp': timestamp,
                 'arbiter_address': order.arbiter.address,
                 'buyer_address': params['buyer_address'],
                 'seller_address': params['seller_address']
             }
         }
+        
+        if not (contract_address is None):
+            response['data']['contract_address'] = contract_address
         
         return Response(response, status=status.HTTP_200_OK)
 

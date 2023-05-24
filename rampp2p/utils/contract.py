@@ -11,11 +11,12 @@ logger = logging.getLogger(__name__)
 def create(contract_id: int, wallet_hashes: List, **kwargs):
     action = 'create'
     path = './rampp2p/escrow/src/'
-    command = 'node {}escrow.js contract {} {} {}'.format(
-        path,
+    command = 'node {}escrow.js contract {} {} {} {}'.format(
+        path,        
         kwargs.get('arbiter_pubkey'), 
         kwargs.get('buyer_pubkey'), 
-        kwargs.get('seller_pubkey')
+        kwargs.get('seller_pubkey'),
+        kwargs.get('timestamp'),
     )
     return tasks.execute_subprocess.apply_async(
                 (command,), 

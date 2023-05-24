@@ -3,14 +3,15 @@ const { compileFile } = require('cashc');
 const path = require('path');
 const BCHJS = require('@psf/bch-js');
 const { ec: EC } = require('elliptic');
+const fs = require('fs');
+const CryptoJS = require('crypto-js');
 
 // params
 const ACTION = process.argv[2]; // 'contract' | 'seller-release' | 'arbiter-release' | 'refund'
-
 const ARBITR_PUBKEY = process.argv[3]
 const BUYER_PUBKEY = process.argv[4]
 const SELLER_PUBKEY = process.argv[5]
-// const CONTRACT_HASH = process.argv[6]
+const TIMESTAMP = process.argv[6]
 const SERVCR_PUBKEY = process.env.SERVICER_PK
 const SERVCR_ADDR = process.env.SERVICER_ADDR
 const TRADING_FEE = parseInt(process.env.TRADING_FEE)
@@ -34,12 +35,15 @@ async function run() {
     const provider = new ElectrumNetworkProvider(NETWORK);
     const [arbiterPkh, buyerPkh, sellerPkh, servicerPkh] = getPubKeyHash();
     
+    // Generate contract hash with timestamp
+    const contractHash = await calculateSHA256('rampp2p/escrow/src/escrow.cash', TIMESTAMP)
+
     // Instantiate a new contract providing the constructor parameters
-    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE];
+    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE, contractHash];
     const contract = new Contract(artifact, contractParams, provider);
 
     if (ACTION == 'contract') {
-        data = `{"success": "True", "contract_address" : "${contract.address}"}`
+        data = `{"success": "true", "contract_address" : "${contract.address}", "hash": "${contractHash}"}`
         console.log(data)
         return 
     }
@@ -69,6 +73,27 @@ function getPubKeyHash() {
     const sellerPkh = bchjs.Crypto.hash160(Buffer.from(SELLER_PUBKEY, "hex"));
     const servicerPkh = bchjs.Crypto.hash160(Buffer.from(SERVCR_PUBKEY, "hex"));
     return [arbiterPkh, buyerPkh, sellerPkh, servicerPkh];
+}
+
+async function calculateSHA256(filePath, timestamp) {
+    const fileData = await readFile(filePath)
+    const dataWithTimestamp = fileData + timestamp
+    const hash = CryptoJS.SHA256(dataWithTimestamp);
+    const contractHash = hash.toString()
+    // console.log(`{"contract_hash": "${contractHash}"}`)
+    return contractHash
+}
+
+function readFile(filePath) {
+    return new Promise((resolve, reject) => {
+        fs.readFile(filePath, (error, fileData) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve(fileData);
+        });
+    });
 }
 
 async function getBalances(contract, arbiterAddr, recipientAddr) {
@@ -200,15 +225,4 @@ async function getBCHBalance (addr, verbose) {
         console.error('Error in getBCHBalance: ', err)
         console.log(`addr: ${addr}`)
     }
-}
-
-function verifySignature(publicKeyHex, derSignatureHex, message){
-    const ec = new EC('secp256k1');
-
-    // Load the public key from the hex representation
-    const publicKey = ec.keyFromPublic(publicKeyHex, 'hex');
-  
-    // Verify the DER-encoded signature
-    const isVerified = publicKey.verify(message, derSignatureHex, 'hex');
-    console.log('isVerified: ', isVerified)
 }
