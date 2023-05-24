@@ -381,18 +381,18 @@ class Transaction(PostgresModel):
     def __str__(self):
         return self.txid
     
-    def _get_decimals(self):
+    def get_token_decimals(self):
+        decimals = None
         if self.token.tokenid == 'wt_cashtoken_token_id':
              if self.cashtoken_ft:
-                 return self.cashtoken_ft.info.decimals
+                 if self.cashtoken_ft.info:
+                    decimals = self.cashtoken_ft.info.decimals
              if self.cashtoken_nft:
-                 return self.cashtoken_ft.info.decimals
+                 if self.cashtoken_nft.info:
+                    decimals = self.cashtoken_nft.info.decimals
         else:
-            return self.token.decimals
-    
-    @property
-    def formatted_amount(self):
-        return self.amount / (10 ** self._get_decimals())
+            decimals = self.token.decimals
+        return decimals
 
 
 class Recipient(PostgresModel):

@@ -492,6 +492,7 @@ def process_cashtoken_tx(
     if 'amount' in token_data.keys():
         amount = amount = int(token_data['amount'])
 
+    created = False
     # save nft transaction
     if 'nft' in token_data.keys():
         nft_data = token_data['nft']
@@ -530,14 +531,24 @@ def process_cashtoken_tx(
             force_create=force_create
         )
 
+    decimals = None
     if created:
+        txn_obj = Transaction.objects.get(id=obj_id)
+        decimals = txn_obj.get_token_decimals()
+
         third_parties = client_acknowledgement(obj_id)
         for platform in third_parties:
             if 'telegram' in platform:
                 message = platform[1]
                 chat_id = platform[2]
                 send_telegram_message(message, chat_id)
-
+    
+    return {
+        'created': created,
+        'token_id': 'ct/' + token_id,
+        'decimals': decimals,
+        'amount': amount or ''
+    }
 
 @shared_task(queue='query_transaction')
 def query_transaction(txid, block_id, for_slp=False):
