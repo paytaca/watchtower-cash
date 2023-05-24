@@ -324,8 +324,14 @@ class Transaction(PostgresModel):
         null=True,
         blank=True
     )
-    amount = models.BigIntegerField(default=0, db_index=True)
-    value = models.BigIntegerField(default=0, db_index=True)
+    amount = models.BigIntegerField(
+        null=True,
+        db_index=True
+    )
+    value = models.BigIntegerField(
+        default=0,
+        db_index=True
+    )
     acknowledged = models.BooleanField(null=True, default=None)
     blockheight = models.ForeignKey(
         BlockHeight,

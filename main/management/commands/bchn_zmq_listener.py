@@ -93,7 +93,7 @@ class ZMQHandler():
 
                         if 'addresses' in scriptPubKey.keys():
                             bchaddress = scriptPubKey['addresses'][0]
-                            amount = output['value']
+                            value = output['value']
                             source = self.BCHN.source
                             index = output['n']
 
@@ -103,20 +103,26 @@ class ZMQHandler():
                                     output['scriptPubKey']['addresses'][0],
                                     tx_hash,
                                     index=index,
-                                    value=(output['value'] * (10 ** 8))
+                                    value=value
                                 )
                             else:
                                 args = (
                                     'bch',
                                     bchaddress,
                                     tx_hash,
-                                    amount,
                                     source,
                                     None,
                                     index
                                 )
                                 now = timezone.now().timestamp()
-                                obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
+                                obj_id, created = save_record(
+                                    *args,
+                                    value=value,
+                                    blockheight=None,
+                                    index=index,
+                                    inputs=inputs_data,
+                                    tx_timestamp=now
+                                )
                                 has_updated_output = has_updated_output or created
                                 if created:
                                     third_parties = client_acknowledgement(obj_id)
@@ -125,7 +131,7 @@ class ZMQHandler():
                                             message = platform[1]
                                             chat_id = platform[2]
                                             send_telegram_message(message, chat_id)
-                                msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
+                                msg = f"{source}: {tx_hash} | {bchaddress} | {value} "
                                 LOGGER.info(msg)
                     
                     if has_subscribed_input and not has_updated_output:
@@ -133,7 +139,7 @@ class ZMQHandler():
                         parse_tx_wallet_histories.delay(tx_hash)
 
         except KeyboardInterrupt:
-            zmqContext.destroy()
+            self.zmqContext.destroy()
 
 class Command(BaseCommand):
     help = "Start mempool tracker using ZMQ"

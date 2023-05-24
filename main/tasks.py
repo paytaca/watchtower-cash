@@ -292,7 +292,9 @@ def get_cashtoken_meta_data(
 
 @shared_task(queue='save_record')
 def save_record(
-    token, transaction_address, transactionid, amount, source,
+    token, transaction_address, transactionid, source,
+    amount=None,
+    value=0,
     blockheightid=None,
     index=0,
     new_subscription=False,
@@ -304,8 +306,7 @@ def save_record(
     is_cashtoken=False,
     is_cashtoken_nft=False,
     capability='',
-    commitment='',
-    value=0
+    commitment=''
 ):
     """
         token                : can be tokenid (slp token) or token name (bch) or category (cashtoken)
@@ -331,9 +332,6 @@ def save_record(
         commitment           : special hex/embedded string for cashtoken NFTs
         value                : value of transaction (amount = value in BCH, value = varies on tokens)
     """
-    
-    if value <= 0:
-        value = amount * (10 ** 8)
 
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
@@ -486,19 +484,23 @@ def process_cashtoken_tx(
 ):
     token_id = token_data['category']
 
+    amount = None
+    if 'amount' in token_data.keys():
+        amount = amount = int(token_data['amount'])
+
     # save nft transaction
     if 'nft' in token_data.keys():
         nft_data = token_data['nft']
         capability = nft_data['capability']
         commitment = nft_data['commitment']
-        amount = int(token_data['amount'])
 
         obj_id, created = save_record(
             token_id,
             address,
             txid,
-            amount,
             NODE.BCH.source,
+            amount=amount,
+            value=value,
             blockheightid=block_id,
             tx_timestamp=timestamp,
             index=index,
@@ -506,24 +508,22 @@ def process_cashtoken_tx(
             is_cashtoken_nft=True,
             capability=capability,
             commitment=commitment,
-            force_create=force_create,
-            value=value
+            force_create=force_create
         )
     else:
         # save fungible token transaction
-        amount = int(token_data['amount'])
         obj_id, created = save_record(
             token_id,
             address,
             txid,
-            amount,
             NODE.BCH.source,
+            amount=amount,
+            value=value,
             blockheightid=block_id,
             tx_timestamp=timestamp,
             index=index,
             is_cashtoken=True,
-            force_create=force_create,
-            value=value
+            force_create=force_create
         )
 
     if created:
@@ -549,8 +549,8 @@ def query_transaction(txid, block_id, for_slp=False):
                     token_id,
                     'simpleledger:%s' % output.slp_token.address,
                     txid,
-                    amount,
                     NODE.SLP.source,
+                    amount=amount,
                     blockheightid=block_id,
                     tx_timestamp=transaction.timestamp,
                     index=output.index
@@ -582,7 +582,7 @@ def query_transaction(txid, block_id, for_slp=False):
                         block_id=block_id,
                         index=index,
                         timestamp=transaction['time'],
-                        value=(output['value'] * (10 ** 8))
+                        value=output['value']
                     )
                 else:
                     # save bch transaction
@@ -590,8 +590,8 @@ def query_transaction(txid, block_id, for_slp=False):
                         'bch',
                         address,
                         txid,
-                        output['value'],
                         NODE.BCH.source,
+                        value=output['value'],
                         blockheightid=block_id,
                         tx_timestamp=transaction['time'],
                         index=index
@@ -711,22 +711,23 @@ def get_bch_utxos(self, address):
                 token_id = token_data['category']
                 is_cashtoken = True
 
+                amount = None
+                if 'amount' in token_data.keys():
+                    amount = int(token_data['amount'])
+
                 if 'nft' in token_data.keys():
                     is_nft = True
-                    amount = 1
                     capability = token_data['nft']['capability']
                     commitment = token_data['nft']['commitment']
-                else:
-                    amount = int(token_data['amount'])
             else:
-                amount = output['value'] / (10 ** 8)
+                value = output['value']
                 token_id = 'bch'
 
             block, created = BlockHeight.objects.get_or_create(number=block)
             transaction_obj = Transaction.objects.filter(
                 txid=tx_hash,
                 address__address=address,
-                amount=amount,
+                value=value,
                 index=index
             )
             if not transaction_obj.exists():
@@ -734,8 +735,9 @@ def get_bch_utxos(self, address):
                     token_id,
                     address,
                     tx_hash,
-                    amount,
                     NODE.BCH.source,
+                    value=value,
+                    amount=amount,
                     blockheightid=block.id,
                     index=index,
                     new_subscription=True,
