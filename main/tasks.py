@@ -292,7 +292,10 @@ def get_cashtoken_meta_data(
 
 @shared_task(queue='save_record')
 def save_record(
-    token, transaction_address, transactionid, source,
+    token,
+    transaction_address,
+    transactionid,
+    source,
     amount=None,
     value=0,
     blockheightid=None,
@@ -463,8 +466,9 @@ def save_record(
                     tx_input["token"],
                     tx_input["address"],
                     tx_input["outpoint_txid"],
-                    tx_input["amount"],
                     source,
+                    amount=tx_input["amount"],
+                    value=tx_input["value"],
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
                     force_create=True
@@ -543,7 +547,7 @@ def query_transaction(txid, block_id, for_slp=False):
         for output in transaction.outputs:
             if output.slp_token.token_id:
                 token_id = bytearray(output.slp_token.token_id).hex()
-                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                amount = output.slp_token.amount
                 # save slp transaction
                 obj_id, created = save_record(
                     token_id,
@@ -790,7 +794,7 @@ def get_slp_utxos(self, address):
                 tx_hash = bytearray(hash[::-1]).hex()
                 index = output.outpoint.index
                 token_id = bytearray(output.slp_token.token_id).hex() 
-                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                amount = output.slp_token.amount
                 block = output.block_height
                 
                 block, _ = BlockHeight.objects.get_or_create(number=block)
@@ -809,13 +813,15 @@ def get_slp_utxos(self, address):
                         token_id,
                         address,
                         tx_hash,
-                        amount,
-                        NODE.SLP.source,
-                        block.id,
-                        index,
-                        True
+                        NODE.SLP.source
                     )
-                    txn_id, created = save_record(*args)
+                    txn_id, created = save_record(
+                        *args,
+                        amount=amount,
+                        blockheightid=block.id,
+                        index=index,
+                        new_subscription=True
+                    )
                     transaction_obj = Transaction.objects.filter(id=txn_id)
                     
                     if created:
@@ -1470,12 +1476,15 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         slp_tx['token_id'],
                         tx_output['address'],
                         slp_tx['txid'],
-                        tx_output['amount'],
                         NODE.SLP.source,
-                        blockheight_id,
-                        tx_output['index']
                     )
-                    obj_id, created = save_record(*args, tx_timestamp=tx_timestamp)
+                    obj_id, created = save_record(
+                        *args,
+                        amount=tx_output['amount'],
+                        blockheightid=blockheight_id,
+                        index=tx_output['index']
+                        tx_timestamp=tx_timestamp
+                    )
                     if created:
                         third_parties = client_acknowledgement(obj_id)
                         for platform in third_parties:
@@ -1542,13 +1551,16 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     'bch',
                     tx_output['address'],
                     bch_tx['txid'],
-                    value,
-                    NODE.BCH.source,
-                    blockheight_id,
-                    tx_output['index']
+                    NODE.BCH.source
                 )
                 
-                obj_id, created = save_record(*args, tx_timestamp=bch_tx['timestamp'])
+                obj_id, created = save_record(
+                    *args,
+                    value=value,
+                    blockheightid=blockheight_id,
+                    index=tx_output['index'],
+                    tx_timestamp=bch_tx['timestamp']
+                )
                 if created:
                     third_parties = client_acknowledgement(obj_id)
                     for platform in third_parties:

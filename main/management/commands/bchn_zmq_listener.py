@@ -63,7 +63,7 @@ class ZMQHandler():
 
                     for _input in inputs:
                         txid = _input['txid']
-                        amount = _input['value']
+                        value = _input['value']
                         index = _input['vout']
 
                         ancestor_tx = self.BCHN._get_raw_transaction(txid)
@@ -83,7 +83,7 @@ class ZMQHandler():
                                 inputs_data.append({
                                     "token": "bch",
                                     "address": address,
-                                    "amount": amount,
+                                    "value": value,
                                     "outpoint_txid": txid,
                                     "outpoint_index": index,
                                 })
