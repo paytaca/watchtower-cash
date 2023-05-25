@@ -53,12 +53,12 @@ def _get_ct_balance(query, multiple_tokens=False):
 def _get_bch_balance(query):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
-    dust = 546 / (10 ** 8)
-    query = query & Q(amount__gt=dust) & Q(token__name='bch')
+    dust = 546 # / (10 ** 8)
+    query = query & Q(value__gt=dust) & Q(token__name='bch')
     qs = Transaction.objects.filter(query)
     qs_count = qs.count()
     qs_balance = qs.aggregate(
-        balance=Coalesce(Sum('amount'), 0)
+        balance=Coalesce(Sum('value'), 0)
     )
     return qs_balance, qs_count
 
@@ -171,6 +171,7 @@ class Balance(APIView):
             query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance, qs_count = _get_bch_balance(query)
             bch_balance = qs_balance['balance'] or 0
+            bch_balance = bch_balance / (10 ** 8)
 
             data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
             data['spendable'] = satoshi_to_bch(data['spendable'])
@@ -228,14 +229,15 @@ class Balance(APIView):
                 
                 if is_bch:
                     qs_balance, qs_count = _get_bch_balance(query)
-                    bch_balance = qs_balance['balance']
+                    bch_balance = qs_balance['balance'] or 0
+                    bch_balance = bch_balance / (10 ** 8)
 
                     data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
                     data['spendable'] = satoshi_to_bch(data['spendable'])
                     data['spendable'] = max(data['spendable'], 0)
                     data['spendable'] = self.truncate(data['spendable'], 8)
 
-                    data['balance'] = self.truncate(qs_balance['balance'], 8)
+                    data['balance'] = self.truncate(bch_balance, 8)
                     data['valid'] = True
                 else:
                     if is_cashtoken_nft:
@@ -293,8 +295,8 @@ class SpendableBalance(APIView):
             qs_balance, qs_count = _get_bch_balance(query)
 
         qs_balance = qs_balance['balance'] or 0
-        bch_balance = qs_balance
-        qs_balance = round(qs_balance, 8)
+        bch_balance = qs_balance / (10 ** 8)
+        bch_balance = round(bch_balance, 8)
 
         serializer = serializers.TxFeeCalculatorSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -306,11 +308,10 @@ class SpendableBalance(APIView):
         tx_fee_kwargs['p2pkh_input_count'] += qs_count
         tx_fee = get_tx_fee_sats(**tx_fee_kwargs)
 
-
         data['spendable'] = int(bch_to_satoshi(bch_balance)) - round(tx_fee)
         data['spendable'] = satoshi_to_bch(data['spendable'])
         data['spendable'] = max(data['spendable'], 0)
 
-        data['balance'] = qs_balance
+        data['balance'] = bch_balance
 
         return Response(data, status=200)
