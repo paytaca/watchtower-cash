@@ -92,7 +92,7 @@ class BCHN(object):
                     data['token_data'] = tx_output['tokenData']
                 transaction['outputs'].append(data)
 
-        transaction['tx_fee'] = txn['fee'] * (10 ** 8)
+        transaction['tx_fee'] = int(txn['fee'] * (10 ** 8))
         return transaction
 
     def broadcast_transaction(self, hex_str):

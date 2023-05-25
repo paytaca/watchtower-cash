@@ -67,7 +67,7 @@ class ZMQHandler():
 
                     for _input in inputs:
                         txid = _input['txid']
-                        value = _input['value']
+                        value = int(_input['value'] * (10 ** 8))
                         index = _input['vout']
 
                         ancestor_tx = self.BCHN._get_raw_transaction(txid)
@@ -97,7 +97,7 @@ class ZMQHandler():
 
                         if 'addresses' in scriptPubKey.keys():
                             bchaddress = scriptPubKey['addresses'][0]
-                            value = output['value']
+                            value = int(output['value'] * (10 ** 8))
                             source = self.BCHN.source
                             index = output['n']
 
