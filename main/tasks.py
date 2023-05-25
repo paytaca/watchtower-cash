@@ -1460,7 +1460,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         *args,
                         amount=tx_output['amount'],
                         blockheightid=blockheight_id,
-                        index=tx_output['index']
+                        index=tx_output['index'],
                         tx_timestamp=tx_timestamp
                     )
                     if created:

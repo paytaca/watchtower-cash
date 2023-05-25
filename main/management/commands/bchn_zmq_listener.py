@@ -16,7 +16,6 @@ from main.models import (
 from main.tasks import (
     save_record,
     client_acknowledgement,
-    send_telegram_message,
     parse_tx_wallet_histories,
     process_cashtoken_tx,
 )
@@ -129,7 +128,7 @@ class ZMQHandler():
                                 obj_id, created = save_record(
                                     *args,
                                     value=value,
-                                    blockheight=None,
+                                    blockheightid=None,
                                     index=index,
                                     inputs=inputs_data,
                                     tx_timestamp=now
@@ -155,7 +154,7 @@ class ZMQHandler():
 
                                 client_acknowledgement(obj_id)
 
-                            LOGGER.info(data)
+                                LOGGER.info(data)
                     
                     if has_subscribed_input and not has_updated_output:
                         LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
