@@ -14,3 +14,4 @@ class ContractSerializer(serializers.ModelSerializer):
             'contract_address',
             'created_at'
         ]
+        depth = 1

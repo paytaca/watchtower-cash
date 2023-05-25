@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
+from django.http import Http404
 
 from rampp2p import utils
 from rampp2p.utils import contract, auth, transaction
@@ -15,14 +16,54 @@ from rampp2p.models import (
     Order,
     Peer,
     Contract,
-    Transaction
+    Transaction,
+    Recipient
 )
 
-from rampp2p.serializers import TransactionSerializer
+from rampp2p.serializers import (
+    ContractSerializer, 
+    TransactionSerializer, 
+    RecipientSerializer
+)
 
 import logging
 logger = logging.getLogger(__name__)
-import json
+
+class ContractList(APIView):
+    def get(self, request):
+        queryset = Contract.objects.all()
+
+        # TODO pagination
+
+        serializer = ContractSerializer(queryset, many=True)
+        return Response(serializer.data, status.HTTP_200_OK)
+
+class ContractDetail(APIView):
+    def get_object(self, pk):
+        try:
+            return Contract.objects.get(pk=pk)
+        except Contract.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk):
+        contract_instance = self.get_object(pk)
+        contract_serializer = ContractSerializer(contract_instance)
+
+        transactions = Transaction.objects.filter(contract__id=contract_instance.id)
+
+        tx_data = []
+        for index, tx in enumerate(transactions):
+            tx_outputs = Recipient.objects.filter(transaction__id=tx.id)
+            data = {}
+            data[index] = TransactionSerializer(tx).data
+            data[index]["outputs"] = RecipientSerializer(tx_outputs, many=True).data
+            tx_data.append(data)
+
+        response = {
+            "contract": contract_serializer.data,
+            "transactions": tx_data
+        }
+        return Response(response, status=status.HTTP_200_OK)
 
 class CreateContract(APIView):
     def post(self, request, pk):

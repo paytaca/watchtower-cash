@@ -39,6 +39,8 @@ urlpatterns = [
     path('order/appeal/<int:pk>/cancel', AppealCancel.as_view(), name='appeal-cancel'),
     path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
     path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
+    path('order/contract/', ContractList.as_view(), name='contract-list'),
+    path('order/contract/<int:pk>', ContractDetail.as_view(), name='contract-detail'),
 
     path('hash-contract', HashContract.as_view(), name='hash-contract'),
     path('verify-signature', VerifySignature.as_view(), name='verify-signature'),

@@ -4,8 +4,13 @@ from asgiref.sync import async_to_sync
 from django.conf import settings
 from typing import Dict
 
-from rampp2p.serializers import TransactionSerializer
-from rampp2p.models import Transaction, StatusType, Contract
+from rampp2p.serializers import TransactionSerializer, RecipientSerializer
+from rampp2p.models import (
+    Transaction, 
+    StatusType, 
+    Contract,
+    Recipient
+)
 from rampp2p import utils
 import subprocess
 import json
@@ -112,14 +117,15 @@ def notify_result(data, wallet_hashes):
 @shared_task(queue='rampp2p__contract_execution')
 def verify_tx_out(data: Dict, **kwargs):
     '''
-    Callback function of subprocess execution that retrieves transaction outputs
+    The callback function after subprocess execution that retrieves transaction outputs.
+    Verifies that transaction input, outputs, and amounts are correct.
     '''
     logger.warning(f'data: {data}')
     logger.warning(f'kwargs: {kwargs}')
 
-    inputs = data.get('result').get('inputs')
-    outputs = data.get('result').get('outputs')
-    if inputs is None or outputs is None:
+    tx_inputs = data.get('result').get('inputs')
+    tx_outputs = data.get('result').get('outputs')
+    if tx_inputs is None or tx_outputs is None:
         error = data.get('result').get('error')
         return notify_result(
             error,
@@ -129,18 +135,27 @@ def verify_tx_out(data: Dict, **kwargs):
     action = kwargs.get('action')
     contract = Contract.objects.get(pk=kwargs.get('contract_id'))
     valid = True
+    error_msg = ""
 
+    outputs = []
     if action == Transaction.ActionType.FUND:
         fees = utils.get_contract_fees()
         amount = contract.order.crypto_amount + fees
 
         # one of the outputs must be the contract address
         match_amount = None
-        for out in outputs:
-            if out.get('address') == contract.contract_address:
+        for out in tx_outputs:
+            address = out.get('address')
+            if address == contract.contract_address:
+
                 # convert value to decimal (8 decimal places)
                 match_amount = decimal.Decimal(out.get('amount'))
                 match_amount = match_amount.quantize(decimal.Decimal('0.00000000'))
+
+                outputs.append({
+                    "address": address,
+                    "amount": str(match_amount)
+                })
                 break
 
         # amount must be correct
@@ -150,8 +165,9 @@ def verify_tx_out(data: Dict, **kwargs):
     else:
         # sender must be the contract address
         sender_is_contract = False
-        for input in inputs:
-            if input.get('address') == contract.contract_address:
+        for input in tx_inputs:
+            address = input.get('address')
+            if address == contract.contract_address:
                 sender_is_contract = True
                 break
         
@@ -169,21 +185,27 @@ def verify_tx_out(data: Dict, **kwargs):
         arbitration_fee = decimal.Decimal(settings.ARBITRATION_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
         trading_fee = decimal.Decimal(settings.TRADING_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
         amount = contract.order.crypto_amount
-
+        
         arbiter_exists = False
         servicer_exists = False
         buyer_exists = False
         seller_exists = False
 
-        for out in outputs:
+        for out in tx_outputs:
             output_address = out.get('address')
             output_amount = decimal.Decimal(out.get('amount')).quantize(decimal.Decimal('0.00000000'))
 
+            outputs.append({
+                "address": output_address,
+                "amount": str(output_amount)
+            })
+            
             # checking for arbiter
             if output_address == arbiter:
                 if output_amount != arbitration_fee:
                     # found address but incorrect fee
-                    logger.warn('arbiter incorrect output_amount')
+                    error_msg = 'arbiter incorrect output_amount'
+                    logger.warn(error_msg)
                     valid = False
                     break
                 arbiter_exists = True
@@ -192,7 +214,8 @@ def verify_tx_out(data: Dict, **kwargs):
             if output_address == servicer:    
                 if output_amount != trading_fee:
                     # found address but incorrect fee
-                    logger.warn('servicer incorrect output_amount')
+                    error_msg = 'servicer incorrect output_amount'
+                    logger.warn(error_msg)
                     valid = False
                     break
                 servicer_exists = True
@@ -202,7 +225,8 @@ def verify_tx_out(data: Dict, **kwargs):
                 if output_address == buyer:
                     if output_amount != amount:
                         # found address but incorrect fee
-                        logger.warn('buyer incorrect output_amount')
+                        error_msg = 'buyer incorrect output_amount'
+                        logger.warn(error_msg)
                         valid = False
                         break
                     buyer_exists = True
@@ -212,7 +236,8 @@ def verify_tx_out(data: Dict, **kwargs):
                 if output_address == seller:
                     if output_amount != amount:
                         # found address but incorrect fee
-                        logger.warn('seller incorrect output_amount')
+                        error_msg = 'seller incorrect output_amount'
+                        logger.warn(error_msg)
                         valid = False
                         break
                     seller_exists = True
@@ -222,19 +247,49 @@ def verify_tx_out(data: Dict, **kwargs):
             (action == Transaction.ActionType.REFUND and not seller_exists))):
             valid = False
 
+    # Initialize transaction details
     txdata = {
         "action": action,
-        "contract_id": contract.id,
         "txid": kwargs.get('txid'),
+        "contract": contract.id
     }
+
+    result = {
+        "success": valid
+    }
+
     status = None
     if valid:
-        # update status
-        
+        # Save transaction details        
         tx_serializer = TransactionSerializer(data=txdata)
         if tx_serializer.is_valid():
             tx_serializer = TransactionSerializer(tx_serializer.save())
+        
+        logger.warn(f"tx_serializer.data: {tx_serializer.data}")
+        tx_id = tx_serializer.data.get("id")
 
+        # Save transaction outputs
+        saved_outputs = []
+        for output in outputs:
+            out_data = {
+                "transaction": tx_id,
+                "address": output.get('address'),
+                "amount": output.get('amount')
+            }
+            logger.warning(f'out_data: {out_data}')
+            recipient_serializer = RecipientSerializer(data=out_data)
+            logger.warn(f'recipient_serializer.is_valid(): {recipient_serializer.is_valid()}')
+            if recipient_serializer.is_valid():
+                recipient_serializer = RecipientSerializer(recipient_serializer.save())
+                saved_outputs.append(recipient_serializer.data)
+            else:
+                logger.warn(f'recipient_serializer.errors: {recipient_serializer.errors}')
+            
+            # outputs[index]["amount"] = str(output.get('amount'))
+
+        logger.warn(f"saved_outputs: {saved_outputs}")
+
+        # Update order status
         status_type = None
         if action == Transaction.ActionType.REFUND:
             status_type = StatusType.REFUNDED
@@ -246,11 +301,12 @@ def verify_tx_out(data: Dict, **kwargs):
         logger.warning(f'status_type: {status_type}')
         status = utils.update_order_status(contract.order.id, status_type).data
 
-    result = {
-        "success": valid,
-        "status": status,
-        "txdata": txdata
-    }
+        txdata["outputs"] = outputs
+        result["status"] = status
+        result["txdata"] = txdata
+    else:
+        result["error"] = error_msg
+    
     logger.warning(f'result: {result}')
 
     return notify_result(
