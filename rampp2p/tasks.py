@@ -269,26 +269,18 @@ def verify_tx_out(data: Dict, **kwargs):
         tx_id = tx_serializer.data.get("id")
 
         # Save transaction outputs
-        saved_outputs = []
         for output in outputs:
             out_data = {
                 "transaction": tx_id,
                 "address": output.get('address'),
                 "amount": output.get('amount')
             }
-            logger.warning(f'out_data: {out_data}')
             recipient_serializer = RecipientSerializer(data=out_data)
-            logger.warn(f'recipient_serializer.is_valid(): {recipient_serializer.is_valid()}')
             if recipient_serializer.is_valid():
                 recipient_serializer = RecipientSerializer(recipient_serializer.save())
-                saved_outputs.append(recipient_serializer.data)
             else:
                 logger.warn(f'recipient_serializer.errors: {recipient_serializer.errors}')
-            
-            # outputs[index]["amount"] = str(output.get('amount'))
-
-        logger.warn(f"saved_outputs: {saved_outputs}")
-
+        
         # Update order status
         status_type = None
         if action == Transaction.ActionType.REFUND:
@@ -298,7 +290,6 @@ def verify_tx_out(data: Dict, **kwargs):
         if action == Transaction.ActionType.FUND:
             status_type = StatusType.CONFIRMED
 
-        logger.warning(f'status_type: {status_type}')
         status = utils.update_order_status(contract.order.id, status_type).data
 
         txdata["outputs"] = outputs
