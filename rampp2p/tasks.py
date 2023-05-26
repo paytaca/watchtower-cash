@@ -8,8 +8,7 @@ from rampp2p.serializers import TransactionSerializer, RecipientSerializer
 from rampp2p.models import (
     Transaction, 
     StatusType, 
-    Contract,
-    Recipient
+    Contract
 )
 from rampp2p import utils
 import subprocess

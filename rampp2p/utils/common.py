@@ -1,10 +1,31 @@
 from django.core.exceptions import ValidationError
-from rampp2p.models import Order, TradeType
+from rampp2p.models import Order, TradeType, Status, StatusType
+from django.db.models import Q
 from rampp2p.serializers import StatusSerializer
 from django.conf import settings
+from datetime import datetime, timedelta
 
 import logging
 logger = logging.getLogger(__name__)
+
+def is_order_expired(order_pk: int):
+    '''
+    Checks if the order has expired
+    '''
+    # get the created_at field of order's CONF status
+    time_duration = Order.objects.get(pk=order_pk).time_duration
+    start_time = Status.objects.filter(
+            Q(order__id=order_pk) & Q(status=StatusType.CONFIRMED)
+        ).values('created_at').first()
+    
+    logger.warn(f'start_time: {start_time}')
+    current_time = datetime.now()
+    elapsed_time = current_time - start_time
+
+    # check if elapsed time is greater than the time limit
+    if elapsed_time >= time_duration:
+        return True
+    return False
 
 def update_order_status(order_id, status):
     serializer = StatusSerializer(data={

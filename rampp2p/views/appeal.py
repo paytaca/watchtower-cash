@@ -1,7 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
-from django.http import Http404
 from django.core.exceptions import ValidationError
 
 from rampp2p.models import (
@@ -16,8 +15,17 @@ from rampp2p.serializers import StatusSerializer, AppealSerializer
 from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
 from rampp2p.utils import auth
+from rampp2p import utils
 
 class AppealCancel(APIView):
+    '''
+    Submits an appeal to cancel the order and refund the escrowed funds from the smart contract 
+    back to the seller.
+
+    Requirements:
+        (1) The creator of appeal must be the seller.
+        (2) The order's latest status must be 'CNF' (StatusType.CONFIRMED)
+    '''
     def post(self, request, pk):
         try:
             # validate signature
@@ -78,6 +86,13 @@ class AppealCancel(APIView):
            raise ValidationError('caller must be buyer')
     
 class AppealRelease(APIView):
+    '''
+    Submits an appeal to release the escrowed funds from the smart contract to the buyer.
+    Requirements:
+        (1) The creator of appeal must be the buyer.
+        (2) The order must be expired.
+        (3) The latest order status must be 'PD' (StatusType.PAID)
+    '''
     def post(self, request, pk):
         try:
             # validate signature
@@ -91,11 +106,13 @@ class AppealRelease(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
+            if not utils.is_order_expired(pk):
+                raise ValidationError('order is not expired yet')
             validate_status_inst_count(StatusType.RELEASE_APPEALED, pk)
             validate_status_progression(StatusType.RELEASE_APPEALED, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         # create and Appeal record with type=RELEASE
         submit_appeal(AppealType.RELEASE, wallet_hash, pk)
 
@@ -137,6 +154,13 @@ class AppealRelease(APIView):
            raise ValidationError('caller must be buyer')
 
 class AppealRefund(APIView):
+    '''
+    Submits an appeal to refund the escrowed funds from the smart contract to the seller.
+    Requirements:
+        (1) The creator of appeal must be the seller.
+        (2) The order must be expired.
+        (3) The latest order status must be 'PD_PN' (StatusType.PAID_PENDING)
+    '''
     def post(self, request, pk):
         try:
             # validate signature
@@ -150,6 +174,8 @@ class AppealRefund(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
+            if not utils.is_order_expired(pk):
+                raise ValidationError('order is not expired yet')
             validate_status_inst_count(StatusType.REFUND_APPEALED, pk)
             validate_status_progression(StatusType.REFUND_APPEALED, pk)
         except ValidationError as err:

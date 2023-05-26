@@ -5,7 +5,8 @@ from rampp2p.models import (
   CryptoCurrency, 
   FiatCurrency,
   Peer,
-  Ad
+  Ad,
+  DurationChoices
 )
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -18,6 +19,7 @@ class OrderSerializer(serializers.ModelSerializer):
       'crypto_currency',
       'fiat_currency',
       'crypto_amount',
+      'time_duration_choice',
       'locked_price',
       'arbiter',
       'payment_methods'
@@ -31,6 +33,7 @@ class OrderWriteSerializer(serializers.ModelSerializer):
     arbiter = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
     locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
+    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices,required=True)
     class Meta:
         model = Order
         fields = ['ad', 
@@ -39,5 +42,6 @@ class OrderWriteSerializer(serializers.ModelSerializer):
                   'fiat_currency',
                   'arbiter',
                   'locked_price',
+                  'time_duration_choice',
                   'crypto_amount',
                   'payment_methods']

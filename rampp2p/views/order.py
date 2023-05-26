@@ -94,6 +94,7 @@ class OrderListCreate(APIView):
         data['owner'] = owner.id
         data['crypto_currency'] = ad.crypto_currency.id
         data['fiat_currency'] = ad.fiat_currency.id
+        data['time_duration_choice'] = ad.time_duration_choice
         serializer = OrderWriteSerializer(data=data)
 
         if serializer.is_valid():

@@ -33,9 +33,9 @@ class AdListCreate(APIView):
 
     try:
         # validate signature
-        pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
         message = ViewCode.AD_CREATE.value + '::' + timestamp
-        auth.verify_signature(wallet_hash, pubkey, signature, message)
+        auth.verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_payment_methods_ownership(wallet_hash, payment_method_ids)
@@ -94,9 +94,9 @@ class AdDetail(APIView):
 
     try:
         # validate signature
-        pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
         message = ViewCode.AD_UPDATE.value + '::' + timestamp
-        auth.verify_signature(wallet_hash, pubkey, signature, message)
+        auth.verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)
@@ -110,7 +110,7 @@ class AdDetail(APIView):
     trade_floor = request.data.get('trade_floor', None)
     trade_ceiling = request.data.get('trade_ceiling', None)
     crypto_amount = request.data.get('crypto_amount', None)
-    time_limit = request.data.get('time_limit', None)
+    time_duration = request.data.get('time_duration', None)
     
     ad = self.get_object(pk)
 
@@ -148,8 +148,8 @@ class AdDetail(APIView):
     if crypto_amount is not None:
         ad.crypto_amount = crypto_amount
 
-    if time_limit is not None:
-        ad.time_limit = time_limit
+    if time_duration is not None:
+        ad.time_duration_choice = time_duration
 
     ad.save()
     serializer = AdSerializer(ad)
@@ -159,9 +159,9 @@ class AdDetail(APIView):
 
     try:
         # validate signature
-        pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
         message = ViewCode.AD_DELETE.value + '::' + timestamp
-        auth.verify_signature(wallet_hash, pubkey, signature, message)
+        auth.verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)

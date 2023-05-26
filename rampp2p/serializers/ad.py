@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models.ad import Ad
+from ..models.ad import Ad, DurationChoices
 from ..models.peer import Peer
 from ..models.currency import FiatCurrency, CryptoCurrency
 from ..models.payment import PaymentMethod
@@ -24,7 +24,7 @@ class AdSerializer(serializers.ModelSerializer):
       'trade_floor',
       'trade_ceiling',
       'crypto_amount',
-      'time_limit',
+      'time_duration_choice',
       'payment_methods',
       'modified_at',
     ]
@@ -41,7 +41,7 @@ class AdWriteSerializer(serializers.ModelSerializer):
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
     crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
-
+    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices,required=True)
     class Meta:
         model = Ad
         fields = [
@@ -56,7 +56,7 @@ class AdWriteSerializer(serializers.ModelSerializer):
             'trade_floor',
             'trade_ceiling',
             'crypto_amount',
-            'time_limit',
+            'time_duration_choice',
             'payment_methods',
             'modified_at',
         ]

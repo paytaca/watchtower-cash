@@ -1,9 +1,17 @@
 from django.db import models
 from django.utils import timezone
-
+from datetime import timedelta
 from .peer import Peer
 from .currency import FiatCurrency, CryptoCurrency
 from .payment import PaymentMethod
+
+class DurationChoices(models.IntegerChoices):
+    FIFTEEN_MINUTES =   15, '15 minutes'
+    THIRTY_MINUTES  =   30, '30 minutes'
+    ONE_HOUR        =   60, '1 hour',
+    FIVE_HOURS      =   300, '5 hours',
+    TWELVE_HOURS    =   720, '12 hours',
+    ONE_DAY         =   1440, '1 day'
 
 class TradeType(models.TextChoices):
     SELL = 'SELL'
@@ -24,7 +32,7 @@ class Ad(models.Model):
     trade_floor = models.FloatField()
     trade_ceiling = models.FloatField()
     crypto_amount = models.FloatField()
-    time_limit = models.IntegerField()
+    time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
@@ -36,3 +44,9 @@ class Ad(models.Model):
         self.is_deleted = True
         self.deleted_at = timezone.now()
         self.save()
+    
+    @property
+    def time_duration(self):
+        # convert the duration choice to a timedelta object
+        minutes = self.time_limit_choice
+        return timedelta(minutes=minutes)
