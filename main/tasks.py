@@ -215,9 +215,9 @@ def get_cashtoken_meta_data(
         name = METADATA['name'] or default_details['name']
         description = METADATA['description']
         symbol = METADATA['symbol'] or default_details['symbol']
-        decimals = METADATA['decimals']
-        image_url = METADATA['icon']
-        nfts = METADATA['nfts']
+        decimals = METADATA.get('decimals') or 0
+        image_url = METADATA.get('icon')
+        nfts = METADATA.get('nfts') or {}
 
         data = {
             'name': name,
