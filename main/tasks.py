@@ -204,8 +204,8 @@ def get_cashtoken_meta_data(
     txid=None,
     index=None,
     is_nft=False,
-    commitment='',
-    capability='',
+    commitment=None,
+    capability=None,
     from_bcmr_webhook=False
 ):
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
@@ -234,9 +234,35 @@ def get_cashtoken_meta_data(
         name = METADATA['name'] or default_details['name']
         description = METADATA['description']
         symbol = METADATA['symbol'] or default_details['symbol']
-        decimals = METADATA.get('decimals') or 0
-        image_url = METADATA.get('icon')
-        nfts = METADATA.get('nfts') or {}
+        decimals = METADATA['decimals']
+        image_url = METADATA['uris']['icon']
+        
+        # nft_details field for FT are {}
+        # nft_details field for NFTs are:
+        #   if minting: nft_details = children types
+        #   else: nft_details = child type details (to include extensions and other data)
+        nfts = None
+
+        if is_nft:
+            _capability = capability.lower()
+            types = METADATA['types']
+
+            if _capability == 'minting':
+                nfts = types
+            else:
+                if types:
+                    if commitment in types.keys():
+                        nft = types[commitment]
+                        nft_keys = nft.keys()
+
+                        if 'name' in nft_keys:
+                            name = nft['name']
+                        if 'description' in nft_keys:
+                            description = nft['description']
+                        if 'uris' in nft_keys:
+                            uris = nft['uris']
+                            if 'icon' in uris.keys():
+                                image_url = uris['icon']
 
         data = {
             'name': name,
@@ -271,7 +297,10 @@ def get_cashtoken_meta_data(
 
     if is_nft:
         if from_bcmr_webhook:
-            nfts = CashNonFungibleToken.objects.filter(category=category)
+            nfts = CashNonFungibleToken.objects.filter(
+                category=category,
+                commitment=commitment
+            )
             nfts.update(info=cashtoken_info)
 
         cashtoken, _ = CashNonFungibleToken.objects.get_or_create(
