@@ -324,8 +324,14 @@ class Transaction(PostgresModel):
         null=True,
         blank=True
     )
-    amount = models.FloatField(default=0, db_index=True)
-    value = models.PositiveIntegerField(default=0)
+    amount = models.BigIntegerField(
+        null=True,
+        db_index=True
+    )
+    value = models.BigIntegerField(
+        default=0,
+        db_index=True
+    )
     acknowledged = models.BooleanField(null=True, default=None)
     blockheight = models.ForeignKey(
         BlockHeight,
@@ -374,6 +380,19 @@ class Transaction(PostgresModel):
 
     def __str__(self):
         return self.txid
+    
+    def get_token_decimals(self):
+        decimals = None
+        if self.token.tokenid == 'wt_cashtoken_token_id':
+             if self.cashtoken_ft:
+                 if self.cashtoken_ft.info:
+                    decimals = self.cashtoken_ft.info.decimals
+             if self.cashtoken_nft:
+                 if self.cashtoken_nft.info:
+                    decimals = self.cashtoken_nft.info.decimals
+        else:
+            decimals = self.token.decimals
+        return decimals
 
 
 class Recipient(PostgresModel):

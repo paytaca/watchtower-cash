@@ -54,7 +54,7 @@ def run():
             has_subscribed_input = False
             has_updated_output = False
 
-            inputs_added = False
+            # inputs_added = False
             inputs_data = [
                 # { "index": 0, "token": "bch", "address": "", "amount": 0,  "outpoint_txid": "", "outpoint_index": 0 }
             ]
@@ -69,15 +69,16 @@ def run():
 
                 token_id = None
                 address = None
-                amount = 0
+                amount = None
+                value = 0
                 if _input.slp_token.token_id:
                     token_id = bytearray(_input.slp_token.token_id).hex() 
                     address = 'simpleledger:' + _input.address
-                    amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                    amount = output.slp_token.amount
                 else:
                     token_id = "bch"
                     address = 'bitcoincash:' + _input.address
-                    amount = _input.value / (10 ** 8)
+                    value = _input.value
 
 
                 subscription = Subscription.objects.filter(
@@ -90,6 +91,7 @@ def run():
                         "token": token_id,
                         "address": address,
                         "amount": amount,
+                        "value": value,
                         "outpoint_txid": txid,
                         "outpoint_index": index,
                     })
@@ -102,12 +104,16 @@ def run():
                         'bch',
                         bchaddress,
                         tx_hash,
-                        amount,
-                        source,
-                        None,
-                        output.index
+                        source
                     )
-                    obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
+                    obj_id, created = save_record(
+                        *args,
+                        value=value,
+                        blockheightid=None,
+                        index=output.index,
+                        inputs=inputs_data,
+                        tx_timestamp=now
+                    )
                     has_updated_output = has_updated_output or created
 
                     if created:
@@ -121,31 +127,29 @@ def run():
                         msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
                         LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
-
-                        third_parties = client_acknowledgement(obj_id)
-                        for platform in third_parties:
-                            if 'telegram' in platform:
-                                message = platform[1]
-                                chat_id = platform[2]
-                                send_telegram_message(message, chat_id)
+                        client_acknowledgement(obj_id)
 
                     msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
                     LOGGER.info(msg)
 
                 if output.slp_token.token_id:
                     token_id = bytearray(output.slp_token.token_id).hex() 
-                    amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                    amount = output.slp_token.amount
                     slp_address = 'simpleledger:' + output.slp_token.address
                     args = (
                         token_id,
                         slp_address,
-                        tx_hash,
-                        amount,
-                        source,
-                        None,
-                        output.index
+                        tx_hash
+                        source
                     )
-                    obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
+                    obj_id, created = save_record(
+                        *args,
+                        amount=amount,
+                        blockheightid=None,
+                        index=output.index,
+                        inputs=inputs_data,
+                        tx_timestamp=now
+                    )
                     has_updated_output = has_updated_output or created
 
                     if created:
@@ -159,12 +163,7 @@ def run():
                         }
                         mqtt_client.publish(f"transactions/{slp_address}", json.dumps(data), qos=1)
 
-                        third_parties = client_acknowledgement(obj_id)
-                        for platform in third_parties:
-                            if 'telegram' in platform:
-                                message = platform[1]
-                                chat_id = platform[2]
-                                send_telegram_message(message, chat_id)
+                        client_acknowledgement(obj_id)
                     
                     if output.slp_token.is_mint_baton:
                         token_obj = Token.objects.filter(tokenid=token_id).first()

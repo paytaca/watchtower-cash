@@ -16,7 +16,6 @@ from main.models import (
 from main.tasks import (
     save_record,
     client_acknowledgement,
-    send_telegram_message,
     parse_tx_wallet_histories,
     process_cashtoken_tx,
 )
@@ -24,7 +23,12 @@ from main.tasks import (
 import logging
 import binascii
 import zmq
-import requests
+import paho.mqtt.client as mqtt
+
+
+mqtt_client = mqtt.Client()
+mqtt_client.connect("docker-host", 1883, 10)
+mqtt_client.loop_start()
 
 
 LOGGER = logging.getLogger(__name__)
@@ -63,7 +67,7 @@ class ZMQHandler():
 
                     for _input in inputs:
                         txid = _input['txid']
-                        amount = _input['value']
+                        value = int(_input['value'] * (10 ** 8))
                         index = _input['vout']
 
                         ancestor_tx = self.BCHN._get_raw_transaction(txid)
@@ -83,7 +87,7 @@ class ZMQHandler():
                                 inputs_data.append({
                                     "token": "bch",
                                     "address": address,
-                                    "amount": amount,
+                                    "value": value,
                                     "outpoint_txid": txid,
                                     "outpoint_index": index,
                                 })
@@ -93,47 +97,71 @@ class ZMQHandler():
 
                         if 'addresses' in scriptPubKey.keys():
                             bchaddress = scriptPubKey['addresses'][0]
-                            amount = output['value']
+                            value = int(output['value'] * (10 ** 8))
                             source = self.BCHN.source
                             index = output['n']
 
+                            token_id = 'bch'
+                            amount = ''
+                            decimals = None
+                            created = False
                             if 'tokenData' in output.keys():
-                                process_cashtoken_tx(
+                                saved_token_data = process_cashtoken_tx(
                                     output['tokenData'],
                                     output['scriptPubKey']['addresses'][0],
                                     tx_hash,
                                     index=index,
-                                    value=(output['value'] * (10 ** 8))
+                                    value=value
                                 )
+                                token_id = saved_token_data['token_id']
+                                decimals = saved_token_data['decimals']
+                                amount = str(saved_token_data['amount'])
+                                created = saved_token_data['created']
                             else:
                                 args = (
-                                    'bch',
+                                    token_id,
                                     bchaddress,
                                     tx_hash,
-                                    amount,
-                                    source,
-                                    None,
-                                    index
+                                    source
                                 )
                                 now = timezone.now().timestamp()
-                                obj_id, created = save_record(*args, inputs=inputs_data, tx_timestamp=now)
+                                obj_id, created = save_record(
+                                    *args,
+                                    value=value,
+                                    blockheightid=None,
+                                    index=index,
+                                    inputs=inputs_data,
+                                    tx_timestamp=now
+                                )
                                 has_updated_output = has_updated_output or created
-                                if created:
-                                    third_parties = client_acknowledgement(obj_id)
-                                    for platform in third_parties:
-                                        if 'telegram' in platform:
-                                            message = platform[1]
-                                            chat_id = platform[2]
-                                            send_telegram_message(message, chat_id)
-                                msg = f"{source}: {tx_hash} | {bchaddress} | {amount} "
-                                LOGGER.info(msg)
+
+                                txn_obj = Transaction.objects.get(id=obj_id)
+                                decimals = txn_obj.get_token_decimals()
+                                
+                            if created:
+                                # Publish MQTT message
+                                data = {
+                                    'txid': tx_hash,
+                                    'recipient': bchaddress,
+                                    'token': token_id,
+                                    'decimals': decimals,
+                                    'amount': amount,
+                                    'value': value
+                                }
+                                LOGGER.info('Sending MQTT message: ' + str(data))
+                                msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                                LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+
+                                client_acknowledgement(obj_id)
+
+                                LOGGER.info(data)
                     
                     if has_subscribed_input and not has_updated_output:
                         LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
                         parse_tx_wallet_histories.delay(tx_hash)
 
         except KeyboardInterrupt:
-            zmqContext.destroy()
+            self.zmqContext.destroy()
 
 class Command(BaseCommand):
     help = "Start mempool tracker using ZMQ"

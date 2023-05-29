@@ -152,25 +152,6 @@ def client_acknowledgement(self, txid):
                                 LOGGER.error(resp)
                                 self.retry(countdown=3)
 
-                        if recipient.telegram_id:
-
-                            if transaction.token.name != 'bch':
-                                message=f"""<b>WatchTower Notification</b> ℹ️
-                                    \n Address: {transaction.address.address}
-                                    \n Token: {token_name}
-                                    \n Token ID: {token_id.split('/')[1]}
-                                    \n Amount: {transaction.amount}
-                                    \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
-                                """
-                            else:
-                                message=f"""<b>WatchTower Notification</b> ℹ️
-                                    \n Address: {transaction.address.address}
-                                    \n Amount: {transaction.amount} BCH
-                                    \nhttps://explorer.bitcoin.com/bch/tx/{transaction.txid}
-                                """
-
-                            args = ('telegram' , message, recipient.telegram_id)
-                            third_parties.append(args)
                             this_transaction.update(acknowledged=True)
 
                 if websocket:
@@ -263,7 +244,6 @@ def get_cashtoken_meta_data(
                             uris = nft['uris']
                             if 'icon' in uris.keys():
                                 image_url = uris['icon']
-
         data = {
             'name': name,
             'description': description,
@@ -321,7 +301,12 @@ def get_cashtoken_meta_data(
 
 @shared_task(queue='save_record')
 def save_record(
-    token, transaction_address, transactionid, amount, source,
+    token,
+    transaction_address,
+    transactionid,
+    source,
+    amount=None,
+    value=0,
     blockheightid=None,
     index=0,
     new_subscription=False,
@@ -333,8 +318,7 @@ def save_record(
     is_cashtoken=False,
     is_cashtoken_nft=False,
     capability='',
-    commitment='',
-    value=0
+    commitment=''
 ):
     """
         token                : can be tokenid (slp token) or token name (bch) or category (cashtoken)
@@ -360,9 +344,6 @@ def save_record(
         commitment           : special hex/embedded string for cashtoken NFTs
         value                : value of transaction (amount = value in BCH, value = varies on tokens)
     """
-    
-    if value <= 0:
-        value = amount * (10 ** 8)
 
     subscription = Subscription.objects.filter(
         address__address=transaction_address             
@@ -494,8 +475,9 @@ def save_record(
                     tx_input["token"],
                     tx_input["address"],
                     tx_input["outpoint_txid"],
-                    tx_input["amount"],
                     source,
+                    amount=tx_input["amount"],
+                    value=tx_input["value"],
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
                     force_create=True
@@ -515,19 +497,24 @@ def process_cashtoken_tx(
 ):
     token_id = token_data['category']
 
+    amount = None
+    if 'amount' in token_data.keys():
+        amount = amount = int(token_data['amount'])
+
+    created = False
     # save nft transaction
     if 'nft' in token_data.keys():
         nft_data = token_data['nft']
         capability = nft_data['capability']
         commitment = nft_data['commitment']
-        amount = int(token_data['amount'])
 
         obj_id, created = save_record(
             token_id,
             address,
             txid,
-            amount,
             NODE.BCH.source,
+            amount=amount,
+            value=value,
             blockheightid=block_id,
             tx_timestamp=timestamp,
             index=index,
@@ -535,34 +522,37 @@ def process_cashtoken_tx(
             is_cashtoken_nft=True,
             capability=capability,
             commitment=commitment,
-            force_create=force_create,
-            value=value
+            force_create=force_create
         )
     else:
         # save fungible token transaction
-        amount = int(token_data['amount'])
         obj_id, created = save_record(
             token_id,
             address,
             txid,
-            amount,
             NODE.BCH.source,
+            amount=amount,
+            value=value,
             blockheightid=block_id,
             tx_timestamp=timestamp,
             index=index,
             is_cashtoken=True,
-            force_create=force_create,
-            value=value
+            force_create=force_create
         )
 
+    decimals = None
     if created:
-        third_parties = client_acknowledgement(obj_id)
-        for platform in third_parties:
-            if 'telegram' in platform:
-                message = platform[1]
-                chat_id = platform[2]
-                send_telegram_message(message, chat_id)
+        txn_obj = Transaction.objects.get(id=obj_id)
+        decimals = txn_obj.get_token_decimals()
 
+        client_acknowledgement(obj_id)
+    
+    return {
+        'created': created,
+        'token_id': 'ct/' + token_id,
+        'decimals': decimals,
+        'amount': amount or ''
+    }
 
 @shared_task(queue='query_transaction')
 def query_transaction(txid, block_id, for_slp=False):
@@ -572,25 +562,21 @@ def query_transaction(txid, block_id, for_slp=False):
         for output in transaction.outputs:
             if output.slp_token.token_id:
                 token_id = bytearray(output.slp_token.token_id).hex()
-                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                amount = output.slp_token.amount
                 # save slp transaction
                 obj_id, created = save_record(
                     token_id,
                     'simpleledger:%s' % output.slp_token.address,
                     txid,
-                    amount,
                     NODE.SLP.source,
+                    amount=amount,
                     blockheightid=block_id,
                     tx_timestamp=transaction.timestamp,
                     index=output.index
                 )            
                 if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+                    client_acknowledgement(obj_id)
+                
     else:
         transaction = NODE.BCH._get_raw_transaction(txid)
 
@@ -611,7 +597,7 @@ def query_transaction(txid, block_id, for_slp=False):
                         block_id=block_id,
                         index=index,
                         timestamp=transaction['time'],
-                        value=(output['value'] * (10 ** 8))
+                        value=output['value']
                     )
                 else:
                     # save bch transaction
@@ -619,19 +605,14 @@ def query_transaction(txid, block_id, for_slp=False):
                         'bch',
                         address,
                         txid,
-                        output['value'],
                         NODE.BCH.source,
+                        value=output['value'],
                         blockheightid=block_id,
                         tx_timestamp=transaction['time'],
                         index=index
                     )
                     if created:
-                        third_parties = client_acknowledgement(obj_id)
-                        for platform in third_parties:
-                            if 'telegram' in platform:
-                                message = platform[1]
-                                chat_id = platform[2]
-                                send_telegram_message(message, chat_id)
+                        client_acknowledgement(obj_id)
 
 
 @shared_task(bind=True, queue='manage_blocks')
@@ -740,22 +721,23 @@ def get_bch_utxos(self, address):
                 token_id = token_data['category']
                 is_cashtoken = True
 
+                amount = None
+                if 'amount' in token_data.keys():
+                    amount = int(token_data['amount'])
+
                 if 'nft' in token_data.keys():
                     is_nft = True
-                    amount = 1
                     capability = token_data['nft']['capability']
                     commitment = token_data['nft']['commitment']
-                else:
-                    amount = int(token_data['amount'])
             else:
-                amount = output['value'] / (10 ** 8)
+                value = output['value']
                 token_id = 'bch'
 
             block, created = BlockHeight.objects.get_or_create(number=block)
             transaction_obj = Transaction.objects.filter(
                 txid=tx_hash,
                 address__address=address,
-                amount=amount,
+                value=value,
                 index=index
             )
             if not transaction_obj.exists():
@@ -763,8 +745,9 @@ def get_bch_utxos(self, address):
                     token_id,
                     address,
                     tx_hash,
-                    amount,
                     NODE.BCH.source,
+                    value=value,
+                    amount=amount,
                     blockheightid=block.id,
                     index=index,
                     new_subscription=True,
@@ -817,7 +800,7 @@ def get_slp_utxos(self, address):
                 tx_hash = bytearray(hash[::-1]).hex()
                 index = output.outpoint.index
                 token_id = bytearray(output.slp_token.token_id).hex() 
-                amount = output.slp_token.amount / (10 ** output.slp_token.decimals)
+                amount = output.slp_token.amount
                 block = output.block_height
                 
                 block, _ = BlockHeight.objects.get_or_create(number=block)
@@ -836,13 +819,15 @@ def get_slp_utxos(self, address):
                         token_id,
                         address,
                         tx_hash,
-                        amount,
-                        NODE.SLP.source,
-                        block.id,
-                        index,
-                        True
+                        NODE.SLP.source
                     )
-                    txn_id, created = save_record(*args)
+                    txn_id, created = save_record(
+                        *args,
+                        amount=amount,
+                        blockheightid=block.id,
+                        index=index,
+                        new_subscription=True
+                    )
                     transaction_obj = Transaction.objects.filter(id=txn_id)
                     
                     if created:
@@ -1497,19 +1482,17 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                         slp_tx['token_id'],
                         tx_output['address'],
                         slp_tx['txid'],
-                        tx_output['amount'],
                         NODE.SLP.source,
-                        blockheight_id,
-                        tx_output['index']
                     )
-                    obj_id, created = save_record(*args, tx_timestamp=tx_timestamp)
+                    obj_id, created = save_record(
+                        *args,
+                        amount=tx_output['amount'],
+                        blockheightid=blockheight_id,
+                        index=tx_output['index'],
+                        tx_timestamp=tx_timestamp
+                    )
                     if created:
-                        third_parties = client_acknowledgement(obj_id)
-                        for platform in third_parties:
-                            if 'telegram' in platform:
-                                message = platform[1]
-                                chat_id = platform[2]
-                                send_telegram_message(message, chat_id)
+                        client_acknowledgement(obj_id)
 
     # Parse BCH inputs
     if bch_tx is None:
@@ -1569,20 +1552,18 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     'bch',
                     tx_output['address'],
                     bch_tx['txid'],
-                    value,
-                    NODE.BCH.source,
-                    blockheight_id,
-                    tx_output['index']
+                    NODE.BCH.source
                 )
                 
-                obj_id, created = save_record(*args, tx_timestamp=bch_tx['timestamp'])
+                obj_id, created = save_record(
+                    *args,
+                    value=value,
+                    blockheightid=blockheight_id,
+                    index=tx_output['index'],
+                    tx_timestamp=bch_tx['timestamp']
+                )
                 if created:
-                    third_parties = client_acknowledgement(obj_id)
-                    for platform in third_parties:
-                        if 'telegram' in platform:
-                            message = platform[1]
-                            chat_id = platform[2]
-                            send_telegram_message(message, chat_id)
+                    client_acknowledgement(obj_id)
     
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
