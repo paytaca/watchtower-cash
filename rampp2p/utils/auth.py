@@ -2,6 +2,9 @@ from django.core.signing import Signer
 from django.core.exceptions import ValidationError
 from rampp2p.models import Peer
 from rampp2p import tasks
+import subprocess
+import json
+import re
 
 import logging
 logger = logging.getLogger(__name__)

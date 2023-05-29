@@ -4,16 +4,14 @@ const bchjs = new BCHJS({
     apiToken: process.env.BCHJS_TOKEN
 })
 
-run();
-
-async function run() {
+(async () => {
     try {
         const txid = process.argv[2]
         const result = await bchjs.Electrumx.txData(txid)
         const vin = result.details.vin
         const vout = result.details.vout
 
-        // inputs
+        // get tx inputs
         let inputs = []
         for (let i = 0; i < vin.length; i++) {
             let prevOut = vin[i]
@@ -26,7 +24,7 @@ async function run() {
             })
         }
 
-        // outputs
+        // get tx outputs
         let outputs = []
         for (let i = 0; i < vout.length; i++) {
             let address = vout[i].scriptPubKey.addresses[0]
@@ -44,4 +42,4 @@ async function run() {
     } catch (error) {
         console.log(JSON.stringify(error))
     }
-}
+})();

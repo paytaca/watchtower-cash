@@ -22,7 +22,7 @@ def is_order_expired(order_pk: int):
     current_time = datetime.now()
     elapsed_time = current_time - start_time
 
-    # check if elapsed time is greater than the time limit
+    # order is expired if elapsed time is greater than the time duration
     if elapsed_time >= time_duration:
         return True
     return False

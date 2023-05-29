@@ -5,7 +5,6 @@ from rampp2p import tasks
 import hashlib
 import ecdsa
 from ecdsa.util import sigdecode_der
-from binascii import unhexlify
 
 import logging
 logger = logging.getLogger(__name__)
