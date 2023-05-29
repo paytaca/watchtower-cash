@@ -42,7 +42,10 @@ class HistoryParser(object):
         )
         return outputs, ct_fungible_outputs, ct_nft_outputs
 
-    def get_total_amount(self, qs):
+    def get_total_amount(self, qs, is_bch=True):
+        if is_bch:
+            value_sum = qs.aggregate(Sum('value'))['value__sum']
+            return value_sum / (10 ** 8)
         return qs.aggregate(Sum('amount'))['amount__sum']
 
     def get_record_type(self, diff):
@@ -81,12 +84,12 @@ class HistoryParser(object):
         if outputs.exists():
             total_outputs = self.get_total_amount(outputs)
         if ct_outputs.exists():
-            total_ct_outputs = self.get_total_amount(ct_outputs)
+            total_ct_outputs = self.get_total_amount(ct_outputs, is_bch=False)
 
         if inputs.exists():
             total_inputs = self.get_total_amount(inputs)
         if ct_inputs.exists():
-            total_ct_inputs = self.get_total_amount(ct_inputs)
+            total_ct_inputs = self.get_total_amount(ct_inputs, is_bch=False)
 
         diff = self.get_txn_diff(total_outputs, total_inputs)
         diff_ct = self.get_txn_diff(total_ct_outputs, total_ct_inputs)
