@@ -220,8 +220,8 @@ def get_cashtoken_meta_data(
         
         # nft_details field for FT are {}
         # nft_details field for NFTs are:
-        #   if minting: nft_details = children types
-        #   else: nft_details = child type details (to include extensions and other data)
+        #   if minting: nft_details = children types or {}
+        #   else: nft_details = child type details (to include extensions and other data) or {}
         nfts = None
 
         if is_nft:
@@ -233,15 +233,15 @@ def get_cashtoken_meta_data(
             else:
                 if types:
                     if commitment in types.keys():
-                        nft = types[commitment]
-                        nft_keys = nft.keys()
+                        nfts = types[commitment]
+                        nft_keys = nfts.keys()
 
                         if 'name' in nft_keys:
-                            name = nft['name']
+                            name = nfts['name']
                         if 'description' in nft_keys:
-                            description = nft['description']
+                            description = nfts['description']
                         if 'uris' in nft_keys:
-                            uris = nft['uris']
+                            uris = nfts['uris']
                             if 'icon' in uris.keys():
                                 image_url = uris['icon']
         data = {
@@ -426,8 +426,6 @@ def save_record(
                 'txid': transactionid,
                 'address': address_obj,
                 'token': token_obj,
-                'amount': amount,
-                'value': int(value),
                 'index': index
             }
             if is_cashtoken:
@@ -437,6 +435,8 @@ def save_record(
                     txn_data['cashtoken_ft'] = CashFungibleToken.objects.get(category=cashtoken.category)
 
             transaction_obj, transaction_created = Transaction.objects.get_or_create(**txn_data)
+            transaction_obj.amount = amount
+            transaction_obj.value = int(value)
 
             if spending_txid:
                 transaction_obj.spending_txid = spending_txid
@@ -597,7 +597,7 @@ def query_transaction(txid, block_id, for_slp=False):
                         block_id=block_id,
                         index=index,
                         timestamp=transaction['time'],
-                        value=output['value']
+                        value=int(output['value'] * (10 ** 8))
                     )
                 else:
                     # save bch transaction
