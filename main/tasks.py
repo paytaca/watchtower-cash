@@ -77,7 +77,7 @@ def client_acknowledgement(self, txid):
 
             
         subscriptions = Subscription.objects.filter(
-            address=address             
+            address=address
         )
 
         senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
@@ -220,8 +220,8 @@ def get_cashtoken_meta_data(
         
         # nft_details field for FT are {}
         # nft_details field for NFTs are:
-        #   if minting: nft_details = children types
-        #   else: nft_details = child type details (to include extensions and other data)
+        #   if minting: nft_details = children types or {}
+        #   else: nft_details = child type details (to include extensions and other data) or {}
         nfts = None
 
         if is_nft:
@@ -233,15 +233,15 @@ def get_cashtoken_meta_data(
             else:
                 if types:
                     if commitment in types.keys():
-                        nft = types[commitment]
-                        nft_keys = nft.keys()
+                        nfts = types[commitment]
+                        nft_keys = nfts.keys()
 
                         if 'name' in nft_keys:
-                            name = nft['name']
+                            name = nfts['name']
                         if 'description' in nft_keys:
-                            description = nft['description']
+                            description = nfts['description']
                         if 'uris' in nft_keys:
-                            uris = nft['uris']
+                            uris = nfts['uris']
                             if 'icon' in uris.keys():
                                 image_url = uris['icon']
         data = {
@@ -426,8 +426,6 @@ def save_record(
                 'txid': transactionid,
                 'address': address_obj,
                 'token': token_obj,
-                'amount': amount,
-                'value': int(value),
                 'index': index
             }
             if is_cashtoken:
@@ -437,6 +435,8 @@ def save_record(
                     txn_data['cashtoken_ft'] = CashFungibleToken.objects.get(category=cashtoken.category)
 
             transaction_obj, transaction_created = Transaction.objects.get_or_create(**txn_data)
+            transaction_obj.amount = amount
+            transaction_obj.value = int(value)
 
             if spending_txid:
                 transaction_obj.spending_txid = spending_txid
@@ -588,6 +588,7 @@ def query_transaction(txid, block_id, for_slp=False):
 
             if 'addresses' in output['scriptPubKey'].keys():
                 address = output['scriptPubKey']['addresses'][0]
+                value = int(output['value'] * (10 ** 8))
                 
                 if 'tokenData' in output.keys():
                     process_cashtoken_tx(
@@ -597,7 +598,7 @@ def query_transaction(txid, block_id, for_slp=False):
                         block_id=block_id,
                         index=index,
                         timestamp=transaction['time'],
-                        value=output['value']
+                        value=value
                     )
                 else:
                     # save bch transaction
@@ -606,7 +607,7 @@ def query_transaction(txid, block_id, for_slp=False):
                         address,
                         txid,
                         NODE.BCH.source,
-                        value=output['value'],
+                        value=value,
                         blockheightid=block_id,
                         tx_timestamp=transaction['time'],
                         index=index
@@ -715,13 +716,14 @@ def get_bch_utxos(self, address):
             is_cashtoken = False
             commitment = ''
             capability = ''
+            value = output['value']
+            amount = None
 
             if 'token_data' in output.keys():
                 token_data = output['token_data']
                 token_id = token_data['category']
                 is_cashtoken = True
 
-                amount = None
                 if 'amount' in token_data.keys():
                     amount = int(token_data['amount'])
 
@@ -730,7 +732,6 @@ def get_bch_utxos(self, address):
                     capability = token_data['nft']['capability']
                     commitment = token_data['nft']['commitment']
             else:
-                value = output['value']
                 token_id = 'bch'
 
             block, created = BlockHeight.objects.get_or_create(number=block)
@@ -1667,9 +1668,8 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
                 'bch',
                 output_address,
                 txid,
-                outputs[output_index][1],
                 NODE.BCH.source,
-                None,
+                value=outputs[output_index][1],
                 index=output_index,
                 tx_timestamp=tx_timestamp,
                 force_create=True

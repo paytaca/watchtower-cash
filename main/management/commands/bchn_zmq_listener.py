@@ -105,6 +105,7 @@ class ZMQHandler():
                             amount = ''
                             decimals = None
                             created = False
+                            
                             if 'tokenData' in output.keys():
                                 saved_token_data = process_cashtoken_tx(
                                     output['tokenData'],
