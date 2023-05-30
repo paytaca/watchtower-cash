@@ -233,7 +233,7 @@ class UTXO(APIView):
         if is_slp_address(slpaddress) or is_token_addr:
             data['address'] = slpaddress
             if is_token_addr:
-                data['address'] = bch_address_converter(tokenaddress, to_token_addr=False)
+                data['address'] = token_addr_converter(tokenaddress, to_token_addr=False)
 
             if tokenid or category:
                 query = Q(address__address=data['address']) & Q(spent=False)

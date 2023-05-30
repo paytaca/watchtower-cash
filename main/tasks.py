@@ -573,10 +573,9 @@ def query_transaction(txid, block_id, for_slp=False):
                     blockheightid=block_id,
                     tx_timestamp=transaction.timestamp,
                     index=output.index
-                )            
+                ) 
                 if created:
                     client_acknowledgement(obj_id)
-                
     else:
         transaction = NODE.BCH._get_raw_transaction(txid)
 

@@ -206,7 +206,7 @@ class Address(PostgresModel):
                 wallet.wallet_type = 'slp'
             elif is_bch_address(self.address) or is_token_address(self.address):
                 if is_token_address(self.address):
-                    self.address = bch_address_converter(self.address, to_token_addr=False)
+                    self.address = token_addr_converter(self.address, to_token_addr=False)
                 wallet.wallet_type = 'bch'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'
@@ -218,7 +218,7 @@ class Address(PostgresModel):
     @property
     def token_address(self):
         if is_bch_address(self.address):
-            return bch_address_converter(self.address)
+            return token_addr_converter(self.address)
         return None
 
 class CashTokenInfo(models.Model):

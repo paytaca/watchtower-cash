@@ -94,7 +94,7 @@ def new_subscription(**kwargs):
                         recipient.save()
 
                     if is_token_address(address):
-                        address = bch_address_converter(address, to_token_addr=False)
+                        address = token_addr_converter(address, to_token_addr=False)
                             
                     address_obj, _ = Address.objects.get_or_create(address=address)
                     if project:

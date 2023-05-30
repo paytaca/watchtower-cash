@@ -8,6 +8,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.conf import settings
 
+from main.utils.queries.bitcoin_verde import *
 from main.utils.queries.bchn import *
 from main.models import (
     Transaction,
@@ -44,6 +45,17 @@ class ZMQHandler():
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)
         self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "hashtx")
         self.zmqSubSocket.connect(self.url)
+    
+    def has_op_ret(self, first_txn_output):
+        scriptPubKey = first_txn_output['scriptPubKey']
+        asm = scriptPubKey['asm']
+        out_type = scriptPubKey['type']
+
+        main_op_code = asm.split(' ')[0].upper()
+        is_op_ret = main_op_code == 'OP_RETURN'
+        is_null_data = out_type == 'nulldata'
+
+        return is_op_ret and is_null_data
 
     def start(self):
         try:
@@ -64,6 +76,17 @@ class ZMQHandler():
                     has_subscribed_input = False
                     has_updated_output = False
                     inputs_data = []
+
+
+                    # check op returns to parse SLP transactions using Bitcoin Verde
+                    has_op_ret = self.has_op_ret(outputs[0])
+                    if has_op_ret:
+                        bcv = BitcoinVerde()
+                        is_valid_slp_txn = bcv.validate_transaction(tx_hash)
+                        
+                        if is_valid_slp_txn:
+                            pass
+
 
                     for _input in inputs:
                         txid = _input['txid']
