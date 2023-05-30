@@ -378,8 +378,8 @@ def save_record(
                 token_obj, created = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
                 
                 if created:
-                    token_obj.name = 'CashToken'
-                    token_obj.token_ticker = 'CASH'
+                    token_obj.name = 'CashToken - '
+                    token_obj.token_ticker = 'CT-' + token_obj.tokenid[0:6]
                     token_obj.save()
                 
                 # get cashtoken metadata always in case there are changes on BCMR
