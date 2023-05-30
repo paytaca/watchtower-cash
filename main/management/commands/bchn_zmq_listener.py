@@ -136,8 +136,9 @@ class ZMQHandler():
                                 )
                                 has_updated_output = has_updated_output or created
 
-                                txn_obj = Transaction.objects.get(id=obj_id)
-                                decimals = txn_obj.get_token_decimals()
+                                if obj_id:
+                                    txn_obj = Transaction.objects.get(id=obj_id)
+                                    decimals = txn_obj.get_token_decimals()
                                 
                             if created:
                                 # Publish MQTT message

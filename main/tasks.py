@@ -476,7 +476,7 @@ def save_record(
                     tx_input["address"],
                     tx_input["outpoint_txid"],
                     source,
-                    amount=tx_input["amount"],
+                    # amount=tx_input["amount"],
                     value=tx_input["value"],
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
