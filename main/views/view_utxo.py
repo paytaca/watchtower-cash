@@ -39,7 +39,7 @@ class Round(Func):
     template = "%(function)s(%(expressions)s::numeric, 0)"
 
 
-def _get_slp_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_address_index=False, minting_baton=None):
+def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_address_index=False, minting_baton=None):
     qs = Transaction.objects.filter(query)
     if minting_baton is not None and not is_cashtoken:
         subquery = Exists(
@@ -134,7 +134,7 @@ def _get_slp_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addres
 
 
 def _get_ct_utxos(query, is_cashtoken_nft=None, show_address_index=False):
-    return _get_slp_utxos(
+    return _get_token_utxos(
         query,
         is_cashtoken=True,
         is_cashtoken_nft=is_cashtoken_nft,
@@ -279,7 +279,7 @@ class UTXO(APIView):
             if is_token_addr:
                 utxos_values = _get_ct_utxos(query, is_cashtoken_nft=is_cashtoken_nft)
             else:
-                utxos_values = _get_slp_utxos(query, minting_baton=baton)
+                utxos_values = _get_token_utxos(query, minting_baton=baton)
 
         if wallet_hash:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
@@ -291,7 +291,7 @@ class UTXO(APIView):
                 else:
                     query = Q(wallet=wallet) & Q(spent=False)
 
-                utxos_values = _get_slp_utxos(query, show_address_index=True, minting_baton=baton)
+                utxos_values = _get_token_utxos(query, show_address_index=True, minting_baton=baton)
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
