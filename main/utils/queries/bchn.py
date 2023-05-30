@@ -116,6 +116,19 @@ class BCHN(object):
         if 'tokenData' in previous_out.keys():
             return previous_out['tokenData']
         return None
+    
+    def _recvall(self, sock):
+        BUFF_SIZE = 4096
+        data = bytearray()
+        while True:
+            packet = sock.recv(BUFF_SIZE)
+            if not packet:  # Important!!
+                break
+            if len(packet) < BUFF_SIZE:
+                data.extend(packet)
+                break
+            data.extend(packet)
+        return data
 
     def get_utxos(self, address):
         data = '{ "id": 194, "method": "blockchain.address.listunspent",'
@@ -126,8 +139,7 @@ class BCHN(object):
             self.fulcrum['port']
         )) as sock:
             sock.send(data.encode('utf-8')+b'\n')
-            # TODO: accomodate data if it goes beyond max bytes of python socket (99999999)
-            response_byte = sock.recv(99999999)
+            response_byte = self._recvall(sock)
             response = response_byte.decode()
-            response = json.loads(response)
+            response = json.loads(response.strip())
             return response['result']
