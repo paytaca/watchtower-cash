@@ -79,13 +79,27 @@ class ZMQHandler():
 
 
                     # check op returns to parse SLP transactions using Bitcoin Verde
-                    has_op_ret = self.has_op_ret(outputs[0])
-                    if has_op_ret:
+
+                    if self.has_op_ret(outputs[0]):
                         bcv = BitcoinVerde()
                         is_valid_slp_txn = bcv.validate_transaction(tx_hash)
                         
                         if is_valid_slp_txn:
-                            pass
+                            txn = bcv.get_transaction(tx_hash)
+
+                            for output in txn['outputs']:
+                                obj_id, created = save_record(
+                                    output['token_id'],
+                                    output['address'],
+                                    tx_hash,
+                                    bcv.source,
+                                    amount=output['amount'],
+                                    index=output['index'],
+                                    tx_timestamp=txn['timestamp']
+                                )
+
+                                if created:
+                                    client_acknowledgement(obj_id)
 
 
                     for _input in inputs:

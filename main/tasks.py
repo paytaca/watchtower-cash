@@ -555,63 +555,65 @@ def process_cashtoken_tx(
     }
 
 @shared_task(queue='query_transaction')
-def query_transaction(txid, block_id, for_slp=False):
-    if for_slp:
-        transaction = NODE.SLP._get_raw_transaction(txid)
+def query_transaction(txid, block_id):
+    transaction = NODE.BCH._get_raw_transaction(txid)
 
-        for output in transaction.outputs:
-            if output.slp_token.token_id:
-                token_id = bytearray(output.slp_token.token_id).hex()
-                amount = output.slp_token.amount
-                # save slp transaction
-                obj_id, created = save_record(
-                    token_id,
-                    'simpleledger:%s' % output.slp_token.address,
+    if 'coinbase' in transaction['vin'][0].keys():
+        return
+
+    for output in transaction['vout']:
+        index = output['n']
+
+        if 'addresses' in output['scriptPubKey'].keys():
+            address = output['scriptPubKey']['addresses'][0]
+            
+            if 'tokenData' in output.keys():
+                process_cashtoken_tx(
+                    output['tokenData'],
+                    address,
                     txid,
-                    NODE.SLP.source,
-                    amount=amount,
+                    block_id=block_id,
+                    index=index,
+                    timestamp=transaction['time'],
+                    value=output['value']
+                )
+            else:
+                # save bch transaction
+                obj_id, created = save_record(
+                    'bch',
+                    address,
+                    txid,
+                    NODE.BCH.source,
+                    value=output['value'],
                     blockheightid=block_id,
-                    tx_timestamp=transaction.timestamp,
-                    index=output.index
-                ) 
+                    tx_timestamp=transaction['time'],
+                    index=index
+                )
                 if created:
                     client_acknowledgement(obj_id)
-    else:
-        transaction = NODE.BCH._get_raw_transaction(txid)
 
-        if 'coinbase' in transaction['vin'][0].keys():
-            return
 
-        for output in transaction['vout']:
-            index = output['n']
+    if NODE.SLP.validate_transaction(txid) and settings.BCH_NETWORK == 'mainnet':
+        transaction = NODE.SLP.get_transaction(txid)
+        token_id = transaction['token_id']
 
-            if 'addresses' in output['scriptPubKey'].keys():
-                address = output['scriptPubKey']['addresses'][0]
-                
-                if 'tokenData' in output.keys():
-                    process_cashtoken_tx(
-                        output['tokenData'],
-                        address,
-                        txid,
-                        block_id=block_id,
-                        index=index,
-                        timestamp=transaction['time'],
-                        value=output['value']
-                    )
-                else:
-                    # save bch transaction
-                    obj_id, created = save_record(
-                        'bch',
-                        address,
-                        txid,
-                        NODE.BCH.source,
-                        value=output['value'],
-                        blockheightid=block_id,
-                        tx_timestamp=transaction['time'],
-                        index=index
-                    )
-                    if created:
-                        client_acknowledgement(obj_id)
+        for output in transaction['outputs']:
+            amount = output['amount']
+            
+            # save slp transaction
+            obj_id, created = save_record(
+                token_id,
+                output['address'],
+                txid,
+                NODE.SLP.source,
+                amount=amount,
+                blockheightid=block_id,
+                tx_timestamp=transaction['timestamp'],
+                index=output['index']
+            ) 
+
+            if created:
+                client_acknowledgement(obj_id)
 
 
 @shared_task(bind=True, queue='manage_blocks')
@@ -667,19 +669,8 @@ def manage_blocks(self):
             REDIS_STORAGE.set('READY', 0)
             subtasks = []
 
-            # TODO: handle block tracking for SLP testnet when BCH_NETWORK=chipnet
-            # (testnet has different block count with chipnet)
-            if settings.BCH_NETWORK == 'mainnet':
-                pass
-                
-                #TODO: Disable block scanning in SLP, for now
-                # transactions = NODE.SLP.get_block(block.number, full_transactions=False)
-                # for tr in transactions:
-                #     txid = bytearray(tr.transaction_hash[::-1]).hex()
-                #     subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
-
             transactions = NODE.BCH.get_block(block.number)
-            for txid in transactions:
+            for txid in transactions: 
                 subtasks.append(query_transaction.si(txid, block.id))
 
             callback = ready_to_accept.si(block.number, len(subtasks))
@@ -794,52 +785,49 @@ def get_slp_utxos(self, address):
         saved_utxo_ids = []
 
         for output in outputs:
-            if output.slp_token.token_id:
-                hash = output.outpoint.hash 
-                tx_hash = bytearray(hash[::-1]).hex()
-                index = output.outpoint.index
-                token_id = bytearray(output.slp_token.token_id).hex() 
-                amount = output.slp_token.amount
-                block = output.block_height
-                
-                block, _ = BlockHeight.objects.get_or_create(number=block)
+            tx_hash = output['tx_hash']
+            index = output['index']
+            token_id = output['token_id']
+            amount = output['amount']
+            block = output['height']
+            
+            block, _ = BlockHeight.objects.get_or_create(number=block)
+            token_obj, _ = Token.objects.get_or_create(tokenid=token_id)
 
-                token_obj, _ = Token.objects.get_or_create(tokenid=token_id)
-
-                transaction_obj = Transaction.objects.filter(
-                    txid=tx_hash,
-                    address__address=address,
-                    token=token_obj,
-                    amount=amount,
-                    index=index
+            transaction_obj = Transaction.objects.filter(
+                txid=tx_hash,
+                address__address=address,
+                token=token_obj,
+                amount=amount,
+                index=index
+            )
+            if not transaction_obj.exists():
+                args = (
+                    token_id,
+                    address,
+                    tx_hash,
+                    NODE.SLP.source
                 )
-                if not transaction_obj.exists():
-                    args = (
-                        token_id,
-                        address,
-                        tx_hash,
-                        NODE.SLP.source
-                    )
-                    txn_id, created = save_record(
-                        *args,
-                        amount=amount,
-                        blockheightid=block.id,
-                        index=index,
-                        new_subscription=True
-                    )
-                    transaction_obj = Transaction.objects.filter(id=txn_id)
-                    
-                    if created:
-                        if not block.requires_full_scan:
-                            qs = BlockHeight.objects.filter(id=block.id)
-                            count = qs.first().transactions.count()
-                            qs.update(processed=True, transactions_count=count)
+                txn_id, created = save_record(
+                    *args,
+                    amount=amount,
+                    blockheightid=block.id,
+                    index=index,
+                    new_subscription=True
+                )
+                transaction_obj = Transaction.objects.filter(id=txn_id)
                 
-                if transaction_obj.exists():
-                    # Mark as unspent, just in case it's already marked spent
-                    transaction_obj.update(spent=False)
-                    for obj in transaction_obj:
-                        saved_utxo_ids.append(obj.id)
+                if created:
+                    if not block.requires_full_scan:
+                        qs = BlockHeight.objects.filter(id=block.id)
+                        count = qs.first().transactions.count()
+                        qs.update(processed=True, transactions_count=count)
+            
+            if transaction_obj.exists():
+                # Mark as unspent, just in case it's already marked spent
+                transaction_obj.update(spent=False)
+                for obj in transaction_obj:
+                    saved_utxo_ids.append(obj.id)
         
         # Mark other transactions of the same address as spent
         txn_check = Transaction.objects.filter(
@@ -980,7 +968,7 @@ def get_token_meta_data(self, token_id, async_image_download=False):
 
             LOGGER.info(f'Fetching token metadata from {NODE.SLP.source}...')
 
-            txn = NODE.SLP.get_transaction(token_id, parse_slp=True)
+            txn = NODE.SLP.get_transaction(token_id)
             if not txn:
                 return
 
@@ -1377,7 +1365,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     if parse_slp:
         # Parse SLP senders and recipients
-        slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
+        slp_tx = NODE.SLP.get_transaction(txid)
         if not slp_tx:
             self.retry(countdown=5)
             return
@@ -1430,7 +1418,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     if parse_slp:
         if slp_tx is None:
-            slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
+            slp_tx = NODE.SLP.get_transaction(txid)
 
         # Mark SLP tx inputs as spent
         for tx_input in slp_tx['inputs']:
