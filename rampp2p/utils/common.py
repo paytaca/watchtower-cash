@@ -12,10 +12,10 @@ def is_order_expired(order_pk: int):
     '''
     Checks if the order has expired
     '''
-    # get the created_at field of order's CONF status
+    # get the created_at field of order's ESCROWED status
     time_duration = Order.objects.get(pk=order_pk).time_duration
     start_time = Status.objects.filter(
-            Q(order__id=order_pk) & Q(status=StatusType.CONFIRMED)
+            Q(order__id=order_pk) & Q(status=StatusType.ESCROWED)
         ).values('created_at').first()
     
     logger.warn(f'start_time: {start_time}')

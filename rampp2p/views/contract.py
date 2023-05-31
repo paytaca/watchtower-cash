@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.http import Http404
 
 from rampp2p import utils
-from rampp2p.utils import contract, auth, transaction
+from rampp2p.utils import auth
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -87,30 +87,27 @@ class CreateContract(APIView):
 
         except (Order.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        generate = False
+        address = None
+        contract = Contract.objects.get(order__id=pk)
 
-        contract_obj = Contract.objects.filter(order__id=pk)
-        gen_contract_address = False
-        contract_address = None
-        if contract_obj.count() == 0:
-            
-            contract_obj = Contract.objects.create(order=order)
-            gen_contract_address = True
+        if not contract.exists():
+            contract = ContractSerializer({"order": order.id}).save()
+            generate = True
         else:
             # return contract if already existing
-            contract_obj = contract_obj.first()
-            if contract_obj.contract_address is None:
-                gen_contract_address = True
+            if contract.contract_address is None:
+                generate = True
             else:
-                contract_address = contract_obj.contract_address
+                address = contract.contract_address
         
-        timestamp = contract_obj.created_at.timestamp()
-        if gen_contract_address:
-            # execute subprocess
-            logger.warning('generating contract address')
-            participants = self.get_order_participants(order)
-            contract.create(
-                contract_obj.id,
-                participants,
+        
+        if generate:
+            # Execute subprocess
+            timestamp = contract.created_at.timestamp()
+            utils.contract.create(
+                order_id=contract.order.id,
                 arbiter_pubkey=params['arbiter_pubkey'], 
                 seller_pubkey=params['seller_pubkey'], 
                 buyer_pubkey=params['buyer_pubkey'],
@@ -121,7 +118,7 @@ class CreateContract(APIView):
             'success': True,
             'data': {
                 'order': order.id,
-                'contract_id': contract_obj.id,
+                'contract': contract.id,
                 'timestamp': timestamp,
                 'arbiter_address': order.arbiter.address,
                 'buyer_address': params['buyer_address'],
@@ -129,8 +126,8 @@ class CreateContract(APIView):
             }
         }
         
-        if not (contract_address is None):
-            response['data']['contract_address'] = contract_address
+        if not (address is None):
+            response['data']['contract_address'] = address
         
         return Response(response, status=status.HTTP_200_OK)
 
@@ -166,7 +163,6 @@ class CreateContract(APIView):
             'buyer_pubkey': buyer_pubkey,
             'seller_address': seller_address,
             'buyer_address': buyer_address,
-            # 'contract_hash': contract_hash
         }
 
         return params
@@ -192,174 +188,3 @@ class CreateContract(APIView):
         # require caller is seller
         if caller.wallet_hash != seller.wallet_hash:
             raise ValidationError('caller must be seller')
-
-    def get_order_participants(self, order: Order):
-        '''
-        Returns the wallet hash of the order's seller, buyer and arbiter.
-        '''
-        party_a = order.ad.owner.wallet_hash
-        party_b = order.owner.wallet_hash
-        arbiter = order.arbiter.wallet_hash
-        
-        return [party_a, party_b, arbiter]
-    
-class ReleaseCrypto(APIView):
-    def post(self, request, pk):
-
-        try:
-            # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
-            message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
-            caller_id = self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            # status validations
-            validate_status_inst_count(StatusType.RELEASED, pk)
-            validate_exclusive_stats(StatusType.RELEASED, pk)
-            validate_status_progression(StatusType.RELEASED, pk)
-            
-            order = self.get_object(pk)
-            contract_id = Contract.objects.values('id').filter(order__id=pk).first()['id']
-            
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid field is required')
-
-            # verify txid
-            participants = self.get_order_participants(order)
-            utils.validate_transaction(
-                txid, 
-                action=Transaction.ActionType.RELEASE,
-                contract_id=contract_id, 
-                wallet_hashes=participants
-            )
-            
-        except ValidationError as err:
-            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-  
-        return Response(status=status.HTTP_200_OK)
-    
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        ReleaseCrypto must only be callable by seller
-        or arbiter if order's status is RELEASE_APPEALED or REFUND_APPEALED
-        '''
-
-        try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-            order = Order.objects.get(pk=pk)
-            curr_status = Status.objects.filter(order=order).latest('created_at')
-        except Peer.DoesNotExist or Order.DoesNotExist:
-            raise ValidationError('Peer/Order DoesNotExist')
-        
-        seller = None
-        caller_id = 'SELLER'
-        if caller.wallet_hash == order.arbiter.wallet_hash:
-           caller_id = 'ARBITER'
-           if (curr_status.status != StatusType.RELEASE_APPEALED and 
-               curr_status.status != StatusType.REFUND_APPEALED):
-              raise ValidationError('arbiter intervention but no order release/refund appeal')
-        elif order.ad.trade_type == TradeType.SELL:
-            seller = order.ad.owner
-        else:
-            seller = order.owner
-        
-        if seller is not None and seller.wallet_hash != caller.wallet_hash:
-           raise ValidationError('caller must be seller')
-        
-        return caller_id
-
-    def get_object(self, pk):
-        try:
-            return Order.objects.get(pk=pk)
-        except Order.DoesNotExist as err:
-            raise err
-
-    def get_order_participants(self, order: Order):
-        '''
-        Returns the wallet hash of the order's seller, buyer and arbiter.
-        '''
-        party_a = order.ad.owner.wallet_hash
-        party_b = order.owner.wallet_hash
-        arbiter = order.arbiter.wallet_hash
-        
-        return [party_a, party_b, arbiter]
-    
-class RefundCrypto(APIView):
-    def post(self, request, pk):
-        
-        try:
-            # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
-            message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-        
-            # status validations
-            validate_status_inst_count(StatusType.REFUNDED, pk)
-            validate_exclusive_stats(StatusType.REFUNDED, pk)
-            validate_status_progression(StatusType.REFUNDED, pk)
-
-            order = self.get_object(pk)
-            contract_id = Contract.objects.values('id').filter(order__id=pk).first()['id']
-
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid field is required')
-
-            # verify txid
-            participants = self.get_order_participants(order)
-            utils.validate_transaction(
-                txid, 
-                action=Transaction.ActionType.REFUND,
-                contract_id=contract_id, 
-                wallet_hashes=participants
-            )
-            
-        except ValidationError as err:
-            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(status=status.HTTP_200_OK)
-    
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        RefundCrypto should be callable only by the arbiter when
-        order status is CANCEL_APPEALED, RELEASE_APPEALED, or REFUND_APPEALED
-        '''
-        try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-            order = Order.objects.get(pk=pk)
-            curr_status = Status.objects.filter(order=order).latest('created_at')
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
-            raise ValidationError(err.args[0])
-        
-        if caller.wallet_hash != order.arbiter.wallet_hash:
-           raise ValidationError('caller must be arbiter')
-        else:
-           if (curr_status.status != StatusType.CANCEL_APPEALED and
-               curr_status.status != StatusType.RELEASE_APPEALED and
-               curr_status.status != StatusType.REFUND_APPEALED):
-              raise ValidationError('status must be CANCEL_APPEALED | RELEASE_APPEALED | REFUND_APPEALED for this action')
-
-    def get_object(self, pk):
-        try:
-            return Order.objects.get(pk=pk)
-        except Order.DoesNotExist as err:
-            raise err
-
-    def get_order_participants(self, order: Order):
-        '''
-        Returns the wallet hash of the order's seller, buyer and arbiter.
-        '''
-        party_a = order.ad.owner.wallet_hash
-        party_b = order.owner.wallet_hash
-        arbiter = order.arbiter.wallet_hash
-        
-        return [party_a, party_b, arbiter]

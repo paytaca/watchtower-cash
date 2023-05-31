@@ -4,7 +4,7 @@ from .contract import Contract
 
 class Transaction(models.Model):
     class ActionType(models.TextChoices):
-        FUND = 'FUND'
+        ESCROW = 'ESCROW'
         REFUND = 'REFUND'
         RELEASE = 'RELEASE'
         # ARBITER_RELEASE = 'ARBITER_RELEASE'

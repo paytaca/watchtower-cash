@@ -1,14 +1,13 @@
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
-def notify_subprocess_completion(result, **kwargs):
-    wallet_hash = kwargs.get('wallet_hash')
-    room_name = f'ramp-p2p-updates-{wallet_hash}'
+def send_order_update(data={}, room_id=""):
+    room_name = f'order/{room_id}'
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(
         room_name,
         {
             'type': 'notify',
-            'message': result
+            'data': data
         }
     )

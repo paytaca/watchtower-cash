@@ -6,6 +6,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 def validate_transaction(txid: str, **kwargs):
+    '''
+    Validates if a transaction satisfies the prerequisites of its contract.
+    Executes a subprocess to fetch raw transaction data, sends this data to `verify_tx_out` for
+    validation, then updates the order's status if valid.
+    '''
     path = './rampp2p/escrow/src/'
     command = 'node {}transaction.js {}'.format(
         path,
@@ -17,6 +22,5 @@ def validate_transaction(txid: str, **kwargs):
                     txid=txid,
                     action=kwargs.get('action'),
                     contract_id=kwargs.get('contract_id'),
-                    wallet_hashes=kwargs.get('wallet_hashes'),
                 )
             )

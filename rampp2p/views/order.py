@@ -31,7 +31,7 @@ from rampp2p.models import (
     Contract,
     Transaction
 )
-
+import json
 import logging
 logger = logging.getLogger(__name__)
 
@@ -166,6 +166,11 @@ class OrderDetail(APIView):
     return Response(response, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
+    '''
+    Marks the order as ESCROW_PENDING and subscribes to the contract address for incoming and outgoing
+    transactions. When the contract address receives a utxo with the correct amount, the order status is
+    is set to ESCROWED
+    '''
     def post(self, request, pk):
         try:
             # validate signature
@@ -186,21 +191,91 @@ class ConfirmOrder(APIView):
             txid = request.data.get('txid')
             if txid is None:
                 raise ValidationError('txid is required')
+                
+            # contract.contract_address must be set first through GenerateContract endpoint
+            contract = Contract.objects.get(order_id=pk)
+            if not contract.exists():
+                raise ValidationError('order contract does not exist')
+
+            # create ESCROW_PENDING status for order
+            status_serializer = StatusSerializer(StatusSerializer(data={
+                'status': StatusType.ESCROW_PENDING,
+                'order': pk
+            }).save())
             
+            # TODO: subscribe contract address        
+
+            # notify order participants
+            utils.websocket.send_order_update(
+                json.dumps(status_serializer.data), 
+                contract.contract_address
+            )
+            
+        except (ValidationError, IntegrityError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(status_serializer.data, status=status.HTTP_200_OK)  
+
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        Only owners of SELL ads can set order statuses to CONFIRMED.
+        Creators of SELL orders skip the order status to CONFIRMED on creation.
+        '''
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+        except Peer.DoesNotExist or Order.DoesNotExist:
+            raise ValidationError('Peer/Order DoesNotExist')
+
+        if order.ad.trade_type == TradeType.SELL:
+            seller = order.ad.owner
+            # require caller is seller
+            if caller.wallet_hash != seller.wallet_hash:
+                raise ValidationError('caller must be seller')
+        else:
+            raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
+    
+class ForceConfirmOrder(APIView):
+    '''
+    Manually marks the order as ESCROWED by submitting the transaction id
+    for validation (should only be used as fallback when ConfirmOrder endpoint fails).
+    '''
+    def post(self, request, pk):
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
+            auth.verify_signature(wallet_hash, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, pk)
+
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            validate_status_inst_count(StatusType.ESCROWED, pk)
+            validate_status_progression(StatusType.ESCROWED, pk)
+
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid is required')
+                
             # contract.contract_address must be set first through GenerateContract endpoint
             contract = Contract.objects.filter(order_id=pk)
             if (contract.count() == 0 or contract.first().contract_address is None):
                 raise ValidationError('order contract does not exist')
 
             contract = contract.first()
-            participants = self.get_order_participants(contract.order)
+            # participants = self.get_order_participants(contract.order)
             utils.validate_transaction(
                 txid, 
                 action=Transaction.ActionType.FUND,
                 contract_id=contract.id, 
-                wallet_hashes=participants
+                # wallet_hashes=participants
             )
-
+           
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -226,15 +301,15 @@ class ConfirmOrder(APIView):
         else:
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
 
-    def get_order_participants(self, order: Order):
-        '''
-        Returns the wallet hash of the order's seller, buyer and arbiter.
-        '''
-        party_a = order.ad.owner.wallet_hash
-        party_b = order.owner.wallet_hash
-        arbiter = order.arbiter.wallet_hash
+    # def get_order_participants(self, order: Order):
+    #     '''
+    #     Returns the wallet hash of the order's seller, buyer and arbiter.
+    #     '''
+    #     party_a = order.ad.owner.wallet_hash
+    #     party_b = order.owner.wallet_hash
+    #     arbiter = order.arbiter.wallet_hash
         
-        return [party_a, party_b, arbiter]
+    #     return [party_a, party_b, arbiter]
     
 class CryptoBuyerConfirmPayment(APIView):
   def post(self, request, pk):
@@ -311,8 +386,8 @@ class CryptoSellerConfirmPayment(APIView):
 
         # create PAID status for order
         serializer = StatusSerializer(data={
-        'status': StatusType.PAID,
-        'order': pk
+            'status': StatusType.PAID,
+            'order': pk
         })
 
         if serializer.is_valid():

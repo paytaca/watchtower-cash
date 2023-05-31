@@ -1,15 +1,13 @@
 from django.conf import settings
-from typing import List
 import decimal
 
 import rampp2p.tasks as tasks
-from rampp2p.models import Contract
 
 import logging
 logger = logging.getLogger(__name__)
 
-def create(contract_id: int, wallet_hashes: List, **kwargs):
-    action = 'create'
+def create(**kwargs):
+    action = 'CREATE'
     path = './rampp2p/escrow/src/'
     command = 'node {}escrow.js {} {} {} {}'.format(
         path,        
@@ -21,10 +19,9 @@ def create(contract_id: int, wallet_hashes: List, **kwargs):
     return tasks.execute_subprocess.apply_async(
                 (command,), 
                 link=tasks.handle_subprocess_completion.s(
-                        action=action, 
-                        contract_id=contract_id, 
-                        wallet_hashes=wallet_hashes
-                    )
+                    action=action, 
+                    order_id=kwargs.get('order_id')
+                )
             )
 
 def get_contract_fees():
@@ -34,10 +31,3 @@ def get_contract_fees():
     total_fee = hardcoded_fee + arbitration_fee + trading_fee
     decimal_fee = total_fee/100000000
     return decimal_fee
-
-
-def update_contract_address(contract_id, data):
-    contract_address = data.get('result').get('contract_address')
-    contract = Contract.objects.get(pk=contract_id)
-    contract.contract_address = contract_address
-    contract.save()

@@ -8,7 +8,9 @@ from rampp2p.models import (
     AppealType,
     StatusType,
     Peer,
-    Order
+    Order,
+    Contract,
+    Transaction
 )
 
 from rampp2p.serializers import StatusSerializer, AppealSerializer
@@ -221,7 +223,6 @@ class AppealRefund(APIView):
         if seller.wallet_hash != caller.wallet_hash:
            raise ValidationError('caller must be seller')
 
-
 def submit_appeal(type, wallet_hash, order_id):
     peer = Peer.objects.get(wallet_hash=wallet_hash)
     data = {
@@ -234,3 +235,273 @@ def submit_appeal(type, wallet_hash, order_id):
         appeal = serializer.save()
         return appeal
     return None
+
+class ReleaseCrypto(APIView):
+    '''
+    Marks an appealed order for release of escrowed funds, updating the order status to RELEASE_PENDING.
+    The order status is automatically updated to RELEASED when the contract address receives an 
+    outgoing transaction that matches the prerequisites of the contract.
+    (The goal is simply to inform the system that any new transaction received that is 
+    associated to the contract must be used to confirm the release of funds and nothing else)
+    Note: This endpoint must be invoked before the actual transfer of funds.
+
+    Requirements:
+        (1) Caller must be the order's arbiter
+        (2) Order must have an existing appeal (regardless of appeal type, release appeals
+        may be refunded, and refund appeals may be released)
+    '''
+    def post(self, request, pk):
+
+        try:
+            # Validate signature
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
+            auth.verify_signature(wallet_hash, signature, message)
+
+            # Validate permissions
+            self.validate_permissions(wallet_hash, pk)
+        except ValidationError as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # Status validations
+            status_type = StatusType.RELEASE_PENDING
+            validate_status_inst_count(status_type, pk)
+            validate_exclusive_stats(status_type, pk)
+            validate_status_progression(status_type, pk)                        
+
+            # Update status to RELEASE_PENDING
+            utils.update_order_status(pk, status_type)
+            
+        except ValidationError as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+  
+        return Response(status=status.HTTP_200_OK)
+    
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        validate_permissions will raise a ValidationError if:
+            (1) caller is not order's arbiter,
+            (2) order's current status is not RELEASE_APPEALED or REFUND_APPEALED
+        '''
+        prefix = "ValidationError:"
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+            curr_status = Status.objects.filter(order=order).latest('created_at')
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(f'{prefix} {err.args[0]}')
+        
+        # Raise error if caller is not order's arbiter
+        if caller.wallet_hash != order.arbiter.wallet_hash:
+            raise ValidationError(f'{prefix} Caller must be order arbiter.')
+        
+        # Raise error if order's current status is not RELEASE_APPEALED nor REFUND_APPEALED
+        if (curr_status.status != StatusType.RELEASE_APPEALED and 
+            curr_status.status != StatusType.REFUND_APPEALED):
+                raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
+
+    
+class RefundCrypto(APIView):
+    '''
+    Marks an appealed order for refund of escrowed funds, updating the order status to REFUND_PENDING.
+    The order status is automatically updated to REFUNDED when the contract address receives an 
+    outgoing transaction that matches the prerequisites of the contract.
+    (The goal is simply to inform the system that any new transaction received that is 
+    associated to the contract must be used to confirm the refund and nothing else)
+    Note: This endpoint must be invoked before the actual transfer of funds.
+
+    Requirements:
+        (1) Caller must be the order's arbiter
+        (2) Order must have an existing appeal (regardless of appeal type, release appeals
+        may be refunded, and refund appeals may be released)
+    '''
+    def post(self, request, pk):
+        
+        try:
+            # Validate signature
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            message = ViewCode.ORDER_REFUND.value + '::' + timestamp
+            auth.verify_signature(wallet_hash, signature, message)
+
+            # Validate permissions
+            self.validate_permissions(wallet_hash, pk)
+        
+            # Status validations
+            status_type = StatusType.REFUND_PENDING
+            validate_status_inst_count(status_type, pk)
+            validate_exclusive_stats(status_type, pk)
+            validate_status_progression(status_type, pk)
+
+            # Update status to REFUND_PENDING
+            utils.update_order_status(pk, status_type)
+            
+        except ValidationError as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(status=status.HTTP_200_OK)
+    
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        validate_permissions will raise a ValidationError if:
+            (1) caller is not order's arbiter,
+            (2) order's current status is not RELEASE_APPEALED or REFUND_APPEALED
+        '''
+        prefix = "ValidationError:"
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+            curr_status = Status.objects.filter(order=order).latest('created_at')
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(f'{prefix} {err.args[0]}')
+        
+        # Raise error if caller is not order's arbiter
+        if caller.wallet_hash != order.arbiter.wallet_hash:
+            raise ValidationError(f'{prefix} Caller must be order arbiter.')
+        
+        # Raise error if order's current status is not RELEASE_APPEALED nor REFUND_APPEALED
+        if (curr_status.status != StatusType.RELEASE_APPEALED and 
+            curr_status.status != StatusType.REFUND_APPEALED):
+                raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
+
+class ForceReleaseCrypto(APIView):
+    '''
+    Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
+    satisfies the prerequisites of its contract.
+    Note: This endpoint should only be used as fallback for the ReleaseCrypto endpoint.
+
+    Requirements:
+        (1) Caller must be the order's arbiter
+        (2) The order's current status must be RELEASE_PENDING (created by calling ReleaseCrypto endpoint first)
+        (3) TODO: An amount of time must already have passed since status RELEASE_PENDING was created
+    '''
+    def post(self, request, pk):
+
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
+            auth.verify_signature(wallet_hash, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, pk)
+        except ValidationError as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # status validations
+            status_type = StatusType.RELEASED
+            validate_status_inst_count(status_type, pk)
+            validate_exclusive_stats(status_type, pk)
+            validate_status_progression(status_type, pk)            
+            
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid field is required')
+
+            contract_id = Contract.objects.values('id').get(order__id=pk)['id']
+
+            # Validate the transaction
+            utils.validate_transaction(
+                txid, 
+                action=Transaction.ActionType.RELEASE,
+                contract_id=contract_id
+            )
+            
+        except (ValidationError, Contract.DoesNotExist) as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+  
+        return Response(status=status.HTTP_200_OK)
+    
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        validate_permissions will raise a ValidationError if:
+            (1) caller is not the order's arbiter
+            (2) the order's current status is not RELEASE_PENDING
+        '''
+        prefix = "ValidationError:"
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+            curr_status = Status.objects.filter(order=order).latest('created_at')
+        except Peer.DoesNotExist or Order.DoesNotExist as err:
+            raise ValidationError(f'{prefix} {err.args[0]}')
+        
+        if caller.wallet_hash != order.arbiter.wallet_hash:
+            raise ValidationError(f'{prefix} Caller must be order arbiter.')
+        
+        if (curr_status.status != StatusType.RELEASE_PENDING):
+                raise ValidationError(f'{prefix} Current status of order #{pk} is not {StatusType.RELEASE_PENDING.label}.')
+
+class ForceRefundCrypto(APIView):
+    '''
+    Manually marks the order as (status) REFUNDED by validating if a given transaction id (txid) 
+    satisfies the prerequisites of its contract.
+    Note: This endpoint should only be used as fallback for the RefundCrypto endpoint.
+
+    Requirements:
+        (1) Caller must be the order's arbiter
+        (2) The order's current status must be REFUND_PENDING (created by calling RefundCrypto endpoint first)
+        (3) TODO: An amount of time must already have passed since status REFUND_PENDING was created
+    '''
+    def post(self, request, pk):
+
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            message = ViewCode.ORDER_REFUND.value + '::' + timestamp
+            auth.verify_signature(wallet_hash, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, pk)
+        except ValidationError as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # status validations
+            status_type = StatusType.REFUNDED
+            validate_status_inst_count(status_type, pk)
+            validate_exclusive_stats(status_type, pk)
+            validate_status_progression(status_type, pk)            
+            
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid field is required')
+
+            contract_id = Contract.objects.values('id').get(order__id=pk)['id']
+
+            # Validate the transaction
+            utils.validate_transaction(
+                txid, 
+                action=Transaction.ActionType.REFUND,
+                contract_id=contract_id
+            )
+            
+        except (ValidationError, Contract.DoesNotExist) as err:
+            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+  
+        return Response(status=status.HTTP_200_OK)
+    
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        validate_permissions will raise a ValidationError if:
+            (1) caller is not the order's arbiter
+            (2) the order's current status is not REFUND_PENDING
+        '''
+        prefix = "ValidationError:"
+
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+            curr_status = Status.objects.filter(order=order).latest('created_at')
+        except Peer.DoesNotExist or Order.DoesNotExist as err:
+            raise ValidationError(f'{prefix} {err.args[0]}')
+        
+        if caller.wallet_hash != order.arbiter.wallet_hash:
+            raise ValidationError(f'{prefix} Caller must be order arbiter.')
+        
+        if (curr_status.status != StatusType.REFUND_PENDING):
+                raise ValidationError(f'{prefix} Current status of order #{pk} is not {StatusType.REFUND_PENDING.label}.')

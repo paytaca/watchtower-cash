@@ -4,6 +4,7 @@ from asgiref.sync import async_to_sync
 from django.conf import settings
 from typing import Dict
 
+from rampp2p.utils.websocket import send_order_update
 from rampp2p.serializers import TransactionSerializer, RecipientSerializer
 from rampp2p.models import (
     Transaction, 
@@ -44,111 +45,79 @@ def execute_subprocess(command):
     return response
 
 @shared_task(queue='rampp2p__contract_execution')
-def handle_subprocess_completion(cmd_resp: Dict, **kwargs):
+def handle_subprocess_completion(response: Dict, **kwargs):
     data = {
-        'result': {
-            'message': cmd_resp.get('result'),
-            'error': cmd_resp.get('error')
-        }
+        'result': response.get('result'),
+        'error': response.get('error')
     }
     logger.warning(f'data: {data}')
 
     action = kwargs.get('action')
-    contract_id = kwargs.get('contract_id')
-    wallet_hashes = kwargs.get('wallet_hashes')
-    success_str = cmd_resp.get('result').get('success')
-    success = False if success_str == "False" else bool(success_str)
-    
-    if bool(success) == True:
-        if action == 'create':
-            # update contract address
-            utils.update_contract_address(contract_id, cmd_resp)
-    
-        if action == 'refund':
-            # create REFUNDED status for order
-            status = utils.update_order_status(kwargs.get('order_id'), StatusType.REFUNDED)
-            data.get('result')['status'] = status.data
+    order_id = kwargs.get('order_id')
 
-        if action == 'seller-release'  or action == 'arbiter-release':
-            # create RELEASED status for order
-            status = utils.update_order_status(kwargs.get('order_id'), StatusType.RELEASED)
-            data.get('result')['status'] = status.data
+    success = response.get('result').get('success')
+    success = False if success == "False" else bool(success)
+
+    if bool(success) == True:
+        if action == 'CREATE':
+            
+            # Update contract address
+            address = data.get('result').get('contract_address')
+            contract = Contract.objects.get(order__id=order_id)
+            contract.contract_address = address
+            contract.save()
+
+            # TODO: subscribe to contract address: listen for incoming & outgoing utxo
     
     data['action'] = action
-    data['contract_id'] = contract_id
-    
-    notify_result(data, wallet_hashes)
-
-@shared_task(queue='rampp2p__contract_execution')
-def notify_result(data, wallet_hashes):
-    for wallet_hash in wallet_hashes:
-        room_name = f'ramp-p2p-updates-{wallet_hash}'
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            room_name,
-            {
-                'type': 'notify',
-                'data': data
-            }
-        )
-
-# @shared_task(queue='rampp2p__contract_execution')
-# def generate_contract(contract_hash: Dict, **kwargs):
-#     hash = contract_hash.get('result').get('contract_hash')
-#     action = 'create'
-#     path = './rampp2p/escrow/src/'
-#     command = 'node {}escrow.js contract {} {} {} {}'.format(
-#         path,
-#         kwargs.get('arbiter_pubkey'), 
-#         kwargs.get('buyer_pubkey'), 
-#         kwargs.get('seller_pubkey'),
-#         hash
-#     )
-#     return execute_subprocess.apply_async(
-#                 (command,), 
-#                 link=handle_subprocess_completion.s(
-#                         action=action, 
-#                         contract_id=kwargs.get('contract_id'), 
-#                         wallet_hashes=kwargs.get('wallet_hashes')
-#                     )
-#             )
+    send_order_update(data=data, room_id=contract.order.id)
 
 @shared_task(queue='rampp2p__contract_execution')
 def verify_tx_out(data: Dict, **kwargs):
     '''
-    The callback function after subprocess execution that retrieves transaction outputs.
-    Verifies that transaction input, outputs, and amounts are correct.
+    Verifies if transaction details (input, outputs, and amounts) satisfy the prerequisites of its contract.
+    Automatically updates the order's status if transaction is valid and sends the result through a websocket channel.
     '''
+
+    # Logs for debugging
     logger.warning(f'data: {data}')
     logger.warning(f'kwargs: {kwargs}')
 
-    tx_inputs = data.get('result').get('inputs')
-    tx_outputs = data.get('result').get('outputs')
-    if tx_inputs is None or tx_outputs is None:
-        error = data.get('result').get('error')
-        return notify_result(
-            error,
-            kwargs.get('wallet_hashes')
-        )
-    
-    action = kwargs.get('action')
-    contract = Contract.objects.get(pk=kwargs.get('contract_id'))
     valid = True
     error_msg = ""
+    action = kwargs.get('action')
+    tx_inputs = data.get('result').get('inputs')
+    tx_outputs = data.get('result').get('outputs')
 
+    contract = Contract.objects.get(pk=kwargs.get('contract_id'))
+
+    # The transaction is invalid, if inputs or outputs are empty
+    if tx_inputs is None or tx_outputs is None:
+        error = data.get('result').get('error')
+        return send_order_update(
+            data=error,
+            room_id=contract.order.id
+        )
+    
     outputs = []
-    if action == Transaction.ActionType.FUND:
+    if action == Transaction.ActionType.ESCROW:
+        '''
+        If the transaction is ActionType.ESCROW (transaction that is required to update status
+        from ESCROW_PENDING to ESCROWED) the transaction's:
+            (1) output amount must be correct, and 
+            (2) output address must be the contract address.
+        '''
         fees = utils.get_contract_fees()
         amount = contract.order.crypto_amount + fees
 
-        # one of the outputs must be the contract address
+        # Find the output where address = contract address
         match_amount = None
-        for out in tx_outputs:
-            address = out.get('address')
-            if address == contract.contract_address:
+        for output in tx_outputs:
+            address = output.get('address')
 
-                # convert value to decimal (8 decimal places)
-                match_amount = decimal.Decimal(out.get('amount'))
+            if address == contract.contract_address:
+                # Convert amount value to decimal (8 decimal places)
+                match_amount = decimal.Decimal(output.get('amount'))
                 match_amount = match_amount.quantize(decimal.Decimal('0.00000000'))
 
                 outputs.append({
@@ -157,12 +126,21 @@ def verify_tx_out(data: Dict, **kwargs):
                 })
                 break
 
-        # amount must be correct
+        # Check if the amount is correct
         if match_amount != amount:
             valid = False
     
     else:
-        # sender must be the contract address
+        '''
+        If the transaction is for ActionType.RELEASE or ActionType.REFUND (transactions that are required
+        to move from status RELEASE_PENDING to RELEASED or REFUND_PENDING to REFUNDED), the transaction's:
+            (1) input address must be the contract address,
+            (2) outputs must include the:
+                (i)   servicer address with correct trading fee,
+                (ii)  arbiter address with correct arbitration fee,
+                (iii) buyer (if RELEASE) or seller (if REFUND) address with correct amount minus fees.
+        '''
+        # Find the contract address in the list of transaction's inputs
         sender_is_contract = False
         for input in tx_inputs:
             address = input.get('address')
@@ -170,17 +148,22 @@ def verify_tx_out(data: Dict, **kwargs):
                 sender_is_contract = True
                 break
         
+        # Set valid=False if contract address is not in transaction inputs and return
         if sender_is_contract == False:
             result = {
                 "success": False,
                 "error": "contract address not found in tx inputs"
             }
-            return notify_result(
-                result, 
-                kwargs.get('wallet_hashes')
+            # Send result through websocket
+            return send_order_update(
+                data=result, 
+                room_id=contract.order.id
             )
         
+        # Retrieve expected transaction output addresses
         arbiter, buyer, seller, servicer = utils.get_order_peer_addresses(contract.order)
+
+        # Calculate expected transaction amount and fees
         arbitration_fee = decimal.Decimal(settings.ARBITRATION_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
         trading_fee = decimal.Decimal(settings.TRADING_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
         amount = contract.order.crypto_amount
@@ -199,31 +182,31 @@ def verify_tx_out(data: Dict, **kwargs):
                 "amount": str(output_amount)
             })
             
-            # checking for arbiter
+            # Checks if the current address is the arbiter
+            # and set valid=False if fee is incorrect
             if output_address == arbiter:
                 if output_amount != arbitration_fee:
-                    # found address but incorrect fee
                     error_msg = 'arbiter incorrect output_amount'
-                    logger.warn(error_msg)
+                    logger.error(error_msg)
                     valid = False
                     break
                 arbiter_exists = True
             
-            # checking for servicer
+            # Checks if the current address is the servicer 
+            # and set valid=False if fee is incorrect
             if output_address == servicer:    
                 if output_amount != trading_fee:
-                    # found address but incorrect fee
                     error_msg = 'servicer incorrect output_amount'
-                    logger.warn(error_msg)
+                    logger.error(error_msg)
                     valid = False
                     break
                 servicer_exists = True
 
             if action == Transaction.ActionType.RELEASE:
-                # checking for buyer
+                # If the action type is RELEASE, check if the current address is the buyer
+                # and set valid=False if the amount is incorrect
                 if output_address == buyer:
                     if output_amount != amount:
-                        # found address but incorrect fee
                         error_msg = 'buyer incorrect output_amount'
                         logger.warn(error_msg)
                         valid = False
@@ -231,16 +214,22 @@ def verify_tx_out(data: Dict, **kwargs):
                     buyer_exists = True
                 
             if action == Transaction.ActionType.REFUND:
-                # checking for seller
+                # If the action type is REFUND, check if the current address is the seller
+                # and set valid=False if the amount is incorrect
                 if output_address == seller:
                     if output_amount != amount:
-                        # found address but incorrect fee
                         error_msg = 'seller incorrect output_amount'
                         logger.warn(error_msg)
                         valid = False
                         break
                     seller_exists = True
-            
+        
+        '''
+        Transaction is not valid if:
+            (1) the arbiter or servicer is not found in the outputs, or
+            (2) the transaction is for RELEASE but the buyer was not found, or
+            (3) the transaction is for REFUND but the seller was not found
+        '''
         if (not(arbiter_exists and servicer_exists) or
             ((action == Transaction.ActionType.RELEASE and not buyer_exists) or 
             (action == Transaction.ActionType.REFUND and not seller_exists))):
@@ -259,7 +248,7 @@ def verify_tx_out(data: Dict, **kwargs):
 
     status = None
     if valid:
-        # Save transaction details        
+        # Save transaction details 
         tx_serializer = TransactionSerializer(data=txdata)
         if tx_serializer.is_valid():
             tx_serializer = TransactionSerializer(tx_serializer.save())
@@ -278,7 +267,7 @@ def verify_tx_out(data: Dict, **kwargs):
             if recipient_serializer.is_valid():
                 recipient_serializer = RecipientSerializer(recipient_serializer.save())
             else:
-                logger.warn(f'recipient_serializer.errors: {recipient_serializer.errors}')
+                logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
         
         # Update order status
         status_type = None
@@ -286,8 +275,8 @@ def verify_tx_out(data: Dict, **kwargs):
             status_type = StatusType.REFUNDED
         if action == Transaction.ActionType.RELEASE:
             status_type = StatusType.RELEASED
-        if action == Transaction.ActionType.FUND:
-            status_type = StatusType.CONFIRMED
+        if action == Transaction.ActionType.ESCROW:
+            status_type = StatusType.ESCROWED
 
         status = utils.update_order_status(contract.order.id, status_type).data
 
@@ -299,7 +288,8 @@ def verify_tx_out(data: Dict, **kwargs):
     
     logger.warning(f'result: {result}')
 
-    return notify_result(
-        result, 
-        kwargs.get('wallet_hashes')
+    # Send the result through websocket
+    return send_order_update(
+        data=result, 
+        room_id=contract.contract_address
     )
