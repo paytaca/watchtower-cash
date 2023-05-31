@@ -9,8 +9,8 @@ from django.db.models import (
     CharField,
     IntegerField,
     BooleanField,
-    Value,
     ExpressionWrapper,
+    TextField
 )
 from django.db.models.functions import Cast
 from django.contrib.postgres.fields.jsonb import KeyTextTransform
@@ -69,6 +69,7 @@ def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addr
         token_name=F('token__name'),
         decimals=F('token__decimals'),
         token_ticker=F('token__token_ticker'),
+        amount=Cast('amount', output_field=TextField()),
         is_cashtoken=ExpressionWrapper(
             Q(token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID),
             output_field=BooleanField()
