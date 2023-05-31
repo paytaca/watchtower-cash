@@ -1,5 +1,6 @@
 from main.utils.address_converter import bch_to_slp_addr
 from main.utils.queries.bchn import BCHN
+from main.utils.slp import *
 
 import requests
 
@@ -53,12 +54,15 @@ class BitcoinVerde(object):
         
         # PARSE TOKEN METADATA
         
-        transaction['token_id'] = token_data['tokenId']
+        token_id = token_data['tokenId']
+        transaction['token_id'] = token_id
         decimals = token_data['decimalCount']
+        op_return_hash = txn['outputs'][0]['lockingScript']['bytes']
+        token_type = parse_slp_op(op_return_hash)['tokenType']
         
         transaction['token_info'] = {
             'name': token_data['tokenName'],
-            'type': None, # TODO: check where this data can be fetched
+            'type': token_type,
             'ticker': token_data['tokenAbbreviation'],
             'document_url': token_data['documentUrl'],
             'document_hash': token_data['documentHash'],
