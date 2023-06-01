@@ -84,6 +84,8 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'token__name',
         'cashtoken_ft__info__name',
         'cashtoken_nft__info__name',
+        'cashtoken_ft__info__symbol',
+        'cashtoken_nft__info__symbol',
         'source',
         'txid'
     ]
@@ -301,6 +303,11 @@ class CashTokenInfoAdmin(admin.ModelAdmin):
 
 
 class CashFungibleTokenAdmin(admin.ModelAdmin):
+    search_fields = [
+        'category',
+        'info__name',
+        'info__symbol'
+    ]
     list_display = [
         'category',
         'name',
@@ -319,6 +326,11 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
 
 
 class CashNonFungibleTokenAdmin(admin.ModelAdmin):
+    search_fields = [
+        'category',
+        'info__name',
+        'info__symbol'
+    ]
     list_display = [
         'category',
         'commitment',
