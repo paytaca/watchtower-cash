@@ -265,7 +265,49 @@ class CashFungibleToken(models.Model):
             'is_cashtoken': True
         }
 
+class CashNonFungibleTokenQuerySet(PostgresQuerySet):
+    def filter_has_group(self, has_group=True):
+        has_group_expr = models.Exists(
+            CashNonFungibleToken.objects.filter(
+                category=models.OuterRef("category"),
+                capability=CashNonFungibleToken.Capability.MINTING,
+            )
+        )
+
+        if has_group:
+            return self.filter(has_group_expr)
+        else:
+            return self.filter(~has_group_expr)
+
+    def filter_group(self):
+        subquery = CashNonFungibleToken.objects \
+            .filter(capability=CashNonFungibleToken.Capability.MINTING) \
+            .values("category") \
+            .annotate(latest_category_record_id=models.Max("id")) \
+            .values("latest_category_record_id")
+        return self.filter(id__in=subquery)
+
+    def annotate_owner_address(self):
+        owner_addr = Transaction.objects.filter(
+            ~models.Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.MINTING),
+            cashtoken_nft_id=models.OuterRef("pk"),
+            spent=False,
+            amount__gte=0,
+        ).values("address__address")[:1]
+        return self.annotate(owner_address=owner_addr)
+
+    def annotate_owner_wallet_hash(self):
+        owner_wallet_hash = Transaction.objects.filter(
+            cashtoken_nft_id=models.OuterRef("pk"),
+            spent=False,
+            amount__gte=0,
+        ).values("wallet__wallet_hash")[:1]
+        return self.annotate(owner_wallet_hash=owner_wallet_hash)
+
+
 class CashNonFungibleToken(models.Model):
+    objects = CashNonFungibleTokenQuerySet.as_manager()
+
     class Capability(models.TextChoices):
         MUTABLE = 'mutable'
         MINTING = 'minting'
