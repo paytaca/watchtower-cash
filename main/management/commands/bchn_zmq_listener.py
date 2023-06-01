@@ -87,12 +87,30 @@ class ZMQHandler():
                         if is_valid_slp_txn:
                             txn = bcv.get_transaction(tx_hash)
 
+                            for _input in txn['inputs']:
+                                address = _input['address']
+                                subscription = Subscription.objects.filter(
+                                    address__address=address
+                                )
+                                if subscription.exists():
+                                    inputs_data.append({
+                                        'token': txn['token_id'],
+                                        'address': address,
+                                        'amount': _input['amount'],
+                                        'value': _input['value'],
+                                        'outpoint_index': _input['spent_index'],
+                                        'outpoint_txid': _input['txid']
+                                    })
+
+
                             for output in txn['outputs']:
                                 obj_id, created = save_record(
                                     output['token_id'],
                                     output['address'],
                                     tx_hash,
                                     bcv.source,
+                                    inputs=inputs_data,
+                                    value=output['value'],
                                     amount=output['amount'],
                                     index=output['index'],
                                     tx_timestamp=txn['timestamp']
@@ -124,6 +142,7 @@ class ZMQHandler():
                                 inputs_data.append({
                                     "token": "bch",
                                     "address": address,
+                                    "amount": None,
                                     "value": value,
                                     "outpoint_txid": txid,
                                     "outpoint_index": index,

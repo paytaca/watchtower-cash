@@ -58,11 +58,11 @@ class BitcoinVerde(object):
         transaction['token_id'] = token_id
         decimals = token_data['decimalCount']
         op_return_hash = txn['outputs'][0]['lockingScript']['bytes']
-        token_type = parse_slp_op(op_return_hash)['tokenType']
+        parsed_slp_data = parse_slp_op(op_return_hash)
         
         transaction['token_info'] = {
             'name': token_data['tokenName'],
-            'type': token_type,
+            'type': parsed_slp_data['tokenType'],
             'ticker': token_data['tokenAbbreviation'],
             'document_url': token_data['documentUrl'],
             'document_hash': token_data['documentHash'],
@@ -80,6 +80,7 @@ class BitcoinVerde(object):
         for tx_input in txn['inputs']:
             if 'slp' in tx_input.keys():
                 input_txid = tx_input['previousOutputTransactionHash']
+                value = tx_input['previousTransactionAmount']
                 index = tx_input['previousOutputIndex']
 
                 slp_data = tx_input['slp']
@@ -91,7 +92,8 @@ class BitcoinVerde(object):
                     'txid': input_txid,
                     'spent_index': index,
                     'amount': amount,
-                    'address': slp_address
+                    'address': slp_address,
+                    'value': value
                 }
                 transaction['inputs'].append(data)
                 txid_spent_index_pairs.append(f'{input_txid}-{index}')
@@ -106,7 +108,8 @@ class BitcoinVerde(object):
                 data = {
                     'address': bch_to_slp_addr(tx_output['cashAddress']),
                     'amount': amount,
-                    'index': tx_output['index']
+                    'index': tx_output['index'],
+                    'value': tx_output['amount']
                 }
 
                 if slp_data['isBaton']:
@@ -158,15 +161,15 @@ class BitcoinVerde(object):
                 transactions = result['object']['transactions']
 
                 for txn in transactions:
-                    txid = txn['hash']
+                    txid = txn['hash'].lower()
 
                     if self.validate_transaction(txid):
                         for output in txn['outputs']:
-                            if output['spentByTransaction'] is not None:
+                            if output['spentByTransaction'] is None:
                                 if 'slp' in output.keys():
                                     index = output['index']
                                     amount = output['slp']['tokenAmount']
-                                    token_id = output['slp']['tokenId']
+                                    token_id = txn['slp']['tokenId'].lower()
                                     value = output['amount']
                                     block_hash = txn['blocks'][0]
 
