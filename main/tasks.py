@@ -102,6 +102,7 @@ def client_acknowledgement(self, txid):
 
                 token_name = transaction.token.name
                 token_id = transaction.token.info_id
+                token_decimals = transaction.token.decimals
                 token_symbol = transaction.token.token_ticker.lower()
 
                 if transaction.cashtoken_ft:
@@ -109,13 +110,16 @@ def client_acknowledgement(self, txid):
                     token_name = token.info.name
                     token_id = token.token_id
                     token_symbol = token.info.symbol
+                    token_decimals = token.info.decimals
 
                 if wallet_version == 2:
                     data = {
                         'token_name': token_name,
                         'token_id':  token_id,
                         'token_symbol': token_symbol,
-                        'amount': transaction.amount,
+                        'token_decimals': token_decimals,
+                        'amount': str(transaction.amount),
+                        'value': transaction.value,
                         'address': transaction.address.address,
                         'source': 'WatchTower',
                         'txid': transaction.txid,
@@ -126,7 +130,8 @@ def client_acknowledgement(self, txid):
                     }
                 elif wallet_version == 1:
                     data = {
-                        'amount': transaction.amount,
+                        'amount': str(transaction.amount),
+                        'value': transaction.value,
                         'address': transaction.address.address,
                         'source': 'WatchTower',
                         'token': transaction.token.tokenid or transaction.token.token_ticker.lower(),
