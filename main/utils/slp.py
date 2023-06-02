@@ -2,8 +2,8 @@ from subprocess import Popen, PIPE
 import json
 
 
-def parse_slp_op(op_ret_hash):
-    cmd = f'node main/js/parse-slp-op.js {op_ret_hash}'
+def get_slp_token_details(token_id):
+    cmd = f'node main/js/get-slp-token-details.js {token_id}'
     p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
 

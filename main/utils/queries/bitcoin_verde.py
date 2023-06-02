@@ -39,7 +39,6 @@ class BitcoinVerde(object):
     
     def parse_transaction(self, txn):
         txid = txn['hash']
-        token_data = txn['slp']
         block_hash = txn['blocks'][0]
         block = self.get_block(block_hash)
         timestamp = block['timestamp']['value']
@@ -54,23 +53,28 @@ class BitcoinVerde(object):
         
         # PARSE TOKEN METADATA
         
-        token_id = token_data['tokenId']
+        bcv_slp_data = txn['slp']
+        token_id = bcv_slp_data['tokenId'].lower()
+        token_data = get_slp_token_details(token_id)
+        token_data = token_data['genesisData']
+        token_type = token_data['type']
+
         transaction['token_id'] = token_id
-        decimals = token_data['decimalCount']
-        op_return_hash = txn['outputs'][0]['lockingScript']['bytes']
-        parsed_slp_data = parse_slp_op(op_return_hash)
-        
         transaction['token_info'] = {
-            'name': token_data['tokenName'],
-            'type': parsed_slp_data['tokenType'],
-            'ticker': token_data['tokenAbbreviation'],
-            'document_url': token_data['documentUrl'],
+            'name': token_data['name'],
+            'type': token_type,
+            'ticker': token_data['ticker'],
+            'document_url': token_data['documentUri'],
             'document_hash': token_data['documentHash'],
-            'nft_token_group': None, # TODO: check where this data can be fetched
-            'mint_amount': int(token_data['tokenCount']),
-            'decimals': decimals,
-            'mint_baton_index': token_data['batonIndex']
+            'mint_amount': int(token_data['totalMinted']),
+            'decimals': token_data['decimals']
         }
+
+        mint_baton_index = bcv_slp_data['batonIndex']
+        if mint_baton_index:
+            transaction['token_info']['mint_baton_index'] = mint_baton_index
+        if token_type in [65, 129]:
+            transaction['token_info']['nft_token_group'] = token_data['parentGroupId']
 
         txid_spent_index_pairs = []
 
@@ -186,3 +190,8 @@ class BitcoinVerde(object):
                                     })
 
         return utxos
+
+
+
+bcv = BitcoinVerde()
+bcv.get_transaction('09398369a40862003ca17e47928e791633801c29befd538b3dd5b2e5e100e92f')
