@@ -70,9 +70,9 @@ class BitcoinVerde(object):
             'decimals': token_data['decimals']
         }
 
-        mint_baton_index = bcv_slp_data['batonIndex']
-        if mint_baton_index:
-            transaction['token_info']['mint_baton_index'] = mint_baton_index
+        # mint_baton_index = bcv_slp_data['batonIndex']
+        # if mint_baton_index:
+        #     transaction['token_info']['mint_baton_index'] = mint_baton_index
         if token_type in [65, 129]:
             transaction['token_info']['nft_token_group'] = token_data['parentGroupId']
 
