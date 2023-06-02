@@ -31,13 +31,11 @@ urlpatterns = [
     path('order/<int:pk>/release', ReleaseCrypto.as_view(), name='release-order'),
     path('order/<int:pk>/refund', RefundCrypto.as_view(), name='refund-order'),
     path('order/<int:pk>/confirm-refund', ConfirmRefundCrypto.as_view(), name='confirm-refund-order'),
-    path('order/<int:pk>/cancel', CancelOrder.as_view(), name='cancel-order'),
     
     path('feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
     path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
     path('feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
 
-    path('order/appeal/<int:pk>/cancel', AppealCancel.as_view(), name='appeal-cancel'),
     path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
     path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
     path('order/contract/', ContractList.as_view(), name='contract-list'),

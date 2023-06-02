@@ -5,7 +5,6 @@ from .peer import Peer
 from .order import Order
 
 class AppealType(models.TextChoices):
-    # CANCEL = 'CNCL', _('Cancel')
     RELEASE = 'RLS', _('Release')
     REFUND  = 'RFN', _('Refund')
 
