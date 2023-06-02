@@ -55,9 +55,9 @@ from rampp2p.models import (
     Contract, 
     Status, 
     StatusType,
-    Transaction)
-from rampp2p.utils import validate_transaction
-from django.db.models import Q
+    Transaction
+)
+from rampp2p.utils.transaction import validate_transaction
 
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
@@ -338,7 +338,7 @@ def save_record(
             # Check if address is a contract address
             contract = Contract.objects.get(contract_address=address_obj.address)
             # Get contract order's current status
-            current_status =  Status.objects.filter(order=contract.order).latest('created_at')
+            current_status = Status.objects.filter(order=contract.order).latest('created_at')
 
             action = None
             if current_status.status == StatusType.ESCROW_PENDING:

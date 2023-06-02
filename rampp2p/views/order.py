@@ -9,8 +9,9 @@ from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
 
-from rampp2p import utils
-from rampp2p.utils import auth
+from rampp2p.utils.transaction import validate_transaction
+from rampp2p.utils.websocket import send_order_update
+from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -18,8 +19,7 @@ from rampp2p.serializers import (
     OrderSerializer, 
     OrderWriteSerializer, 
     StatusSerializer, 
-    ContractSerializer,
-    TransactionSerializer
+    ContractSerializer
 )
 from rampp2p.models import (
     Ad,
@@ -74,9 +74,9 @@ class OrderListCreate(APIView):
         
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_CREATE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)
@@ -167,16 +167,16 @@ class OrderDetail(APIView):
 
 class ConfirmOrder(APIView):
     '''
-    Marks the order as ESCROW_PENDING and subscribes to the contract address for incoming and outgoing
-    transactions. When the contract address receives a utxo with the correct amount, the order status is
-    is set to ESCROWED
+    Marks the order as ESCROW_PENDING and listener waits for the contract address to receive an incoming
+    transaction that satisfies the prerequisites of the contract, at which point the status
+    is then set to ESCROWED.
     '''
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -185,31 +185,27 @@ class ConfirmOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            validate_status_inst_count(StatusType.CONFIRMED, pk)
-            validate_status_progression(StatusType.CONFIRMED, pk)
-
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid is required')
+            validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
+            validate_status_progression(StatusType.ESCROW_PENDING, pk)
                 
             # contract.contract_address must be set first through GenerateContract endpoint
-            contract = Contract.objects.get(order_id=pk)
-            if not contract.exists():
-                raise ValidationError('order contract does not exist')
+            contract_exists = Contract.objects.filter(order__id=pk).exists()
+            if not contract_exists:
+                raise ValidationError(f"Contract for order#{pk} does not exist")
 
             # create ESCROW_PENDING status for order
-            status_serializer = StatusSerializer(StatusSerializer(data={
+            status_serializer = StatusSerializer(data={
                 'status': StatusType.ESCROW_PENDING,
                 'order': pk
-            }).save())
-            
-            # TODO: subscribe contract address        
+            })
 
-            # notify order participants
-            utils.websocket.send_order_update(
-                json.dumps(status_serializer.data), 
-                contract.contract_address
-            )
+            if status_serializer.is_valid():
+                status_serializer = StatusSerializer(status_serializer.save())
+            else: 
+                raise ValidationError(f"Encountered error saving status for order#{pk}")
+
+            # notify order update subscribers
+            send_order_update(json.dumps(status_serializer.data), pk)
             
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -236,17 +232,18 @@ class ConfirmOrder(APIView):
         else:
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
     
-class ForceConfirmOrder(APIView):
+class EscrowConfirmOrder(APIView):
     '''
     Manually marks the order as ESCROWED by submitting the transaction id
-    for validation (should only be used as fallback when ConfirmOrder endpoint fails).
+    for validation (should only be used as fallback when listener fails to update the status 
+    after calling ConfirmOrder).
     '''
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -269,9 +266,9 @@ class ForceConfirmOrder(APIView):
 
             contract = contract.first()
             # participants = self.get_order_participants(contract.order)
-            utils.validate_transaction(
+            validate_transaction(
                 txid, 
-                action=Transaction.ActionType.FUND,
+                action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id, 
                 # wallet_hashes=participants
             )
@@ -316,9 +313,9 @@ class CryptoBuyerConfirmPayment(APIView):
 
     try:
         # validate signature
-        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+        signature, timestamp, wallet_hash = get_verification_headers(request)
         message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
-        auth.verify_signature(wallet_hash, signature, message)
+        verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)
@@ -368,9 +365,9 @@ class CryptoSellerConfirmPayment(APIView):
         
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_SELLER_CONF_PAYMENT.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -426,9 +423,9 @@ class CancelOrder(APIView):
 
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_CANCEL.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)

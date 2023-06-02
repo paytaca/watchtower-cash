@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from typing import List
 
 from rampp2p.viewcodes import ViewCode
-from rampp2p.utils import auth
+from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.serializers import AdSerializer, AdWriteSerializer
 from rampp2p.models import Ad, Peer, PaymentMethod
 
@@ -33,9 +33,9 @@ class AdListCreate(APIView):
 
     try:
         # validate signature
-        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+        signature, timestamp, wallet_hash = get_verification_headers(request)
         message = ViewCode.AD_CREATE.value + '::' + timestamp
-        auth.verify_signature(wallet_hash, signature, message)
+        verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_payment_methods_ownership(wallet_hash, payment_method_ids)
@@ -94,9 +94,9 @@ class AdDetail(APIView):
 
     try:
         # validate signature
-        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+        signature, timestamp, wallet_hash = get_verification_headers(request)
         message = ViewCode.AD_UPDATE.value + '::' + timestamp
-        auth.verify_signature(wallet_hash, signature, message)
+        verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)
@@ -159,9 +159,9 @@ class AdDetail(APIView):
 
     try:
         # validate signature
-        signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+        signature, timestamp, wallet_hash = get_verification_headers(request)
         message = ViewCode.AD_DELETE.value + '::' + timestamp
-        auth.verify_signature(wallet_hash, signature, message)
+        verify_signature(wallet_hash, signature, message)
 
         # validate permissions
         self.validate_permissions(wallet_hash, pk)

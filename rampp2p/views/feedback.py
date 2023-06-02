@@ -4,10 +4,10 @@ from rest_framework import status, generics
 from django.db.models import Q
 from django.core.exceptions import ValidationError
 
+from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.models import Feedback, Peer, Order
 from rampp2p.serializers import FeedbackSerializer
 from rampp2p.viewcodes import ViewCode
-from rampp2p.utils import auth
 
 class ArbiterFeedbackListCreate(APIView):
     def get(self, request):
@@ -39,7 +39,7 @@ class ArbiterFeedbackListCreate(APIView):
         data = request.data.copy()
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
 
             try:
                 from_peer = Peer.objects.get(wallet_hash=wallet_hash)
@@ -49,7 +49,7 @@ class ArbiterFeedbackListCreate(APIView):
             data['from_peer'] = from_peer.id
 
             message = ViewCode.FEEDBACK_ARBITER_CREATE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             validate_permissions(data['from_peer'], data['order'])
@@ -133,7 +133,7 @@ class PeerFeedbackListCreate(APIView):
         data = request.data.copy()
         try:
             # validate signature
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
 
             try:
                 from_peer = Peer.objects.get(wallet_hash=wallet_hash)
@@ -143,7 +143,7 @@ class PeerFeedbackListCreate(APIView):
             data['from_peer'] = from_peer.id
 
             message = ViewCode.FEEDBACK_PEER_CREATE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
 
             # validate permissions
             validate_permissions(data['from_peer'], data['order'])

@@ -25,12 +25,13 @@ urlpatterns = [
     path('order/<int:pk>/status', OrderListStatus.as_view(), name='order-list-status'),
     path('order/<int:pk>/generate-contract', CreateContract.as_view(), name='generate-contract'),
     path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),
+    path('order/<int:pk>/escrow-confirm', EscrowConfirmOrder.as_view(), name='escrow-confirm-order'),
     path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
     path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
     path('order/<int:pk>/release', ReleaseCrypto.as_view(), name='release-order'),
     path('order/<int:pk>/refund', RefundCrypto.as_view(), name='refund-order'),
+    path('order/<int:pk>/confirm-refund', ConfirmRefundCrypto.as_view(), name='confirm-refund-order'),
     path('order/<int:pk>/cancel', CancelOrder.as_view(), name='cancel-order'),
-
     
     path('feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
     path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),

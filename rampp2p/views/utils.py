@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 
 from rampp2p.utils.signature import verify_signature
 from rampp2p import utils
-from rampp2p import tasks
+from rampp2p.tasks import contract_tasks
 from rampp2p.models import Peer
 
 import logging
@@ -57,7 +57,7 @@ class VerifySignature(APIView):
                 signature, 
                 message
             )
-            response = tasks.execute_subprocess(command)
+            response = contract_tasks.execute_subprocess(command)
             result = response.get('result')
             error = response.get('error')
             return result, error

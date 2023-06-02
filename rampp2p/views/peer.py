@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from rampp2p.models import Peer
 from rampp2p.serializers import PeerSerializer, PeerWriteSerializer
 from rampp2p.viewcodes import ViewCode
-from rampp2p.utils import auth
+from rampp2p.utils.signature import verify_signature, get_verification_headers
 
 class PeerListCreate(APIView):
     def get(self, request):
@@ -23,9 +23,9 @@ class PeerListCreate(APIView):
     def post(self, request):
 
         try:
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.POST_PEER.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
@@ -53,9 +53,9 @@ class PeerDetail(APIView):
 
     def put(self, request, pk):
         try:
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.PUT_PEER.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         

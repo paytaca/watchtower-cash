@@ -6,8 +6,8 @@ import asyncio
 class RampP2PUpdatesConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
-        self.wallet_hash = self.scope['url_route']['kwargs']['wallet_hash']
-        self.room_name = f'ramp-p2p-updates-{self.wallet_hash}'
+        self.order_id = self.scope['url_route']['kwargs']['order_id']
+        self.room_name = f'ramp-p2p-updates-{self.order_id}'
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name

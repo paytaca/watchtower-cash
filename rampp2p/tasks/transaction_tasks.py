@@ -1,9 +1,9 @@
 from celery import shared_task
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
-from django.conf import settings
 from typing import Dict
+from decimal import Decimal
+from django.conf import settings
 
+from rampp2p import utils
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.serializers import TransactionSerializer, RecipientSerializer
 from rampp2p.models import (
@@ -11,11 +11,10 @@ from rampp2p.models import (
     StatusType, 
     Contract
 )
-from rampp2p import utils
+
 import subprocess
 import json
 import re
-import decimal
 
 import logging
 logger = logging.getLogger(__name__)
@@ -42,35 +41,8 @@ def execute_subprocess(command):
     
     response = {'result': stdout, 'error': stderr} 
     logger.warning(f'response: {response}')
+
     return response
-
-@shared_task(queue='rampp2p__contract_execution')
-def handle_subprocess_completion(response: Dict, **kwargs):
-    data = {
-        'result': response.get('result'),
-        'error': response.get('error')
-    }
-    logger.warning(f'data: {data}')
-
-    action = kwargs.get('action')
-    order_id = kwargs.get('order_id')
-
-    success = response.get('result').get('success')
-    success = False if success == "False" else bool(success)
-
-    if bool(success) == True:
-        if action == 'CREATE':
-            
-            # Update contract address
-            address = data.get('result').get('contract_address')
-            contract = Contract.objects.get(order__id=order_id)
-            contract.contract_address = address
-            contract.save()
-
-            # TODO: subscribe to contract address: listen for incoming & outgoing utxo
-    
-    data['action'] = action
-    send_order_update(data=data, room_id=contract.order.id)
 
 @shared_task(queue='rampp2p__contract_execution')
 def verify_tx_out(data: Dict, **kwargs):
@@ -95,8 +67,8 @@ def verify_tx_out(data: Dict, **kwargs):
     if tx_inputs is None or tx_outputs is None:
         error = data.get('result').get('error')
         return send_order_update(
-            data=error,
-            room_id=contract.order.id
+            error,
+            contract.order.id
         )
     
     outputs = []
@@ -117,8 +89,8 @@ def verify_tx_out(data: Dict, **kwargs):
 
             if address == contract.contract_address:
                 # Convert amount value to decimal (8 decimal places)
-                match_amount = decimal.Decimal(output.get('amount'))
-                match_amount = match_amount.quantize(decimal.Decimal('0.00000000'))
+                match_amount = Decimal(output.get('amount'))
+                match_amount = match_amount.quantize(Decimal('0.00000000'))
 
                 outputs.append({
                     "address": address,
@@ -156,16 +128,16 @@ def verify_tx_out(data: Dict, **kwargs):
             }
             # Send result through websocket
             return send_order_update(
-                data=result, 
-                room_id=contract.order.id
+                result, 
+                contract.order.id
             )
         
         # Retrieve expected transaction output addresses
         arbiter, buyer, seller, servicer = utils.get_order_peer_addresses(contract.order)
 
         # Calculate expected transaction amount and fees
-        arbitration_fee = decimal.Decimal(settings.ARBITRATION_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
-        trading_fee = decimal.Decimal(settings.TRADING_FEE).quantize(decimal.Decimal('0.00000000'))/100000000
+        arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
+        trading_fee = Decimal(settings.TRADING_FEE).quantize(Decimal('0.00000000'))/100000000
         amount = contract.order.crypto_amount
         
         arbiter_exists = False
@@ -175,7 +147,7 @@ def verify_tx_out(data: Dict, **kwargs):
 
         for out in tx_outputs:
             output_address = out.get('address')
-            output_amount = decimal.Decimal(out.get('amount')).quantize(decimal.Decimal('0.00000000'))
+            output_amount = Decimal(out.get('amount')).quantize(Decimal('0.00000000'))
 
             outputs.append({
                 "address": output_address,
@@ -290,6 +262,6 @@ def verify_tx_out(data: Dict, **kwargs):
 
     # Send the result through websocket
     return send_order_update(
-        data=result, 
-        room_id=contract.contract_address
+        result, 
+        contract.order.id
     )

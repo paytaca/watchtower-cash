@@ -6,9 +6,9 @@ from django.http import Http404
 from django.core.exceptions import ValidationError
 
 from rampp2p.models import PaymentType, PaymentMethod, Peer
+from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.serializers import PaymentTypeSerializer, PaymentMethodSerializer
 from rampp2p.viewcodes import ViewCode
-from rampp2p.utils import auth
 
 class PaymentTypeList(APIView):
     def get(self, request):
@@ -33,9 +33,9 @@ class PaymentMethodListCreate(APIView):
     def get(self, request):
         
         try:
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.LIST_PAYMENT_METHOD.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -51,9 +51,9 @@ class PaymentMethodListCreate(APIView):
     def post(self, request):
 
         try:
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.POST_PAYMENT_METHOD.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -81,9 +81,9 @@ class PaymentMethodDetail(APIView):
     
     def get(self, request, pk):
         try:
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.GET_PAYMENT_METHOD.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -94,9 +94,9 @@ class PaymentMethodDetail(APIView):
 
     def put(self, request, pk):
         try:
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.PUT_PAYMENT_METHOD.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -123,9 +123,9 @@ class PaymentMethodDetail(APIView):
 
     def delete(self, request, pk):
         try:
-            pubkey, signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.DEL_PAYMENT_METHOD.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, pubkey, signature, message)
+            verify_signature(wallet_hash, pubkey, signature, message)
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)

@@ -1,13 +1,12 @@
-from django.conf import settings
-import decimal
-
-import rampp2p.tasks as tasks
+from rampp2p.tasks.contract_tasks import execute_subprocess, subprocess_handler
 
 import logging
 logger = logging.getLogger(__name__)
 
-def create(**kwargs):
-    action = 'CREATE'
+def create_contract(**kwargs):
+    '''
+    Executes a subprocess task to generate the contract address
+    '''
     path = './rampp2p/escrow/src/'
     command = 'node {}escrow.js {} {} {} {}'.format(
         path,        
@@ -16,18 +15,9 @@ def create(**kwargs):
         kwargs.get('seller_pubkey'),
         kwargs.get('timestamp'),
     )
-    return tasks.execute_subprocess.apply_async(
-                (command,), 
-                link=tasks.handle_subprocess_completion.s(
-                    action=action, 
-                    order_id=kwargs.get('order_id')
-                )
-            )
-
-def get_contract_fees():
-    hardcoded_fee = decimal.Decimal(settings.HARDCODED_FEE)
-    arbitration_fee = decimal.Decimal(settings.ARBITRATION_FEE)
-    trading_fee = decimal.Decimal(settings.TRADING_FEE)
-    total_fee = hardcoded_fee + arbitration_fee + trading_fee
-    decimal_fee = total_fee/100000000
-    return decimal_fee
+    return execute_subprocess.apply_async(
+        (command,), 
+        link=subprocess_handler.s(
+            order_id=kwargs.get('order_id')
+        )
+    )

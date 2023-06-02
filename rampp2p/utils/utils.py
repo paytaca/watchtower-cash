@@ -3,7 +3,9 @@ from rampp2p.models import Order, TradeType, Status, StatusType
 from django.db.models import Q
 from rampp2p.serializers import StatusSerializer
 from django.conf import settings
-from datetime import datetime, timedelta
+from datetime import datetime
+from decimal import Decimal
+from django.utils import timezone
 
 import logging
 logger = logging.getLogger(__name__)
@@ -14,13 +16,11 @@ def is_order_expired(order_pk: int):
     '''
     # get the created_at field of order's ESCROWED status
     time_duration = Order.objects.get(pk=order_pk).time_duration
-    start_time = Status.objects.filter(
-            Q(order__id=order_pk) & Q(status=StatusType.ESCROWED)
-        ).values('created_at').first()
+    start_time = Status.objects.values('created_at').filter(Q(order__id=order_pk) & Q(status=StatusType.ESCROWED)).first()
     
-    logger.warn(f'start_time: {start_time}')
     current_time = datetime.now()
-    elapsed_time = current_time - start_time
+    timezone_aware_time = timezone.make_aware(current_time)
+    elapsed_time = timezone_aware_time - start_time['created_at']
 
     # order is expired if elapsed time is greater than the time duration
     if elapsed_time >= time_duration:
@@ -57,3 +57,11 @@ def get_order_peers(order: Order):
         buyer = order.ad.owner
     
     return arbiter, buyer, seller
+
+def get_contract_fees():
+    hardcoded_fee = Decimal(settings.HARDCODED_FEE)
+    arbitration_fee = Decimal(settings.ARBITRATION_FEE)
+    trading_fee = Decimal(settings.TRADING_FEE)
+    total_fee = hardcoded_fee + arbitration_fee + trading_fee
+    decimal_fee = total_fee/100000000
+    return decimal_fee

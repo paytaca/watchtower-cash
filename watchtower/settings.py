@@ -245,7 +245,8 @@ CELERY_IMPORTS = (
     'smartbch.tasks',
     'anyhedge.tasks',
     'ramp.tasks',
-    'rampp2p.tasks'
+    'rampp2p.tasks.contract_tasks',
+    'rampp2p.tasks.transaction_tasks'
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'

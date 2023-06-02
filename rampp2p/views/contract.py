@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from django.http import Http404
 
-from rampp2p import utils
-from rampp2p.utils import auth
+from rampp2p.utils.signature import verify_signature, get_verification_headers
+from rampp2p.utils.contract import create_contract
 from rampp2p.viewcodes import ViewCode
 from rampp2p.permissions import *
 from rampp2p.validators import *
@@ -61,6 +61,7 @@ class ContractDetail(APIView):
 
         response = {
             "contract": contract_serializer.data,
+            "timestamp": contract_instance.created_at.timestamp(),
             "transactions": tx_data
         }
         return Response(response, status=status.HTTP_200_OK)
@@ -70,9 +71,9 @@ class CreateContract(APIView):
         
         try:
             # signature validation
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # permission validations
             self.validate_permissions(wallet_hash, pk)
@@ -90,23 +91,25 @@ class CreateContract(APIView):
         
         generate = False
         address = None
-        contract = Contract.objects.get(order__id=pk)
+        timestamp = None
+        contract = Contract.objects.filter(order__id=pk)
 
         if not contract.exists():
-            contract = ContractSerializer({"order": order.id}).save()
+            contract = Contract.objects.create(order=order)
+            timestamp = contract.created_at.timestamp()
             generate = True
         else:
             # return contract if already existing
+            contract = contract.first()
             if contract.contract_address is None:
                 generate = True
             else:
                 address = contract.contract_address
         
-        
         if generate:
             # Execute subprocess
             timestamp = contract.created_at.timestamp()
-            utils.contract.create(
+            create_contract(
                 order_id=contract.order.id,
                 arbiter_pubkey=params['arbiter_pubkey'], 
                 seller_pubkey=params['seller_pubkey'], 

@@ -31,5 +31,5 @@ class Order(models.Model):
     @property
     def time_duration(self):
         # convert the duration choice to a timedelta object
-        minutes = self.time_limit_choice
+        minutes = self.time_duration_choice
         return timedelta(minutes=minutes)

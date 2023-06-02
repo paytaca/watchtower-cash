@@ -16,7 +16,8 @@ from rampp2p.models import (
 from rampp2p.serializers import StatusSerializer, AppealSerializer
 from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
-from rampp2p.utils import auth
+from rampp2p.utils.signature import verify_signature, get_verification_headers
+from rampp2p.utils.transaction import validate_transaction
 from rampp2p import utils
 
 class AppealCancel(APIView):
@@ -31,9 +32,9 @@ class AppealCancel(APIView):
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.APPEAL_CANCEL.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -41,18 +42,18 @@ class AppealCancel(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            validate_status_inst_count(StatusType.CANCEL_APPEALED, pk)
+            validate_status_inst_count(StatusType.REFUND_APPEALED, pk)
             validate_status_confirmed(pk)
-            validate_status_progression(StatusType.CANCEL_APPEALED, pk)
+            validate_status_progression(StatusType.REFUND_APPEALED, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # create and Appeal record with type=CANCEL
-        submit_appeal(AppealType.CANCEL, wallet_hash, pk)
+        # create and Appeal record with type=REFUND
+        submit_appeal(AppealType.REFUND, wallet_hash, pk)
 
-        # create CANCEL_APPEALED status for order
+        # create REFUND_APPEALED status for order
         serializer = StatusSerializer(data={
-            'status': StatusType.CANCEL_APPEALED,
+            'status': StatusType.REFUND_APPEALED,
             'order': pk
         })
 
@@ -98,9 +99,9 @@ class AppealRelease(APIView):
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.APPEAL_RELEASE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -166,9 +167,9 @@ class AppealRefund(APIView):
     def post(self, request, pk):
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.APPEAL_REFUND.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -254,9 +255,9 @@ class ReleaseCrypto(APIView):
 
         try:
             # Validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # Validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -302,7 +303,6 @@ class ReleaseCrypto(APIView):
             curr_status.status != StatusType.REFUND_APPEALED):
                 raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
 
-    
 class RefundCrypto(APIView):
     '''
     Marks an appealed order for refund of escrowed funds, updating the order status to REFUND_PENDING.
@@ -321,9 +321,9 @@ class RefundCrypto(APIView):
         
         try:
             # Validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # Validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -381,9 +381,9 @@ class ForceReleaseCrypto(APIView):
 
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -404,7 +404,7 @@ class ForceReleaseCrypto(APIView):
             contract_id = Contract.objects.values('id').get(order__id=pk)['id']
 
             # Validate the transaction
-            utils.validate_transaction(
+            validate_transaction(
                 txid, 
                 action=Transaction.ActionType.RELEASE,
                 contract_id=contract_id
@@ -436,7 +436,7 @@ class ForceReleaseCrypto(APIView):
         if (curr_status.status != StatusType.RELEASE_PENDING):
                 raise ValidationError(f'{prefix} Current status of order #{pk} is not {StatusType.RELEASE_PENDING.label}.')
 
-class ForceRefundCrypto(APIView):
+class ConfirmRefundCrypto(APIView):
     '''
     Manually marks the order as (status) REFUNDED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
@@ -451,9 +451,9 @@ class ForceRefundCrypto(APIView):
 
         try:
             # validate signature
-            signature, timestamp, wallet_hash = auth.get_verification_headers(request)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
             message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            auth.verify_signature(wallet_hash, signature, message)
+            verify_signature(wallet_hash, signature, message)
 
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
@@ -474,7 +474,7 @@ class ForceRefundCrypto(APIView):
             contract_id = Contract.objects.values('id').get(order__id=pk)['id']
 
             # Validate the transaction
-            utils.validate_transaction(
+            validate_transaction(
                 txid, 
                 action=Transaction.ActionType.REFUND,
                 contract_id=contract_id
