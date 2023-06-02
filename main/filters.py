@@ -14,6 +14,17 @@ from main.models import (
 
 
 class CashNftFilter(filters.FilterSet):
+    capabilities = filters.CharFilter(
+        method='capabilities_filter',
+        help_text='Filter by list of values separated by comma',
+    )
+
+    has_group = filters.BooleanFilter(
+        method='has_group_filter',
+        help_text='Filter NFTs that has a group. ' +  \
+            'NFT belong to a group if there is a `minting` capability with the same category',
+    )
+
     class Meta:
         model = CashNonFungibleToken
         fields = (
@@ -21,6 +32,19 @@ class CashNftFilter(filters.FilterSet):
             'commitment',
             'category',
         )
+
+    def capabilities_filter(self, queryset, name, value):
+        if not isinstance(value, str):
+            return queryset
+
+        capabilities = [capability.strip() for capability in value.split(",") if capability.strip()]
+        return queryset.filter(capability__in=capabilities)
+
+    def has_group_filter(self, queryset, name, value):
+        if not isinstance(value, bool):
+            return queryset
+
+        return queryset.filter_has_group(has_group=value)
 
 
 class TokensViewSetFilter(BaseFilterBackend):
