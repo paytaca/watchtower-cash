@@ -298,7 +298,7 @@ class RefundCrypto(APIView):
             curr_status.status != StatusType.REFUND_APPEALED):
                 raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
 
-class ForceReleaseCrypto(APIView):
+class ConfirmReleaseCrypto(APIView):
     '''
     Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.

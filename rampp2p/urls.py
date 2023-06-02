@@ -29,6 +29,7 @@ urlpatterns = [
     path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
     path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
     path('order/<int:pk>/release', ReleaseCrypto.as_view(), name='release-order'),
+    path('order/<int:pk>/confirm-release', ConfirmReleaseCrypto.as_view(), name='confirm-release-order'),
     path('order/<int:pk>/refund', RefundCrypto.as_view(), name='refund-order'),
     path('order/<int:pk>/confirm-refund', ConfirmRefundCrypto.as_view(), name='confirm-refund-order'),
     
