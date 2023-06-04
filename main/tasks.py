@@ -1135,22 +1135,25 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
     processed_list = []
     if _list:
         processed_list = []
-        for index, val in enumerate(_list):
+        for _, val in enumerate(_list):
             elem = [
                 val[0],
                 val[1]
             ]
             if key != BCH_OR_SLP:
-                cashtoken_data = val[2]
-                if cashtoken_data:
-                    elem.append(cashtoken_data['category'])
-                    elem.append(cashtoken_data['amount'])
+                try:
+                    cashtoken_data = val[2]
+                    if cashtoken_data:
+                        elem.append(cashtoken_data['category'])
+                        elem.append(cashtoken_data['amount'])
 
-                    if 'nft' in cashtoken_data.keys():
-                        nft_data = cashtoken_data['nft']
-                        elem.append(nft_data['capability'])
-                        elem.append(nft_data['commitment'])
-            
+                        if 'nft' in cashtoken_data.keys():
+                            nft_data = cashtoken_data['nft']
+                            elem.append(nft_data['capability'])
+                            elem.append(nft_data['commitment'])
+                except IndexError:
+                    pass
+                
             '''mask remaining fields with None (incurs Django error for non-uniform ArrayField(ArrayField) length for senders/recipients)
             [
                 address,
