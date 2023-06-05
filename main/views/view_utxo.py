@@ -10,9 +10,11 @@ from django.db.models import (
     IntegerField,
     BooleanField,
     ExpressionWrapper,
-    TextField
+    TextField,
+    Case,
+    When
 )
-from django.db.models.functions import Cast
+from django.db.models.functions import Cast, Coalesce
 from django.contrib.postgres.fields.jsonb import KeyTextTransform
 from django.contrib.postgres.fields import JSONField
 from rest_framework.views import APIView
@@ -77,7 +79,18 @@ def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addr
     )
 
     if is_cashtoken:
-        if is_cashtoken_nft:
+        if is_cashtoken_nft is None:
+            annotate_token_info = lambda field: Case(
+                When(cashtoken_nft_id__isnull=False, then=F(f"cashtoken_nft__{field}")),
+                default=F(f"cashtoken_ft__{field}")
+            )
+            utxos_values = utxos_values.annotate(
+                tokenid=annotate_token_info("category"),
+                token_name=annotate_token_info("info__name"),
+                decimals=annotate_token_info("info__decimals"),
+                token_ticker=annotate_token_info("info__symbol")
+            )
+        elif is_cashtoken_nft:
             utxos_values = utxos_values.annotate(
                 tokenid=F('cashtoken_nft__category'),
                 token_name=F('cashtoken_nft__info__name'),
