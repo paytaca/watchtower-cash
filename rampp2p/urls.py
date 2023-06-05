@@ -28,17 +28,17 @@ urlpatterns = [
     path('order/<int:pk>/escrow-confirm', EscrowConfirmOrder.as_view(), name='escrow-confirm-order'),
     path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
     path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
-    path('order/<int:pk>/release', ReleaseCrypto.as_view(), name='release-order'),
-    path('order/<int:pk>/confirm-release', ConfirmReleaseCrypto.as_view(), name='confirm-release-order'),
-    path('order/<int:pk>/refund', RefundCrypto.as_view(), name='refund-order'),
-    path('order/<int:pk>/confirm-refund', ConfirmRefundCrypto.as_view(), name='confirm-refund-order'),
-    
+    path('order/<int:pk>/mark-release', MarkForRelease.as_view(), name='mark-release'),
+    path('order/<int:pk>/validate-release', ValidateRelease.as_view(), name='validate-release'),
+    path('order/<int:pk>/mark-refund', MarkForRefund.as_view(), name='mark-refund'),
+    path('order/<int:pk>/validate-refund', ValidateRefund.as_view(), name='validate-refund'),
+    path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
+    path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
+
     path('feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
     path('feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
     path('feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
 
-    path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
-    path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
     path('order/contract/', ContractList.as_view(), name='contract-list'),
     path('order/contract/<int:pk>', ContractDetail.as_view(), name='contract-detail'),
 

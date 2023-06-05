@@ -169,7 +169,7 @@ def submit_appeal(type, wallet_hash, order_id):
         return appeal
     return None
 
-class ReleaseCrypto(APIView):
+class MarkForRelease(APIView):
     '''
     Marks an appealed order for release of escrowed funds, updating the order status to RELEASE_PENDING.
     The order status is automatically updated to RELEASED when the contract address receives an 
@@ -235,7 +235,7 @@ class ReleaseCrypto(APIView):
             curr_status.status != StatusType.REFUND_APPEALED):
                 raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
 
-class RefundCrypto(APIView):
+class MarkForRefund(APIView):
     '''
     Marks an appealed order for refund of escrowed funds, updating the order status to REFUND_PENDING.
     The order status is automatically updated to REFUNDED when the contract address receives an 
@@ -298,14 +298,14 @@ class RefundCrypto(APIView):
             curr_status.status != StatusType.REFUND_APPEALED):
                 raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
 
-class ConfirmReleaseCrypto(APIView):
+class ValidateRelease(APIView):
     '''
     Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
     Note: This endpoint should only be used as fallback for the ReleaseCrypto endpoint.
 
     Requirements:
-        (1) Caller must be the order's arbiter
+        (1) Caller must be the order's arbiter or seller
         (2) The order's current status must be RELEASE_PENDING (created by calling ReleaseCrypto endpoint first)
         (3) TODO: An amount of time must already have passed since status RELEASE_PENDING was created
     '''
@@ -350,8 +350,8 @@ class ConfirmReleaseCrypto(APIView):
     def validate_permissions(self, wallet_hash, pk):
         '''
         validate_permissions will raise a ValidationError if:
-            (1) caller is not the order's arbiter
-            (2) the order's current status is not RELEASE_PENDING
+            (1) caller is not the order's arbiter nor seller
+            (2) the order's current status is not RELEASE_PENDING nor PAID
         '''
         prefix = "ValidationError:"
 
@@ -362,13 +362,22 @@ class ConfirmReleaseCrypto(APIView):
         except Peer.DoesNotExist or Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
-        if caller.wallet_hash != order.arbiter.wallet_hash:
-            raise ValidationError(f'{prefix} Caller must be order arbiter.')
-        
-        if (curr_status.status != StatusType.RELEASE_PENDING):
-                raise ValidationError(f'{prefix} Current status of order #{pk} is not {StatusType.RELEASE_PENDING.label}.')
+        is_arbiter = False
+        is_seller = False
+        if caller.wallet_hash == order.arbiter.wallet_hash:
+            is_arbiter = True
+        elif order.ad.trade_type == TradeType.SELL:
+            seller = order.ad.owner
+            if caller.wallet_hash == seller.wallet_hash:
+                is_seller = True
 
-class ConfirmRefundCrypto(APIView):
+        if (not is_arbiter) and (not is_seller):
+            raise ValidationError(f'{prefix} Caller must be seller or arbiter.')
+        
+        if not (curr_status.status == StatusType.RELEASE_PENDING or curr_status.status == StatusType.PAID):
+            raise ValidationError(f'{prefix} Current status of order #{pk} must be {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}.')
+
+class ValidateRefund(APIView):
     '''
     Manually marks the order as (status) REFUNDED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
