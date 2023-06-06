@@ -1,13 +1,14 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.http import Http404
 from django.core.exceptions import ValidationError
 
-from rampp2p.utils.signature import verify_signature
 from rampp2p import utils
-from rampp2p.tasks import contract_tasks
 from rampp2p.models import Peer
+
+import ecdsa
+import hashlib
+from ecdsa.util import sigdecode_der
 
 import logging
 logger = logging.getLogger(__name__)
@@ -22,44 +23,38 @@ class TransactionDetail(APIView):
         utils.validate_transaction(txid, wallet_hashes=[wallet_hash])
         return Response(status=status.HTTP_200_OK)
 
-class HashContract(APIView):
-    def get(self, request):
-        sha256_hash = hash.calculate_sha256("./rampp2p/escrow/src/escrow.cash")
-        return Response({'sha256_hash': sha256_hash}, status=status.HTTP_200_OK)
-
-class VerifySignature(APIView):
+class VerifyMessageView(APIView):
     def post(self, request):
-        wallet_hash = request.data.get('wallet_hash')
-        signature = request.data.get('signature')
+        pubkey = request.data.get('pubkey')
         message = request.data.get('message')
-
-        if (signature is None or message is None or wallet_hash is None):
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+        signature_hex = request.data.get('signature')
         
-        public_key = Peer.objects.values('public_key').get(wallet_hash=wallet_hash)['public_key']
-        logger.warning(f'message: "{message}", pubkey_hex: "{public_key}", signature_hex: "{signature}"')
-
-        try: 
-            result, error = self.verify_signature(public_key, signature, message)
-            # is_valid = verify_signature(public_key, signature, message)
-            # logger.warn(f'result: {result}')
-            # return Response({'is_verified': is_valid}, status=status.HTTP_200_OK)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({'is_verified': result.get('is_verified')}, status=status.HTTP_200_OK)
-
-    def verify_signature(self, public_key, signature, message):
+        valid = False
         try:
-            path = './rampp2p/escrow/src/'
-            command = 'node {}signature.js verify {} {} {}'.format(
-                path,
-                public_key, 
-                signature, 
-                message
-            )
-            response = contract_tasks.execute_subprocess(command)
-            result = response.get('result')
-            error = response.get('error')
-            return result, error
-        except Exception as err:
-            raise ValidationError(err.args[0])
+            valid = self.verify_signature(pubkey, signature_hex, message)
+        except ValidationError:
+            valid = False
+        return Response({"valid": valid}, status=status.HTTP_200_OK)
+    
+    def verify_signature(self, public_key_hex, signature_hex, message):
+        try:
+
+            # Convert the signature and public key to bytes
+            der_signature_bytes = bytearray.fromhex(signature_hex)
+            public_key_bytes = bytearray.fromhex(public_key_hex)
+
+            # Create an ECDSA public key object
+            vk = ecdsa.VerifyingKey.from_string(public_key_bytes, curve=ecdsa.SECP256k1)
+            logger.warn(f'public_key: {public_key_hex}')
+            logger.warn(f'message: {message}')
+
+            # Verify the signature
+            try:
+                is_valid = vk.verify(der_signature_bytes, message.encode('utf-8'), hashlib.sha256, sigdecode=sigdecode_der)
+            except Exception as err:
+                raise ValidationError(err.args[0])
+
+            return is_valid
+
+        except Peer.DoesNotExist as err:
+            raise ValidationError({"error": err.args[0]})

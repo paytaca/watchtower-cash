@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-
+from rampp2p.models import Peer
 import logging
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def verify_signature(wallet_hash, signature, message):
     #         raise ValidationError('invalid signature')
     # except Exception as err:
     #     raise ValidationError(err.args[0])
-    return
+    # return
 
 def get_verification_headers(request):
     signature = request.headers.get('signature', None)

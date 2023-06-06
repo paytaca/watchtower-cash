@@ -41,9 +41,8 @@ urlpatterns = [
 
     path('order/contract/', ContractList.as_view(), name='contract-list'),
     path('order/contract/<int:pk>', ContractDetail.as_view(), name='contract-detail'),
-
-    path('hash-contract', HashContract.as_view(), name='hash-contract'),
-    path('verify-signature', VerifySignature.as_view(), name='verify-signature'),
+    
     path('transaction-detail', TransactionDetail.as_view(), name='transaction-detail'),
+    path('verify-message', VerifyMessageView.as_view(), name='verify-message'),
     
 ]
