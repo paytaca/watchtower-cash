@@ -49,10 +49,7 @@ class VerifyMessageView(APIView):
             logger.warn(f'message: {message}')
 
             # Verify the signature
-            try:
-                is_valid = vk.verify(der_signature_bytes, message.encode('utf-8'), hashlib.sha256, sigdecode=sigdecode_der)
-            except Exception as err:
-                raise ValidationError(err.args[0])
+            is_valid = vk.verify(der_signature_bytes, message.encode('utf-8'), hashlib.sha256, sigdecode=sigdecode_der)
 
             return is_valid
 

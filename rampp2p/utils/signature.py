@@ -1,35 +1,33 @@
 from django.core.exceptions import ValidationError
 from rampp2p.models import Peer
+import ecdsa
+import hashlib
+
 import logging
 logger = logging.getLogger(__name__)
 
-def verify_signature(wallet_hash, signature, message):
-    '''
-    Executes a javascript code to verify signature (maybe not the best way)
-    '''
-    logger.warn('simulating signature verification')
-    # try:
-    #     public_key = Peer.objects.values('public_key').get(wallet_hash=wallet_hash)['public_key']
-    #     path = './rampp2p/escrow/src/'
-    #     command = 'node {}signature.js verify {} {} {}'.format(
-    #         path,
-    #         public_key, 
-    #         signature, 
-    #         message
-    #     )
-    #     response = tasks.execute_subprocess(command)
-    #     result = response.get('result')
-    #     # error = response.get('error')
+def verify_signature(wallet_hash, signature_hex, message):
+    
+    try:
+        peer = Peer.objects.get(wallet_hash=wallet_hash)
+        public_key_hex = peer.public_key
 
-    #     is_valid = result.get('is_valid')
-    #     if is_valid is None:
-    #         is_valid = False
-        
-    #     if bool(is_valid) == False:
-    #         raise ValidationError('invalid signature')
-    # except Exception as err:
-    #     raise ValidationError(err.args[0])
-    # return
+        # Convert the signature and public key to bytes
+        der_signature_bytes = bytearray.fromhex(signature_hex)
+        public_key_bytes = bytearray.fromhex(public_key_hex)
+
+        # Create an ECDSA public key object
+        vk = ecdsa.VerifyingKey.from_string(public_key_bytes, curve=ecdsa.SECP256k1)
+        logger.warn(f'public_key: {public_key_hex}')
+        logger.warn(f'message: {message}')
+
+        # Verify the signature
+        is_valid = vk.verify(der_signature_bytes, message.encode('utf-8'), hashlib.sha256, sigdecode=ecdsa.util.sigdecode_der)
+
+        return is_valid
+
+    except (Peer.DoesNotExist, Exception) as err:
+        raise ValidationError({"error": err.args[0]})
 
 def get_verification_headers(request):
     signature = request.headers.get('signature', None)
