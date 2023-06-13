@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 import grpc
-import random
 import logging
 from main.utils.bchd import bchrpc_pb2 as pb
 from main.utils.bchd import bchrpc_pb2_grpc as bchrpc
 from grpc._channel import _InactiveRpcError
+from django.conf import settings
 import base64
 import ssl
 
+# from bitcoinrpc.authproxy import AuthServiceProxy
+
+
 LOGGER = logging.getLogger(__name__)
+
 
 class BCHDQuery(object):
 
     def __init__(self):
-        nodes = [
-            'bchd.paytaca.com:8335'
-        ]
-        self.base_url = random.choice(nodes)
+        self.base_url = settings.BCHD_NODE
 
+        # if settings.BCH_NETWORK != 'mainnet':
+        #     self.rpc_connection = AuthServiceProxy(self.base_url)
+
+        self.source = 'bchd-query'
         self._slp_action = {
             0: 'NON_SLP',
             1: 'NON_SLP_BURN',

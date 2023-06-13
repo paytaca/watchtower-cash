@@ -1,4 +1,5 @@
 from django.db import models
+from main.models import WalletHistory
 
 
 class LinkedDeviceInfo(models.Model):
@@ -93,9 +94,22 @@ class Merchant(models.Model):
         null=True, blank=True,
         related_name="merchant",
     )
+    verified = models.BooleanField(default=False)
+    gmap_business_link = models.URLField(default=None, blank=True, null=True)
+    active = models.BooleanField(default=False)
+
 
     def __str__(self):
         return f"Merchant ({self.name})"
+
+    @property
+    def last_transaction_date(self):
+        wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
+        last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')
+        last_tx_date = None
+        if last_tx:
+            last_tx_date = str(last_tx.date_created)
+        return last_tx_date
 
 
 class Branch(models.Model):

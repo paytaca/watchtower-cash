@@ -44,8 +44,12 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
+DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='prod')
+DOMAIN = 'https://watchtower.cash'
 
-DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='local')
+if DEPLOYMENT_INSTANCE == 'local':
+    DEBUG = True
+    DOMAIN = 'http://localhost:8000'
 
 ALLOWED_HOSTS = [
     '*'
@@ -70,6 +74,7 @@ INSTALLED_APPS=[
     'drf_yasg',
     'channels',
     'push_notifications',
+    'django_filters',
 
     'constance',
     'main',
@@ -233,9 +238,9 @@ PUSH_NOTIFICATIONS_SETTINGS = {
 }
 
 
-DB_NUM = [0,1,2]
-if DEPLOYMENT_INSTANCE == 'staging':
-    DB_NUM = [3,4,5]
+DB_NUM = [3,4,5]
+if DEPLOYMENT_INSTANCE == 'prod':
+    DB_NUM = [0,1,2]
 
 REDIS_HOST = decipher(config('REDIS_HOST'))
 REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', ''))
@@ -252,7 +257,7 @@ CELERY_IMPORTS = (
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 # CELERY_RESULT_BACKEND = 'rpc://'
 
-if REDIS_PASSWORD:   
+if REDIS_PASSWORD:
     redis_prefix = ''
     if DEPLOYMENT_INSTANCE == 'prod':
         redis_prefix = 'user'
@@ -280,6 +285,9 @@ else:
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 TOKEN_IMAGES_DIR = config('TOKEN_IMAGES_DIR', default='/images')
 
@@ -348,7 +356,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'update_shift_status': {
         'task': 'ramp.tasks.update_shift_status',
-        'schedule': 30
+        'schedule': 60
     }
 }
 
@@ -374,6 +382,9 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.MultiPartParser',
         'rest_framework.parsers.JSONParser',
     ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer'
+    ]
 }
 
 SWAGGER_SETTINGS = {
@@ -385,9 +396,9 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 #Telegram bot settings
 # TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN', default='')
-TELEGRAM_BOT_TOKEN = "1764241013:AAGA5L8vuZf8CBJH3iHkFsp84pRbFzSGwrc"
-TELEGRAM_BOT_USER = decipher(config('TELEGRAM_BOT_USER'))
-TELEGRAM_DESTINATION_ADDR = decipher(config('TELEGRAM_DESTINATION_ADDR'))
+# TELEGRAM_BOT_TOKEN = "1764241013:AAGA5L8vuZf8CBJH3iHkFsp84pRbFzSGwrc"
+# TELEGRAM_BOT_USER = decipher(config('TELEGRAM_BOT_USER'))
+# TELEGRAM_DESTINATION_ADDR = decipher(config('TELEGRAM_DESTINATION_ADDR'))
 
 
 # Slack credentials and configurations
@@ -409,6 +420,9 @@ MAX_SLPBITCOIN_SOCKET_DURATION = 10
 MAX_BITSOCKET_DURATION = 10
 BITDB_QUERY_LIMIT_PER_PAGE = 1000
 TRANSACTIONS_PER_CHUNK=100
+
+# Sideshift credentials
+SIDESHIFT_SECRET_KEY = config('SIDESHIFT_SECRET_KEY')
 
 LOGGING = {
     'version': 1,
@@ -507,6 +521,26 @@ ANYHEDGE = {
     "ANYHEDGE_DEFAULT_ORACLE_PUBKEY": config("ANYHEDGE_DEFAULT_ORACLE_PUBKEY", ""),
     "ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN": config("ANYHEDGE_SETTLEMENT_SERVICE_AUTH_TOKEN", ""),
 }
+
+
+BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
+RPC_USER = decipher(config('RPC_USER'))
+
+BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
+BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@bchn:8332'
+
+# BCHD_RPC_PASSWORD = decipher(config('BCHD_RPC_PASSWORD'))
+# BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@bchd:18334'
+BCHD_NODE = 'bchd.paytaca.com:8335'
+
+WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
+
+bcmr_url_type = ''
+if BCH_NETWORK == 'chipnet':
+    bcmr_url_type = f'-chipnet'
+
+PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api'
+
 
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_PK = config('SERVICER_PK', '')

@@ -366,6 +366,8 @@ class HedgePositionOfferCounterParty(models.Model):
         return self._price_oracle_message
 
 class Oracle(models.Model):
+    active = models.BooleanField(default=True)
+
     pubkey = models.CharField(max_length=75, unique=True)
     relay = models.CharField(max_length=50)
     port = models.IntegerField()

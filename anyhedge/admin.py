@@ -16,4 +16,5 @@ class OracleAdmin(admin.ModelAdmin):
         "asset_name",
         "asset_currency",
         "asset_decimals",
+        "active",
     ]

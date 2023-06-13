@@ -1,16 +1,22 @@
+from django.conf import settings
 from drf_yasg.utils import swagger_auto_schema
-from main.models import Transaction, Wallet, Token
+from main.models import Transaction, Wallet, Token, CashFungibleToken, CashNonFungibleToken
 from django.db.models import Q, Sum, F
 from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
+from main.utils.address_validator import *
+from main.utils.address_converter import *
 from main import serializers
 from main.utils.tx_fee import (
     get_tx_fee_sats,
     bch_to_satoshi,
     satoshi_to_bch
 )
+
+import logging
+LOGGER = logging.getLogger(__name__)
 
 
 def _get_slp_balance(query, multiple_tokens=False):
@@ -40,15 +46,19 @@ def _get_slp_balance(query, multiple_tokens=False):
     return qs_balance
 
 
+def _get_ct_balance(query, multiple_tokens=False):
+    return _get_slp_balance(query, multiple_tokens)
+
+
 def _get_bch_balance(query):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
-    dust = 546 / (10 ** 8)
-    query = query & Q(amount__gt=dust)
+    dust = 546 # / (10 ** 8)
+    query = query & Q(value__gt=dust) & Q(token__name='bch')
     qs = Transaction.objects.filter(query)
     qs_count = qs.count()
     qs_balance = qs.aggregate(
-        balance=Coalesce(Sum('amount'), 0)
+        balance=Coalesce(Sum('value'), 0)
     )
     return qs_balance, qs_count
 
@@ -75,39 +85,93 @@ class Balance(APIView):
         else:
             return num
 
-    @swagger_auto_schema(responses={ 200: serializers.BalanceResponseSerializer })
     def get(self, request, *args, **kwargs):
         slpaddress = kwargs.get('slpaddress', '')
         bchaddress = kwargs.get('bchaddress', '')
+        tokenaddress = kwargs.get('tokenaddress', '')
         tokenid = kwargs.get('tokenid', '')
+        category = kwargs.get('category', '')
+        index = kwargs.get('index', '')
+        txid = kwargs.get('txid', '')
+        tokenid_or_category = kwargs.get('tokenid_or_category', '')
         wallet_hash = kwargs.get('wallethash', '')
+
+        is_cashtoken_nft = False
+        if index and txid:
+            index = int(index)
+            is_cashtoken_nft = True
 
         data = { 'valid': False }
         balance = 0
         qs = None
 
-        if slpaddress.startswith('simpleledger:'):
+        is_token_addr = is_token_address(tokenaddress)
+
+        if is_slp_address(slpaddress) or is_token_addr:
             data['address'] = slpaddress
-            if tokenid:
+            if is_token_addr:
+                data['address'] = bch_address_converter(tokenaddress, to_token_addr=False)
+
+            if tokenid or category:
                 multiple = False
-                query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
+                if is_token_addr:
+                    query = Q(address__address=data['address']) & Q(spent=False)
+
+                    if is_cashtoken_nft:
+                        query = (
+                            query &
+                            Q(cashtoken_nft__category=category) &
+                            Q(cashtoken_nft__current_index=index) &
+                            Q(cashtoken_nft__current_txid=txid)
+                        )
+                    else:
+                        query = query & Q(cashtoken_ft__category=category)
+                else:
+                    query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=tokenid)
             else:
                 multiple = True
-                query =  Q(address__address=data['address']) & Q(spent=False)
-            qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
-            token = Token.objects.get(tokenid=tokenid)
+                if is_token_addr:
+                    query = Q(address__address=data['address']) & Q(spent=False) & Q(token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+                else:
+                    query = Q(address__address=data['address']) & Q(spent=False)
+
+            if is_token_addr:
+                qs_balance = _get_ct_balance(query, multiple_tokens=multiple)
+            else:
+                qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
+
+            if is_token_addr:
+                if is_cashtoken_nft:
+                    token = CashNonFungibleToken.objects.get(
+                        category=category,
+                        current_index=index,
+                        current_txid=txid
+                    )
+                else:
+                    token = CashFungibleToken.objects.get(category=category)
+                decimals = token.info.decimals
+            else:
+                token = Token.objects.get(tokenid=tokenid)
+                decimals = token.decimals
+            
             balance = qs_balance['amount__sum'] or 0
-            if balance > 0 and token.decimals:
-                balance = self.truncate(balance, token.decimals)
+            if balance > 0 and decimals:
+                balance = self.truncate(balance, decimals)
+
             data['balance'] = balance
             data['spendable'] = balance
             data['valid'] = True
+
+            if is_cashtoken_nft:
+                data['commitment'] = token.commitment
+                data['capability'] = token.capability
         
-        if bchaddress.startswith('bitcoincash:'):
+        if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
             qs_balance, qs_count = _get_bch_balance(query)
             bch_balance = qs_balance['balance'] or 0
+            bch_balance = bch_balance / (10 ** 8)
 
             data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
             data['spendable'] = satoshi_to_bch(data['spendable'])
@@ -122,37 +186,82 @@ class Balance(APIView):
             data['wallet'] = wallet_hash
 
             if wallet.wallet_type == 'slp':
-                if tokenid:
+                if tokenid_or_category:
                     multiple = False
-                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid)
+                    query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid_or_category)
                 else:
                     multiple = True
                     query =  Q(wallet=wallet) & Q(spent=False)
+
                 qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
+
                 if multiple:
                     pass
                 else:
-                    token = Token.objects.get(tokenid=tokenid)
+                    token = Token.objects.get(tokenid=tokenid_or_category)
                     balance = qs_balance['amount__sum'] or 0
                     if balance > 0 and token.decimals:
                         balance = self.truncate(balance, token.decimals)
                     data['balance'] = balance
                     data['spendable'] = balance
-                    data['token_id'] = tokenid
+                    data['token_id'] = tokenid_or_category
                     data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
-                query = Q(wallet=wallet) & Q(spent=False)
-                qs_balance, qs_count = _get_bch_balance(query)
-                bch_balance = qs_balance['balance']
+                if tokenid_or_category or category:
+                    is_bch = False
+                    query = Q(wallet=wallet) & Q(spent=False)
 
-                data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
-                data['spendable'] = satoshi_to_bch(data['spendable'])
-                data['spendable'] = max(data['spendable'], 0)
-                data['spendable'] = self.truncate(data['spendable'], 8)
+                    if is_cashtoken_nft:
+                        query = (
+                            query &
+                            Q(cashtoken_nft__category=category) &
+                            Q(cashtoken_nft__current_index=index) &
+                            Q(cashtoken_nft__current_txid=txid)
+                        )
+                    else:
+                        query = query & Q(cashtoken_ft__category=tokenid_or_category)
 
-                data['balance'] = self.truncate(qs_balance['balance'], 8)
-                data['valid'] = True
+                    qs_balance = _get_ct_balance(query, multiple_tokens=False)
+                else:
+                    is_bch = True
+                    query = Q(wallet=wallet) & Q(spent=False)
+                
+                if is_bch:
+                    qs_balance, qs_count = _get_bch_balance(query)
+                    bch_balance = qs_balance['balance'] or 0
+                    bch_balance = bch_balance / (10 ** 8)
+
+                    data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+                    data['spendable'] = satoshi_to_bch(data['spendable'])
+                    data['spendable'] = max(data['spendable'], 0)
+                    data['spendable'] = self.truncate(data['spendable'], 8)
+
+                    data['balance'] = self.truncate(bch_balance, 8)
+                    data['valid'] = True
+                else:
+                    if is_cashtoken_nft:
+                        token = CashNonFungibleToken.objects.get(
+                            category=category,
+                            current_index=index,
+                            current_txid=txid
+                        )
+                    else:
+                        token = CashFungibleToken.objects.get(category=tokenid_or_category)
+
+                    balance = qs_balance['amount__sum'] or 0
+
+                    if balance > 0 and token.info.decimals:
+                        balance = self.truncate(balance, token.info.decimals)
+
+                    data['balance'] = balance
+                    data['spendable'] = balance
+                    data['token_id'] = tokenid_or_category or category
+                    data['valid'] = True
+                    
+                    if is_cashtoken_nft:
+                        data['commitment'] = token.commitment
+                        data['capability'] = token.capability
 
         return Response(data=data, status=status.HTTP_200_OK)
 
@@ -172,7 +281,7 @@ class SpendableBalance(APIView):
 
         qs_balance = 0
         qs_count = 0
-        if bchaddress.startswith('bitcoincash:'):
+        if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=bchaddress) & Q(spent=False)
             qs_balance, qs_count = _get_bch_balance(query)
@@ -186,8 +295,8 @@ class SpendableBalance(APIView):
             qs_balance, qs_count = _get_bch_balance(query)
 
         qs_balance = qs_balance['balance'] or 0
-        bch_balance = qs_balance
-        qs_balance = round(qs_balance, 8)
+        bch_balance = qs_balance / (10 ** 8)
+        bch_balance = round(bch_balance, 8)
 
         serializer = serializers.TxFeeCalculatorSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -199,11 +308,10 @@ class SpendableBalance(APIView):
         tx_fee_kwargs['p2pkh_input_count'] += qs_count
         tx_fee = get_tx_fee_sats(**tx_fee_kwargs)
 
-
         data['spendable'] = int(bch_to_satoshi(bch_balance)) - round(tx_fee)
         data['spendable'] = satoshi_to_bch(data['spendable'])
         data['spendable'] = max(data['spendable'], 0)
 
-        data['balance'] = qs_balance
+        data['balance'] = bch_balance
 
         return Response(data, status=200)

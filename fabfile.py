@@ -1,80 +1,120 @@
 from patchwork.transfers import rsync
 from fabric import task
-from dotenv import dotenv_values 
+from fabric.connection import Connection
+from dotenv import dotenv_values
+
 
 config = dotenv_values(".env")
-hosts = [ 'root@' + config['SERVER_IP'] ]
 project = "watchtower"
 
-@task(hosts=hosts)
-def sync(c):
+
+@task
+def chipnet(ctx):
+    ctx.config.network = 'chipnet'
+    ctx.config.project_dir = f'/home/ubuntu/{project}'
+    ctx.config.run.env['conn'] = Connection(
+        config['CHIPNET_SERVER_HOST'],
+        user=config['CHIPNET_SERVER_USER'],
+        connect_kwargs = { 'key_filename': config['SERVER_SSH_KEY'] }
+    )
+
+
+@task
+def mainnet(ctx):
+    ctx.config.network = 'mainnet'
+    ctx.config.project_dir = f'/root/{project}'
+    ctx.config.run.env['conn'] = Connection(
+        config['MAINNET_SERVER_HOST'],
+        user=config['MAINNET_SERVER_USER']
+    )
+
+
+@task
+def uname(ctx):
+    conn = ctx.config.run.env['conn']
+    conn.run('uname -a')
+
+
+@task
+def sync(ctx):
+    conn = ctx.config.run.env['conn']
     rsync(
-        c,
+        conn,
         '.',
-        f'/root/{project}',
+        ctx.config.project_dir,
         exclude=[
             '.venv',
             '.git',
             '/static',
             '.DS_Store',
-            '.env',
             '__pycache__',
             '*.pyc',
             '*.log',
             '*.pid'
         ]
     )
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'cat compose/.env_{ctx.config.network} >> .env')
 
 
-@task(hosts=hosts)
-def build(c):
-    with c.cd(f'/root/{project}'):
-        c.run('docker-compose -f compose/prod.yml build')
+@task
+def build(ctx):
+    conn = ctx.config.run.env['conn']
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env build')
 
 
-@task(hosts=hosts)
-def up(c):
-    with c.cd(f'/root/{project}'):
-        c.run('docker-compose -f compose/prod.yml up -d')
+@task
+def up(ctx):
+    conn = ctx.config.run.env['conn']
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env up -d')
 
 
-@task(hosts=hosts)
-def down(c):
-    with c.cd(f'/root/{project}'):
-        c.run('docker-compose -f compose/prod.yml down')
+@task
+def down(ctx):
+    conn = ctx.config.run.env['conn']
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env down --remove-orphans')
 
 
-@task(hosts=hosts)
-def deploy(c):
-    sync(c)
-    build(c)
-    down(c)
-    up(c)
+@task
+def deploy(ctx):
+    sync(ctx)
+    build(ctx)
+    down(ctx)
+    up(ctx)
 
 
-@task(hosts=hosts)
-def nginx(c):
-    sync(c)
-    with c.cd(f'/root/{project}/compose'):
+@task
+def nginx(ctx):
+    sync(ctx)
+    conn = ctx.config.run.env['conn']
+    with conn.cd(f'{ctx.config.project_dir}/compose'):
         nginx_conf = f"/etc/nginx/sites-available/{project}"
         nginx_slink = f"/etc/nginx/sites-enabled/{project}"
 
-        c.run(f'sudo rm {nginx_conf}')
-        c.run(f'sudo rm {nginx_slink}')
+        try:
+            conn.run(f'sudo rm {nginx_conf}')
+            conn.run(f'sudo rm {nginx_slink}')
+        except:
+            pass
 
-        c.run(f'sudo cat nginx.conf > {nginx_conf}')
-        c.run(f'sudo ln -s {nginx_conf} {nginx_slink}')
+        conn.run(f'sudo cat nginx.conf > {nginx_conf}')
+        conn.run(f'sudo ln -s {nginx_conf} {nginx_slink}')
 
-        c.run('sudo service nginx restart')
-
-
-@task(hosts=hosts)
-def logs(c):
-    with c.cd(f'/root/{project}'):
-        c.run(f'docker-compose -f compose/prod.yml logs  -f web')
+        conn.run('sudo service nginx restart')
 
 
-@task(hosts=hosts)
-def reports(c):
-    with c.cd(f'/root/{project}'):
-        c.run(f'docker-compose -f compose/prod.yml exec -T web python manage.py reports -p paytaca')
+@task
+def logs(ctx):
+    conn = ctx.config.run.env['conn']
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env logs  -f web')
+
+
+@task
+def reports(ctx):
+    conn = ctx.config.run.env['conn']
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py reports -p paytaca')

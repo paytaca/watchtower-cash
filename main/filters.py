@@ -3,8 +3,49 @@ from django.db.models import Q
 from django.db.models import Exists, OuterRef
 from rest_framework.compat import coreapi, coreschema
 from rest_framework.filters import BaseFilterBackend
+from django_filters import rest_framework as filters
 
-from main.models import Transaction
+from main.models import (
+    Transaction,
+    CashNonFungibleToken,
+    CashFungibleToken,
+    Token,
+)
+
+
+class CashNftFilter(filters.FilterSet):
+    capabilities = filters.CharFilter(
+        method='capabilities_filter',
+        help_text='Filter by list of values separated by comma',
+    )
+
+    has_group = filters.BooleanFilter(
+        method='has_group_filter',
+        help_text='Filter NFTs that has a group. ' +  \
+            'NFT belong to a group if there is a `minting` capability with the same category',
+    )
+
+    class Meta:
+        model = CashNonFungibleToken
+        fields = (
+            'capability',
+            'commitment',
+            'category',
+        )
+
+    def capabilities_filter(self, queryset, name, value):
+        if not isinstance(value, str):
+            return queryset
+
+        capabilities = [capability.strip() for capability in value.split(",") if capability.strip()]
+        return queryset.filter(capability__in=capabilities)
+
+    def has_group_filter(self, queryset, name, value):
+        if not isinstance(value, bool):
+            return queryset
+
+        return queryset.filter_has_group(has_group=value)
+
 
 class TokensViewSetFilter(BaseFilterBackend):
     WALLET_HASH_QUERY_NAME = "wallet_hash"
@@ -37,6 +78,7 @@ class TokensViewSetFilter(BaseFilterBackend):
     def filter_queryset_by_address(self, request, queryset, view):
         address = self._parse_query_param(request, self.ADDRESS_QUERY_NAME, is_list=False)
         has_balance = self._parse_query_param(request, self.HAS_BALANCE_QUERY_NAME, is_list=False)
+        
         if has_balance.lower() == "true":
             has_balance = True
         elif has_balance.lower() == "false":
@@ -50,11 +92,28 @@ class TokensViewSetFilter(BaseFilterBackend):
                 # Since transaction amount will always be positive,
                 # instead of using SUM operator against all transaction, we will only check if
                 # the filtered wallet has(or doesnt have) any unspent transaction that has amount greater than zero,
-                subquery = Transaction.objects.filter(
-                    spent=False,
-                    token_id=OuterRef('pk'),
-                    amount__gte=0,
-                )
+                set_model = queryset.model
+
+                if set_model is CashNonFungibleToken:
+                    subquery = Transaction.objects.filter(
+                        spent=False,
+                        cashtoken_nft_id=OuterRef('pk'),
+                        amount__gte=0,
+                    )
+                elif set_model is CashFungibleToken:
+                    subquery = Transaction.objects.filter(
+                        spent=False,
+                        cashtoken_ft_id=OuterRef('pk'),
+                        amount__gte=0,
+                    )
+                else:
+                    # Token
+                    subquery = Transaction.objects.filter(
+                        spent=False,
+                        token_id=OuterRef('pk'),
+                        amount__gte=0,
+                    )
+
                 if has_balance:
                     queryset = queryset.filter(Exists(subquery))
                 else:
@@ -68,6 +127,7 @@ class TokensViewSetFilter(BaseFilterBackend):
         address = self._parse_query_param(request, self.ADDRESS_QUERY_NAME, is_list=False)
         wallet_hash = self._parse_query_param(request, self.WALLET_HASH_QUERY_NAME, is_list=False)
         has_balance = self._parse_query_param(request, self.HAS_BALANCE_QUERY_NAME, is_list=False)
+        
         if has_balance.lower() == "true":
             has_balance = True
         elif has_balance.lower() == "false":
@@ -86,11 +146,28 @@ class TokensViewSetFilter(BaseFilterBackend):
                 # Since transaction amount will always be positive,
                 # instead of using SUM operator against all transaction, we will only check if
                 # the filtered wallet has(or doesnt have) any unspent transaction that has amount greater than zero,
-                subquery = Transaction.objects.filter(
-                    spent=False,
-                    token_id=OuterRef('pk'),
-                    amount__gte=0,
-                )
+                set_model = queryset.model
+
+                if set_model is CashNonFungibleToken:
+                    subquery = Transaction.objects.filter(
+                        spent=False,
+                        cashtoken_nft_id=OuterRef('pk'),
+                        amount__gte=0,
+                    )
+                elif set_model is CashFungibleToken:
+                    subquery = Transaction.objects.filter(
+                        spent=False,
+                        cashtoken_ft_id=OuterRef('pk'),
+                        amount__gte=0,
+                    )
+                else:
+                    # Token
+                    subquery = Transaction.objects.filter(
+                        spent=False,
+                        token_id=OuterRef('pk'),
+                        amount__gte=0,
+                    )
+
                 if has_balance:
                     queryset = queryset.filter(Exists(subquery))
                 else:
@@ -104,7 +181,10 @@ class TokensViewSetFilter(BaseFilterBackend):
     def filter_queryset_by_exclude_token_ids(self, request, queryset, view):
         exclude_token_ids = self._parse_query_param(request, self.EXCLUDE_TOKEN_IDS_QUERY_NAME, is_list=True)
         if len(exclude_token_ids):
-            _exclude_token_ids_filter = self._case_insensitive_list_filter(name="tokenid", values=exclude_token_ids)
+            if queryset.model in [CashFungibleToken, CashNonFungibleToken]:
+                _exclude_token_ids_filter = self._case_insensitive_list_filter(name="category", values=exclude_token_ids)
+            else:
+                _exclude_token_ids_filter = self._case_insensitive_list_filter(name="tokenid", values=exclude_token_ids)
             queryset = queryset.exclude(_exclude_token_ids_filter)
         return queryset
 
@@ -118,8 +198,8 @@ class TokensViewSetFilter(BaseFilterBackend):
         queryset = self.filter_queryset_by_address(request, queryset, view)
         queryset = self.filter_queryset_by_wallet_hash(request, queryset, view)
         queryset = self.filter_queryset_by_exclude_token_ids(request, queryset, view)
-        queryset = self.filter_queryset_by_token_type(request, queryset, view)
-
+        if queryset.model is Token:
+            queryset = self.filter_queryset_by_token_type(request, queryset, view)
         return queryset
 
     def get_schema_fields(self, view):

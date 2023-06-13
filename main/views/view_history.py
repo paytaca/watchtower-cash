@@ -9,6 +9,7 @@ from django.db.models import (
     BigIntegerField,
 )
 from django.db.models.functions import Substr, Cast, Floor
+from django.db.models import ExpressionWrapper, FloatField
 from rest_framework import status
 from main.models import Wallet, Address, WalletHistory
 from django.core.paginator import Paginator
@@ -30,17 +31,27 @@ class WalletHistoryView(APIView):
     )
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', None)
-        token_id = kwargs.get('tokenid', None)
+        token_id_or_category = kwargs.get('tokenid_or_category', None)
+        category = kwargs.get('category', None)
+        index = kwargs.get('index', None)
+        txid = kwargs.get('txid', None)
         page = request.query_params.get('page', 1)
         record_type = request.query_params.get('type', 'all')
         posid = request.query_params.get("posid", None)
         txids = request.query_params.get("txids", "")
         include_attrs = str(request.query_params.get("exclude_attr", "true")).strip().lower() == "true"
+        
+        is_cashtoken_nft = False
+        if index and txid:
+            index = int(index)
+            is_cashtoken_nft = True
+
         if isinstance(txids, str):
             txids = [txid for txid in txids.split(",") if txid]
 
 
         qs = WalletHistory.objects.filter(wallet__wallet_hash=wallet_hash).exclude(amount=0)
+        
         if record_type in ['incoming', 'outgoing']:
             qs = qs.filter(record_type=record_type)
         if len(txids):
@@ -74,27 +85,66 @@ class WalletHistoryView(APIView):
         else:
             qs = qs.annotate_empty_attributes()
 
-        if wallet.wallet_type == 'slp':
-            qs = qs.filter(token__tokenid=token_id)
-            history = qs.annotate(
-                _token=F('token__tokenid')
-            ).rename_annotations(
-                _token='token_id'
-            ).values(
-                'record_type',
-                'txid',
-                'amount',
-                'token',
-                'tx_fee',
-                'senders',
-                'recipients',
-                'date_created',
-                'tx_timestamp',
-                'usd_price',
-                'market_prices',
-                'attributes',
-            )
-        elif wallet.wallet_type == 'bch':
+        if token_id_or_category or category:
+            if wallet.wallet_type == 'bch':
+                if is_cashtoken_nft:
+                    qs = qs.filter(
+                        cashtoken_nft__category=category,
+                        cashtoken_nft__current_index=index,
+                        cashtoken_nft__current_txid=txid
+                    )
+                    history = qs.annotate(
+                        _token=F('cashtoken_nft__category')
+                    )
+                else:
+                    qs = qs.filter(cashtoken_ft__category=token_id_or_category)
+                    history = qs.annotate(
+                        _token=F('cashtoken_ft__category'),
+                        amount=ExpressionWrapper(
+                            F('amount') / (10 ** F('cashtoken_ft__info__decimals')),
+                            output_field=FloatField()
+                        )
+                    )
+
+                history = history.rename_annotations(
+                    _token='token_id_or_category'
+                ).values(
+                    'record_type',
+                    'txid',
+                    'amount',
+                    'token',
+                    'tx_fee',
+                    'senders',
+                    'recipients',
+                    'date_created',
+                    'tx_timestamp',
+                    'usd_price',
+                    'market_prices',
+                    'attributes',
+                )
+            else:
+                qs = qs.filter(token__tokenid=token_id_or_category)
+
+                history = qs.annotate(
+                    _token=F('token__tokenid')
+                ).rename_annotations(
+                    _token='token_id_or_category'
+                ).values(
+                    'record_type',
+                    'txid',
+                    'amount',
+                    'token',
+                    'tx_fee',
+                    'senders',
+                    'recipients',
+                    'date_created',
+                    'tx_timestamp',
+                    'usd_price',
+                    'market_prices',
+                    'attributes',
+                )
+        else:
+            qs = qs.filter(token__name='bch')
             history = qs.values(
                 'record_type',
                 'txid',
@@ -108,6 +158,7 @@ class WalletHistoryView(APIView):
                 'market_prices',
                 'attributes',
             )
+
         if wallet.version == 1:
             return Response(data=history, status=status.HTTP_200_OK)
         else:

@@ -1,9 +1,12 @@
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+
+from django.db.models import F, Subquery, OuterRef, Count, Q
+from django.conf import settings
+
 from rest_framework import viewsets, mixins
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import F, Subquery, OuterRef, Count, Q
 from rest_framework import status
 
 from main.filters import TokensViewSetFilter
@@ -29,11 +32,13 @@ class TokensViewSet(
     pagination_class = CustomLimitOffsetPagination
 
     filter_backends = [
-        TokensViewSetFilter
+        TokensViewSetFilter,
     ]
 
     def get_queryset(self):
-        return Token.objects.all()
+        return Token.objects.exclude(
+            tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
+        )
 
     def retrieve(self, request, *args, **kwargs):
         token_id = kwargs.get('tokenid', None)

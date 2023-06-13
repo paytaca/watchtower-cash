@@ -8,12 +8,20 @@ from psqlextra.query import PostgresQuerySet
 from django.contrib.postgres.fields import ArrayField
 from django.conf import settings
 
+from main.utils.address_validator import *
+from main.utils.address_converter import *
+
 import re
 import uuid
 import web3
 
 
 class Token(PostgresModel):
+    class Capability(models.TextChoices):
+        MUTABLE = 'mutable'
+        MINTING = 'minting'
+        NONE = 'none'  # immutable
+
     name = models.CharField(max_length=200, blank=True)
     tokenid = models.CharField(
         max_length=70,
@@ -71,28 +79,21 @@ class Token(PostgresModel):
             return 'slp/' + self.tokenid
         else:
             return self.name.lower()
+            
     @property
     def image_url(self):
         if self.thumbnail_image_url:
             return self.thumbnail_image_url
-
         return self.original_image_url
 
     def get_info(self):
-        if self.token_type:
-            info_id = 'slp/' + self.tokenid
-        else:
-            info_id = self.name.lower()
-        image_url = self.original_image_url
-        if self.thumbnail_image_url:
-            image_url = self.thumbnail_image_url
         return {
-            'id': info_id,
+            'id': self.info_id,
             'name': self.name,
             'symbol': self.token_ticker,
             'decimals': self.decimals,
             'token_type': self.token_type,
-            'image_url': image_url
+            'image_url': self.image_url
         }
 
 
@@ -201,9 +202,11 @@ class Address(PostgresModel):
     def save(self, *args, **kwargs):
         wallet = self.wallet
         if wallet and not wallet.wallet_type:
-            if self.address.startswith('simpleledger:'):
+            if is_slp_address(self.address):
                 wallet.wallet_type = 'slp'
-            elif self.address.startswith('bitcoincash:'):
+            elif is_bch_address(self.address) or is_token_address(self.address):
+                if is_token_address(self.address):
+                    self.address = bch_address_converter(self.address, to_token_addr=False)
                 wallet.wallet_type = 'bch'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'
@@ -212,6 +215,147 @@ class Address(PostgresModel):
             wallet.save()
         super(Address, self).save(*args, **kwargs)
 
+    @property
+    def token_address(self):
+        if is_bch_address(self.address):
+            return bch_address_converter(self.address)
+        return None
+
+class CashTokenInfo(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    symbol = models.CharField(max_length=100)
+    decimals = models.PositiveIntegerField(default=0)
+    image_url = models.URLField(blank=True, null=True)
+    nft_details = JSONField(default=dict)
+
+class CashFungibleToken(models.Model):
+    category = models.CharField(
+        max_length=100,
+        unique=True,
+        primary_key=True,
+        db_index=True
+    )
+    info = models.ForeignKey(
+        CashTokenInfo,
+        related_name='fungible_tokens',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        verbose_name_plural = 'CashToken Fungible Tokens'
+
+    def __str__(self):
+        return f'{self.info.name} | {self.category[:7]}'
+
+    @property
+    def token_id(self):
+        return f'ct/{self.category}'
+
+    def get_info(self):
+        info = self.info
+        return {
+            'id': self.token_id,
+            'name': info.name,
+            'symbol': info.symbol,
+            'decimals': info.decimals,
+            'image_url': info.image_url,
+            'is_cashtoken': True
+        }
+
+class CashNonFungibleTokenQuerySet(PostgresQuerySet):
+    def filter_has_group(self, has_group=True):
+        has_group_expr = models.Exists(
+            CashNonFungibleToken.objects.filter(
+                category=models.OuterRef("category"),
+                capability=CashNonFungibleToken.Capability.MINTING,
+            )
+        )
+
+        if has_group:
+            return self.filter(has_group_expr)
+        else:
+            return self.filter(~has_group_expr)
+
+    def filter_group(self):
+        subquery = CashNonFungibleToken.objects \
+            .filter(capability=CashNonFungibleToken.Capability.MINTING) \
+            .values("category") \
+            .annotate(latest_category_record_id=models.Max("id")) \
+            .values("latest_category_record_id")
+        return self.filter(id__in=subquery)
+
+    def annotate_owner_address(self):
+        owner_addr = Transaction.objects.filter(
+            ~models.Q(cashtoken_nft__capability=CashNonFungibleToken.Capability.MINTING),
+            cashtoken_nft_id=models.OuterRef("pk"),
+            spent=False,
+            amount__gte=0,
+        ).values("address__address")[:1]
+        return self.annotate(owner_address=owner_addr)
+
+    def annotate_owner_wallet_hash(self):
+        owner_wallet_hash = Transaction.objects.filter(
+            cashtoken_nft_id=models.OuterRef("pk"),
+            spent=False,
+            amount__gte=0,
+        ).values("wallet__wallet_hash")[:1]
+        return self.annotate(owner_wallet_hash=owner_wallet_hash)
+
+
+class CashNonFungibleToken(models.Model):
+    objects = CashNonFungibleTokenQuerySet.as_manager()
+
+    class Capability(models.TextChoices):
+        MUTABLE = 'mutable'
+        MINTING = 'minting'
+        NONE = 'none'  # immutable
+
+    category = models.CharField(max_length=100, db_index=True)
+    commitment = models.CharField(max_length=255, default='', blank=True)
+    capability = models.CharField(
+        max_length=10,
+        choices=Capability.choices,
+        default='',
+        blank=True
+    )
+    info = models.ForeignKey(
+        CashTokenInfo,
+        related_name='nfts',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True
+    )
+    current_txid = models.CharField(max_length=70)
+    current_index = models.PositiveIntegerField()
+
+    class Meta:
+        verbose_name_plural = 'CashToken NFTs'
+        unique_together = (
+            'current_index',
+            'current_txid',
+        )
+
+    def __str__(self):
+        return f'{self.info.name} | {self.category[:7]}'
+        
+    @property
+    def token_id(self):
+        return f'ct/{self.category}/{self.current_txid}/{self.current_index}'
+
+    def get_info(self):
+        info = self.info
+        return {
+            'id': self.token_id,
+            'name': info.name,
+            'symbol': info.symbol,
+            'decimals': info.decimals,
+            'image_url': info.image_url,
+            'nft_details': info.nft_details,
+            'is_cashtoken': True
+        }
 
 class Transaction(PostgresModel):
     txid = models.CharField(max_length=70, db_index=True)
@@ -222,7 +366,14 @@ class Transaction(PostgresModel):
         null=True,
         blank=True
     )
-    amount = models.FloatField(default=0, db_index=True)
+    amount = models.BigIntegerField(
+        null=True,
+        db_index=True
+    )
+    value = models.BigIntegerField(
+        default=0,
+        db_index=True
+    )
     acknowledged = models.BooleanField(null=True, default=None)
     blockheight = models.ForeignKey(
         BlockHeight,
@@ -235,6 +386,18 @@ class Transaction(PostgresModel):
     token = models.ForeignKey(
         Token,
         on_delete=models.CASCADE
+    )
+    cashtoken_ft = models.ForeignKey(
+        CashFungibleToken,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    cashtoken_nft = models.ForeignKey(
+        CashNonFungibleToken,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
     )
     index = models.IntegerField(default=0, db_index=True)
     spent = models.BooleanField(default=False, db_index=True)
@@ -259,6 +422,19 @@ class Transaction(PostgresModel):
 
     def __str__(self):
         return self.txid
+    
+    def get_token_decimals(self):
+        decimals = None
+        if self.token.tokenid == 'wt_cashtoken_token_id':
+             if self.cashtoken_ft:
+                 if self.cashtoken_ft.info:
+                    decimals = self.cashtoken_ft.info.decimals
+             if self.cashtoken_nft:
+                 if self.cashtoken_nft.info:
+                    decimals = self.cashtoken_nft.info.decimals
+        else:
+            decimals = self.token.decimals
+        return decimals
 
 
 class Recipient(PostgresModel):
@@ -389,6 +565,10 @@ class WalletHistory(PostgresModel):
         max_length=70,
         db_index=True
     )
+    # unlike SLP tokens, cashtoken NFTs and fungible tokens can be on the same txn
+    # unlike SLP tokens, a single cashtoken txn can have multiple tokens of diff category (token ID)
+    # thus, [wallet, txid] is not enough to make this model unique
+    # token_index = models.PositiveIntegerField(default=0)
     record_type = models.CharField(
         max_length=10,
         blank=True,
@@ -399,6 +579,20 @@ class WalletHistory(PostgresModel):
         Token,
         related_name='wallet_history_records',
         on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    cashtoken_ft = models.ForeignKey(
+        CashFungibleToken,
+        on_delete=models.CASCADE,
+        related_name='wallet_history_records',
+        null=True,
+        blank=True
+    )
+    cashtoken_nft = models.ForeignKey(
+        CashNonFungibleToken,
+        on_delete=models.CASCADE,
+        related_name='wallet_history_records',
         null=True,
         blank=True
     )
@@ -415,7 +609,11 @@ class WalletHistory(PostgresModel):
         ordering = ['-tx_timestamp', '-date_created']
         unique_together = [
             'wallet',
-            'txid'
+            'txid',
+            # 'token_index',
+            'token',
+            'cashtoken_ft',
+            'cashtoken_nft',
         ]
 
     def __str__(self):

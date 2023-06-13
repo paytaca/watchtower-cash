@@ -25,6 +25,7 @@ from .serializers import (
     POSPaymentResponseSerializer,
     PosDeviceSerializer,
     MerchantSerializer,
+    MerchantListSerializer,
     BranchSerializer,
 )
 from .filters import (
@@ -211,18 +212,43 @@ class PosDeviceViewSet(
 
 
 class MerchantViewSet(
-    viewsets.GenericViewSet,
-    # mixins.ListModelMixin,
+    mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
     mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
 ):
-    serializer_class = MerchantSerializer
     lookup_field="wallet_hash"
     pagination_class = CustomLimitOffsetPagination
 
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="active", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
+            openapi.Parameter(name="verified", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
+            openapi.Parameter(name="name", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+    
+    def get_serializer_class(self):
+        if self.action in ['list']:
+            return MerchantListSerializer
+        else:
+            return MerchantSerializer
+
     def get_queryset(self):
-        return self.serializer_class.Meta.model.objects.all()
+        serializer = self.get_serializer_class()
+        queryset = serializer.Meta.model.objects\
+            .prefetch_related('location')\
+            .all()
+        if self.action == 'list':
+            active = self.request.query_params.get('active') == 'true' or False
+            verified = self.request.query_params.get('verified') == 'true' or False
+            queryset = queryset.filter(active=active, verified=verified)
+            name = self.request.query_params.get('name')
+            if name: queryset = queryset.filter(name__icontains=name)
+        return queryset
 
 
 class BranchViewSet(viewsets.ModelViewSet):

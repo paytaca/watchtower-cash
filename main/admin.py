@@ -1,17 +1,7 @@
-from django.contrib import admin
-from main.models import (
-    Token,
-    Address,
-    Transaction,
-    BlockHeight,
-    Subscription,
-    Recipient,
-    Project,
-    Wallet,
-    WalletHistory,
-    WalletNftToken
-)
 from django.contrib.auth.models import User, Group
+from django.contrib import admin
+
+from main.models import *
 from main.tasks import (
     client_acknowledgement,
     send_telegram_message,
@@ -20,9 +10,11 @@ from main.tasks import (
     get_slp_utxos,
     parse_tx_wallet_histories
 )
+
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
 from django.conf import settings
+
 import json
 
 
@@ -88,7 +80,13 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
 
 class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
-    search_fields = ['token__name', 'source', 'txid']
+    search_fields = [
+        'token__name',
+        'cashtoken_ft__info__name',
+        'cashtoken_nft__info__name',
+        'source',
+        'txid'
+    ]
     
     dynamic_raw_id_fields = [
         'blockheight',
@@ -109,13 +107,24 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'address',
         'project',
         'amount',
+        'value',
         'source',
         'blockheight',
         'token',
+        'cashtoken',
+        'capability',
         'acknowledged',
         'spent',
         'date_created'
     ]
+
+    def capability(self, obj):
+        if obj.cashtoken_nft:
+            return obj.cashtoken_nft.capability
+        return None
+
+    def cashtoken(self, obj):
+        return obj.cashtoken_ft or obj.cashtoken_nft or None
 
     def project(self, obj):
         if obj.address.wallet:
@@ -169,6 +178,7 @@ class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
     list_display = [
         'address',
+        'token_address',
         'wallet',
         'wallet_index',
         'address_path',
@@ -239,6 +249,8 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'record_type',
         'amount',
         'token',
+        'cashtoken',
+        'capability',
         'date_created'
     ]
 
@@ -250,6 +262,14 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = [
         'wallet__wallet_hash'
     ]
+
+    def cashtoken(self, obj):
+        return obj.cashtoken_ft or obj.cashtoken_nft or None
+
+    def capability(self, obj):
+        if obj.cashtoken_nft:
+            return obj.cashtoken_nft.capability
+        return None
 
 
 class WalletNftTokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
@@ -272,8 +292,62 @@ class WalletNftTokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
 
+class CashTokenInfoAdmin(admin.ModelAdmin):
+    list_display = [
+        'name',
+        'symbol',
+        'decimals',
+    ]
+
+
+class CashFungibleTokenAdmin(admin.ModelAdmin):
+    list_display = [
+        'category',
+        'name',
+        'symbol',
+        'decimals',
+    ]
+
+    def name(self, obj):
+        return obj.info.name
+    
+    def symbol(self, obj):
+        return obj.info.symbol
+
+    def decimals(self, obj):
+        return obj.info.decimals
+
+
+class CashNonFungibleTokenAdmin(admin.ModelAdmin):
+    list_display = [
+        'category',
+        'commitment',
+        'capability',
+        'name',
+        'symbol',
+        'decimals',
+        'nft_details',
+    ]
+
+    def name(self, obj):
+        return obj.info.name
+    
+    def symbol(self, obj):
+        return obj.info.symbol
+
+    def decimals(self, obj):
+        return obj.info.decimals
+
+    def nft_details(self, obj):
+        return obj.info.nft_details
+
+
 admin.site.unregister(User)
 admin.site.unregister(Group)
+
+admin.site.register(CashTokenInfo, CashTokenInfoAdmin)
+admin.site.register(CashFungibleToken, CashFungibleTokenAdmin)
+admin.site.register(CashNonFungibleToken, CashNonFungibleTokenAdmin)
 
 admin.site.register(Token, TokenAdmin)
 admin.site.register(Transaction, TransactionAdmin)

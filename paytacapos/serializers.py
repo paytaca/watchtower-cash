@@ -420,6 +420,20 @@ class LocationSerializer(serializers.ModelSerializer):
         ]
 
 
+class MerchantListSerializer(serializers.ModelSerializer):
+    location = LocationSerializer(required=False)
+    last_transaction_date = serializers.CharField()
+    
+    class Meta:
+        model = Merchant
+        fields = [
+            "id",
+            "name",
+            "location",
+            "gmap_business_link",
+            "last_transaction_date"
+        ]
+
 class MerchantSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     wallet_hash = serializers.CharField() # to supress unique validation
@@ -431,7 +445,7 @@ class MerchantSerializer(serializers.ModelSerializer):
             "wallet_hash",
             "name",
             "primary_contact_number",
-            "location",
+            "location"
         ]
 
 
