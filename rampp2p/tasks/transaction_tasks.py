@@ -28,7 +28,7 @@ def execute_subprocess(command):
 
     stderr = stderr.decode("utf-8")
     stdout = stdout.decode('utf-8')
-    logger.warning(f'stdout: {stdout}, stderr: {stderr}')
+    # logger.warning(f'stdout: {stdout}, stderr: {stderr}')
 
     if stdout is not None:
         # Define the pattern for matching control characters
@@ -40,7 +40,7 @@ def execute_subprocess(command):
         stdout = json.loads(clean_stdout)
     
     response = {'result': stdout, 'error': stderr} 
-    logger.warning(f'response: {response}')
+    # logger.warning(f'response: {response}')
 
     return response
 
@@ -53,11 +53,22 @@ def verify_tx_out(data: Dict, **kwargs):
 
     # Logs for debugging
     logger.warning(f'data: {data}')
-    logger.warning(f'kwargs: {kwargs}')
+    # logger.warning(f'kwargs: {kwargs}')
 
     valid = True
     error_msg = ""
     action = kwargs.get('action')
+
+    # transaction must have at least 1 confirmation
+    confirmations = data.get('result').get('confirmations')
+    min_req_confirmations = 1
+    if confirmations != None and confirmations < min_req_confirmations:
+        error = {"error": f"transaction needs to have at least {min_req_confirmations} confirmations."}
+        return send_order_update(
+            error,
+            contract.order.id
+        )
+    
     tx_inputs = data.get('result').get('inputs')
     tx_outputs = data.get('result').get('outputs')
 

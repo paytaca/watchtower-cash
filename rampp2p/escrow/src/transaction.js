@@ -36,7 +36,8 @@ const bchjs = new BCHJS({
         }
         const response = {
             "inputs": inputs,
-            "outputs": outputs
+            "outputs": outputs,
+            "confirmations": result.details.confirmations
         }
         console.log(JSON.stringify(response))
     } catch (error) {
