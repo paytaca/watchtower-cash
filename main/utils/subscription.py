@@ -40,7 +40,7 @@ def save_subscription(address, subscriber_id):
 
 
 def new_subscription(**kwargs):
-    LOGGER.info(kwargs)
+    LOGGER.info(f'New subscription: {kwargs}')
     response = {'success': False}
     address = kwargs.get('address', None)
     addresses = kwargs.get('addresses', None)

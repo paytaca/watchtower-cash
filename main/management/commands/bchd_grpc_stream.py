@@ -17,9 +17,9 @@ from main.tasks import (
 import paho.mqtt.client as mqtt
 
 
-mqtt_client = mqtt.Client()
-mqtt_client.connect("docker-host", 1883, 10)
-mqtt_client.loop_start()
+# mqtt_client = mqtt.Client()
+# mqtt_client.connect("docker-host", 1883, 10)
+# mqtt_client.loop_start()
 
 
 # Logger
@@ -124,7 +124,7 @@ def run():
                             'amount': amount
                         }
                         LOGGER.info('Sending MQTT message: ' + str(data))
-                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                        # msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
                         LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
                         client_acknowledgement(obj_id)
@@ -139,8 +139,8 @@ def run():
                     args = (
                         token_id,
                         slp_address,
-                        tx_hash
-                        source
+                        tx_hash,
+                        source,
                     )
                     obj_id, created = save_record(
                         *args,
@@ -161,7 +161,7 @@ def run():
                             'token_type': 'slp',
                             'token_id': token_id
                         }
-                        mqtt_client.publish(f"transactions/{slp_address}", json.dumps(data), qos=1)
+                        # mqtt_client.publish(f"transactions/{slp_address}", json.dumps(data), qos=1)
 
                         client_acknowledgement(obj_id)
                     

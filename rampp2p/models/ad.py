@@ -6,6 +6,7 @@ from .currency import FiatCurrency, CryptoCurrency
 from .payment import PaymentMethod
 
 class DurationChoices(models.IntegerChoices):
+    FIVE_MINUTES    =   5, '5 minutes'
     FIFTEEN_MINUTES =   15, '15 minutes'
     THIRTY_MINUTES  =   30, '30 minutes'
     ONE_HOUR        =   60, '1 hour',

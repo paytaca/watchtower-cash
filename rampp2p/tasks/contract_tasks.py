@@ -2,7 +2,9 @@ from celery import shared_task
 from typing import Dict
 from main.utils.subscription import new_subscription
 from rampp2p.utils.websocket import send_order_update
-from rampp2p.models import Contract
+from rampp2p.utils.utils import update_order_status
+from rampp2p.models import Contract, StatusType
+from django.core.exceptions import ValidationError
 
 import subprocess
 import json
@@ -48,8 +50,15 @@ def subprocess_handler(response: Dict, **kwargs):
     success = response.get('result').get('success')
     success = False if success == "False" else bool(success)
 
-    if bool(success) == True:            
-        # Update contract address
+    if bool(success) == True:
+        # update order status to ESCROW_PENDING
+        try:
+            update_order_status(order_id, StatusType.ESCROW_PENDING)
+        except ValidationError as err:
+            logger.error(err)
+            return send_order_update(err, contract.order.id)
+        
+        # update the order's contract address
         address = data.get('result').get('contract_address')
         contract = Contract.objects.get(order__id=order_id)
         contract.contract_address = address
@@ -58,4 +67,4 @@ def subprocess_handler(response: Dict, **kwargs):
         # TODO: subscribe to contract address: listen for incoming & outgoing utxo
         new_subscription(address=address)
     
-    send_order_update(data, contract.order.id)
+    return send_order_update(data, contract.order.id)

@@ -9,6 +9,7 @@ from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
 
+from rampp2p.utils.contract import create_contract
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -90,6 +91,7 @@ class OrderListCreate(APIView):
         except (Ad.DoesNotExist, Peer.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Create the order
         data = request.data.copy()
         data['owner'] = owner.id
         data['crypto_currency'] = ad.crypto_currency.id
@@ -97,16 +99,82 @@ class OrderListCreate(APIView):
         data['time_duration_choice'] = ad.time_duration_choice
         serializer = OrderWriteSerializer(data=data)
 
-        if serializer.is_valid():
-            order = serializer.save()
-            Status.objects.create(
-                status=StatusType.SUBMITTED,
-                order=Order.objects.get(pk=order.id)
-            )
-            serializer = OrderSerializer(order)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # return error if order isn't valid
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # save order and mark it with status=SUBMITTED
+        order = serializer.save()
+        Status.objects.create(
+            status=StatusType.SUBMITTED,
+            order=Order.objects.get(pk=order.id)
+        )
+        serializer = OrderSerializer(order)
+        
+        # generate the contract address
+        params = self.get_contract_params(order)
+        contract = Contract.objects.create(order=order)
+        timestamp = contract.created_at.timestamp()
+        
+        # execute long running task
+        create_contract(
+            order_id=contract.order.id,
+            arbiter_pubkey=params['arbiter_pubkey'], 
+            seller_pubkey=params['seller_pubkey'], 
+            buyer_pubkey=params['buyer_pubkey'],
+            timestamp=timestamp
+        )
+        
+        response = {
+            'success': True,
+            'data': {
+                'order': serializer.data,
+                'contract': contract.id,
+                'timestamp': timestamp,
+                'arbiter_address': order.arbiter.address,
+                'buyer_address': params['buyer_address'],
+                'seller_address': params['seller_address']
+            }
+        }
+    
+        return Response(response, status=status.HTTP_201_CREATED)
+    
+    def get_contract_params(self, order: Order):
 
+        arbiter_pubkey = order.arbiter.public_key
+        seller_pubkey = None
+        buyer_pubkey = None
+        seller_address = None
+        buyer_address = None
+
+        if order.ad.trade_type == TradeType.SELL:
+            seller_pubkey = order.ad.owner.public_key
+            buyer_pubkey = order.owner.public_key
+            seller_address = order.ad.owner.address
+            buyer_address = order.owner.address
+        else:
+            seller_pubkey = order.owner.public_key
+            buyer_pubkey = order.ad.owner.public_key
+            seller_address = order.owner.address
+            buyer_address = order.ad.owner.address
+
+        if (arbiter_pubkey is None or 
+            seller_pubkey is None or 
+            buyer_pubkey is None or
+            seller_address is None or
+            buyer_address is None):
+            raise ValidationError('contract parameters are required')
+        
+        params = {
+            'arbiter_pubkey': arbiter_pubkey,
+            'seller_pubkey': seller_pubkey,
+            'buyer_pubkey': buyer_pubkey,
+            'seller_address': seller_address,
+            'buyer_address': buyer_address,
+        }
+
+        return params
+    
     def validate_permissions(self, wallet_hash, pk):
         '''
         Ad owners cannot create orders for their ad

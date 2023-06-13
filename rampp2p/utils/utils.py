@@ -6,6 +6,7 @@ from django.conf import settings
 from datetime import datetime
 from decimal import Decimal
 from django.utils import timezone
+from rampp2p.validators import validate_status_inst_count, validate_status_progression
 
 import logging
 logger = logging.getLogger(__name__)
@@ -28,6 +29,9 @@ def is_order_expired(order_pk: int):
     return False
 
 def update_order_status(order_id, status):
+    validate_status_inst_count(status, order_id)
+    validate_status_progression(status, order_id)
+
     serializer = StatusSerializer(data={
         'status': status,
         'order': order_id
@@ -36,8 +40,8 @@ def update_order_status(order_id, status):
     if not serializer.is_valid():
         raise ValidationError('invalid status')
     
-    serializer = StatusSerializer(serializer.save())
-    return serializer
+    status = StatusSerializer(serializer.save())
+    return status
 
 def get_order_peer_addresses(order: Order):
     arbiter, buyer, seller = get_order_peers(order)

@@ -9,6 +9,7 @@ def validate_transaction(txid: str, **kwargs):
     Executes a subprocess to fetch raw transaction data, sends this data to `verify_tx_out` for
     validation, then updates the order's status if valid.
     '''
+    logger.warning(f'Validating tx: {txid}')
     path = './rampp2p/escrow/src/'
     command = 'node {}transaction.js {}'.format(
         path,
