@@ -37,7 +37,7 @@ LOGGER = logging.getLogger(__name__)
 class ZMQHandler():
 
     def __init__(self):
-        self.url = "tcp://zmq:28332"
+        self.url = f"tcp://{settings.BCHN_HOST}:28332"
         self.BCHN = BCHN()
 
         self.zmqContext = zmq.Context()

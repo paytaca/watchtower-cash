@@ -15,7 +15,7 @@ class BCHN(object):
         self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE)
         self.source = 'bchn'
         self.fulcrum = {
-            'host': 'fulcrum',
+            'host': settings.BCHN_HOST,
             'port': 60001
         }
 
