@@ -9,7 +9,7 @@ from typing import List
 
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
-from rampp2p.serializers import AdSerializer, AdWriteSerializer
+from rampp2p.serializers import AdListSerializer, AdWriteSerializer
 from rampp2p.models import Ad, Peer, PaymentMethod
 
 class AdListCreate(APIView):
@@ -22,7 +22,7 @@ class AdListCreate(APIView):
     if owner is not None:
         queryset = queryset.filter(Q(owner=owner))
 
-    serializer = AdSerializer(queryset, many=True)
+    serializer = AdListSerializer(queryset, many=True)
     return Response(serializer.data, status.HTTP_200_OK)
 
   def post(self, request):
@@ -87,7 +87,7 @@ class AdDetail(APIView):
     ad = self.get_object(pk)
     if ad.is_deleted:
         return Response(status=status.HTTP_204_NO_CONTENT)
-    serializer = AdSerializer(ad)
+    serializer = AdListSerializer(ad)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
   def put(self, request, pk):
@@ -152,7 +152,7 @@ class AdDetail(APIView):
         ad.time_duration_choice = time_duration
 
     ad.save()
-    serializer = AdSerializer(ad)
+    serializer = AdListSerializer(ad)
     return Response(serializer.data, status=status.HTTP_200_OK)
   
   def delete(self, request, pk):

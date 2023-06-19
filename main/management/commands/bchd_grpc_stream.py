@@ -51,6 +51,8 @@ def run():
             tx = notification.unconfirmed_transaction.transaction
             tx_hash = bytearray(tx.hash[::-1]).hex()
 
+            LOGGER.warning(f'tx_hash: {tx_hash}')
+            
             has_subscribed_input = False
             has_updated_output = False
 

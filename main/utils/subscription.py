@@ -137,7 +137,7 @@ def new_subscription(**kwargs):
                             recipient=recipient,
                             address=address_obj
                         )
-
+                        LOGGER.warn(f'created: {created}')
                         if is_slp_address(address):
                             get_slp_utxos.delay(address)
                         elif is_bch_address(address):

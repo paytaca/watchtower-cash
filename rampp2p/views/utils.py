@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 
 from rampp2p import utils
 from rampp2p.models import Peer
+from main.utils.subscription import new_subscription, remove_subscription
 
 import ecdsa
 import hashlib
@@ -55,3 +56,12 @@ class VerifyMessageView(APIView):
 
         except Peer.DoesNotExist as err:
             raise ValidationError({"error": err.args[0]})
+    
+class SubscribeAddress(APIView):
+    def post(self, request):
+        address = request.data.get('address')
+        if address is None:
+            return Response({"error": "address field is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        result = new_subscription(address=address)
+        return Response(result, status=status.HTTP_200_OK)

@@ -52,8 +52,11 @@ class ZMQHandler():
                 topic = msg[0].decode()
                 body = msg[1]
 
+                LOGGER.warning(f'topic: {topic}')
+
                 if topic == "hashtx":
                     tx_hash = binascii.hexlify(body).decode()
+                    
                     tx = self.BCHN._get_raw_transaction(tx_hash)
                     inputs = tx['vin']
                     outputs = tx['vout']
