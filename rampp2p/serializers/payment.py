@@ -2,6 +2,12 @@ from rest_framework import serializers
 from ..models.payment import PaymentMethod, PaymentType
 from ..models.peer import Peer
 
+class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
+    payment_type = serializers.SlugRelatedField(slug_field="name", queryset=PaymentType.objects.all())
+    class Meta:
+        model = PaymentMethod
+        fields = ['id', 'payment_type']
+
 class PaymentTypeSerializer(serializers.ModelSerializer):
   class Meta:
     model = PaymentType

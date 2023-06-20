@@ -52,11 +52,16 @@ logger = logging.getLogger(__name__)
 class OrderListCreate(APIView):
 
     def get(self, request):
-        queryset = Order.objects.all()
-        creator = request.query_params.get("creator", None)
-        if creator is not None:
-            queryset = queryset.filter(creator=creator)
-        serializer = OrderSerializer(queryset, many=True)
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_LIST_OWNED.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        
+        orders = Order.objects.filter(owner__wallet_hash=wallet_hash)
+        serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):

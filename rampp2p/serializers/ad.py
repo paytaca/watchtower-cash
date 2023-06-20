@@ -1,32 +1,24 @@
 from rest_framework import serializers
-from ..models.ad import Ad, DurationChoices
-from ..models.peer import Peer
-from ..models.currency import FiatCurrency, CryptoCurrency
-from ..models.payment import PaymentMethod, PaymentType
-from rampp2p.models import Order, Status, StatusType
 from django.db.models import Q, Subquery, OuterRef, F
-
-class FiatCurrencySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = FiatCurrency
-        fields = ['id', 'name', 'abbrev']
-
-class CryptoCurrencySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CryptoCurrency
-        fields = ['id', 'name', 'abbrev']
-
-class PaymentMethodSerializer(serializers.ModelSerializer):
-    payment_type = serializers.SlugRelatedField(slug_field="name", queryset=PaymentType.objects.all())
-    class Meta:
-        model = PaymentMethod
-        fields = ['id', 'payment_type']
+from rampp2p.models import (
+    Ad, 
+    DurationChoices,
+    Peer,
+    FiatCurrency, 
+    CryptoCurrency,
+    Order, 
+    Status, 
+    StatusType,
+    PaymentMethod
+)
+from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
+from .payment import RelatedPaymentMethodSerializer
 
 class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SlugRelatedField(slug_field="nickname", queryset=Peer.objects.all())
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    payment_methods = PaymentMethodSerializer(many=True)
+    payment_methods = RelatedPaymentMethodSerializer(many=True)
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
 
@@ -46,17 +38,7 @@ class AdListSerializer(serializers.ModelSerializer):
         'payment_methods',
         'trade_count',
         'completion_rate',
-        # 'time_duration_choice',
-        # 'price_type',
-        # 'modified_at',
         ]
-        # read_only_fields = [
-        # 'owner',
-        # 'fiat_currency',
-        # 'crypto_currency',
-        # 'payment_methods',
-        # ]
-        # depth = 1
     
     def get_trade_count(self, instance: Ad):
         # Count the number of trades (orders) related to ad owner
@@ -94,8 +76,6 @@ class AdListSerializer(serializers.ModelSerializer):
         # Filter only the orders with their latest status
         filtered_orders_count = user_orders.filter(status__id=F('latest_status_id')).count()
         return filtered_orders_count
-
-    
 
 class AdWriteSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
