@@ -43,6 +43,10 @@ class ZMQHandler():
         self.zmqContext = zmq.Context()
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)
         self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "hashtx")
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE,1)
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_CNT,10)
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_IDLE,1)
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_INTVL,1)
         self.zmqSubSocket.connect(self.url)
 
     def start(self):
