@@ -36,19 +36,6 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
-'''
-  SUBMITTED         = at Order creation
-  CONFIRMED         = when crypto is escrowed
-  PAID_PENDING      = when crypto buyer clicks "confirm payment"
-  PAID              = when crypto seller clicks on "confirm payment"
-  CANCEL_APPEALED   = on cancel appeal
-  RELEASE_APPEALED  = on release appeal
-  REFUND_APPEALED   = on refund appeal
-  RELEASED          = on arbiter "release"
-  REFUNDED          = on arbiter "refunded"
-  CANCELED          = on "cancel order" before status=CONFIRMED || on arbiter "mark canceled, refund"
-'''
-
 class OrderListCreate(APIView):
 
     def get(self, request):
@@ -60,7 +47,7 @@ class OrderListCreate(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
-        orders = Order.objects.filter(owner__wallet_hash=wallet_hash)
+        orders = Order.objects.filter(owner__wallet_hash=wallet_hash).order_by('-created_at')
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
