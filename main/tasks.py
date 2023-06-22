@@ -654,7 +654,8 @@ def manage_blocks(self):
             processed=False,
             requires_full_scan=True
         ).values_list('number', flat=True)
-        REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(list(unscanned_blocks)))
+        blocks = list(unscanned_blocks)
+        REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(blocks))
 
 
     if int(REDIS_STORAGE.get('READY').decode()): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
@@ -678,30 +679,70 @@ def manage_blocks(self):
         if not discard_block:
             REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
             REDIS_STORAGE.set('READY', 0)
-            subtasks = []
+            try:
+                # TODO: handle block tracking for SLP testnet when BCH_NETWORK=chipnet
+                # (testnet has different block count with chipnet)
+                if settings.BCH_NETWORK == 'mainnet':
+                    pass
+                    
+                    #TODO: Disable block scanning in SLP, for now
+                    # transactions = NODE.SLP.get_block(block.number, full_transactions=False)
+                    # for tr in transactions:
+                    #     txid = bytearray(tr.transaction_hash[::-1]).hex()
+                    #     subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
 
-            # TODO: handle block tracking for SLP testnet when BCH_NETWORK=chipnet
-            # (testnet has different block count with chipnet)
-            if settings.BCH_NETWORK == 'mainnet':
-                pass
-                
-                #TODO: Disable block scanning in SLP, for now
-                # transactions = NODE.SLP.get_block(block.number, full_transactions=False)
-                # for tr in transactions:
-                #     txid = bytearray(tr.transaction_hash[::-1]).hex()
-                #     subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
+                transactions = NODE.BCH.get_block(block.number, verbosity=3)
+                block_time = NODE.BCH.get_block_stats(block.number, stats=["time"])["time"]
+                for tx in transactions:
+                    tx["time"] = block_time # tx is from .get_block() which doesn't return tx's timestamp
+                    parsed_tx = NODE.BCH._parse_transaction(tx)
+                    save_transaction(parsed_tx, block_id=block.id)
 
-            transactions = NODE.BCH.get_block(block.number)
-            for txid in transactions:
-                subtasks.append(query_transaction.si(txid, block.id))
-
-            callback = ready_to_accept.si(block.number, len(subtasks))
-            if subtasks:
-                # Execute the workflow
-                chord(subtasks)(callback)
+                ready_to_accept.delay(block.number, len(transactions))
+            finally:
+                REDIS_STORAGE.set('READY', 1)
 
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'CURRENTLY PROCESSING BLOCK {str(active_block)}.'
+
+
+def save_transaction(tx, block_id=None):
+    """
+        tx must be parsed by 'BCHN._parse_transaction()'
+    """
+    txid = tx['txid']
+    if 'coinbase' in tx['inputs'][0].keys():
+        return
+
+    for output in tx['outputs']:
+        index = output['index']
+        address = output['address']
+        value = output['value']
+
+        if output.get('token_data'):
+            process_cashtoken_tx(
+                output['token_data'],
+                address,
+                txid,
+                block_id=block_id,
+                index=index,
+                timestamp=tx['timestamp'],
+                value=value
+            )
+        else:
+            # save bch transaction
+            obj_id, created = save_record(
+                'bch',
+                address,
+                txid,
+                NODE.BCH.source,
+                value=value,
+                blockheightid=block_id,
+                tx_timestamp=tx['timestamp'],
+                index=index
+            )
+            if created:
+                client_acknowledgement(obj_id)
 
 
 @shared_task(bind=True, queue='get_latest_block')
