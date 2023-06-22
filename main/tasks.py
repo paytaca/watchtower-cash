@@ -219,6 +219,8 @@ def get_cashtoken_meta_data(
 
     if response.status_code == 200:
         METADATA = response.json()
+        if "error" in METADATA:
+            METADATA = None
 
     if METADATA:
         name = METADATA['name'] or default_details['name']
