@@ -1,3 +1,4 @@
+import logging
 from bitcoinrpc.authproxy import AuthServiceProxy
 
 from django.conf import settings
@@ -33,8 +34,11 @@ class BCHN(object):
             try:
                 txn = self.rpc_connection.getrawtransaction(txid, 2)
                 return txn
-            except:
+            except Exception as exception:
                 retries += 1
+                logging.exception(exception)
+                if retries >= self.max_retries:
+                    raise exception
                 time.sleep(1)
 
     def get_transaction(self, tx_hash):
@@ -45,8 +49,11 @@ class BCHN(object):
                 if txn:
                     return self._parse_transaction(txn)
                 break
-            except:
+            except Exception as exception:
                 retries += 1
+                logging.exception(exception)
+                if retries >= self.max_retries:
+                    raise exception
                 time.sleep(1)
 
     def _parse_transaction(self, txn):
@@ -100,8 +107,10 @@ class BCHN(object):
         while retries < self.max_retries:
             try:
                 return self.rpc_connection.sendrawtransaction(hex_str)
-            except:
+            except Exception as exception:
                 retries += 1
+                if retries >= self.max_retries:
+                    raise exception
                 time.sleep(1)
     
     def get_input_address(self, txid, vout_index):
