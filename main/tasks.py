@@ -1150,7 +1150,7 @@ def update_nft_owner(tokenid):
     return f"token({token}) | wallet_nft_token: ({wallet_nft_token}) | dispensed: ({dispensed_wallets})"
 
 
-@shared_task(bind=True, queue='broadcast', max_retries=3)
+@shared_task(bind=True, queue='broadcast', max_retries=2)
 def broadcast_transaction(self, transaction):
     txid = calc_txid(transaction)
     LOGGER.info(f'Broadcasting {txid}: {transaction}')
@@ -1171,10 +1171,11 @@ def broadcast_transaction(self, transaction):
                 else:
                     self.retry(countdown=1)
             except Exception as exc:
-                error = exc.details()
-                LOGGER.error(error)
+                LOGGER.exception(exc)
+                error = str(exc)
                 return False, error
-        except AttributeError:
+        except AttributeError as exc:
+            LOGGER.exception(exc)
             self.retry(countdown=1)
 
 
