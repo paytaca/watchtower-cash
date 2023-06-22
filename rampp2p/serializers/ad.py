@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import (
     Ad, 
+    PriceType,
     DurationChoices,
     Peer,
     FiatCurrency, 
@@ -18,6 +19,7 @@ class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SlugRelatedField(slug_field="nickname", queryset=Peer.objects.all())
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
+    price = serializers.SerializerMethodField()
     payment_methods = RelatedPaymentMethodSerializer(many=True)
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
@@ -25,20 +27,28 @@ class AdListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ad
         fields = [
-        'id',
-        'owner',
-        'trade_type',
-        'fiat_currency',
-        'crypto_currency',
-        'fixed_price',
-        'floating_price',
-        'trade_floor',
-        'trade_ceiling',
-        'crypto_amount',
-        'payment_methods',
-        'trade_count',
-        'completion_rate',
+            'id',
+            'owner',
+            'trade_type',
+            'price_type',
+            'fiat_currency',
+            'crypto_currency',
+            'price',
+            'trade_floor',
+            'trade_ceiling',
+            'crypto_amount',
+            'payment_methods',
+            'trade_count',
+            'completion_rate',
         ]
+    
+    def get_price(self, instance: Ad):
+        if instance.price_type == PriceType.FIXED:
+            return instance.fixed_price
+        
+        # market_price = get_market_price()
+        price = market_price * instance.floating_price
+        return price
     
     def get_trade_count(self, instance: Ad):
         # Count the number of trades (orders) related to ad owner

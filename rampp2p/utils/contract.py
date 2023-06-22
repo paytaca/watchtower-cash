@@ -1,4 +1,4 @@
-from rampp2p.tasks.contract_tasks import execute_subprocess, subprocess_handler
+from rampp2p.tasks.contract_tasks import execute_subprocess, contract_handler
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ def create_contract(**kwargs):
     )
     return execute_subprocess.apply_async(
         (command,), 
-        link=subprocess_handler.s(
+        link=contract_handler.s(
             order_id=kwargs.get('order_id')
         )
     )

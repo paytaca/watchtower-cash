@@ -39,7 +39,7 @@ def execute_subprocess(command, **kwargs):
     return response
 
 @shared_task(queue='rampp2p__contract_execution')
-def subprocess_handler(response: Dict, **kwargs):
+def contract_handler(response: Dict, **kwargs):
     data = {
         'result': response.get('result'),
         'error': response.get('error')

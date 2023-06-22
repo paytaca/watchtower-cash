@@ -65,3 +65,11 @@ class SubscribeAddress(APIView):
         
         result = new_subscription(address=address)
         return Response(result, status=status.HTTP_200_OK)
+    
+class GetMarketRates(APIView):
+    def get(self, request):
+        currency = request.query_params.get('currency')
+        utils.transaction.get_rates(currency)
+        return Response(status=status.HTTP_200_OK)
+
+        

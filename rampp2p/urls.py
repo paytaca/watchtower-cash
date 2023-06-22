@@ -45,5 +45,6 @@ urlpatterns = [
     path('utils/transaction-detail', TransactionDetail.as_view(), name='transaction-detail'),
     path('utils/verify-message', VerifyMessageView.as_view(), name='verify-message'),
     path('utils/subscribe-address', SubscribeAddress.as_view(), name='subscribe-address'),
+    path('utils/market-price', GetMarketRates.as_view(), name='market-price'),
     
 ]
