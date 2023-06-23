@@ -19,7 +19,7 @@ def update_market_rates():
     command = 'node {}rates.js'.format(path)
     return execute_subprocess.apply_async(
                 (command,), 
-                link=rates_beat_handler.s()
+                link=market_rates_beat_handler.s()
             )
 
 @shared_task(queue='rampp2p__subprocess_execution')
@@ -48,24 +48,22 @@ def execute_subprocess(command):
     return response
 
 @shared_task(queue='rampp2p__subprocess_execution')
-def rates_beat_handler(result):
+def market_rates_beat_handler(result):
     rates = result.get('result').get('rates')
     subbed_currencies = FiatCurrency.objects.values('abbrev').all()
     logger.warn(f'subbed_currencies: {subbed_currencies}')
+
     for currency in subbed_currencies:
         abbrev = currency.get('abbrev')
         rate = rates.get(abbrev)
         obj, created = MarketRate.objects.get_or_create(currency=abbrev)
         obj.price = rate
         obj.save()
+        
         if created:
             logger.warn(f'New market price | {obj.currency} : {obj.price}')
         else:
             logger.warn(f'Updated market price | {obj.currency} : {obj.price}')
-
-@shared_task(queue='rampp2p__subprocess_execution')
-def rates_request_handler(result, currency):
-    rates = result.get('result').get('rates')
-    if currency is not None:
-        rates = {currency: rates.get(currency)}
-    send_market_price(rates)
+        
+        data =  { 'currency': obj.currency, 'price' : obj.price }
+        send_market_price(data, currency)

@@ -6,7 +6,8 @@ logger = logging.getLogger(__name__)
 
 class MarketRateConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.room_name = f'ramp-p2p-market-price'
+        self.currency = self.scope['url_route']['kwargs']['currency']
+        self.room_name = f'ramp-p2p-subscribe-market-price-{self.currency}'
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name
@@ -29,7 +30,7 @@ class MarketRateConsumer(AsyncWebsocketConsumer):
 class OrderUpdatesConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.order_id = self.scope['url_route']['kwargs']['order_id']
-        self.room_name = f'ramp-p2p-updates-{self.order_id}'
+        self.room_name = f'ramp-p2p-subscribe-order-{self.order_id}'
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name

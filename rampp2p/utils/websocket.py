@@ -5,11 +5,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 def send_order_update(data, order_id):
-    room_name = f'ramp-p2p-updates-{order_id}'
+    room_name = f'ramp-p2p-subscribe-order-{order_id}'
     send_message(data, room_name)
 
-def send_market_price(data):
-    room_name = 'ramp-p2p-market-price'
+def send_market_price(data, currency):
+    room_name = f'ramp-p2p-subscribe-market-price-{currency.get("abbrev")}'
+    logger.warn(f'room_name: {room_name}')
     send_message(data, room_name)
 
 def send_message(data, room_name):
