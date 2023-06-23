@@ -44,10 +44,13 @@ def execute_subprocess(command):
 
     return response
 
-@shared_task(queue='rampp2p__subprocess_execution')
-def rates_handler(rates, currency):
-    logger.warn(f'rates: {rates}')
+@shared_task(queue='rampp2p__contract_execution')
+def rates_handler(result, currency):
+    logger.warn(f'result: {result}')
     logger.warn(f'currency: {currency}')
+    rates = result.get('result').get('rates')
+    if currency is not None:
+        rates = {currency: rates.get(currency)}
     send_market_price(rates)
 
 @shared_task(queue='rampp2p__contract_execution')
