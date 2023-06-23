@@ -201,7 +201,6 @@ def get_cashtoken_meta_data(
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     METADATA = None
-    PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
     DEFAULT_TOKEN_DETAILS = {
         'nft': {
             'name': 'CashToken NFT',
@@ -215,12 +214,14 @@ def get_cashtoken_meta_data(
     detail_key = 'nft' if is_nft else 'fungible'
     default_details = DEFAULT_TOKEN_DETAILS[detail_key]
 
-    response = requests.get(PAYTACA_BCMR_URL)
+    # TODO: Don't fetch from BCMR indexer for now, to be reconsidered later
+    # PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
+    # response = requests.get(PAYTACA_BCMR_URL)
 
-    if response.status_code == 200:
-        METADATA = response.json()
-        if "error" in METADATA:
-            METADATA = None
+    # if response.status_code == 200:
+    #     METADATA = response.json()
+    #     if "error" in METADATA:
+    #         METADATA = None
 
     if METADATA:
         name = METADATA['name'] or default_details['name']
