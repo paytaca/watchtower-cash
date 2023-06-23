@@ -14,6 +14,7 @@ RUN pip install -r requirements.txt
 
 # For running javascript
 RUN sudo apt install -y curl
+RUN sudo apt-get update --allow-releaseinfo-change
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
 RUN sudo apt install nodejs -y --allow-change-held-packages
 COPY ./anyhedge/js/package*.json /code/anyhedge/js/
