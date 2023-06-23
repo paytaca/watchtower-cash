@@ -47,9 +47,12 @@ class BCHN(object):
                 return txn
             except Exception as exception:
                 retries += 1
-                logging.exception(exception)
                 if retries >= self.max_retries:
-                    raise exception
+                    if 'No such mempool or blockchain transaction' in str(exception):
+                        break
+                    else:
+                        logging.exception(f'ERROR IN FETCHING TXN DETAILS: {txid}', exception)
+                        raise exception
                 time.sleep(1)
 
     def get_transaction(self, tx_hash):
@@ -150,15 +153,16 @@ class BCHN(object):
     
     def get_input_address(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
-        previous_out = previous_tx['vout'][vout_index]
-        return previous_out['scriptPubKey']['addresses'][0]
+        if previous_tx:
+            previous_out = previous_tx['vout'][vout_index]
+            return previous_out['scriptPubKey']['addresses'][0]
 
     def get_input_token_data(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
-        previous_out = previous_tx['vout'][vout_index]
-
-        if 'tokenData' in previous_out.keys():
-            return previous_out['tokenData']
+        if previous_tx:
+            previous_out = previous_tx['vout'][vout_index]
+            if 'tokenData' in previous_out.keys():
+                return previous_out['tokenData']
         return None
     
     def _recvall(self, sock):
