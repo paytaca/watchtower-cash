@@ -57,7 +57,6 @@ psycopg2==2.8.4
 ptyprocess==0.6.0
 py==1.9.0
 Pillow==9.4.0
-python-bitcoinrpc==1.0
 Pygments==2.5.2
 PyJWT==1.7.1
 pyparsing==2.4.7
@@ -94,3 +93,4 @@ channels-redis==3.2.0
 channels==3.0.4
 cashaddress==1.0.6
 paho-mqtt==1.6.1
+git+https://github.com/paytaca/python-bitcoinrpc

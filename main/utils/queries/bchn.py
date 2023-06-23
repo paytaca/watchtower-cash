@@ -1,3 +1,5 @@
+import logging
+from functools import lru_cache
 from bitcoinrpc.authproxy import AuthServiceProxy
 
 from django.conf import settings
@@ -22,19 +24,32 @@ class BCHN(object):
     def get_latest_block(self):
         return self.rpc_connection.getblockcount()
         
-    def get_block(self, block):
+    def get_block(self, block, verbosity=None):
         block_hash = self.rpc_connection.getblockhash(block)
-        block_data = self.rpc_connection.getblock(block_hash)
+        block_data = self.rpc_connection.getblock(block_hash, verbosity)
         return block_data['tx']
 
+    def get_block_stats(self, block_number_or_hash, stats=None):
+        """
+            block_number_or_hash: (int | str) 
+            stats: (None, List<str>) provide list of strings to return only a subset of stats
+                See https://docs.bitcoincashnode.org/doc/json-rpc/getblockstats/ for valid values
+        """
+        return self.rpc_connection.getblockstats(block_number_or_hash, stats)
+
+    # Cache to prevent multiple requests when parsing transaction in '._parse_transaction()'
+    @lru_cache(maxsize=128)
     def _get_raw_transaction(self, txid):
         retries = 0
         while retries < self.max_retries:
             try:
                 txn = self.rpc_connection.getrawtransaction(txid, 2)
                 return txn
-            except:
+            except Exception as exception:
                 retries += 1
+                logging.exception(exception)
+                if retries >= self.max_retries:
+                    raise exception
                 time.sleep(1)
 
     def get_transaction(self, tx_hash):
@@ -45,8 +60,11 @@ class BCHN(object):
                 if txn:
                     return self._parse_transaction(txn)
                 break
-            except:
+            except Exception as exception:
                 retries += 1
+                logging.exception(exception)
+                if retries >= self.max_retries:
+                    raise exception
                 time.sleep(1)
 
     def _parse_transaction(self, txn):
@@ -65,14 +83,37 @@ class BCHN(object):
         transaction['inputs'] = []
 
         for tx_input in txn['vin']:
-            value = int(float(tx_input['value'] * (10 ** 8)))
+            if 'coinbase' in tx_input:
+                transaction['inputs'].append(tx_input)
+                continue
+
+            input_txid = tx_input['txid']
+
+            if 'prevout' in tx_input.keys():
+                prevout = tx_input['prevout']
+                value = prevout['value']
+                input_token_data = None
+                scriptPubKey = prevout['scriptPubKey']
+
+                if 'address' in scriptPubKey.keys():
+                    input_address = scriptPubKey['address']
+                else:
+                    # for multisig input prevouts (no address given on data)
+                    input_address = self.get_input_address(input_txid, tx_input['vout'])
+
+                if 'tokenData' in prevout.keys():
+                    input_token_data = prevout['tokenData']
+            else:
+                value = int(float(tx_input['value'] * (10 ** 8)))
+                input_token_data = self.get_input_token_data(input_txid, tx_input['vout'])
+                input_address = self.get_input_address(input_txid, tx_input['vout'])
             input_txid = tx_input['txid']
             data = {
                 'txid': input_txid,
                 'spent_index': tx_input['vout'],
                 'value': value,
-                'token_data': self.get_input_token_data(input_txid, tx_input['vout']),
-                'address': self.get_input_address(input_txid, tx_input['vout'])
+                'token_data': input_token_data,
+                'address': input_address
             }
             transaction['inputs'].append(data)
 
@@ -92,7 +133,8 @@ class BCHN(object):
                     data['token_data'] = tx_output['tokenData']
                 transaction['outputs'].append(data)
 
-        transaction['tx_fee'] = int(txn['fee'] * (10 ** 8))
+        if 'fee' in txn:
+            transaction['tx_fee'] = int(txn['fee'] * (10 ** 8))
         return transaction
 
     def broadcast_transaction(self, hex_str):
@@ -100,8 +142,10 @@ class BCHN(object):
         while retries < self.max_retries:
             try:
                 return self.rpc_connection.sendrawtransaction(hex_str)
-            except:
+            except Exception as exception:
                 retries += 1
+                if retries >= self.max_retries:
+                    raise exception
                 time.sleep(1)
     
     def get_input_address(self, txid, vout_index):
@@ -143,3 +187,16 @@ class BCHN(object):
             response = response_byte.decode()
             response = json.loads(response.strip())
             return response['result']
+
+    def get_input_address(self, txid, vout_index):
+        previous_tx = self._get_raw_transaction(txid)
+        previous_out = previous_tx['vout'][vout_index]
+        return previous_out['scriptPubKey']['addresses'][0]
+
+    def get_input_token_data(self, txid, vout_index):
+        previous_tx = self._get_raw_transaction(txid)
+        previous_out = previous_tx['vout'][vout_index]
+
+        if 'tokenData' in previous_out.keys():
+            return previous_out['tokenData']
+        return None
