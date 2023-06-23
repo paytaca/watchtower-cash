@@ -9,3 +9,4 @@ from .peer import *
 from .receipt import *
 from .status import *
 from .transaction import *
+from .market_rate import *

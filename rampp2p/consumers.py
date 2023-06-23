@@ -4,7 +4,7 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
-class MarketPriceConsumer(AsyncWebsocketConsumer):
+class MarketRateConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.room_name = f'ramp-p2p-market-price'
         await self.channel_layer.group_add(

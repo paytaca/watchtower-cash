@@ -251,6 +251,7 @@ CELERY_IMPORTS = (
     'anyhedge.tasks',
     'ramp.tasks',
     'rampp2p.tasks.contract_tasks',
+    'rampp2p.tasks.market_rate_tasks',
     'rampp2p.tasks.transaction_tasks'
 )
 
@@ -356,6 +357,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     'update_shift_status': {
         'task': 'ramp.tasks.update_shift_status',
+        'schedule': 60
+    },
+    'update_market_rates': {
+        'task': 'rampp2p.tasks.market_rate_tasks.update_market_rates',
         'schedule': 60
     }
 }

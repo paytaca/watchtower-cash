@@ -3,8 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.core.exceptions import ValidationError
 
-from rampp2p import utils
-from rampp2p.models import Peer
+from rampp2p.models import Peer, MarketRate
+from rampp2p.serializers import MarketRateSerializer
 from main.utils.subscription import new_subscription, remove_subscription
 
 import ecdsa
@@ -66,10 +66,12 @@ class SubscribeAddress(APIView):
         result = new_subscription(address=address)
         return Response(result, status=status.HTTP_200_OK)
     
-class GetMarketRates(APIView):
+class MarketRates(APIView):
     def get(self, request):
+        queryset = MarketRate.objects.all()
         currency = request.query_params.get('currency')
-        utils.transaction.get_rates(currency)
-        return Response(status=status.HTTP_200_OK)
+        if currency is not None:
+            queryset = MarketRate.objects.filter(currency=currency)
+        serializer = MarketRateSerializer(queryset, many=True)
+        return Response(serializer.data, status.HTTP_200_OK)
 
-        

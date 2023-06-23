@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 
 from rampp2p import utils
-from rampp2p.utils.websocket import send_order_update, send_market_price
+from rampp2p.utils.websocket import send_order_update
 from rampp2p.serializers import TransactionSerializer, RecipientSerializer
 from rampp2p.models import (
     Transaction, 
@@ -43,15 +43,6 @@ def execute_subprocess(command):
     # logger.warning(f'response: {response}')
 
     return response
-
-@shared_task(queue='rampp2p__contract_execution')
-def rates_handler(result, currency):
-    logger.warn(f'result: {result}')
-    logger.warn(f'currency: {currency}')
-    rates = result.get('result').get('rates')
-    if currency is not None:
-        rates = {currency: rates.get(currency)}
-    send_market_price(rates)
 
 @shared_task(queue='rampp2p__contract_execution')
 def verify_tx_out(data: Dict, **kwargs):

@@ -10,3 +10,4 @@ from .appeal import *
 from .receipt import *
 from .contract import *
 from .transaction import *
+from .market_rate import *
