@@ -170,12 +170,9 @@ class BCHN(object):
         data = bytearray()
         while True:
             packet = sock.recv(BUFF_SIZE)
-            if not packet:  # Important!!
-                break
-            if len(packet) < BUFF_SIZE:
-                data.extend(packet)
-                break
             data.extend(packet)
+            if data.endswith(bytes('\r\n', 'utf-8')):
+                break
         return data
 
     def get_utxos(self, address):
