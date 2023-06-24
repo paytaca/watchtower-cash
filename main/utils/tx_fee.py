@@ -108,7 +108,7 @@ def get_tx_fee_sats(**kwargs):
         Calculate tx fee in satoshi.
         See 'get_byte_count()' for more info
     """
-    return get_byte_count(**kwargs) * 1.1
+    return get_byte_count(**kwargs) * 1.2
 
 
 def get_tx_fee_bch(**kwargs):
