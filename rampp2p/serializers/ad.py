@@ -10,7 +10,8 @@ from rampp2p.models import (
     Order, 
     Status, 
     StatusType,
-    PaymentMethod
+    PaymentMethod,
+    MarketRate
 )
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 from .payment import RelatedPaymentMethodSerializer
@@ -46,8 +47,13 @@ class AdListSerializer(serializers.ModelSerializer):
         if instance.price_type == PriceType.FIXED:
             return instance.fixed_price
         
-        # market_price = get_market_price()
-        price = market_price * instance.floating_price
+        currency = self.context.get('currency')
+        market_price = MarketRate.objects.filter(currency=currency)
+        if market_price.exists():
+            market_price = market_price.first().price
+            price = market_price * instance.floating_price
+        else:
+            price = None
         return price
     
     def get_trade_count(self, instance: Ad):

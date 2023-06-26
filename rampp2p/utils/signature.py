@@ -6,11 +6,13 @@ import hashlib
 import logging
 logger = logging.getLogger(__name__)
 
-def verify_signature(wallet_hash, signature_hex, message):
+def verify_signature(wallet_hash, signature_hex, message, **kwargs):
     return True
     try:
-        peer = Peer.objects.get(wallet_hash=wallet_hash)
-        public_key_hex = peer.public_key
+        public_key_hex = kwargs.get('public_key')
+        if public_key_hex is None:
+            peer = Peer.objects.get(wallet_hash=wallet_hash)
+            public_key_hex = peer.public_key
 
         # Convert the signature and public key to bytes
         der_signature_bytes = bytearray.fromhex(signature_hex)
@@ -30,9 +32,10 @@ def verify_signature(wallet_hash, signature_hex, message):
         raise ValidationError({"error": err.args[0]})
 
 def get_verification_headers(request):
+    logger.warn(f'headers: {request.headers}')
     signature = request.headers.get('signature', None)
     timestamp = request.headers.get('timestamp', None)
-    wallet_hash = request.headers.get('wallet-hash', None)
+    wallet_hash = request.headers.get('wallet_hash', None)
     if  (wallet_hash is None or
           signature is None or 
           timestamp is None):

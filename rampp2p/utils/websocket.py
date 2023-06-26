@@ -10,11 +10,9 @@ def send_order_update(data, order_id):
 
 def send_market_price(data, currency):
     room_name = f'ramp-p2p-subscribe-market-price-{currency.get("abbrev")}'
-    logger.warn(f'room_name: {room_name}')
     send_message(data, room_name)
 
 def send_message(data, room_name):
-    logger.warning(f'inside send_message: {data}')
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(
         room_name,

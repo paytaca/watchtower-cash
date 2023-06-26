@@ -18,16 +18,16 @@ class AdListCreate(APIView):
 
         # TODO pagination
 
-        owner = request.query_params.get('owner')
-        fiat = request.query_params.get('fiat')
+        owner = request.headers.get('wallet_hash')
+        currency = request.query_params.get('currency')
 
         if owner is not None:
-            queryset = queryset.filter(Q(owner=owner))
+            queryset = queryset.filter(Q(owner__wallet_hash=owner))
         
-        if fiat is not None:
-            queryset = queryset.filter(Q(fiat_currency=fiat))
+        if currency is not None:
+            queryset = queryset.filter(Q(fiat_currency__abbrev=currency))
 
-        serializer = AdListSerializer(queryset, many=True)
+        serializer = AdListSerializer(queryset, many=True, context={'currency': currency})
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):

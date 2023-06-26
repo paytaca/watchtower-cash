@@ -372,7 +372,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "wallet-hash",
     "signature",
     "timestamp",
-    "pubkey"
+    "public-key"
 ]
 
 REST_FRAMEWORK = {

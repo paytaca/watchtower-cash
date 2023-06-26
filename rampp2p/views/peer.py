@@ -23,15 +23,18 @@ class PeerListCreate(APIView):
     def post(self, request):
 
         try:
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.POST_PEER.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            public_key = request.headers.get('public_key')
+            
+            message = ViewCode.PEER_CREATE.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message, public_key=public_key)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         # create new Peer instance
         data = request.data.copy()
         data['wallet_hash'] = wallet_hash
+        data['public_key'] = public_key
         
         serializer = PeerWriteSerializer(data=data)
         if serializer.is_valid():
