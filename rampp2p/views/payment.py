@@ -7,42 +7,32 @@ from django.core.exceptions import ValidationError
 
 from rampp2p.models import PaymentType, PaymentMethod, Peer
 from rampp2p.utils.signature import verify_signature, get_verification_headers
-from rampp2p.serializers import PaymentTypeSerializer, PaymentMethodSerializer
+from rampp2p.serializers import (
+    PaymentTypeSerializer, 
+    PaymentMethodSerializer,
+    PaymentMethodUpdateSerializer
+)
 from rampp2p.viewcodes import ViewCode
 
 class PaymentTypeList(APIView):
-    def get(self, request):
+    def get(self, _):
         queryset = PaymentType.objects.all()
         serializer = PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-class PaymentTypeDetail(APIView):
-    def get_object(self, pk):
-        try:
-            return PaymentType.objects.get(pk=pk)
-        except PaymentType.DoesNotExist:
-            raise Http404
-
-    def get(self, request, pk):
-        payment_type = self.get_object(pk)
-        serializer = PaymentTypeSerializer(payment_type)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-class PaymentMethodListCreate(APIView):
-    
+class PaymentMethodListCreate(APIView):   
     def get(self, request):
-        
         try:
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.LIST_PAYMENT_METHOD.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.PAYMENT_METHOD_LIST.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
            owner = Peer.objects.get(wallet_hash=wallet_hash)
-        except Peer.DoesNotExist:
-           return Response({'error': 'no such Peer with wallet_hash'}, status=status.HTTP_400_BAD_REQUEST)
+        except Peer.DoesNotExist as err:
+           return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             
         queryset = PaymentMethod.objects.filter(owner=owner, is_deleted=False)
         serializer = PaymentMethodSerializer(queryset, many=True)
@@ -51,16 +41,16 @@ class PaymentMethodListCreate(APIView):
     def post(self, request):
 
         try:
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.POST_PAYMENT_METHOD.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.PAYMENT_METHOD_CREATE.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
            owner = Peer.objects.get(wallet_hash=wallet_hash)
-        except Peer.DoesNotExist:
-           return Response({'error': 'no such Peer with wallet_hash'}, status=status.HTTP_400_BAD_REQUEST)
+        except Peer.DoesNotExist as err:
+           return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         data = request.data.copy()
         data['owner'] = owner.id
@@ -74,16 +64,18 @@ class PaymentMethodListCreate(APIView):
 class PaymentMethodDetail(APIView):
     def get_object(self, pk):
         try:
-          queryset = PaymentMethod.objects.filter(is_deleted=False) 
-          return queryset.get(pk=pk)
+            queryset = PaymentMethod.objects.filter(is_deleted=False) 
+            return queryset.get(pk=pk)
         except PaymentMethod.DoesNotExist:
             raise Http404
     
     def get(self, request, pk):
         try:
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.GET_PAYMENT_METHOD.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.PAYMENT_METHOD_GET.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+
+            # Validate that caller is payment method owner
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -94,38 +86,29 @@ class PaymentMethodDetail(APIView):
 
     def put(self, request, pk):
         try:
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.PUT_PAYMENT_METHOD.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.PAYMENT_METHOD_UPDATE.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+
+            # Validate that caller is payment method owner
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
-        try:
-           owner = Peer.objects.get(wallet_hash=wallet_hash)
-        except Peer.DoesNotExist:
-           return Response({'error': 'no such Peer with wallet_hash'}, status=status.HTTP_400_BAD_REQUEST)
-        
         payment_method = self.get_object(pk=pk)
-        account_name = request.data.get('account_name', None)
-        account_number = request.data.get('account_number', None)
-
-        if account_name is not None:
-           payment_method.account_name = account_name
-
-        if account_number is not None:
-           payment_method.account_number = account_number
-        
-        payment_method.owner = owner
-        payment_method.save()
-        serializer = PaymentMethodSerializer(payment_method)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = PaymentMethodUpdateSerializer(payment_method, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         try:
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.DEL_PAYMENT_METHOD.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.PAYMENT_METHOD_DELETE.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+
+            # Validate that caller is payment method owner
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -135,19 +118,17 @@ class PaymentMethodDetail(APIView):
             payment_method.is_deleted = True
             payment_method.deleted_at = timezone.now()
             payment_method.save()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def validate_permissions(self, wallet_hash, id):
         '''
         Validates if caller is owner
         '''
-
         try:
             payment_method = PaymentMethod.objects.get(pk=id)
             caller = Peer.objects.get(wallet_hash=wallet_hash)
-        except PaymentMethod.DoesNotExist or Peer.DoesNotExist:
-            raise ValidationError('payment method or peer does not exist')
+        except (PaymentMethod.DoesNotExist, Peer.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
         
         if caller.wallet_hash != payment_method.owner.wallet_hash:
-            raise ValidationError('caller must be ad owner')
+            raise ValidationError('caller must be payment method owner')

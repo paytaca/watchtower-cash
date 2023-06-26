@@ -27,3 +27,11 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
     ]
     read_only_fields = ['owner']
     depth = 1
+
+class PaymentMethodUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentMethod
+        fields = [
+            'account_name',
+            'account_number'
+        ]

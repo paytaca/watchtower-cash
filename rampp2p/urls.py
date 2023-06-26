@@ -7,8 +7,6 @@ urlpatterns = [
     path('ad/<int:pk>', AdDetail.as_view(), name='ad-detail'),
 
     path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list'),
-    path('payment-type/<int:pk>', PaymentTypeDetail.as_view(), name='payment-type-detail'),
-
     path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
     path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
 
