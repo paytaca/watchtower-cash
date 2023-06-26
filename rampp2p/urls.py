@@ -12,8 +12,7 @@ urlpatterns = [
     path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
     path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
 
-    path('peer/', PeerListCreate.as_view(), name='peer-list-create'),
-    path('peer/<int:pk>', PeerDetail.as_view(), name='peer-detail'),
+    path('peer/', PeerView.as_view(), name='peer-view'),
 
     path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list'),
     path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),
