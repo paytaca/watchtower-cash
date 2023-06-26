@@ -32,7 +32,7 @@ class ArbiterFeedbackListCreate(APIView):
             queryset = queryset.filter(Q(from_peer=from_peer))
         
         if arbiter is not None:
-            queryset = queryset.filter(Q(arbiter=arbiter))
+            queryset = queryset.filter(Q(to_arbiter=arbiter))
         
         if rating is not None:
             queryset = queryset.filter(Q(rating=rating))
