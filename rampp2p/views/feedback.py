@@ -5,103 +5,84 @@ from django.db.models import Q
 from django.core.exceptions import ValidationError
 
 from rampp2p.utils.signature import verify_signature, get_verification_headers
-from rampp2p.models import Feedback, Peer, Order
-from rampp2p.serializers import FeedbackSerializer
+from rampp2p.models import Feedback, Peer, Order, ArbiterFeedback
+from rampp2p.serializers import (
+    FeedbackSerializer, 
+    ArbiterFeedbackSerializer, 
+    ArbiterFeedbackCreateSerializer
+)
 from rampp2p.viewcodes import ViewCode
+
+import logging
+logger = logging.getLogger(__name__)
 
 class ArbiterFeedbackListCreate(APIView):
     def get(self, request):
-        queryset = Feedback.objects.filter(Q(to_peer__is_arbiter=True))
+        queryset = ArbiterFeedback.objects.all()
 
-        order = request.query_params.get('order', None)
+        order = request.query_params.get('order')
+        from_peer = request.query_params.get('from_peer')
+        arbiter = request.query_params.get('arbiter')
+        rating = request.query_params.get('rating')
+
         if order is not None:
             queryset = queryset.filter(Q(order=order))
-
-        from_peer = request.query_params.get('from_peer', None)
+        
         if from_peer is not None:
             queryset = queryset.filter(Q(from_peer=from_peer))
-
-        arbiter = request.query_params.get('arbiter', None)
+        
         if arbiter is not None:
-            queryset = queryset.filter(Q(from_peer=arbiter))
-
-        rating = request.query_params.get('rating', None)
+            queryset = queryset.filter(Q(arbiter=arbiter))
+        
         if rating is not None:
             queryset = queryset.filter(Q(rating=rating))
 
         # TODO pagination
 
-        serializer = FeedbackSerializer(queryset, many=True)
+        serializer = ArbiterFeedbackSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
-        
-        data = request.data.copy()
+
         try:
-            # validate signature
-            pubkey, signature, timestamp, wallet_hash = get_verification_headers(request)
+            # Validate signature
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.FEEDBACK_ARBITER_CREATE.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
 
             try:
+                order = Order.objects.get(pk=request.data.get('order'))
                 from_peer = Peer.objects.get(wallet_hash=wallet_hash)
-            except Peer.DoesNotExist:
-                return Response({'error': 'no such Peer with wallet_hash'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Limit feedbacks to 1 per peer
+                self.validate_limit(from_peer, order)
+            except (Order.DoesNotExist, Peer.DoesNotExist, AssertionError) as err:
+                return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             
-            data['from_peer'] = from_peer.id
-
-            message = ViewCode.FEEDBACK_ARBITER_CREATE.value + '::' + timestamp
-            verify_signature(wallet_hash, pubkey, signature, message)
-
-            # validate permissions
-            validate_permissions(data['from_peer'], data['order'])
+            # Validate if user is allowed to feedback this order
+            validate_permissions(from_peer, order)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
-        try:            
-            self.validate_arbiter(
-                data['to_peer'],
-                data['order']
-            )
-            self.validate_limit(
-                data['from_peer'], 
-                data['to_peer'],
-                data['order']
-            )
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        # TODO: block feedback if order is not yet completed
+
+        data = request.data.copy()
+        data['from_peer'] = from_peer.id
+        data['to_arbiter'] = order.arbiter.id
+        logger.warn(f'data: {data}')
         
-        serializer = FeedbackSerializer(data=data)
+        serializer = ArbiterFeedbackCreateSerializer(data=data)
         if serializer.is_valid():                        
-            serializer = FeedbackSerializer(serializer.save())
+            serializer = ArbiterFeedbackCreateSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def validate_arbiter(self, to_peer_id, order_id):
-        '''
-        Validates if to_peer is the order's arbiter
-        '''
-
-        try:
-            to_peer = Peer.objects.get(pk=to_peer_id)
-            order = Order.objects.get(pk=order_id)
-        except Peer.DoesNotExist:
-            raise ValidationError('to_peer or order does not exist')
         
-        if (to_peer.is_arbiter is False or
-            to_peer.wallet_hash != order.arbiter.wallet_hash):
-            raise ValidationError('to_peer must be the order arbiter')
-        
-    def validate_limit(self, from_peer, to_peer, order):
+    def validate_limit(self, from_peer, order):
         '''
-        Validates that from_peer can only create 1 arbiter feedback for the order.
+        Limits feedback to 1 per order peer.
         '''
-        feedback_count = (Feedback.objects.filter(
-                            Q(from_peer=from_peer) & 
-                            Q(to_peer=to_peer) & 
-                            Q(order=order)
-                        )).count()
-
-        if feedback_count > 0:
-            raise ValidationError('peer feedback already existing')
+        feedback_count = (Feedback.objects.filter(Q(order=order) & Q(from_peer=from_peer))).count()
+        assert feedback_count == 0, 'peer feedback already existing'
     
 class PeerFeedbackListCreate(APIView):
     def get(self, request):
@@ -129,7 +110,6 @@ class PeerFeedbackListCreate(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
-
         data = request.data.copy()
         try:
             # validate signature
@@ -209,20 +189,12 @@ class FeedbackDetail(generics.RetrieveUpdateAPIView):
   queryset = Feedback.objects.all()
   serializer_class = FeedbackSerializer
 
-def validate_permissions(from_peer, order_id):
+def validate_permissions(from_peer, order):
     '''
     Validates if from_peer is allowed to create an arbiter feedback for this order.
-    '''
-    # if from_peer is NOT order seller or buyer
-    #   raise error
-
-    try:
-        order = Order.objects.get(pk=order_id)
-    except Order.DoesNotExist:
-        raise ValidationError('order does not exist')
-  
-    order_creator = order.owner.id == from_peer
-    order_ad_creator = order.ad.owner.id == from_peer
+    ''' 
+    order_creator = order.owner.id == from_peer.id
+    order_ad_creator = order.ad.owner.id == from_peer.id
 
     if not (order_creator or order_ad_creator):
-        raise ValidationError('unauthorized')
+        raise ValidationError('peer unallowed to feedback order')

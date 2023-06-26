@@ -11,7 +11,8 @@ from rampp2p.models import (
     TradeType,
     DurationChoices,
     Status,
-    StatusType
+    StatusType,
+    Arbiter
 )
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 
@@ -22,7 +23,7 @@ class OrderSerializer(serializers.ModelSerializer):
     ad_owner_name = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    arbiter = serializers.SlugRelatedField(slug_field="nickname", queryset=Peer.objects.all())
+    arbiter = serializers.SlugRelatedField(slug_field="name", queryset=Peer.objects.all())
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     expiration_date = serializers.SerializerMethodField()
@@ -80,7 +81,7 @@ class OrderWriteSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=Peer.objects.all())
     crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
-    arbiter = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
+    arbiter = serializers.PrimaryKeyRelatedField(queryset=Arbiter.objects.all())
     locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
     time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices,required=True)
