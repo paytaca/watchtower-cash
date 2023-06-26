@@ -93,7 +93,7 @@ class AdListSerializer(serializers.ModelSerializer):
         filtered_orders_count = user_orders.filter(status__id=F('latest_status_id')).count()
         return filtered_orders_count
 
-class AdWriteSerializer(serializers.ModelSerializer):
+class AdCreateSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
     crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
@@ -117,10 +117,20 @@ class AdWriteSerializer(serializers.ModelSerializer):
             'payment_methods',
             'modified_at',
         ]
-        read_only_fields = [
-        'owner',
-        'fiat_currency',
-        'crypto_currency',
-        'payment_methods',
+    
+class AdUpdateSerializer(serializers.ModelSerializer):
+    payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
+    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices)
+    class Meta:
+        model = Ad
+        fields = [
+            'price_type',
+            'fixed_price',
+            'floating_price',
+            'trade_floor',
+            'trade_ceiling',
+            'crypto_amount',
+            'time_duration_choice',
+            'payment_methods',
+            'modified_at',
         ]
-        depth = 1
