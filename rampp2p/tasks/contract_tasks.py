@@ -2,7 +2,7 @@ from celery import shared_task
 from typing import Dict
 from main.utils.subscription import new_subscription
 from rampp2p.utils.websocket import send_order_update
-from rampp2p.utils.utils import update_order_status
+from rampp2p.utils.handler import update_order_status
 from rampp2p.models import Contract, StatusType
 from django.core.exceptions import ValidationError
 

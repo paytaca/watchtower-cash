@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rampp2p.utils.utils import get_trading_fees
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import (
     Ad, 
@@ -92,6 +93,24 @@ class AdListSerializer(serializers.ModelSerializer):
         # Filter only the orders with their latest status
         filtered_orders_count = user_orders.filter(status__id=F('latest_status_id')).count()
         return filtered_orders_count
+
+class AdDetailSerializer(AdListSerializer):
+    time_duration = serializers.SerializerMethodField()
+    fees = serializers.SerializerMethodField()
+
+    class Meta(AdListSerializer.Meta):
+        fields = AdListSerializer.Meta.fields + [
+            'time_duration',
+            'fees',
+        ]
+    
+    def get_time_duration(self, instance: Ad):
+        return DurationChoices(instance.time_duration_choice).label
+
+    def get_fees(self, _):
+        _, fees = get_trading_fees()
+        return fees
+
 
 class AdCreateSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())

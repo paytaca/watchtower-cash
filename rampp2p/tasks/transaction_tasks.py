@@ -90,7 +90,7 @@ def verify_tx_out(data: Dict, **kwargs):
             (1) output amount must be correct, and 
             (2) output address must be the contract address.
         '''
-        fees = utils.get_contract_fees()
+        fees, _ = utils.get_trading_fees()
         amount = contract.order.crypto_amount + fees
 
         # Find the output where address = contract address
@@ -148,7 +148,7 @@ def verify_tx_out(data: Dict, **kwargs):
 
         # Calculate expected transaction amount and fees
         arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
-        trading_fee = Decimal(settings.TRADING_FEE).quantize(Decimal('0.00000000'))/100000000
+        service_fee = Decimal(settings.TRADING_FEE).quantize(Decimal('0.00000000'))/100000000
         amount = contract.order.crypto_amount
         
         arbiter_exists = False
@@ -178,7 +178,7 @@ def verify_tx_out(data: Dict, **kwargs):
             # Checks if the current address is the servicer 
             # and set valid=False if fee is incorrect
             if output_address == servicer:    
-                if output_amount != trading_fee:
+                if output_amount != service_fee:
                     error_msg = 'servicer incorrect output_amount'
                     logger.error(error_msg)
                     valid = False
@@ -261,7 +261,7 @@ def verify_tx_out(data: Dict, **kwargs):
         if action == Transaction.ActionType.ESCROW:
             status_type = StatusType.ESCROWED
 
-        status = utils.update_order_status(contract.order.id, status_type).data
+        status = utils.handler.update_order_status(contract.order.id, status_type).data
 
         txdata["outputs"] = outputs
         result["status"] = status

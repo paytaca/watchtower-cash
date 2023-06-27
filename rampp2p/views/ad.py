@@ -11,6 +11,7 @@ from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.serializers import (
     AdListSerializer, 
+    AdDetailSerializer,
     AdCreateSerializer, 
     AdUpdateSerializer
 )
@@ -74,7 +75,7 @@ class AdDetail(APIView):
         ad = self.get_object(pk)
         if ad.is_deleted:
             return Response(status=status.HTTP_204_NO_CONTENT)
-        serializer = AdListSerializer(ad)
+        serializer = AdDetailSerializer(ad)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):

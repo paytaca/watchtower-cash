@@ -1,13 +1,10 @@
-from django.core.exceptions import ValidationError
+
 from rampp2p.models import Order, TradeType, Status, StatusType
 from django.db.models import Q
-from rampp2p.serializers import StatusSerializer
 from django.conf import settings
 from datetime import datetime
 from django.utils import timezone
 from decimal import Decimal
-
-from rampp2p.validators import validate_status_inst_count, validate_status_progression
 
 import logging
 logger = logging.getLogger(__name__)
@@ -29,21 +26,6 @@ def is_order_expired(order_pk: int):
         return True
     return False
 
-def update_order_status(order_id, status):
-    validate_status_inst_count(status, order_id)
-    validate_status_progression(status, order_id)
-
-    serializer = StatusSerializer(data={
-        'status': status,
-        'order': order_id
-    })
-    
-    if not serializer.is_valid():
-        raise ValidationError('invalid status')
-    
-    status = StatusSerializer(serializer.save())
-    return status
-
 def get_order_peer_addresses(order: Order):
     arbiter, buyer, seller = get_order_peers(order)
     return arbiter.address, buyer.address, seller.address, settings.SERVICER_ADDR
@@ -63,10 +45,16 @@ def get_order_peers(order: Order):
     
     return arbiter, buyer, seller
 
-def get_contract_fees():
-    hardcoded_fee = Decimal(settings.HARDCODED_FEE)
-    arbitration_fee = Decimal(settings.ARBITRATION_FEE)
-    trading_fee = Decimal(settings.TRADING_FEE)
-    total_fee = hardcoded_fee + arbitration_fee + trading_fee
-    decimal_fee = total_fee/100000000
-    return decimal_fee
+def get_trading_fees():
+    # Retrieve fee values. Format must be in satoshi
+    hardcoded_fee = Decimal(settings.HARDCODED_FEE).quantize(Decimal('0.00000000'))/100000000
+    arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
+    service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))/100000000
+
+    total_fee = hardcoded_fee + arbitration_fee + service_fee
+    fees = {
+        'hardcoded_fee': hardcoded_fee,
+        'arbitration_fee': arbitration_fee,
+        'service_fee': service_fee
+    }
+    return total_fee, fees

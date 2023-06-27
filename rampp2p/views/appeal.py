@@ -204,7 +204,7 @@ class MarkForRelease(APIView):
             validate_status_progression(status_type, pk)                        
 
             # Update status to RELEASE_PENDING
-            utils.update_order_status(pk, status_type)
+            utils.handler.update_order_status(pk, status_type)
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -267,7 +267,7 @@ class MarkForRefund(APIView):
             validate_status_progression(status_type, pk)
 
             # Update status to REFUND_PENDING
-            utils.update_order_status(pk, status_type)
+            utils.handler.update_order_status(pk, status_type)
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
