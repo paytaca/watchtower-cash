@@ -302,11 +302,11 @@ def get_cashtoken_meta_data(
         cashtoken.category = category
         cashtoken.commitment = commitment
         cashtoken.capability = capability
+        cashtoken.info = cashtoken_info
+        cashtoken.save()
     else:
         cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
-
-    cashtoken.info = cashtoken_info
-    cashtoken.save()
+        cashtoken.fetch_metadata()
 
     return cashtoken
 
@@ -1345,7 +1345,9 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                             history.refresh_from_db()
                         except Exception:
                             pass
-                    if amount != 0:
+                    # Do not send notifications for amounts less than or equal to 0.00001
+                    if abs(amount) > 0.00001:
+                        LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
                         send_wallet_history_push_notification(history)
                 except Exception as exception:
                     LOGGER.exception(exception)
@@ -1395,8 +1397,9 @@ def send_wallet_history_push_notification_task(wallet_history_id):
                 history.refresh_from_db()
             except Exception as exception:
                 LOGGER.exception(exception)
-        LOGGER.info(f"PUSH_NOTIF CURRENCY: wallet_history:{history.txid} | {history.amount} | {history.fiat_value} | {history.usd_value} | {history.market_prices}")
-        if history.amount != 0:
+        # Do not send notifications for amounts less than or equal to 0.00001
+        if abs(history.amount) > 0.00001:
+            LOGGER.info(f"PUSH_NOTIF CURRENCY: wallet_history:{history.txid} | {history.amount} | {history.fiat_value} | {history.usd_value} | {history.market_prices}")
             return send_wallet_history_push_notification(history)
     except Exception as exception:
         LOGGER.exception(exception)

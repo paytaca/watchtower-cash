@@ -10,7 +10,7 @@ from django.conf import settings
 
 from main.utils.address_validator import *
 from main.utils.address_converter import *
-
+import requests
 import re
 import uuid
 import web3
@@ -229,6 +229,7 @@ class CashTokenInfo(models.Model):
     image_url = models.URLField(blank=True, null=True)
     nft_details = JSONField(default=dict)
 
+
 class CashFungibleToken(models.Model):
     category = models.CharField(
         max_length=100,
@@ -264,6 +265,27 @@ class CashFungibleToken(models.Model):
             'image_url': info.image_url,
             'is_cashtoken': True
         }
+    
+    def fetch_metadata(self):
+        PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{self.category}/'
+        response = requests.get(PAYTACA_BCMR_URL)
+        if response.status_code == 200:
+            data = response.json()
+            if 'error' not in data.keys():
+                uris = data.get('token').get('uris')
+                if not uris:
+                    uris = data.get('uris')
+
+                info, _ = CashTokenInfo.objects.get_or_create(
+                    name=data.get('name', f'CT-{self.category[0:4]}'),
+                    description=data.get('description', ''),
+                    symbol=data.get('token').get('symbol'),
+                    decimals=data.get('token').get('decimals'),
+                    image_url=uris.get('icon')
+                )
+                self.info = info
+                self.save()
+
 
 class CashNonFungibleTokenQuerySet(PostgresQuerySet):
     def filter_has_group(self, has_group=True):
