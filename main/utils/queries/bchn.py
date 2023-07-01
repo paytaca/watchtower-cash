@@ -55,6 +55,18 @@ class BCHN(object):
                         raise exception
                 time.sleep(1)
 
+    def _decode_raw_transaction(self, tx_hash):
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                txn = self.rpc_connection.decoderawtransaction(tx_hash)
+                return txn
+            except Exception as exception:
+                retries += 1
+                if retries >= self.max_retries:
+                    raise exception
+                time.sleep(1)
+
     def get_transaction(self, tx_hash):
         retries = 0
         while retries < self.max_retries:

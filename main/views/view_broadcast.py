@@ -3,7 +3,31 @@ from rest_framework.response import Response
 from rest_framework import generics
 from rest_framework import status
 from main import serializers
+from main.models import Address
+from main.tasks import rescan_utxos
+from main.utils.queries.bchn import BCHN
 from main.tasks import broadcast_transaction
+
+
+def _get_wallet_hash(tx_hash):
+    bchn = BCHN()
+    wallet_hash = None
+    try:
+        tx = bchn._decode_raw_transaction(tx_hash)
+        input0 = tx['vin'][0]
+        input0_tx = bchn._get_raw_transaction(input0['txid'])
+        vout_data = input0_tx['vout'][input0['vout']]
+        if vout_data['scriptPubKey']['type'] == 'pubkeyhash':
+            address = vout_data['scriptPubKey']['addresses'][0]
+            try:
+                address_obj = Address.objects.get(address=address)
+                if address_obj.wallet:
+                    wallet_hash = address_obj.wallet.wallet_hash
+            except Address.DoesNotExist:
+                pass
+    except:
+        pass
+    return wallet_hash
 
 
 class BroadcastViewSet(generics.GenericAPIView):
@@ -15,10 +39,11 @@ class BroadcastViewSet(generics.GenericAPIView):
         response = {'success': False}
         if serializer.is_valid():
             job = broadcast_transaction.delay(serializer.data['transaction'])
-            try:
-                success, result = job.get()
-            except:
-                success, result = broadcast_transaction(serializer.data['transaction'])
+            success, result = job.get()
+            # try:
+            #     success, result = job.get()
+            # except:
+            #     success, result = broadcast_transaction(serializer.data['transaction'])
             if 'already have transaction' in result:
                 success = True
             if success:
@@ -26,6 +51,10 @@ class BroadcastViewSet(generics.GenericAPIView):
                 response['success'] = True
                 return Response(response, status=status.HTTP_200_OK)
             else:
-                response['error'] = result
+                # Do a wallet utxo rescan if failed
+                wallet_hash = _get_wallet_hash(serializer.data['transaction'])
+                rescan_utxos.delay(wallet_hash)
+
+                response['error'] = result + '. [This problem might resolve itself. Try again in a few seconds.]'
                 return Response(response, status=status.HTTP_409_CONFLICT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
