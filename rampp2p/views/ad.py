@@ -23,11 +23,19 @@ class AdListCreate(APIView):
 
         # TODO pagination
 
-        owner = request.headers.get('wallet_hash')
+        wallet_hash = request.headers.get('wallet_hash')
         currency = request.query_params.get('currency')
 
-        if owner is not None:
-            queryset = queryset.filter(Q(owner__wallet_hash=owner))
+        if wallet_hash is not None:
+            try:
+                # Verify owner signature
+                signature, timestamp, _ = get_verification_headers(request)
+                message = ViewCode.AD_LIST.value + '::' + timestamp
+                verify_signature(wallet_hash, signature, message)
+            except ValidationError as err:
+                return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+            queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash))
 
         if currency is not None:
             queryset = queryset.filter(Q(fiat_currency__abbrev=currency))
