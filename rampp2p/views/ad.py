@@ -28,12 +28,11 @@ class AdListCreate(APIView):
 
         if owner is not None:
             queryset = queryset.filter(Q(owner__wallet_hash=owner))
+
+        if currency is not None:
+            queryset = queryset.filter(Q(fiat_currency__abbrev=currency))
         
-        if currency is None:
-            return Response({'error': 'currency field is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        queryset = queryset.filter(Q(fiat_currency__abbrev=currency))
-        serializer = AdListSerializer(queryset, many=True, context={'currency': currency})
+        serializer = AdListSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
