@@ -9,7 +9,7 @@ def send_order_update(data, order_id):
     send_message(data, room_name)
 
 def send_market_price(data, currency):
-    room_name = f'ramp-p2p-subscribe-market-price-{currency.get("abbrev")}'
+    room_name = f'ramp-p2p-subscribe-market-price-{currency.get("symbol")}'
     send_message(data, room_name)
 
 def send_message(data, room_name):

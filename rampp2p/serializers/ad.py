@@ -48,7 +48,7 @@ class AdListSerializer(serializers.ModelSerializer):
         if instance.price_type == PriceType.FIXED:
             return instance.fixed_price
         
-        currency = instance.fiat_currency.abbrev
+        currency = instance.fiat_currency.symbol
         market_price = MarketRate.objects.filter(currency=currency)
         if market_price.exists():
             market_price = market_price.first().price

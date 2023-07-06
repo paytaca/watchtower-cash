@@ -38,7 +38,7 @@ class AdListCreate(APIView):
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash))
 
         if currency is not None:
-            queryset = queryset.filter(Q(fiat_currency__abbrev=currency))
+            queryset = queryset.filter(Q(fiat_currency__symbol=currency))
         
         serializer = AdListSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)

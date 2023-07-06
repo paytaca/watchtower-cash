@@ -50,13 +50,13 @@ def execute_subprocess(command):
 @shared_task(queue='rampp2p__subprocess_execution')
 def market_rates_beat_handler(result):
     rates = result.get('result').get('rates')
-    subbed_currencies = FiatCurrency.objects.values('abbrev').all()
+    subbed_currencies = FiatCurrency.objects.values('symbol').all()
     logger.warn(f'subbed_currencies: {subbed_currencies}')
 
     for currency in subbed_currencies:
-        abbrev = currency.get('abbrev')
-        rate = rates.get(abbrev)
-        obj, created = MarketRate.objects.get_or_create(currency=abbrev)
+        symbol = currency.get('symbol')
+        rate = rates.get(symbol)
+        obj, created = MarketRate.objects.get_or_create(currency=symbol)
         obj.price = rate
         obj.save()
         
