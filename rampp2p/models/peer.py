@@ -16,7 +16,6 @@ class Peer(models.Model):
         blank=True,
         null=True
     )
-    is_arbiter = models.BooleanField(default=False)
     is_disabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)

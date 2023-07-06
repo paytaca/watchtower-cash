@@ -7,7 +7,6 @@ class PeerSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'nickname',
-            'is_arbiter',
             'public_key',
             'address',
             'is_disabled',
