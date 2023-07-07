@@ -2,10 +2,13 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from django.db.models import Count
 from paytacagifts import models, serializers
+from rest_framework.decorators import action
 
 
 class CampaignViewSet(viewsets.ViewSet):
-    @staticmethod
+    lookup_field = "wallet_hash"
+
+    @action(detail=True, methods=['post'])
     def get_campaigns(request, wallet_hash):
         offset = int(request.query_params.get("offset", 0))
         limit = int(request.query_params.get("limit", 0))

@@ -80,6 +80,7 @@ INSTALLED_APPS=[
     'main',
     'smartbch',
     'paytacapos',
+    'paytacagifts',
     'anyhedge',
     'chat',
     'notifications',

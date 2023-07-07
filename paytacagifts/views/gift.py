@@ -2,12 +2,12 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Gift, Wallet, Campaign, Claim
+from paytacagifts.models import Gift, Wallet, Campaign, Claim
 
 
 class GiftViewSet(viewsets.ViewSet):
+    lookup_field = "gift_code_hash"
 
-    @action(detail=True, methods=['get'])
     def list(self, request, wallet_hash=None):
         count = None
         claimed = None
@@ -71,7 +71,6 @@ class GiftViewSet(viewsets.ViewSet):
         }
         return Response(data)
 
-    @action(detail=True, methods=['post'])
     def create(self, request, wallet_hash=None):
         data = request.data
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
@@ -95,7 +94,7 @@ class GiftViewSet(viewsets.ViewSet):
         )
         return Response({"gift": str(gift)})
 
-    @staticmethod
+    @action(detail=True, methods=['post'])
     def claim(request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
@@ -141,7 +140,7 @@ class GiftViewSet(viewsets.ViewSet):
         else:
             raise Exception("This gift has been claimed")
 
-    @staticmethod
+    @action(detail=True, methods=['post'])
     def recover(request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)

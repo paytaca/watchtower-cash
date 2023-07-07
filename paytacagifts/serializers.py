@@ -9,15 +9,15 @@ class LimitOffsetPaginationInfoSerializer(serializers.Serializer):
 
 class GiftPayloadSerializer(serializers.Serializer):
     gift_code_hash = serializers.CharField()
-    date_created = datetime
+    date_created = serializers.DateTimeField()
     amount = serializers.FloatField()
     campaign_id = serializers.CharField()
-    date_claimed = datetime
+    date_claimed = serializers.DateTimeField()
 
 
 class CampaignPayloadSerializer(serializers.Serializer):
     id = serializers.CharField()
-    date_created = datetime
+    date_created = serializers.DateTimeField()
     name = serializers.CharField()
     limit_per_wallet = serializers.FloatField()
     gifts = serializers.IntegerField()
@@ -60,5 +60,5 @@ class ListGiftsResponseSerializer(serializers.Serializer):
 
 
 class ListCampaignsResponseSerializer(serializers.Serializer):
-    campaigns = (CampaignPayloadSeralizer, many=True)
+    campaigns = CampaignPayloadSerializer(many=True)
     pagination = LimitOffsetPaginationInfoSerializer
