@@ -225,7 +225,7 @@ class CashTokenInfo(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     symbol = models.CharField(max_length=100)
-    decimals = models.PositiveIntegerField(default=0)
+    decimals = models.PositiveIntegerField(default=0, null=True)
     image_url = models.URLField(blank=True, null=True)
     nft_details = JSONField(default=dict)
 
