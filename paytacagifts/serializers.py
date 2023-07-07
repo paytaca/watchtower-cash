@@ -29,7 +29,7 @@ class CreateGiftPayloadSerializer(serializers.Serializer):
     address = serializers.CharField()
     share = serializers.CharField()
     amount = serializers.FloatField()
-    campaign = CampaignPayloadSerializer
+    campaign = CampaignPayloadSerializer()
 
 
 class ClaimGiftPayloadSerializer(serializers.Serializer):
@@ -56,9 +56,9 @@ class RecoverGiftResponseSerializer(serializers.Serializer):
 
 class ListGiftsResponseSerializer(serializers.Serializer):
     gifts = GiftPayloadSerializer(many=True)
-    pagination =  LimitOffsetPaginationInfoSerializer
+    pagination =  LimitOffsetPaginationInfoSerializer()
 
 
 class ListCampaignsResponseSerializer(serializers.Serializer):
     campaigns = CampaignPayloadSerializer(many=True)
-    pagination = LimitOffsetPaginationInfoSerializer
+    pagination = LimitOffsetPaginationInfoSerializer()
