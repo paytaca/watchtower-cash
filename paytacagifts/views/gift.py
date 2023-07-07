@@ -1,21 +1,41 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from paytacagifts.serializers import (ListGiftsResponseSerializer, CreateGiftPayloadSerializer, ClaimGiftPayloadSerializer,
+                                    ClaimGiftResponseSerializer,RecoverGiftResponseSerializer, RecoverGiftPayloadSerializer,
+                                    CreateGiftResponseSerializer)
 from paytacagifts.models import Gift, Wallet, Campaign, Claim
 
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
-class GiftViewSet(viewsets.ViewSet):
+
+class GiftViewSet(viewsets.GenericViewSet):
     lookup_field = "gift_code_hash"
 
-    def list(self, request, wallet_hash=None):
+    @action(detail=True, methods=['get'])
+    @swagger_auto_schema(
+        operation_description="Fetches a list of Gifts filtered by wallet hash with pagination.",
+        responses={
+            status.HTTP_200_OK: ListGiftsResponseSerializer
+        },
+        manual_parameters=[
+            openapi.Parameter('offset', openapi.IN_QUERY, description="Offset for pagination.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('limit', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('claimed', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_BOOLEAN, default=None),
+            openapi.Parameter('campaign', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_INTEGER),
+        ]
+    )
+    def list_gifts(self, request, wallet_hash=None):
         count = None
         claimed = None
         campaign_filter = None
         offset = 0
         limit = 0
         query_args = request.query_params
-
+        wallet_hash = self.kwargs[self.lookup_field]
+        
         if query_args.get("offset"):
             offset = int(query_args.get("offset"))
 
@@ -70,7 +90,8 @@ class GiftViewSet(viewsets.ViewSet):
             }
         }
         return Response(data)
-
+        
+    @swagger_auto_schema(request_body=CreateGiftPayloadSerializer, responses={status.HTTP_200_OK: CreateGiftResponseSerializer})
     def create(self, request, wallet_hash=None):
         data = request.data
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
@@ -95,6 +116,13 @@ class GiftViewSet(viewsets.ViewSet):
         return Response({"gift": str(gift)})
 
     @action(detail=True, methods=['post'])
+    @swagger_auto_schema(
+        operation_description="Claim a Gift record.",
+        request_body=ClaimGiftPayloadSerializer,
+        responses={
+            status.HTTP_200_OK: ClaimGiftResponseSerializer
+        }
+    )
     def claim(request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
@@ -141,6 +169,11 @@ class GiftViewSet(viewsets.ViewSet):
             raise Exception("This gift has been claimed")
 
     @action(detail=True, methods=['post'])
+    @swagger_auto_schema(
+        operation_description="Recover a Gift record, which deletes this record from the database",
+        request_body=RecoverGiftPayloadSerializer,
+        responses={status.HTTP_200_OK: RecoverGiftResponseSerializer}
+    )
     def recover(request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
