@@ -249,7 +249,10 @@ class CashFungibleToken(models.Model):
         verbose_name_plural = 'CashToken Fungible Tokens'
 
     def __str__(self):
-        return f'{self.info.name} | {self.category[:7]}'
+        if self.info:
+            return f'{self.info.name} | {self.category[:7]}'
+        else:
+            return f'CashToken | {self.category[:7]}'
 
     @property
     def token_id(self):
@@ -361,7 +364,10 @@ class CashNonFungibleToken(models.Model):
         )
 
     def __str__(self):
-        return f'{self.info.name} | {self.category[:7]}'
+        if self.info:
+            return f'{self.info.name} | {self.category[:7]}'
+        else:
+            return f'CashToken NFT | {self.category[:7]}'
         
     @property
     def token_id(self):
