@@ -13,7 +13,8 @@ class MarketRateConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         await self.accept()
-        await self.send(text_data=f"Subscribed to '{self.room_name}'")
+        data = { 'message': f"Subscribed to '{self.room_name}'" }
+        await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
@@ -36,7 +37,8 @@ class OrderUpdatesConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         await self.accept()
-        await self.send(text_data=f"Subscribed to '{self.room_name}'")
+        data = { 'message': f"Subscribed to '{self.room_name}'" }
+        await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(

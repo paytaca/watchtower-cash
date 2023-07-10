@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from rampp2p.models import PaymentType, PaymentMethod, Peer
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.serializers import (
+    PaymentMethodCreateSerializer,
     PaymentTypeSerializer, 
     PaymentMethodSerializer,
     PaymentMethodUpdateSerializer
@@ -55,7 +56,7 @@ class PaymentMethodListCreate(APIView):
         data = request.data.copy()
         data['owner'] = owner.id
 
-        serializer = PaymentMethodSerializer(data=data)
+        serializer = PaymentMethodCreateSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
