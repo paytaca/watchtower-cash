@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db import models
 from main.models import WalletHistory
 
@@ -110,6 +111,39 @@ class Merchant(models.Model):
         if last_tx:
             last_tx_date = str(last_tx.date_created)
         return last_tx_date
+
+    def get_main_branch(self):
+        return self.branches.filter(is_main=True).first()
+
+    @transaction.atomic
+    def get_or_create_main_branch(self, force_new=False):
+        main_branch = self.get_main_branch()
+        if main_branch:
+            return main_branch, False
+
+        branch = self.branches.filter(name__icontains="main").first()
+        if not branch:
+            branch = self.branches.first()
+
+        if branch and not force_new:
+            branch.is_main = True
+            branch.save()
+            return branch, False
+
+        location = None
+        if self.location:
+            location = self.location
+            location.id = None
+            location.save()
+            self.refresh_from_db()
+
+        branch = Branch.objects.create(
+            merchant=self,
+            name="Main",
+            is_main=True,
+            location=location
+        )
+        return branch, True
 
 
 class Branch(models.Model):

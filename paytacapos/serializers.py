@@ -332,6 +332,13 @@ class PosDeviceSerializer(serializers.ModelSerializer):
                 Branch.objects.get(merchant__wallet_hash=wallet_hash, id=branch_id)
             except Branch.DoesNotExist:
                 raise serializers.ValidationError("branch_id under merchant wallet_hash not found")
+        else:
+            merchant = Merchant.objects.filter(wallet_hash=wallet_hash).first()
+            if not merchant:
+                raise serializers.ValidationError(dict(branch_id="Unable to create default branch"))
+            main_branch, _ = merchant.get_or_create_main_branch()
+            data["branch_id"] = main_branch.id
+
         return data
 
     def create(self, validated_data, *args, **kwargs):
