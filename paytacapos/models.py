@@ -114,6 +114,7 @@ class Merchant(models.Model):
 
 class Branch(models.Model):
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="branches")
+    is_main = models.BooleanField(default=False)
     name = models.CharField(max_length=75)
     location = models.OneToOneField(
         Location, on_delete=models.SET_NULL,
@@ -126,3 +127,14 @@ class Branch(models.Model):
 
     def __str__(self):
         return f"Branch ({self.merchant.name} - {self.name})"
+
+    def save(self, *args, **kwargs):
+        if self.is_main:
+            qs = self.__class__.objects.filter(merchant_id = self.merchant_id, is_main=True)
+            if self.pk:
+              qs = qs.exclude(pk=self.pk)
+            has_existing_main = qs.exists()
+            if has_existing_main:
+                raise Exception("Unable to save as main branch due to existing main branch")
+
+        return super().save(*args, **kwargs)

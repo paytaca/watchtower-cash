@@ -499,6 +499,7 @@ class BranchSerializer(serializers.ModelSerializer):
             "id",
             "merchant_wallet_hash",
             "merchant",
+            "is_main",
             "name",
             "location",
         ]
@@ -529,6 +530,10 @@ class BranchSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
+        is_main = validated_data.get("is_main", False)
+        if is_main:
+            Branch.objects.filter(merchant=validated_data["merchant"]).update(is_main=False)
+
         return super().create(validated_data)
 
     @transaction.atomic()
@@ -540,5 +545,12 @@ class BranchSerializer(serializers.ModelSerializer):
             if not location_serializer.is_valid():
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
+
+        is_main = validated_data.get("is_main", instance.is_main)
+        if is_main:
+            Branch.objects \
+                .filter(merchant_id=instance.merchant_id) \
+                .exclude(pk=instance.pk) \
+                .update(is_main=False)
 
         return super().update(instance, validated_data)
