@@ -91,9 +91,17 @@ class GiftViewSet(viewsets.GenericViewSet):
         }
         return Response(data)
         
-    @swagger_auto_schema(request_body=CreateGiftPayloadSerializer, responses={status.HTTP_200_OK: CreateGiftResponseSerializer})
-    def create(self, request, wallet_hash=None):
+    @swagger_auto_schema(
+        request_body=CreateGiftPayloadSerializer,
+        responses={status.HTTP_200_OK: CreateGiftResponseSerializer},
+        manual_parameters=[
+            openapi.Parameter('wallet_hash', openapi.IN_QUERY, description="Wallet Hash", type=openapi.TYPE_STRING, required=True),
+        ]
+    )
+    def create(self, request):
         data = request.data
+        wallet_hash = request.query_params.get("wallet_hash", "")
+        if not wallet_hash: raise Exception('Wallet Hash Required')
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
         if "campaign" in data:
             if "limit_per_wallet" in data["campaign"]:
@@ -104,15 +112,14 @@ class GiftViewSet(viewsets.GenericViewSet):
                 campaign = Campaign.objects.get(id=data["campaign"]["id"])
         else:
             campaign = None
-
-        gift = Gift.objects.create(
-            gift_code_hash=data["gift_code_hash"],
-            address=data["address"],
-            wallet=wallet,
-            amount=data["amount"],
-            share=data["share"],
-            campaign=campaign
-        )
+        gift, created = Gift.objects.get_or_create(gift_code_hash=data["gift_code_hash"])
+        if created:
+            gift.address=data["address"]
+            gift.wallet=wallet
+            gift.amount=data["amount"]
+            gift.share=data["share"]
+            gift.campaign=campaign
+            gift.save()
         return Response({"gift": str(gift)})
 
     @action(detail=True, methods=['post'])
