@@ -9,7 +9,8 @@ from paytacagifts.models import Gift, Wallet, Campaign, Claim
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-
+from django.db.models import Sum
+from datetime import datetime
 
 class GiftViewSet(viewsets.GenericViewSet):
     lookup_field = "gift_code_hash"
@@ -130,13 +131,13 @@ class GiftViewSet(viewsets.GenericViewSet):
             status.HTTP_200_OK: ClaimGiftResponseSerializer
         }
     )
-    def claim(request, gift_code_hash):
+    def claim(self, request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
-        gift = Gift.objects.filter(gift_code_hash=gift_code_hash).first()
-        if gift is None:
+        gift_qs = Gift.objects.filter(gift_code_hash=gift_code_hash)
+        if not gift_qs.exists():
             raise Exception("Gift does not exist!")
-
+        gift = gift_qs.first()
         claim = Claim.objects.filter(gift=gift.id, wallet=wallet).first()
         if claim:
             return Response({
@@ -144,9 +145,7 @@ class GiftViewSet(viewsets.GenericViewSet):
                 "claim_id": str(claim.id)
             })
 
-        gift.fetch_related('campaign')
         if gift.campaign:
-            gift.campaign.fetch_related('claims')
             claims = gift.campaign.claims.all()
             claims_sum = claims.aggregate(Sum('amount'))['amount__sum'] or 0
             if claims_sum < gift.campaign.limit_per_wallet:
@@ -181,13 +180,13 @@ class GiftViewSet(viewsets.GenericViewSet):
         request_body=RecoverGiftPayloadSerializer,
         responses={status.HTTP_200_OK: RecoverGiftResponseSerializer}
     )
-    def recover(request, gift_code_hash):
+    def recover(self, request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
-        gift = Gift.objects.filter(wallet=wallet, gift_code_hash=gift_code_hash, date_claimed__isnull=True).first()
-        if gift is None:
+        gift_qs = Gift.objects.filter(wallet=wallet, gift_code_hash=gift_code_hash, date_claimed__isnull=True)
+        if not gift_qs.exists():
             raise Exception("Gift does not exist!")
-
+        gift = gift_qs.first()
         gift_share = gift.share
         gift_id = gift.id
         gift.delete()
