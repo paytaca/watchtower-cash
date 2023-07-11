@@ -23,7 +23,7 @@ class CampaignViewSet(viewsets.GenericViewSet):
             openapi.Parameter('limit', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_INTEGER)
         ]
     )
-    def list_campaigns(request, wallet_hash):
+    def list_campaigns(self, request, wallet_hash):
         offset = int(request.query_params.get("offset", 0))
         limit = int(request.query_params.get("limit", 0))
 
@@ -37,16 +37,23 @@ class CampaignViewSet(viewsets.GenericViewSet):
 
         campaigns = []
         for campaign in queryset.order_by('-date_created'):
-            campaign.gifts = campaign.gifts.count()
-            campaign.claims = campaign.claims.count()
-            campaigns.append(serializers.CampaignSerializer(campaign).data)
-
-        data = {
-            'campaigns': campaigns,
-            'pagination': {
-                'count': count,
-                'offset': offset,
-                'limit': limit,
-            }
-        }
+            gifts = campaign.gifts
+            claims = campaign.claims
+            campaigns.append({
+                "id": str(campaign.id),
+                "date_created": str(campaign.date_created),
+                "name": campaign.name,
+                "limit_per_wallet": campaign.limit_per_wallet,
+                "gifts": campaign.gifts.count(),
+                "claims": campaign.claims.count()
+            })
+            
+        data = dict(
+            campaigns=campaigns,
+            pagination=dict(
+                count=count,
+                offset=offset,
+                limit=limit,
+            ),
+        )
         return Response(data)
