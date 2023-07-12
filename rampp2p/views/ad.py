@@ -15,7 +15,16 @@ from rampp2p.serializers import (
     AdCreateSerializer, 
     AdUpdateSerializer
 )
-from rampp2p.models import Ad, Peer, PaymentMethod
+from rampp2p.models import (
+    Ad, 
+    Peer, 
+    PaymentMethod,
+    FiatCurrency,
+    CryptoCurrency
+)
+
+import logging
+logger = logging.getLogger(__name__)
 
 class AdListCreate(APIView):
     def get(self, request):
@@ -36,7 +45,7 @@ class AdListCreate(APIView):
             except ValidationError as err:
                 return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
-            queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash))
+            queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
 
         if currency is not None:
             queryset = queryset.filter(Q(fiat_currency__symbol=currency))
@@ -68,6 +77,15 @@ class AdListCreate(APIView):
         
         data = request.data.copy()
         data['owner'] = caller.id
+
+        try:
+            crypto = data['crypto_currency']
+            data['crypto_currency'] = CryptoCurrency.objects.get(symbol=crypto).id
+            
+            fiat = data['fiat_currency']
+            data['fiat_currency'] = FiatCurrency.objects.get(symbol=fiat).id
+        except (CryptoCurrency.DoesNotExist, FiatCurrency.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = AdCreateSerializer(data=data)
         if serializer.is_valid():

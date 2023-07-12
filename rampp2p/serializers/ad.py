@@ -42,6 +42,8 @@ class AdListSerializer(serializers.ModelSerializer):
             'payment_methods',
             'trade_count',
             'completion_rate',
+            'created_at',
+            'modified_at'
         ]
     
     def get_price(self, instance: Ad):
