@@ -33,7 +33,7 @@ class VerifyMessageView(APIView):
         valid = False
         try:
             valid = self.verify_signature(pubkey, signature_hex, message)
-        except ValidationError:
+        except (ValidationError, Exception):
             valid = False
         return Response({"valid": valid}, status=status.HTTP_200_OK)
     

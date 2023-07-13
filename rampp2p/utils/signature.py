@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def verify_signature(wallet_hash, signature_hex, message, **kwargs):
-    return True
+    # return True
     try:
         public_key_hex = kwargs.get('public_key')
         if public_key_hex is None:
@@ -20,8 +20,10 @@ def verify_signature(wallet_hash, signature_hex, message, **kwargs):
 
         # Create an ECDSA public key object
         vk = ecdsa.VerifyingKey.from_string(public_key_bytes, curve=ecdsa.SECP256k1)
-        logger.warn(f'public_key: {public_key_hex}')
-        logger.warn(f'message: {message}')
+        # logger.warn(f'wallet_hash: {wallet_hash}')
+        # logger.warn(f'signature_hex: {signature_hex}')
+        # logger.warn(f'public_key: {public_key_hex}')
+        # logger.warn(f'message: {message}')
 
         # Verify the signature
         is_valid = vk.verify(der_signature_bytes, message.encode('utf-8'), hashlib.sha256, sigdecode=ecdsa.util.sigdecode_der)
