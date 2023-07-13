@@ -20,7 +20,8 @@ from rampp2p.models import (
     Peer, 
     PaymentMethod,
     FiatCurrency,
-    CryptoCurrency
+    CryptoCurrency,
+    TradeType
 )
 
 import logging
@@ -54,7 +55,16 @@ class AdListCreate(APIView):
             queryset = queryset.filter(Q(trade_type=trade_type))
         
         serializer = AdListSerializer(queryset, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
+        data = serializer.data
+        if wallet_hash is None:
+            serialized_data = serializer.data
+            reverse = False
+            if trade_type == TradeType.BUY:
+                reverse = True
+            ordered_data = sorted(serialized_data, key=lambda x: x['price'], reverse=reverse)
+            data = ordered_data
+
+        return Response(data, status.HTTP_200_OK)
 
     def post(self, request):
         try:
