@@ -54,7 +54,7 @@ class AdListSerializer(serializers.ModelSerializer):
         market_price = MarketRate.objects.filter(currency=currency)
         if market_price.exists():
             market_price = market_price.first().price
-            price = market_price * instance.floating_price
+            price = market_price * (instance.floating_price/100)
         else:
             price = None
         return price
