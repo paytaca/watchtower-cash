@@ -21,8 +21,11 @@ from rampp2p.models import (
     PaymentMethod,
     FiatCurrency,
     CryptoCurrency,
-    TradeType
+    TradeType,
+    PriceType,
+    MarketRate
 )
+from django.db.models import F, ExpressionWrapper, Subquery, OuterRef, DecimalField,  Case, When, Value
 
 import logging
 logger = logging.getLogger(__name__)
@@ -36,7 +39,7 @@ class AdListCreate(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
-
+        
         if wallet_hash is not None:
             try:
                 # Verify owner signature
@@ -45,26 +48,40 @@ class AdListCreate(APIView):
                 verify_signature(wallet_hash, signature, message)
             except ValidationError as err:
                 return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-            queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
-
+        
         if currency is not None:
             queryset = queryset.filter(Q(fiat_currency__symbol=currency))
+        elif wallet_hash is None:
+            # Require currency param if fetching data for marketplace page
+            return Response({'error': 'currency is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         if trade_type is not None:
             queryset = queryset.filter(Q(trade_type=trade_type))
-        
-        serializer = AdListSerializer(queryset, many=True)
-        data = serializer.data
-        if wallet_hash is None:
-            serialized_data = serializer.data
-            reverse = False
-            if trade_type == TradeType.BUY:
-                reverse = True
-            ordered_data = sorted(serialized_data, key=lambda x: x['price'], reverse=reverse)
-            data = ordered_data
 
-        return Response(data, status.HTTP_200_OK)
+        market_rate = MarketRate.objects.filter(currency=currency)
+
+        queryset = queryset.annotate(
+            price=ExpressionWrapper(
+                Case(
+                    When(price_type=PriceType.FLOATING, then=(F('floating_price')/100 * market_rate.values('price'))),
+                    default=F('fixed_price'),
+                    output_field=DecimalField()
+                ),
+                output_field=DecimalField()
+            )
+        )
+
+        if wallet_hash is None:
+            # default order: ascending price for SELL ads
+            order = 'price'
+            if trade_type == TradeType.BUY:
+                order = '-price'
+            queryset = queryset.order_by(order)
+        else:
+            queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
+        
+        serializer = AdListSerializer(queryset, many=True)        
+        return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
         try:
