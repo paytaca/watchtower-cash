@@ -1,3 +1,4 @@
+import json
 import requests
 import logging
 from rest_framework import serializers
@@ -11,19 +12,38 @@ LOGGER = logging.getLogger("main")
 class PaySerializer(serializers.Serializer):
     payment_url = serializers.CharField()
     raw_tx_hex = serializers.CharField()
+    source = serializers.CharField(required=False)
 
     def construct(self):
         payment_pb = prpb.Payment()
         payment_pb.transactions.append(bytes.fromhex(self.validated_data["raw_tx_hex"]))
         self.serialized_payment = payment_pb.SerializeToString()
+        
+        source = self.validated_data.get("source", None)
+        if source == "anypay":
+            tx_hex = self.validated_data["raw_tx_hex"]
+            self.serialized_payment = json.dumps({
+                "chain": "BCH",
+                "currency": "BCH",
+                "transactions": [{
+                    "tx": tx_hex,
+                    "weightedSize": int(len(tx_hex) / 2),
+                }]
+            })
         return self.serialized_payment
+
+    def get_headers(self):
+        source = self.validated_data.get("source", None)
+        if source == "anypay":
+            return { "Content-Type": "application/payment" }
+        return ACK_HEADERS
 
     def send(self):
         try:
             r = requests.post(
                 self.validated_data["payment_url"],
                 data=self.serialized_payment,
-                headers=ACK_HEADERS,
+                headers=self.get_headers(),
                 verify=ca_path
             )
         except requests.exceptions.RequestException as e:
@@ -40,6 +60,16 @@ class PaySerializer(serializers.Serializer):
             # Hide those and just display the name of the error code.
             LOGGER.error(f"Payment request api error: {r.reason}")
             return False, r.reason
+
+        try:
+            response_data = r.json()
+            if "memo" in response_data:
+                response_data = response_data["memo"]
+            LOGGER.info("Payment response: %s" % response_data)
+            return True, response_data
+        except (json.JSONDecodeError, TypeError):
+            pass
+
         try:
             payment_ack_pb = prpb.PaymentACK()
             payment_ack_pb.ParseFromString(r.content)
