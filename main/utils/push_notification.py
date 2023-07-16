@@ -20,8 +20,11 @@ def send_wallet_history_push_notification(wallet_history_obj):
         "token_id": wallet_history_obj.token.tokenid,
     }
     title = "Payment Received" if incoming else "Payment Sent"
-    amount = abs(wallet_history_obj.amount) / (10 ** decimals)
-    amount = f'{amount:.5f}'.strip('0').rstrip('.')
+    if token_name.lower() == "bch":
+        amount = abs(wallet_history_obj.amount)
+    else:
+        amount = abs(wallet_history_obj.amount) / (10 ** decimals)
+    amount = f'{amount:.5f}'.rstrip('0').rstrip('.')
     message = f"{'Received' if incoming else 'Sent'} {amount} {token_name}"
     if fiat_value and fiat_value.get('value', None):
         message += f" ({abs(fiat_value['value'])} {fiat_value['currency']})"
