@@ -36,6 +36,7 @@ from jpp.urls import urlpatterns as jpp_urlpatterns
 from django.conf.urls.static import static
 from django.conf import settings
 from ramp.urls import urlpatterns as ramp_urlpatterns
+from paytacagifts.urls import urlpatterns as paytacagifts_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -58,6 +59,7 @@ urlpatterns = [
     path('api/', include(main_urls)),
     path('api/smartbch/', include(sbch_urlpatterns)),
     path('api/paytacapos/', include(paytacapos_urlpatterns)),
+    path('api/paytaca/', include(paytacagifts_urlpatterns)),
     path('api/anyhedge/', include(anyhedge_urlpatterns)),
     path('api/chat/', include(chat_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
