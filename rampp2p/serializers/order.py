@@ -20,7 +20,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class OrderSerializer(serializers.ModelSerializer):
-    ad_owner_name = serializers.SerializerMethodField()
+    # ad = serializers.PrimaryKeyRelatedField(required=True, queryset=Ad.objects.all())
+    ad = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     arbiter = serializers.SlugRelatedField(slug_field="name", queryset=Peer.objects.all())
@@ -31,7 +32,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id',
-            'ad_owner_name',
+            'ad',
             'crypto_currency',
             'fiat_currency',
             'crypto_amount',
@@ -43,8 +44,14 @@ class OrderSerializer(serializers.ModelSerializer):
             'created_at'
         ]
     
-    def get_ad_owner_name(self, instance: Order):
-        return instance.ad.owner.nickname
+    def get_ad(self, instance: Order):
+        return {
+            'id': instance.ad.id,
+            'owner': {
+                'id': instance.ad.owner.id,
+                'nickname': instance.ad.owner.nickname
+            }
+        }
     
     def get_trade_type(self, instance: Order):
         ad_trade_type = instance.ad.trade_type
