@@ -5,8 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from typing import List
-from decimal import Decimal
+import math
 
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -40,8 +39,8 @@ class AdListCreate(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
-        last_price = Decimal(request.query_params.get('last_price', 0))
-        last_date = request.query_params.get('last_date')
+        limit = int(request.query_params.get('limit', 0))
+        page = int(request.query_params.get('page', 1))
         
         if wallet_hash is not None:
             try:
@@ -76,47 +75,31 @@ class AdListCreate(APIView):
         )
 
         if wallet_hash is None:
-            # If fetching ads for store page,
-            # Order ads by price (default: ascending order)
+            # Order ads by price (default: ascending order) if fetching ads for store page
             order = 'price'
 
             # switch to descending order if trade type is BUY
             if trade_type == TradeType.BUY:
                 order = '-price'
 
-                if last_price > 0:
-                    # filter less than or equal to last cursor value if last_price is not 0.
-                    queryset = queryset.filter(price__lte=last_price)
-            else:
-                # filter greater than or equal to cursor value
-                queryset = queryset.filter(price__gte=last_price)
-
-            if last_date is not None:
-                queryset = queryset.filter(created_at__gt=last_date)
-
             queryset = queryset.order_by(order, 'created_at')
         else:
-            # If fetching ads for owner, order by created_at
+            # Order by created_at if fetching ads for owner
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
 
-        limit = 10
+
+        # Count the number of items left for next page
         count = queryset.count()
-        queryset = queryset[:limit]
+        total_pages = math.ceil(count / limit)
 
-        # Retrieve the next cursor value
-        last_index = queryset.count() - 1
-        last_date = None
-        if last_index >= 0:
-            last_value = queryset[last_index]
-            last_date = last_value.created_at
-            last_price = last_value.price
+        offset = (page - 1) * limit
+        page_results = queryset[offset:offset + limit]
 
-        serializer = AdListSerializer(queryset, many=True)
+        serializer = AdListSerializer(page_results, many=True)
         data = {
             'ads': serializer.data,
-            'last_price': last_price,
-            'last_date': last_date,
-            'count': count
+            'count': count,
+            'total_pages': total_pages
         }
         return Response(data, status.HTTP_200_OK)
 
