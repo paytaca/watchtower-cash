@@ -26,10 +26,10 @@ class Gift(models.Model):
     address = models.CharField(max_length=64)
     amount = models.FloatField(default=0)
     share = models.CharField(max_length=255)
-    date_funded = models.DateTimeField(null=True) 
-    date_claimed = models.DateTimeField(null=True)
+    date_funded = models.DateTimeField(blank=True, null=True) 
+    date_claimed = models.DateTimeField(blank=True, null=True)
     wallet = models.ForeignKey(Wallet, related_name="gifts", on_delete=models.CASCADE)
-    campaign = models.ForeignKey(Campaign, related_name="gifts", on_delete=models.CASCADE, null=True)
+    campaign = models.ForeignKey(Campaign, related_name="gifts", on_delete=models.CASCADE, blank=True, null=True)
 
     def __str__(self):
         return str(self.id)

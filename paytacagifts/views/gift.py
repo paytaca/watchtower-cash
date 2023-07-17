@@ -96,14 +96,14 @@ class GiftViewSet(viewsets.GenericViewSet):
         request_body=CreateGiftPayloadSerializer,
         responses={status.HTTP_200_OK: CreateGiftResponseSerializer},
         manual_parameters=[
-            openapi.Parameter('wallet_hash', openapi.IN_QUERY, description="Wallet Hash", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('wallet_hash', openapi.IN_PATH, description="Wallet Hash", type=openapi.TYPE_STRING, required=True),
         ]
     )
-    def create(self, request):
+    def create(self, request, *args, **kwargs):
         data = request.data
-        wallet_hash = request.query_params.get("wallet_hash", "")
+        wallet_hash = kwargs.get("wallet_hash", "")
         if not wallet_hash: raise Exception('Wallet Hash Required')
-        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
+        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         if "campaign" in data:
             if "limit_per_wallet" in data["campaign"]:
                 limit = data["campaign"]["limit_per_wallet"]
@@ -113,10 +113,12 @@ class GiftViewSet(viewsets.GenericViewSet):
                 campaign = Campaign.objects.get(id=data["campaign"]["id"])
         else:
             campaign = None
-        gift, created = Gift.objects.get_or_create(gift_code_hash=data["gift_code_hash"])
+        gift, created = Gift.objects.get_or_create(
+            gift_code_hash=data["gift_code_hash"],
+            wallet=wallet
+        )
         if created:
             gift.address=data["address"]
-            gift.wallet=wallet
             gift.amount=data["amount"]
             gift.share=data["share"]
             gift.campaign=campaign
@@ -188,8 +190,11 @@ class GiftViewSet(viewsets.GenericViewSet):
             raise Exception("Gift does not exist!")
         gift = gift_qs.first()
         gift_share = gift.share
-        gift_id = gift.id
-        gift.delete()
+        # Do not delete, just mark as claimed
+        gift.date_claimed = datetime.now()
+        gift.save()
+        # gift_id = gift.id
+        # gift.delete()
         return Response({
             "share": gift_share
         })
