@@ -39,8 +39,18 @@ class AdListCreate(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
-        limit = int(request.query_params.get('limit', 0))
-        page = int(request.query_params.get('page', 1))
+
+        try:
+            limit = int(request.query_params.get('limit', 0))
+            page = int(request.query_params.get('page', 1))
+        except ValueError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if limit < 0:
+            return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if page < 1:
+            return Response({'error': 'page must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
         
         if wallet_hash is not None:
             try:
