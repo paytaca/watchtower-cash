@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from typing import List
+from decimal import Decimal
 
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -39,6 +40,7 @@ class AdListCreate(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
+        last_price = Decimal(request.query_params.get('last_price', 0))
         
         if wallet_hash is not None:
             try:
@@ -52,7 +54,7 @@ class AdListCreate(APIView):
         if currency is not None:
             queryset = queryset.filter(Q(fiat_currency__symbol=currency))
         elif wallet_hash is None:
-            # Require currency param if fetching data for marketplace page
+            # Require currency param if fetching data for store page
             return Response({'error': 'currency is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         if trade_type is not None:
@@ -60,6 +62,7 @@ class AdListCreate(APIView):
 
         market_rate = MarketRate.objects.filter(currency=currency)
 
+        # annotate to compute ad price based on price type (FIXED vs FLOATING)
         queryset = queryset.annotate(
             price=ExpressionWrapper(
                 Case(
@@ -72,16 +75,44 @@ class AdListCreate(APIView):
         )
 
         if wallet_hash is None:
-            # default order: ascending price for SELL ads
+            # If fetching ads for store page,
+            # Order ads by price (default: ascending order)
             order = 'price'
+
+            # switch to descending order if trade type is BUY
             if trade_type == TradeType.BUY:
                 order = '-price'
+
+                if last_price > 0:
+                    # filter less than or equal to last cursor value if last_price is not 0.
+                    queryset = queryset.filter(price__lte=last_price)
+            else:
+                # filter greater than or equal to cursor value
+                queryset = queryset.filter(price__gte=last_price)
+
             queryset = queryset.order_by(order)
         else:
+            # If fetching ads for owner, order by created_at
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
+
+        limit = 10
+        count = queryset.count()
+        queryset = queryset[:limit]
+
+        # Retrieve the next cursor value
+        last_index = queryset.count() - 1
+        if last_index >= 0:
+            last_price = queryset[last_index].price
+        else:
+            last_price = last_price
         
-        serializer = AdListSerializer(queryset, many=True)        
-        return Response(serializer.data, status.HTTP_200_OK)
+        serializer = AdListSerializer(queryset, many=True)
+        data = {
+            'ads': serializer.data,
+            'last_price': last_price,
+            'count': count
+        }
+        return Response(data, status.HTTP_200_OK)
 
     def post(self, request):
         try:
