@@ -41,6 +41,7 @@ class AdListCreate(APIView):
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
         last_price = Decimal(request.query_params.get('last_price', 0))
+        last_date = request.query_params.get('last_date')
         
         if wallet_hash is not None:
             try:
@@ -90,7 +91,10 @@ class AdListCreate(APIView):
                 # filter greater than or equal to cursor value
                 queryset = queryset.filter(price__gte=last_price)
 
-            queryset = queryset.order_by(order)
+            if last_date is not None:
+                queryset = queryset.filter(created_at__gt=last_date)
+
+            queryset = queryset.order_by(order, 'created_at')
         else:
             # If fetching ads for owner, order by created_at
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
@@ -101,15 +105,17 @@ class AdListCreate(APIView):
 
         # Retrieve the next cursor value
         last_index = queryset.count() - 1
+        last_date = None
         if last_index >= 0:
-            last_price = queryset[last_index].price
-        else:
-            last_price = last_price
-        
+            last_value = queryset[last_index]
+            last_date = last_value.created_at
+            last_price = last_value.price
+
         serializer = AdListSerializer(queryset, many=True)
         data = {
             'ads': serializer.data,
             'last_price': last_price,
+            'last_date': last_date,
             'count': count
         }
         return Response(data, status.HTTP_200_OK)
