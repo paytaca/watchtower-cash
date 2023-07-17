@@ -13,7 +13,7 @@ from django.db.models import Sum
 from datetime import datetime
 
 class GiftViewSet(viewsets.GenericViewSet):
-    lookup_field = "gift_code_hash"
+    lookup_field = "wallet_hash"
 
     @action(detail=True, methods=['get'])
     @swagger_auto_schema(
@@ -59,14 +59,14 @@ class GiftViewSet(viewsets.GenericViewSet):
             queryset = queryset.filter(campaign__id=campaign_filter)
 
         count = queryset.count()
+        queryset = queryset.order_by('-date_created')
         if offset:
             queryset = queryset[offset:]
         if limit:
             queryset = queryset[:limit]
 
         gifts = []
-        for gift in queryset.order_by('-date_created'):
-            gift.fetch_related("campaign")
+        for gift in queryset:
             campaign = gift.campaign
             campaign_id = None
             campaign_name = None

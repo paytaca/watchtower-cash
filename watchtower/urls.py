@@ -59,7 +59,6 @@ urlpatterns = [
     path('api/', include(main_urls)),
     path('api/smartbch/', include(sbch_urlpatterns)),
     path('api/paytacapos/', include(paytacapos_urlpatterns)),
-    path('api/paytaca/', include(paytacagifts_urlpatterns)),
     path('api/anyhedge/', include(anyhedge_urlpatterns)),
     path('api/chat/', include(chat_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
@@ -71,3 +70,8 @@ urlpatterns = [
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui')
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+urlpatterns += [
+    path('api/', include(paytacagifts_urlpatterns)),
+]
