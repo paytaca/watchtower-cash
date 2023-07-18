@@ -50,7 +50,7 @@ class AdListCreate(APIView):
             return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
         
         if page < 1:
-            return Response({'error': 'page must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
         
         if wallet_hash is not None:
             try:
@@ -100,7 +100,9 @@ class AdListCreate(APIView):
 
         # Count the number of items left for next page
         count = queryset.count()
-        total_pages = math.ceil(count / limit)
+        total_pages = count
+        if limit > 0:
+            total_pages = math.ceil(count / limit)
 
         offset = (page - 1) * limit
         page_results = queryset[offset:offset + limit]
