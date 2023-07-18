@@ -225,7 +225,7 @@ class AdDetail(APIView):
         
         if caller.wallet_hash != ad.owner.wallet_hash:
             raise ValidationError('caller must be ad owner')
-    
+
 def validate_payment_methods_ownership(wallet_hash, payment_method_ids):
     '''
     Validates if caller owns the payment methods

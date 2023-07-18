@@ -12,16 +12,46 @@ from rampp2p.models import (
     DurationChoices,
     Status,
     StatusType,
-    Arbiter
+    Arbiter,
+    PaymentMethod
 )
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 
 import logging
 logger = logging.getLogger(__name__)
 
+class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
+    payment_type = serializers.SerializerMethodField()
+    class Meta:
+        model = PaymentMethod
+        fields = [
+            'payment_type',
+            'account_name',
+            'account_number'
+        ]
+    
+    def get_payment_type(self, instance: PaymentMethod):
+        return instance.payment_type.name
+
+class OrderAdSerializer(serializers.ModelSerializer):
+    owner = serializers.SerializerMethodField()
+    payment_methods = OrderAdPaymentMethodSerializer(many=True)
+    class Meta:
+        model = Ad
+        fields = [
+            'id',
+            'owner',
+            'payment_methods'
+        ]
+    
+    def get_owner(self, instance: Ad):
+        return {
+            'id': instance.owner.id,
+            'nickname': instance.owner.nickname
+        }
+
 class OrderSerializer(serializers.ModelSerializer):
-    # ad = serializers.PrimaryKeyRelatedField(required=True, queryset=Ad.objects.all())
-    ad = serializers.SerializerMethodField()
+    ad = OrderAdSerializer()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     arbiter = serializers.SlugRelatedField(slug_field="name", queryset=Peer.objects.all())
@@ -45,13 +75,24 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
     
     def get_ad(self, instance: Order):
-        return {
+        data = {
             'id': instance.ad.id,
             'owner': {
                 'id': instance.ad.owner.id,
                 'nickname': instance.ad.owner.nickname
             }
         }
+        latest_status = self.get_latest_order_status(instance)
+        if latest_status.status == StatusType.ESCROWED:
+            payment_methods = instance.ad.payment_methods
+            logger.warn(f'payment_methods: {payment_methods}')
+            # data['payment_methods'] = OrderAdPaymentMethodSerializer(payment_methods, many=True)
+        return data
+    
+    def get_latest_order_status(self, instance: Order):
+        latest_status = Status.objects.filter(Q(order=instance)).last()
+        logger.warn(f'latest_status: {latest_status.status}')
+        return latest_status
     
     def get_trade_type(self, instance: Order):
         ad_trade_type = instance.ad.trade_type
