@@ -22,8 +22,8 @@ class Campaign(models.Model):
 class Gift(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     date_created = models.DateTimeField(auto_now_add=True)
-    gift_code_hash = models.CharField(max_length=70, db_index=True, unique=True)
-    address = models.CharField(max_length=64)
+    gift_code_hash = models.CharField(max_length=70, unique=True)
+    address = models.CharField(max_length=64, db_index=True)
     amount = models.FloatField(default=0)
     share = models.CharField(max_length=255)
     date_funded = models.DateTimeField(blank=True, null=True) 
@@ -33,6 +33,18 @@ class Gift(models.Model):
 
     def __str__(self):
         return str(self.id)
+    
+    class Meta:
+        ordering = [
+            '-date_created',
+            '-date_funded'
+        ]
+        indexes = [
+            models.Index(fields=['gift_code_hash']),
+            models.Index(fields=['date_funded']),
+            models.Index(fields=['date_claimed']),
+        ]
+
 
 class Claim(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
