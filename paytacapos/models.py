@@ -52,7 +52,7 @@ class PosDevice(models.Model):
 
     branch = models.ForeignKey(
         "Branch",
-        on_delete=models.SET_NULL, related_name="devices",
+        on_delete=models.PROTECT, related_name="devices",
         null=True, blank=True,
     )
 
