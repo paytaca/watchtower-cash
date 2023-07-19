@@ -470,7 +470,9 @@ class MerchantSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
-        return super().create(validated_data)
+        instance = super().create(validated_data)
+        instance.get_or_create_main_branch()
+        return instance
 
     @transaction.atomic()
     def update(self, instance, validated_data):
