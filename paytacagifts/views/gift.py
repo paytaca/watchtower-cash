@@ -180,21 +180,3 @@ class GiftViewSet(viewsets.GenericViewSet):
             })
         else:
             raise Exception("This gift has been claimed")
-
-    @action(detail=True, methods=['post'])
-    @swagger_auto_schema(
-        operation_description="Recover a Gift record, which deletes this record from the database",
-        request_body=RecoverGiftPayloadSerializer,
-        responses={status.HTTP_200_OK: RecoverGiftResponseSerializer}
-    )
-    def recover(self, request, gift_code_hash):
-        wallet_hash = request.data["wallet_hash"]
-        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
-        gift_qs = Gift.objects.filter(wallet=wallet, gift_code_hash=gift_code_hash, date_claimed__isnull=True)
-        if not gift_qs.exists():
-            raise Exception("Gift does not exist!")
-        gift = gift_qs.first()
-        gift_share = gift.share
-        return Response({
-            "share": gift_share
-        })
