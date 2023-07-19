@@ -11,7 +11,7 @@ class CampaignAdmin(admin.ModelAdmin):
 
 
 class GiftAdmin(admin.ModelAdmin):
-    list_display = ['id', 'date_created', 'gift_code_hash', 'address', 'amount', 'share', 'date_funded', 'date_claimed', 'wallet']
+    list_display = ['id', 'date_created', 'gift_code_hash', 'wallet', 'address', 'amount', 'date_funded', 'date_claimed']
 
 
 class ClaimAdmin(admin.ModelAdmin):

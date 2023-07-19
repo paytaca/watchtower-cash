@@ -352,9 +352,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.
     },
-    'update_shift_status': {
-        'task': 'ramp.tasks.update_shift_status',
-        'schedule': 60
+    'check_unfunded_gifts': {
+        'task': 'paytacagifts.tasks.check_unfunded_gifts',
+        'schedule': 5
+    },
+    'check_unclaimed_gifts': {
+        'task': 'paytacagifts.tasks.check_unclaimed_gifts',
+        'schedule': 7
     }
 }
 

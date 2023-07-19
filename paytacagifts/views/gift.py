@@ -9,6 +9,7 @@ from paytacagifts.models import Gift, Wallet, Campaign, Claim
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from main.utils.subscription import new_subscription
 from django.db.models import Sum
 from datetime import datetime
 
@@ -51,7 +52,10 @@ class GiftViewSet(viewsets.GenericViewSet):
         if query_args.get("campaign"):
             campaign_filter = query_args.get("campaign", None)
 
-        queryset = Gift.objects.filter(wallet__wallet_hash=wallet_hash)
+        queryset = Gift.objects.filter(
+            wallet__wallet_hash=wallet_hash,
+            date_funded__is_null=False
+        )
         if isinstance(claimed, bool):
             queryset = queryset.filter(date_claimed__isnull=not claimed)
 
@@ -113,6 +117,9 @@ class GiftViewSet(viewsets.GenericViewSet):
                 campaign = Campaign.objects.get(id=data["campaign"]["id"])
         else:
             campaign = None
+        # subscribe address
+        new_subscription(address=data["address"])
+        # create gift record
         gift, created = Gift.objects.get_or_create(
             gift_code_hash=data["gift_code_hash"],
             wallet=wallet
@@ -167,8 +174,6 @@ class GiftViewSet(viewsets.GenericViewSet):
             )
 
         if claim:
-            gift.date_claimed = datetime.now()
-            gift.save()
             return Response({
                 "share": gift.share,
                 "claim_id": str(claim.id)
@@ -190,11 +195,6 @@ class GiftViewSet(viewsets.GenericViewSet):
             raise Exception("Gift does not exist!")
         gift = gift_qs.first()
         gift_share = gift.share
-        # Do not delete, just mark as claimed
-        gift.date_claimed = datetime.now()
-        gift.save()
-        # gift_id = gift.id
-        # gift.delete()
         return Response({
             "share": gift_share
         })
