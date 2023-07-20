@@ -54,7 +54,7 @@ class GiftViewSet(viewsets.GenericViewSet):
 
         queryset = Gift.objects.filter(
             wallet__wallet_hash=wallet_hash,
-            date_funded__is_null=False
+            date_funded__isnull=False
         )
         if isinstance(claimed, bool):
             queryset = queryset.filter(date_claimed__isnull=not claimed)
