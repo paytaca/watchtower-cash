@@ -31,9 +31,9 @@ def execute_subprocess(command):
 
     stderr = stderr.decode("utf-8")
     stdout = stdout.decode('utf-8')
-    # logger.warning(f'stdout: {stdout}, stderr: {stderr}')
+    logger.warning(f'stdout: {stdout}, stderr: {stderr}')
 
-    if stdout is not None:
+    if stdout is not '':
         # Define the pattern for matching control characters
         control_char_pattern = re.compile('[\x00-\x1f\x7f-\x9f]')
         

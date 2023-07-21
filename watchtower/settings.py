@@ -361,7 +361,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'update_market_rates': {
         'task': 'rampp2p.tasks.market_rate_tasks.update_market_rates',
-        'schedule': 60
+        'schedule': 60 * 10 # run every 10 minutes
     }
 }
 
