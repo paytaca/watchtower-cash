@@ -108,7 +108,7 @@ class AdDetailSerializer(AdListSerializer):
         ]
     
     def get_time_duration(self, instance: Ad):
-        return DurationChoices(instance.time_duration_choice).label
+        return DurationChoices(instance.time_duration_choice).value
 
     def get_fees(self, _):
         _, fees = get_trading_fees()
