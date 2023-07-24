@@ -4,14 +4,13 @@ import json
 
 
 SLP_MAIN_ADDR_LEN = 55
-BCH_TEST_ADDR_LEN = 50
 SLP_TEST_ADDR_LEN = 50
 
 
 def is_bch_address(addr, to_token_addr=False):
-    cmd = f'node main/js/validate-address.js {bch_addr} {to_token_addr}'
+    cmd = f'node main/js/validate-address.js {addr} {to_token_addr}'
     p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate()
+    stdout, _ = p.communicate()
     result = json.loads(stdout.decode('utf8'))
     return result['valid']
 
@@ -31,4 +30,3 @@ def is_slp_address(addr, check_len=True):
     if check_len:
         return prefix_check and len(addr) == basis_len
     return prefix_check
-
