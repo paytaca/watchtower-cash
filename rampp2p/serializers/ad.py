@@ -15,7 +15,7 @@ from rampp2p.models import (
     MarketRate
 )
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
-from .payment import RelatedPaymentMethodSerializer
+from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer
 
 class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SlugRelatedField(slug_field="nickname", queryset=Peer.objects.all())
@@ -114,6 +114,8 @@ class AdDetailSerializer(AdListSerializer):
         _, fees = get_trading_fees()
         return fees
 
+class AdOwnerSerializer(AdDetailSerializer):
+    payment_methods = PaymentMethodSerializer(many=True)
 
 class AdCreateSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())

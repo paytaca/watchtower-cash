@@ -13,7 +13,8 @@ from rampp2p.serializers import (
     AdListSerializer, 
     AdDetailSerializer,
     AdCreateSerializer, 
-    AdUpdateSerializer
+    AdUpdateSerializer,
+    AdOwnerSerializer
 )
 from rampp2p.models import (
     Ad, 
@@ -25,7 +26,16 @@ from rampp2p.models import (
     PriceType,
     MarketRate
 )
-from django.db.models import F, ExpressionWrapper, Subquery, OuterRef, DecimalField,  Case, When, Value
+from django.db.models import (
+    F, 
+    ExpressionWrapper, 
+    Subquery, 
+    OuterRef, 
+    DecimalField, 
+    Case, 
+    When, 
+    Value
+)
 
 import logging
 logger = logging.getLogger(__name__)
@@ -159,11 +169,25 @@ class AdDetail(APIView):
         except Ad.DoesNotExist:
             raise Http404
 
-    def get(self, _, pk):
+    def get(self, request, pk):
         ad = self.get_object(pk)
         if ad.is_deleted:
             return Response(status=status.HTTP_204_NO_CONTENT)
+        
+        wallet_hash = request.headers.get('wallet_hash')
+
         serializer = AdDetailSerializer(ad)
+        if wallet_hash is not None:
+            try:
+                # validate signature
+                signature, timestamp, wallet_hash = get_verification_headers(request)
+                message = ViewCode.AD_GET.value + '::' + timestamp
+                verify_signature(wallet_hash, signature, message)
+
+            except ValidationError as err:
+                return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            
+            serializer = AdOwnerSerializer(ad)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
