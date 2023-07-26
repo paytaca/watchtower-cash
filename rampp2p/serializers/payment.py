@@ -26,6 +26,13 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
             'account_number'
         ]
 
+    def create(self, validated_data):
+        owner_wallet_hash = validated_data['owner'].wallet_hash
+        payment_type_id = validated_data['payment_type'].id
+
+        if PaymentMethod.objects.filter(owner__wallet_hash=owner_wallet_hash, payment_type__id=payment_type_id).exists():
+            raise serializers.ValidationError('A record with the same payment_type already exists for this user')
+
 class PaymentMethodSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
     payment_type = PaymentTypeSerializer()
