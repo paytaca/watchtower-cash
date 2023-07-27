@@ -104,13 +104,21 @@ def client_acknowledgement(self, txid):
                 token_id = transaction.token.info_id
                 token_decimals = transaction.token.decimals
                 token_symbol = transaction.token.token_ticker.lower()
+                
+                token = None
+                image_url = None
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
+                elif transaction.cashtoken_nft:
+                    token = transaction.cashtoken_nft
+
+                if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_name = token.info.name
                     token_id = token.token_id
                     token_symbol = token.info.symbol
                     token_decimals = token.info.decimals
+                    image_url = token.info.image_url
                 
                 txn_amount = None
                 if transaction.amount:
@@ -122,6 +130,7 @@ def client_acknowledgement(self, txid):
                         'token_id':  token_id,
                         'token_symbol': token_symbol,
                         'token_decimals': token_decimals,
+                        'image_url': image_url,
                         'amount': txn_amount,
                         'value': transaction.value,
                         'address': transaction.address.address,
@@ -131,7 +140,15 @@ def client_acknowledgement(self, txid):
                         'index': transaction.index,
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
+                        'is_nft': False,
                     }
+
+                    if transaction.cashtoken_nft:
+                        data['capability'] = token.capability
+                        data['commitment'] = token.commitment
+                        data['id'] = token.id
+                        data['is_nft'] = True
+
                 elif wallet_version == 1:
                     data = {
                         'amount': txn_amount,
