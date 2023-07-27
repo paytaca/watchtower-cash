@@ -21,6 +21,7 @@ urlpatterns = [
     path('order/', OrderListCreate.as_view(), name='order-list-create'),
     path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
     path('order/<int:pk>/status', OrderListStatus.as_view(), name='order-list-status'),
+    path('order/<int:pk>/cancel', CancelOrder.as_view(), name='order-cancel'),
     path('order/<int:pk>/generate-contract', CreateContract.as_view(), name='generate-contract'),
     path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),
     path('order/<int:pk>/escrow-confirm', EscrowConfirmOrder.as_view(), name='escrow-confirm-order'),
