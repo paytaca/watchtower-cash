@@ -2,6 +2,9 @@ from rest_framework import serializers
 from ..models.payment import PaymentMethod, PaymentType
 from ..models.peer import Peer
 
+import logging
+logger = logging.getLogger(__name__)
+
 class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = serializers.SlugRelatedField(slug_field="name", queryset=PaymentType.objects.all())
     class Meta:
@@ -25,6 +28,7 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
             'account_name',
             'account_number'
         ]
+    depth = 1
 
     def create(self, validated_data):
         owner_wallet_hash = validated_data['owner'].wallet_hash
@@ -32,6 +36,9 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
 
         if PaymentMethod.objects.filter(owner__wallet_hash=owner_wallet_hash, payment_type__id=payment_type_id).exists():
             raise serializers.ValidationError('A record with the same payment_type already exists for this user')
+        
+        instance, _ = PaymentMethod.objects.get_or_create(**validated_data)
+        return instance
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())

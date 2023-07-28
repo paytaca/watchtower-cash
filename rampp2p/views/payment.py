@@ -15,6 +15,9 @@ from rampp2p.serializers import (
 )
 from rampp2p.viewcodes import ViewCode
 
+import logging
+logger = logging.getLogger(__name__)
+
 class PaymentTypeList(APIView):
     def get(self, _):
         queryset = PaymentType.objects.all()
@@ -35,7 +38,7 @@ class PaymentMethodListCreate(APIView):
         except Peer.DoesNotExist as err:
            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             
-        queryset = PaymentMethod.objects.filter(owner=owner, is_deleted=False)
+        queryset = PaymentMethod.objects.filter(owner=owner)
         serializer = PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
@@ -58,15 +61,16 @@ class PaymentMethodListCreate(APIView):
 
         serializer = PaymentMethodCreateSerializer(data=data)
         if serializer.is_valid():
-            serializer = PaymentMethodSerializer(serializer.save())
+            payment_method = serializer.save()
+            serializer = PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
 class PaymentMethodDetail(APIView):
     def get_object(self, pk):
         try:
-            queryset = PaymentMethod.objects.filter(is_deleted=False) 
-            return queryset.get(pk=pk)
+            payment_method = PaymentMethod.objects.get(pk=pk)
+            return payment_method
         except PaymentMethod.DoesNotExist:
             raise Http404
     
@@ -114,12 +118,12 @@ class PaymentMethodDetail(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
-        payment_method = self.get_object(pk=pk)
-        if not payment_method.is_deleted:
-            payment_method.is_deleted = True
-            payment_method.deleted_at = timezone.now()
-            payment_method.save()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        try:
+            payment_method = self.get_object(pk=pk)
+            payment_method.delete()
+        except Exception as err:
+            return Response({'error': err.args[0]},status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_200_OK)
 
     def validate_permissions(self, wallet_hash, id):
         '''

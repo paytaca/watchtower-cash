@@ -15,8 +15,8 @@ class PaymentMethod(models.Model):
   owner = models.ForeignKey(Peer, on_delete=models.CASCADE, editable=False)
   account_name = models.CharField(max_length=100)
   account_number = models.CharField(max_length=100)
-  is_deleted = models.BooleanField(default=False)
-  deleted_at = models.DateTimeField(null=True)
+  # is_deleted = models.BooleanField(default=False)
+  # deleted_at = models.DateTimeField(null=True)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
   modified_at = models.DateTimeField(auto_now=True)
 
