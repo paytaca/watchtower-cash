@@ -169,7 +169,8 @@ class Wallet(PostgresModel):
         return self.wallet_hash
 
 class Address(PostgresModel):
-    address = models.CharField(max_length=70, unique=True, db_index=True)
+    address = models.CharField(max_length=100, unique=True, db_index=True)
+    token_address = models.CharField(max_length=100, null=True, blank=True)
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
@@ -206,7 +207,7 @@ class Address(PostgresModel):
                 wallet.wallet_type = 'slp'
             elif is_bch_address(self.address) or is_token_address(self.address):
                 if is_token_address(self.address):
-                    self.address = bch_address_converter(self.address, to_token_addr=False)
+                    self.address = bch_address_converter(self.address, to_token_addr=False)                    
                 wallet.wallet_type = 'bch'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'
