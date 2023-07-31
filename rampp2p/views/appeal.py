@@ -18,7 +18,8 @@ from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.transaction import validate_transaction
-from rampp2p import utils
+from rampp2p.utils.utils import is_order_expired
+from rampp2p.utils.handler import update_order_status
     
 class AppealRelease(APIView):
     '''
@@ -41,7 +42,7 @@ class AppealRelease(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
-            if not utils.is_order_expired(pk):
+            if not is_order_expired(pk):
                 raise ValidationError('order is not expired yet')
             validate_status_inst_count(StatusType.RELEASE_APPEALED, pk)
             validate_status_progression(StatusType.RELEASE_APPEALED, pk)
@@ -109,7 +110,7 @@ class AppealRefund(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            if not utils.is_order_expired(pk):
+            if not is_order_expired(pk):
                 raise ValidationError('order is not expired yet')
             validate_status_inst_count(StatusType.REFUND_APPEALED, pk)
             validate_status_progression(StatusType.REFUND_APPEALED, pk)
@@ -204,7 +205,7 @@ class MarkForRelease(APIView):
             validate_status_progression(status_type, pk)                        
 
             # Update status to RELEASE_PENDING
-            utils.handler.update_order_status(pk, status_type)
+            update_order_status(pk, status_type)
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -267,7 +268,7 @@ class MarkForRefund(APIView):
             validate_status_progression(status_type, pk)
 
             # Update status to REFUND_PENDING
-            utils.handler.update_order_status(pk, status_type)
+            update_order_status(pk, status_type)
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

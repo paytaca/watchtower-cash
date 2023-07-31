@@ -322,7 +322,7 @@ class EscrowConfirmOrder(APIView):
                 
             # contract.contract_address must be set first through GenerateContract endpoint
             contract = Contract.objects.filter(order_id=pk)
-            if (contract.count() == 0 or contract.first().contract_address is None):
+            if (not contract.exists()):
                 raise ValidationError('order contract does not exist')
 
             contract = contract.first()

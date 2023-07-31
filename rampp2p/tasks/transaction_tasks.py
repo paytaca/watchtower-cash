@@ -91,17 +91,18 @@ def handle_order_status(**kwargs):
         tx_id = tx_serializer.data.get("id")
 
         # Save transaction outputs
-        for output in outputs:
-            out_data = {
-                "transaction": tx_id,
-                "address": output.get('address'),
-                "amount": output.get('amount')
-            }
-            recipient_serializer = RecipientSerializer(data=out_data)
-            if recipient_serializer.is_valid():
-                recipient_serializer = RecipientSerializer(recipient_serializer.save())
-            else:
-                logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
+        if outputs is not None:
+            for output in outputs:
+                out_data = {
+                    "transaction": tx_id,
+                    "address": output.get('address'),
+                    "amount": output.get('amount')
+                }
+                recipient_serializer = RecipientSerializer(data=out_data)
+                if recipient_serializer.is_valid():
+                    recipient_serializer = RecipientSerializer(recipient_serializer.save())
+                else:
+                    logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
         
         # Update order status
         status_type = None

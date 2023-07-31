@@ -1,4 +1,4 @@
-from rampp2p.tasks.transaction_tasks import execute_subprocess, verify_tx_out
+from rampp2p.tasks.transaction_tasks import execute_subprocess, handle_transaction
 
 import logging
 logger = logging.getLogger(__name__)
@@ -17,7 +17,8 @@ def validate_transaction(txid: str, **kwargs):
     )
     return execute_subprocess.apply_async(
                 (command,), 
-                link=verify_tx_out.s(
+                # link=verify_tx_out.s(
+                link=handle_transaction.s(
                     txid=txid,
                     action=kwargs.get('action'),
                     contract_id=kwargs.get('contract_id'),
