@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db import models
 from main.models import WalletHistory
 
@@ -51,7 +52,7 @@ class PosDevice(models.Model):
 
     branch = models.ForeignKey(
         "Branch",
-        on_delete=models.SET_NULL, related_name="devices",
+        on_delete=models.PROTECT, related_name="devices",
         null=True, blank=True,
     )
 
@@ -111,9 +112,43 @@ class Merchant(models.Model):
             last_tx_date = str(last_tx.date_created)
         return last_tx_date
 
+    def get_main_branch(self):
+        return self.branches.filter(is_main=True).first()
+
+    @transaction.atomic
+    def get_or_create_main_branch(self, force_new=False):
+        main_branch = self.get_main_branch()
+        if main_branch:
+            return main_branch, False
+
+        branch = self.branches.filter(name__icontains="main").first()
+        if not branch:
+            branch = self.branches.first()
+
+        if branch and not force_new:
+            branch.is_main = True
+            branch.save()
+            return branch, False
+
+        location = None
+        if self.location:
+            location = self.location
+            location.id = None
+            location.save()
+            self.refresh_from_db()
+
+        branch = Branch.objects.create(
+            merchant=self,
+            name="Main",
+            is_main=True,
+            location=location
+        )
+        return branch, True
+
 
 class Branch(models.Model):
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="branches")
+    is_main = models.BooleanField(default=False)
     name = models.CharField(max_length=75)
     location = models.OneToOneField(
         Location, on_delete=models.SET_NULL,
@@ -126,3 +161,14 @@ class Branch(models.Model):
 
     def __str__(self):
         return f"Branch ({self.merchant.name} - {self.name})"
+
+    def save(self, *args, **kwargs):
+        if self.is_main:
+            qs = self.__class__.objects.filter(merchant_id = self.merchant_id, is_main=True)
+            if self.pk:
+              qs = qs.exclude(pk=self.pk)
+            has_existing_main = qs.exists()
+            if has_existing_main:
+                raise Exception("Unable to save as main branch due to existing main branch")
+
+        return super().save(*args, **kwargs)

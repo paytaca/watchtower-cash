@@ -11,7 +11,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import viewsets, mixins, decorators
+from rest_framework import viewsets, mixins, decorators, exceptions
 from rest_framework import status
 from .serializers import (
     SalesSummarySerializer,
@@ -260,3 +260,10 @@ class BranchViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.all()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.devices.count():
+            raise exceptions.ValidationError("Unable to remove branches linked to a device")
+        return super().destroy(request, *args, **kwargs)
+ 
