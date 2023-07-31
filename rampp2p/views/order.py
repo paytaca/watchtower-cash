@@ -9,6 +9,7 @@ from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
 
+from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.contract import create_contract
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
@@ -325,14 +326,12 @@ class EscrowConfirmOrder(APIView):
                 raise ValidationError('order contract does not exist')
 
             contract = contract.first()
-            # participants = self.get_order_participants(contract.order)
             validate_transaction(
                 txid, 
                 action=Transaction.ActionType.ESCROW,
-                contract_id=contract.id, 
-                # wallet_hashes=participants
+                contract_id=contract.id
             )
-           
+
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         

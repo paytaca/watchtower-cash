@@ -45,7 +45,90 @@ def execute_subprocess(command):
     return response
 
 @shared_task(queue='rampp2p__contract_execution')
-def verify_tx_out(data: Dict, **kwargs):
+def handle_transaction(data: Dict, **kwargs):
+    action = kwargs.get('action')
+    txid = kwargs.get('txid')
+    contract = Contract.objects.get(pk=kwargs.get('contract_id'))
+
+    # valid, error, outputs = verify_tx_out(data, action, contract)
+    txdata = {
+        "action": action,
+        "txid": txid,
+        "contract": contract.id,
+        # "error": error
+    }
+    handle_order_status(
+        # valid=valid,
+        valid=True,
+        action=action,
+        txdata=txdata,
+        contract=contract,
+        # outputs=outputs,
+        # error=error
+    )
+    
+
+# @shared_task(queue='rampp2p__contract_execution')
+def handle_order_status(**kwargs):
+    valid = kwargs.get('valid')
+    action = kwargs.get('action')
+    txdata = kwargs.get('txdata')
+    contract = kwargs.get('contract')
+    outputs = kwargs.get('outputs')
+
+    result = {
+        "success": valid
+    }
+
+    status = None
+    if valid:
+        # Save transaction details 
+        tx_serializer = TransactionSerializer(data=txdata)
+        if tx_serializer.is_valid():
+            tx_serializer = TransactionSerializer(tx_serializer.save())
+        
+        logger.warn(f"tx_serializer.data: {tx_serializer.data}")
+        tx_id = tx_serializer.data.get("id")
+
+        # Save transaction outputs
+        for output in outputs:
+            out_data = {
+                "transaction": tx_id,
+                "address": output.get('address'),
+                "amount": output.get('amount')
+            }
+            recipient_serializer = RecipientSerializer(data=out_data)
+            if recipient_serializer.is_valid():
+                recipient_serializer = RecipientSerializer(recipient_serializer.save())
+            else:
+                logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
+        
+        # Update order status
+        status_type = None
+        if action == Transaction.ActionType.REFUND:
+            status_type = StatusType.REFUNDED
+        if action == Transaction.ActionType.RELEASE:
+            status_type = StatusType.RELEASED
+        if action == Transaction.ActionType.ESCROW:
+            status_type = StatusType.ESCROWED
+
+        status = utils.handler.update_order_status(contract.order.id, status_type).data
+
+        txdata["outputs"] = outputs
+        result["status"] = status
+        result["txdata"] = txdata
+    
+    logger.warning(f'result: {result}')
+
+    # Send the result through websocket
+    return send_order_update(
+        result, 
+        contract.order.id
+    )
+
+
+# @shared_task(queue='rampp2p__contract_execution')
+def verify_tx_out(data: Dict, action, contract):
     '''
     Verifies if transaction details (input, outputs, and amounts) satisfy the prerequisites of its contract.
     Automatically updates the order's status if transaction is valid and sends the result through a websocket channel.
@@ -56,8 +139,7 @@ def verify_tx_out(data: Dict, **kwargs):
     # logger.warning(f'kwargs: {kwargs}')
 
     valid = True
-    error_msg = ""
-    action = kwargs.get('action')
+    error = None
 
     # transaction must have at least 1 confirmation
     confirmations = data.get('result').get('confirmations')
@@ -71,8 +153,6 @@ def verify_tx_out(data: Dict, **kwargs):
     
     tx_inputs = data.get('result').get('inputs')
     tx_outputs = data.get('result').get('outputs')
-
-    contract = Contract.objects.get(pk=kwargs.get('contract_id'))
 
     # The transaction is invalid, if inputs or outputs are empty
     if tx_inputs is None or tx_outputs is None:
@@ -169,8 +249,8 @@ def verify_tx_out(data: Dict, **kwargs):
             # and set valid=False if fee is incorrect
             if output_address == arbiter:
                 if output_amount != arbitration_fee:
-                    error_msg = 'arbiter incorrect output_amount'
-                    logger.error(error_msg)
+                    error = 'arbiter incorrect output_amount'
+                    logger.error(error)
                     valid = False
                     break
                 arbiter_exists = True
@@ -179,8 +259,8 @@ def verify_tx_out(data: Dict, **kwargs):
             # and set valid=False if fee is incorrect
             if output_address == servicer:    
                 if output_amount != service_fee:
-                    error_msg = 'servicer incorrect output_amount'
-                    logger.error(error_msg)
+                    error = 'servicer incorrect output_amount'
+                    logger.error(error)
                     valid = False
                     break
                 servicer_exists = True
@@ -190,8 +270,8 @@ def verify_tx_out(data: Dict, **kwargs):
                 # and set valid=False if the amount is incorrect
                 if output_address == buyer:
                     if output_amount != amount:
-                        error_msg = 'buyer incorrect output_amount'
-                        logger.warn(error_msg)
+                        error = 'buyer incorrect output_amount'
+                        logger.warn(error)
                         valid = False
                         break
                     buyer_exists = True
@@ -201,8 +281,8 @@ def verify_tx_out(data: Dict, **kwargs):
                 # and set valid=False if the amount is incorrect
                 if output_address == seller:
                     if output_amount != amount:
-                        error_msg = 'seller incorrect output_amount'
-                        logger.warn(error_msg)
+                        error = 'seller incorrect output_amount'
+                        logger.warn(error)
                         valid = False
                         break
                     seller_exists = True
@@ -217,62 +297,5 @@ def verify_tx_out(data: Dict, **kwargs):
             ((action == Transaction.ActionType.RELEASE and not buyer_exists) or 
             (action == Transaction.ActionType.REFUND and not seller_exists))):
             valid = False
-
-    # Initialize transaction details
-    txdata = {
-        "action": action,
-        "txid": kwargs.get('txid'),
-        "contract": contract.id
-    }
-
-    result = {
-        "success": valid
-    }
-
-    status = None
-    if valid:
-        # Save transaction details 
-        tx_serializer = TransactionSerializer(data=txdata)
-        if tx_serializer.is_valid():
-            tx_serializer = TransactionSerializer(tx_serializer.save())
-        
-        logger.warn(f"tx_serializer.data: {tx_serializer.data}")
-        tx_id = tx_serializer.data.get("id")
-
-        # Save transaction outputs
-        for output in outputs:
-            out_data = {
-                "transaction": tx_id,
-                "address": output.get('address'),
-                "amount": output.get('amount')
-            }
-            recipient_serializer = RecipientSerializer(data=out_data)
-            if recipient_serializer.is_valid():
-                recipient_serializer = RecipientSerializer(recipient_serializer.save())
-            else:
-                logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
-        
-        # Update order status
-        status_type = None
-        if action == Transaction.ActionType.REFUND:
-            status_type = StatusType.REFUNDED
-        if action == Transaction.ActionType.RELEASE:
-            status_type = StatusType.RELEASED
-        if action == Transaction.ActionType.ESCROW:
-            status_type = StatusType.ESCROWED
-
-        status = utils.handler.update_order_status(contract.order.id, status_type).data
-
-        txdata["outputs"] = outputs
-        result["status"] = status
-        result["txdata"] = txdata
-    else:
-        result["error"] = error_msg
     
-    logger.warning(f'result: {result}')
-
-    # Send the result through websocket
-    return send_order_update(
-        result, 
-        contract.order.id
-    )
+    return valid, error, outputs
