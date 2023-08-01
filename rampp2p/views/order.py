@@ -48,7 +48,16 @@ class OrderListCreate(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
-        orders = Order.objects.filter(owner__wallet_hash=wallet_hash).order_by('-created_at')
+        # Fetch orders created by user
+        owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash).order_by('-created_at')
+        # Fetch orders created for ads owned by user
+        ads = Ad.objects.values('id').filter(owner__wallet_hash=wallet_hash)
+        ad_orders = Order.objects.filter(ad__id__in=ads)
+        orders = owned_orders.union(ad_orders)
+        # logger.warn(f'ads: {ads}')
+        # logger.warn(f'owned_orders: {owned_orders}')
+        # logger.warn(f'ad_orders: {ad_orders}')
+        # logger.warn(f'orders: {orders}')
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
