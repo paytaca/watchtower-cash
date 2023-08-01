@@ -1,11 +1,17 @@
 from notifications.utils.send import send_push_notification_to_wallet_hashes, NotificationTypes
+from django.conf import settings
+
 
 def send_wallet_history_push_notification(wallet_history_obj):
     fiat_value = None
     if wallet_history_obj.cashtoken_ft:
         token = wallet_history_obj.cashtoken_ft
-        token_name = token.info.symbol
-        decimals = token.info.decimals
+        token_name = settings.DEFAULT_TOKEN_DETAILS['fungible']['name']
+        decimals = 0
+        
+        if token.info:
+            token_name = token.info.symbol
+            decimals = token.info.decimals
     else:
         token_name = wallet_history_obj.token.token_ticker or wallet_history_obj.token.name
         if token_name.lower() == "bch":

@@ -149,13 +149,16 @@ class Balance(APIView):
                     )
                 else:
                     token = CashFungibleToken.objects.get(category=category)
-                decimals = token.info.decimals
+                
+                decimals = 0
+                if token.info:
+                    decimals = token.info.decimals
             else:
                 token = Token.objects.get(tokenid=tokenid)
                 decimals = token.decimals
             
             balance = qs_balance['amount__sum'] or 0
-            if balance > 0 and decimals:
+            if balance > 0:
                 balance = self.truncate(balance, decimals)
 
             data['balance'] = balance
@@ -250,9 +253,12 @@ class Balance(APIView):
                         token = CashFungibleToken.objects.get(category=tokenid_or_category)
 
                     balance = qs_balance['amount__sum'] or 0
+                    decimals = 0
+                    if token.info:
+                        decimals = token.info.decimals
 
-                    if balance > 0 and token.info.decimals:
-                        balance = self.truncate(balance, token.info.decimals)
+                    if balance > 0:
+                        balance = self.truncate(balance, decimals)
 
                     data['balance'] = balance
                     data['spendable'] = balance

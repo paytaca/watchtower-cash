@@ -109,18 +109,27 @@ def client_acknowledgement(self, txid):
                 
                 token = None
                 image_url = None
+                token_details_key = None
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
+                    token_details_key = 'fungible'
                 elif transaction.cashtoken_nft:
                     token = transaction.cashtoken_nft
+                    token_details_key = 'nft'
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
-                    token_name = token.info.name
+                    token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
                     token_id = token.token_id
-                    token_symbol = token.info.symbol
-                    token_decimals = token.info.decimals
-                    image_url = token.info.image_url
+                    token_name = token_default_details['name']
+                    token_symbol = token_default_details['symbol']
+                    token_decimals = 0
+                    
+                    if token.info:
+                        token_name = token.info.name
+                        token_symbol = token.info.symbol
+                        token_decimals = token.info.decimals
+                        image_url = token.info.image_url
                 
                 txn_amount = None
                 if transaction.amount:
@@ -220,18 +229,8 @@ def get_cashtoken_meta_data(
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     METADATA = None
-    DEFAULT_TOKEN_DETAILS = {
-        'nft': {
-            'name': 'CashToken NFT',
-            'symbol': 'CASH-NFT'
-        },
-        'fungible': {
-            'name': 'CashToken',
-            'symbol': 'CASH'
-        }
-    }
     detail_key = 'nft' if is_nft else 'fungible'
-    default_details = DEFAULT_TOKEN_DETAILS[detail_key]
+    default_details = settings.DEFAULT_TOKEN_DETAILS[detail_key]
 
     # TODO: Don't fetch from BCMR indexer for now, to be reconsidered later
     # PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
@@ -1998,11 +1997,11 @@ def update_wallet_history_currency(wallet_hash, currency):
 @shared_task(queue='populate_token_addresses')
 def populate_token_addresses():
     bch_addresses = Address.objects.filter(
-        Q(address__startswith='bitcoincash:') |
-        Q(address__startswith='bchtest:')
+        models.Q(address__startswith='bitcoincash:') |
+        models.Q(address__startswith='bchtest:')
     ).filter(
         token_address__isnull=True
-    )
+    ).order_by('id')
 
     for obj in bch_addresses:
         if is_bch_address(obj.address): # double check here

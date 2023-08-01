@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.conf import settings
 
 from main.models import (
     CashNonFungibleToken,
@@ -38,17 +39,25 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
         ]
 
     def get_name(self, obj):
-        return obj.info.name
+        if obj.info:
+            return obj.info.name
+        return settings.DEFAULT_TOKEN_DETAILS['fungible']['name']
 
     def get_symbol(self, obj):
-        return obj.info.symbol
+        if obj.info:
+            return obj.info.symbol
+        return settings.DEFAULT_TOKEN_DETAILS['fungible']['symbol']
 
     def get_decimals(self, obj):
-        return obj.info.decimals
+        if obj.info:
+            return obj.info.decimals
+        return 0
 
     def get_image_url(self, obj):
-        return obj.info.image_url
-        
+        if obj.info:
+            return obj.info.image_url
+        return None
+            
 
 class CashNonFungibleTokenSerializer(serializers.ModelSerializer):
     info = CashTokenInfoSerializer()
