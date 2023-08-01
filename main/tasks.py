@@ -23,6 +23,8 @@ from main.utils.nft import (
     find_token_utxo,
     find_minting_baton,
 )
+from main.utils.address_converter import bch_address_converter
+from main.utils.address_validator import is_bch_address
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
     send_wallet_history_push_notification,
@@ -1991,3 +1993,18 @@ def parse_wallet_history_market_values(wallet_history_id):
 @shared_task(queue='wallet_history_2', max_retries=3)
 def update_wallet_history_currency(wallet_hash, currency):
     return save_wallet_history_currency(wallet_hash, currency)
+
+
+@shared_task(queue='populate_token_addresses')
+def populate_token_addresses():
+    bch_addresses = Address.objects.filter(
+        Q(address__startswith='bitcoincash:') |
+        Q(address__startswith='bchtest:')
+    ).filter(
+        token_address__isnull=True
+    )
+
+    for obj in bch_addresses:
+        if is_bch_address(obj.address): # double check here
+            obj.token_address = bch_address_converter(obj.address)
+            obj.save()
