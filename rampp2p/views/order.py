@@ -37,6 +37,11 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
+from django.db.models import (
+    OuterRef,
+    Subquery
+)
+
 class OrderListCreate(APIView):
 
     def get(self, request):
@@ -48,13 +53,36 @@ class OrderListCreate(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
+        order_state = request.query_params.get('state')
+        if order_state is None:
+            return Response({'error': 'parameter "state" is required'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Fetch orders created by user
         owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash).order_by('-created_at')
         # Fetch orders created for ads owned by user
         ads = Ad.objects.values('id').filter(owner__wallet_hash=wallet_hash)
         ad_orders = Order.objects.filter(ad__id__in=ads)
-        orders = owned_orders.union(ad_orders)
+
+        completed_status = [
+            StatusType.CANCELED,
+            StatusType.RELEASED,
+            StatusType.REFUNDED
+        ]
+        latest_status = Status.objects.filter(
+            order=OuterRef('pk'), 
+            status__in=completed_status
+        ).order_by('-pk')
+
+        orders = None
+        if order_state == 'COMPLETED':            
+            owned_orders = owned_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
+            ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
+        elif order_state == 'ONGOING':
+            owned_orders = owned_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
+            ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
         
+        orders = owned_orders.union(ad_orders)
+
         serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 

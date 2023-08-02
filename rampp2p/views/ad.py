@@ -29,12 +29,9 @@ from rampp2p.models import (
 from django.db.models import (
     F, 
     ExpressionWrapper, 
-    Subquery, 
-    OuterRef, 
     DecimalField, 
     Case, 
-    When, 
-    Value
+    When
 )
 
 import logging
