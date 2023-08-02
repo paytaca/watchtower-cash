@@ -1,6 +1,5 @@
 import { getPriceMessages, parseOracleMessage } from './price.js'
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
-import { OracleData } from '@generalprotocols/price-oracle'
 
 /**
  * 
@@ -22,13 +21,9 @@ import { OracleData } from '@generalprotocols/price-oracle'
 export async function create(intent, pubkeys, startingOracleMessage, priceMessageConfig, priceMessageRequestParams) {
   try {
     let startingPriceMessage
-    try {
-      const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
-      startingPriceMessage = priceMessagesResponse?.results?.[0]
-    } catch {}
-
-    if (!startingPriceMessage && startingOracleMessage?.publicKey &&
-      startingOracleMessage?.message && startingOracleMessage?.signature
+    if (startingOracleMessage?.publicKey &&
+      startingOracleMessage?.message &&
+      startingOracleMessage?.signature
     ) {
       const parsedPriceDataResponse = await parseOracleMessage(startingOracleMessage?.message)
       startingPriceMessage = {
@@ -39,6 +34,12 @@ export async function create(intent, pubkeys, startingOracleMessage, priceMessag
         },
         priceData: parsedPriceDataResponse.priceData,
       }
+    }
+    if (!startingPriceMessage) {
+      try {
+        const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
+        startingPriceMessage = priceMessagesResponse?.results?.[0]
+      } catch {}
     }
 
     if (!startingPriceMessage) throw 'Unable to retrieve price data'
