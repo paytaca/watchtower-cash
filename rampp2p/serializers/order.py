@@ -35,13 +35,13 @@ class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
 
 class OrderAdSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
-    payment_methods = OrderAdPaymentMethodSerializer(many=True)
+    # payment_methods = OrderAdPaymentMethodSerializer(many=True)
     class Meta:
         model = Ad
         fields = [
             'id',
-            'owner',
-            'payment_methods'
+            'owner'
+            # 'payment_methods'
         ]
     
     def get_owner(self, instance: Ad):
@@ -58,6 +58,7 @@ class OrderSerializer(serializers.ModelSerializer):
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     expiration_date = serializers.SerializerMethodField()
+    payment_methods = serializers.SerializerMethodField()
     class Meta:
         model = Order
         fields = [
@@ -71,6 +72,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'trade_type',
             'status',
             'expiration_date',
+            'payment_methods',
             'created_at'
         ]
     
@@ -82,13 +84,19 @@ class OrderSerializer(serializers.ModelSerializer):
                 'nickname': instance.ad.owner.nickname
             }
         }
-        latest_status = self.get_latest_order_status(instance)
-        if latest_status.status == StatusType.ESCROWED:
-            payment_methods = instance.ad.payment_methods
-            logger.warn(f'payment_methods: {payment_methods}')
-            # data['payment_methods'] = OrderAdPaymentMethodSerializer(payment_methods, many=True)
         return data
     
+    def get_payment_methods(self, instance: Order):
+        latest_status = self.get_latest_order_status(instance)
+        payment_methods = None
+        if latest_status.status == StatusType.ESCROWED:
+            serialized_payment_methods = OrderAdPaymentMethodSerializer(
+                instance.ad.payment_methods.all(), 
+                many=True
+            )
+            payment_methods = serialized_payment_methods.data
+        return payment_methods
+
     def get_latest_order_status(self, instance: Order):
         latest_status = Status.objects.filter(Q(order=instance)).last()
         logger.warn(f'latest_status: {latest_status.status}')
