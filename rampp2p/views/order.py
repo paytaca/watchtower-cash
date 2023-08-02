@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
+import math
 
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.contract import create_contract
@@ -33,6 +34,7 @@ from rampp2p.models import (
     Contract,
     Transaction
 )
+
 import json
 import logging
 logger = logging.getLogger(__name__)
@@ -57,12 +59,26 @@ class OrderListCreate(APIView):
         if order_state is None:
             return Response({'error': 'parameter "state" is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            limit = int(request.query_params.get('limit', 0))
+            page = int(request.query_params.get('page', 1))
+        except ValueError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if limit < 0:
+            return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if page < 1:
+            return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Fetch orders created by user
         owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash).order_by('-created_at')
+
         # Fetch orders created for ads owned by user
         ads = Ad.objects.values('id').filter(owner__wallet_hash=wallet_hash)
-        ad_orders = Order.objects.filter(ad__id__in=ads)
+        ad_orders = Order.objects.filter(ad__id__in=ads).order_by('-created_at')
 
+        # Create subquery to filter/exclude completed status
         completed_status = [
             StatusType.CANCELED,
             StatusType.RELEASED,
@@ -73,7 +89,7 @@ class OrderListCreate(APIView):
             status__in=completed_status
         ).order_by('-pk')
 
-        orders = None
+        # Filter or exclude orders according to their latest status
         if order_state == 'COMPLETED':            
             owned_orders = owned_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
             ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
@@ -81,10 +97,26 @@ class OrderListCreate(APIView):
             owned_orders = owned_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
             ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
         
-        orders = owned_orders.union(ad_orders)
+        # Combine owned and ad orders
+        queryset = owned_orders.union(ad_orders)
 
-        serializer = OrderSerializer(orders, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
+        # Count total pages
+        count = queryset.count()
+        total_pages = page
+        if limit > 0:
+            total_pages = math.ceil(count / limit)
+
+        # Splice queryset
+        offset = (page - 1) * limit
+        page_results = queryset[offset:offset + limit]
+
+        serializer = OrderSerializer(page_results, many=True)
+        data = {
+            'orders': serializer.data,
+            'count': count,
+            'total_pages': total_pages
+        }
+        return Response(data, status.HTTP_200_OK)
 
     def post(self, request):
 

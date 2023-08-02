@@ -41,8 +41,6 @@ class AdListCreate(APIView):
     def get(self, request):
         queryset = Ad.objects.filter(is_deleted=False)
 
-        # TODO pagination
-
         wallet_hash = request.headers.get('wallet_hash')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
@@ -104,10 +102,8 @@ class AdListCreate(APIView):
             # Order by created_at if fetching ads for owner
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
 
-
-        # Count the number of items left for next page
         count = queryset.count()
-        total_pages = count
+        total_pages = page
         if limit > 0:
             total_pages = math.ceil(count / limit)
 
