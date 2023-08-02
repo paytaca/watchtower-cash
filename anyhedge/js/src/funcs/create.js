@@ -1,4 +1,4 @@
-import { getPriceMessages } from './price.js'
+import { getPriceMessages, parseOracleMessage } from './price.js'
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
 
 /**
@@ -14,13 +14,36 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
  * @param {String} pubkeys.hedgePubkey - Public key of hedger
  * @param {String} pubkeys.shortAddress - Destination address of counterparty's funds on maturity/liquidation
  * @param {String} pubkeys.shortPubkey - Public key of counterparty
+ * @param {OraclePriceMessage} [startingOracleMessage]
  * @param {PriceMessageConfig | undefined } priceMessageConfig
  * @param {PriceRequestParams | undefined } priceMessageRequestParams
  */
-export async function create(intent, pubkeys, priceMessageConfig, priceMessageRequestParams) {
+export async function create(intent, pubkeys, startingOracleMessage, priceMessageConfig, priceMessageRequestParams) {
   try {
-    const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
-    const { priceData, priceMessage } = priceMessagesResponse?.results?.[0]
+    let startingPriceMessage
+    if (startingOracleMessage?.publicKey &&
+      startingOracleMessage?.message &&
+      startingOracleMessage?.signature
+    ) {
+      const parsedPriceDataResponse = await parseOracleMessage(startingOracleMessage?.message)
+      startingPriceMessage = {
+        priceMessage: {
+          publicKey: startingOracleMessage?.publicKey,
+          message: startingOracleMessage?.message,
+          signature: startingOracleMessage?.signature,
+        },
+        priceData: parsedPriceDataResponse.priceData,
+      }
+    }
+    if (!startingPriceMessage) {
+      try {
+        const priceMessagesResponse = await getPriceMessages(priceMessageConfig, priceMessageRequestParams)
+        startingPriceMessage = priceMessagesResponse?.results?.[0]
+      } catch {}
+    }
+
+    if (!startingPriceMessage) throw 'Unable to retrieve price data'
+    const { priceData, priceMessage } = startingPriceMessage
     if (!priceData) throw 'Unable to retrieve price data'
 
     const nominalUnits = intent.amount * priceData.priceValue // BCH * (UScents / BCH)
