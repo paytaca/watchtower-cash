@@ -112,32 +112,10 @@ class OrderListCreate(APIView):
             status=StatusType.SUBMITTED,
             order=Order.objects.get(pk=order.id)
         )
-        serializer = OrderSerializer(order)
-        
-        # generate the contract address
-        params = self.get_contract_params(order)
-        contract = Contract.objects.create(order=order)
-        timestamp = contract.created_at.timestamp()
-        
-        # execute long running task
-        create_contract(
-            order_id=contract.order.id,
-            arbiter_pubkey=params['arbiter_pubkey'], 
-            seller_pubkey=params['seller_pubkey'], 
-            buyer_pubkey=params['buyer_pubkey'],
-            timestamp=timestamp
-        )
-        
+        serializer = OrderSerializer(order)        
         response = {
             'success': True,
-            'data': {
-                'order': serializer.data,
-                'contract': contract.id,
-                'timestamp': timestamp,
-                'arbiter_address': order.arbiter.address,
-                'buyer_address': params['buyer_address'],
-                'seller_address': params['seller_address']
-            }
+            'order': serializer.data
         }
     
         return Response(response, status=status.HTTP_201_CREATED)

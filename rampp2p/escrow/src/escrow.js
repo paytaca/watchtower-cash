@@ -11,7 +11,7 @@ const BUYER_PUBKEY = process.argv[3]
 const SELLER_PUBKEY = process.argv[4]
 const TIMESTAMP = process.argv[5]
 const SERVCR_PUBKEY = process.env.SERVICER_PK
-const TRADING_FEE = parseInt(process.env.TRADING_FEE)
+const SERVICE_FEE = parseInt(process.env.SERVICE_FEE)
 const ARBITRATION_FEE = parseInt(process.env.ARBITRATION_FEE)
 
 const bchjs = new BCHJS({
@@ -33,13 +33,11 @@ const NETWORK = 'mainnet';
     const contractHash = await calculateSHA256('rampp2p/escrow/src/escrow.cash', TIMESTAMP)
 
     // Instantiate a new contract providing the constructor parameters
-    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TRADING_FEE, ARBITRATION_FEE, contractHash];
+    const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, SERVICE_FEE, ARBITRATION_FEE, contractHash];
     const contract = new Contract(artifact, contractParams, provider);
 
-    // if (ACTION == 'contract') {
-    data = `{"success": "true", "contract_address" : "${contract.address}", "hash": "${contractHash}"}`
+    data = `{"success": "true", "contract_address" : "${contract.address}"}`
     console.log(data)
-    // }
 })();
 
 function getPubKeyHash() {  
