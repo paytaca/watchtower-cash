@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from purelypeer.serializers import VaultSerializer
 from .models import (
     LinkedDeviceInfo,
     UnlinkDeviceRequest,
@@ -444,6 +445,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
 class MerchantSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     wallet_hash = serializers.CharField() # to supress unique validation
+    vault = VaultSerializer()
 
     class Meta:
         model = Merchant
@@ -452,7 +454,8 @@ class MerchantSerializer(serializers.ModelSerializer):
             "wallet_hash",
             "name",
             "primary_contact_number",
-            "location"
+            "location",
+            "vault",
         ]
 
 
