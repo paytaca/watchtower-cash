@@ -1,8 +1,8 @@
 import { OracleNetwork, OracleData } from '@generalprotocols/price-oracle'
 import { hexToBin } from '@bitauth/libauth'
 
-const ORACLE_PUBLIC_KEY = process.env.ANYHEDGE_DEFAULT_ORACLE_PUBKEY || '02d3c1de9d4bc77d6c3608cbe44d10138c7488e592dc2b1e10a6cf0e92c2ecb047'
-const ORACLE_RELAY = process.env.ANYHEDGE_DEFAULT_ORACLE_RELAY || 'staging-oracles.generalprotocols.com'
+const ORACLE_PUBLIC_KEY = process.env.ANYHEDGE_DEFAULT_ORACLE_PUBKEY || '02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818'
+const ORACLE_RELAY = process.env.ANYHEDGE_DEFAULT_ORACLE_RELAY || 'oracles.generalprotocols.com'
 const ORACLE_RELAY_PORT = Number(process.env.ANYHEDGE_DEFAULT_ORACLE_PORT) || 7083
 
 /**
