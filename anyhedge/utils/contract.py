@@ -1,6 +1,10 @@
 from datetime import datetime, timedelta
 from ..js.runner import AnyhedgeFunctions
-from ..models import HedgePositionOffer
+from ..models import (
+    HedgePositionOffer,
+    Oracle,
+    PriceOracleMessage,
+)
 
 
 def calculate_hedge_sats(long_sats=0.0, low_price_mult=1, price_value=None):
@@ -51,9 +55,13 @@ def create_contract(
 
     priceMessageConfig = None
     if oracle_pubkey:
+        oracle = Oracle.objects.filter(pubkey=oracle_pubkey).first()
         priceMessageConfig = {
             "oraclePubKey": oracle_pubkey,
         }
+        if oracle:
+            priceMessageConfig["oracleRelay"] = oracle.relay
+            priceMessageConfig["oraclePort"] = oracle.port
 
     priceMessageRequestParams = None
     if price_oracle_message_sequence:
@@ -61,7 +69,20 @@ def create_contract(
             "minMessageSequence": price_oracle_message_sequence,
             "maxMessageSequence": price_oracle_message_sequence,
         }
-    return AnyhedgeFunctions.create(intent, pubkeys, priceMessageConfig, priceMessageRequestParams)
+
+    startingPriceMessage = None
+    if oracle_pubkey and price_oracle_message_sequence:
+        price_oracle_message = PriceOracleMessage.objects.filter(
+            pubkey=oracle_pubkey, message_sequence=price_oracle_message_sequence
+        ).first()
+        if price_oracle_message:
+            startingPriceMessage = {
+                "publicKey": price_oracle_message.pubkey,
+                "message": price_oracle_message.message,
+                "signature": price_oracle_message.signature,
+            }
+
+    return AnyhedgeFunctions.create(intent, pubkeys, startingPriceMessage, priceMessageConfig, priceMessageRequestParams)
 
 def compile_contract(
     takerSide:str="",
