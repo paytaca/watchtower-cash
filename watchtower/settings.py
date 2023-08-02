@@ -542,3 +542,15 @@ if BCH_NETWORK == 'chipnet':
     bcmr_url_type = f'-chipnet'
 
 PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api'
+
+
+DEFAULT_TOKEN_DETAILS = {
+    'nft': {
+        'name': 'CashToken NFT',
+        'symbol': 'CASH-NFT'
+    },
+    'fungible': {
+        'name': 'CashToken',
+        'symbol': 'CASH'
+    }
+}
