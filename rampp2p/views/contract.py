@@ -17,7 +17,8 @@ from rampp2p.models import (
     Peer,
     Contract,
     Transaction,
-    Recipient
+    Recipient,
+    Arbiter
 )
 
 from rampp2p.serializers import (
@@ -84,9 +85,10 @@ class CreateContract(APIView):
         try:
             validate_status(pk, StatusType.SUBMITTED)
             order = Order.objects.get(pk=pk)
-            params = self.get_params(order)
+            arbiter = Arbiter.objects.get(pk=request.data.get('arbiter'))
+            params = self.get_params(arbiter.public_key, order)
 
-        except (Order.DoesNotExist, ValidationError) as err:
+        except (Order.DoesNotExist, Arbiter.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         generate = False
@@ -123,7 +125,7 @@ class CreateContract(APIView):
                 'order': order.id,
                 'contract': contract.id,
                 'timestamp': timestamp,
-                'arbiter_address': order.arbiter.address,
+                'arbiter_address': arbiter.address,
                 'buyer_address': params['buyer_address'],
                 'seller_address': params['seller_address']
             }
@@ -134,9 +136,8 @@ class CreateContract(APIView):
         
         return Response(response, status=status.HTTP_200_OK)
 
-    def get_params(self, order: Order):
+    def get_params(self, arbiter_pubkey, order: Order):
 
-        arbiter_pubkey = order.arbiter.public_key
         seller_pubkey = None
         buyer_pubkey = None
         seller_address = None

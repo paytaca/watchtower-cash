@@ -59,6 +59,7 @@ class OrderSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     expiration_date = serializers.SerializerMethodField()
     payment_methods = serializers.SerializerMethodField()
+    last_modified_at = serializers.SerializerMethodField() # lastest order status created_at
     class Meta:
         model = Order
         fields = [
@@ -73,7 +74,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'status',
             'expiration_date',
             'payment_methods',
-            'created_at'
+            'created_at',
+            'last_modified_at'
         ]
     
     def get_ad(self, instance: Order):
@@ -118,6 +120,11 @@ class OrderSerializer(serializers.ModelSerializer):
             logger.error(err)
         
         return status_type
+    
+    def get_last_modified_at(self, instance: Order):
+        latest_status = Status.objects.filter(order__id=instance.id).order_by('-created_at').values('created_at').first()
+        logger.warn(f'latest_status:{latest_status}')
+        return latest_status['created_at']
     
     def get_expiration_date(self, instance: Order):
         '''

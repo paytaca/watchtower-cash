@@ -90,7 +90,7 @@ class OrderListCreate(APIView):
         latest_status = Status.objects.filter(
             order=OuterRef('pk'), 
             status__in=completed_status
-        ).order_by('-pk')
+        ).order_by('-created_at')
 
         # Filter or exclude orders according to their latest status
         if order_state == 'COMPLETED':            
@@ -100,6 +100,14 @@ class OrderListCreate(APIView):
             owned_orders = owned_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
             ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
         
+        owned_orders.annotate(
+            last_modified_at=latest_status.values('created_at')[:1]
+        ).order_by('last_modified_at')
+
+        ad_orders.annotate(
+            last_modified_at=latest_status.values('created_at')[:1]
+        ).order_by('last_modified_at')
+
         # Combine owned and ad orders
         queryset = owned_orders.union(ad_orders)
 
