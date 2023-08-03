@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
+from decimal import Decimal, ROUND_HALF_UP
 import math
 
 from rampp2p.utils.handler import update_order_status
@@ -32,7 +33,9 @@ from rampp2p.models import (
     Peer,
     PaymentMethod,
     Contract,
-    Transaction
+    Transaction,
+    PriceType,
+    MarketRate
 )
 
 import json
@@ -160,6 +163,17 @@ class OrderListCreate(APIView):
         data['fiat_currency'] = ad.fiat_currency.id
         data['time_duration_choice'] = ad.time_duration_choice
         data['payment_methods'] = payment_method_ids
+
+        price = None
+        if ad.price_type == PriceType.FLOATING:
+            market_price = MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
+            if market_price.exists():
+                market_price = market_price.first().price
+                price = market_price * (ad.floating_price/100)
+        else:
+            price = ad.fixed_price
+
+        data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         serializer = OrderWriteSerializer(data=data)
 
         # return error if order isn't valid

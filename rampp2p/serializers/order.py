@@ -137,7 +137,7 @@ class OrderWriteSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=Peer.objects.all())
     crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
-    arbiter = serializers.PrimaryKeyRelatedField(queryset=Arbiter.objects.all())
+    arbiter = serializers.PrimaryKeyRelatedField(queryset=Arbiter.objects.all(), required=False)
     locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
     time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices,required=True)
@@ -152,3 +152,4 @@ class OrderWriteSerializer(serializers.ModelSerializer):
                   'time_duration_choice',
                   'crypto_amount',
                   'payment_methods']
+    

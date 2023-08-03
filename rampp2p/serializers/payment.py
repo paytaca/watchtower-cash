@@ -34,6 +34,7 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
         owner_wallet_hash = validated_data['owner'].wallet_hash
         payment_type_id = validated_data['payment_type'].id
 
+        # returns an error if a record with the same payment type already exist for the user
         if PaymentMethod.objects.filter(owner__wallet_hash=owner_wallet_hash, payment_type__id=payment_type_id).exists():
             raise serializers.ValidationError('A record with the same payment_type already exists for this user')
         
