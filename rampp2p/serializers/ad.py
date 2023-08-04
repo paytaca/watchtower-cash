@@ -25,6 +25,7 @@ class AdListSerializer(serializers.ModelSerializer):
     payment_methods = RelatedPaymentMethodSerializer(many=True)
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
+    is_owned = serializers.SerializerMethodField()
 
     class Meta:
         model = Ad
@@ -42,9 +43,16 @@ class AdListSerializer(serializers.ModelSerializer):
             'payment_methods',
             'trade_count',
             'completion_rate',
+            'is_owned',
             'created_at',
             'modified_at'
         ]
+    
+    def get_is_owned(self, instance: Ad):
+        wallet_hash = self.context['wallet_hash']
+        if instance.owner.wallet_hash == wallet_hash:
+            return True
+        return False
     
     def get_price(self, instance: Ad):
         if instance.price_type == PriceType.FIXED:

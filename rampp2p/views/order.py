@@ -205,7 +205,9 @@ class OrderListCreate(APIView):
             status=StatusType.SUBMITTED,
             order=Order.objects.get(pk=order.id)
         )
-        serializer = OrderSerializer(order)        
+
+        context = { 'wallet_hash': wallet_hash }
+        serializer = OrderSerializer(order, context=context)        
         response = {
             'success': True,
             'order': serializer.data

@@ -44,6 +44,7 @@ class AdListCreate(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
+        owned = request.query_params.get('owned', False)
 
         try:
             limit = int(request.query_params.get('limit', 0))
@@ -57,20 +58,20 @@ class AdListCreate(APIView):
         if page < 1:
             return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if wallet_hash is not None:
-            try:
-                # Verify owner signature
-                signature, timestamp, _ = get_verification_headers(request)
-                message = ViewCode.AD_LIST.value + '::' + timestamp
-                verify_signature(wallet_hash, signature, message)
-            except ValidationError as err:
-                return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            # Verify owner signature
+            signature, timestamp, _ = get_verification_headers(request)
+            message = ViewCode.AD_LIST.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        
+        if not owned and currency is None:
+            # Require currency param if fetching data for store page
+            return Response({'error': 'currency is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         if currency is not None:
             queryset = queryset.filter(Q(fiat_currency__symbol=currency))
-        elif wallet_hash is None:
-            # Require currency param if fetching data for store page
-            return Response({'error': 'currency is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         if trade_type is not None:
             queryset = queryset.filter(Q(trade_type=trade_type))
@@ -89,7 +90,7 @@ class AdListCreate(APIView):
             )
         )
 
-        if wallet_hash is None:
+        if not owned:
             # Order ads by price (default: ascending order) if fetching ads for store page
             order = 'price'
 
@@ -110,7 +111,8 @@ class AdListCreate(APIView):
         offset = (page - 1) * limit
         page_results = queryset[offset:offset + limit]
 
-        serializer = AdListSerializer(page_results, many=True)
+        context = { 'wallet_hash': wallet_hash }
+        serializer = AdListSerializer(page_results, many=True, context=context)
         data = {
             'ads': serializer.data,
             'count': count,
@@ -169,18 +171,22 @@ class AdDetail(APIView):
         
         wallet_hash = request.headers.get('wallet_hash')
 
-        serializer = AdDetailSerializer(ad)
-        if wallet_hash is not None:
-            try:
-                # validate signature
-                signature, timestamp, wallet_hash = get_verification_headers(request)
-                message = ViewCode.AD_GET.value + '::' + timestamp
-                verify_signature(wallet_hash, signature, message)
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.AD_GET.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
 
-            except ValidationError as err:
-                return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-            
-            serializer = AdOwnerSerializer(ad)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = None
+        context = { 'wallet_hash': wallet_hash }
+        if ad.owner.wallet_hash == wallet_hash:
+            serializer = AdOwnerSerializer(ad, context=context)
+        else:
+            serializer = AdDetailSerializer(ad, context=context)
+        
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
