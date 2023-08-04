@@ -17,11 +17,14 @@ def generate_merchant_vault(merchant_id):
         wallet__wallet_type='bch'
     ).order_by('id').last()
 
-    receiving_pubkey = ScriptFunctions.cashAddrToPubkey(address=merchant_receiving_address)
-    receiving_pubkey_hash = ScriptFunctions.cashAddrToPubkey(
-        address=merchant_receiving_address,
-        hash=True
-    )
+    address = merchant_receiving_address.address
+
+    receiving_pubkey = ScriptFunctions.cashAddrToPubkey(dict(address=address))
+    receiving_pubkey_hash = ScriptFunctions.cashAddrToPubkey(dict(
+        address=address,
+        hash=True,
+        toString=True
+    ))
     contract = ScriptFunctions.compileVaultContract(dict(
         params=dict(merchantPkHash=receiving_pubkey_hash),
         options=dict(network=settings.BCH_NETWORK)

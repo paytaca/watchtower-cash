@@ -3,14 +3,14 @@ pragma cashscript ^0.8.0;
 
 contract Vault(bytes20 merchantPKH) {
 
-    function claim() {
+    function claim(bytes32 keyNftCategory) {
         // 2 outputs: lock & key nft
         // 1 output: recipient of BCH stored in lock NFT
         require(tx.inputs.length >= 2);
         require(tx.outputs.length >= 1);
 
         // key NFT must be an immutable NFT
-        require(tx.inputs[1].tokenCategory == keyNFTCategory);
+        require(tx.inputs[1].tokenCategory == keyNftCategory);
 
         // lock & key nft must have the same commitment
         // 20 bytes - questOwnerPubkeyHash

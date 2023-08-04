@@ -9,6 +9,6 @@ class Vault(models.Model):
     )
 
     address = models.CharField(max_length=100)
-    token_address = models.CharField(max_digits=100)
+    token_address = models.CharField(max_length=100)
     receiving_pubkey = models.CharField(max_length=60)
     receiving_pubkey_hash = models.CharField(max_length=60)

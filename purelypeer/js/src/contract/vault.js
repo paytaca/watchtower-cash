@@ -20,7 +20,7 @@ export class Vault {
 
   getContract () {
     const provider = new ElectrumNetworkProvider(this.network)
-    const artifact = compileFile('vault.cash')
+    const artifact = compileFile(new URL('vault.cash', import.meta.url))
     const contract = new Contract(
       artifact,
       this.contractCreationParams,
