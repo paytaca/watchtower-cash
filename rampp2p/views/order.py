@@ -78,8 +78,8 @@ class OrderListCreate(APIView):
         owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash)
 
         # Fetch orders created for ads owned by user
-        ads = Ad.objects.values('id').filter(owner__wallet_hash=wallet_hash)
-        ad_orders = Order.objects.filter(ad__id__in=ads)
+        ads = list(Ad.objects.filter(owner__wallet_hash=wallet_hash).values_list('id', flat=True))
+        ad_orders = Order.objects.filter(ad__pk__in=ads)
 
         latest_status = Status.objects.filter(
             order=OuterRef('pk'), 
@@ -115,7 +115,7 @@ class OrderListCreate(APIView):
             ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
         elif order_state == 'ONGOING':
             owned_orders = owned_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
-            ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
+            ad_orders = ad_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
 
         # Combine owned and ad orders
         queryset = owned_orders.union(ad_orders)
