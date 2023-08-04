@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Q, Value
 from django.db import IntegrityError
 from django.shortcuts import render
 from typing import List
@@ -131,7 +131,8 @@ class OrderListCreate(APIView):
         offset = (page - 1) * limit
         page_results = queryset[offset:offset + limit]
 
-        serializer = OrderSerializer(page_results, many=True)
+        context = { 'wallet_hash': wallet_hash }
+        serializer = OrderSerializer(page_results, many=True, context=context)
         data = {
             'orders': serializer.data,
             'count': count,
