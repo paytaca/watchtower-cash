@@ -75,11 +75,27 @@ class OrderListCreate(APIView):
             return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Fetch orders created by user
-        owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash).order_by('-created_at')
+        owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash)
 
         # Fetch orders created for ads owned by user
         ads = Ad.objects.values('id').filter(owner__wallet_hash=wallet_hash)
-        ad_orders = Order.objects.filter(ad__id__in=ads).order_by('-created_at')
+        ad_orders = Order.objects.filter(ad__id__in=ads)
+
+        latest_status = Status.objects.filter(
+            order=OuterRef('pk'), 
+        ).order_by('-created_at')
+
+        owned_orders = owned_orders.annotate(
+            last_modified_at=Subquery(
+                latest_status.values('created_at')[:1]
+            )
+        )
+
+        ad_orders = ad_orders.annotate(
+            last_modified_at=Subquery(
+                latest_status.values('created_at')[:1]
+            )
+        )
 
         # Create subquery to filter/exclude completed status
         completed_status = [
@@ -87,6 +103,7 @@ class OrderListCreate(APIView):
             StatusType.RELEASED,
             StatusType.REFUNDED
         ]
+
         latest_status = Status.objects.filter(
             order=OuterRef('pk'), 
             status__in=completed_status
@@ -99,17 +116,10 @@ class OrderListCreate(APIView):
         elif order_state == 'ONGOING':
             owned_orders = owned_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
             ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
-        
-        owned_orders.annotate(
-            last_modified_at=latest_status.values('created_at')[:1]
-        ).order_by('last_modified_at')
-
-        ad_orders.annotate(
-            last_modified_at=latest_status.values('created_at')[:1]
-        ).order_by('last_modified_at')
 
         # Combine owned and ad orders
         queryset = owned_orders.union(ad_orders)
+        queryset = queryset.order_by('-last_modified_at')
 
         # Count total pages
         count = queryset.count()

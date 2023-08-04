@@ -101,7 +101,6 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_latest_order_status(self, instance: Order):
         latest_status = Status.objects.filter(Q(order=instance)).last()
-        logger.warn(f'latest_status: {latest_status.status}')
         return latest_status
     
     def get_trade_type(self, instance: Order):
@@ -122,8 +121,7 @@ class OrderSerializer(serializers.ModelSerializer):
         return status_type
     
     def get_last_modified_at(self, instance: Order):
-        latest_status = Status.objects.filter(order__id=instance.id).order_by('-created_at').values('created_at').first()
-        logger.warn(f'latest_status:{latest_status}')
+        latest_status = Status.objects.values('created_at').filter(order__id=instance.id).order_by('-created_at').first()
         return latest_status['created_at']
     
     def get_expiration_date(self, instance: Order):
