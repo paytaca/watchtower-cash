@@ -363,23 +363,16 @@ class ConfirmOrder(APIView):
 
     def validate_permissions(self, wallet_hash, pk):
         '''
-        Only owners of SELL ads can set order statuses to CONFIRMED.
-        Creators of SELL orders skip the order status to CONFIRMED on creation.
+        Only ad owners can set order status to ESCROW_PENDING
         '''
-
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except Peer.DoesNotExist or Order.DoesNotExist:
-            raise ValidationError('Peer/Order DoesNotExist')
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
 
-        if order.ad.trade_type == TradeType.SELL:
-            seller = order.ad.owner
-            # require caller is seller
-            if caller.wallet_hash != seller.wallet_hash:
-                raise ValidationError('caller must be seller')
-        else:
-            raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
+        if order.ad.owner.wallet_hash != caller.wallet_hash:
+            raise ValidationError('caller must be ad owner')
     
 class EscrowConfirmOrder(APIView):
     '''
