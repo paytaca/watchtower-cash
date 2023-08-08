@@ -298,8 +298,13 @@ class OrderDetail(APIView):
 
   def get(self, request, pk):
     order = self.get_object(pk)
+    wallet_hash = request.headers.get('wallet_hash')
+    if wallet_hash is None:
+        return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    context = { 'wallet_hash': wallet_hash }
     response = {
-        'order': OrderSerializer(order).data
+        'order': OrderSerializer(order, context=context).data
     }
 
     order_contract = Contract.objects.filter(order__pk=pk)

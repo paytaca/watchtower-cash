@@ -112,7 +112,8 @@ class AdDetailSerializer(AdListSerializer):
         fields = AdListSerializer.Meta.fields + [
             'time_duration',
             'fees',
-            'floating_price'
+            'floating_price',
+            'fixed_price'
         ]
     
     def get_time_duration(self, instance: Ad):
