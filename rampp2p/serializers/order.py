@@ -60,7 +60,7 @@ class OrderSerializer(serializers.ModelSerializer):
     expiration_date = serializers.SerializerMethodField()
     payment_methods = serializers.SerializerMethodField()
     last_modified_at = serializers.SerializerMethodField() # lastest order status created_at
-    is_owned = serializers.SerializerMethodField()
+    is_ad_owner = serializers.SerializerMethodField()
     class Meta:
         model = Order
         fields = [
@@ -77,7 +77,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'payment_methods',
             'created_at',
             'last_modified_at',
-            'is_owned'
+            'is_ad_owner'
         ]
     
     def get_ad(self, instance: Order):
@@ -139,9 +139,10 @@ class OrderSerializer(serializers.ModelSerializer):
         
         return expiration_date
     
-    def get_is_owned(self, instance: Order):
+    def get_is_ad_owner(self, instance: Order):
         wallet_hash = self.context['wallet_hash']
-        if instance.owner.wallet_hash == wallet_hash:
+        logger.warn(f'{wallet_hash} == {instance.ad.owner.wallet_hash}')
+        if instance.ad.owner.wallet_hash == wallet_hash:
             return True
         return False
 

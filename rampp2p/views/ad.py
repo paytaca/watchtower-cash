@@ -211,7 +211,8 @@ class AdDetail(APIView):
         serializer = AdUpdateSerializer(ad, data=request.data)
         if serializer.is_valid():
             ad = serializer.save()
-            serializer = AdListSerializer(ad)
+            context = { 'wallet_hash': wallet_hash }
+            serializer = AdListSerializer(ad, context=context)
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
