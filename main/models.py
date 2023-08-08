@@ -484,7 +484,6 @@ class Subscription(PostgresModel):
         Address,
         on_delete=models.CASCADE,
         related_name='subscriptions',
-        db_index=True,
         null=True
     )
     recipient = models.ForeignKey(
