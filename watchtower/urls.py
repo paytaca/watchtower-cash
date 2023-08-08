@@ -28,6 +28,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from main.urls import main_urls, test_urls
 from paytacapos.urls import urlpatterns as paytacapos_urlpatterns
+from purelypeer.urls import urlpatterns as purelypeer_urlpatterns
 from smartbch.urls import urlpatterns as sbch_urlpatterns
 from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from chat.urls import urlpatterns as chat_urlpatterns
@@ -59,6 +60,7 @@ urlpatterns = [
     path('api/', include(main_urls)),
     path('api/smartbch/', include(sbch_urlpatterns)),
     path('api/paytacapos/', include(paytacapos_urlpatterns)),
+    path('api/purelypeer/', include(purelypeer_urlpatterns)),
     path('api/anyhedge/', include(anyhedge_urlpatterns)),
     path('api/chat/', include(chat_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
