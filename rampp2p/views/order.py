@@ -337,10 +337,8 @@ class ConfirmOrder(APIView):
             validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
             validate_status_progression(StatusType.ESCROW_PENDING, pk)
                 
-            # contract.contract_address must be set first through GenerateContract endpoint
-            contract_exists = Contract.objects.filter(order__id=pk).exists()
-            if not contract_exists:
-                raise ValidationError(f"Contract for order#{pk} does not exist")
+            # create contract here (no address yet until generated)
+            Contract.objects.get_or_create(order_id=pk)
 
             # create ESCROW_PENDING status for order
             status_serializer = StatusSerializer(data={
