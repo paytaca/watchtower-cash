@@ -590,17 +590,15 @@ class CancelOrder(APIView):
     
     def validate_permissions(self, wallet_hash, pk):
         '''
-        CancelOrder must only be callable by the order creator
+        CancelOrder is callable by the order/ad owner.
         '''
-
-        # if caller is not order creator
-        #     raise error
-        
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except Peer.DoesNotExist or Order.DoesNotExist:
-            raise ValidationError('Peer/Order DoesNotExist')
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
         
-        if caller.wallet_hash != order.owner.wallet_hash:
-           raise ValidationError('caller must be order creator')
+        order_owner = order.owner.wallet_hash
+        ad_owner = order.ad.owner.wallet_hash
+        if caller.wallet_hash != order_owner and caller.wallet_hash != ad_owner:
+           raise ValidationError('caller must be order/ad owner')
