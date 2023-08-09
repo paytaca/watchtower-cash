@@ -50,11 +50,19 @@ class OrderAdSerializer(serializers.ModelSerializer):
             'nickname': instance.owner.nickname
         }
 
+class OrderArbiterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Arbiter
+        fields = [
+            'id',
+            'name'
+        ]
+
 class OrderSerializer(serializers.ModelSerializer):
     ad = OrderAdSerializer()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    arbiter = serializers.SlugRelatedField(slug_field="name", queryset=Peer.objects.all())
+    arbiter = OrderArbiterSerializer()
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     expiration_date = serializers.SerializerMethodField()

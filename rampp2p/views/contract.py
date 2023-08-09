@@ -73,7 +73,7 @@ class CreateContract(APIView):
         try:
             # signature validation
             signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
+            message = ViewCode.CONTRACT_CREATE.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
 
             # permission validations
@@ -83,6 +83,7 @@ class CreateContract(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
+            # requires that the current order status is ESCROW_PENDING
             validate_status(pk, StatusType.ESCROW_PENDING)
             order = Order.objects.get(pk=pk)
             arbiter = Arbiter.objects.get(pk=request.data.get('arbiter'))
@@ -98,19 +99,22 @@ class CreateContract(APIView):
 
         if not contract.exists():
             contract = Contract.objects.create(order=order)
-            timestamp = contract.created_at.timestamp()
             generate = True
         else:
-            # return contract if already existing
             contract = contract.first()
-            if contract.contract_address is None:
+            # - generate contract address if contract_address is None
+            # - re-generate contract address if user has changed the arbiter
+            if ((contract.contract_address is None) 
+                or (order.arbiter is None) 
+                or (order.arbiter.id != arbiter.id)):
                 generate = True
             else:
+                # return contract if already existing
                 address = contract.contract_address
         
+        timestamp = contract.created_at.timestamp()
         if generate:
             # Execute subprocess
-            timestamp = contract.created_at.timestamp()
             create_contract(
                 order_id=contract.order.id,
                 arbiter_pubkey=params['arbiter_pubkey'], 
@@ -119,13 +123,17 @@ class CreateContract(APIView):
                 timestamp=timestamp
             )
         
+        # update order arbiter
+        order.arbiter = arbiter
+        order.save()
+        
         response = {
             'success': True,
             'data': {
                 'order': order.id,
                 'contract': contract.id,
                 'timestamp': timestamp,
-                'arbiter_address': arbiter.address,
+                'arbiter_address': order.arbiter.address,
                 'buyer_address': params['buyer_address'],
                 'seller_address': params['seller_address']
             }
