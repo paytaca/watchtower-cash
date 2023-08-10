@@ -17,7 +17,6 @@ def validate_transaction(txid: str, **kwargs):
     )
     return execute_subprocess.apply_async(
                 (command,), 
-                # link=verify_tx_out.s(
                 link=handle_transaction.s(
                     txid=txid,
                     action=kwargs.get('action'),

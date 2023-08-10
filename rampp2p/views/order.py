@@ -23,7 +23,8 @@ from rampp2p.serializers import (
     OrderSerializer, 
     OrderWriteSerializer, 
     StatusSerializer, 
-    ContractSerializer
+    ContractSerializer,
+    TransactionSerializer
 )
 from rampp2p.models import (
     Ad,
@@ -442,7 +443,7 @@ class EscrowVerifyOrder(APIView):
         try:
             # validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
+            message = ViewCode.ORDER_ESCROW_VERIFY.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
 
             # validate permissions
@@ -452,6 +453,7 @@ class EscrowVerifyOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
+            validate_status(pk, StatusType.ESCROW_PENDING)
             validate_status_inst_count(StatusType.ESCROWED, pk)
             validate_status_progression(StatusType.ESCROWED, pk)
 
@@ -459,22 +461,23 @@ class EscrowVerifyOrder(APIView):
             if txid is None:
                 raise ValidationError('txid is required')
                 
-            # contract.contract_address must be set first through GenerateContract endpoint
-            contract = Contract.objects.filter(order_id=pk)
-            if (not contract.exists()):
-                raise ValidationError('order contract does not exist')
-
-            contract = contract.first()
+            contract = Contract.objects.get(order_id=pk)
+            transaction, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.ESCROW,
+                txid=txid
+            )
             validate_transaction(
-                txid, 
+                txid=transaction.txid,
                 action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id
             )
 
-        except (ValidationError, IntegrityError) as err:
+        except (ValidationError, IntegrityError, Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response(status=status.HTTP_200_OK)  
+        serialized_tx = TransactionSerializer(transaction)
+        return Response(serialized_tx.data, status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -485,8 +488,8 @@ class EscrowVerifyOrder(APIView):
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except Peer.DoesNotExist or Order.DoesNotExist:
-            raise ValidationError('Peer/Order DoesNotExist')
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
 
         if order.ad.trade_type == TradeType.SELL:
             seller = order.ad.owner
@@ -495,16 +498,6 @@ class EscrowVerifyOrder(APIView):
                 raise ValidationError('caller must be seller')
         else:
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
-
-    # def get_order_participants(self, order: Order):
-    #     '''
-    #     Returns the wallet hash of the order's seller, buyer and arbiter.
-    #     '''
-    #     party_a = order.ad.owner.wallet_hash
-    #     party_b = order.owner.wallet_hash
-    #     arbiter = order.arbiter.wallet_hash
-        
-    #     return [party_a, party_b, arbiter]
     
 class CryptoBuyerConfirmPayment(APIView):
   def post(self, request, pk):

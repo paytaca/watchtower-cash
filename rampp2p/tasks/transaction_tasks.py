@@ -2,6 +2,7 @@ from celery import shared_task
 from typing import Dict
 from decimal import Decimal
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 from rampp2p import utils
 from rampp2p.utils.websocket import send_order_update
@@ -50,31 +51,43 @@ def handle_transaction(data: Dict, **kwargs):
     txid = kwargs.get('txid')
     contract = Contract.objects.get(pk=kwargs.get('contract_id'))
 
+    # TODO: uncomment after status testing
     # valid, error, outputs = verify_tx_out(data, action, contract)
-    txdata = {
-        "action": action,
-        "txid": txid,
-        "contract": contract.id,
-        # "error": error
-    }
+    # txdata = {
+    #     "action": action,
+    #     "txid": txid,
+    #     "contract": contract.id,
+    #     "error": error
+    # }
+    # handle_order_status(
+    #     valid=valid,
+    #     action=action,
+    #     txdata=txdata,
+    #     contract=contract,
+    #     outputs=outputs,
+    #     error=error
+    # )
+    # TODO: uncomment after status testing
+
+    # TODO: delete below after status testing
+    # Skips the transaction verification (via verify_tx_out) and goes directly to
+    # handle_order_status
     handle_order_status(
-        # valid=valid,
         valid=True,
         action=action,
-        txdata=txdata,
-        contract=contract,
-        # outputs=outputs,
-        # error=error
+        txid=txid,
+        contract=contract
     )
-    
+    # TODO: delete above after status testing
 
 # @shared_task(queue='rampp2p__contract_execution')
 def handle_order_status(**kwargs):
     valid = kwargs.get('valid')
     action = kwargs.get('action')
-    txdata = kwargs.get('txdata')
+    txid = kwargs.get('txid')
     contract = kwargs.get('contract')
     outputs = kwargs.get('outputs')
+    error = kwargs.get('error')
 
     result = {
         "success": valid
@@ -82,13 +95,16 @@ def handle_order_status(**kwargs):
 
     status = None
     if valid:
-        # Save transaction details 
-        tx_serializer = TransactionSerializer(data=txdata)
-        if tx_serializer.is_valid():
-            tx_serializer = TransactionSerializer(tx_serializer.save())
-        
-        logger.warn(f"tx_serializer.data: {tx_serializer.data}")
-        tx_id = tx_serializer.data.get("id")
+
+        try:
+            # Update transaction details 
+            transaction = Transaction.objects.get(txid=txid)
+            transaction.valid = True
+            tx_serializer = TransactionSerializer(transaction.save())
+            logger.warn(f"tx_serializer.data: {tx_serializer.data}")
+            tx_id = tx_serializer.data.get("id")
+        except Transaction.DoesNotExist as err:
+            raise ValidationError(err.args[0])
 
         # Save transaction outputs
         if outputs is not None:
@@ -114,6 +130,13 @@ def handle_order_status(**kwargs):
             status_type = StatusType.ESCROWED
 
         status = utils.handler.update_order_status(contract.order.id, status_type).data
+
+        txdata = {
+            "action": action,
+            "txid": transaction.txid,
+            "contract": contract.id,
+            "error": error
+        }
 
         txdata["outputs"] = outputs
         result["status"] = status

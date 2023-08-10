@@ -10,6 +10,7 @@ class TransactionSerializer(serializers.ModelSerializer):
       'contract',
       'action',
       'txid',
+      'valid',
       'created_at'
     ]
     depth = 1
