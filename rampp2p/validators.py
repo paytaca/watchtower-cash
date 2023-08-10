@@ -37,9 +37,14 @@ def validate_status_progression(new_status, order_id):
             raise ValidationError( f'{prefix} Cannot change a completed order\'s status')
 
     if current_status.status == StatusType.SUBMITTED:
+        if (new_status != StatusType.CONFIRMED and
+            new_status != StatusType.CANCELED):
+            raise ValidationError(f'{prefix} {StatusType.SUBMITTED.label} orders can only be {StatusType.CONFIRMED.label} | {StatusType.CANCELED.label}')
+        
+    if current_status.status == StatusType.CONFIRMED:
         if (new_status != StatusType.ESCROW_PENDING and
             new_status != StatusType.CANCELED):
-                raise ValidationError(f'{prefix} {StatusType.SUBMITTED.label} orders can only be {StatusType.ESCROW_PENDING.label} | {StatusType.CANCELED.label}')
+                raise ValidationError(f'{prefix} {StatusType.CONFIRMED.label} orders can only be {StatusType.ESCROW_PENDING.label} | {StatusType.CANCELED.label}')
 
     if current_status.status == StatusType.ESCROW_PENDING:
         if (new_status != StatusType.ESCROWED and

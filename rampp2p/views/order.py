@@ -316,9 +316,7 @@ class OrderDetail(APIView):
 
 class ConfirmOrder(APIView):
     '''
-    Marks the order as ESCROW_PENDING and listener waits for the contract address to receive an incoming
-    transaction that satisfies the prerequisites of the contract, at which point the status
-    is then set to ESCROWED.
+    ConfirmOrder creates a status=CONFIRMED for an order. This is callable only by the order's ad owner.
     '''
     def post(self, request, pk):
         try:
@@ -334,11 +332,67 @@ class ConfirmOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         try:
+            validate_status(pk, StatusType.SUBMITTED)
+            validate_status_inst_count(StatusType.CONFIRMED, pk)
+            validate_status_progression(StatusType.CONFIRMED, pk)
+                
+            # create CONFIRMED status for order
+            status_serializer = StatusSerializer(data={
+                'status': StatusType.CONFIRMED,
+                'order': pk
+            })
+
+            if status_serializer.is_valid():
+                status_serializer = StatusSerializer(status_serializer.save())
+            else: 
+                raise ValidationError(f"Encountered error saving status for order#{pk}")
+
+            # notify order update subscribers
+            send_order_update(json.dumps(status_serializer.data), pk)
+            
+        except (ValidationError, IntegrityError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(status_serializer.data, status=status.HTTP_200_OK)  
+
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        Only ad owners can set order status to CONFIRMED
+        '''
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+            order = Order.objects.get(pk=pk)
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
+
+        if order.ad.owner.wallet_hash != caller.wallet_hash:
+            raise ValidationError('caller must be ad owner')
+
+class PendingEscrowOrder(APIView):
+    '''
+    - EscrowPendingOrder creates a status=ESCROW_PENDING for the order.
+    - Listener then waits for the contract address to receive an incoming
+    transaction that satisfies the requisites of the contract, at which point the status
+    is then automatically set to ESCROWED.    
+    - Callable only by the order's seller.
+    '''
+    def post(self, request, pk):
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_ESCROW_PENDING.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, pk)
+
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            validate_status(pk, StatusType.CONFIRMED)
             validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
             validate_status_progression(StatusType.ESCROW_PENDING, pk)
-                
-            # create contract here (no address yet until generated)
-            Contract.objects.get_or_create(order_id=pk)
 
             # create ESCROW_PENDING status for order
             status_serializer = StatusSerializer(data={
@@ -361,18 +415,24 @@ class ConfirmOrder(APIView):
 
     def validate_permissions(self, wallet_hash, pk):
         '''
-        Only ad owners can set order status to ESCROW_PENDING
+        Only order sellers can set order status to ESCROW_PENDING
         '''
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
         except (Peer.DoesNotExist, Order.DoesNotExist) as err:
             raise ValidationError(err.args[0])
+        
+        seller = None
+        if order.ad.trade_type == TradeType.SELL:
+            seller = order.ad.owner
+        else:
+            seller = order.owner
 
-        if order.ad.owner.wallet_hash != caller.wallet_hash:
-            raise ValidationError('caller must be ad owner')
-    
-class EscrowConfirmOrder(APIView):
+        if caller.wallet_hash != seller.wallet_hash:
+            raise ValidationError('caller must be seller')
+
+class EscrowVerifyOrder(APIView):
     '''
     Manually marks the order as ESCROWED by submitting the transaction id
     for validation (should only be used as fallback when listener fails to update the status 
@@ -486,8 +546,8 @@ class CryptoBuyerConfirmPayment(APIView):
     try:
         caller = Peer.objects.get(wallet_hash=wallet_hash)
         order = Order.objects.get(pk=pk)
-    except Peer.DoesNotExist or Order.DoesNotExist:
-        raise ValidationError('Peer/Order DoesNotExist')
+    except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        raise ValidationError(err.args[0])
     
     buyer = None
     if order.ad.trade_type == TradeType.SELL:
@@ -534,18 +594,11 @@ class CryptoSellerConfirmPayment(APIView):
         '''
         Only the seller can set the order status to PAID
         '''
-
-        # if ad.trade_type is SELL:
-        #      seller is ad creator
-        # else 
-        #      seller is order creator
-        # require(caller == seller)
-
         try:
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except Peer.DoesNotExist or Order.DoesNotExist:
-            raise ValidationError('Peer/Order DoesNotExist')
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
         
         seller = None
         if order.ad.trade_type == TradeType.SELL:

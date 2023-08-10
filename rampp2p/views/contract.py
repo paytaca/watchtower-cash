@@ -83,8 +83,8 @@ class CreateContract(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
-            # requires that the current order status is ESCROW_PENDING
-            validate_status(pk, StatusType.ESCROW_PENDING)
+            # requires that the current order status is CONFIRMED
+            validate_status(pk, StatusType.CONFIRMED)
             order = Order.objects.get(pk=pk)
             arbiter = Arbiter.objects.get(pk=request.data.get('arbiter'))
             params = self.get_params(arbiter.public_key, order)

@@ -299,7 +299,7 @@ class MarkForRefund(APIView):
             curr_status.status != StatusType.REFUND_APPEALED):
                 raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
 
-class ValidateRelease(APIView):
+class VerifyRelease(APIView):
     '''
     Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
@@ -378,7 +378,7 @@ class ValidateRelease(APIView):
         if not (curr_status.status == StatusType.RELEASE_PENDING or curr_status.status == StatusType.PAID):
             raise ValidationError(f'{prefix} Current status of order #{pk} must be {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}.')
 
-class ValidateRefund(APIView):
+class VerifyRefund(APIView):
     '''
     Manually marks the order as (status) REFUNDED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.

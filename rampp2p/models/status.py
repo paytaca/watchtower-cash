@@ -4,6 +4,7 @@ from .order import Order
 
 class StatusType(models.TextChoices):
   SUBMITTED         = 'SBM', _('Submitted')
+  CONFIRMED         = 'CNF', _('Confirmed')
   ESCROW_PENDING    =  'ESCRW_PN', _('Escrow Pending')
   ESCROWED          = 'ESCRW', _('Escrowed')
   PAID_PENDING      = 'PD_PN', _('Paid Pending')
