@@ -462,19 +462,23 @@ class EscrowVerifyOrder(APIView):
                 raise ValidationError('txid is required')
                 
             contract = Contract.objects.get(order_id=pk)
+            logger.warn('before tx get_or_create')
             transaction, _ = Transaction.objects.get_or_create(
                 contract=contract,
                 action=Transaction.ActionType.ESCROW,
                 txid=txid
             )
+            logger.warn('after tx get_or_create')
             validate_transaction(
                 txid=transaction.txid,
                 action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id
             )
-
-        except (ValidationError, IntegrityError, Contract.DoesNotExist) as err:
+            logger.warn('after validation')
+        except (ValidationError, Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as err:
+            return Response({'error': 'duplicate txid'}, status=status.HTTP_400_BAD_REQUEST)
         
         serialized_tx = TransactionSerializer(transaction)
         return Response(serialized_tx.data, status=status.HTTP_200_OK)  

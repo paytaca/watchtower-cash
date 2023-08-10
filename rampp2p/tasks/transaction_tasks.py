@@ -72,13 +72,17 @@ def handle_transaction(data: Dict, **kwargs):
     # TODO: delete below after status testing
     # Skips the transaction verification (via verify_tx_out) and goes directly to
     # handle_order_status
-    handle_order_status(
+    result = handle_order_status(
         valid=True,
         action=action,
         txid=txid,
         contract=contract
     )
     # TODO: delete above after status testing
+    send_order_update(
+        result, 
+        contract.order.id
+    )
 
 # @shared_task(queue='rampp2p__contract_execution')
 def handle_order_status(**kwargs):
@@ -88,6 +92,10 @@ def handle_order_status(**kwargs):
     contract = kwargs.get('contract')
     outputs = kwargs.get('outputs')
     error = kwargs.get('error')
+
+    errors = []
+    if error is not None:
+        errors.append(error)
 
     result = {
         "success": valid
@@ -104,7 +112,7 @@ def handle_order_status(**kwargs):
             logger.warn(f"tx_serializer.data: {tx_serializer.data}")
             tx_id = tx_serializer.data.get("id")
         except Transaction.DoesNotExist as err:
-            raise ValidationError(err.args[0])
+            errors.append(err.args[0])
 
         # Save transaction outputs
         if outputs is not None:
@@ -129,13 +137,16 @@ def handle_order_status(**kwargs):
         if action == Transaction.ActionType.ESCROW:
             status_type = StatusType.ESCROWED
 
-        status = utils.handler.update_order_status(contract.order.id, status_type).data
+        try:
+            status = utils.handler.update_order_status(contract.order.id, status_type).data
+        except Transaction.DoesNotExist as err:
+            errors.append(err.args[0])
 
         txdata = {
             "action": action,
             "txid": transaction.txid,
             "contract": contract.id,
-            "error": error
+            "errors": errors
         }
 
         txdata["outputs"] = outputs
@@ -145,10 +156,7 @@ def handle_order_status(**kwargs):
     logger.warning(f'result: {result}')
 
     # Send the result through websocket
-    return send_order_update(
-        result, 
-        contract.order.id
-    )
+    return result
 
 
 # @shared_task(queue='rampp2p__contract_execution')
