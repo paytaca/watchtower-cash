@@ -122,13 +122,12 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_status(self, instance: Order):
         latest_status = Status.objects.filter(order__id=instance.id).order_by('-created_at').first().status
-        status_type = latest_status
-        try:
-            status_type = StatusType(latest_status).label
-        except ValueError as err:
-            logger.error(err)
-        
-        return status_type
+        status_type = StatusType(latest_status)
+        status = {
+            'label': status_type.label,
+            'value': status_type.value
+        }
+        return status
     
     def get_last_modified_at(self, instance: Order):
         latest_status = Status.objects.values('created_at').filter(order__id=instance.id).order_by('-created_at').first()
