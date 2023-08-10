@@ -7,6 +7,6 @@ from purelypeer.vault import generate_merchant_vault
 
 
 @receiver(post_save, sender=Merchant)
-def post_create_mechant(sender, instance=None, created=False, **kwargs):
+def post_create_merchant(sender, instance=None, created=False, **kwargs):
     if created or instance.vault is None:
         generate_merchant_vault(instance.id)

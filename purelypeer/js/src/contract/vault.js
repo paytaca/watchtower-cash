@@ -8,19 +8,24 @@ import {
 export class Vault {
 
   constructor (opts) {
-    this.merchantPkHash = opts?.params?.merchantPkHash
+    this.merchantPk = opts?.params?.merchantPk
     this.network = opts?.options?.network
   }
 
   get contractCreationParams () {
     return [
-      this.merchantPkHash
+      this.merchantPk
     ]
   }
 
-  getContract () {
+  getProviderAndArtifact () {
     const provider = new ElectrumNetworkProvider(this.network)
     const artifact = compileFile(new URL('vault.cash', import.meta.url))
+    return { provider, artifact }
+  }
+
+  getContract () {
+    const { provider, artifact } = this.getProviderAndArtifact()
     const contract = new Contract(
       artifact,
       this.contractCreationParams,
@@ -35,5 +40,5 @@ export class Vault {
 
     return contract
   }
-
+  
 }

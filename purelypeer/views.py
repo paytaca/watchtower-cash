@@ -1,13 +1,9 @@
-from django.shortcuts import render
+from rest_framework import viewsets, mixins
 
-from rest_framework import viewsets
-
-from purelypeer.serializers import VaultSerializer
-from purelypeer.models import Vault
-from paytacapos.pagination import CustomLimitOffsetPagination
+from purelypeer.serializers import CreateCashdropNftPairSerializer
+from purelypeer.models import CashdropNftPair
 
 
-class VaultViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Vault.objects.all()
-    serializer_class = VaultSerializer
-    pagination_class = CustomLimitOffsetPagination
+class CashdropNftPairViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    queryset = CashdropNftPair.objects.all()
+    serializer_class = CreateCashdropNftPairSerializer

@@ -1,9 +1,14 @@
 pragma cashscript ^0.8.0;
 
 
-contract Vault(bytes20 merchantPKH) {
+contract Vault(pubkey merchantPK) {
 
-    function claim(bytes32 keyNftCategory) {
+    function claim(
+        bytes32 keyNftCategory,
+        sig merchantSignature
+    ) {
+        require(checkSig(merchantSignature, merchantPK));
+
         // 2 outputs: lock & key nft
         // 1 output: recipient of BCH stored in lock NFT
         require(tx.inputs.length >= 2);
@@ -28,6 +33,7 @@ contract Vault(bytes20 merchantPKH) {
         require(tx.inputs[this.activeInputIndex].value == feeAmount);
 
         // the funds must be sent to the merchant receiving address
+        bytes20 merchantPKH = hash160(merchantPK);
         bytes25 merchant = new LockingBytecodeP2PKH(merchantPKH);
         require(tx.outputs[0].lockingBytecode == merchant);
     }

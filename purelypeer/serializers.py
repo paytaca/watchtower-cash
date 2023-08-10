@@ -1,18 +1,15 @@
 from rest_framework import serializers
 
-from purelypeer.models import Vault
-from paytacapos.serializers import MerchantSerializer
+from purelypeer.models import Vault, CashdropNftPair
 
 
-class VaultSerializer(serializers.ModelSerializer):
-    merchant = MerchantSerializer()
-    
+class VaultSerializer(serializers.ModelSerializer):    
     class Meta:
         model = Vault
-        fields = (
-            'merchant',
-            'address',
-            'token_address',
-            'receiving_pubkey',
-            'receiving_pubkey_hash',
-        )
+        fields = '__all__'
+
+
+class CreateCashdropNftPairSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashdropNftPair
+        fields = '__all__'

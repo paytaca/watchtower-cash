@@ -113,7 +113,7 @@ class ZMQHandler():
                             if 'tokenData' in output.keys():
                                 saved_token_data = process_cashtoken_tx(
                                     output['tokenData'],
-                                    output['scriptPubKey']['addresses'][0],
+                                    bchaddress,
                                     tx_hash,
                                     index=index,
                                     value=value
