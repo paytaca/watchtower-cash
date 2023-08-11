@@ -11,7 +11,7 @@ class ContractSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'order',
-            'contract_address',
+            'address',
             'created_at'
         ]
         depth = 1

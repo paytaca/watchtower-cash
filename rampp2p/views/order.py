@@ -11,8 +11,7 @@ from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
 
-from rampp2p.utils.handler import update_order_status
-from rampp2p.utils.contract import create_contract
+from rampp2p.utils.utils import get_trading_fees
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -312,6 +311,7 @@ class OrderDetail(APIView):
     if order_contract.count() > 0:
         order_contract = order_contract.first()
         response['contract'] = ContractSerializer(order_contract).data
+        response['fees'] = get_trading_fees()
 
     return Response(response, status=status.HTTP_200_OK)
 

@@ -61,7 +61,7 @@ def contract_handler(response: Dict, **kwargs):
         # update the order's contract address
         address = data.get('result').get('contract_address')
         contract = Contract.objects.get(order__id=order_id)
-        contract.contract_address = address
+        contract.address = address
         contract.save()
 
         # TODO: subscribe to contract address: listen for incoming & outgoing utxo

@@ -102,15 +102,15 @@ class CreateContract(APIView):
             generate = True
         else:
             contract = contract.first()
-            # - generate contract address if contract_address is None
+            # - generate contract address if None
             # - re-generate contract address if user has changed the arbiter
-            if ((contract.contract_address is None) 
+            if ((contract.address is None) 
                 or (order.arbiter is None) 
                 or (order.arbiter.id != arbiter.id)):
                 generate = True
             else:
                 # return contract if already existing
-                address = contract.contract_address
+                address = contract.address
         
         timestamp = contract.created_at.timestamp()
         if generate:

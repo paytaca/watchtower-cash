@@ -210,7 +210,7 @@ def verify_tx_out(data: Dict, action, contract):
         for output in tx_outputs:
             address = output.get('address')
 
-            if address == contract.contract_address:
+            if address == contract.address:
                 # Convert amount value to decimal (8 decimal places)
                 match_amount = Decimal(output.get('amount'))
                 match_amount = match_amount.quantize(Decimal('0.00000000'))
@@ -239,7 +239,7 @@ def verify_tx_out(data: Dict, action, contract):
         sender_is_contract = False
         for input in tx_inputs:
             address = input.get('address')
-            if address == contract.contract_address:
+            if address == contract.address:
                 sender_is_contract = True
                 break
         
