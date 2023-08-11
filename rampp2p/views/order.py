@@ -311,7 +311,11 @@ class OrderDetail(APIView):
     if order_contract.count() > 0:
         order_contract = order_contract.first()
         response['contract'] = ContractSerializer(order_contract).data
-        response['fees'] = get_trading_fees()
+        total_fee, fees = get_trading_fees()
+        response['fees'] = {
+            'total': total_fee,
+            'fees': fees
+        }
 
     return Response(response, status=status.HTTP_200_OK)
 
