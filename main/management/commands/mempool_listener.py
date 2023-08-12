@@ -3,6 +3,7 @@ from main.utils.queries.bchn import BCHN
 import paho.mqtt.client as mqtt
 from django.utils import timezone
 import json
+import time
 import logging
 from json.decoder import JSONDecodeError
 
@@ -38,9 +39,36 @@ def on_message(client, userdata, msg):
         pass
 
 
+FIRST_RECONNECT_DELAY = 1
+RECONNECT_RATE = 2
+MAX_RECONNECT_COUNT = 12
+MAX_RECONNECT_DELAY = 60
+
+def on_disconnect(client, userdata, rc):
+    LOGGER.info(f"Disconnected with result code: {rc}")
+    reconnect_count, reconnect_delay = 0, FIRST_RECONNECT_DELAY
+    while reconnect_count < MAX_RECONNECT_COUNT:
+        LOGGER.info(f"Reconnecting in {reconnect_delay} seconds...")
+        time.sleep(reconnect_delay)
+
+        try:
+            client.reconnect()
+            LOGGER.info("Reconnected successfully!")
+            return
+        except Exception as err:
+            LOGGER.error(f"{err}. Reconnect failed. Retrying...")
+
+        reconnect_delay *= RECONNECT_RATE
+        reconnect_delay = min(reconnect_delay, MAX_RECONNECT_DELAY)
+        reconnect_count += 1
+    LOGGER.info(f"Reconnect failed after {reconnect_count} attempts. Exiting...")
+
+
+
 # client = mqtt.Client()
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
+mqtt_client.on_disconnect = on_disconnect
 
 
 # Blocking call that processes network traffic, dispatches callbacks and

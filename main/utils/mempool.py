@@ -1,4 +1,3 @@
-from main.utils.queries.bchn import BCHN
 from django.utils import timezone
 from main.models import (
     Transaction,
@@ -14,19 +13,12 @@ from main.tasks import (
 
 import json
 import logging
-import paho.mqtt.client as mqtt
 
 LOGGER = logging.getLogger(__name__)
 
 
-def process_tx(tx_hash, bchn_client=None, mqtt_client=None):
+def process_tx(tx_hash, bchn_client, mqtt_client):
     LOGGER.info('Processing mempool tx: ' + tx_hash)
-    if not bchn_client:
-        bchn_client = BCHN()
-    if not mqtt_client:
-        mqtt_client = mqtt.Client()
-        mqtt_client.connect("docker-host", 1883, 10)
-        mqtt_client.loop_start()
 
     tx = bchn_client._get_raw_transaction(tx_hash)
     inputs = tx['vin']
