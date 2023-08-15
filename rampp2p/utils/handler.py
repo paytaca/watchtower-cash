@@ -1,5 +1,5 @@
 from rampp2p.validators import validate_status_inst_count, validate_status_progression
-from rampp2p.serializers.status import StatusSerializer
+from rampp2p.serializers.status import StatusSerializer, StatusReadSerializer
 from django.core.exceptions import ValidationError
 
 def update_order_status(order_id, status):
@@ -14,5 +14,5 @@ def update_order_status(order_id, status):
     if not serializer.is_valid():
         raise ValidationError('invalid status')
     
-    status = StatusSerializer(serializer.save())
+    status = StatusReadSerializer(serializer.save())
     return status

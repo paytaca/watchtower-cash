@@ -101,12 +101,13 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_payment_methods(self, instance: Order):
         latest_status = self.get_latest_order_status(instance)
         payment_methods = None
-        if latest_status.status == StatusType.ESCROWED:
-            serialized_payment_methods = OrderAdPaymentMethodSerializer(
-                instance.ad.payment_methods.all(), 
-                many=True
-            )
-            payment_methods = serialized_payment_methods.data
+        if latest_status is not None:
+            if latest_status.status == StatusType.ESCROWED:
+                serialized_payment_methods = OrderAdPaymentMethodSerializer(
+                    instance.ad.payment_methods.all(), 
+                    many=True
+                )
+                payment_methods = serialized_payment_methods.data
         return payment_methods
 
     def get_latest_order_status(self, instance: Order):
@@ -121,17 +122,20 @@ class OrderSerializer(serializers.ModelSerializer):
         return order_trade_type
     
     def get_status(self, instance: Order):
-        latest_status = Status.objects.filter(order__id=instance.id).order_by('-created_at').first().status
-        status_type = StatusType(latest_status)
-        status = {
-            'label': status_type.label,
-            'value': status_type.value
-        }
-        return status
+        latest_status = self.get_latest_order_status(instance)
+        if latest_status is not None:
+            latest_status = {
+                'label': latest_status.get_status_display(),
+                'value': latest_status.status
+            }
+        return latest_status
     
     def get_last_modified_at(self, instance: Order):
+        last_modified_at = None
         latest_status = Status.objects.values('created_at').filter(order__id=instance.id).order_by('-created_at').first()
-        return latest_status['created_at']
+        if latest_status is not None:
+            last_modified_at = latest_status['created_at']
+        return last_modified_at
     
     def get_expiration_date(self, instance: Order):
         '''

@@ -193,24 +193,37 @@ class OrderListCreate(APIView):
             price = ad.fixed_price
 
         data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        serializer = OrderWriteSerializer(data=data)
+        serialized_order = OrderWriteSerializer(data=data)
 
         # return error if order isn't valid
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serialized_order.is_valid():
+            return Response(serialized_order.errors, status=status.HTTP_400_BAD_REQUEST)
         
         # save order and mark it with status=SUBMITTED
-        order = serializer.save()
-        Status.objects.create(
-            status=StatusType.SUBMITTED,
-            order=Order.objects.get(pk=order.id)
+        order = serialized_order.save()
+        # order_status = Status.objects.create(
+        #     status=StatusType.SUBMITTED,
+        #     order=Order.objects.get(pk=order.id)
+        # )
+        serialized_status = StatusSerializer(
+            data={
+                'status': StatusType.SUBMITTED,
+                'order': order.id
+            }
         )
+
+        if serialized_status.is_valid():
+            order_status = serialized_status.save()
+            serialized_status = StatusSerializer(order_status)
+        else:
+            return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
 
         context = { 'wallet_hash': wallet_hash }
         serializer = OrderSerializer(order, context=context)        
         response = {
             'success': True,
-            'order': serializer.data
+            'order': serializer.data,
+            'status': serialized_status.data
         }
     
         return Response(response, status=status.HTTP_201_CREATED)
