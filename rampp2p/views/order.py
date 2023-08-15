@@ -22,6 +22,7 @@ from rampp2p.serializers import (
     OrderSerializer, 
     OrderWriteSerializer, 
     StatusSerializer, 
+    StatusReadSerializer,
     ContractSerializer,
     TransactionSerializer
 )
@@ -420,7 +421,7 @@ class PendingEscrowOrder(APIView):
             })
 
             if status_serializer.is_valid():
-                status_serializer = StatusSerializer(status_serializer.save())
+                status_serializer = StatusReadSerializer(status_serializer.save())
             else: 
                 raise ValidationError(f"Encountered error saving status for order#{pk}")
 
