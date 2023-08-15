@@ -2,7 +2,7 @@ from django.db.models.signals import post_migrate
 from django.apps import AppConfig
 
 
-def generate_merchant_vaults(*args, **kwargs):
+def generate_vault_for_existing_merchants(*args, **kwargs):
     from purelypeer.vault import generate_merchant_vault
     from paytacapos.models import Merchant
 
@@ -17,4 +17,4 @@ class PaytacaposConfig(AppConfig):
     def ready(self):
         import paytacapos.signals
 
-        post_migrate.connect(generate_merchant_vaults, sender=self)
+        post_migrate.connect(generate_vault_for_existing_merchants, sender=self)

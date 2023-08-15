@@ -15,4 +15,17 @@ class VaultAdmin(admin.ModelAdmin):
     ]
 
 
+class CashdropNftPairAdmin(admin.ModelAdmin):
+    search_fields = [
+        'key_category',
+        'lock_category',
+    ]
+    list_display = [
+        'vault',
+        'key_category',
+        'lock_category',
+    ]
+
+
 admin.site.register(Vault, VaultAdmin)
+admin.site.register(CashdropNftPair, CashdropNftPairAdmin)
