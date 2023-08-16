@@ -157,7 +157,10 @@ def client_acknowledgement(self, txid):
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
                         'is_nft': False,
-                        'is_key_nft': __is_key_nft,
+                        'purelypeer': {
+                            'is_key_nft': __is_key_nft,
+                            'lock_nft_category': None
+                        }
                     }
 
                     if transaction.cashtoken_nft:
@@ -167,7 +170,7 @@ def client_acknowledgement(self, txid):
                         data['is_nft'] = True
 
                     if __is_key_nft:
-                        data['lock_nft'] = lock_nft_category
+                        data['purelypeer']['lock_nft_category'] = lock_nft_category
 
                 elif wallet_version == 1:
                     data = {
