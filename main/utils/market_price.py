@@ -11,8 +11,6 @@ from main.models import (
     WalletHistory,
 )
 
-from anyhedge.utils.price_oracle import (get_price_messages, save_price_oracle_message)
-
 
 def fetch_currency_value_for_timestamp(timestamp, currency="USD", relative_currency="BCH"):
     """
@@ -49,7 +47,7 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD", relative_curre
         Oracle = apps.get_model("anyhedge", "Oracle")
         PriceOracleMessage = apps.get_model("anyhedge", "PriceOracleMessage")
 
-        oracles = Oracle.objects.filter(asset_currency=currency)
+        oracles = Oracle.objects.filter(asset_currency=currency, active=True)
         oracles_decimals_map = { oracle.pubkey: oracle.asset_decimals for oracle in oracles }
         closest = PriceOracleMessage.objects.filter(
             pubkey__in=oracles_decimals_map.keys(),
@@ -63,35 +61,6 @@ def fetch_currency_value_for_timestamp(timestamp, currency="USD", relative_curre
             asset_decimals = oracles_decimals_map[closest.pubkey]
             price_value = Decimal(closest.price_value) / 10 ** asset_decimals
             return (price_value, closest.message_timestamp, f"anyhedge:{closest.pubkey}")
-    except LookupError:
-        pass
-
-    try:
-        Oracle = apps.get_model("anyhedge", "Oracle")
-        oracles = Oracle.objects.filter(asset_currency=currency)
-        for oracle in oracles:
-            price_messages = get_price_messages(
-                oracle_pubkey=oracle.pubkey,
-                relay=oracle.relay or None,
-                port=oracle.port or None,
-                min_message_timestamp=int(timestamp_range_low.timestamp()),
-                max_message_timestamp=int(timestamp_range_high.timestamp()),
-            )
-            closest = None
-            for price_msg in price_messages:
-                price_msg_obj = save_price_oracle_message(oracle.pubkey, price_msg)
-                obj_diff = abs(price_msg_obj.message_timestamp - timestamp)
-                if closest is not None:
-                    closest_diff = abs(closest.message_timestamp - timestamp)
-                    if obj_diff < closest_diff:
-                        closest = price_msg_obj
-                elif obj_diff < timedelta(seconds=30):
-                    closest = price_msg_obj
-
-            if closest:
-                asset_decimals = oracle.asset_decimals
-                price_value = Decimal(closest.price_value) / 10 ** asset_decimals
-                return (price_value, closest.message_timestamp, f"anyhedge-oracle:{closest.pubkey}")
     except LookupError:
         pass
 

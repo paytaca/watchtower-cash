@@ -170,7 +170,7 @@ class Wallet(PostgresModel):
 
 class Address(PostgresModel):
     address = models.CharField(max_length=100, unique=True, db_index=True)
-    token_address = models.CharField(max_length=100, null=True, blank=True)
+    token_address = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
@@ -466,8 +466,8 @@ class Transaction(PostgresModel):
 
 
 class Recipient(PostgresModel):
-    web_url = models.CharField(max_length=300, null=True, blank=True)
-    telegram_id = models.CharField(max_length=50, null=True, blank=True)
+    web_url = models.CharField(max_length=300, null=True, blank=True, db_index=True)
+    telegram_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     valid = models.BooleanField(default=True)
 
     def __str__(self):
@@ -484,7 +484,6 @@ class Subscription(PostgresModel):
         Address,
         on_delete=models.CASCADE,
         related_name='subscriptions',
-        db_index=True,
         null=True
     )
     recipient = models.ForeignKey(
@@ -636,12 +635,9 @@ class WalletHistory(PostgresModel):
         verbose_name_plural = 'Wallet histories'
         ordering = ['-tx_timestamp', '-date_created']
         unique_together = [
-            'wallet',
-            'txid',
-            # 'token_index',
-            'token',
-            'cashtoken_ft',
-            'cashtoken_nft',
+            ['wallet', 'txid', 'token'],
+            ['wallet', 'txid', 'cashtoken_ft'],
+            ['wallet', 'txid', 'cashtoken_nft']
         ]
 
     def __str__(self):
