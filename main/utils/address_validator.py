@@ -1,5 +1,6 @@
-from subprocess import Popen, PIPE
+# from subprocess import Popen, PIPE
 from django.conf import settings
+import requests
 import json
 
 
@@ -21,14 +22,18 @@ def is_slp_address(addr, check_len=True):
 
 
 def is_bch_address(addr, to_token_addr=False):
-    if is_slp_address(addr):
-        return False
 
-    cmd = f'node main/js/validate-address.js {addr} {to_token_addr}'
-    p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-    stdout, _ = p.communicate()
-    result = json.loads(stdout.decode('utf8'))
-    return result['valid']
+    if addr:
+        if is_slp_address(addr):
+            return False
+
+        result = { 'valid': False }
+        url = f'http://localhost:3000/validate-address/{addr}?token={to_token_addr}'
+        resp = requests.get(url)
+        result = resp.json()
+        return result['valid']
+    
+    return False
 
 
 def is_token_address(addr):

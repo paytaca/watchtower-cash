@@ -47,14 +47,14 @@ def generate_func(func_name):
         process = run(['node', './anyhedge/js/src/main.js'], input=json.dumps(_input).encode(), stdout=PIPE, stderr=PIPE)
         result = None
 
-        LOGGER.info(f"{process}")
+        LOGGER.info(f"{func_name} | {args} | {process}")
         if process.stdout:
             try:
                 result = json.loads(process.stdout)
             except json.JSONDecodeError:
                 result = process.stdout
         elif process.stderr:
-            raise Exception(process.stderr.decode())
+            raise Exception(f"{func_name} | {args} | {process.stderr.decode()}")
         return result
 
     return func
