@@ -24,6 +24,7 @@ from rampp2p.serializers import (
     StatusSerializer, 
     StatusReadSerializer,
     ContractSerializer,
+    ContractDetailSerializer,
     TransactionSerializer
 )
 from rampp2p.models import (
@@ -317,14 +318,22 @@ class OrderDetail(APIView):
         return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     context = { 'wallet_hash': wallet_hash }
+    serialized_order = OrderSerializer(order, context=context).data
     response = {
-        'order': OrderSerializer(order, context=context).data
+        'order': serialized_order
     }
 
     order_contract = Contract.objects.filter(order__pk=pk)
     if order_contract.count() > 0:
         order_contract = order_contract.first()
-        response['contract'] = ContractSerializer(order_contract).data
+        serialized_contract = None
+        if (serialized_order['status']['value'] == StatusType.CONFIRMED or
+            serialized_order['status']['value'] == StatusType.PAID):
+            serialized_contract = ContractDetailSerializer(order_contract).data
+        else:
+            serialized_contract = ContractSerializer(order_contract).data
+        
+        response['contract'] = serialized_contract
     
     total_fee, fees = get_trading_fees()
     response['fees'] = {

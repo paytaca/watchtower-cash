@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from rampp2p.models import (
     Contract, 
-    Order
+    Order,
+    TradeType
 )
 
 class ContractSerializer(serializers.ModelSerializer):
@@ -15,3 +16,50 @@ class ContractSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         depth = 1
+
+class ContractDetailSerializer(ContractSerializer):
+    arbiter = serializers.SerializerMethodField()
+    seller = serializers.SerializerMethodField()
+    buyer = serializers.SerializerMethodField()
+    class Meta:
+        model = Contract
+        fields = ContractSerializer.Meta.fields + [
+            'arbiter',
+            'seller',
+            'buyer'
+        ]
+    
+    def get_arbiter(self, instance: Contract):
+        arbiter, _, _ = self.get_parties(instance)
+        return {
+            'public_key': arbiter.public_key,
+            'address': arbiter.address
+        }
+    
+    def get_seller(self, instance: Contract):
+        _, seller, _ = self.get_parties(instance)
+        return {
+            'public_key': seller.public_key,
+            'address': seller.address
+        }
+
+    def get_buyer(self, instance: Contract):
+        _, _, buyer = self.get_parties(instance)
+        return {
+            'public_key': buyer.public_key,
+            'address': buyer.address
+        }
+
+    def get_parties(self, instance: Contract):
+        arbiter = instance.order.arbiter
+        seller = None
+        buyer = None
+        ad = instance.order.ad
+        order = instance.order
+        if ad.trade_type == TradeType.SELL:
+            seller = ad.owner
+            buyer = order.owner
+        else:
+            seller = order.owner
+            buyer = ad.owner
+        return arbiter, seller, buyer

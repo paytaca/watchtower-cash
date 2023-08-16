@@ -23,6 +23,7 @@ from rampp2p.models import (
 
 from rampp2p.serializers import (
     ContractSerializer, 
+    ContractDetailSerializer,
     TransactionSerializer, 
     RecipientSerializer
 )
@@ -48,7 +49,7 @@ class ContractDetail(APIView):
 
     def get(self, request, pk):
         contract_instance = self.get_object(pk)
-        contract_serializer = ContractSerializer(contract_instance)
+        contract_serializer = ContractDetailSerializer(contract_instance)
 
         transactions = Transaction.objects.filter(contract__id=contract_instance.id)
 
