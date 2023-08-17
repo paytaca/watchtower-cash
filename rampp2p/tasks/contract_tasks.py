@@ -40,10 +40,8 @@ def execute_subprocess(command, **kwargs):
 
 @shared_task(queue='rampp2p__contract_execution')
 def contract_handler(response: Dict, **kwargs):
-    data = {
-        'result': response.get('result'),
-        'error': response.get('error')
-    }
+    data = response.get('result')
+    data['error'] = response.get('error')
     logger.warning(f'data: {data}')
 
     order_id = kwargs.get('order_id')
@@ -59,7 +57,7 @@ def contract_handler(response: Dict, **kwargs):
         #     return send_order_update(err, contract.order.id)
         
         # update the order's contract address
-        address = data.get('result').get('contract_address')
+        address = data.get('contract_address')
         contract = Contract.objects.get(order__id=order_id)
         contract.address = address
         contract.save()

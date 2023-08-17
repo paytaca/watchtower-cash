@@ -435,12 +435,16 @@ class PendingEscrowOrder(APIView):
                 raise ValidationError(f"Encountered error saving status for order#{pk}")
 
             # notify order update subscribers
-            send_order_update(json.dumps(status_serializer.data), pk)
+            result = {
+                'success' : True,
+                'status': status_serializer.data
+            }
+            send_order_update(result, pk)
             
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        return Response(status_serializer.data, status=status.HTTP_200_OK)  
+        return Response(result, status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
