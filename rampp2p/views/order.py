@@ -399,11 +399,10 @@ class ConfirmOrder(APIView):
 
 class PendingEscrowOrder(APIView):
     '''
-    - EscrowPendingOrder creates a status=ESCROW_PENDING for the order.
-    - Listener then waits for the contract address to receive an incoming
-    transaction that satisfies the requisites of the contract, at which point the status
-    is then automatically set to ESCROWED.    
-    - Callable only by the order's seller.
+    EscrowPendingOrder creates a status=ESCROW_PENDING for the given order.
+    If transaction id is given, it is sent to a task queue for validation, if valid, 
+    the order status is set to ESCROWED automatically.
+    Callable only by the order's seller.
     '''
     def post(self, request, pk):
         try:
@@ -423,6 +422,10 @@ class PendingEscrowOrder(APIView):
             validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
             validate_status_progression(StatusType.ESCROW_PENDING, pk)
 
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid is required')
+
             # create ESCROW_PENDING status for order
             status_serializer = StatusSerializer(data={
                 'status': StatusType.ESCROW_PENDING,
@@ -437,13 +440,26 @@ class PendingEscrowOrder(APIView):
             # notify order update subscribers
             result = {
                 'success' : True,
+                'txid': txid,
                 'status': status_serializer.data
             }
             send_order_update(result, pk)
+
+            contract = Contract.objects.get(order__id=pk)
+            transaction, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.ESCROW,
+                txid=txid
+            )
+            # Validate the transaction
+            validate_transaction(
+                txid=transaction.txid,
+                action=Transaction.ActionType.ESCROW,
+                contract_id=contract.id
+            )
             
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
         return Response(result, status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
@@ -506,7 +522,6 @@ class EscrowVerifyOrder(APIView):
                 action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id
             )
-            logger.warn('after validation')
         except (ValidationError, Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as err:
@@ -557,15 +572,21 @@ class CryptoBuyerConfirmPayment(APIView):
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     # create PAID_PENDING status for order
-    serializer = StatusSerializer(data={
+    serialized_status = StatusSerializer(data={
         'status': StatusType.PAID_PENDING,
         'order': pk
     })
 
-    if serializer.is_valid():
-      stat = StatusSerializer(serializer.save())
-      return Response(stat.data, status=status.HTTP_200_OK)        
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    if serialized_status.is_valid():
+        serialized_status = StatusReadSerializer(serialized_status.save())
+        result = {
+            'success' : True,
+            'status': serialized_status.data
+        }
+        send_order_update(result, pk)
+        return Response(serialized_status.data, status=status.HTTP_200_OK)
+    
+    return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
   
   def validate_permissions(self, wallet_hash, pk):
     '''
@@ -609,15 +630,20 @@ class CryptoSellerConfirmPayment(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # create PAID status for order
-        serializer = StatusSerializer(data={
+        serialized_status = StatusSerializer(data={
             'status': StatusType.PAID,
             'order': pk
         })
 
-        if serializer.is_valid():
-            stat = StatusSerializer(serializer.save())
-            return Response(stat.data, status=status.HTTP_200_OK)        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if serialized_status.is_valid():
+            serialized_status = StatusReadSerializer(serialized_status.save())
+            result = {
+                'success' : True,
+                'status': serialized_status.data
+            }
+            send_order_update(result, pk)
+            return Response(serialized_status.data, status=status.HTTP_200_OK)        
+        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
   
     def validate_permissions(self, wallet_hash, pk):
         '''

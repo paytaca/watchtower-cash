@@ -49,13 +49,6 @@ def contract_handler(response: Dict, **kwargs):
     success = False if success == "False" else bool(success)
 
     if bool(success) == True:
-        # # update order status to ESCROW_PENDING
-        # try:
-        #     update_order_status(order_id, StatusType.ESCROW_PENDING)
-        # except ValidationError as err:
-        #     logger.error(err)
-        #     return send_order_update(err, contract.order.id)
-        
         # update the order's contract address
         address = data.get('contract_address')
         contract = Contract.objects.get(order__id=order_id)
