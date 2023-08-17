@@ -490,13 +490,13 @@ class EscrowVerifyOrder(APIView):
                 raise ValidationError('txid is required')
                 
             contract = Contract.objects.get(order_id=pk)
-            logger.warn('before tx get_or_create')
             transaction, _ = Transaction.objects.get_or_create(
                 contract=contract,
                 action=Transaction.ActionType.ESCROW,
                 txid=txid
             )
-            logger.warn('after tx get_or_create')
+
+            # Validate the transaction
             validate_transaction(
                 txid=transaction.txid,
                 action=Transaction.ActionType.ESCROW,

@@ -334,13 +334,18 @@ class VerifyRelease(APIView):
             if txid is None:
                 raise ValidationError('txid field is required')
 
-            contract_id = Contract.objects.values('id').get(order__id=pk)['id']
+            contract = Contract.objects.get(order__id=pk)
+            transaction, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.RELEASE,
+                txid=txid
+            )
 
             # Validate the transaction
             validate_transaction(
-                txid, 
+                txid=transaction.txid,
                 action=Transaction.ActionType.RELEASE,
-                contract_id=contract_id
+                contract_id=contract.id
             )
             
         except (ValidationError, Contract.DoesNotExist) as err:
@@ -360,7 +365,7 @@ class VerifyRelease(APIView):
             caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except Peer.DoesNotExist or Order.DoesNotExist as err:
+        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
         is_arbiter = False
@@ -413,13 +418,18 @@ class VerifyRefund(APIView):
             if txid is None:
                 raise ValidationError('txid field is required')
 
-            contract_id = Contract.objects.values('id').get(order__id=pk)['id']
+            contract = Contract.objects.get(order__id=pk)
+            transaction, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.REFUND,
+                txid=txid
+            )
 
             # Validate the transaction
             validate_transaction(
-                txid, 
+                txid=transaction.txid, 
                 action=Transaction.ActionType.REFUND,
-                contract_id=contract_id
+                contract_id=contract.id
             )
             
         except (ValidationError, Contract.DoesNotExist) as err:

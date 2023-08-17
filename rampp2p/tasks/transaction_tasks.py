@@ -109,42 +109,46 @@ def handle_order_status(**kwargs):
             transaction = Transaction.objects.get(txid=txid)
             transaction.valid = True
             tx_serializer = TransactionSerializer(transaction.save())
-            logger.warn(f"tx_serializer.data: {tx_serializer.data}")
             tx_id = tx_serializer.data.get("id")
         except Transaction.DoesNotExist as err:
             errors.append(err.args[0])
+            result['success'] = False
 
         # Save transaction outputs
-        if outputs is not None:
-            for output in outputs:
-                out_data = {
-                    "transaction": tx_id,
-                    "address": output.get('address'),
-                    "amount": output.get('amount')
-                }
-                recipient_serializer = RecipientSerializer(data=out_data)
-                if recipient_serializer.is_valid():
-                    recipient_serializer = RecipientSerializer(recipient_serializer.save())
-                else:
-                    logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
+        if result['success']:
+            if outputs is not None:
+                for output in outputs:
+                    out_data = {
+                        "transaction": tx_id,
+                        "address": output.get('address'),
+                        "amount": output.get('amount')
+                    }
+                    recipient_serializer = RecipientSerializer(data=out_data)
+                    if recipient_serializer.is_valid():
+                        recipient_serializer = RecipientSerializer(recipient_serializer.save())
+                    else:
+                        logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
+                        result['success'] = False
         
-        # Update order status
-        status_type = None
-        if action == Transaction.ActionType.REFUND:
-            status_type = StatusType.REFUNDED
-        if action == Transaction.ActionType.RELEASE:
-            status_type = StatusType.RELEASED
-        if action == Transaction.ActionType.ESCROW:
-            status_type = StatusType.ESCROWED
+            # Update order status
+            status_type = None
+            if action == Transaction.ActionType.REFUND:
+                status_type = StatusType.REFUNDED
+            if action == Transaction.ActionType.RELEASE:
+                status_type = StatusType.RELEASED
+            if action == Transaction.ActionType.ESCROW:
+                status_type = StatusType.ESCROWED
 
-        try:
-            status = utils.handler.update_order_status(contract.order.id, status_type).data
-        except Transaction.DoesNotExist as err:
-            errors.append(err.args[0])
+            if result['success']:
+                try:
+                    status = utils.handler.update_order_status(contract.order.id, status_type).data
+                except Transaction.DoesNotExist as err:
+                    errors.append(err.args[0])
+                    result['success'] = False
 
         txdata = {
             "action": action,
-            "txid": transaction.txid,
+            "txid": txid,
             "contract": contract.id,
             "errors": errors
         }
@@ -155,7 +159,6 @@ def handle_order_status(**kwargs):
     
     logger.warning(f'result: {result}')
 
-    # Send the result through websocket
     return result
 
 
