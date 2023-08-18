@@ -21,19 +21,17 @@ contract Vault(
         require(tx.inputs[1].tokenCategory == keyNftCategory);
 
         // lock & key nft must have the same commitment
-        // 20 bytes - questOwnerPubkeyHash
-        // 10 bytes - collection timestamp
-        // 10 bytes - claim amount
+        // 20 bytes - collection timestamp
+        // 20 bytes - claim amount
         require(tx.inputs[0].nftCommitment == tx.inputs[1].nftCommitment);
 
         // sent amount must be equal to the commitment data
-        bytes amountAndTimestampBytes = tx.inputs[1].nftCommitment.split(20)[1];
-        bytes feeAmountBytes = amountAndTimestampBytes.split(10)[1];
-        int feeAmount = int(feeAmountBytes);
-        require(tx.outputs[0].value == feeAmount);
+        bytes claimAmountBytes = tx.inputs[1].nftCommitment.split(20)[1];
+        int claimAmount = int(claimAmountBytes);
+        require(tx.outputs[0].value == claimAmount);
 
         // the amount sent must be from lock nft's output
-        require(tx.inputs[this.activeInputIndex].value == feeAmount);
+        require(tx.inputs[this.activeInputIndex].value == claimAmount);
 
         // the funds must be sent to the merchant receiving address
         bytes20 merchantPKH = hash160(merchantReceiverPK);
