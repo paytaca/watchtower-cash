@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.conf import settings
 from rampp2p.models import (
     Contract, 
     Order,
@@ -21,12 +22,16 @@ class ContractDetailSerializer(ContractSerializer):
     arbiter = serializers.SerializerMethodField()
     seller = serializers.SerializerMethodField()
     buyer = serializers.SerializerMethodField()
+    servicer = serializers.SerializerMethodField()
+    timestamp = serializers.SerializerMethodField()
     class Meta:
         model = Contract
         fields = ContractSerializer.Meta.fields + [
             'arbiter',
             'seller',
-            'buyer'
+            'buyer',
+            'servicer',
+            'timestamp'
         ]
     
     def get_arbiter(self, instance: Contract):
@@ -49,6 +54,15 @@ class ContractDetailSerializer(ContractSerializer):
             'public_key': buyer.public_key,
             'address': buyer.address
         }
+
+    def get_servicer(self, _):
+        return {
+            'public_key': settings.SERVICER_PK,
+            'address': settings.SERVICER_ADDR
+        }
+    
+    def get_timestamp(self, instance: Contract):
+        return instance.created_at.timestamp()
 
     def get_parties(self, instance: Contract):
         arbiter = instance.order.arbiter

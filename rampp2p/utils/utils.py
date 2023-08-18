@@ -47,9 +47,9 @@ def get_order_peers(order: Order):
 
 def get_trading_fees():
     # Retrieve fee values. Format must be in satoshi
-    hardcoded_fee = Decimal(settings.HARDCODED_FEE).quantize(Decimal('0.00000000'))/100000000
-    arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
-    service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))/100000000
+    hardcoded_fee = Decimal(settings.HARDCODED_FEE).quantize(Decimal('0.00000000'))#/100000000
+    arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))#/100000000
+    service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))#/100000000
 
     total_fee = hardcoded_fee + arbitration_fee + service_fee
     fees = {
