@@ -327,13 +327,17 @@ class OrderDetail(APIView):
     if order_contract.count() > 0:
         order_contract = order_contract.first()
         serialized_contract = None
+        serialized_transactions = None
         if (serialized_order['status']['value'] == StatusType.CONFIRMED or
             serialized_order['status']['value'] == StatusType.PAID):
             serialized_contract = ContractDetailSerializer(order_contract).data
+            contract_txs = Transaction.objects.filter(contract__id=order_contract.id)
+            serialized_transactions = TransactionSerializer(contract_txs, many=True).data
         else:
             serialized_contract = ContractSerializer(order_contract).data
         
         response['contract'] = serialized_contract
+        response['contract']['transactions'] = serialized_transactions
     
     total_fee, fees = get_trading_fees()
     response['fees'] = {
