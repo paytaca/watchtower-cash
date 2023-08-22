@@ -1847,15 +1847,22 @@ def resolve_wallet_history_usd_values(txid=None):
         wallet_histories.update(usd_price=price_value)
         txids = list(wallet_histories.values_list("txid", flat=True).distinct())
         txids_updated = txids_updated + txids
-        AssetPriceLog.objects.update_or_create(
-            currency=CURRENCY,
-            relative_currency=RELATIVE_CURRENCY,
-            timestamp=actual_timestamp,
-            source=price_data_source,
-            defaults={
-                "price_value": price_value,
-            }
-        )
+
+        price_log_data = {
+            'currency': CURRENCY,
+            'relative_currency': RELATIVE_CURRENCY,
+            'timestamp': actual_timestamp,
+            'source': price_data_source
+        }
+        price_log_check = AssetPriceLog.objects.filter(**price_log_data)
+        if price_log_check.exists():
+            price_log = price_log_check.first()
+            price_log.price_value = price_value
+            price_log.save()
+        else:
+            price_log_data['price_value'] = price_value
+            price_log = AssetPriceLog(**price_log_data)
+            price_log.save()
 
     return txids_updated
 
@@ -1963,15 +1970,22 @@ def parse_wallet_history_market_values(wallet_history_id):
             bch_rate = bch_rates.get(currency.lower(), None)
             if bch_rate:
                 market_prices[currency] = bch_rate[0]
-                AssetPriceLog.objects.update_or_create(
-                    currency=currency,
-                    relative_currency="BCH",
-                    timestamp=bch_rate[1],
-                    source=bch_rate[2],
-                    defaults={
-                        "price_value": bch_rate[0],
-                    }
-                )
+
+                price_log_data = {
+                    'currency': currency,
+                    'relative_currency': "BCH",
+                    'timestamp': bch_rate[1],
+                    'source': bch_rate[2]
+                }
+                price_log_check = AssetPriceLog.objects.filter(**price_log_data)
+                if price_log_check.exists():
+                    price_log = price_log_check.first()
+                    price_log.price_value = bch_rate[0]
+                    price_log.save()
+                else:
+                    price_log_data['price_value'] = bch_rate[0]
+                    price_log = AssetPriceLog(**price_log_data)
+                    price_log.save()
 
     wallet_history_obj.market_prices = market_prices
     if "USD" in wallet_history_obj.market_prices and not wallet_history_obj.usd_price:
