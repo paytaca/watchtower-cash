@@ -28,6 +28,8 @@ main_urls += [
 
     re_path(r"^blockheight/latest/$", views.BlockHeightViewSet.as_view(), name='blockheight'),
 
+    re_path(r"^blockchain/info/$", views.BlockChainView.as_view(), name='blockchain-info'),
+
     re_path(r"^balance/bch/(?P<bchaddress>[\w+:]+)/$", views.Balance.as_view(),name='bch-balance'),
     re_path(r"^balance/ct/(?P<tokenaddress>[\w+:]+)/$", views.Balance.as_view(),name='ct-balances'),
     re_path(r"^balance/ct/(?P<tokenaddress>[\w+:]+)/(?P<category>[\w+]+)/$", views.Balance.as_view(),name='ct-ft-balance'),

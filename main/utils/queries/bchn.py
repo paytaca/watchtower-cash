@@ -23,6 +23,9 @@ class BCHN(object):
 
     def get_latest_block(self):
         return self.rpc_connection.getblockcount()
+
+    def get_block_chain_info(self):
+        return self.rpc_connection.getblockchaininfo()
         
     def get_block(self, block, verbosity=None):
         block_hash = self.rpc_connection.getblockhash(block)
