@@ -326,15 +326,15 @@ class OrderDetail(APIView):
     order_contract = Contract.objects.filter(order__pk=pk)
     if order_contract.count() > 0:
         order_contract = order_contract.first()
-        serialized_contract = None
-        serialized_transactions = None
-        if (serialized_order['status']['value'] == StatusType.CONFIRMED or
-            serialized_order['status']['value'] == StatusType.PAID):
-            serialized_contract = ContractDetailSerializer(order_contract).data
-            contract_txs = Transaction.objects.filter(contract__id=order_contract.id)
-            serialized_transactions = TransactionSerializer(contract_txs, many=True).data
-        else:
-            serialized_contract = ContractSerializer(order_contract).data
+        # serialized_contract = None
+        # serialized_transactions = None
+        # if (serialized_order['status']['value'] == StatusType.CONFIRMED or
+        #     serialized_order['status']['value'] == StatusType.PAID):
+        serialized_contract = ContractDetailSerializer(order_contract).data
+        contract_txs = Transaction.objects.filter(contract__id=order_contract.id)
+        serialized_transactions = TransactionSerializer(contract_txs, many=True).data
+        # else:
+        #     serialized_contract = ContractSerializer(order_contract).data
         
         response['contract'] = serialized_contract
         response['contract']['transactions'] = serialized_transactions
@@ -447,7 +447,6 @@ class PendingEscrowOrder(APIView):
                 'txid': txid,
                 'status': status_serializer.data
             }
-            send_order_update(result, pk)
 
             contract = Contract.objects.get(order__id=pk)
             transaction, _ = Transaction.objects.get_or_create(
@@ -455,12 +454,15 @@ class PendingEscrowOrder(APIView):
                 action=Transaction.ActionType.ESCROW,
                 txid=txid
             )
+            result['transaction'] = TransactionSerializer(transaction).data
+
             # Validate the transaction
             validate_transaction(
                 txid=transaction.txid,
                 action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id
             )
+            send_order_update(result, pk)
             
         except (ValidationError, IntegrityError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

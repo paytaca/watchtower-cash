@@ -113,8 +113,6 @@ def handle_order_status(**kwargs):
             # Update transaction details 
             transaction = Transaction.objects.get(txid=txid)
             transaction.valid = True
-            tx_serializer = TransactionSerializer(transaction.save())
-            tx_id = tx_serializer.data.get("id")
 
         except Transaction.DoesNotExist as err:
             errors.append(err.args[0])
@@ -126,7 +124,7 @@ def handle_order_status(**kwargs):
         if outputs is not None:
             for output in outputs:
                 out_data = {
-                    "transaction": tx_id,
+                    "transaction": transaction.id,
                     "address": output.get('address'),
                     "amount": output.get('amount')
                 }
@@ -150,7 +148,7 @@ def handle_order_status(**kwargs):
 
         try:
             status = utils.handler.update_order_status(contract.order.id, status_type).data
-        except Transaction.DoesNotExist as err:
+        except ValidationError as err:
             errors.append(err.args[0])
             result["errors"] = errors
             result["success"] = False
@@ -160,6 +158,10 @@ def handle_order_status(**kwargs):
         txdata["errors"] = errors
         result["status"] = status
         result["txdata"] = txdata
+
+        if result["success"]:
+            transaction.verifying = False
+            transaction.save()
     
     logger.warning(f'result: {result}')
 

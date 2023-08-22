@@ -13,7 +13,11 @@ from rampp2p.models import (
     Transaction
 )
 
-from rampp2p.serializers import StatusSerializer, AppealSerializer
+from rampp2p.serializers import (
+    StatusSerializer,
+    AppealSerializer,
+    TransactionSerializer
+)
 from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -341,6 +345,11 @@ class VerifyRelease(APIView):
                 txid=txid
             )
 
+            result = {
+                'txid': txid,
+                'transaction': TransactionSerializer(transaction).data
+            }
+
             # Validate the transaction
             validate_transaction(
                 txid=transaction.txid,
@@ -351,7 +360,7 @@ class VerifyRelease(APIView):
         except (ValidationError, Contract.DoesNotExist) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
-        return Response(status=status.HTTP_200_OK)
+        return Response(result, status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''
