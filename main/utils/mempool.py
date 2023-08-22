@@ -76,7 +76,8 @@ def process_tx(tx_hash, bchn_client, mqtt_client):
                 amount = ''
                 decimals = None
                 created = False
-                
+                obj_id = None
+
                 if 'tokenData' in output.keys():
                     saved_token_data = process_cashtoken_tx(
                         output['tokenData'],
@@ -97,7 +98,6 @@ def process_tx(tx_hash, bchn_client, mqtt_client):
                         source
                     )
                     now = timezone.now().timestamp()
-                    obj_id = None
                     obj_id, created = save_record(
                         *args,
                         value=value,
@@ -112,7 +112,7 @@ def process_tx(tx_hash, bchn_client, mqtt_client):
                         txn_obj = Transaction.objects.get(id=obj_id)
                         decimals = txn_obj.get_token_decimals()
                     
-                if created:
+                if obj_id and created:
                     # Publish MQTT message
                     data = {
                         'txid': tx_hash,
