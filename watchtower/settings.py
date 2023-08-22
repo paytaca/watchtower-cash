@@ -79,13 +79,14 @@ INSTALLED_APPS=[
     'constance',
     'main',
     'smartbch',
+    'purelypeer',
     'paytacapos',
     'paytacagifts',
     'anyhedge',
     'chat',
     'notifications',
     'jpp',
-    'ramp'
+    'ramp',
 ]
 
 MIDDLEWARE=[

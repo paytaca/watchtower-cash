@@ -13,6 +13,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
+from main.utils.purelypeer import is_key_nft
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -110,6 +111,8 @@ def client_acknowledgement(self, txid):
                 token = None
                 image_url = None
                 token_details_key = None
+                __is_key_nft = False
+                lock_nft_category = None
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
@@ -117,6 +120,8 @@ def client_acknowledgement(self, txid):
                 elif transaction.cashtoken_nft:
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
+                    category = token.token_id.split('/')[1]
+                    __is_key_nft, lock_nft_category = is_key_nft(subscription.address, category)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
@@ -152,6 +157,10 @@ def client_acknowledgement(self, txid):
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
                         'is_nft': False,
+                        'purelypeer': {
+                            'is_key_nft': __is_key_nft,
+                            'lock_nft_category': None
+                        }
                     }
 
                     if transaction.cashtoken_nft:
@@ -159,6 +168,9 @@ def client_acknowledgement(self, txid):
                         data['commitment'] = token.commitment
                         data['id'] = token.id
                         data['is_nft'] = True
+
+                    if __is_key_nft:
+                        data['purelypeer']['lock_nft_category'] = lock_nft_category
 
                 elif wallet_version == 1:
                     data = {
