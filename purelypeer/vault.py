@@ -30,17 +30,17 @@ def generate_merchant_vault(merchant_id):
     address = merchant_receiving_address.address
     signer_address = merchant_signer_address.address
 
-    receiving_pubkey = ScriptFunctions.cashAddrToPubkey(dict(address=address))
-    signer_pubkey = ScriptFunctions.cashAddrToPubkey(dict(address=signer_address))
+    receiving_pubkey = merchant.receiving_pubkey
+    signer_pubkey = merchant.signer_pubkey
 
-    receiving_pubkey_hash = ScriptFunctions.cashAddrToPubkey(dict(
-        address=address,
-        hash=True,
+    receiving_pubkey_hash = ScriptFunctions.toBytes20(dict(
+        val=receiving_pubkey,
+        encoding="hex",
         toString=True
     ))
-    signer_pubkey_hash = ScriptFunctions.cashAddrToPubkey(dict(
-        address=signer_address,
-        hash=True,
+    signer_pubkey_hash = ScriptFunctions.toBytes20(dict(
+        val=signer_pubkey,
+        encoding="hex",
         toString=True
     ))
 

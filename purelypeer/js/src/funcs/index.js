@@ -1,9 +1,9 @@
 import { compileVaultContract } from './vault.js'
-import { cashAddrToPubkey } from './utils.js'
+import { toBytes20 } from './utils.js'
 
 
 const funcs = {
-  cashAddrToPubkey,
+  toBytes20,
   compileVaultContract,
 }
 
