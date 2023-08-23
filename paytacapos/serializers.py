@@ -442,6 +442,13 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "gmap_business_link",
             "last_transaction_date",
             "wallet_hash",
+
+            "receiving_address",
+            "signer_address",
+            "receiving_pubkey",
+            "receiving_pubkey_hash",
+            "signer_pubkey",
+            "signer_pubkey_hash",
             "vault",
         ]
 
@@ -468,6 +475,8 @@ class MerchantSerializer(serializers.ModelSerializer):
             "signer_pubkey_hash",
             "vault",
         ]
+
+        read_only_fields = ('vault', )
 
 
     @transaction.atomic()
