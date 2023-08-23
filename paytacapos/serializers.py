@@ -431,7 +431,7 @@ class LocationSerializer(serializers.ModelSerializer):
 class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
-    vault = VaultSerializer()
+    vault = VaultSerializer(required=False)
     
     class Meta:
         model = Merchant
@@ -455,7 +455,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
 class MerchantSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     wallet_hash = serializers.CharField() # to supress unique validation
-    vault = VaultSerializer()
+    vault = VaultSerializer(required=False)
 
     class Meta:
         model = Merchant
