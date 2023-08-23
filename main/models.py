@@ -635,9 +635,12 @@ class WalletHistory(PostgresModel):
         verbose_name_plural = 'Wallet histories'
         ordering = ['-tx_timestamp', '-date_created']
         unique_together = [
-            ['wallet', 'txid', 'token'],
-            ['wallet', 'txid', 'cashtoken_ft'],
-            ['wallet', 'txid', 'cashtoken_nft']
+            'wallet',
+            'txid',
+            # 'token_index',
+            'token',
+            'cashtoken_ft',
+            'cashtoken_nft',
         ]
 
     def __str__(self):

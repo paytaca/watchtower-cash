@@ -22,7 +22,7 @@ def generate_merchant_vault(merchant_id):
         address_path='0/0'
     )
 
-    if not merchant_signer_address.exists() and not merchant_receiving_address.exists():
+    if not merchant_signer_address.exists() or not merchant_receiving_address.exists():
         return
     
     merchant_receiving_address = merchant_receiving_address.first()
