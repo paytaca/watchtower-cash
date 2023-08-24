@@ -63,7 +63,12 @@ def generate_merchant_vault(merchant_id):
         'address': contract['address'],
         'project_id': project_id,
     }
-    new_subscription(**subscription_data)
+
+    # added try catch here for already subscribed addresses error
+    try:
+        new_subscription(**subscription_data)
+    except:
+        pass
 
     Merchant.objects.filter(id=merchant_id).update(
         receiving_address=address,
