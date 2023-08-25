@@ -7,7 +7,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 def verify_signature(wallet_hash, signature_hex, message, **kwargs):
-    return True
     try:
         public_key_hex = kwargs.get('public_key')
         if public_key_hex is None:
@@ -34,7 +33,7 @@ def verify_signature(wallet_hash, signature_hex, message, **kwargs):
         raise ValidationError({"error": err.args[0]})
 
 def get_verification_headers(request):
-    logger.warn(f'headers: {request.headers}')
+    # logger.warn(f'headers: {request.headers}')
     signature = request.headers.get('signature', None)
     timestamp = request.headers.get('timestamp', None)
     wallet_hash = request.headers.get('wallet_hash', None)

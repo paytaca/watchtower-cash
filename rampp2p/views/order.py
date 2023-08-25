@@ -55,7 +55,7 @@ class OrderListCreate(APIView):
         try:
             # validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_LIST_OWNED.value + '::' + timestamp
+            message = ViewCode.ORDER_LIST.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)

@@ -152,7 +152,6 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_is_ad_owner(self, instance: Order):
         wallet_hash = self.context['wallet_hash']
-        logger.warn(f'{wallet_hash} == {instance.ad.owner.wallet_hash}')
         if instance.ad.owner.wallet_hash == wallet_hash:
             return True
         return False

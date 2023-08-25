@@ -99,12 +99,15 @@ class CreateContract(APIView):
         contract = Contract.objects.filter(order__id=pk)
 
         if not contract.exists():
+            # Create contract (& address) if not already existing
             contract = Contract.objects.create(order=order)
             generate = True
         else:
             contract = contract.first()
-            # - generate contract address if None
-            # - re-generate contract address if user has changed the arbiter
+            # (Re)generate contract address if:
+            #   - address is None
+            #   - arbiter is None
+            #   - arbiter has been changed
             if ((contract.address is None) 
                 or (order.arbiter is None) 
                 or (order.arbiter.id != arbiter.id)):
@@ -115,6 +118,8 @@ class CreateContract(APIView):
         
         timestamp = contract.created_at.timestamp()
         if generate:
+            contract.address = None
+            contract.save()
             # Execute subprocess
             create_contract(
                 order_id=contract.order.id,
