@@ -118,6 +118,8 @@ class CreateContract(APIView):
         
         timestamp = contract.created_at.timestamp()
         if generate:
+            # if contract.address != None:
+                # unsubscribe to contract address
             contract.address = None
             contract.save()
             # Execute subprocess

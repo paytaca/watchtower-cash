@@ -35,9 +35,9 @@ urlpatterns = [
     path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
     path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
 
-    path('order/feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
+    path('order/<int:pk>/feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
     path('order/feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
-    path('order/feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
+    path('order/<int:pk>/feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
 
     path('order/contract/', ContractList.as_view(), name='contract-list'),
     path('order/contract/<int:pk>', ContractDetail.as_view(), name='contract-detail'),

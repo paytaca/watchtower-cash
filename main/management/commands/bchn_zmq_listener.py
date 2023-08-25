@@ -68,6 +68,8 @@ class ZMQHandler():
                     has_updated_output = False
                     inputs_data = []
 
+                    LOGGER.warning(f'tx[{tx_hash}]: {tx}')
+
                     for _input in inputs:
                         txid = _input['txid']
                         value = int(_input['value'] * (10 ** 8))
@@ -86,6 +88,7 @@ class ZMQHandler():
                             subscription = Subscription.objects.filter(
                                 address__address=address
                             )
+                            
                             if subscription.exists():
                                 inputs_data.append({
                                     "token": "bch",
