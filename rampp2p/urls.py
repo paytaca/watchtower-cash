@@ -25,15 +25,16 @@ urlpatterns = [
     path('order/<int:pk>/generate-contract', CreateContract.as_view(), name='generate-contract'),
     path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),
     path('order/<int:pk>/pending-escrow', PendingEscrowOrder.as_view(), name='pending-escrow'),
-    path('order/<int:pk>/escrow-verify', EscrowVerifyOrder.as_view(), name='escrow-verify-order'),
     path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
     path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
-    path('order/<int:pk>/pending-release', MarkForRelease.as_view(), name='pending-release'),
+    
+    path('order/<int:pk>/verify-escrow', VerifyEscrow.as_view(), name='verify-escrow'),
     path('order/<int:pk>/verify-release', VerifyRelease.as_view(), name='verify-release'),
-    path('order/<int:pk>/pending-refund', MarkForRefund.as_view(), name='pending-refund'),
     path('order/<int:pk>/verify-refund', VerifyRefund.as_view(), name='verify-refund'),
-    path('order/appeal/<int:pk>/release', AppealRelease.as_view(), name='appeal-release'),
-    path('order/appeal/<int:pk>/refund', AppealRefund.as_view(), name='appeal-refund'),
+
+    path('order/<int:pk>/appeal', AppealRequest.as_view(), name='appeal-request'),
+    path('order/<int:pk>/appeal/pending-release', AppealPendingRelease.as_view(), name='appeal-pending-release'),
+    path('order/<int:pk>/appeal/pending-refund', AppealPendingRefund.as_view(), name='appeal-pending-refund'),
 
     path('order/<int:pk>/feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
     path('order/feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),

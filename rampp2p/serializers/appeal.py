@@ -12,7 +12,6 @@ class AppealSerializer(serializers.ModelSerializer):
         model = Appeal
         fields = [
            'id',
-           'type',
            'creator',
            'order',
            'created_at'

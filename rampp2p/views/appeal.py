@@ -5,7 +5,6 @@ from django.core.exceptions import ValidationError
 
 from rampp2p.models import (
     TradeType,
-    AppealType,
     StatusType,
     Peer,
     Order,
@@ -25,19 +24,23 @@ from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired
 from rampp2p.utils.handler import update_order_status
     
-class AppealRelease(APIView):
+class AppealRequest(APIView):
     '''
-    Submits an appeal to release the escrowed funds from the smart contract to the buyer.
+    Submits an appeal for an order.
     Requirements:
-        (1) The creator of appeal must be the buyer.
+        (1) The creator of appeal must be the buyer/seller.
         (2) The order must be expired.
-        (3) The latest order status must be 'PD' (StatusType.PAID)
+        (3) The latest order status must be one of ['ESCRW', 'PD_PN', 'PD']
+    Restrictions:
+        (1) The seller cannot appeal once they marked the order as 'PD'
+        (2) The seller/buyer cannot appeal once the order is completed (i.e. 'RLS', 'CNCL' or 'RFN')
+        (3) The seller/buyer cannot appeal before the funds are escrowed (i.e. status = 'SBM', 'CNF', 'ESCRW_PN')
     '''
     def post(self, request, pk):
         try:
             # validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_RELEASE.value + '::' + timestamp
+            message = ViewCode.APPEAL_REQUEST.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
 
             # validate permissions
@@ -48,17 +51,17 @@ class AppealRelease(APIView):
         try:
             if not is_order_expired(pk):
                 raise ValidationError('order is not expired yet')
-            validate_status_inst_count(StatusType.RELEASE_APPEALED, pk)
-            validate_status_progression(StatusType.RELEASE_APPEALED, pk)
+            validate_status_inst_count(StatusType.APPEALED, pk)
+            validate_status_progression(StatusType.APPEALED, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        # create and Appeal record with type=RELEASE
-        submit_appeal(AppealType.RELEASE, wallet_hash, pk)
+        # create and Appeal record
+        self.submit_appeal(wallet_hash, pk)
 
-        # create RELEASE_APPEALED status for order
+        # create APPEALED status for order
         serializer = StatusSerializer(data={
-            'status': StatusType.RELEASE_APPEALED,
+            'status': StatusType.APPEALED,
             'order': pk
         })
 
@@ -69,131 +72,48 @@ class AppealRelease(APIView):
     
     def validate_permissions(self, wallet_hash, pk):
         '''
-        AppealRelease is callable only by the crypto buyer.
+        AppealRelease is callable only by the buyer/seller.
         '''
-
-        # if ad type is SELL:
-        #   order creator is BUYER
-        # else (if BUY):
-        #   ad owner is BUYER
-        # require(caller is buyer)
 
         try:
             order = Order.objects.get(pk=pk)
             caller = Peer.objects.get(wallet_hash=wallet_hash)
-        except Order.DoesNotExist or Peer.DoesNotExist:
-            raise ValidationError('order or peer does not exist')
+        except (Order.DoesNotExist, Peer.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
         
-        buyer = None
-        if order.ad.trade_type == TradeType.BUY:
-           buyer = order.ad.owner
-        else:
-           buyer = order.owner
-
-        if buyer.wallet_hash != caller.wallet_hash:
-           raise ValidationError('caller must be buyer')
-
-class AppealRefund(APIView):
-    '''
-    Submits an appeal to refund the escrowed funds from the smart contract to the seller.
-    Requirements:
-        (1) The creator of appeal must be the seller.
-        (2) The order must be expired.
-        (3) The latest order status must be 'PD_PN' (StatusType.PAID_PENDING)
-    '''
-    def post(self, request, pk):
-        try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_REFUND.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            if not is_order_expired(pk):
-                raise ValidationError('order is not expired yet')
-            validate_status_inst_count(StatusType.REFUND_APPEALED, pk)
-            validate_status_progression(StatusType.REFUND_APPEALED, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        # create and Appeal record with type=REFUND
-        submit_appeal(AppealType.REFUND, wallet_hash, pk)
-
-        # create RELEASE_APPEALED status for order
-        serializer = StatusSerializer(data={
-            'status': StatusType.REFUND_APPEALED,
-            'order': pk
-        })
-
-        if serializer.is_valid():
-            stat = StatusSerializer(serializer.save())
-            return Response(stat.data, status=status.HTTP_200_OK)        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if (caller.wallet_hash != order.owner.wallet_hash and
+            caller.wallet_hash != order.ad.owner.wallet_hash):
+            raise ValidationError('caller not affiliated to this order')
     
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        AppealRefund is callable only by the crypto seller.
-        '''
-        
-        # if ad type is SELL:
-        #   ad owner is SELLER
-        # else (if BUY):
-        #   order creator is SELLER
-        # require(caller is seller)
+    def submit_appeal(wallet_hash, order_id):
+        peer = Peer.objects.get(wallet_hash=wallet_hash)
+        data = {
+            'creator': peer.id,
+            'order': order_id
+        }
+        serializer = AppealSerializer(data=data)
+        if serializer.is_valid():
+            appeal = serializer.save()
+            return appeal
+        return None
 
-        try:
-            order = Order.objects.get(pk=pk)
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-        except Order.DoesNotExist or Peer.DoesNotExist:
-            raise ValidationError('order or peer does not exist')
-        
-        seller = None
-        if order.ad.trade_type == TradeType.SELL:
-           seller = order.ad.owner
-        else:
-           seller = order.owner
-
-        if seller.wallet_hash != caller.wallet_hash:
-           raise ValidationError('caller must be seller')
-
-def submit_appeal(type, wallet_hash, order_id):
-    peer = Peer.objects.get(wallet_hash=wallet_hash)
-    data = {
-        'type': type, 
-        'creator': peer.id,
-        'order': order_id
-    }
-    serializer = AppealSerializer(data=data)
-    if serializer.is_valid():
-        appeal = serializer.save()
-        return appeal
-    return None
-
-class MarkForRelease(APIView):
+class AppealPendingRelease(APIView):
     '''
     Marks an appealed order for release of escrowed funds, updating the order status to RELEASE_PENDING.
     The order status is automatically updated to RELEASED when the contract address receives an 
-    outgoing transaction that matches the prerequisites of the contract.
-    (The goal is simply to inform the system that any new transaction received that is 
-    associated to the contract must be used to confirm the release of funds and nothing else)
+    outgoing transaction that matches the requisites of the contract.
     Note: This endpoint must be invoked before the actual transfer of funds.
 
     Requirements:
         (1) Caller must be the order's arbiter
-        (2) Order must have an existing appeal (regardless of appeal type, release appeals
-        may be refunded, and refund appeals may be released)
+        (2) Order must have an existing appeal
     '''
     def post(self, request, pk):
 
         try:
             # Validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
+            message = ViewCode.APPEAL_PENDING_RELEASE.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
 
             # Validate permissions
@@ -240,26 +160,23 @@ class MarkForRelease(APIView):
             curr_status.status != StatusType.REFUND_APPEALED):
                 raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
 
-class MarkForRefund(APIView):
+class AppealPendingRefund(APIView):
     '''
     Marks an appealed order for refund of escrowed funds, updating the order status to REFUND_PENDING.
     The order status is automatically updated to REFUNDED when the contract address receives an 
-    outgoing transaction that matches the prerequisites of the contract.
-    (The goal is simply to inform the system that any new transaction received that is 
-    associated to the contract must be used to confirm the refund and nothing else)
+    outgoing transaction that matches the requisites of the contract.
     Note: This endpoint must be invoked before the actual transfer of funds.
 
     Requirements:
         (1) Caller must be the order's arbiter
-        (2) Order must have an existing appeal (regardless of appeal type, release appeals
-        may be refunded, and refund appeals may be released)
+        (2) Order must have an existing appeal
     '''
     def post(self, request, pk):
         
         try:
             # Validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_REFUND.value + '::' + timestamp
+            message = ViewCode.APPEAL_PENDING_REFUND.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
 
             # Validate permissions

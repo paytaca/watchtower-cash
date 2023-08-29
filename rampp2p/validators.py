@@ -53,34 +53,33 @@ def validate_status_progression(new_status, order_id):
          
     if current_status.status == StatusType.ESCROWED:
         if (new_status != StatusType.PAID_PENDING and 
-            new_status != StatusType.REFUND_APPEALED):
-                raise ValidationError(f'{prefix} {StatusType.ESCROWED.label} orders can only be {StatusType.PAID_PENDING.label} | {StatusType.REFUND_APPEALED.label}')
+            new_status != StatusType.APPEALED):
+                raise ValidationError(f'{prefix} {StatusType.ESCROWED.label} orders can only be {StatusType.PAID_PENDING.label} | {StatusType.APPEALED.label}')
     
     if current_status.status == StatusType.PAID_PENDING:
         if (new_status != StatusType.PAID and 
-            new_status != StatusType.RELEASE_APPEALED and
-            new_status != StatusType.REFUND_APPEALED):
-                raise ValidationError(f'{prefix} {StatusType.PAID_PENDING.label} orders can only be {StatusType.PAID} | {StatusType.RELEASE_APPEALED} | {StatusType.REFUND_APPEALED}')
+            new_status != StatusType.APPEALED):
+                raise ValidationError(f'{prefix} {StatusType.PAID_PENDING.label} orders can only be {StatusType.PAID.label} | {StatusType.APPEALED.label}')
        
     if current_status.status == StatusType.PAID:
         if (new_status != StatusType.RELEASED and 
-            new_status != StatusType.RELEASE_APPEALED):
-                raise ValidationError(f'{prefix} {StatusType.PAID.label} orders can only be {StatusType.RELEASED.label} | {StatusType.RELEASE_APPEALED.label}')
+            new_status != StatusType.APPEALED):
+                raise ValidationError(f'{prefix} {StatusType.PAID.label} orders can only be {StatusType.RELEASED.label} | {StatusType.APPEALED.label}')
     
-    if (current_status.status == StatusType.REFUND_APPEALED):
-        if (new_status != StatusType.RELEASE_PENDING and 
-            new_status != StatusType.REFUND_PENDING):
-                raise ValidationError(f'{prefix} {StatusType.REFUND_APPEALED.label} orders can only be {StatusType.RELEASE_PENDING.label} | {StatusType.REFUND_PENDING.label}')
+    # if (current_status.status == StatusType.APPEALED):
+    #     if (new_status != StatusType.RELEASE_PENDING and 
+    #         new_status != StatusType.REFUND_PENDING):
+    #             raise ValidationError(f'{prefix} {StatusType.APPEALED.label} orders can only be {StatusType.RELEASE_PENDING.label} | {StatusType.REFUND_PENDING.label}')
 
-    if (current_status.status == StatusType.RELEASE_APPEALED):
+    if (current_status.status == StatusType.APPEALED):
         was_marked_paid = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.PAID)).count() > 0
         if was_marked_paid:
             if (new_status != StatusType.RELEASE_PENDING):
-                raise ValidationError(f'{prefix} {StatusType.RELEASE_APPEALED.label} orders previously marked as {StatusType.PAID.label} can only be {StatusType.RELEASE_PENDING.label}')
+                raise ValidationError(f'{prefix} {StatusType.APPEALED.label} orders previously marked as {StatusType.PAID.label} can only be {StatusType.RELEASE_PENDING.label}')
         else:
             if (new_status != StatusType.RELEASE_PENDING and 
                 new_status != StatusType.REFUND_PENDING):
-                    raise ValidationError(f'{prefix} {StatusType.RELEASE_APPEALED.label} orders can only be {StatusType.RELEASE_PENDING.label} | {StatusType.REFUND_PENDING.label}')
+                    raise ValidationError(f'{prefix} {StatusType.APPEALED.label} orders can only be {StatusType.RELEASE_PENDING.label} | {StatusType.REFUND_PENDING.label}')
     
     if (current_status.status == StatusType.RELEASE_PENDING):
         if (new_status != StatusType.RELEASED):

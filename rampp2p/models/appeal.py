@@ -4,16 +4,16 @@ from django.utils.translation import gettext_lazy as _
 from .peer import Peer
 from .order import Order
 
-class AppealType(models.TextChoices):
-    RELEASE = 'RLS', _('Release')
-    REFUND  = 'RFN', _('Refund')
+# class AppealType(models.TextChoices):
+#     RELEASE = 'RLS', _('Release')
+#     REFUND  = 'RFN', _('Refund')
 
 class Appeal(models.Model):
-    type = models.CharField(
-        max_length=10, 
-        choices=AppealType.choices, 
-        editable=False
-    )
+    # type = models.CharField(
+    #     max_length=10, 
+    #     choices=AppealType.choices, 
+    #     editable=False
+    # )
     creator = models.ForeignKey(
         Peer, 
         on_delete=models.PROTECT, 

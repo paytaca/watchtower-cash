@@ -487,7 +487,7 @@ class PendingEscrowOrder(APIView):
         if caller.wallet_hash != seller.wallet_hash:
             raise ValidationError('caller must be seller')
 
-class EscrowVerifyOrder(APIView):
+class VerifyEscrow(APIView):
     '''
     Manually marks the order as ESCROWED by submitting the transaction id
     for validation (should only be used as fallback when listener fails to update the status 
