@@ -20,14 +20,14 @@ class ArbiterFeedbackListCreate(APIView):
     def get(self, request):
         queryset = ArbiterFeedback.objects.all()
 
-        order = request.query_params.get('order')
+        order_id = request.query_params.get('order_id')
         from_peer = request.query_params.get('from_peer')
         arbiter = request.query_params.get('arbiter')
         rating = request.query_params.get('rating')
-
-        if order is not None:
-            queryset = queryset.filter(Q(order=order))
         
+        if order_id is not None:
+            queryset = queryset.filter(Q(order=order_id))
+
         if from_peer is not None:
             queryset = queryset.filter(Q(from_peer=from_peer))
         
@@ -42,8 +42,12 @@ class ArbiterFeedbackListCreate(APIView):
         serializer = ArbiterFeedbackSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-    def post(self, request, pk):
-    
+    def post(self, request):
+
+        order_id = request.data.get('order_id')
+        if order_id is None:
+            return Response({'error': 'order_id field may not be blank'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
             # Validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
@@ -51,7 +55,7 @@ class ArbiterFeedbackListCreate(APIView):
             verify_signature(wallet_hash, signature, message)
             
             # Validate if user is allowed to feedback this order
-            from_peer, arbiter, order = self.validate_permissions(wallet_hash, pk)
+            from_peer, arbiter, order = self.validate_permissions(wallet_hash, order_id)
         except (ValidationError, Peer.DoesNotExist, Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
@@ -65,6 +69,7 @@ class ArbiterFeedbackListCreate(APIView):
             return Response({'error': 'order not completed yet'}, status=status.HTTP_400_BAD_REQUEST)
 
         data = request.data.copy()
+        data['order'] = order.id
         data['from_peer'] = from_peer.id
         data['to_arbiter'] = arbiter.id
         logger.warn(f'data: {data}')
@@ -103,11 +108,11 @@ class ArbiterFeedbackListCreate(APIView):
     
 class PeerFeedbackListCreate(APIView):
     def get(self, request):
-        queryset = Feedback.objects.filter(Q(to_peer__is_arbiter=False))
+        queryset = Feedback.objects.all()
         
-        order = request.query_params.get('order', None)
-        if order is not None:
-            queryset = queryset.filter(Q(order=order))
+        order_id = request.query_params.get('order_id')
+        if order_id is not None:
+            queryset = queryset.filter(Q(order=order_id))
         
         from_peer = request.query_params.get('from_peer', None)
         if from_peer is not None:
@@ -126,8 +131,13 @@ class PeerFeedbackListCreate(APIView):
         serializer = FeedbackSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-    def post(self, request, pk):
-        data = request.data.copy()
+    def post(self, request):
+        
+        order_id = request.data.get('order_id')
+        if order_id is None:
+            return Response({'error': 'order_id field may not be blank'}, status=status.HTTP_400_BAD_REQUEST)
+        
+            
         try:
             # validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
@@ -135,12 +145,13 @@ class PeerFeedbackListCreate(APIView):
             verify_signature(wallet_hash, signature, message)
 
             # validate permissions
-            from_peer, to_peer, order = self.validate_permissions(wallet_hash, pk)
+            from_peer, to_peer, order = self.validate_permissions(wallet_hash, order_id)
 
         except (ValidationError, Peer.DoesNotExist, Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
+            data = request.data.copy()
             data['from_peer'] = from_peer.id
             data['to_peer'] = to_peer.id
             data['order'] = order.id
