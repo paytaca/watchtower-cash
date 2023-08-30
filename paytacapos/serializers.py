@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from purelypeer.serializers import VaultSerializer
 from .models import (
     LinkedDeviceInfo,
     UnlinkDeviceRequest,
@@ -332,6 +333,13 @@ class PosDeviceSerializer(serializers.ModelSerializer):
                 Branch.objects.get(merchant__wallet_hash=wallet_hash, id=branch_id)
             except Branch.DoesNotExist:
                 raise serializers.ValidationError("branch_id under merchant wallet_hash not found")
+        else:
+            merchant = Merchant.objects.filter(wallet_hash=wallet_hash).first()
+            if not merchant:
+                raise serializers.ValidationError(dict(branch_id="Unable to create default branch"))
+            main_branch, _ = merchant.get_or_create_main_branch()
+            data["branch_id"] = main_branch.id
+
         return data
 
     def create(self, validated_data, *args, **kwargs):
@@ -423,6 +431,7 @@ class LocationSerializer(serializers.ModelSerializer):
 class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
+    vault = VaultSerializer(required=False)
     
     class Meta:
         model = Merchant
@@ -431,22 +440,43 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "name",
             "location",
             "gmap_business_link",
-            "last_transaction_date"
+            "last_transaction_date",
+            "wallet_hash",
+
+            "receiving_address",
+            "signer_address",
+            "receiving_pubkey",
+            "receiving_pubkey_hash",
+            "signer_pubkey",
+            "signer_pubkey_hash",
+            "vault",
         ]
 
 class MerchantSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     wallet_hash = serializers.CharField() # to supress unique validation
+    vault = VaultSerializer(required=False)
 
     class Meta:
         model = Merchant
         fields = [
             "id",
             "wallet_hash",
+            "signer_wallet_hash",
             "name",
             "primary_contact_number",
-            "location"
+            "location",
+            
+            "receiving_address",
+            "signer_address",
+            "receiving_pubkey",
+            "receiving_pubkey_hash",
+            "signer_pubkey",
+            "signer_pubkey_hash",
+            "vault",
         ]
+
+        read_only_fields = ('vault', )
 
 
     @transaction.atomic()
@@ -463,7 +493,9 @@ class MerchantSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
-        return super().create(validated_data)
+        instance = super().create(validated_data)
+        instance.get_or_create_main_branch()
+        return instance
 
     @transaction.atomic()
     def update(self, instance, validated_data):
@@ -499,6 +531,7 @@ class BranchSerializer(serializers.ModelSerializer):
             "id",
             "merchant_wallet_hash",
             "merchant",
+            "is_main",
             "name",
             "location",
         ]
@@ -529,6 +562,10 @@ class BranchSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
+        is_main = validated_data.get("is_main", False)
+        if is_main:
+            Branch.objects.filter(merchant=validated_data["merchant"]).update(is_main=False)
+
         return super().create(validated_data)
 
     @transaction.atomic()
@@ -540,5 +577,12 @@ class BranchSerializer(serializers.ModelSerializer):
             if not location_serializer.is_valid():
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
+
+        is_main = validated_data.get("is_main", instance.is_main)
+        if is_main:
+            Branch.objects \
+                .filter(merchant_id=instance.merchant_id) \
+                .exclude(pk=instance.pk) \
+                .update(is_main=False)
 
         return super().update(instance, validated_data)

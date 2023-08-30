@@ -29,6 +29,7 @@ djangorestframework==3.11.0
 djangorestframework-simplejwt==4.4.0
 django-dynamic-raw-id==2.8
 drf-yasg==1.17.1
+drf-extensions==0.7.1
 filelock==3.0.12
 gevent==20.6.2
 greenlet==0.4.16
@@ -57,7 +58,6 @@ psycopg2==2.8.4
 ptyprocess==0.6.0
 py==1.9.0
 Pillow==9.4.0
-python-bitcoinrpc==1.0
 Pygments==2.5.2
 PyJWT==1.7.1
 pyparsing==2.4.7
@@ -96,3 +96,4 @@ cashaddress==1.0.6
 paho-mqtt==1.6.1
 cryptography==40.0.2
 ecdsa==0.18.0
+git+https://github.com/paytaca/python-bitcoinrpc

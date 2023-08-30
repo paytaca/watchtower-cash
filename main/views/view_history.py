@@ -101,7 +101,8 @@ class WalletHistoryView(APIView):
                     history = qs.annotate(
                         _token=F('cashtoken_ft__category'),
                         amount=ExpressionWrapper(
-                            F('amount') / (10 ** F('cashtoken_ft__info__decimals')),
+                            #F('amount') / (10 ** F('cashtoken_ft__info__decimals')),
+                            F('amount'),
                             output_field=FloatField()
                         )
                     )

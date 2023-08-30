@@ -79,7 +79,9 @@ INSTALLED_APPS=[
     'constance',
     'main',
     'smartbch',
+    'purelypeer',
     'paytacapos',
+    'paytacagifts',
     'anyhedge',
     'chat',
     'notifications',
@@ -362,6 +364,14 @@ CELERY_BEAT_SCHEDULE = {
     'update_market_rates': {
         'task': 'rampp2p.tasks.market_rate_tasks.update_market_rates',
         'schedule': 60 * 10 # run every 10 minutes
+    },
+    'check_unfunded_gifts': {
+        'task': 'paytacagifts.tasks.check_unfunded_gifts',
+        'schedule': 5
+    },
+    'check_unclaimed_gifts': {
+        'task': 'paytacagifts.tasks.check_unclaimed_gifts',
+        'schedule': 7
     }
 }
 
@@ -531,8 +541,12 @@ ANYHEDGE = {
 BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
 RPC_USER = decipher(config('RPC_USER'))
 
+BCHN_HOST = config('BCHN_CHIPNET_HOST', 'bchn')
+if BCH_NETWORK == 'mainnet':
+    BCHN_HOST = config('BCHN_MAINNET_HOST', 'bchn')
 BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
-BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@bchn:8332'
+
+BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@{BCHN_HOST}:8332'
 
 # BCHD_RPC_PASSWORD = decipher(config('BCHD_RPC_PASSWORD'))
 # BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@bchd:18334'
@@ -546,7 +560,6 @@ if BCH_NETWORK == 'chipnet':
 
 PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api'
 
-
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_PK = config('SERVICER_PK', '')
 SERVICER_ADDR = config('SERVICER_ADDR', '')
@@ -554,3 +567,14 @@ SERVICE_FEE = config('SERVICE_FEE', '')
 ARBITRATION_FEE = config('ARBITRATION_FEE', '')
 HARDCODED_FEE = config('HARDCODED_FEE', 1000)
 SMART_CONTRACT_PATH = config('SMART_CONTRACT_PATH', '')
+
+DEFAULT_TOKEN_DETAILS = {
+    'nft': {
+        'name': 'CashToken NFT',
+        'symbol': 'CASH-NFT'
+    },
+    'fungible': {
+        'name': 'CashToken',
+        'symbol': 'CASH'
+    }
+}

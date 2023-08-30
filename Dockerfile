@@ -14,13 +14,21 @@ RUN pip install -r requirements.txt
 
 # For running javascript
 RUN sudo apt install -y curl
+RUN sudo apt-get update --allow-releaseinfo-change
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
 RUN sudo apt install nodejs -y --allow-change-held-packages
+
+COPY ./main/js/package*.json /code/main/js/
+RUN npm install --prefix /code/main/js --legacy-peer-deps
+
 COPY ./anyhedge/js/package*.json /code/anyhedge/js/
 RUN npm install --prefix /code/anyhedge/js --legacy-peer-deps
 
 COPY ./rampp2p/escrow/package*.json /code/rampp2p/escrow/
 RUN npm install --prefix /code/rampp2p/escrow --legacy-peer-deps
+
+COPY ./purelypeer/js/package*.json /code/purelypeer/js/
+RUN npm install --prefix /code/purelypeer/js --legacy-peer-deps
 
 COPY . /code
 WORKDIR /code

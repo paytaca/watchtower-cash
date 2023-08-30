@@ -5,24 +5,14 @@
 
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 from django.conf import settings
 
-from main.utils.queries.bchn import *
-from main.models import (
-    Transaction,
-    Subscription,
-)
-from main.tasks import (
-    save_record,
-    client_acknowledgement,
-    parse_tx_wallet_histories,
-    process_cashtoken_tx,
-)
+from main.utils.queries.bchn import BCHN
 
 import logging
 import binascii
 import zmq
+import json
 import paho.mqtt.client as mqtt
 
 
@@ -37,12 +27,16 @@ LOGGER = logging.getLogger(__name__)
 class ZMQHandler():
 
     def __init__(self):
-        self.url = "tcp://zmq:28332"
+        self.url = f"tcp://{settings.BCHN_HOST}:28332"
         self.BCHN = BCHN()
 
         self.zmqContext = zmq.Context()
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)
         self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "hashtx")
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE,1)
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_CNT,10)
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_IDLE,1)
+        self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_INTVL,1)
         self.zmqSubSocket.connect(self.url)
 
     def start(self):
@@ -167,6 +161,12 @@ class ZMQHandler():
                     if has_subscribed_input and not has_updated_output:
                         LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
                         parse_tx_wallet_histories.delay(tx_hash)
+
+                    data = {
+                        'txid': tx_hash
+                    }
+                    msg = mqtt_client.publish('mempool', json.dumps(data), qos=1)
+                    LOGGER.info('New mempool tx pushed to MQTT: ' + tx_hash)
 
         except KeyboardInterrupt:
             self.zmqContext.destroy()

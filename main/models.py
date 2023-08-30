@@ -10,7 +10,7 @@ from django.conf import settings
 
 from main.utils.address_validator import *
 from main.utils.address_converter import *
-
+import requests
 import re
 import uuid
 import web3
@@ -169,7 +169,8 @@ class Wallet(PostgresModel):
         return self.wallet_hash
 
 class Address(PostgresModel):
-    address = models.CharField(max_length=70, unique=True, db_index=True)
+    address = models.CharField(max_length=100, unique=True, db_index=True)
+    token_address = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
@@ -207,6 +208,10 @@ class Address(PostgresModel):
             elif is_bch_address(self.address) or is_token_address(self.address):
                 if is_token_address(self.address):
                     self.address = bch_address_converter(self.address, to_token_addr=False)
+                    self.token_address = self.address
+                else:
+                    self.token_address = bch_address_converter(self.address)
+
                 wallet.wallet_type = 'bch'
             elif re.match("0x[0-9a-f]{40}", self.address, re.IGNORECASE):
                 wallet.wallet_type = 'sbch'
@@ -214,20 +219,16 @@ class Address(PostgresModel):
                 wallet.wallet_type = 'sbch'
             wallet.save()
         super(Address, self).save(*args, **kwargs)
-
-    @property
-    def token_address(self):
-        if is_bch_address(self.address):
-            return bch_address_converter(self.address)
-        return None
+        
 
 class CashTokenInfo(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     symbol = models.CharField(max_length=100)
-    decimals = models.PositiveIntegerField(default=0)
+    decimals = models.PositiveIntegerField(default=0, null=True)
     image_url = models.URLField(blank=True, null=True)
     nft_details = JSONField(default=dict)
+
 
 class CashFungibleToken(models.Model):
     category = models.CharField(
@@ -248,7 +249,10 @@ class CashFungibleToken(models.Model):
         verbose_name_plural = 'CashToken Fungible Tokens'
 
     def __str__(self):
-        return f'{self.info.name} | {self.category[:7]}'
+        if self.info:
+            return f'{self.info.name} | {self.category[:7]}'
+        else:
+            return f'CashToken | {self.category[:7]}'
 
     @property
     def token_id(self):
@@ -264,6 +268,27 @@ class CashFungibleToken(models.Model):
             'image_url': info.image_url,
             'is_cashtoken': True
         }
+    
+    def fetch_metadata(self):
+        PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{self.category}/'
+        response = requests.get(PAYTACA_BCMR_URL)
+        if response.status_code == 200:
+            data = response.json()
+            if 'error' not in data.keys():
+                uris = data.get('token').get('uris')
+                if not uris:
+                    uris = data.get('uris')
+
+                info, _ = CashTokenInfo.objects.get_or_create(
+                    name=data.get('name', f'CT-{self.category[0:4]}'),
+                    description=data.get('description', ''),
+                    symbol=data.get('token').get('symbol'),
+                    decimals=data.get('token').get('decimals'),
+                    image_url=uris.get('icon')
+                )
+                self.info = info
+                self.save()
+
 
 class CashNonFungibleTokenQuerySet(PostgresQuerySet):
     def filter_has_group(self, has_group=True):
@@ -339,7 +364,10 @@ class CashNonFungibleToken(models.Model):
         )
 
     def __str__(self):
-        return f'{self.info.name} | {self.category[:7]}'
+        if self.info:
+            return f'{self.info.name} | {self.category[:7]}'
+        else:
+            return f'CashToken NFT | {self.category[:7]}'
         
     @property
     def token_id(self):
@@ -438,8 +466,8 @@ class Transaction(PostgresModel):
 
 
 class Recipient(PostgresModel):
-    web_url = models.CharField(max_length=300, null=True, blank=True)
-    telegram_id = models.CharField(max_length=50, null=True, blank=True)
+    web_url = models.CharField(max_length=300, null=True, blank=True, db_index=True)
+    telegram_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     valid = models.BooleanField(default=True)
 
     def __str__(self):
@@ -456,7 +484,6 @@ class Subscription(PostgresModel):
         Address,
         on_delete=models.CASCADE,
         related_name='subscriptions',
-        db_index=True,
         null=True
     )
     recipient = models.ForeignKey(

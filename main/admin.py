@@ -309,13 +309,19 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
     ]
 
     def name(self, obj):
-        return obj.info.name
+        if obj.info:
+            return obj.info.name
+        return settings.DEFAULT_TOKEN_DETAILS['fungible']['name']
     
     def symbol(self, obj):
-        return obj.info.symbol
+        if obj.info:
+            return obj.info.symbol
+        return settings.DEFAULT_TOKEN_DETAILS['fungible']['symbol']
 
     def decimals(self, obj):
-        return obj.info.decimals
+        if obj.info:
+            return obj.info.decimals
+        return 0
 
 
 class CashNonFungibleTokenAdmin(admin.ModelAdmin):
@@ -330,16 +336,24 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
     ]
 
     def name(self, obj):
-        return obj.info.name
+        if obj.info:
+            return obj.info.name
+        return settings.DEFAULT_TOKEN_DETAILS['nft']['name']
     
     def symbol(self, obj):
-        return obj.info.symbol
+        if obj.info:
+            return obj.info.symbol
+        return settings.DEFAULT_TOKEN_DETAILS['nft']['symbol']
 
     def decimals(self, obj):
-        return obj.info.decimals
+        if obj.info:
+            return obj.info.decimals
+        return 0
 
     def nft_details(self, obj):
-        return obj.info.nft_details
+        if obj.info:
+            return obj.info.nft_details
+        return None
 
 
 admin.site.unregister(User)

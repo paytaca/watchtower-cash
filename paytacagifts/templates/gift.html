@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <!-- HTML Meta Tags -->
+        <title>{{ title }}</title>
+        <meta name="description" content="{{ description }}">
+
+        <!-- Facebook Meta Tags -->
+        <meta property="og:url" content="https://gifts.paytaca.com/claim/?code={{ code }}">
+        <meta property="og:type" content="website">
+        <meta property="og:title" content="{{ title }}">
+        <meta property="og:description" content="{{ description }}">
+        <meta property="og:image" content="https://gifts.paytaca.com/static/gift.png/">
+
+        <!-- Twitter Meta Tags -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta property="twitter:domain" content="gifts.paytaca.com">
+        <meta property="twitter:url" content="https://gifts.paytaca.com/claim/?code={{ code }}">
+        <meta name="twitter:title" content="{{ title }}">
+        <meta name="twitter:description" content="{{ description }}">
+        <meta name="twitter:image" content="https://gifts.paytaca.com/static/gift.png/">
+
+        <!-- Meta Tags Generated via https://www.opengraph.xyz -->
+                
+    </head>
+
+    <body>
+        <div class="md:pt-12 max-w-full md:h-screen md:bg-gray-100">
+            <div class="grid md:grid-cols-6 grid-rows-1 pt-4">
+                    <div class="md:col-start-2 md:col-span-4 md:drop-shadow-lg md:rounded-2xl bg-white">
+                        {% if exists %}
+                            <div class="grid gap-2 md:grid-cols-2 grid-rows-1">
+                                <div class="w-fit m-auto p-4 md:p-12 pb-16">
+                                    {% if claimed %}
+                                        <h1 class="text-center text-3xl font-semibold text-red-600">Sorry, you missed your chance to receive</h1>
+                                    {% else %}
+                                        <h1 class="text-center text-3xl font-semibold text-red-600">You are about to receive</h1>
+                                    {% endif %}
+                                    <div class="mt-2">
+                                        <h1 class="text-center text-4xl font-semibold">
+                                            <img style="display: inline-block; margin-top: -5px;" src="/static/bch-logo.png" width="40"/> 
+                                            <span style="font-style: italic;">Bitcoin</span><span style="color: #9ac360; font-style: italic;">Cash</span>
+                                        </h1>
+                                    </div>
+                                    {% if claimed %}
+                                        <p class="text-center pt-6">The <strong>{{ amount }} BCH</strong> in this gift has been claimed.</p>
+                                    {% else %}
+                                        <p class="text-center pt-6">This link delivers <strong>{{ amount }} BCH</strong> gift. Follow the claim instructions to get it.</p>
+                                    {% endif %}
+                                    <div class="place-items-center">
+                                        <div id="qr-code" class="pt-6 w-fit m-auto drop-shadow-md"></div>
+                                    </div>
+                                </div>
+                                {% if claimed %}
+                                <div class="p-6 md:pt-7 text-center bg-bottom bg-no-repeat md:bg-[url('/static/intro-app.png')] bg-blue-800 md:rounded-r-2xl">
+                                    <p class="text-3xl text-white">Don't miss any BCH gift next time</p>
+                                    <p class="text-4xl text-white mt-2">Get Paytaca wallet app now!</p>
+                                    <p class="pt-3 text-white">@ <a style="text-decoration: underline;" href="https://www.paytaca.com/#wallet" target="_blank">https://www.paytaca.com</a></p>
+                                </div>
+                                {% else %}
+                                <div class="p-6 md:pt-7 bg-bottom bg-blue-800 md:rounded-r-2xl">
+                                    <p class="text-2xl text-white">Claim your gift now</p>
+                                    <p class="text-1xl text-white pt-2">Method 1</p>
+                                    <ol class="pt-3 list-decimal pl-10 text-white">
+                                        <li>Open this URL in your mobile browser</li>
+                                        <li>It will automatically redirect to the installed Paytaca app</li>
+                                        <li>The app will automatically claim the gift</li>
+                                    </ol>
+                                    <p class="text-1xl text-white pt-2">Method 2</p>
+                                    <ol class="pt-3 list-decimal pl-10 text-white">
+                                        <li>Open the Paytaca app</li>
+                                        <li>Click on Apps, on Gifts, and on Claim Gift button</li>
+                                        <li>Click on QR scanner icon</li>
+                                        <li>Scan the QR image received</li>
+                                    </ol>
+                                    <p class="text-2xl pt-7 text-white">Don't have Paytaca yet?</p>
+                                    <p class="pt-3 text-white">Download & install from <a style="text-decoration: underline;" href="https://www.paytaca.com/#wallet" target="_blank">https://www.paytaca.com</a></p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="p-2">
+                                <h1 class="text-center text-3xl font-semibold text-red-600">The gift code in this link does not exist. Try another one.</h1>
+                            </div>
+                        {% endif %}
+                    </div>
+            </div>
+        </div>
+        <script type="text/javascript">
+            var qrcode = new QRCode(document.querySelector("#qr-code"), {
+                text: "https://gifts.paytaca.com/claim/?code={{ code }}",
+                width: 260, //default 128
+                height: 260,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+        </script>
+    </body>
+</html>

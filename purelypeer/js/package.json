@@ -1,0 +1,9 @@
+{
+    "dependencies": {
+        "@bitauth/libauth": "^2.0.0-alpha.8",
+        "@psf/bch-js": "^6.2.9",
+        "cashc": "^0.8.0",
+        "cashscript": "^0.8.0"
+    },
+    "type": "module"
+}

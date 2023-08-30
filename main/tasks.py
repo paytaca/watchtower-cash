@@ -13,6 +13,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
+from main.utils.purelypeer import is_key_nft
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -23,6 +24,8 @@ from main.utils.nft import (
     find_token_utxo,
     find_minting_baton,
 )
+from main.utils.address_converter import bch_address_converter
+from main.utils.address_validator import is_bch_address
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
     send_wallet_history_push_notification,
@@ -112,13 +115,38 @@ def client_acknowledgement(self, txid):
                 token_id = transaction.token.info_id
                 token_decimals = transaction.token.decimals
                 token_symbol = transaction.token.token_ticker.lower()
+                
+                token = None
+                image_url = None
+                token_details_key = None
+                __is_key_nft = False
+                lock_nft_category = None
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
-                    token_name = token.info.name
+                    token_details_key = 'fungible'
+                elif transaction.cashtoken_nft:
+                    token = transaction.cashtoken_nft
+                    token_details_key = 'nft'
+                    category = token.token_id.split('/')[1]
+                    __is_key_nft, lock_nft_category = is_key_nft(subscription.address, category)
+
+                if transaction.cashtoken_ft or transaction.cashtoken_nft:
+                    token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
                     token_id = token.token_id
-                    token_symbol = token.info.symbol
-                    token_decimals = token.info.decimals
+                    token_name = token_default_details['name']
+                    token_symbol = token_default_details['symbol']
+                    token_decimals = 0
+                    
+                    if token.info:
+                        token_name = token.info.name
+                        token_symbol = token.info.symbol
+                        token_decimals = token.info.decimals
+                        image_url = token.info.image_url
+                
+                txn_amount = None
+                if transaction.amount:
+                    txn_amount = str(transaction.amount)
 
                 if wallet_version == 2:
                     data = {
@@ -126,7 +154,8 @@ def client_acknowledgement(self, txid):
                         'token_id':  token_id,
                         'token_symbol': token_symbol,
                         'token_decimals': token_decimals,
-                        'amount': str(transaction.amount),
+                        'image_url': image_url,
+                        'amount': txn_amount,
                         'value': transaction.value,
                         'address': transaction.address.address,
                         'source': 'WatchTower',
@@ -135,10 +164,25 @@ def client_acknowledgement(self, txid):
                         'index': transaction.index,
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
+                        'is_nft': False,
+                        'purelypeer': {
+                            'is_key_nft': __is_key_nft,
+                            'lock_nft_category': None
+                        }
                     }
+
+                    if transaction.cashtoken_nft:
+                        data['capability'] = token.capability
+                        data['commitment'] = token.commitment
+                        data['id'] = token.id
+                        data['is_nft'] = True
+
+                    if __is_key_nft:
+                        data['purelypeer']['lock_nft_category'] = lock_nft_category
+
                 elif wallet_version == 1:
                     data = {
-                        'amount': str(transaction.amount),
+                        'amount': txn_amount,
                         'value': transaction.value,
                         'address': transaction.address.address,
                         'source': 'WatchTower',
@@ -205,24 +249,17 @@ def get_cashtoken_meta_data(
     LOGGER.info(f'Fetching cashtoken metadata for {category} from BCMR')
 
     METADATA = None
-    PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
-    DEFAULT_TOKEN_DETAILS = {
-        'nft': {
-            'name': 'CashToken NFT',
-            'symbol': 'CASH-NFT'
-        },
-        'fungible': {
-            'name': 'CashToken',
-            'symbol': 'CASH'
-        }
-    }
     detail_key = 'nft' if is_nft else 'fungible'
-    default_details = DEFAULT_TOKEN_DETAILS[detail_key]
+    default_details = settings.DEFAULT_TOKEN_DETAILS[detail_key]
 
-    response = requests.get(PAYTACA_BCMR_URL)
+    # TODO: Don't fetch from BCMR indexer for now, to be reconsidered later
+    # PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
+    # response = requests.get(PAYTACA_BCMR_URL)
 
-    if response.status_code == 200:
-        METADATA = response.json()
+    # if response.status_code == 200:
+    #     METADATA = response.json()
+    #     if "error" in METADATA:
+    #         METADATA = None
 
     if METADATA:
         name = METADATA['name'] or default_details['name']
@@ -303,11 +340,11 @@ def get_cashtoken_meta_data(
         cashtoken.category = category
         cashtoken.commitment = commitment
         cashtoken.capability = capability
+        cashtoken.info = cashtoken_info
+        cashtoken.save()
     else:
         cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
-
-    cashtoken.info = cashtoken_info
-    cashtoken.save()
+        cashtoken.fetch_metadata()
 
     return cashtoken
 
@@ -686,7 +723,8 @@ def manage_blocks(self):
             processed=False,
             requires_full_scan=True
         ).values_list('number', flat=True)
-        REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(list(unscanned_blocks)))
+        blocks = list(unscanned_blocks)
+        REDIS_STORAGE.set('PENDING-BLOCKS', json.dumps(blocks))
 
 
     if int(REDIS_STORAGE.get('READY').decode()): LOGGER.info('READY TO PROCESS ANOTHER BLOCK')
@@ -710,30 +748,70 @@ def manage_blocks(self):
         if not discard_block:
             REDIS_STORAGE.set('ACTIVE-BLOCK', active_block)
             REDIS_STORAGE.set('READY', 0)
-            subtasks = []
+            try:
+                # TODO: handle block tracking for SLP testnet when BCH_NETWORK=chipnet
+                # (testnet has different block count with chipnet)
+                if settings.BCH_NETWORK == 'mainnet':
+                    pass
+                    
+                    #TODO: Disable block scanning in SLP, for now
+                    # transactions = NODE.SLP.get_block(block.number, full_transactions=False)
+                    # for tr in transactions:
+                    #     txid = bytearray(tr.transaction_hash[::-1]).hex()
+                    #     subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
 
-            # TODO: handle block tracking for SLP testnet when BCH_NETWORK=chipnet
-            # (testnet has different block count with chipnet)
-            if settings.BCH_NETWORK == 'mainnet':
-                pass
-                
-                #TODO: Disable block scanning in SLP, for now
-                # transactions = NODE.SLP.get_block(block.number, full_transactions=False)
-                # for tr in transactions:
-                #     txid = bytearray(tr.transaction_hash[::-1]).hex()
-                #     subtasks.append(query_transaction.si(txid, block.id, for_slp=True))
+                transactions = NODE.BCH.get_block(block.number, verbosity=3)
+                block_time = NODE.BCH.get_block_stats(block.number, stats=["time"])["time"]
+                for tx in transactions:
+                    tx["time"] = block_time # tx is from .get_block() which doesn't return tx's timestamp
+                    parsed_tx = NODE.BCH._parse_transaction(tx)
+                    save_transaction(parsed_tx, block_id=block.id)
 
-            transactions = NODE.BCH.get_block(block.number)
-            for txid in transactions:
-                subtasks.append(query_transaction.si(txid, block.id))
-
-            callback = ready_to_accept.si(block.number, len(subtasks))
-            if subtasks:
-                # Execute the workflow
-                chord(subtasks)(callback)
+                ready_to_accept.delay(block.number, len(transactions))
+            finally:
+                REDIS_STORAGE.set('READY', 1)
 
     active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'CURRENTLY PROCESSING BLOCK {str(active_block)}.'
+
+
+def save_transaction(tx, block_id=None):
+    """
+        tx must be parsed by 'BCHN._parse_transaction()'
+    """
+    txid = tx['txid']
+    if 'coinbase' in tx['inputs'][0].keys():
+        return
+
+    for output in tx['outputs']:
+        index = output['index']
+        address = output['address']
+        value = output['value']
+
+        if output.get('token_data'):
+            process_cashtoken_tx(
+                output['token_data'],
+                address,
+                txid,
+                block_id=block_id,
+                index=index,
+                timestamp=tx['timestamp'],
+                value=value
+            )
+        else:
+            # save bch transaction
+            obj_id, created = save_record(
+                'bch',
+                address,
+                txid,
+                NODE.BCH.source,
+                value=value,
+                blockheightid=block_id,
+                tx_timestamp=tx['timestamp'],
+                index=index
+            )
+            if created:
+                client_acknowledgement(obj_id)
 
 
 @shared_task(bind=True, queue='get_latest_block')
@@ -1141,7 +1219,7 @@ def update_nft_owner(tokenid):
     return f"token({token}) | wallet_nft_token: ({wallet_nft_token}) | dispensed: ({dispensed_wallets})"
 
 
-@shared_task(bind=True, queue='broadcast', max_retries=3)
+@shared_task(bind=True, queue='broadcast', max_retries=2)
 def broadcast_transaction(self, transaction):
     txid = calc_txid(transaction)
     LOGGER.info(f'Broadcasting {txid}: {transaction}')
@@ -1162,10 +1240,11 @@ def broadcast_transaction(self, transaction):
                 else:
                     self.retry(countdown=1)
             except Exception as exc:
-                error = exc.details()
-                LOGGER.error(error)
+                LOGGER.exception(exc)
+                error = str(exc)
                 return False, error
-        except AttributeError:
+        except AttributeError as exc:
+            LOGGER.exception(exc)
             self.retry(countdown=1)
 
 
@@ -1334,7 +1413,9 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                             history.refresh_from_db()
                         except Exception:
                             pass
-                    if amount != 0:
+                    # Do not send notifications for amounts less than or equal to 0.00001
+                    if abs(amount) > 0.00001:
+                        LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
                         send_wallet_history_push_notification(history)
                 except Exception as exception:
                     LOGGER.exception(exception)
@@ -1384,8 +1465,9 @@ def send_wallet_history_push_notification_task(wallet_history_id):
                 history.refresh_from_db()
             except Exception as exception:
                 LOGGER.exception(exception)
-        LOGGER.info(f"PUSH_NOTIF CURRENCY: wallet_history:{history.txid} | {history.amount} | {history.fiat_value} | {history.usd_value} | {history.market_prices}")
-        if history.amount != 0:
+        # Do not send notifications for amounts less than or equal to 0.00001
+        if abs(history.amount) > 0.00001:
+            LOGGER.info(f"PUSH_NOTIF CURRENCY: wallet_history:{history.txid} | {history.amount} | {history.fiat_value} | {history.usd_value} | {history.market_prices}")
             return send_wallet_history_push_notification(history)
     except Exception as exception:
         LOGGER.exception(exception)
@@ -1815,15 +1897,22 @@ def resolve_wallet_history_usd_values(txid=None):
         wallet_histories.update(usd_price=price_value)
         txids = list(wallet_histories.values_list("txid", flat=True).distinct())
         txids_updated = txids_updated + txids
-        AssetPriceLog.objects.update_or_create(
-            currency=CURRENCY,
-            relative_currency=RELATIVE_CURRENCY,
-            timestamp=actual_timestamp,
-            source=price_data_source,
-            defaults={
-                "price_value": price_value,
-            }
-        )
+
+        price_log_data = {
+            'currency': CURRENCY,
+            'relative_currency': RELATIVE_CURRENCY,
+            'timestamp': actual_timestamp,
+            'source': price_data_source
+        }
+        price_log_check = AssetPriceLog.objects.filter(**price_log_data)
+        if price_log_check.exists():
+            price_log = price_log_check.first()
+            price_log.price_value = price_value
+            price_log.save()
+        else:
+            price_log_data['price_value'] = price_value
+            price_log = AssetPriceLog(**price_log_data)
+            price_log.save()
 
     return txids_updated
 
@@ -1931,15 +2020,22 @@ def parse_wallet_history_market_values(wallet_history_id):
             bch_rate = bch_rates.get(currency.lower(), None)
             if bch_rate:
                 market_prices[currency] = bch_rate[0]
-                AssetPriceLog.objects.update_or_create(
-                    currency=currency,
-                    relative_currency="BCH",
-                    timestamp=bch_rate[1],
-                    source=bch_rate[2],
-                    defaults={
-                        "price_value": bch_rate[0],
-                    }
-                )
+
+                price_log_data = {
+                    'currency': currency,
+                    'relative_currency': "BCH",
+                    'timestamp': bch_rate[1],
+                    'source': bch_rate[2]
+                }
+                price_log_check = AssetPriceLog.objects.filter(**price_log_data)
+                if price_log_check.exists():
+                    price_log = price_log_check.first()
+                    price_log.price_value = bch_rate[0]
+                    price_log.save()
+                else:
+                    price_log_data['price_value'] = bch_rate[0]
+                    price_log = AssetPriceLog(**price_log_data)
+                    price_log.save()
 
     wallet_history_obj.market_prices = market_prices
     if "USD" in wallet_history_obj.market_prices and not wallet_history_obj.usd_price:
@@ -1960,3 +2056,18 @@ def parse_wallet_history_market_values(wallet_history_id):
 @shared_task(queue='wallet_history_2', max_retries=3)
 def update_wallet_history_currency(wallet_hash, currency):
     return save_wallet_history_currency(wallet_hash, currency)
+
+
+@shared_task(queue='populate_token_addresses')
+def populate_token_addresses():
+    bch_addresses = Address.objects.filter(
+        models.Q(address__startswith='bitcoincash:') |
+        models.Q(address__startswith='bchtest:')
+    ).filter(
+        token_address__isnull=True
+    ).order_by('id')
+
+    for obj in bch_addresses:
+        if is_bch_address(obj.address): # double check here
+            obj.token_address = bch_address_converter(obj.address)
+            obj.save()

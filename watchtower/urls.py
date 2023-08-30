@@ -28,6 +28,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from main.urls import main_urls, test_urls
 from paytacapos.urls import urlpatterns as paytacapos_urlpatterns
+from purelypeer.urls import urlpatterns as purelypeer_urlpatterns
 from smartbch.urls import urlpatterns as sbch_urlpatterns
 from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from chat.urls import urlpatterns as chat_urlpatterns
@@ -37,6 +38,7 @@ from django.conf.urls.static import static
 from django.conf import settings
 from ramp.urls import urlpatterns as ramp_urlpatterns
 from rampp2p.urls import urlpatterns as ramp_p2p_urlpatterns
+from paytacagifts.urls import urlpatterns as paytacagifts_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -59,6 +61,7 @@ urlpatterns = [
     path('api/', include(main_urls)),
     path('api/smartbch/', include(sbch_urlpatterns)),
     path('api/paytacapos/', include(paytacapos_urlpatterns)),
+    path('api/purelypeer/', include(purelypeer_urlpatterns)),
     path('api/anyhedge/', include(anyhedge_urlpatterns)),
     path('api/chat/', include(chat_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
@@ -71,3 +74,8 @@ urlpatterns = [
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui')
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+urlpatterns += [
+    path('api/', include(paytacagifts_urlpatterns)),
+]
