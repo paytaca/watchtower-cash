@@ -17,6 +17,9 @@ def is_order_expired(order_pk: int):
     time_duration = Order.objects.get(pk=order_pk).time_duration
     start_time = Status.objects.values('created_at').filter(Q(order__id=order_pk) & Q(status=StatusType.ESCROWED)).first()
     
+    if start_time is None:
+        return False
+    
     current_time = datetime.now()
     timezone_aware_time = timezone.make_aware(current_time)
     elapsed_time = timezone_aware_time - start_time['created_at']

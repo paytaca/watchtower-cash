@@ -50,7 +50,7 @@ class AppealRequest(APIView):
         
         try:
             if not is_order_expired(pk):
-                raise ValidationError('order is not expired yet')
+                raise ValidationError('order is not expired')
             validate_status_inst_count(StatusType.APPEALED, pk)
             validate_status_progression(StatusType.APPEALED, pk)
         except ValidationError as err:
@@ -85,7 +85,7 @@ class AppealRequest(APIView):
             caller.wallet_hash != order.ad.owner.wallet_hash):
             raise ValidationError('caller not affiliated to this order')
     
-    def submit_appeal(wallet_hash, order_id):
+    def submit_appeal(self, wallet_hash, order_id):
         peer = Peer.objects.get(wallet_hash=wallet_hash)
         data = {
             'creator': peer.id,

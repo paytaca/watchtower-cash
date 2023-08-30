@@ -8,6 +8,7 @@ from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.models import Feedback, Peer, Order, ArbiterFeedback
 from rampp2p.serializers import (
     FeedbackSerializer, 
+    FeedbackCreateSerializer,
     ArbiterFeedbackSerializer, 
     ArbiterFeedbackCreateSerializer
 )
@@ -159,7 +160,7 @@ class PeerFeedbackListCreate(APIView):
         except AssertionError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             
-        serializer = FeedbackSerializer(data=data)
+        serializer = FeedbackCreateSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
