@@ -4,8 +4,9 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
 
-from rampp2p import utils
+from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.websocket import send_order_update
+from rampp2p.utils.utils import get_order_peer_addresses, get_trading_fees
 from rampp2p.serializers import TransactionSerializer, RecipientSerializer
 from rampp2p.models import (
     Transaction, 
@@ -52,32 +53,26 @@ def handle_transaction(data: Dict, **kwargs):
     contract = Contract.objects.get(pk=kwargs.get('contract_id'))
 
     # TODO: uncomment after status testing
-    # valid, error, outputs = verify_tx_out(data, action, contract)
-    # txdata = {
-    #     "action": action,
-    #     "txid": txid,
-    #     "contract": contract.id,
-    #     "error": error
-    # }
-    # handle_order_status(
-    #     valid=valid,
-    #     action=action,
-    #     txdata=txdata,
-    #     contract=contract,
-    #     outputs=outputs,
-    #     error=error
-    # )
+    valid, error, outputs = verify_tx_out(data, action, contract)
+    result = handle_order_status(
+        valid=valid,
+        action=action,
+        txid=txid,
+        contract=contract,
+        outputs=outputs,
+        error=error
+    )
     # TODO: uncomment after status testing
 
     # TODO: delete below after status testing
     # Skips the transaction verification (via verify_tx_out) and goes directly to
     # handle_order_status
-    result = handle_order_status(
-        valid=True,
-        action=action,
-        txid=txid,
-        contract=contract
-    )
+    # result = handle_order_status(
+    #     valid=True,
+    #     action=action,
+    #     txid=txid,
+    #     contract=contract
+    # )
     # TODO: delete above after status testing
     send_order_update(
         result, 
@@ -147,7 +142,7 @@ def handle_order_status(**kwargs):
             status_type = StatusType.ESCROWED
 
         try:
-            status = utils.handler.update_order_status(contract.order.id, status_type).data
+            status = update_order_status(contract.order.id, status_type).data
         except ValidationError as err:
             errors.append(err.args[0])
             result["errors"] = errors
@@ -211,9 +206,9 @@ def verify_tx_out(data: Dict, action, contract):
             (1) output amount must be correct, and 
             (2) output address must be the contract address.
         '''
-        fees, _ = utils.get_trading_fees()
-        amount = contract.order.crypto_amount + fees
-
+        fees, _ = get_trading_fees()
+        amount = contract.order.crypto_amount + (fees/100000000)
+        logger.warn(f'amount:{amount}')
         # Find the output where address = contract address
         match_amount = None
         for output in tx_outputs:
@@ -265,11 +260,11 @@ def verify_tx_out(data: Dict, action, contract):
             )
         
         # Retrieve expected transaction output addresses
-        arbiter, buyer, seller, servicer = utils.get_order_peer_addresses(contract.order)
+        arbiter, buyer, seller, servicer = get_order_peer_addresses(contract.order)
 
         # Calculate expected transaction amount and fees
         arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
-        service_fee = Decimal(settings.TRADING_FEE).quantize(Decimal('0.00000000'))/100000000
+        service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))/100000000
         amount = contract.order.crypto_amount
         
         arbiter_exists = False
