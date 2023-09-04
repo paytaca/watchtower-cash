@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from purelypeer.models import *
+from vouchers.models import *
 
 
 class VaultAdmin(admin.ModelAdmin):

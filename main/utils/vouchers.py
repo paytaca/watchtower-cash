@@ -1,4 +1,4 @@
-from purelypeer.models import *
+from vouchers.models import *
 
 
 def is_key_nft(address, category):

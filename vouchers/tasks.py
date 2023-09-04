@@ -8,8 +8,8 @@ from django.db.models import (
     DateTimeField,
 )
 
-from purelypeer.models import Voucher
-from purelypeer.websocket import send_websocket_data
+from vouchers.models import Voucher
+from vouchers.websocket import send_websocket_data
 
 
 @shared_task(queue='claim_expired_unclaimed_vouchers')

@@ -1,6 +1,6 @@
 from django.urls import re_path
 
-from purelypeer.consumers import *
+from vouchers.consumers import *
 
 
 websocket_urlpatterns = [

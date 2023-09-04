@@ -3,7 +3,7 @@ from django.dispatch import receiver
 
 from paytacapos.models import Merchant
 
-from purelypeer.vault import generate_merchant_vault
+from vouchers.vault import generate_merchant_vault
 
 
 @receiver(post_save, sender=Merchant)

@@ -7,7 +7,7 @@ import django.utils.timezone
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('purelypeer', '0006_auto_20230904_0139'),
+        ('vouchers', '0006_auto_20230904_0139'),
     ]
 
     operations = [

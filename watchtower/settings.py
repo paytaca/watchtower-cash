@@ -77,11 +77,12 @@ INSTALLED_APPS=[
     'channels',
     'push_notifications',
     'django_filters',
+    'django_rename_app',
 
     'constance',
     'main',
     'smartbch',
-    'purelypeer',
+    'vouchers',
     'paytacapos',
     'paytacagifts',
     'anyhedge',
@@ -253,7 +254,7 @@ CELERY_IMPORTS = (
     'smartbch.tasks',
     'anyhedge.tasks',
     'ramp.tasks',
-    'purelypeer.tasks',
+    'vouchers.tasks',
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -365,7 +366,7 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 7
     },
     'claim_expired_unclaimed_vouchers': {
-        'task': 'purelypeer.tasks.claim_expired_unclaimed_vouchers',
+        'task': 'vouchers.tasks.claim_expired_unclaimed_vouchers',
         'schedule': 60 * 60
     }
 }

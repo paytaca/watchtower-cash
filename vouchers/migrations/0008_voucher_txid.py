@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('purelypeer', '0007_auto_20230904_0253'),
+        ('vouchers', '0007_auto_20230904_0253'),
     ]
 
     operations = [

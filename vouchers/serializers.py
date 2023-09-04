@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from purelypeer.models import Vault, Voucher
+from vouchers.models import Vault, Voucher
 
 
 class VaultSerializer(serializers.ModelSerializer):    

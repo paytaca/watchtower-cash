@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters
 
-from purelypeer.models import Voucher
+from vouchers.models import Voucher
 
 
 class VoucherFilter(filters.FilterSet):

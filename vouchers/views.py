@@ -7,13 +7,13 @@ from django_filters import rest_framework as filters
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import F
 
-from purelypeer.serializers import (
+from vouchers.serializers import (
     CreateVoucherSerializer,
     VoucherClaimCheckSerializer,
     VoucherClaimCheckResponseSerializer,
 )
-from purelypeer.models import Voucher
-from purelypeer.filters import VoucherFilter
+from vouchers.models import Voucher
+from vouchers.filters import VoucherFilter
 
 from paytacapos.serializers import MerchantListSerializer
 from paytacapos.pagination import CustomLimitOffsetPagination

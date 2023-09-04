@@ -3,7 +3,7 @@ from asgiref.sync import async_to_sync
 
 from django.conf import settings
 
-from purelypeer.websocket import send_websocket_data
+from vouchers.websocket import send_websocket_data
 
 import logging
 import json
