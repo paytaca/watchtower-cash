@@ -1478,9 +1478,9 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     # Parse SLP senders and recipients
     if parse_slp and wallet_type == 'slp':
-        senders['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in bch_tx['inputs']]
+        senders['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['inputs']]
         if 'outputs' in slp_tx:
-            recipients['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in bch_tx['outputs']]
+            recipients['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['outputs']]
 
     # Parse BCH senders and recipients
     if wallet_type == 'bch':
