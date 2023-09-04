@@ -32,6 +32,7 @@ urlpatterns = [
     path('order/<int:pk>/verify-release', VerifyRelease.as_view(), name='verify-release'),
     path('order/<int:pk>/verify-refund', VerifyRefund.as_view(), name='verify-refund'),
 
+    path('appeals', AppealList.as_view(), name='appeal-list'),
     path('order/<int:pk>/appeal', AppealRequest.as_view(), name='appeal-request'),
     path('order/<int:pk>/appeal/pending-release', AppealPendingRelease.as_view(), name='appeal-pending-release'),
     path('order/<int:pk>/appeal/pending-refund', AppealPendingRefund.as_view(), name='appeal-pending-refund'),

@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
+import math
 
 from rampp2p.models import (
     TradeType,
@@ -12,7 +13,8 @@ from rampp2p.models import (
     Contract,
     Transaction,
     Appeal,
-    AppealType
+    AppealType,
+    Arbiter
 )
 
 from rampp2p.serializers import (
@@ -31,12 +33,75 @@ from rampp2p.utils.handler import update_order_status
 import logging
 logger = logging.getLogger(__name__)
     
+class AppealList(APIView):
+    def get(self, request):
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.APPEAL_LIST.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        
+        appeal_state = request.query_params.get('state')
+        try:
+            limit = int(request.query_params.get('limit', 0))
+            page = int(request.query_params.get('page', 1))
+        except ValueError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if limit < 0:
+            return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if page < 1:
+            return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        arbiter_order_ids = list(Order.objects.filter(arbiter__wallet_hash=wallet_hash).values_list('id', flat=True))
+        queryset = Appeal.objects.filter(order__pk__in=arbiter_order_ids).order_by('created_at')
+
+        if appeal_state == 'PENDING':
+            queryset = queryset.exclude(resolved_at__isnull=False)
+        if appeal_state == 'RESOLVED':
+            queryset = queryset.exclude(resolved_at__isnull=True)
+
+        # Count total pages
+        count = queryset.count()
+        total_pages = page
+        if limit > 0:
+            total_pages = math.ceil(count / limit)
+
+        # Splice queryset
+        offset = (page - 1) * limit
+        page_results = queryset[offset:offset + limit]
+
+        serializer = AppealSerializer(page_results, many=True)
+        data = {
+            'appeals': serializer.data,
+            'count': count,
+            'total_pages': total_pages
+        }
+        return Response(data, status.HTTP_200_OK)
+
+
+
+    def validate_permissions(self, wallet_hash):
+        '''
+        Caller must be an arbiter
+        '''
+        try:
+            Arbiter.objects.get(wallet_hash=wallet_hash)
+        except Arbiter.DoesNotExist as err:
+            raise ValidationError(err.args[0])
+
 class AppealRequest(APIView):
     def get(self, request, pk):
         try:
             # validate signature
             signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_REQUEST.value + '::' + timestamp
+            message = ViewCode.APPEAL_GET.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
 
             # validate permissions
@@ -69,6 +134,7 @@ class AppealRequest(APIView):
             raise ValidationError('caller not allowed to view this order')
         
         return order
+    
     '''
     Submits an appeal for an order.
     Requirements:

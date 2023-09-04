@@ -277,9 +277,6 @@ class OrderListCreate(APIView):
         except Peer.DoesNotExist or Ad.DoesNotExist:
             raise ValidationError('peer or ad DoesNotExist')
         
-        # if caller.is_arbiter:
-        #     raise ValidationError('caller must not be an arbiter')
-        
         if ad.owner.wallet_hash == caller.wallet_hash:
             raise ValidationError('ad owner not allowed to create order for this ad')
 
