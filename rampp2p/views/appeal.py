@@ -159,8 +159,8 @@ class AppealRequest(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
-            # if not is_order_expired(pk):
-            #     raise ValidationError('order is not expired')
+            if not is_order_expired(pk):
+                raise ValidationError('order is not expired')
             validate_status_inst_count(StatusType.APPEALED, pk)
             validate_status_progression(StatusType.APPEALED, pk)
             appeal_type = request.data.get('type')
