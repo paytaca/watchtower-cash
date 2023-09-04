@@ -17,11 +17,9 @@ class CreateVoucherSerializer(serializers.ModelSerializer):
 
 class VoucherClaimCheckSerializer(serializers.Serializer):
     address = serializers.CharField(max_length=100, required=True)  # vault token address
-    key_nft_category = serializers.CharField(
-        max_length=100,
-        required=False,
-        allow_blank=True,
-        allow_null=True
+    key_nft_categories = serializers.ListField(
+        child=serializers.CharField(max_length=100),
+        allow_empty=True
     )
 
 
@@ -30,3 +28,4 @@ class VoucherClaimCheckResponseSerializer(serializers.Serializer):
     expired = serializers.BooleanField(default=False)
     voucher_belongs_to_merchant = serializers.BooleanField(default=False)
     is_merchant_address = serializers.BooleanField(default=False)
+    category_with_err = serializers.CharField(max_length=100)
