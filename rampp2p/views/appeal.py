@@ -1,3 +1,4 @@
+from django.db import IntegrityError
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.response import Response
@@ -151,7 +152,7 @@ class AppealPendingRelease(APIView):
         '''
         validate_permissions will raise a ValidationError if:
             (1) caller is not order's arbiter,
-            (2) order's current status is not RELEASE_APPEALED or REFUND_APPEALED
+            (2) order's current status is not APPEALED
         '''
         prefix = "ValidationError:"
 
@@ -166,10 +167,9 @@ class AppealPendingRelease(APIView):
         if caller.wallet_hash != order.arbiter.wallet_hash:
             raise ValidationError(f'{prefix} Caller must be order arbiter.')
         
-        # Raise error if order's current status is not RELEASE_APPEALED nor REFUND_APPEALED
-        if (curr_status.status != StatusType.RELEASE_APPEALED and 
-            curr_status.status != StatusType.REFUND_APPEALED):
-                raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
+        # Raise error if order's current status is not APPEALED
+        if curr_status.status != StatusType.APPEALED:
+            raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class AppealPendingRefund(APIView):
     '''
@@ -211,7 +211,7 @@ class AppealPendingRefund(APIView):
         '''
         validate_permissions will raise a ValidationError if:
             (1) caller is not order's arbiter,
-            (2) order's current status is not RELEASE_APPEALED or REFUND_APPEALED
+            (2) order's current status is not APPEALED
         '''
         prefix = "ValidationError:"
 
@@ -226,10 +226,9 @@ class AppealPendingRefund(APIView):
         if caller.wallet_hash != order.arbiter.wallet_hash:
             raise ValidationError(f'{prefix} Caller must be order arbiter.')
         
-        # Raise error if order's current status is not RELEASE_APPEALED nor REFUND_APPEALED
-        if (curr_status.status != StatusType.RELEASE_APPEALED and 
-            curr_status.status != StatusType.REFUND_APPEALED):
-                raise ValidationError(f'{prefix} No existing release/refund appeal for order #{pk}.')
+        # Raise error if order's current status is not APPEALED
+        if curr_status.status != StatusType.APPEALED:
+                raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class VerifyRelease(APIView):
     '''
@@ -285,7 +284,7 @@ class VerifyRelease(APIView):
                 contract_id=contract.id
             )
             
-        except (ValidationError, Contract.DoesNotExist) as err:
+        except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
         return Response(result, status=status.HTTP_200_OK)
@@ -318,7 +317,7 @@ class VerifyRelease(APIView):
             raise ValidationError(f'{prefix} Caller must be seller or arbiter.')
         
         if not (curr_status.status == StatusType.RELEASE_PENDING or curr_status.status == StatusType.PAID):
-            raise ValidationError(f'{prefix} Current status of order #{pk} must be {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}.')
+            raise ValidationError(f'{prefix} action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')
 
 class VerifyRefund(APIView):
     '''
@@ -393,4 +392,4 @@ class VerifyRefund(APIView):
             raise ValidationError(f'{prefix} Caller must be order arbiter.')
         
         if (curr_status.status != StatusType.REFUND_PENDING):
-                raise ValidationError(f'{prefix} Current status of order #{pk} is not {StatusType.REFUND_PENDING.label}.')
+            raise ValidationError(f'{prefix} action requires status={StatusType.REFUND_PENDING.label}')
