@@ -21,6 +21,7 @@ class Voucher(models.Model):
         related_name='vouchers',
         on_delete=models.CASCADE
     )
+    txid = models.CharField(max_length=100, default='')
     key_category = models.CharField(max_length=100 ,unique=True)
     lock_category = models.CharField(max_length=100 ,unique=True)
     used = models.BooleanField(default=False)
