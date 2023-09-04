@@ -25,6 +25,7 @@ from main.utils.nft import (
     find_minting_baton,
 )
 from main.utils.address_converter import bch_address_converter
+from main.utils.address_scan import get_bch_transactions
 from main.utils.address_validator import is_bch_address
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
@@ -1626,6 +1627,34 @@ def rescan_utxos(wallet_hash, full=False):
             get_bch_utxos(address.address)
         elif wallet.wallet_type == 'slp':
             get_slp_utxos(address.address)
+
+
+@shared_task(queue='wallet_history_1')
+def rebuild_wallet_history(wallet_hash):
+    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+    if not wallet: return { "success": False, "error": "Wallet does not exist" }
+    if wallet.wallet_type != 'bch':
+        return { "success": False, "error": f"Only supports 'bch' wallets, got '{wallet.wallet_type}'" }
+
+    tx_hashes = []
+    for address in wallet.addresses.all():
+        tx_hashes += rebuild_address_wallet_history(address)
+
+    return { "success": True, "txs": tx_hashes }
+
+def rebuild_address_wallet_history(address, tx_count_limit=30):
+    data = get_bch_transactions(address, chipnet=settings.BCH_NETWORK == 'chipnet')
+    if isinstance(data, list) and tx_count_limit:
+        data = data[:tx_count_limit]
+    tx_hashes = []
+    for tx_info in data:
+        tx_hash = tx_info['tx_hash']
+        try:
+            parse_tx_wallet_histories(tx_hash)
+            tx_hashes.append(tx_hash)
+        except Exception as exception:
+            LOGGER.error(f'Unable to parse {address} tx {tx_hash} | {str(exception)}')
+    return tx_hashes
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)

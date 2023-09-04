@@ -14,6 +14,10 @@ from rest_framework import status
 from main.models import Wallet, Address, WalletHistory
 from django.core.paginator import Paginator
 from main.serializers import PaginatedWalletHistorySerializer
+from main.throttles import RebuildHistoryThrottle
+from main.tasks import (
+    rebuild_wallet_history
+)
 
 POS_ID_MAX_DIGITS = 4
 
@@ -246,3 +250,30 @@ class LastAddressIndexView(APIView):
         }
 
         return Response(data)
+
+
+class RebuildHistoryView(APIView):
+    throttle_classes = [RebuildHistoryThrottle]
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="background", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        wallet_hash = kwargs.get('wallethash', '')
+        background = request.query_params.get("background", None)
+        if isinstance(background, str) and background.lower() == "false":
+            background = False
+
+        try:
+            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        except Wallet.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if background:
+            task = rebuild_wallet_history.delay(wallet.wallet_hash)
+            return Response({ "task_id": task.id }, status = status.HTTP_202_ACCEPTED)
+
+        rebuild_wallet_history(wallet.wallet_hash)
+        return Response(data={'success': True}, status=status.HTTP_200_OK)
