@@ -1479,7 +1479,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     # Parse SLP senders and recipients
     if parse_slp and wallet_type == 'slp':
-        senders['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['inputs']]
+        senders['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['inputs'] if 'amount' in i]
         if 'outputs' in slp_tx:
             recipients['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['outputs']]
 
@@ -1638,11 +1638,11 @@ def rebuild_wallet_history(wallet_hash):
 
     tx_hashes = []
     for address in wallet.addresses.all():
-        tx_hashes += rebuild_address_wallet_history(address)
+        tx_hashes += rebuild_address_wallet_history(address, ignore_txids=tx_hashes)
 
     return { "success": True, "txs": tx_hashes }
 
-def rebuild_address_wallet_history(address, tx_count_limit=30):
+def rebuild_address_wallet_history(address, tx_count_limit=30, ignore_txids=[]):
     data = get_bch_transactions(address, chipnet=settings.BCH_NETWORK == 'chipnet')
     if isinstance(data, list) and tx_count_limit:
         data = data[:tx_count_limit]
@@ -1650,6 +1650,7 @@ def rebuild_address_wallet_history(address, tx_count_limit=30):
     for tx_info in data:
         tx_hash = tx_info['tx_hash']
         try:
+            if tx_hash in ignore_txids: continue
             parse_tx_wallet_histories(tx_hash)
             tx_hashes.append(tx_hash)
         except Exception as exception:
