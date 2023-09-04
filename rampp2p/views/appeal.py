@@ -9,12 +9,14 @@ from rampp2p.models import (
     Peer,
     Order,
     Contract,
-    Transaction
+    Transaction,
+    AppealType
 )
 
 from rampp2p.serializers import (
     StatusSerializer,
     AppealSerializer,
+    AppealCreateSerializer,
     TransactionSerializer
 )
 from rampp2p.viewcodes import ViewCode
@@ -23,6 +25,9 @@ from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired
 from rampp2p.utils.handler import update_order_status
+
+import logging
+logger = logging.getLogger(__name__)
     
 class AppealRequest(APIView):
     '''
@@ -49,26 +54,43 @@ class AppealRequest(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         try:
-            if not is_order_expired(pk):
-                raise ValidationError('order is not expired')
+            # if not is_order_expired(pk):
+            #     raise ValidationError('order is not expired')
             validate_status_inst_count(StatusType.APPEALED, pk)
             validate_status_progression(StatusType.APPEALED, pk)
-        except ValidationError as err:
+            appeal_type = request.data.get('type')
+            AppealType(appeal_type)
+        except (ValidationError, ValueError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # create and Appeal record
-        self.submit_appeal(wallet_hash, pk)
+        peer = Peer.objects.get(wallet_hash=wallet_hash)
+        data = {
+            'order': pk,
+            'owner': peer.id,
+            'type': appeal_type,
+            'reasons': request.data.get('reasons')
+        }
+        logger.warn(f'data;{data}')
+        serialized_appeal = AppealCreateSerializer(data=data)
+        if not serialized_appeal.is_valid():
+            return Response({'error': serialized_appeal.errors}, status=status.HTTP_400_BAD_REQUEST)        
+        serialized_appeal = AppealSerializer(serialized_appeal.save())
 
         # create APPEALED status for order
-        serializer = StatusSerializer(data={
+        serialized_status = StatusSerializer(data={
             'status': StatusType.APPEALED,
             'order': pk
         })
+        if not serialized_status.is_valid():
+            return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
+        serialized_status = StatusSerializer(serialized_status.save())
 
-        if serializer.is_valid():
-            stat = StatusSerializer(serializer.save())
-            return Response(stat.data, status=status.HTTP_200_OK)        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        response_data = {
+            'appeal': serialized_appeal.data,
+            'status': serialized_status.data
+        }
+        return Response(response_data, status=status.HTTP_200_OK)        
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -84,18 +106,7 @@ class AppealRequest(APIView):
         if (caller.wallet_hash != order.owner.wallet_hash and
             caller.wallet_hash != order.ad.owner.wallet_hash):
             raise ValidationError('caller not affiliated to this order')
-    
-    def submit_appeal(self, wallet_hash, order_id):
-        peer = Peer.objects.get(wallet_hash=wallet_hash)
-        data = {
-            'creator': peer.id,
-            'order': order_id
-        }
-        serializer = AppealSerializer(data=data)
-        if serializer.is_valid():
-            appeal = serializer.save()
-            return appeal
-        return None
+        
 
 class AppealPendingRelease(APIView):
     '''

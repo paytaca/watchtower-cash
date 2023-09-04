@@ -4,15 +4,38 @@ from rampp2p.models import (
     Peer, 
     Order
 )
+import json
 
-class AppealSerializer(serializers.ModelSerializer):
-    creator = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
+class ListTextField(serializers.Field):
+    def to_representation(self, obj):
+        return json.loads(obj) if obj else []
+    
+    def to_internal_value(self, data):
+        return json.dumps(data)
+
+class AppealCreateSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
     order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+    reasons = ListTextField()
     class Meta:
         model = Appeal
         fields = [
            'id',
-           'creator',
+           'owner',
            'order',
+           'reasons',
+           'resolved_at',
            'created_at'
         ]
+
+class AppealSerializer(AppealCreateSerializer):
+    owner = serializers.SerializerMethodField()
+    class Meta:
+        model = Appeal
+        fields = AppealCreateSerializer.Meta.fields
+    
+    def get_owner(self, instance: Appeal):
+        return {
+            'id': instance.owner.id,
+            'nickname': instance.owner.nickname
+        }

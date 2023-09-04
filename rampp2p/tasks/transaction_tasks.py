@@ -41,7 +41,7 @@ def execute_subprocess(command):
 
         stdout = json.loads(clean_stdout)
     
-    response = {'result': stdout, 'error': stderr} 
+    response = {'result': stdout, 'stderr': stderr} 
     # logger.warning(f'response: {response}')
 
     return response
@@ -53,26 +53,31 @@ def handle_transaction(data: Dict, **kwargs):
     contract = Contract.objects.get(pk=kwargs.get('contract_id'))
 
     # TODO: uncomment after status testing
-    valid, error, outputs = verify_tx_out(data, action, contract)
+    # valid, error, outputs = verify_tx_out(data.get('result'), action, contract)
+    # result = None
+    # if valid:
+    #     result = handle_order_status(
+    #         valid=valid,
+    #         action=action,
+    #         txid=txid,
+    #         contract=contract,
+    #         outputs=outputs,
+    #         error=error
+    #     )
+    # else:
+    #     result = {
+    #         'success': valid,
+    #         'error': error
+    #     }
+    # TODO: uncomment after status testing
+    # TODO: delete below after status testing
+    '''Skips the transaction verification (via verify_tx_out) and goes directly to handle_order_status'''
     result = handle_order_status(
-        valid=valid,
+        valid=True,
         action=action,
         txid=txid,
-        contract=contract,
-        outputs=outputs,
-        error=error
+        contract=contract
     )
-    # TODO: uncomment after status testing
-
-    # TODO: delete below after status testing
-    # Skips the transaction verification (via verify_tx_out) and goes directly to
-    # handle_order_status
-    # result = handle_order_status(
-    #     valid=True,
-    #     action=action,
-    #     txid=txid,
-    #     contract=contract
-    # )
     # TODO: delete above after status testing
     send_order_update(
         result, 
@@ -164,21 +169,25 @@ def handle_order_status(**kwargs):
 
 
 # @shared_task(queue='rampp2p__contract_execution')
-def verify_tx_out(data: Dict, action, contract):
+def verify_tx_out(result: Dict, action, contract):
     '''
     Verifies if transaction details (input, outputs, and amounts) satisfy the prerequisites of its contract.
     Automatically updates the order's status if transaction is valid and sends the result through a websocket channel.
     '''
 
     # Logs for debugging
-    logger.warning(f'data: {data}')
+    logger.warning(f'result: {result}')
     # logger.warning(f'kwargs: {kwargs}')
 
-    valid = True
+    outputs = []
     error = None
+    valid = result.get('success') if (result.get('success') is not None) else True
+    if not valid:
+        error = result.get('error') if (result.get('error') is not None) else None
+        return valid, error, outputs
 
     # transaction must have at least 1 confirmation
-    confirmations = data.get('result').get('confirmations')
+    confirmations = result.get('confirmations')
     min_req_confirmations = 1
     if confirmations != None and confirmations < min_req_confirmations:
         error = {"error": f"transaction needs to have at least {min_req_confirmations} confirmations."}
@@ -187,18 +196,17 @@ def verify_tx_out(data: Dict, action, contract):
             contract.order.id
         )
     
-    tx_inputs = data.get('result').get('inputs')
-    tx_outputs = data.get('result').get('outputs')
+    tx_inputs = result.get('inputs')
+    tx_outputs = result.get('outputs')
 
     # The transaction is invalid, if inputs or outputs are empty
     if tx_inputs is None or tx_outputs is None:
-        error = data.get('result').get('error')
+        error = result.get('error')
         return send_order_update(
             error,
             contract.order.id
         )
     
-    outputs = []
     if action == Transaction.ActionType.ESCROW:
         '''
         If the transaction is ActionType.ESCROW (transaction that is required to update status

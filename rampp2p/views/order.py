@@ -430,6 +430,8 @@ class PendingEscrowOrder(APIView):
             if txid is None:
                 raise ValidationError('txid is required')
 
+            contract = Contract.objects.get(order__id=pk)
+            
             # create ESCROW_PENDING status for order
             status_serializer = StatusSerializer(data={
                 'status': StatusType.ESCROW_PENDING,
@@ -448,7 +450,6 @@ class PendingEscrowOrder(APIView):
                 'status': status_serializer.data
             }
 
-            contract = Contract.objects.get(order__id=pk)
             transaction, _ = Transaction.objects.get_or_create(
                 contract=contract,
                 action=Transaction.ActionType.ESCROW,
@@ -464,7 +465,7 @@ class PendingEscrowOrder(APIView):
             )
             send_order_update(result, pk)
             
-        except (ValidationError, IntegrityError) as err:
+        except (ValidationError, IntegrityError, Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result, status=status.HTTP_200_OK)  
 
