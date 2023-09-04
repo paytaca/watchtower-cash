@@ -11,6 +11,7 @@ from rampp2p.models import (
     Order,
     Contract,
     Transaction,
+    Appeal,
     AppealType
 )
 
@@ -31,6 +32,43 @@ import logging
 logger = logging.getLogger(__name__)
     
 class AppealRequest(APIView):
+    def get(self, request, pk):
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.APPEAL_REQUEST.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
+
+            # validate permissions
+            self.validate_permissions(wallet_hash, pk)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        
+        serialized_appeal = None
+        appeal = Appeal.objects.filter(order=pk)
+        if appeal.exists():
+            appeal = appeal.first()
+            serialized_appeal = AppealSerializer(appeal)
+        
+        return Response({'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data}, status=status.HTTP_200_OK)
+        
+    def validate_permissions(self, wallet_hash, pk):
+        '''
+        Order appeals should only be viewable by the buyer/seller/arbiter.
+        '''
+
+        try:
+            order = Order.objects.get(pk=pk)
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+        except (Order.DoesNotExist, Peer.DoesNotExist) as err:
+            raise ValidationError(err.args[0])
+        
+        if (caller.wallet_hash != order.owner.wallet_hash and
+            caller.wallet_hash != order.ad.owner.wallet_hash and
+            caller.wallet_hash != order.arbiter.wallet_hash):
+            raise ValidationError('caller not allowed to view this order')
+        
+        return order
     '''
     Submits an appeal for an order.
     Requirements:
@@ -368,7 +406,7 @@ class VerifyRefund(APIView):
                 contract_id=contract.id
             )
             
-        except (ValidationError, Contract.DoesNotExist) as err:
+        except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
         return Response(status=status.HTTP_200_OK)

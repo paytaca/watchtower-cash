@@ -2,6 +2,7 @@ from celery import shared_task
 from typing import Dict
 from decimal import Decimal
 from django.conf import settings
+from django.utils import timezone
 from django.core.exceptions import ValidationError
 
 from rampp2p.utils.handler import update_order_status
@@ -11,7 +12,8 @@ from rampp2p.serializers import TransactionSerializer, RecipientSerializer
 from rampp2p.models import (
     Transaction, 
     StatusType, 
-    Contract
+    Contract,
+    Appeal
 )
 
 import subprocess
@@ -147,6 +149,15 @@ def handle_order_status(**kwargs):
             status_type = StatusType.ESCROWED
 
         try:
+            # If status_type is RELEASED or REFUNDED and order was APPEALED, update the appeal to resolved
+            if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
+                appeal = Appeal.objects.filter(order=contract.order.id)
+                if appeal.exists():
+                    appeal = appeal.first()
+                    appeal.resolved_at = timezone.now()
+                    appeal.save()
+
+            # Update order status
             status = update_order_status(contract.order.id, status_type).data
         except ValidationError as err:
             errors.append(err.args[0])
