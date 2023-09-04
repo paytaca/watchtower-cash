@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+from django.conf import settings
 
 
 class Vault(models.Model):
@@ -23,3 +25,5 @@ class Voucher(models.Model):
     lock_category = models.CharField(max_length=100 ,unique=True)
     used = models.BooleanField(default=False)
     expired = models.BooleanField(default=False)
+    duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
+    date_created = models.DateTimeField(default=timezone.now)

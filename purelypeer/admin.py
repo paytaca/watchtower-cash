@@ -30,6 +30,8 @@ class VoucherAdmin(admin.ModelAdmin):
         'lock_category',
         'used',
         'expired',
+        'duration_days',
+        'date_created',
     ]
 
 
