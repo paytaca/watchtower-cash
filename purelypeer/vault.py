@@ -3,7 +3,7 @@ from django.conf import settings
 from paytacapos.models import Merchant
 
 from purelypeer.js.runner import ScriptFunctions
-from purelypeer.models import Vault, CashdropNftPair
+from purelypeer.models import Vault, Voucher
 
 from main.utils.subscription import new_subscription
 from main.models import Address

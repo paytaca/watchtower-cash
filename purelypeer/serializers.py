@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from purelypeer.models import Vault, CashdropNftPair
+from purelypeer.models import Vault, Voucher
 
 
 class VaultSerializer(serializers.ModelSerializer):    
@@ -9,7 +9,7 @@ class VaultSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class CreateCashdropNftPairSerializer(serializers.ModelSerializer):
+class CreateVoucherSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CashdropNftPair
+        model = Voucher
         fields = '__all__'

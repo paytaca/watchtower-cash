@@ -5,7 +5,7 @@ def is_key_nft(address, category):
     vaults = Vault.objects.filter(address=address)
 
     if vaults.exists():
-        cashdrop_nft_pairs = CashdropNftPair.objects.filter(
+        cashdrop_nft_pairs = Voucher.objects.filter(
             key_category=category,
             vault=vaults.first()
         )

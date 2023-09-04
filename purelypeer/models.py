@@ -13,11 +13,13 @@ class Vault(models.Model):
     token_address = models.CharField(max_length=100, unique=True)
 
 
-class CashdropNftPair(models.Model):
+class Voucher(models.Model):
     vault = models.ForeignKey(
         Vault,
-        related_name='claim_credentials',
+        related_name='vouchers',
         on_delete=models.CASCADE
     )
     key_category = models.CharField(max_length=100 ,unique=True)
     lock_category = models.CharField(max_length=100 ,unique=True)
+    used = models.BooleanField(default=False)
+    expired = models.BooleanField(default=False)

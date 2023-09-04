@@ -1,8 +1,8 @@
 from rest_framework import routers
 
-from .views import CashdropNftPairViewSet
+from .views import VoucherViewSet
 
 router = routers.DefaultRouter()
-router.register("cashdrop_nft_pairs", CashdropNftPairViewSet)
+router.register("vouchers", VoucherViewSet)
 
 urlpatterns = router.urls
