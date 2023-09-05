@@ -12,13 +12,13 @@ class HistoryParser(object):
     def get_relevant_inputs(self):
         inputs = Transaction.objects.filter(
             spending_txid=self.txid,
-            wallet__wallet_hash=self.wallet_hash
+            address__wallet__wallet_hash=self.wallet_hash
         ).exclude(
             token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
         )
         ct_fungible_inputs = Transaction.objects.filter(
             spending_txid=self.txid,
-            wallet__wallet_hash=self.wallet_hash,
+            address__wallet__wallet_hash=self.wallet_hash,
             cashtoken_ft__isnull=False
         )
         return inputs, ct_fungible_inputs
@@ -32,12 +32,12 @@ class HistoryParser(object):
         )
         ct_fungible_outputs = Transaction.objects.filter(
             txid=self.txid,
-            wallet__wallet_hash=self.wallet_hash,
+            address__wallet__wallet_hash=self.wallet_hash,
             cashtoken_ft__isnull=False
         )
         ct_nft_outputs = Transaction.objects.filter(
             txid=self.txid,
-            wallet__wallet_hash=self.wallet_hash,
+            address__wallet__wallet_hash=self.wallet_hash,
             cashtoken_nft__isnull=False
         )
         return outputs, ct_fungible_outputs, ct_nft_outputs

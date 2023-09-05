@@ -5,6 +5,7 @@ import {
     CashAddressType,
     CashAddressNetworkPrefix,
 } from '@bitauth/libauth'
+import ElectrumCashProvider from './utils/electrum-cash-provider.js'
 
 
 function validateAddress(address, isTokenAddress=false) {
@@ -68,6 +69,15 @@ function bchAddressConverter (address, toTokenAddress) {
     return resultAddress
 }
 
+function getTransactions(address, network=''){
+    const provider = new ElectrumCashProvider({ network })
+    return provider.performRequest('blockchain.address.get_history', address)
+        .catch(error => {
+            console.error(error)
+            return []
+        })
+}
+
 
 const app = express()
 const port = 3000
@@ -82,6 +92,12 @@ app.get('/convert-address/:address', (req, res) => {
     const toTokenAddress = req.query.to_token === 'True'
     const resultAddress = bchAddressConverter(req.params.address, toTokenAddress)
     res.send(resultAddress)
+})
+
+app.get('/get-transactions/:address', async (req, res) => {
+    const network = req.query.network
+    const response = await getTransactions(req.params.address, network)
+    res.send(response)
 })
 
 app.listen(port, () => {
