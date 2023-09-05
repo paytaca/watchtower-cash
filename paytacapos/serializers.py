@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
-from purelypeer.serializers import VaultSerializer
+from vouchers.serializers import VaultSerializer
 from .models import (
     LinkedDeviceInfo,
     UnlinkDeviceRequest,

@@ -13,7 +13,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
-from main.utils.purelypeer import is_key_nft
+from main.utils.vouchers import is_key_nft
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -25,6 +25,7 @@ from main.utils.nft import (
     find_minting_baton,
 )
 from main.utils.address_converter import bch_address_converter
+from main.utils.address_scan import get_bch_transactions
 from main.utils.address_validator import is_bch_address
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
@@ -39,6 +40,10 @@ from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.queries.node import Node
+from main.utils.queries.parse_utils import (
+    parse_utxo_to_tuple,
+    extract_tx_utxos,
+)
 from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
@@ -165,7 +170,7 @@ def client_acknowledgement(self, txid):
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
                         'is_nft': False,
-                        'purelypeer': {
+                        'voucher': {
                             'is_key_nft': __is_key_nft,
                             'lock_nft_category': None
                         }
@@ -178,7 +183,7 @@ def client_acknowledgement(self, txid):
                         data['is_nft'] = True
 
                     if __is_key_nft:
-                        data['purelypeer']['lock_nft_category'] = lock_nft_category
+                        data['voucher']['lock_nft_category'] = lock_nft_category
 
                 elif wallet_version == 1:
                     data = {
@@ -1310,11 +1315,10 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             # Correct the amount for outgoing, subtract the miner fee if given and maintain negative sign
             if record_type == 'outgoing':
                 if key == BCH_OR_SLP:
-                    amount = (abs(amount) - ((tx_fee / 100000000) or 0)) * -1
+                    amount = abs(amount) - ((tx_fee / 100000000) or 0)
                     amount = round(amount, 8)
-                else:
-                    amount = abs(amount) * -1
-                
+                amount = abs(amount) * -1
+
             # Don't save a record if resulting amount is zero or dust
             is_zero_amount = amount == 0 or amount == abs(0.00000546)
             if is_zero_amount and not proceed_with_zero_amount:
@@ -1347,112 +1351,107 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
         txn = txns.last()
         tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
-        
-        if txn:
-            if change_address:
-                recipients = [(info[0], info[1]) for info in recipients if info[0] != change_address]
 
-            processed_recipients = process_history_recpts_or_senders(recipients, key, BCH_OR_SLP)
-            processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
+        if not txn: continue
 
-            history_check = WalletHistory.objects.filter(
-                wallet=wallet,
-                txid=txid,
+        if change_address:
+            recipients = [(info[0], info[1]) for info in recipients if info[0] != change_address]
+
+        processed_recipients = process_history_recpts_or_senders(recipients, key, BCH_OR_SLP)
+        processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
+
+        history_check = WalletHistory.objects.filter(
+            wallet=wallet,
+            txid=txid,
+            token=txn.token,
+            cashtoken_ft=txn.cashtoken_ft,
+            cashtoken_nft=txn.cashtoken_nft
+        )
+        if history_check.exists():
+            history_check.update(
+                record_type=record_type,
+                amount=amount,
                 token=txn.token,
                 cashtoken_ft=txn.cashtoken_ft,
                 cashtoken_nft=txn.cashtoken_nft
             )
-            if history_check.exists():
+            if tx_fee and processed_senders and processed_recipients:
                 history_check.update(
-                    record_type=record_type,
-                    amount=amount,
-                    token=txn.token,
-                    cashtoken_ft=txn.cashtoken_ft,
-                    cashtoken_nft=txn.cashtoken_nft
-                )
-                if tx_fee and processed_senders and processed_recipients:
-                    history_check.update(
-                        tx_fee=tx_fee,
-                        senders=processed_senders,
-                        recipients=processed_recipients
-                    )
-                if tx_timestamp:
-                    history_check.update(
-                        tx_timestamp=tx_timestamp,
-                    )
-                    resolve_wallet_history_usd_values.delay(txid=txid)
-                    for history in history_check:
-                        parse_wallet_history_market_values.delay(history.id)
-            else:
-                history = WalletHistory(
-                    wallet=wallet,
-                    txid=txid,
-                    record_type=record_type,
-                    amount=amount,
-                    token=txn.token,
-                    cashtoken_ft=txn.cashtoken_ft,
-                    cashtoken_nft=txn.cashtoken_nft,
                     tx_fee=tx_fee,
                     senders=processed_senders,
-                    recipients=processed_recipients,
-                    date_created=txn.date_created,
+                    recipients=processed_recipients
+                )
+            if tx_timestamp:
+                history_check.update(
                     tx_timestamp=tx_timestamp,
                 )
-                history.save()
-
                 resolve_wallet_history_usd_values.delay(txid=txid)
-                parse_market_values_task = None
-                
-                if history.tx_timestamp:
-                    parse_market_values_task = parse_wallet_history_market_values.delay(history.id)
+                for history in history_check:
+                    parse_wallet_history_market_values.delay(history.id)
+        else:
+            history = WalletHistory(
+                wallet=wallet,
+                txid=txid,
+                record_type=record_type,
+                amount=amount,
+                token=txn.token,
+                cashtoken_ft=txn.cashtoken_ft,
+                cashtoken_nft=txn.cashtoken_nft,
+                tx_fee=tx_fee,
+                senders=processed_senders,
+                recipients=processed_recipients,
+                date_created=txn.date_created,
+                tx_timestamp=tx_timestamp,
+            )
+            history.save()
 
+            resolve_wallet_history_usd_values.delay(txid=txid)
+
+            if history.tx_timestamp:
                 try:
-                    if parse_market_values_task:
-                        try:
-                            parse_market_values_task.get()
-                            history.refresh_from_db()
-                        except Exception:
-                            pass
-                    # Do not send notifications for amounts less than or equal to 0.00001
-                    if abs(amount) > 0.00001:
-                        LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
-                        send_wallet_history_push_notification(history)
-                except Exception as exception:
+                    parse_wallet_history_market_values(history.id)
+                    history.refresh_from_db()
+                except Exception:
                     LOGGER.exception(exception)
 
-            # for older token records 
-            if (
-                txn.token and
-                txn.token.tokenid and
-                txn.token.tokenid != settings.WT_DEFAULT_CASHTOKEN_ID and
-                (txn.token.token_type is None or txn.token.mint_amount is None)
-            ):
-                get_token_meta_data(txn.token.tokenid, async_image_download=True)
-                txn.token.refresh_from_db()
+            try:
+                # Do not send notifications for amounts less than or equal to 0.00001
+                if abs(amount) > 0.00001:
+                    LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
+                    send_wallet_history_push_notification(history)
+            except Exception as exception:
+                LOGGER.exception(exception)
 
-            if txn.token and txn.token.is_nft:
-                if record_type == 'incoming':
-                    wallet_nft_token, created = WalletNftToken.objects.get_or_create(
-                        wallet=wallet,
-                        token=txn.token,
-                        acquisition_transaction=txn
-                    )
-                    if created:
-                        wallet_nft_token.acquisition_transaction = txn
-                        wallet_nft_token.save()
-                elif record_type == 'outgoing':
-                    wallet_nft_token_check = WalletNftToken.objects.filter(
-                        wallet=wallet,
-                        token=txn.token,
-                        date_dispensed__isnull=True
-                    )
-                    if wallet_nft_token_check.exists():
-                        wallet_nft_token = wallet_nft_token_check.last()
-                        wallet_nft_token.date_dispensed = txn.date_created
-                        wallet_nft_token.dispensation_transaction = txn
-                        wallet_nft_token.save()
+        # for older token records 
+        if (
+            txn.token and
+            txn.token.tokenid and
+            txn.token.tokenid != settings.WT_DEFAULT_CASHTOKEN_ID and
+            (txn.token.token_type is None or txn.token.mint_amount is None)
+        ):
+            get_token_meta_data(txn.token.tokenid, async_image_download=True)
+            txn.token.refresh_from_db()
 
-                update_nft_owner.delay(txn.token.tokenid)
+        if txn.token and txn.token.is_nft:
+            if record_type == 'incoming':
+                wallet_nft_token, created = WalletNftToken.objects.get_or_create(
+                    wallet=wallet,
+                    token=txn.token,
+                    acquisition_transaction=txn
+                )
+            elif record_type == 'outgoing':
+                wallet_nft_token_check = WalletNftToken.objects.filter(
+                    wallet=wallet,
+                    token=txn.token,
+                    date_dispensed__isnull=True
+                )
+                if wallet_nft_token_check.exists():
+                    wallet_nft_token = wallet_nft_token_check.last()
+                    wallet_nft_token.date_dispensed = txn.date_created
+                    wallet_nft_token.dispensation_transaction = txn
+                    wallet_nft_token.save()
+
+            update_nft_owner.delay(txn.token.tokenid)
 
 @shared_task(queue='client_acknowledgement')
 def send_wallet_history_push_notification_task(wallet_history_id):
@@ -1475,185 +1474,128 @@ def send_wallet_history_push_notification_task(wallet_history_id):
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
-    transaction = Transaction.objects.get(id=transaction_id)
-    txid = transaction.txid
+    txid = Transaction.objects.values_list("txid", flat=True).filter(id=transaction_id).first()
+    if not txid: return
 
     LOGGER.info(f"TX POST SAVE TASK: {address} | {txid} | {blockheight_id}")
-    
-    blockheight = None
-    if blockheight_id:
-        blockheight = BlockHeight.objects.get(id=blockheight_id)
+
+    if not BlockHeight.objects.filter(id=blockheight_id).exists():
+        blockheight_id = None
 
     wallets = []
     txn_address = Address.objects.get(address=address)
+    wallet_type = None
+    wallet_hash = None
     if txn_address.wallet:
-        wallets.append(txn_address.wallet.wallet_type + '|' + txn_address.wallet.wallet_hash)
-
-    slp_tx = None
-    bch_tx = None
-
-    # Extract tx_fee, senders, and recipients
-    tx_fee = 0
-    senders = {
-        'bch': [],
-        'slp': []
-    }
-    recipients = {
-        'bch': [],
-        'slp': []
-    }
+        wallet_type = txn_address.wallet.wallet_type
+        wallet_hash = txn_address.wallet.wallet_hash
+        wallets.append(wallet_type + '|' + wallet_hash)
 
     parse_slp = is_slp_address(address)
-
-    if parse_slp:
-        # Parse SLP senders and recipients
-        slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
-        if not slp_tx:
-            self.retry(countdown=5)
-            return
-        tx_fee = slp_tx['tx_fee']
-        if slp_tx['valid']:
-            if txn_address.wallet:
-                if txn_address.wallet.wallet_type == 'slp':
-                    for tx_input in slp_tx['inputs']:
-                        if 'amount' in tx_input.keys():
-                            senders['slp'].append(
-                                (
-                                    tx_input['address'],
-                                    tx_input['amount']
-                                ) 
-                            )
-                if 'outputs' in slp_tx.keys():
-                    recipients['slp'] = [(i['address'], i['amount']) for i in slp_tx['outputs']]
-
-    # Parse BCH senders and recipients
     bch_tx = NODE.BCH.get_transaction(txid)
+    slp_tx = None
+    if parse_slp:
+        slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
+
+    if parse_slp and not isinstance(slp_tx, dict) and not slp_tx.get('valid'):
+        self.retry(countdown=5)
+        return
+
     if not bch_tx:
         self.retry(countdown=5)
         return
 
-    tx_fee = bch_tx['tx_fee']
     tx_timestamp = bch_tx['timestamp']
-
     # use batch update to not trigger the post save signal and potentially create an infinite loop
     parsed_tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
     Transaction.objects.filter(txid=txid, tx_timestamp__isnull=True).update(tx_timestamp=parsed_tx_timestamp)
 
-    if txn_address.wallet:
-        if txn_address.wallet.wallet_type == 'bch':
-            senders['bch'] = [
-                (
-                    i['address'],
-                    i['value'],
-                    i['token_data']
-                ) for i in bch_tx['inputs']
-            ]
+    # Extract tx_fee, senders, and recipients
+    tx_fee = bch_tx['tx_fee']
+    senders = { 'bch': [], 'slp': [] }
+    recipients = { 'bch': [], 'slp': [] }
 
-            if 'outputs' in bch_tx.keys():
-                recipients['bch'] = [
-                    (
-                        i['address'],
-                        i['value'],
-                        i['token_data']
-                    ) for i in bch_tx['outputs']
-                ]
+    # Parse SLP senders and recipients
+    if parse_slp and wallet_type == 'slp':
+        senders['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['inputs'] if 'amount' in i]
+        if 'outputs' in slp_tx:
+            recipients['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['outputs']]
+
+    # Parse BCH senders and recipients
+    if wallet_type == 'bch':
+        senders['bch'] = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
+        if 'outputs' in bch_tx:
+            recipients['bch'] = [parse_utxo_to_tuple(i)for i in bch_tx['outputs']]
+
+    # Resolve wallets
+    addresses = [*bch_tx['inputs'], *bch_tx['outputs']]
+    if parse_slp: addresses += [*slp_tx['inputs'], *slp_tx['outputs']]
+    addresses = [i['address'] for i in addresses]
+
+    wallets += Address.objects \
+        .filter(address__in=addresses, wallet__isnull=False) \
+        .filter(wallet__wallet_type__in=['slp', 'bch']) \
+        .annotate(wallet_handle=models.functions.Concat(
+            models.F('wallet__wallet_type'),
+            models.Value('|'),
+            models.F('wallet__wallet_hash'),
+        )) \
+        .values_list('wallet_handle', flat=True)
 
     if parse_slp:
-        if slp_tx is None:
-            slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
-
         # Mark SLP tx inputs as spent
         for tx_input in slp_tx['inputs']:
-            try:
-                address = Address.objects.get(address=tx_input['address'])
-                if address.wallet:
-                    wallets.append('slp|' + address.wallet.wallet_hash)
-            except Address.DoesNotExist:
-                pass
             txn_check = Transaction.objects.filter(
                 txid=tx_input['txid'],
-                index=tx_input['spent_index']
-            )
-            txn_check.update(
-                spent=True,
-                spending_txid=txid
+                index=tx_input['spent_index'],
             )
 
-            if txn_check.exists():
-                txn_obj = txn_check.last()
-                if txn_obj.token.is_nft:
-                    wallet_nft_tokens = WalletNftToken.objects.filter(acquisition_transaction=txn_obj)
-                    if wallet_nft_tokens.exists():
-                        wallet_nft_tokens.update(
-                            date_dispensed = timezone.now(),
-                            dispensation_transaction = transaction,
-                        )
+            if not txn_check.exists(): continue
+            txn_check.update(spent=True, spending_txid=txid)
+
+            txn_obj = txn_check.last()
+            if txn_obj.token.is_nft:
+                wallet_nft_tokens = WalletNftToken.objects.filter(acquisition_transaction=txn_obj)
+                if wallet_nft_tokens.exists():
+                    wallet_nft_tokens.update(
+                        date_dispensed = timezone.now(),
+                        dispensation_transaction = transaction,
+                    )
 
         # Parse SLP tx outputs
-        if slp_tx['valid']:
-            for tx_output in slp_tx['outputs']:
-                try:
-                    address = Address.objects.get(address=tx_output['address'])
-                    if address.wallet:
-                        wallets.append('slp|' + address.wallet.wallet_hash)
-                except Address.DoesNotExist:
-                    pass
-                txn_check = Transaction.objects.filter(
-                    txid=slp_tx['txid'],
-                    address__address=tx_output['address'],
-                    index=tx_output['index']
+        for tx_output in slp_tx['outputs']:
+            txn_check = Transaction.objects.filter(
+                txid=slp_tx['txid'],
+                address__address=tx_output['address'],
+                index=tx_output['index']
+            )
+            if not txn_check.exists():
+                obj_id, created = save_record(
+                    slp_tx['token_id'],
+                    tx_output['address'],
+                    slp_tx['txid'],
+                    NODE.SLP.source,
+                    amount=tx_output['amount'],
+                    blockheightid=blockheight_id,
+                    index=tx_output['index'],
+                    tx_timestamp=tx_timestamp
                 )
-                if not txn_check.exists():
-                    blockheight_id = None
-                    if blockheight:
-                        blockheight_id = blockheight.id
-                    args = (
-                        slp_tx['token_id'],
-                        tx_output['address'],
-                        slp_tx['txid'],
-                        NODE.SLP.source,
-                    )
-                    obj_id, created = save_record(
-                        *args,
-                        amount=tx_output['amount'],
-                        blockheightid=blockheight_id,
-                        index=tx_output['index'],
-                        tx_timestamp=tx_timestamp
-                    )
-                    if created:
-                        client_acknowledgement(obj_id)
 
-    # Parse BCH inputs
-    if bch_tx is None:
-        bch_tx = NODE.BCH.get_transaction(txid)
+                if created:
+                    client_acknowledgement(obj_id)
 
     # Mark BCH tx inputs as spent
     for tx_input in bch_tx['inputs']:
-        try:
-            address = Address.objects.get(address=tx_input['address'])
-            if address.wallet:
-                wallets.append('bch|' + address.wallet.wallet_hash)
-        except Address.DoesNotExist:
-            pass
-
         txn_check = Transaction.objects.filter(
             txid=tx_input['txid'],
-            index=tx_input['spent_index']
+            index=tx_input['spent_index'],
         )
-        txn_check.update(
-            spent=True,
-            spending_txid=txid
-        )
+
+        if not txn_check.exists(): continue
+        txn_check.update(spent=True, spending_txid=txid)
 
     # Parse BCH tx outputs
     for tx_output in bch_tx['outputs']:
-        try:
-            address = Address.objects.get(address=tx_output['address'])
-            if address.wallet:
-                wallets.append('bch|' + address.wallet.wallet_hash)
-        except Address.DoesNotExist:
-            pass
-
         txn_check = Transaction.objects.filter(
             txid=bch_tx['txid'],
             address__address=tx_output['address'],
@@ -1661,10 +1603,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         )
 
         if not txn_check.exists():
-            blockheight_id = None
-            if blockheight:
-                blockheight_id = blockheight.id
-
             if tx_output['token_data']:
                 process_cashtoken_tx(
                     tx_output['token_data'],
@@ -1677,15 +1615,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                 )
             else:
                 value = tx_output['value'] / 10 ** 8
-                args = (
+                obj_id, created = save_record(
                     'bch',
                     tx_output['address'],
                     bch_tx['txid'],
-                    NODE.BCH.source
-                )
-                
-                obj_id, created = save_record(
-                    *args,
+                    NODE.BCH.source,
                     value=value,
                     blockheightid=blockheight_id,
                     index=tx_output['index'],
@@ -1693,7 +1627,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                 )
                 if created:
                     client_acknowledgement(obj_id)
-    
+
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
         if wallet_handle.split('|')[0] == 'slp':
@@ -1733,6 +1667,35 @@ def rescan_utxos(wallet_hash, full=False):
             get_slp_utxos(address.address)
 
 
+@shared_task(queue='wallet_history_1')
+def rebuild_wallet_history(wallet_hash):
+    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+    if not wallet: return { "success": False, "error": "Wallet does not exist" }
+    if wallet.wallet_type != 'bch':
+        return { "success": False, "error": f"Only supports 'bch' wallets, got '{wallet.wallet_type}'" }
+
+    tx_hashes = []
+    for address in wallet.addresses.all():
+        tx_hashes += rebuild_address_wallet_history(address, ignore_txids=tx_hashes)
+
+    return { "success": True, "txs": tx_hashes }
+
+def rebuild_address_wallet_history(address, tx_count_limit=30, ignore_txids=[]):
+    data = get_bch_transactions(address, chipnet=settings.BCH_NETWORK == 'chipnet')
+    if isinstance(data, list) and tx_count_limit:
+        data = data[:tx_count_limit]
+    tx_hashes = []
+    for tx_info in data:
+        tx_hash = tx_info['tx_hash']
+        try:
+            if tx_hash in ignore_txids: continue
+            parse_tx_wallet_histories(tx_hash)
+            tx_hashes.append(tx_hash)
+        except Exception as exception:
+            LOGGER.error(f'Unable to parse {address} tx {tx_hash} | {str(exception)}')
+    return tx_hashes
+
+
 @shared_task(queue='wallet_history_1', max_retries=3)
 def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=False):
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
@@ -1743,65 +1706,71 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
     tx_timestamp = bch_tx['timestamp']
 
     # parse inputs and outputs to desired structure
-    inputs = [
-        (
-            i['address'],
-            i['value'],
-            i['token_data']
-        ) for i in bch_tx['inputs']
-    ]
-    outputs = []
-    for i in bch_tx['outputs']:
-        outputs.append(
-            (
-                i['address'],
-                i['value'],
-                i['token_data']
-            )
-        )
+    inputs = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
+    outputs = [parse_utxo_to_tuple(i) for i in bch_tx['outputs']]
 
     # get bch wallets with addresses that are in inputs and outputs
     input_addresses = [i[0] for i in inputs]
     output_addresses = [i[0] for i in outputs]
     addresses = set([*input_addresses, *output_addresses])
     wallets = Wallet.objects.filter(addresses__address__in=addresses, wallet_type="bch")
+    wallet_hashes = wallets.values_list("wallet_hash", flat=True)
 
-    # parse_wallet_history requires an output saved in Transaction model
-    # this block will attempt to create one if there are none
-    if not Transaction.objects.filter(txid=txid).exists():
-        output_index = -1
-        output_address = ""
+    utxos = extract_tx_utxos(bch_tx)
+    has_saved_output = Transaction.objects.filter(txid=txid).exists()
+    for i, utxo in enumerate(utxos):
+        is_output = not utxo['is_input']
 
-        address_obj = Address.objects.filter(address__in=output_addresses).first()
-        if address_obj:
-            output_address = address_obj.address
-            output_index = output_addresses.index(output_address)
+        force_create = False
+        if i == len(utxos)-1 and not has_saved_output: force_create = True
 
-        if not output_address or output_index < 0:
-            output_address = output_addresses[0]
-            output_index = 0
+        if not force_create:
+            txn_check = Transaction.objects.filter(txid=utxo['txid'], index=utxo['index'])
+            if txn_check.exists():
+                txn_check.update(spent=True, spending_txid=txid)
+                continue
 
-        if outputs[output_index][2]:
+            inp_wallet_hash = Address.objects.filter(address=utxo['address']).values_list("wallet__wallet_hash", flat=True).first()
+            if inp_wallet_hash not in wallet_hashes:
+                continue
+
+        if is_output: has_saved_output = True
+
+        if utxo['token_data']:
             process_cashtoken_tx(
-                outputs[output_index][2],
-                output_address,
-                txid,
-                index=output_index,
-                timestamp=tx_timestamp,
-                force_create=True,
-                value=outputs[output_index][1]
+                utxo['token_data'],
+                utxo['address'],
+                utxo['txid'],
+                index=utxo['index'],
+                timestamp=tx_timestamp if is_output else None,
+                force_create=force_create,
+                value=utxo['value'],
             )
         else:
             save_record(
                 'bch',
-                output_address,
-                txid,
+                utxo['address'],
+                utxo['txid'],
                 NODE.BCH.source,
-                value=outputs[output_index][1],
-                index=output_index,
-                tx_timestamp=tx_timestamp,
-                force_create=True
+                value=utxo['value'],
+                index=utxo['index'],
+                tx_timestamp=tx_timestamp if is_output else None,
+                force_create=force_create,
             )
+
+        if not is_output:
+            Transaction.objects \
+                .filter(txid=utxo['txid'], index=utxo['index']) \
+                .update(spent=True, spending_txid=txid)
+
+        tx_obj = Transaction.objects \
+            .filter(txid=utxo['txid'], index=utxo['index']) \
+            .annotate(
+                addr=models.F("address__address"),
+                wallet_hash=models.F("wallet__wallet_hash"),
+                token_name=models.F("token__name"),
+            ) \
+            .first()
 
     # parse wallet history of bch wallets
     wallet_handles = []

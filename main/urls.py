@@ -54,6 +54,7 @@ main_urls += [
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/$", views.WalletHistoryView.as_view(),name='wallet-history'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/(?P<tokenid_or_category>[\w+]+)/$", views.WalletHistoryView.as_view(),name='wallet-history-ft-token'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/(?P<category>[\w+]+)/(?P<txid>[\w+]+)/(?P<index>[\w+]+)/$", views.WalletHistoryView.as_view(),name='wallet-history-ct-nft-token'),
+    re_path(r"^history-rebuild/wallet/(?P<wallethash>[\w+:]+)/$", views.RebuildHistoryView.as_view(),name='rebuild-wallet-history'),
 
     re_path(r"^last-address-index/wallet/(?P<wallethash>[\w+:]+)/$", views.LastAddressIndexView.as_view(),name='wallet-last-address-index'),
 

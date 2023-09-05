@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from purelypeer.models import *
+from vouchers.models import *
 
 
 class VaultAdmin(admin.ModelAdmin):
@@ -15,17 +15,25 @@ class VaultAdmin(admin.ModelAdmin):
     ]
 
 
-class CashdropNftPairAdmin(admin.ModelAdmin):
+class VoucherAdmin(admin.ModelAdmin):
     search_fields = [
         'key_category',
         'lock_category',
+    ]
+    list_filter = [
+        'used',
+        'expired',
     ]
     list_display = [
         'vault',
         'key_category',
         'lock_category',
+        'used',
+        'expired',
+        'duration_days',
+        'date_created',
     ]
 
 
 admin.site.register(Vault, VaultAdmin)
-admin.site.register(CashdropNftPair, CashdropNftPairAdmin)
+admin.site.register(Voucher, VoucherAdmin)

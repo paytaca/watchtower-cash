@@ -17,6 +17,8 @@ import psycopg2
 from datetime import timedelta
 import base64
 import decimal
+from celery.schedules import crontab
+
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -75,11 +77,12 @@ INSTALLED_APPS=[
     'channels',
     'push_notifications',
     'django_filters',
+    'django_rename_app',
 
     'constance',
     'main',
     'smartbch',
-    'purelypeer',
+    'vouchers',
     'paytacapos',
     'paytacagifts',
     'anyhedge',
@@ -255,6 +258,7 @@ CELERY_IMPORTS = (
     'rampp2p.tasks.contract_tasks',
     'rampp2p.tasks.market_rate_tasks',
     'rampp2p.tasks.transaction_tasks'
+    'vouchers.tasks'
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -372,6 +376,10 @@ CELERY_BEAT_SCHEDULE = {
     'check_unclaimed_gifts': {
         'task': 'paytacagifts.tasks.check_unclaimed_gifts',
         'schedule': 7
+    },
+    'claim_expired_unclaimed_vouchers': {
+        'task': 'vouchers.tasks.claim_expired_unclaimed_vouchers',
+        'schedule': 60 * 60
     }
 }
 
@@ -399,6 +407,9 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer'
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend'
     ]
 }
 
@@ -578,3 +589,9 @@ DEFAULT_TOKEN_DETAILS = {
         'symbol': 'CASH'
     }
 }
+
+
+# vouchers
+
+UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
+VOUCHER_ROOM = 'voucher_room'

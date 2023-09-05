@@ -32,7 +32,7 @@ def generate_func(func_name):
         process = run(
             [
                 'node',
-                './purelypeer/js/src/main.js'
+                './vouchers/js/src/main.js'
             ],
             input=json.dumps(_input).encode(),
             stdout=PIPE,

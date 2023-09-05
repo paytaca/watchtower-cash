@@ -1,3 +1,4 @@
+import requests
 
 def sort_address_sets(data):
     """
@@ -11,3 +12,11 @@ def sort_address_sets(data):
                 min_index = j
         address_sets[i], address_sets[min_index] = address_sets[min_index], address_sets[i]
     return address_sets
+
+
+def get_bch_transactions(address, chipnet=False):
+    network = "chipnet" if chipnet else "mainnet"
+    url = f'http://localhost:3000/get-transactions/{address}/'
+    params = dict(network=network)
+    response = requests.get(url, params=params)
+    return response.json()
