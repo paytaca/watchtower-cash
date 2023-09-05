@@ -24,8 +24,8 @@ RUN npm install --prefix /code/main/js --legacy-peer-deps
 COPY ./anyhedge/js/package*.json /code/anyhedge/js/
 RUN npm install --prefix /code/anyhedge/js --legacy-peer-deps
 
-COPY ./purelypeer/js/package*.json /code/purelypeer/js/
-RUN npm install --prefix /code/purelypeer/js --legacy-peer-deps
+COPY ./vouchers/js/package*.json /code/vouchers/js/
+RUN npm install --prefix /code/vouchers/js --legacy-peer-deps
 
 COPY . /code
 WORKDIR /code

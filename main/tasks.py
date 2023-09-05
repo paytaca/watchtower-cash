@@ -13,7 +13,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
-from main.utils.purelypeer import is_key_nft
+from main.utils.vouchers import is_key_nft
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -162,7 +162,7 @@ def client_acknowledgement(self, txid):
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
                         'is_nft': False,
-                        'purelypeer': {
+                        'voucher': {
                             'is_key_nft': __is_key_nft,
                             'lock_nft_category': None
                         }
@@ -175,7 +175,7 @@ def client_acknowledgement(self, txid):
                         data['is_nft'] = True
 
                     if __is_key_nft:
-                        data['purelypeer']['lock_nft_category'] = lock_nft_category
+                        data['voucher']['lock_nft_category'] = lock_nft_category
 
                 elif wallet_version == 1:
                     data = {

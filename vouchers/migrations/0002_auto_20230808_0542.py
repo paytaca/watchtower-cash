@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('purelypeer', '0001_initial'),
+        ('vouchers', '0001_initial'),
     ]
 
     operations = [
@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('key_category', models.CharField(max_length=100)),
                 ('lock_category', models.CharField(max_length=100)),
-                ('vault', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='claim_credentials', to='purelypeer.Vault')),
+                ('vault', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='claim_credentials', to='vouchers.Vault')),
             ],
         ),
     ]

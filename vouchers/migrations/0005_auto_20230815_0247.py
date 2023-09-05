@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('purelypeer', '0004_vault_merchant_signer_address'),
+        ('vouchers', '0004_vault_merchant_signer_address'),
     ]
 
     operations = [

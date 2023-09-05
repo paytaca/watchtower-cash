@@ -3,7 +3,7 @@ from django.apps import AppConfig
 
 
 def generate_vault_for_existing_merchants(*args, **kwargs):
-    from purelypeer.vault import generate_merchant_vault
+    from vouchers.vault import generate_merchant_vault
     from paytacapos.models import Merchant
 
     for merchant in Merchant.objects.filter(vault__isnull=True):

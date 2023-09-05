@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+from django.conf import settings
 
 
 class Vault(models.Model):
@@ -13,11 +15,16 @@ class Vault(models.Model):
     token_address = models.CharField(max_length=100, unique=True)
 
 
-class CashdropNftPair(models.Model):
+class Voucher(models.Model):
     vault = models.ForeignKey(
         Vault,
-        related_name='claim_credentials',
+        related_name='vouchers',
         on_delete=models.CASCADE
     )
+    txid = models.CharField(max_length=100, default='')
     key_category = models.CharField(max_length=100 ,unique=True)
     lock_category = models.CharField(max_length=100 ,unique=True)
+    used = models.BooleanField(default=False)
+    expired = models.BooleanField(default=False)
+    duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
+    date_created = models.DateTimeField(default=timezone.now)
