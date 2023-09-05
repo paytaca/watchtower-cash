@@ -33,7 +33,7 @@ def claim_expired_unclaimed_vouchers():
             voucher.vault.merchant.receiving_address,
             None,
             {
-                'lock_nft_category': voucher.key_category
+                'lock_nft_category': voucher.lock_category
             },
             room_name=settings.VOUCHER_ROOM
         )
