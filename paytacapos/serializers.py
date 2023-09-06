@@ -441,14 +441,8 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "location",
             "gmap_business_link",
             "last_transaction_date",
-            "wallet_hash",
-
-            "receiving_address",
-            "signer_address",
             "receiving_pubkey",
-            "receiving_pubkey_hash",
             "signer_pubkey",
-            "signer_pubkey_hash",
             "vault",
         ]
 
@@ -462,17 +456,11 @@ class MerchantSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "wallet_hash",
-            "signer_wallet_hash",
             "name",
             "primary_contact_number",
             "location",
-            
-            "receiving_address",
-            "signer_address",
             "receiving_pubkey",
-            "receiving_pubkey_hash",
             "signer_pubkey",
-            "signer_pubkey_hash",
             "vault",
         ]
 
