@@ -10,6 +10,7 @@ from django.db.models import (
 
 from vouchers.models import Voucher
 from vouchers.websocket import send_websocket_data
+from vouchers.js.runner import ScriptFunctions
 
 
 @shared_task(queue='claim_expired_unclaimed_vouchers')
@@ -29,8 +30,12 @@ def claim_expired_unclaimed_vouchers():
     unclaimed_vouchers.update(expired=True)
 
     for voucher in unclaimed_vouchers:
+        merchant_receiving_address = ScriptFunctions.pubkeyToCashAddress(
+            dict(pubkey=voucher.vault.merchant.receiving_pubkey)
+        )
+        
         send_websocket_data(
-            voucher.vault.merchant.receiving_address,
+            merchant_receiving_address,
             None,
             {
                 'lock_nft_category': voucher.lock_category

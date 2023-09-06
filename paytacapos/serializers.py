@@ -432,6 +432,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
     vault = VaultSerializer(required=False)
+    logo_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Merchant
@@ -441,16 +442,17 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "location",
             "gmap_business_link",
             "last_transaction_date",
-            "wallet_hash",
-
-            "receiving_address",
-            "signer_address",
             "receiving_pubkey",
-            "receiving_pubkey_hash",
             "signer_pubkey",
-            "signer_pubkey_hash",
             "vault",
+            "logo_url",
         ]
+    
+    def get_logo_url(self, obj):
+        if obj.logo:
+            return f'{settings.DOMAIN}{obj.logo.url}'
+        return None
+
 
 class MerchantSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
@@ -462,17 +464,11 @@ class MerchantSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "wallet_hash",
-            "signer_wallet_hash",
             "name",
             "primary_contact_number",
             "location",
-            
-            "receiving_address",
-            "signer_address",
             "receiving_pubkey",
-            "receiving_pubkey_hash",
             "signer_pubkey",
-            "signer_pubkey_hash",
             "vault",
         ]
 

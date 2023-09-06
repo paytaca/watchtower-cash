@@ -5,13 +5,13 @@ from vouchers.models import Voucher
 
 class VoucherFilter(filters.FilterSet):
     wallet_hash = filters.BooleanFilter(help_text='Filter vouchers by wallet hash of user')
-    merchant_wallet_hash = filters.CharFilter(help_text='Filter vouchers by merchant')
+    vault_address = filters.CharFilter(help_text='Filter vouchers by merchant using either its token or cash address')
 
     class Meta:
         model = Voucher
         fields = [
             'wallet_hash',
-            'merchant_wallet_hash',
+            'vault_address',
             'key_category',
             'lock_category',
             'used',

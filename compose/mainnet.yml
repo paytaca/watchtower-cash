@@ -13,6 +13,7 @@ services:
     env_file: /root/watchtower/compose/.env_mainnet
     volumes:
       - /var/www/images:/images
+      - /var/opt/watchtower/media:/code/media
       - /code/anyhedge/js/node_modules
     ports:
       - 8000:8000
