@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from django_filters import rest_framework as filters
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import F
+from django.db.models import F, Q
 
 from vouchers.serializers import (
     CreateVoucherSerializer,
@@ -49,12 +49,13 @@ class VoucherViewSet(
         queryset = self.filter_queryset(self.get_queryset())
 
         wallet_hash = request.query_params.get('wallet_hash') or ''
-        merchant_wallet_hash = request.query_params.get('merchant_wallet_hash') or ''
+        vault_address = request.query_params.get('vault_address') or ''
 
         vouchers = queryset
-        if merchant_wallet_hash:
+        if vault_address:
             vouchers = vouchers.filter(
-                vault__merchant__wallet_hash=merchant_wallet_hash
+                Q(vault__token_address=vault_address) |
+                Q(vault__address=vault_address)
             )
 
         voucher_categories = list(
