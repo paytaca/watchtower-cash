@@ -18,6 +18,7 @@ from channels.security.websocket import AllowedHostsOriginValidator
 from channels.routing import ProtocolTypeRouter, URLRouter
 import main.routing
 import anyhedge.routing
+import vouchers.routing
 
 
 application = ProtocolTypeRouter({
@@ -26,7 +27,8 @@ application = ProtocolTypeRouter({
     AuthMiddlewareStack(
         URLRouter(
           anyhedge.routing.websocket_urlpatterns +
-          main.routing.websocket_urlpatterns
+          main.routing.websocket_urlpatterns +
+          vouchers.routing.websocket_urlpatterns
         )
     )
   )
