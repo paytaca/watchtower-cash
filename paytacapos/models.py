@@ -99,7 +99,7 @@ class Merchant(models.Model):
     gmap_business_link = models.URLField(default=None, blank=True, null=True)
     active = models.BooleanField(default=False)
 
-    logo = models.ImageField(null=True, blank=True)
+    logo = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
     signer_pubkey = models.CharField(max_length=70, null=True, blank=True)
