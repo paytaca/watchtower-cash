@@ -47,11 +47,9 @@ SECRET_KEY = 'g7+b)g5r@ugo4&ix$mto0b(u*^9_51p5a5-j#_@t)1g!fv&j99'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 DEPLOYMENT_INSTANCE = config('DEPLOYMENT_INSTANCE', default='prod')
-DOMAIN = 'https://watchtower.cash'
 
 if DEPLOYMENT_INSTANCE == 'local':
     DEBUG = True
-    DOMAIN = 'http://localhost:8000'
 
 ALLOWED_HOSTS = [
     '*'
@@ -566,10 +564,17 @@ BCHD_NODE = 'bchd.paytaca.com:8335'
 WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
 
 bcmr_url_type = ''
+domain_prefix = ''
+
 if BCH_NETWORK == 'chipnet':
-    bcmr_url_type = f'-chipnet'
+    bcmr_url_type = '-chipnet'
+    domain_prefix = 'chipnet.'
 
 PAYTACA_BCMR_URL = f'https://bcmr{bcmr_url_type}.paytaca.com/api'
+DOMAIN = f'https://{domain_prefix}watchtower.cash'
+
+if DEPLOYMENT_INSTANCE == 'local':
+    DOMAIN = 'http://localhost:8000'
 
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_PK = config('SERVICER_PK', '')

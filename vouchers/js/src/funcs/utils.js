@@ -7,3 +7,8 @@ export function toBytes20 ({ val, encoding = "utf8", toString = false }) {
   if (toString) bytes20 = bytes20.toString("hex")
   return bytes20
 }
+
+export function pubkeyToCashAddress ({ pubkey }) {
+  const ecpair = bchjs.ECPair.fromPublicKey(pubkey)
+  return bchjs.ECPair.toCashAddress(ecpair)
+}

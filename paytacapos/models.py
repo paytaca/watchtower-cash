@@ -88,7 +88,6 @@ class Location(models.Model):
 
 class Merchant(models.Model):
     wallet_hash = models.CharField(max_length=75, unique=True, db_index=True)
-    signer_wallet_hash = models.CharField(max_length=100, null=True, blank=True)
     name = models.CharField(max_length=75)
     primary_contact_number = models.CharField(max_length=20, null=True, blank=True)
     location = models.OneToOneField(
@@ -100,12 +99,10 @@ class Merchant(models.Model):
     gmap_business_link = models.URLField(default=None, blank=True, null=True)
     active = models.BooleanField(default=False)
 
-    receiving_address = models.CharField(max_length=100, null=True, blank=True)
-    signer_address = models.CharField(max_length=100, null=True, blank=True)
+    logo = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
+    
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
-    receiving_pubkey_hash = models.CharField(max_length=70, null=True, blank=True)
     signer_pubkey = models.CharField(max_length=70, null=True, blank=True)
-    signer_pubkey_hash = models.CharField(max_length=70, null=True, blank=True)
 
     def __str__(self):
         return f"Merchant ({self.name})"

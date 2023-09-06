@@ -14,6 +14,8 @@ class HistoryParser(object):
             spending_txid=self.txid,
             address__wallet__wallet_hash=self.wallet_hash
         ).exclude(
+            txid=self.txid
+        ).exclude(
             token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
         )
         ct_fungible_inputs = Transaction.objects.filter(
