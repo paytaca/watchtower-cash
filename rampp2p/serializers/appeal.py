@@ -23,6 +23,7 @@ class AppealCreateSerializer(serializers.ModelSerializer):
            'id',
            'owner',
            'order',
+           'type',
            'reasons',
            'resolved_at',
            'created_at'
@@ -30,6 +31,7 @@ class AppealCreateSerializer(serializers.ModelSerializer):
 
 class AppealSerializer(AppealCreateSerializer):
     owner = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
     class Meta:
         model = Appeal
         fields = AppealCreateSerializer.Meta.fields
@@ -38,4 +40,10 @@ class AppealSerializer(AppealCreateSerializer):
         return {
             'id': instance.owner.id,
             'nickname': instance.owner.nickname
+        }
+
+    def get_type(self, instance: Appeal):
+        return {
+            'label': instance.get_type_display(),
+            'value': instance.type
         }

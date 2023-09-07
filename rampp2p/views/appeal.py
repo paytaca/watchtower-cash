@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 import math
+import json
 
 from rampp2p.models import (
     TradeType,
@@ -25,6 +26,7 @@ from rampp2p.serializers import (
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
+from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired
@@ -195,6 +197,8 @@ class AppealRequest(APIView):
             'appeal': serialized_appeal.data,
             'status': serialized_status.data
         }
+        # notify order update subscribers
+        send_order_update(json.dumps(response_data), pk)
         return Response(response_data, status=status.HTTP_200_OK)        
     
     def validate_permissions(self, wallet_hash, pk):
@@ -245,11 +249,14 @@ class AppealPendingRelease(APIView):
             validate_status_progression(status_type, pk)                        
 
             # Update status to RELEASE_PENDING
-            update_order_status(pk, status_type)
+            serialized_status = update_order_status(pk, status_type)
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
+        # notify order update subscribers
+        send_order_update(json.dumps(serialized_status.data), pk)
+
         return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
@@ -304,10 +311,13 @@ class AppealPendingRefund(APIView):
             validate_status_progression(status_type, pk)
 
             # Update status to REFUND_PENDING
-            update_order_status(pk, status_type)
+            serialized_status = update_order_status(pk, status_type)
             
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # notify order update subscribers
+        send_order_update(json.dumps(serialized_status.data), pk)
         
         return Response(status=status.HTTP_200_OK)
     
