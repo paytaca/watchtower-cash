@@ -49,14 +49,6 @@ from io import BytesIO
 import pytz
 from celery import chord
 
-from rampp2p.models import (
-    Contract, 
-    Status, 
-    StatusType,
-    Transaction
-)
-from rampp2p.utils.transaction import validate_transaction
-
 LOGGER = logging.getLogger(__name__)
 REDIS_STORAGE = settings.REDISKV
 NODE = Node()
@@ -519,36 +511,6 @@ def save_record(
         # Check if address belongs to a wallet
         if address_obj.wallet:
             transaction_obj.wallet = address_obj.wallet
-
-        '''
-        If address belongs to a contract: 
-            if current status is ESCROW_PENDING:
-                ESCROW: tx must be incoming with correct amount
-            if current status is PAID or RELEASE_PENDING:
-                RELEASE: tx must be outgoing to buyer with correct amount
-            if current status is REFUND_PENDING:
-                REFUND: tx must be outgoing to seller with correct amount
-        '''
-        try:
-            # Check if address is a contract address
-            contract = Contract.objects.get(contract_address=address_obj.address)
-            # Get contract order's current status
-            current_status = Status.objects.filter(order=contract.order).latest('created_at')
-
-            action = None
-            if current_status.status == StatusType.ESCROW_PENDING:
-                action = Transaction.ActionType.ESCROW
-            if (current_status.status == StatusType.PAID or 
-                current_status.status == StatusType.RELEASE_PENDING):
-                action = Transaction.ActionType.RELEASE
-            if current_status.status == StatusType.REFUND_PENDING:
-                action = Transaction.ActionType.REFUND
-            
-            if action != None:
-                validate_transaction(transactionid, action=action, contract_id=contract.id)
-
-        except Contract.DoesNotExist:
-            logging.warning(f'Contract with address {address_obj.address} does not exist.')
 
         # Save updates and trigger post-save signals
         transaction_obj.save()

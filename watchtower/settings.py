@@ -550,9 +550,11 @@ ANYHEDGE = {
 BCH_NETWORK = config('BCH_NETWORK', default='chipnet')
 RPC_USER = decipher(config('RPC_USER'))
 
+FULCRUM_PORT = 50001
 BCHN_HOST = config('BCHN_CHIPNET_HOST', 'bchn')
 if BCH_NETWORK == 'mainnet':
     BCHN_HOST = config('BCHN_MAINNET_HOST', 'bchn')
+    FULCRUM_PORT = 60001
 BCHN_RPC_PASSWORD = decipher(config('BCHN_RPC_PASSWORD'))
 
 BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@{BCHN_HOST}:8332'
