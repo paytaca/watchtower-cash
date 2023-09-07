@@ -18,8 +18,8 @@ from channels.security.websocket import AllowedHostsOriginValidator
 from channels.routing import ProtocolTypeRouter, URLRouter
 import main.routing
 import anyhedge.routing
+import rampp2p.routing
 import vouchers.routing
-
 
 application = ProtocolTypeRouter({
   "http": django_asgi_app,
@@ -28,6 +28,7 @@ application = ProtocolTypeRouter({
         URLRouter(
           anyhedge.routing.websocket_urlpatterns +
           main.routing.websocket_urlpatterns +
+          rampp2p.routing.websocket_urlpatterns +
           vouchers.routing.websocket_urlpatterns
         )
     )

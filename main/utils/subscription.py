@@ -40,7 +40,7 @@ def save_subscription(address, subscriber_id):
 
 
 def new_subscription(**kwargs):
-    LOGGER.info(kwargs)
+    LOGGER.info(f'New subscription: {kwargs}')
     response = {'success': False}
     address = kwargs.get('address', None)
     addresses = kwargs.get('addresses', None)
@@ -143,7 +143,7 @@ def new_subscription(**kwargs):
                             recipient=recipient,
                             address=address_obj
                         )
-
+                        LOGGER.warn(f'created: {created}')
                         if is_slp_address(address):
                             get_slp_utxos.delay(address)
                         elif is_bch_address(address):
