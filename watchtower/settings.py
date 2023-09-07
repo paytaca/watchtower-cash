@@ -255,7 +255,7 @@ CELERY_IMPORTS = (
     'ramp.tasks',
     'rampp2p.tasks.contract_tasks',
     'rampp2p.tasks.market_rate_tasks',
-    'rampp2p.tasks.transaction_tasks'
+    'rampp2p.tasks.transaction_tasks',
     'vouchers.tasks'
 )
 
