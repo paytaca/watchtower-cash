@@ -1,12 +1,10 @@
-from rampp2p.serializers.contract import ContractSerializer
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import Q, Value
+from django.db.models import Q
 from django.db import IntegrityError
-from django.shortcuts import render
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
@@ -23,9 +21,9 @@ from rampp2p.serializers import (
     OrderWriteSerializer, 
     StatusSerializer, 
     StatusReadSerializer,
-    ContractSerializer,
     ContractDetailSerializer,
-    TransactionSerializer
+    TransactionSerializer,
+    AppealSerializer
 )
 from rampp2p.models import (
     Ad,
@@ -37,7 +35,8 @@ from rampp2p.models import (
     Contract,
     Transaction,
     PriceType,
-    MarketRate
+    MarketRate,
+    Appeal
 )
 
 import json
@@ -330,12 +329,23 @@ class OrderDetail(APIView):
         serialized_contract = ContractDetailSerializer(order_contract).data
         contract_txs = Transaction.objects.filter(contract__id=order_contract.id)
         serialized_transactions = TransactionSerializer(contract_txs, many=True).data
-        # else:
-        #     serialized_contract = ContractSerializer(order_contract).data
         
         response['contract'] = serialized_contract
         response['contract']['transactions'] = serialized_transactions
     
+    if serialized_order['status']['value'] == StatusType.APPEALED:
+        appeal = Appeal.objects.filter(order_id=order.id)
+        if appeal.exists():
+            serialized_appeal = AppealSerializer(appeal.first()).data
+            # response['appeal'] = serialized_appeal
+            response['appeal'] = {
+                'id': serialized_appeal['id'],
+                'type': serialized_appeal['type'],
+                'reasons': serialized_appeal['reasons'],
+                'resolved_at': serialized_appeal['resolved_at'],
+                'created_at': serialized_appeal['created_at']
+            }
+
     total_fee, fees = get_trading_fees()
     response['fees'] = {
         'total': total_fee,
