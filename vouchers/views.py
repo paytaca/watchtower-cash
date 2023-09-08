@@ -8,7 +8,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.models import F, Q
 
 from vouchers.serializers import (
-    CreateVoucherSerializer,
+    VoucherSerializer,
     VoucherClaimCheckSerializer,
     VoucherClaimCheckResponseSerializer,
 )
@@ -22,10 +22,7 @@ from paytacapos.models import Merchant
 from main.utils.queries.node import Node
 from main.utils.address_converter import bch_address_converter
 from main.models import CashNonFungibleToken
-from main.serializers import (
-    CashNonFungibleTokenSerializer,
-    EmptySerializer,
-)
+from main.serializers import EmptySerializer
 
 
 class VoucherViewSet(
@@ -39,48 +36,11 @@ class VoucherViewSet(
     filterset_class = VoucherFilter
     pagination_class = CustomLimitOffsetPagination
     serializer_classes = {
-        'create': CreateVoucherSerializer,
-        'list': CashNonFungibleTokenSerializer,
+        'create': VoucherSerializer,
+        'list': VoucherSerializer,
         'merchants': MerchantListSerializer,
         'claim_check': VoucherClaimCheckSerializer,
     }
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-
-        wallet_hash = request.query_params.get('wallet_hash') or ''
-        vault_address = request.query_params.get('vault_address') or ''
-
-        vouchers = queryset
-        if vault_address:
-            vouchers = vouchers.filter(
-                Q(vault__token_address=vault_address) |
-                Q(vault__address=vault_address)
-            )
-
-        voucher_categories = list(
-            vouchers.values_list(
-                'key_category',
-                flat=True
-            )
-        )
-        owned_vouchers = CashNonFungibleToken.objects.filter(
-            category__in=voucher_categories
-        )
-        if wallet_hash:
-            owned_vouchers = owned_vouchers.filter(
-                transaction__wallet__wallet_hash=wallet_hash
-            )
-
-        queryset = owned_vouchers.distinct()
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-
 
     @action(methods=['GET'], detail=False)
     @swagger_auto_schema(responses={200: MerchantListSerializer})

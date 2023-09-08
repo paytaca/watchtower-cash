@@ -2,6 +2,8 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
+from datetime import timedelta
+
 
 class Vault(models.Model):
     merchant = models.OneToOneField(
@@ -28,3 +30,8 @@ class Voucher(models.Model):
     expired = models.BooleanField(default=False)
     duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
     date_created = models.DateTimeField(default=timezone.now)
+
+    @property
+    def expiration_date(self):
+        expiration_date = self.date_created + timedelta(days=self.duration_days)
+        return expiration_date

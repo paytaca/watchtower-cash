@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
-from vouchers.models import Vault, Voucher
+from datetime import timedelta
+
+from vouchers.models import *
 
 
 class VaultSerializer(serializers.ModelSerializer):    
@@ -9,10 +11,25 @@ class VaultSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class CreateVoucherSerializer(serializers.ModelSerializer):
+class VoucherSerializer(serializers.ModelSerializer):    
     class Meta:
         model = Voucher
-        fields = '__all__'
+        fields = (
+            'vault',
+            'txid',
+            'key_category',
+            'lock_category',
+            'used',
+            'expired',
+            'duration_days',
+            'date_created',
+            'expiration_date',
+        )
+
+        read_only_fields = (
+            'expiration_date',
+            'id',
+        )
 
 
 class VoucherClaimCheckSerializer(serializers.Serializer):
