@@ -601,7 +601,7 @@ class WalletHistory(PostgresModel):
         blank=True,
         choices=RECORD_TYPE_OPTIONS
     )
-    amount = models.FloatField(default=0)
+    amount = models.BigIntegerField(default=0)
     token = models.ForeignKey(
         Token,
         related_name='wallet_history_records',
