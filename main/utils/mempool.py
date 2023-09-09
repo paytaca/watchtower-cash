@@ -128,7 +128,7 @@ def process_tx(tx_hash, bchn_client, mqtt_client):
                         msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
                         LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
-                    client_acknowledgement(obj_id)
+                    client_acknowledgement.delay(obj_id)
 
                     LOGGER.info(data)
 
