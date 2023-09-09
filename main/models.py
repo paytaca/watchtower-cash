@@ -6,6 +6,8 @@ from django.contrib.postgres.fields import JSONField
 from psqlextra.models import PostgresModel
 from psqlextra.query import PostgresQuerySet
 from django.contrib.postgres.fields import ArrayField
+from django.db.models.constraints import UniqueConstraint
+from django.db.models import Q
 from django.conf import settings
 
 from main.utils.address_validator import *
@@ -601,7 +603,7 @@ class WalletHistory(PostgresModel):
         blank=True,
         choices=RECORD_TYPE_OPTIONS
     )
-    amount = models.BigIntegerField(default=0)
+    amount = models.FloatField(default=0)
     token = models.ForeignKey(
         Token,
         related_name='wallet_history_records',
@@ -634,14 +636,36 @@ class WalletHistory(PostgresModel):
         verbose_name = 'Wallet history'
         verbose_name_plural = 'Wallet histories'
         ordering = ['-tx_timestamp', '-date_created']
-        unique_together = [
-            'wallet',
-            'txid',
-            # 'token_index',
-            'token',
-            'cashtoken_ft',
-            'cashtoken_nft',
+        constraints = [
+            UniqueConstraint(
+                fields=['wallet', 'txid', 'token', 'amount', 'record_type'],
+                condition=Q(cashtoken_ft=None) & Q(cashtoken_nft=None),
+                name='both_ctft_ctnft_none'
+            ),
+            UniqueConstraint(
+                fields=['wallet', 'txid', 'token', 'amount', 'record_type', 'cashtoken_nft'],
+                condition=Q(cashtoken_ft=None),
+                name='ctft_none'
+            ),
+            UniqueConstraint(
+                fields=['wallet', 'txid', 'token', 'amount', 'record_type', 'cashtoken_ft'],
+                condition=Q(cashtoken_nft=None),
+                name='ctnft_none'
+            ),
+            UniqueConstraint(
+                fields=['wallet', 'txid', 'token', 'amount', 'record_type', 'cashtoken_ft', 'cashtoken_nft'],
+                condition=Q(cashtoken_nft=None),
+                name='ctft_ctnft_not_none'
+            )
         ]
+        # unique_together = [
+        #     'wallet',
+        #     'txid',
+        #     # 'token_index',
+        #     'token',
+        #     'cashtoken_ft',
+        #     'cashtoken_nft',
+        # ]
 
     def __str__(self):
         return self.txid
