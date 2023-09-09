@@ -215,7 +215,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
     def rescan_utxos(self, request, queryset):
         for wallet in queryset:
-            addresses = wallet.addresses.filter(transactions__spent=False)
+            addresses = wallet.addresses.all()
             for address in addresses:
                 if wallet.wallet_type == 'bch':
                     get_bch_utxos(address.address)
