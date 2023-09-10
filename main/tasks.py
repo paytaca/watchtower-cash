@@ -48,7 +48,7 @@ from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
 
-import paho.mqtt.client as mqtt
+from main.mqtt import client as mqtt_client
 
 LOGGER = logging.getLogger(__name__)
 
@@ -2004,10 +2004,6 @@ def populate_token_addresses():
         if is_bch_address(obj.address): # double check here
             obj.token_address = bch_address_converter(obj.address)
             obj.save()
-
-
-mqtt_client = mqtt.Client()
-mqtt_client.connect("docker-host", 1883, 10)
 
 
 @shared_task(queue='mempool_processing')
