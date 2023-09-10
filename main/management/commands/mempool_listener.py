@@ -1,19 +1,14 @@
 from django.core.management.base import BaseCommand
-from main.utils.queries.bchn import BCHN
 import paho.mqtt.client as mqtt
-from django.utils import timezone
 import json
 import time
 import logging
 from json.decoder import JSONDecodeError
-
-from main.utils import mempool
+from main.tasks import process_mempool_transaction
 
 
 LOGGER = logging.getLogger(__name__)
 
-
-bchn_client = BCHN()
 
 mqtt_client = mqtt.Client()
 mqtt_client.connect("docker-host", 1883, 10)
@@ -34,7 +29,7 @@ def on_message(client, userdata, msg):
         payload = json.loads(msg.payload)
         if 'txid' in payload.keys():
             txid = payload['txid']
-            mempool.process_tx(txid, bchn_client, mqtt_client)
+            process_mempool_transaction.delay(txid)
     except JSONDecodeError:
         pass
 
