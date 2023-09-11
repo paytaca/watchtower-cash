@@ -21,7 +21,7 @@ class VoucherFilter(filters.FilterSet):
         fields = [
             'wallet_hash',
             'vault_address',
-            'used',
+            'claimed',
             'expired',
         ]
 

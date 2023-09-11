@@ -21,17 +21,18 @@ class VoucherAdmin(admin.ModelAdmin):
         'lock_category',
     ]
     list_filter = [
-        'used',
+        'claimed',
         'expired',
     ]
     list_display = [
         'vault',
         'key_category',
         'lock_category',
-        'used',
+        'claimed',
         'expired',
         'duration_days',
         'date_created',
+        'date_claimed',
     ]
 
 

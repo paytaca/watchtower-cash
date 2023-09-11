@@ -17,12 +17,14 @@ class VoucherSerializer(serializers.ModelSerializer):
         fields = (
             'vault',
             'txid',
+            'claim_txid',
             'key_category',
             'lock_category',
-            'used',
+            'claimed',
             'expired',
             'duration_days',
             'date_created',
+            'date_claimed',
             'expiration_date',
         )
 
@@ -46,3 +48,12 @@ class VoucherClaimCheckResponseSerializer(serializers.Serializer):
     voucher_belongs_to_merchant = serializers.BooleanField(default=False)
     is_merchant_address = serializers.BooleanField(default=False)
     category_with_err = serializers.CharField(max_length=100)
+
+
+class VoucherClaimedResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField(default=False)
+
+
+class VoucherClaimedSerializer(serializers.Serializer):
+    lock_category = serializers.CharField(max_length=100, required=True)
+    txid = serializers.CharField(max_length=100, required=True)

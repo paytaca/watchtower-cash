@@ -24,12 +24,14 @@ class Voucher(models.Model):
         on_delete=models.CASCADE
     )
     txid = models.CharField(max_length=100, default='')
-    key_category = models.CharField(max_length=100 ,unique=True)
+    claim_txid = models.CharField(max_length=100, null=True, blank=True)
+    key_category = models.CharField(max_length=100)
     lock_category = models.CharField(max_length=100 ,unique=True)
-    used = models.BooleanField(default=False)
+    claimed = models.BooleanField(default=False)
     expired = models.BooleanField(default=False)
     duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
     date_created = models.DateTimeField(default=timezone.now)
+    date_claimed = models.DateTimeField(null=True, blank=True)
 
     @property
     def expiration_date(self):
