@@ -92,6 +92,8 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'blockheight',
         'address',
         'token',
+        'cashtoken_ft',
+        'cashtoken_nft',
         'wallet'
     ]
 

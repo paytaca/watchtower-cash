@@ -2094,14 +2094,17 @@ def process_mempool_transaction(tx_hash):
                         tx_hash,
                         source
                     )
-                    now = timezone.now().timestamp()
+                    if 'time' in tx.keys():
+                        timestamp = tx['time']
+                    else:
+                        timestamp = timezone.now().timestamp()
                     obj_id, created = save_record(
                         *args,
                         value=value,
                         blockheightid=None,
                         index=index,
                         inputs=inputs_data,
-                        tx_timestamp=now
+                        tx_timestamp=timestamp
                     )
                     has_updated_output = has_updated_output or created
 
