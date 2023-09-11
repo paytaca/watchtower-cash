@@ -56,6 +56,6 @@ def contract_handler(response: Dict, **kwargs):
         contract.save()
 
         # TODO: subscribe to contract address: listen for incoming & outgoing utxo
-        new_subscription(address=address)
+        # new_subscription(address=address)
     
     return send_order_update(data, contract.order.id)

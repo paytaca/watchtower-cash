@@ -27,6 +27,7 @@ from rampp2p.serializers import (
 )
 from rampp2p.models import (
     Ad,
+    AdSnapshot,
     StatusType,
     Status,
     Order,
@@ -80,7 +81,7 @@ class OrderListCreate(APIView):
 
         # Fetch orders created for ads owned by user
         ads = list(Ad.objects.filter(owner__wallet_hash=wallet_hash).values_list('id', flat=True))
-        ad_orders = Order.objects.filter(ad__pk__in=ads)
+        ad_orders = Order.objects.filter(ad_snapshot__ad__pk__in=ads)
 
         latest_status = Status.objects.filter(
             order=OuterRef('pk'), 
@@ -156,6 +157,10 @@ class OrderListCreate(APIView):
             ad_id = request.data.get('ad', None)
             if ad_id is None:
                 raise ValidationError('ad_id field is required')
+            
+            crypto_amount = request.data.get('crypto_amount')
+            if crypto_amount is None:
+                raise ValidationError('crypto_amount field is required')
 
             ad = Ad.objects.get(pk=ad_id)
             owner = Peer.objects.get(wallet_hash=wallet_hash)
@@ -163,6 +168,7 @@ class OrderListCreate(APIView):
 
             if ad.trade_type == TradeType.SELL:
                 # order will inherit ad's payment methods
+                # TODO: Let order creator decide which payment methods to use
                 payment_methods = ad.payment_methods.all()
                 payment_method_ids = list(payment_methods.values_list('id', flat=True))
             else:
@@ -173,25 +179,51 @@ class OrderListCreate(APIView):
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)
 
+            market_price = MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
+            if not market_price.exists():
+                raise ValidationError(f'market price for currency {ad.fiat_currency.symbol} does not exist.')
+            market_price = market_price.first()
+
         except (Ad.DoesNotExist, Peer.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
+
+        # Create snapshot of ad
+        ad_snapshot = AdSnapshot(
+            ad = ad,
+            owner = ad.owner,
+            trade_type = ad.trade_type,
+            price_type = ad.price_type,
+            fiat_currency = ad.fiat_currency,
+            crypto_currency = ad.crypto_currency,
+            fixed_price = ad.fixed_price,
+            floating_price = ad.floating_price,
+            market_price = market_price.price,
+            trade_floor = ad.trade_floor,
+            trade_ceiling = ad.trade_ceiling,
+            crypto_amount = ad.crypto_amount,
+            time_duration_choice = ad.time_duration_choice,
+        )
+        ad_snapshot.save()
+        ad_snapshot.payment_methods.set(ad.payment_methods.all())
+
         # Create the order
-        data = request.data.copy()
-        data['owner'] = owner.id
-        data['crypto_currency'] = ad.crypto_currency.id
-        data['fiat_currency'] = ad.fiat_currency.id
-        data['time_duration_choice'] = ad.time_duration_choice
-        data['payment_methods'] = payment_method_ids
+        data = {
+            'owner': owner.id,
+            'ad_snapshot': ad_snapshot.id,
+            'crypto_currency': ad_snapshot.crypto_currency.id,
+            'fiat_currency': ad_snapshot.fiat_currency.id,
+            'time_duration_choice': ad_snapshot.time_duration_choice,
+            'payment_methods': payment_method_ids,
+            'crypto_amount': crypto_amount
+        }
 
         price = None
-        if ad.price_type == PriceType.FLOATING:
-            market_price = MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
-            if market_price.exists():
-                market_price = market_price.first().price
-                price = market_price * (ad.floating_price/100)
+        if ad_snapshot.price_type == PriceType.FLOATING:
+            market_price = market_price.first().price
+            price = market_price * (ad_snapshot.floating_price/100)
         else:
-            price = ad.fixed_price
+            price = ad_snapshot.fixed_price
 
         data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         serialized_order = OrderWriteSerializer(data=data)
@@ -237,16 +269,16 @@ class OrderListCreate(APIView):
         seller_address = None
         buyer_address = None
 
-        if order.ad.trade_type == TradeType.SELL:
-            seller_pubkey = order.ad.owner.public_key
+        if order.ad_snapshot.trade_type == TradeType.SELL:
+            seller_pubkey = order.ad_snapshot.owner.public_key
             buyer_pubkey = order.owner.public_key
-            seller_address = order.ad.owner.address
+            seller_address = order.ad_snapshot.owner.address
             buyer_address = order.owner.address
         else:
             seller_pubkey = order.owner.public_key
-            buyer_pubkey = order.ad.owner.public_key
+            buyer_pubkey = order.ad_snapshot.owner.public_key
             seller_address = order.owner.address
-            buyer_address = order.ad.owner.address
+            buyer_address = order.ad_snapshot.owner.address
 
         if (arbiter_pubkey is None or 
             seller_pubkey is None or 
@@ -405,7 +437,7 @@ class ConfirmOrder(APIView):
         except (Peer.DoesNotExist, Order.DoesNotExist) as err:
             raise ValidationError(err.args[0])
 
-        if order.ad.owner.wallet_hash != caller.wallet_hash:
+        if order.ad_snapshot.owner.wallet_hash != caller.wallet_hash:
             raise ValidationError('caller must be ad owner')
 
 class PendingEscrowOrder(APIView):
@@ -487,8 +519,8 @@ class PendingEscrowOrder(APIView):
             raise ValidationError(err.args[0])
         
         seller = None
-        if order.ad.trade_type == TradeType.SELL:
-            seller = order.ad.owner
+        if order.ad_snapshot.trade_type == TradeType.SELL:
+            seller = order.ad_snapshot.owner
         else:
             seller = order.owner
 
@@ -556,8 +588,8 @@ class VerifyEscrow(APIView):
         except (Peer.DoesNotExist, Order.DoesNotExist) as err:
             raise ValidationError(err.args[0])
 
-        if order.ad.trade_type == TradeType.SELL:
-            seller = order.ad.owner
+        if order.ad_snapshot.trade_type == TradeType.SELL:
+            seller = order.ad_snapshot.owner
             # require caller is seller
             if caller.wallet_hash != seller.wallet_hash:
                 raise ValidationError('caller must be seller')
@@ -614,10 +646,10 @@ class CryptoBuyerConfirmPayment(APIView):
         raise ValidationError(err.args[0])
     
     buyer = None
-    if order.ad.trade_type == TradeType.SELL:
+    if order.ad_snapshot.trade_type == TradeType.SELL:
        buyer = order.owner
     else:
-       buyer = order.ad.owner
+       buyer = order.ad_snapshot.owner
 
     if caller.wallet_hash != buyer.wallet_hash:
         raise ValidationError('caller must be buyer')
@@ -670,8 +702,8 @@ class CryptoSellerConfirmPayment(APIView):
             raise ValidationError(err.args[0])
         
         seller = None
-        if order.ad.trade_type == TradeType.SELL:
-            seller = order.ad.owner
+        if order.ad_snapshot.trade_type == TradeType.SELL:
+            seller = order.ad_snapshot.owner
         else:
             seller = order.owner
 
@@ -721,6 +753,6 @@ class CancelOrder(APIView):
             raise ValidationError(err.args[0])
         
         order_owner = order.owner.wallet_hash
-        ad_owner = order.ad.owner.wallet_hash
+        ad_owner = order.ad_snapshot.owner.wallet_hash
         if caller.wallet_hash != order_owner and caller.wallet_hash != ad_owner:
            raise ValidationError('caller must be order/ad owner')

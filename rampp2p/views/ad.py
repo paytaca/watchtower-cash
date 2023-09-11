@@ -186,7 +186,8 @@ class AdDetail(APIView):
             serializer = AdOwnerSerializer(ad, context=context)
         else:
             serializer = AdDetailSerializer(ad, context=context)
-        
+        logger.warn(f'ad: {ad}')
+        # return Response(serializer, status=status.HTTP_200_OK)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):

@@ -1,5 +1,5 @@
 from django.db import models
-from .ad import Ad, DurationChoices
+from .ad import Ad, AdSnapshot, DurationChoices
 from .peer import Peer
 from .arbiter import Arbiter
 from .currency import FiatCurrency, CryptoCurrency
@@ -7,7 +7,7 @@ from .payment import PaymentMethod
 from datetime import timedelta
 
 class Order(models.Model):
-    ad = models.ForeignKey(Ad, on_delete=models.PROTECT, editable=False)
+    ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
     owner = models.ForeignKey(
         Peer, 
         on_delete=models.PROTECT, 

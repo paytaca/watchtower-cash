@@ -131,7 +131,7 @@ class AppealRequest(APIView):
             raise ValidationError(err.args[0])
         
         if (caller.wallet_hash != order.owner.wallet_hash and
-            caller.wallet_hash != order.ad.owner.wallet_hash and
+            caller.wallet_hash != order.ad_snapshot.owner.wallet_hash and
             caller.wallet_hash != order.arbiter.wallet_hash):
             raise ValidationError('caller not allowed to view this order')
         
@@ -213,7 +213,7 @@ class AppealRequest(APIView):
             raise ValidationError(err.args[0])
         
         if (caller.wallet_hash != order.owner.wallet_hash and
-            caller.wallet_hash != order.ad.owner.wallet_hash):
+            caller.wallet_hash != order.ad_snapshot.owner.wallet_hash):
             raise ValidationError('caller not affiliated to this order')
         
 
@@ -422,8 +422,8 @@ class VerifyRelease(APIView):
         is_seller = False
         if caller.wallet_hash == order.arbiter.wallet_hash:
             is_arbiter = True
-        elif order.ad.trade_type == TradeType.SELL:
-            seller = order.ad.owner
+        elif order.ad_snapshot.trade_type == TradeType.SELL:
+            seller = order.ad_snapshot.owner
             if caller.wallet_hash == seller.wallet_hash:
                 is_seller = True
 

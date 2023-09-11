@@ -159,16 +159,16 @@ class CreateContract(APIView):
         seller_address = None
         buyer_address = None
 
-        if order.ad.trade_type == TradeType.SELL:
-            seller_pubkey = order.ad.owner.public_key
+        if order.ad_snapshot.trade_type == TradeType.SELL:
+            seller_pubkey = order.ad_snapshot.owner.public_key
             buyer_pubkey = order.owner.public_key
-            seller_address = order.ad.owner.address
+            seller_address = order.ad_snapshot.owner.address
             buyer_address = order.owner.address
         else:
             seller_pubkey = order.owner.public_key
-            buyer_pubkey = order.ad.owner.public_key
+            buyer_pubkey = order.ad_snapshot.owner.public_key
             seller_address = order.owner.address
-            buyer_address = order.ad.owner.address
+            buyer_address = order.ad_snapshot.owner.address
 
         if (arbiter_pubkey is None or 
             seller_pubkey is None or 
@@ -200,8 +200,8 @@ class CreateContract(APIView):
             raise ValidationError('Peer/Order DoesNotExist')
 
         seller = None
-        if order.ad.trade_type == TradeType.SELL:
-            seller = order.ad.owner
+        if order.ad_snapshot.trade_type == TradeType.SELL:
+            seller = order.ad_snapshot.owner
         else:
             seller = order.owner
     

@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 
 from rampp2p.models import Peer, MarketRate
 from rampp2p.serializers import MarketRateSerializer
-from main.utils.subscription import new_subscription, remove_subscription
+# from main.utils.subscription import new_subscription, remove_subscription
 
 import ecdsa
 import hashlib
@@ -63,7 +63,8 @@ class SubscribeAddress(APIView):
         if address is None:
             return Response({"error": "address field is required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        result = new_subscription(address=address)
+        # result = new_subscription(address=address)
+        result = None
         return Response(result, status=status.HTTP_200_OK)
     
 class MarketRates(APIView):
