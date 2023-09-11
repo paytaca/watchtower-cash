@@ -525,7 +525,6 @@ def save_record(
                     tx_input["address"],
                     tx_input["outpoint_txid"],
                     source,
-                    # amount=tx_input["amount"],
                     value=tx_input["value"],
                     index=tx_input["outpoint_index"],
                     spending_txid=transaction_obj.txid,
@@ -1283,8 +1282,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     amount = round(amount, 8)
                 amount = abs(amount) * -1
 
-            # Don't save a record if resulting amount is zero or dust
-            is_zero_amount = amount == 0 or amount == abs(0.00000546)
+            # Don't save a record if resulting amount is zero or <= dust
+            is_zero_amount = amount == 0 or amount <= abs(0.00000546)
             if is_zero_amount and not proceed_with_zero_amount:
                 return
 
@@ -2006,6 +2005,7 @@ def populate_token_addresses():
             obj.save()
 
 
+
 @shared_task(queue='mempool_processing')
 def process_mempool_transaction(tx_hash):
     LOGGER.info('Processing mempool tx: ' + tx_hash)
@@ -2033,10 +2033,15 @@ def process_mempool_transaction(tx_hash):
 
             if 'addresses' in ancestor_spubkey.keys():
                 address = ancestor_spubkey['addresses'][0]
-                spent_transactions = Transaction.objects.filter(txid=txid, index=index)
-                spent_transactions.update(spent=True, spending_txid=tx_hash)
-                has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
-                has_subscribed_input = has_subscribed_input or has_existing_wallet
+                txn_check = Transaction.objects.filter(
+                    txid=txid,
+                    index=index
+                )
+                if not txn_check.exists():
+                    spent_transactions = Transaction.objects.filter(txid=txid, index=index)
+                    spent_transactions.update(spent=True, spending_txid=tx_hash)
+                    has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
+                    has_subscribed_input = has_subscribed_input or has_existing_wallet
 
                 subscription = Subscription.objects.filter(
                     address__address=address
