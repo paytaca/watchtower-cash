@@ -18,7 +18,7 @@ class BCHN(object):
         self.source = 'bchn'
         self.fulcrum = {
             'host': settings.BCHN_HOST,
-            'port': 60001
+            'port': settings.FULCRUM_PORT
         }
 
     def get_latest_block(self):
