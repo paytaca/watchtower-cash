@@ -6,11 +6,14 @@ from drf_yasg.utils import swagger_auto_schema
 from django_filters import rest_framework as filters
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import F, Q
+from django.utils import timezone
 
 from vouchers.serializers import (
-    CreateVoucherSerializer,
+    VoucherSerializer,
     VoucherClaimCheckSerializer,
     VoucherClaimCheckResponseSerializer,
+    VoucherClaimedSerializer,
+    VoucherClaimedResponseSerializer,
 )
 from vouchers.models import Voucher
 from vouchers.filters import VoucherFilter
@@ -22,10 +25,7 @@ from paytacapos.models import Merchant
 from main.utils.queries.node import Node
 from main.utils.address_converter import bch_address_converter
 from main.models import CashNonFungibleToken
-from main.serializers import (
-    CashNonFungibleTokenSerializer,
-    EmptySerializer,
-)
+from main.serializers import EmptySerializer
 
 
 class VoucherViewSet(
@@ -39,47 +39,47 @@ class VoucherViewSet(
     filterset_class = VoucherFilter
     pagination_class = CustomLimitOffsetPagination
     serializer_classes = {
-        'create': CreateVoucherSerializer,
-        'list': CashNonFungibleTokenSerializer,
+        'create': VoucherSerializer,
+        'list': VoucherSerializer,
         'merchants': MerchantListSerializer,
         'claim_check': VoucherClaimCheckSerializer,
+        'claimed': VoucherClaimedSerializer,
     }
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
+    @action(methods=['POST'], detail=False)
+    @swagger_auto_schema(responses={200: VoucherClaimedResponseSerializer})
+    def claimed(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        wallet_hash = request.query_params.get('wallet_hash') or ''
-        vault_address = request.query_params.get('vault_address') or ''
+        lock_category = serializer.validated_data['lock_category']
+        claim_txid = serializer.validated_data['txid']
+        vouchers = Voucher.objects.filter(lock_category=lock_category)
+        result = { 'success': False }
+        
+        if vouchers.exists():
+            node = Node()
+            txn = node.BCH.get_transaction(claim_txid)
 
-        vouchers = queryset
-        if vault_address:
-            vouchers = vouchers.filter(
-                Q(vault__token_address=vault_address) |
-                Q(vault__address=vault_address)
-            )
+            if txn['valid']:
+                inputs = txn['inputs']
+                first_input = inputs[0]
+                second_input = inputs[1]
 
-        voucher_categories = list(
-            vouchers.values_list(
-                'key_category',
-                flat=True
-            )
-        )
-        owned_vouchers = CashNonFungibleToken.objects.filter(
-            category__in=voucher_categories
-        )
-        if wallet_hash:
-            owned_vouchers = owned_vouchers.filter(
-                transaction__wallet__wallet_hash=wallet_hash
-            )
+                if 'token_data' in first_input.keys() and 'token_data' in second_input.keys():
+                    voucher = vouchers.first()
+                    first_input_category = first_input['token_data']['category']
+                    second_input_category = second_input['token_data']['category']
 
-        queryset = owned_vouchers.distinct()
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+                    if first_input_category == voucher.lock_category and second_input_category == voucher.key_category:
+                        vouchers.update(
+                            claimed=True,
+                            claim_txid=claim_txid,
+                            date_claimed=timezone.now()
+                        )
+                        result['success'] = True
+        
+        return Response(result, status=status.HTTP_200_OK)
 
 
     @action(methods=['GET'], detail=False)
@@ -156,7 +156,7 @@ class VoucherViewSet(
                         txn = node.BCH.get_transaction(voucher.txid)
 
                         if txn['valid']:
-                            outputs = txn['details']['outputs']
+                            outputs = txn['outputs']
                             key_nft_output = outputs[0]
                             lock_nft_output = outputs[1]
 

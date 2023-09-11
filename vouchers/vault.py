@@ -49,11 +49,6 @@ def generate_merchant_vault(merchant_id):
     except:
         pass
 
-    Merchant.objects.filter(id=merchant_id).update(
-        receiving_pubkey=receiving_pubkey,
-        signer_pubkey=signer_pubkey
-    )
-
     Vault(
         merchant=merchant,
         address=contract['address'],
