@@ -16,7 +16,8 @@ class VoucherSerializer(serializers.ModelSerializer):
         model = Voucher
         fields = (
             'vault',
-            'txid',
+            'value',
+            'minting_txid',
             'claim_txid',
             'key_category',
             'lock_category',

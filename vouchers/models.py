@@ -23,7 +23,8 @@ class Voucher(models.Model):
         related_name='vouchers',
         on_delete=models.CASCADE
     )
-    txid = models.CharField(max_length=100, default='')
+    value = models.FloatField(default=0.0)  # in BCH
+    minting_txid = models.CharField(max_length=100, default='')
     claim_txid = models.CharField(max_length=100, null=True, blank=True)
     key_category = models.CharField(max_length=100)
     lock_category = models.CharField(max_length=100 ,unique=True)
