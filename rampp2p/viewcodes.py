@@ -1,6 +1,7 @@
 from enum import Enum
 
 class ViewCode(Enum):
+    ARBITER_GET = 'ARBITER_GET'
     PEER_CREATE = 'PEER_CREATE'
     PEER_UPDATE = 'PEER_UPDATE'
     PAYMENT_METHOD_LIST = 'PAYMENT_METHOD_LIST'
