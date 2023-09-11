@@ -5,12 +5,11 @@ const BCHJS = require('@psf/bch-js');
 const fs = require('fs');
 const CryptoJS = require('crypto-js');
 
-// const ACTION = process.argv[2];
-const ARBITR_PUBKEY = process.argv[2]
+const ARBITER_PUBKEY = process.argv[2]
 const BUYER_PUBKEY = process.argv[3]
 const SELLER_PUBKEY = process.argv[4]
 const TIMESTAMP = process.argv[5]
-const SERVCR_PUBKEY = process.env.SERVICER_PK
+const SERVICER_PUBKEY = process.env.SERVICER_PK
 const SERVICE_FEE = parseInt(process.env.SERVICE_FEE)
 const ARBITRATION_FEE = parseInt(process.env.ARBITRATION_FEE)
 
@@ -18,8 +17,8 @@ const bchjs = new BCHJS({
     restURL: 'https://bchn.fullstack.cash/v5/',
     apiToken: process.env.BCHJS_TOKEN
   });
-  
-const NETWORK = 'mainnet';
+
+const NETWORK = process.env.BCH_NETWORK;
 
 (async () => {
 
@@ -42,10 +41,10 @@ const NETWORK = 'mainnet';
 
 function getPubKeyHash() {  
     // produce the public key hashes
-    const arbiterPkh = bchjs.Crypto.hash160(Buffer.from(ARBITR_PUBKEY, "hex"));
+    const arbiterPkh = bchjs.Crypto.hash160(Buffer.from(ARBITER_PUBKEY, "hex"));
     const buyerPkh = bchjs.Crypto.hash160(Buffer.from(BUYER_PUBKEY, "hex"));
     const sellerPkh = bchjs.Crypto.hash160(Buffer.from(SELLER_PUBKEY, "hex"));
-    const servicerPkh = bchjs.Crypto.hash160(Buffer.from(SERVCR_PUBKEY, "hex"));
+    const servicerPkh = bchjs.Crypto.hash160(Buffer.from(SERVICER_PUBKEY, "hex"));
     return [arbiterPkh, buyerPkh, sellerPkh, servicerPkh];
 }
 
