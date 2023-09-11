@@ -37,21 +37,24 @@ class HistoryParser(object):
             address__wallet__wallet_hash=self.wallet_hash,
             cashtoken_ft__isnull=False
         )
-        ct_nft_outputs = Transaction.objects.filter(
-            txid=self.txid,
-            address__wallet__wallet_hash=self.wallet_hash,
-            cashtoken_nft__isnull=False
-        )
-        return outputs, ct_fungible_outputs, ct_nft_outputs
+        return outputs, ct_fungible_outputs
 
     def get_total_amount(self, qs, is_bch=True):
         if is_bch:
             value_sum = qs.aggregate(Sum('value'))['value__sum']
+            # round down to zero if value sum is equal to or lesser than dust
+            if value_sum <= 546:
+                return 0
             return value_sum / (10 ** 8)
         return qs.aggregate(Sum('amount'))['amount__sum']
 
     def get_record_type(self, diff):
-        return 'incoming' if diff > 0 else 'outgoing'
+        if diff == 0:
+            return ''
+        elif diff < 0:
+            return 'outgoing'
+        else:
+            return 'incoming'
 
     def get_change_address(self, inputs, outputs):
         change_address = None
@@ -80,7 +83,7 @@ class HistoryParser(object):
         total_inputs = 0
         total_ct_inputs = 0
 
-        outputs, ct_outputs, ct_nft_outputs = self.get_relevant_outputs()
+        outputs, ct_outputs = self.get_relevant_outputs()
         inputs, ct_inputs = self.get_relevant_inputs()
         
         if outputs.exists():

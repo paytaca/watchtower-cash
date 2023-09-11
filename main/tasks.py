@@ -1260,7 +1260,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
     wallet_hash = wallet_handle.split('|')[1]
     parser = HistoryParser(txid, wallet_hash)
     parsed_history = parser.parse()
-
+    
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
     if type(tx_fee) is str:
@@ -1268,6 +1268,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
     
     BCH_OR_SLP = 'bch_or_slp'
 
+    # parsed_history.keys() = ['bch_or_slp', 'ct']
     for key in parsed_history.keys():
         data = parsed_history[key]
         record_type = data['record_type']
@@ -1282,10 +1283,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     amount = round(amount, 8)
                 amount = abs(amount) * -1
 
-            # Don't save a record if resulting amount is zero or <= dust
-            is_zero_amount = amount == 0 or amount <= abs(0.00000546)
+            # Don't save a record if resulting amount is zero
+            is_zero_amount = amount == 0
             if is_zero_amount and not proceed_with_zero_amount:
-                return
+                # skip this key and continue with the next key
+                continue
 
             if is_zero_amount:
                 record_type = ''
