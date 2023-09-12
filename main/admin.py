@@ -258,7 +258,9 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
     dynamic_raw_id_fields = [
         'wallet',
-        'token'
+        'token',
+        'cashtoken_ft',
+        'cashtoken_nft'
     ]
 
     search_fields = [

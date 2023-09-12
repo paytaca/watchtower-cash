@@ -1310,6 +1310,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
             cashtoken_ft = None
             cashtoken_nft = None
+            token_obj = None
 
             if key == BCH_OR_SLP:
                 txns = txns.filter(token__name='bch')
@@ -1330,6 +1331,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                             ct_recipient = _recipient
                             break
                     if key == 'ct' and ct_recipient:
+                        token_obj, _ = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
                         token_id = ct_recipient[2]
                         nft_capability = ct_recipient[4]
                         nft_commitment = ct_recipient[5]
@@ -1359,10 +1361,13 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
         if not txn: continue
 
+        if not token_obj:
+            token_obj = txn.token
+
         history_check = WalletHistory.objects.filter(
             wallet=wallet,
             txid=txid,
-            token=txn.token,
+            token=token_obj,
             cashtoken_ft=cashtoken_ft,
             cashtoken_nft=cashtoken_nft
         )
@@ -1370,7 +1375,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             history_check.update(
                 record_type=record_type,
                 amount=amount,
-                token=txn.token,
+                token=token_obj,
                 cashtoken_ft=cashtoken_ft,
                 cashtoken_nft=cashtoken_nft
             )
@@ -1393,7 +1398,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 txid=txid,
                 record_type=record_type,
                 amount=amount,
-                token=txn.token,
+                token=token_obj,
                 cashtoken_ft=cashtoken_ft,
                 cashtoken_nft=cashtoken_nft,
                 tx_fee=tx_fee,
@@ -1410,7 +1415,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 try:
                     parse_wallet_history_market_values(history.id)
                     history.refresh_from_db()
-                except Exception:
+                except Exception as exception:
                     LOGGER.exception(exception)
 
             try:
