@@ -2,6 +2,7 @@
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
@@ -25,6 +26,16 @@ class AddressUtxos(APIView):
     #   coinbase?: boolean;
     #   token?: TokenI;
     # }
+    @swagger_auto_schema(
+        operation_description="Fetches the utxos of the provided address",
+        responses={status.HTTP_200_OK: UtxoSerializer},
+        manual_parameters=[
+            openapi.Parameter(name='is_token', type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False, description="If true, api will only return token utxos."),
+            openapi.Parameter('token_type', openapi.IN_QUERY, description="Filters based on type of token. Valid values are 'ft'|'nft'|'hybrid'", type=openapi.TYPE_STRING),
+            openapi.Parameter('offset', openapi.IN_QUERY, description="Pagination's offset.", type=openapi.TYPE_STRING),
+            openapi.Parameter('limit', openapi.IN_QUERY, description="Pagination's page limit.Maximum rows per page", type=openapi.TYPE_INTEGER),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         queryset = Transaction.objects.filter(spent=False)
         address  = kwargs.get('address', None)
