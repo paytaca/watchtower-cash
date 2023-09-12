@@ -29,7 +29,7 @@ class ArbiterDetail(APIView):
             message = ViewCode.ARBITER_GET.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': err.args[0]}, status=status.HTTP_200_OK)
 
         response = {}
         try:

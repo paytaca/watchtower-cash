@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from rampp2p.models import Peer
+from rampp2p.models import Peer, Arbiter
 import ecdsa
 import hashlib
 
@@ -10,8 +10,13 @@ def verify_signature(wallet_hash, signature_hex, message, **kwargs):
     try:
         public_key_hex = kwargs.get('public_key')
         if public_key_hex is None:
-            peer = Peer.objects.get(wallet_hash=wallet_hash)
-            public_key_hex = peer.public_key
+            user = Peer.objects.filter(wallet_hash=wallet_hash)
+            if not user.exists():
+                user = Arbiter.objects.filter(wallet_hash=wallet_hash)
+                if not user.exists():
+                    raise ValidationError('Peer or Arbiter matching query does not exist')
+            user = user.first()
+            public_key_hex = user.public_key
 
         # Convert the signature and public key to bytes
         der_signature_bytes = bytearray.fromhex(signature_hex)
@@ -29,7 +34,7 @@ def verify_signature(wallet_hash, signature_hex, message, **kwargs):
 
         return is_valid
 
-    except (Peer.DoesNotExist, Exception) as err:
+    except Exception as err:
         raise ValidationError({"error": err.args[0]})
 
 def get_verification_headers(request):
