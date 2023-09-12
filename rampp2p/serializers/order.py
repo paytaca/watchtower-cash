@@ -1,13 +1,10 @@
 from rest_framework import serializers
 from django.db.models import Q
-from datetime import datetime
-from django.utils import timezone
 from rampp2p.models import (
     Order,
     CryptoCurrency, 
     FiatCurrency,
     Peer,
-    Ad,
     AdSnapshot,
     TradeType,
     DurationChoices,

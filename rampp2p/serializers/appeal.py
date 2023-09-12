@@ -1,8 +1,10 @@
 from rest_framework import serializers
+from django.db.models import Q
 from rampp2p.models import (
     Appeal, 
     Peer, 
-    Order
+    Order,
+    Status
 )
 import json
 
@@ -32,6 +34,7 @@ class AppealCreateSerializer(serializers.ModelSerializer):
 class AppealSerializer(AppealCreateSerializer):
     owner = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
+    order = serializers.SerializerMethodField()
     class Meta:
         model = Appeal
         fields = AppealCreateSerializer.Meta.fields
@@ -47,3 +50,20 @@ class AppealSerializer(AppealCreateSerializer):
             'label': instance.get_type_display(),
             'value': instance.type
         }
+
+    def get_order(self, instance: Appeal):
+        prev_status = self.get_previous_order_status(instance.order)
+        return {
+            'id': instance.order.id,
+            'status': {
+                'label': prev_status.get_status_display(),
+                'value': prev_status.status
+            }
+        }
+    
+    def get_previous_order_status(self, instance: Order):
+        statuses = Status.objects.filter(Q(order=instance))
+        prev_status = None
+        if statuses.exists() and statuses.count() > 1:
+            prev_status = statuses[statuses.count() - 2]
+        return prev_status
