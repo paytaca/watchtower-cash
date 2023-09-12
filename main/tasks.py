@@ -1275,6 +1275,13 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         amount = data['diff']
         change_address = data['change_address']
 
+        _recipients = None
+        if change_address:
+            _recipients = [(info[0], info[1]) for info in recipients if info[0] != change_address]
+
+        processed_recipients = process_history_recpts_or_senders(_recipients or recipients, key, BCH_OR_SLP)
+        processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
+
         if wallet.wallet_type == 'bch':
             # Correct the amount for outgoing, subtract the miner fee if given and maintain negative sign
             if record_type == 'outgoing':
@@ -1300,10 +1307,43 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 txid=txid,
                 address__address__startswith=bch_prefix
             )
+
+            cashtoken_ft = None
+            cashtoken_nft = None
+
             if key == BCH_OR_SLP:
                 txns = txns.filter(token__name='bch')
+                if txns.exists():
+                    cashtoken_ft = txns.last().cashtoken_ft
+                    cashtoken_nft = txns.last().cashtoken_nft
             else:
-                txns = txns.exclude(token__name='bch')
+                _txns = txns.exclude(token__name='bch')
+                if _txns.exists():
+                    txns = _txns
+                else:
+                    # Get the cashtoken record if transaction does not have this info
+                    ct_recipient = None
+                    ct_index = None
+                    for i, _recipient in enumerate(processed_recipients):
+                        ct_index = i
+                        if _recipient[2]:
+                            ct_recipient = _recipient
+                            break
+                    if key == 'ct' and ct_recipient:
+                        token_id = ct_recipient[2]
+                        nft_capability = ct_recipient[4]
+                        nft_commitment = ct_recipient[5]
+                        if token_id:
+                            if not cashtoken_ft:
+                                cashtoken_ft, _ = CashFungibleToken.objects.get_or_create(category=token_id)
+                            if not cashtoken_nft and nft_capability:
+                                cashtoken_nft, _ = CashNonFungibleToken.objects.get_or_create(
+                                    category=token_id,
+                                    capability=nft_capability,
+                                    commitment=nft_commitment,
+                                    current_txid=txid,
+                                    current_index=ct_index
+                                )
 
         elif wallet.wallet_type == 'slp':
             if key != BCH_OR_SLP:
@@ -1319,26 +1359,20 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
         if not txn: continue
 
-        if change_address:
-            recipients = [(info[0], info[1]) for info in recipients if info[0] != change_address]
-
-        processed_recipients = process_history_recpts_or_senders(recipients, key, BCH_OR_SLP)
-        processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
-
         history_check = WalletHistory.objects.filter(
             wallet=wallet,
             txid=txid,
             token=txn.token,
-            cashtoken_ft=txn.cashtoken_ft,
-            cashtoken_nft=txn.cashtoken_nft
+            cashtoken_ft=cashtoken_ft,
+            cashtoken_nft=cashtoken_nft
         )
         if history_check.exists():
             history_check.update(
                 record_type=record_type,
                 amount=amount,
                 token=txn.token,
-                cashtoken_ft=txn.cashtoken_ft,
-                cashtoken_nft=txn.cashtoken_nft
+                cashtoken_ft=cashtoken_ft,
+                cashtoken_nft=cashtoken_nft
             )
             if tx_fee and processed_senders and processed_recipients:
                 history_check.update(
@@ -1360,8 +1394,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 record_type=record_type,
                 amount=amount,
                 token=txn.token,
-                cashtoken_ft=txn.cashtoken_ft,
-                cashtoken_nft=txn.cashtoken_nft,
+                cashtoken_ft=cashtoken_ft,
+                cashtoken_nft=cashtoken_nft,
                 tx_fee=tx_fee,
                 senders=processed_senders,
                 recipients=processed_recipients,
@@ -1524,7 +1558,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                 if wallet_nft_tokens.exists():
                     wallet_nft_tokens.update(
                         date_dispensed = timezone.now(),
-                        dispensation_transaction = transaction,
+                        dispensation_transaction = txn_obj
                     )
 
         # Parse SLP tx outputs
@@ -1632,19 +1666,6 @@ def rescan_utxos(wallet_hash, full=False):
             get_slp_utxos(address.address)
 
 
-@shared_task(queue='wallet_history_1')
-def rebuild_wallet_history(wallet_hash):
-    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-    if not wallet: return { "success": False, "error": "Wallet does not exist" }
-    if wallet.wallet_type != 'bch':
-        return { "success": False, "error": f"Only supports 'bch' wallets, got '{wallet.wallet_type}'" }
-
-    tx_hashes = []
-    for address in wallet.addresses.all():
-        tx_hashes += rebuild_address_wallet_history(address, ignore_txids=tx_hashes)
-
-    return { "success": True, "txs": tx_hashes }
-
 def rebuild_address_wallet_history(address, tx_count_limit=30, ignore_txids=[]):
     data = get_bch_transactions(address, chipnet=settings.BCH_NETWORK == 'chipnet')
     if isinstance(data, list) and tx_count_limit:
@@ -1659,6 +1680,20 @@ def rebuild_address_wallet_history(address, tx_count_limit=30, ignore_txids=[]):
         except Exception as exception:
             LOGGER.error(f'Unable to parse {address} tx {tx_hash} | {str(exception)}')
     return tx_hashes
+
+
+@shared_task(queue='wallet_history_1')
+def rebuild_wallet_history(wallet_hash):
+    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+    if not wallet: return { "success": False, "error": "Wallet does not exist" }
+    if wallet.wallet_type != 'bch':
+        return { "success": False, "error": f"Only supports 'bch' wallets, got '{wallet.wallet_type}'" }
+
+    tx_hashes = []
+    for address in wallet.addresses.all():
+        tx_hashes += rebuild_address_wallet_history(address, ignore_txids=tx_hashes)
+
+    return { "success": True, "txs": tx_hashes }
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
@@ -2005,7 +2040,6 @@ def populate_token_addresses():
         if is_bch_address(obj.address): # double check here
             obj.token_address = bch_address_converter(obj.address)
             obj.save()
-
 
 
 @shared_task(queue='mempool_processing')
