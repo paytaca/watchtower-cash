@@ -30,6 +30,22 @@ class AddressUtxos(APIView):
         address  = kwargs.get('address', None)
         if address:
           queryset = queryset.filter(Q(address__address=address) | Q(address__token_address=address))
+        
+        is_token = self.request.query_params.get('is_token')
+        token_type = self.request.query_params.get('token_type')
+
+        if is_token == 'true':     # return only token utxos
+            queryset = queryset.filter(Q(amount__gt=0) | Q(cashtoken_ft__category__isnull=False) | Q(cashtoken_nft__category__isnull=False))
+        
+        if token_type == 'ft':     # ft (may have capability also)
+            queryset = queryset.filter(Q(amount__gt=0) & Q(cashtoken_ft__category__isnull=False))
+
+        if token_type == 'nft':    # nft (may have ft also)
+            queryset = queryset.filter(Q(cashtoken_nft__category__isnull=False) & Q(cashtoken_nft__capability__isnull=False))
+
+        if token_type == 'hybrid': # strictly hybrid
+            queryset = queryset.filter(Q(amount__gt=0) & Q(cashtoken_ft__category__isnull=False) & Q(cashtoken_nft__category__isnull=False) & Q(cashtoken_nft__capability__isnull=False))
+
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request)
         if page is not None:
