@@ -113,7 +113,7 @@ class AuthIdentityOutputs(APIView):
         urls = []
         for authkey in authkeys:
             if authkey.cashtoken_nft.category:
-                urls.append[f'http://localhost:3001/cts/js/authguard-token-deposit-address/{authkey.cashtoken_nft.category}']
+                urls.append(f'http://localhost:3001/cts/js/authguard-token-deposit-address/{authkey.cashtoken_nft.category}')
         
         threads = []
         for url in urls:
