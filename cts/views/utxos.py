@@ -1,5 +1,7 @@
 
 
+import requests
+import threading
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
@@ -102,13 +104,33 @@ class AuthIdentityOutputs(APIView):
           queryset = queryset.filter(Q(address__address=address) | Q(address__token_address=address))
         
         queryset = queryset.filter(Q(amount__gt=0) | Q(cashtoken_ft__category__isnull=False) | Q(cashtoken_nft__category__isnull=False))
-        authkeys = queryset.filter(cashtoken_nft__commitment='00')
-        
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(queryset, request)
-        if page is not None:
-            serializer = self.serializer_class(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
+        authkeys = queryset.filter(cashtoken_nft__commitment='00') # authkey like
+        # We need to get the addresses of the AuthGuard contract
+        # associated with each of these AuthKeys.
+        # We'll save it here 
+        token_authguard_addresses = [] 
 
-        serializer = self.serializer_class(queryset, many=True)
-        return Response(serializer.data)
+        urls = []
+        for authkey in authkeys:
+            if authkey.cashtoken_nft.category:
+                urls.append[f'http://localhost:3001/cts/js/authguard-token-deposit-address/{authkey.cashtoken_nft.category}']
+        
+        threads = []
+        for url in urls:
+            thread = threading.Thread(
+                target = lambda u = url: token_authguard_addresses.append(requests.get(u).json())
+            )
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+        # paginator = self.pagination_class()
+        # page = paginator.paginate_queryset(queryset, request)
+        # if page is not None:
+        #     serializer = self.serializer_class(page, many=True)
+        #     return paginator.get_paginated_response(serializer.data)
+
+        # serializer = self.serializer_class(queryset, many=True)
+        # return Response(serializer.data)
+        return Response(token_authguard_addresses)
