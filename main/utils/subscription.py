@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q
 from main.utils.recipient_handler import RecipientHandler
+from django.db import IntegrityError
 from main.utils.address_validator import *
 from main.utils.address_converter import *
 from main.models import (
@@ -40,7 +41,7 @@ def save_subscription(address, subscriber_id):
 
 
 def new_subscription(**kwargs):
-    LOGGER.info(f'New subscription: {kwargs}')
+    LOGGER.info(kwargs)
     response = {'success': False}
     address = kwargs.get('address', None)
     addresses = kwargs.get('addresses', None)
@@ -98,60 +99,68 @@ def new_subscription(**kwargs):
                         address = bch_address_converter(address, to_token_addr=False)
                     else:
                         token_address = bch_address_converter(address)
-                            
-                    address_obj, _ = Address.objects.get_or_create(
-                        address=address,
-                        token_address=token_address
-                    )
-                    if project:
-                        address_obj.project = project
-                        address_obj.save()
 
-                    if wallet_hash:
-                        if wallet_index is not None or address_index is not None:
-                            if isinstance(path, str):
-                                if '/' in path:
-                                    address_obj.address_path = path
-                                    wallet_version = 2
-                            else:
-                                # Deal with subscription for v1 wallets
-                                address_obj.wallet_index = int(path)
-                                address_obj.address_path = path
-                                wallet_version = 1
-                            wallet_check = Wallet.objects.filter(
-                                wallet_hash=wallet_hash
-                            )
-                            if wallet_check.exists():
-                                wallet = wallet_check.last()
-                            else:
-                                wallet = Wallet(
-                                    wallet_hash=wallet_hash,
-                                    version=wallet_version
-                                )
-                                wallet.save()
-                            if wallet.version != wallet_version:
-                                wallet.version = wallet_version
-                                wallet.save()
-                            if not wallet.project:
-                                wallet.project = project
-                                wallet.save()
-                            address_obj.wallet = wallet
-                            address_obj.save()
-                    
                     try:
-                        _, created = Subscription.objects.get_or_create(
-                            recipient=recipient,
-                            address=address_obj
+                            
+                        address_obj, _ = Address.objects.get_or_create(
+                            address=address,
+                            token_address=token_address
                         )
-                        LOGGER.warn(f'created: {created}')
-                        if is_slp_address(address):
-                            get_slp_utxos.delay(address)
-                        elif is_bch_address(address):
-                            get_bch_utxos.delay(address)
-                        elif web3.Web3.isAddress(address):
-                            save_transactions_by_address.delay(address)
-                    except Subscription.MultipleObjectsReturned:
-                        pass
+                        if project:
+                            address_obj.project = project
+                            address_obj.save()
+
+                        if wallet_hash:
+                            if wallet_index is not None or address_index is not None:
+                                if isinstance(path, str):
+                                    if '/' in path:
+                                        address_obj.address_path = path
+                                        wallet_version = 2
+                                else:
+                                    # Deal with subscription for v1 wallets
+                                    address_obj.wallet_index = int(path)
+                                    address_obj.address_path = path
+                                    wallet_version = 1
+                                wallet_check = Wallet.objects.filter(
+                                    wallet_hash=wallet_hash
+                                )
+                                if wallet_check.exists():
+                                    wallet = wallet_check.last()
+                                else:
+                                    wallet = Wallet(
+                                        wallet_hash=wallet_hash,
+                                        version=wallet_version
+                                    )
+                                    wallet.save()
+                                if wallet.version != wallet_version:
+                                    wallet.version = wallet_version
+                                    wallet.save()
+                                if not wallet.project:
+                                    wallet.project = project
+                                    wallet.save()
+                                address_obj.wallet = wallet
+                                address_obj.save()
+
+                        try:
+                            _, created = Subscription.objects.get_or_create(
+                                recipient=recipient,
+                                address=address_obj
+                            )
+
+                            if is_slp_address(address):
+                                get_slp_utxos.delay(address)
+                            elif is_bch_address(address):
+                                get_bch_utxos.delay(address)
+                            elif web3.Web3.isAddress(address):
+                                save_transactions_by_address.delay(address)
+                        except Subscription.MultipleObjectsReturned:
+                            pass
+                        
+                    except IntegrityError as exception:
+                        if 'unique constraint' in str(exception.args).lower():
+                            pass
+                        else:
+                            raise exception
 
                     response['success'] = True
             else:

@@ -92,6 +92,8 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'blockheight',
         'address',
         'token',
+        'cashtoken_ft',
+        'cashtoken_nft',
         'wallet'
     ]
 
@@ -215,7 +217,7 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
     def rescan_utxos(self, request, queryset):
         for wallet in queryset:
-            addresses = wallet.addresses.filter(transactions__spent=False)
+            addresses = wallet.addresses.all()
             for address in addresses:
                 if wallet.wallet_type == 'bch':
                     get_bch_utxos(address.address)
@@ -256,7 +258,9 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
     dynamic_raw_id_fields = [
         'wallet',
-        'token'
+        'token',
+        'cashtoken_ft',
+        'cashtoken_nft'
     ]
 
     search_fields = [

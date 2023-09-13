@@ -9,6 +9,6 @@ export function toBytes20 ({ val, encoding = "utf8", toString = false }) {
 }
 
 export function pubkeyToCashAddress ({ pubkey }) {
-  const ecpair = bchjs.ECPair.fromPublicKey(pubkey)
+  const ecpair = bchjs.ECPair.fromPublicKey(Buffer.from(pubkey, 'hex'))
   return bchjs.ECPair.toCashAddress(ecpair)
 }
