@@ -48,11 +48,8 @@ from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
 
-<<<<<<< HEAD
-=======
 from main.mqtt import client as mqtt_client
 
->>>>>>> master
 LOGGER = logging.getLogger(__name__)
 
 REDIS_STORAGE = settings.REDISKV
