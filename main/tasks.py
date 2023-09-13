@@ -1314,13 +1314,12 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
             if key == BCH_OR_SLP:
                 txns = txns.filter(token__name='bch')
-                if txns.exists():
-                    cashtoken_ft = txns.last().cashtoken_ft
-                    cashtoken_nft = txns.last().cashtoken_nft
             else:
                 _txns = txns.exclude(token__name='bch')
                 if _txns.exists():
                     txns = _txns
+                    cashtoken_ft = txns.last().cashtoken_ft
+                    cashtoken_nft = txns.last().cashtoken_nft
                 else:
                     # Get the cashtoken record if transaction does not have this info
                     ct_recipient = None
@@ -1338,6 +1337,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                         if token_id:
                             if not cashtoken_ft:
                                 cashtoken_ft, _ = CashFungibleToken.objects.get_or_create(category=token_id)
+                                cashtoken_ft.fetch_metadata()
                             if not cashtoken_nft and nft_capability:
                                 cashtoken_nft, _ = CashNonFungibleToken.objects.get_or_create(
                                     category=token_id,
