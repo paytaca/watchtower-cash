@@ -54,6 +54,7 @@ services:
     volumes:
       - ./:/code
       - /code/anyhedge/js/node_modules
+      - /code/rampp2p/escrow/node_modules
   # bchn:
   #   image: cagataygurturk/docker-ssh-tunnel
   #   volumes:
