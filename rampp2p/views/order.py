@@ -14,7 +14,6 @@ from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.viewcodes import ViewCode
-from rampp2p.permissions import *
 from rampp2p.validators import *
 from rampp2p.serializers import (
     OrderSerializer, 

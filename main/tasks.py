@@ -48,11 +48,8 @@ from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
 
-<<<<<<< HEAD
-=======
-from main.mqtt import client as mqtt_client
+# from main.mqtt import client as mqtt_client
 
->>>>>>> master
 LOGGER = logging.getLogger(__name__)
 
 REDIS_STORAGE = settings.REDISKV
@@ -2164,10 +2161,10 @@ def process_mempool_transaction(tx_hash):
                         'value': value
                     }
 
-                    if mqtt_client:
-                        LOGGER.info('Sending MQTT message: ' + str(data))
-                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
-                        LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+                    # if mqtt_client:
+                        # LOGGER.info('Sending MQTT message: ' + str(data))
+                        # msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                        # LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
                     client_acknowledgement.delay(obj_id)
 

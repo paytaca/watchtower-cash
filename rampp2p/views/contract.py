@@ -7,7 +7,6 @@ from django.http import Http404
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.contract import create_contract
 from rampp2p.viewcodes import ViewCode
-from rampp2p.permissions import *
 from rampp2p.validators import *
 
 from rampp2p.models import (
