@@ -11,16 +11,21 @@ class VaultSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class VoucherSerializer(serializers.ModelSerializer):    
+class VoucherSerializer(serializers.ModelSerializer):
+    capability = serializers.SerializerMethodField()
+
     class Meta:
         model = Voucher
         fields = (
+            'id',
             'vault',
             'value',
             'minting_txid',
             'claim_txid',
             'key_category',
             'lock_category',
+            'commitment',
+            'capability',
             'claimed',
             'expired',
             'duration_days',
@@ -32,7 +37,11 @@ class VoucherSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'expiration_date',
             'id',
+            'capability',
         )
+
+    def get_capability(self, obj):
+        return 'none'
 
 
 class VoucherClaimCheckSerializer(serializers.Serializer):
