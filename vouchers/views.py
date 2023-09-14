@@ -130,17 +130,16 @@ class VoucherViewSet(
         
         if is_merchant_address:
             valid_categories = []
-            key_nft_categories = serializer.validated_data['key_nft_categories']
+            voucher_ids = serializer.validated_data['voucher_ids']
 
             # error keys
             VOUCHER_EXPIRED = 'voucher_expired'
             INVALID_VOUCHER = 'invalid_voucher'
             VOUCHER_MERCHANT_MISMATCH = 'voucher_merchant_mismatch'
 
-
-            for key_nft_category in key_nft_categories:
-                vouchers = Voucher.objects.filter(key_category=key_nft_category)
-                result[key_nft_category] = { 'err': '' }
+            for voucher_id in voucher_ids:
+                vouchers = Voucher.objects.filter(id=voucher_id)
+                result[voucher_id] = { 'err': '' }
 
                 if vouchers.exists():
                     voucher = vouchers.first()
@@ -149,11 +148,11 @@ class VoucherViewSet(
 
                     if voucher_belongs_to_merchant:
                         if voucher.expired:
-                            result[key_nft_category]['err'] = VOUCHER_EXPIRED
+                            result[voucher_id]['err'] = VOUCHER_EXPIRED
                             return Response(result)
 
                         node = Node()
-                        txn = node.BCH.get_transaction(voucher.txid)
+                        txn = node.BCH.get_transaction(voucher.minting_txid)
 
                         if txn['valid']:
                             outputs = txn['outputs']
@@ -168,15 +167,15 @@ class VoucherViewSet(
                             if key_nft_category == voucher.key_category and lock_nft_recipient == vault_token_address:
                                 valid_categories.append(key_nft_category)
                             else:
-                                result[key_nft_category]['err'] = VOUCHER_MERCHANT_MISMATCH
+                                result[voucher_id]['err'] = VOUCHER_MERCHANT_MISMATCH
                         else:
-                            result[key_nft_category]['err'] = INVALID_VOUCHER
+                            result[voucher_id]['err'] = INVALID_VOUCHER
                     else:
-                        result[key_nft_category]['err'] = VOUCHER_MERCHANT_MISMATCH
+                        result[voucher_id]['err'] = VOUCHER_MERCHANT_MISMATCH
                 else:
-                    result[key_nft_category]['err'] = INVALID_VOUCHER
+                    result[voucher_id]['err'] = INVALID_VOUCHER
 
-            if len(valid_categories) == len(key_nft_categories):
+            if len(valid_categories) == len(voucher_ids):
                 result['proceed'] = True
         
         return Response(result, status=status.HTTP_200_OK)
