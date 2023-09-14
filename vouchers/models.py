@@ -2,6 +2,8 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
+from main.models import CashNonFungibleToken
+
 from datetime import timedelta
 
 
@@ -38,3 +40,11 @@ class Voucher(models.Model):
     def expiration_date(self):
         expiration_date = self.date_created + timedelta(days=self.duration_days)
         return expiration_date
+
+    @property
+    def commitment(self):
+        nft = CashNonFungibleToken.objects.filter(category=self.lock_category)
+        if nft.exists():
+            nft = nft.first()
+            return nft.commitment
+        return None
