@@ -21,6 +21,7 @@ import anyhedge.routing
 import rampp2p.routing
 import vouchers.routing
 
+
 application = ProtocolTypeRouter({
   "http": django_asgi_app,
   "websocket": AllowedHostsOriginValidator(

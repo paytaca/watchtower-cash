@@ -66,7 +66,6 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
 
 class CashNonFungibleTokenSerializer(serializers.ModelSerializer):
     info = CashTokenInfoSerializer()
-    expiration_date = serializers.SerializerMethodField()
     
     class Meta:
         model = CashNonFungibleToken
@@ -78,13 +77,4 @@ class CashNonFungibleTokenSerializer(serializers.ModelSerializer):
             'current_txid',
             'current_index',
             'info',
-            'expiration_date',
         ]
-
-    def get_expiration_date(self, obj):
-        vouchers = Voucher.objects.filter(key_category=obj.category)
-        if vouchers.exists():
-            voucher = vouchers.first()
-            expiration_date = voucher.date_created + timedelta(days=voucher.duration_days)
-            return expiration_date
-        return None

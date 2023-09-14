@@ -14,7 +14,7 @@ from main.tasks import (
     send_telegram_message,
     parse_tx_wallet_histories,
 )
-import paho.mqtt.client as mqtt
+# import paho.mqtt.client as mqtt
 
 
 # mqtt_client = mqtt.Client()
@@ -51,8 +51,6 @@ def run():
             tx = notification.unconfirmed_transaction.transaction
             tx_hash = bytearray(tx.hash[::-1]).hex()
 
-            LOGGER.warning(f'tx_hash: {tx_hash}')
-            
             has_subscribed_input = False
             has_updated_output = False
 
@@ -142,7 +140,7 @@ def run():
                         token_id,
                         slp_address,
                         tx_hash,
-                        source,
+                        source
                     )
                     obj_id, created = save_record(
                         *args,

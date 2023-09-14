@@ -37,4 +37,4 @@ def is_bch_address(addr, to_token_addr=False):
 
 
 def is_token_address(addr):
-    is_bch_address(addr, to_token_addr=True)
+    return is_bch_address(addr, to_token_addr=True)
