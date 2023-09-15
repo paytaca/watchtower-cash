@@ -55,7 +55,6 @@ class Ad(models.Model):
 '''A snapshot of the ad is created everytime an order is created.'''
 class AdSnapshot(models.Model):
     ad = models.ForeignKey(Ad, on_delete=models.CASCADE)
-    owner = models.ForeignKey(Peer, on_delete=models.PROTECT)
     trade_type = models.CharField(max_length=4, choices=TradeType.choices)
     price_type = models.CharField(max_length=10, choices=PriceType.choices)
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT)
@@ -67,7 +66,7 @@ class AdSnapshot(models.Model):
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     crypto_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
-    payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots')
+    payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots') # TODO: payment_method snapshots
     created_at = models.DateTimeField(auto_now_add=True)
     
     @property

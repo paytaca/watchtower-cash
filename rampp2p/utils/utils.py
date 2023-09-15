@@ -40,11 +40,11 @@ def get_order_peers(order: Order):
     buyer = None
     arbiter = order.arbiter
     if order.ad_snapshot.trade_type == TradeType.SELL:
-        seller = order.ad_snapshot.owner
+        seller = order.ad_snapshot.ad.owner
         buyer = order.owner
     else:
         seller = order.owner
-        buyer = order.ad_snapshot.owner
+        buyer = order.ad_snapshot.ad.owner
     
     return arbiter, buyer, seller
 

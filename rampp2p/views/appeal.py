@@ -15,14 +15,17 @@ from rampp2p.models import (
     Transaction,
     Appeal,
     AppealType,
-    Arbiter
+    Arbiter,
+    Status
 )
 
 from rampp2p.serializers import (
     StatusSerializer,
     AppealSerializer,
     AppealCreateSerializer,
-    TransactionSerializer
+    TransactionSerializer,
+    OrderSerializer,
+    ContractSerializer
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
@@ -87,8 +90,6 @@ class AppealList(APIView):
         }
         return Response(data, status.HTTP_200_OK)
 
-
-
     def validate_permissions(self, wallet_hash):
         '''
         Caller must be an arbiter
@@ -96,7 +97,7 @@ class AppealList(APIView):
         try:
             Arbiter.objects.get(wallet_hash=wallet_hash)
         except Arbiter.DoesNotExist as err:
-            raise ValidationError(err.args[0])
+            raise ValidationError(err.args[0])        
 
 class AppealRequest(APIView):
     def get(self, request, pk):
@@ -117,7 +118,24 @@ class AppealRequest(APIView):
             appeal = appeal.first()
             serialized_appeal = AppealSerializer(appeal)
         
-        return Response({'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data}, status=status.HTTP_200_OK)
+            context = { 'wallet_hash': wallet_hash }
+            serialized_order = OrderSerializer(appeal.order, context=context)
+            statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
+            serialized_statuses = StatusSerializer(statuses, many=True)
+            contract = Contract.objects.filter(order=appeal.order.id).first()
+            serialized_contract = ContractSerializer(contract)
+            transactions = Transaction.objects.filter(contract=contract.id)
+            serialized_transactions = TransactionSerializer(transactions, many=True)
+
+        response = {
+            'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data,
+            'order': serialized_order.data,
+            'statuses': serialized_statuses.data,
+            'contract': serialized_contract.data,
+            'transaction': serialized_transactions.data
+        }
+        
+        return Response(response, status=status.HTTP_200_OK)
         
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -126,14 +144,19 @@ class AppealRequest(APIView):
 
         try:
             order = Order.objects.get(pk=pk)
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-        except (Order.DoesNotExist, Peer.DoesNotExist) as err:
+            caller = Arbiter.objects.filter(wallet_hash=wallet_hash)
+            if not caller.exists():
+                caller = Peer.objects.filter(wallet_hash=wallet_hash)
+                if not caller.exists():
+                    raise ValidationError('Peer or Arbiter matching query does not exist')
+            caller = caller.first()
+        except (Order.DoesNotExist, ValidationError) as err:
             raise ValidationError(err.args[0])
         
         if (caller.wallet_hash != order.owner.wallet_hash and
-            caller.wallet_hash != order.ad_snapshot.owner.wallet_hash and
+            caller.wallet_hash != order.ad_snapshot.ad.owner.wallet_hash and
             caller.wallet_hash != order.arbiter.wallet_hash):
-            raise ValidationError('caller not allowed to view this order')
+            raise ValidationError('caller not allowed to view this appeal')
         
         return order
     
@@ -199,23 +222,7 @@ class AppealRequest(APIView):
         }
         # notify order update subscribers
         send_order_update(json.dumps(response_data), pk)
-        return Response(response_data, status=status.HTTP_200_OK)        
-    
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        AppealRelease is callable only by the buyer/seller.
-        '''
-
-        try:
-            order = Order.objects.get(pk=pk)
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-        except (Order.DoesNotExist, Peer.DoesNotExist) as err:
-            raise ValidationError(err.args[0])
-        
-        if (caller.wallet_hash != order.owner.wallet_hash and
-            caller.wallet_hash != order.ad_snapshot.owner.wallet_hash):
-            raise ValidationError('caller not affiliated to this order')
-        
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class AppealPendingRelease(APIView):
     '''
@@ -423,7 +430,7 @@ class VerifyRelease(APIView):
         if caller.wallet_hash == order.arbiter.wallet_hash:
             is_arbiter = True
         elif order.ad_snapshot.trade_type == TradeType.SELL:
-            seller = order.ad_snapshot.owner
+            seller = order.ad_snapshot.ad.owner
             if caller.wallet_hash == seller.wallet_hash:
                 is_seller = True
 
