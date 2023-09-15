@@ -594,6 +594,7 @@ def process_cashtoken_tx(
         client_acknowledgement(obj_id)
     
     return {
+        'transaction_id': obj_id,
         'created': created,
         'token_id': 'ct/' + token_id,
         'decimals': decimals,
@@ -2126,6 +2127,7 @@ def process_mempool_transaction(tx_hash):
                     decimals = saved_token_data['decimals']
                     amount = str(saved_token_data['amount'])
                     created = saved_token_data['created']
+                    obj_id = saved_token_data['transaction_id']
                 else:
                     args = (
                         token_id,
