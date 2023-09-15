@@ -68,7 +68,10 @@ class UtxoSerializer(serializers.Serializer):
 
   def get_token(self, obj) -> Dict[str,str]:
     
-    token = {}
+    token = {
+      'amount': 0,
+      'commitment': ''
+    }
 
     if obj.amount:
       token['amount'] = obj.amount
@@ -79,7 +82,7 @@ class UtxoSerializer(serializers.Serializer):
     if obj.cashtoken_nft and not token.get('tokenId'):
       token['tokenId'] = obj.cashtoken_nft.category
 
-    if obj.cashtoken_nft and obj.cashtoken_nft.commitment:
+    if obj.cashtoken_nft.commitment:
       token['commitment'] = obj.cashtoken_nft.commitment
     
     if obj.cashtoken_nft and obj.cashtoken_nft.capability:
@@ -96,6 +99,7 @@ class UtxoSerializer(serializers.Serializer):
 
 class AuthchainIdentitySerializer(serializers.Serializer):
 
+  txid = serializers.CharField()
   vout = serializers.SerializerMethodField()
   satoshis = serializers.SerializerMethodField()
   height = serializers.SerializerMethodField()
@@ -127,7 +131,7 @@ class AuthchainIdentitySerializer(serializers.Serializer):
     token = {}
 
     if obj.amount:
-      token['amount'] = obj.amount
+      token['amount'] = obj.amount or 0
 
     if obj.cashtoken_ft and obj.cashtoken_ft.category:
       token['tokenId'] = obj.cashtoken_ft.category
@@ -135,8 +139,9 @@ class AuthchainIdentitySerializer(serializers.Serializer):
     if obj.cashtoken_nft and not token.get('tokenId'):
       token['tokenId'] = obj.cashtoken_nft.category
 
-    if obj.cashtoken_nft and obj.cashtoken_nft.commitment:
-      token['commitment'] = obj.cashtoken_nft.commitment
+    if obj.cashtoken_nft:
+      token['commitment'] = obj.cashtoken_nft.commitment or ""
+    
     
     if obj.cashtoken_nft and obj.cashtoken_nft.capability:
       token['capability'] = obj.cashtoken_nft.capability
