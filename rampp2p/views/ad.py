@@ -42,6 +42,7 @@ class AdListCreate(APIView):
         queryset = Ad.objects.filter(is_deleted=False)
 
         wallet_hash = request.headers.get('wallet_hash')
+        owner_id = request.query_params.get('owner_id')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
         owned = request.query_params.get('owned', False)
@@ -70,6 +71,9 @@ class AdListCreate(APIView):
             # Require currency param if fetching data for store page
             return Response({'error': 'currency is required'}, status=status.HTTP_400_BAD_REQUEST)
         
+        if owner_id is not None:
+            queryset = queryset.filter(owner_id=owner_id)
+
         if currency is not None:
             queryset = queryset.filter(Q(fiat_currency__symbol=currency))
         
