@@ -69,7 +69,7 @@ class AdListSerializer(serializers.ModelSerializer):
     
     def get_trade_count(self, instance: Ad):
         # Count the number of trades (orders) related to ad owner
-        query = Q(ad_snapshot__owner__id=instance.owner.id)
+        query = Q(ad_snapshot__ad__owner__id=instance.owner.id)
         trade_count = Order.objects.filter(query).count()
         return trade_count
 
@@ -96,7 +96,7 @@ class AdListSerializer(serializers.ModelSerializer):
         latest_status_subquery = Status.objects.filter(query).order_by('-created_at').values('id')[:1]
         
         # Retrieve the latest statuses for each order
-        user_orders = Order.objects.filter(Q(ad_snapshot__owner__id=owner_id)).annotate(
+        user_orders = Order.objects.filter(Q(ad_snapshot__ad__owner__id=owner_id)).annotate(
             latest_status_id = Subquery(latest_status_subquery)
         )
 

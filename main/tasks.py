@@ -2162,9 +2162,9 @@ def process_mempool_transaction(tx_hash):
                     }
 
                     # if mqtt_client:
-                        # LOGGER.info('Sending MQTT message: ' + str(data))
-                        # msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
-                        # LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+                    #     LOGGER.info('Sending MQTT message: ' + str(data))
+                    #     msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                    #     LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
                     client_acknowledgement.delay(obj_id)
 
