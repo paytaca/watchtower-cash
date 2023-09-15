@@ -36,13 +36,16 @@ class AuthchainIdentity(APIView):
         manual_parameters=[
             openapi.Parameter('authkey_owner_address', openapi.IN_PATH, description="The address that currently owns the AuthKey (NFT) that can unlock the AuthGuard that stores the IdentityOutputs", type=openapi.TYPE_STRING),
             openapi.Parameter('authguard', openapi.IN_QUERY, description="The Authguard contract's token address. This filters results by Authguard contract's token address. Returns only the IdentityOutputs locked in this Authguard", type=openapi.TYPE_STRING),
+            openapi.Parameter('token_amount__eq', openapi.IN_QUERY, description="Filters identities with token amount equal to the provided value", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('token_amount__lte', openapi.IN_QUERY, description="Filters identities with token amount less than or equal to the provided value.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('token_amount__gte', openapi.IN_QUERY, description="Filters identities with token amount greater than or equal to the provided value. This can be used to filter identities holds FT reserve supply.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('token_is_nft', openapi.IN_QUERY, description="Filters identities with nft capability", type=openapi.TYPE_BOOLEAN),
+            openapi.Parameter('token_capability', openapi.IN_QUERY, description="Filters identities by nft capability", type=openapi.TYPE_STRING),
+            openapi.Parameter('token_commitment', openapi.IN_QUERY, description="Filters identities by nft commitment", type=openapi.TYPE_STRING),
             openapi.Parameter('offset', openapi.IN_QUERY, description="Pagination's offset.", type=openapi.TYPE_STRING),
             openapi.Parameter('limit', openapi.IN_QUERY, description="Pagination's page limit.Maximum rows per page", type=openapi.TYPE_INTEGER),
         ]
     )
-
-    
-
     def get(self, request, *args, **kwargs):
         queryset = Transaction.objects.filter(spent=False)
         address  = kwargs.get('authkey_owner_address', None)
@@ -81,6 +84,25 @@ class AuthchainIdentity(APIView):
 
         if self.request.query_params.get('authguard'):
             identity_outputs = identity_outputs.filter(address__token_address=self.request.query_params.get('authguard'))
+
+        if self.request.query_params.get('token_amount__eq'):
+            identity_outputs = identity_outputs.filter(amount=int(self.request.query_params.get('token_amount__eq')))
+
+        if self.request.query_params.get('token_amount__lte'):
+            identity_outputs = identity_outputs.filter(amount__lte=int(self.request.query_params.get('token_amount__lte')))
+
+        if self.request.query_params.get('token_amount__gte'):
+            identity_outputs = identity_outputs.filter(amount__gte=int(self.request.query_params.get('token_amount__gte')))
+
+        if self.request.query_params.get('token_is_nft'):
+            identity_outputs = identity_outputs.filter(cashtoken_nft__capability__isnull=False)
+
+        if self.request.query_params.get('token_capability'):
+            identity_outputs = identity_outputs.filter(cashtoken_nft__capability=self.request.query_params.get('token_capability'))
+        
+        if self.request.query_params.get('token_commitment'):
+            identity_outputs = identity_outputs.filter(cashtoken_nft__commitment=self.request.query_params.get('token_commitment'))
+        
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(identity_outputs, request)
