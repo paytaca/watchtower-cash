@@ -25,7 +25,8 @@ from rampp2p.serializers import (
     AppealCreateSerializer,
     TransactionSerializer,
     OrderSerializer,
-    ContractSerializer
+    ContractSerializer,
+    AdSnapshotSerializer
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
@@ -126,13 +127,15 @@ class AppealRequest(APIView):
             serialized_contract = ContractSerializer(contract)
             transactions = Transaction.objects.filter(contract=contract.id)
             serialized_transactions = TransactionSerializer(transactions, many=True)
+            serialized_ad_snapshot =  AdSnapshotSerializer(appeal.order.ad_snapshot)
 
         response = {
             'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data,
             'order': serialized_order.data,
+            'ad_snapshot': serialized_ad_snapshot.data,
             'statuses': serialized_statuses.data,
             'contract': serialized_contract.data,
-            'transaction': serialized_transactions.data
+            'transactions': serialized_transactions.data
         }
         
         return Response(response, status=status.HTTP_200_OK)

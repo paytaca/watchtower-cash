@@ -3,6 +3,7 @@ from rampp2p.utils.utils import get_trading_fees
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import (
     Ad, 
+    AdSnapshot,
     PriceType,
     DurationChoices,
     Peer,
@@ -16,6 +17,38 @@ from rampp2p.models import (
 )
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer
+
+class AdSnapshotSerializer(serializers.ModelSerializer):
+    price = serializers.SerializerMethodField()
+    fiat_currency = FiatCurrencySerializer()
+    crypto_currency = CryptoCurrencySerializer()
+    payment_methods = RelatedPaymentMethodSerializer(many=True)
+
+    class Meta:
+        model = AdSnapshot
+        fields = [
+            'id',
+            'ad',
+            'trade_type',
+            'price_type',
+            'fiat_currency',
+            'crypto_currency',
+            'floating_price',
+            'price',
+            'market_price',
+            'fixed_price',
+            'trade_floor',
+            'trade_ceiling',
+            'crypto_amount',
+            'payment_methods',
+            'time_duration_choice',
+            'created_at'
+        ]
+
+    def get_price(self, instance: AdSnapshot):
+        if instance.price_type == PriceType.FIXED:
+            return instance.fixed_price
+        return instance.market_price * (instance.floating_price/100)
 
 class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SlugRelatedField(slug_field="nickname", queryset=Peer.objects.all())
