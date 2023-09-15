@@ -1,7 +1,10 @@
 import requests
+from typing import Dict
 from rest_framework import serializers
 from django.db.models import Q
 from main.models import Transaction
+from drf_yasg.utils import swagger_serializer_method
+
 
 # from typing import TypedDict, Optional, Union
 
@@ -41,6 +44,7 @@ def extract_token_id_from_authguard_pair(token_authguard_addresses, authguard):
 
 class UtxoSerializer(serializers.Serializer):
 
+  txid = serializers.CharField()
   vout = serializers.SerializerMethodField()
   satoshis = serializers.SerializerMethodField()
   height = serializers.SerializerMethodField()
@@ -59,10 +63,10 @@ class UtxoSerializer(serializers.Serializer):
     else:
       return 0
 
-  def get_coinbase(self, obj):
+  def get_coinbase(self, obj) -> bool:
     return False # We just assume watchtower is not indexing coinbase txs, verify.
 
-  def get_token(self, obj):
+  def get_token(self, obj) -> Dict[str,str]:
     
     token = {}
 
@@ -103,22 +107,22 @@ class AuthchainIdentitySerializer(serializers.Serializer):
   authKeyOwner = serializers.SerializerMethodField()
   authKey = serializers.SerializerMethodField()
 
-  def get_vout(self, obj):
+  def get_vout(self, obj) -> int:
     return obj.index
 
-  def get_satoshis(self, obj):
+  def get_satoshis(self, obj) -> int:
     return obj.value
 
-  def get_height(self, obj):
+  def get_height(self, obj) -> int:
     if obj.blockheight:
       return obj.blockheight.number
     else:
       return 0
 
-  def get_coinbase(self, obj):
+  def get_coinbase(self, obj) -> bool:
     return False # We just assume watchtower is not indexing coinbase txs, verify.
 
-  def get_token(self, obj):
+  def get_token(self, obj) -> Dict[str,str]:
     
     token = {}
 
@@ -142,20 +146,21 @@ class AuthchainIdentitySerializer(serializers.Serializer):
     
     return None
 
-  def get_authGuard(self, obj):
+  def get_authGuard(self, obj) -> str:
     return obj.authGuard
 
-  def get_authKeyOwner(self, obj):
+  def get_authKeyOwner(self, obj) -> str:
     return obj.authKeyOwner
   
-  def get_authGuardTokenId(self, obj):
+  def get_authGuardTokenId(self, obj) -> str:
     token_id_authguard_pairs = self.context.get('token_id_authguard_pairs')
     if obj.authGuard and token_id_authguard_pairs:
       found = extract_token_id_from_authguard_pair(token_id_authguard_pairs, obj.authGuard)
       return list(found.keys())[0] # key here is tokenId
     return None
   
-  def get_authKey(self, obj):
+  @swagger_serializer_method(serializer_or_field=serializers.DictField)
+  def get_authKey(self, obj) -> Dict[str, str]:
     authkey_token_id = self.get_authGuardTokenId(obj)
     if authkey_token_id:
       authKey = Transaction.objects.filter(
