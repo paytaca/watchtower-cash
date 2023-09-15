@@ -48,8 +48,6 @@ from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
 
-from main.mqtt import client as mqtt_client
-
 LOGGER = logging.getLogger(__name__)
 
 REDIS_STORAGE = settings.REDISKV
@@ -2049,6 +2047,8 @@ def populate_token_addresses():
 
 @shared_task(queue='mempool_processing')
 def process_mempool_transaction(tx_hash):
+    from main.mqtt import client as mqtt_client
+
     LOGGER.info('Processing mempool tx: ' + tx_hash)
 
     tx = NODE.BCH._get_raw_transaction(tx_hash)
@@ -2161,12 +2161,12 @@ def process_mempool_transaction(tx_hash):
                         'amount': amount,
                         'value': value
                     }
-
-                    if mqtt_client:
-                        LOGGER.info('Sending MQTT message: ' + str(data))
-                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
-                        LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
-
+                    mqtt_client.loop_start()
+                    LOGGER.info('Sending MQTT message: ' + str(data))
+                    msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                    LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+                    mqtt_client.loop_stop()
+                    
                     client_acknowledgement.delay(obj_id)
 
                     LOGGER.info(data)
