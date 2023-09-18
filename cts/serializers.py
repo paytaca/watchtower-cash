@@ -154,6 +154,7 @@ class AuthKeySerializer(UtxoSerializer):
   authGuard = serializers.SerializerMethodField()
   authKeyOwner = serializers.SerializerMethodField()
   unlockableTokens = serializers.SerializerMethodField()
+  unlockableTokensCount = serializers.SerializerMethodField()
 
   def get_authGuard(self, obj) -> str:
     token_id_authguard_pairs = self.context.get('token_id_authguard_pairs')
@@ -180,7 +181,14 @@ class AuthKeySerializer(UtxoSerializer):
 
     return None
   
+  def get_unlockableTokensCount(self, obj) -> int:
+    c = self.get_unlockableTokens(obj)
+    if c:
+      return len(c)
+    else:
+      return 0
+    
   class Meta:
     model = Transaction
-    fields = ['txid','vout', 'satoshis', 'height', 'coinbase', 'token', 'authGuard', 'authKeyOwner', 'unlockableTokens']
+    fields = ['txid','vout', 'satoshis', 'height', 'coinbase', 'token', 'authGuard', 'authKeyOwner', 'unlockableTokens', 'unlockableTokensCount']
 
