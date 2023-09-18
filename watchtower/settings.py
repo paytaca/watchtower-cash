@@ -88,7 +88,8 @@ INSTALLED_APPS=[
     'notifications',
     'jpp',
     'ramp',
-    'rampp2p'
+    'rampp2p',
+    'cts'
 ]
 
 MIDDLEWARE=[

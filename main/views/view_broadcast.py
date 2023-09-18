@@ -7,6 +7,7 @@ from main.models import Address
 from main.tasks import rescan_utxos
 from main.utils.queries.bchn import BCHN
 from main.tasks import broadcast_transaction
+from main.tasks import process_mempool_transaction
 
 
 def _get_wallet_hash(tx_hash):
@@ -47,8 +48,10 @@ class BroadcastViewSet(generics.GenericAPIView):
             if 'already have transaction' in result:
                 success = True
             if success:
-                response['txid'] = result.split(' ')[-1]
+                txid = result.split(' ')[-1]
+                response['txid'] = txid
                 response['success'] = True
+                process_mempool_transaction.delay(txid)
                 return Response(response, status=status.HTTP_200_OK)
             else:
                 # Do a wallet utxo rescan if failed
