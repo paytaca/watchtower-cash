@@ -7,18 +7,17 @@ from django.http import Http404
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.contract import create_contract
 from rampp2p.viewcodes import ViewCode
-from rampp2p.permissions import *
 from rampp2p.validators import *
 
 from rampp2p.models import (
     StatusType,
-    Status,
     Order,
     Peer,
     Contract,
     Transaction,
     Recipient,
-    Arbiter
+    Arbiter,
+    TradeType
 )
 
 from rampp2p.serializers import (
@@ -160,15 +159,15 @@ class CreateContract(APIView):
         buyer_address = None
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
-            seller_pubkey = order.ad_snapshot.owner.public_key
+            seller_pubkey = order.ad_snapshot.ad.owner.public_key
             buyer_pubkey = order.owner.public_key
-            seller_address = order.ad_snapshot.owner.address
+            seller_address = order.ad_snapshot.ad.owner.address
             buyer_address = order.owner.address
         else:
             seller_pubkey = order.owner.public_key
-            buyer_pubkey = order.ad_snapshot.owner.public_key
+            buyer_pubkey = order.ad_snapshot.ad.owner.public_key
             seller_address = order.owner.address
-            buyer_address = order.ad_snapshot.owner.address
+            buyer_address = order.ad_snapshot.ad.owner.address
 
         if (arbiter_pubkey is None or 
             seller_pubkey is None or 
@@ -201,7 +200,7 @@ class CreateContract(APIView):
 
         seller = None
         if order.ad_snapshot.trade_type == TradeType.SELL:
-            seller = order.ad_snapshot.owner
+            seller = order.ad_snapshot.ad.owner
         else:
             seller = order.owner
     

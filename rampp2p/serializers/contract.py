@@ -68,12 +68,12 @@ class ContractDetailSerializer(ContractSerializer):
         arbiter = instance.order.arbiter
         seller = None
         buyer = None
-        ad = instance.order.ad_snapshot
+        ad_snapshot = instance.order.ad_snapshot
         order = instance.order
-        if ad.trade_type == TradeType.SELL:
-            seller = ad.owner
+        if ad_snapshot.trade_type == TradeType.SELL:
+            seller = ad_snapshot.ad.owner
             buyer = order.owner
         else:
             seller = order.owner
-            buyer = ad.owner
+            buyer = ad_snapshot.ad.owner
         return arbiter, seller, buyer

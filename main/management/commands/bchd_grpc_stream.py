@@ -139,7 +139,7 @@ def run():
                     args = (
                         token_id,
                         slp_address,
-                        tx_hash
+                        tx_hash,
                         source
                     )
                     obj_id, created = save_record(

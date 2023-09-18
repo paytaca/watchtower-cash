@@ -74,8 +74,8 @@ class OrderSerializer(serializers.ModelSerializer):
         return {
             'id': instance.ad_snapshot.ad.id,
             'owner': {
-                'id': instance.ad_snapshot.owner.id,
-                'nickname': instance.ad_snapshot.owner.nickname
+                'id': instance.ad_snapshot.ad.owner.id,
+                'nickname': instance.ad_snapshot.ad.owner.nickname
             }
         }
     
@@ -133,7 +133,7 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_is_ad_owner(self, instance: Order):
         wallet_hash = self.context['wallet_hash']
-        if instance.ad_snapshot.owner.wallet_hash == wallet_hash:
+        if instance.ad_snapshot.ad.owner.wallet_hash == wallet_hash:
             return True
         return False
 

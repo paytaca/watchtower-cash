@@ -55,31 +55,31 @@ def handle_transaction(data: Dict, **kwargs):
     contract = Contract.objects.get(pk=kwargs.get('contract_id'))
 
     # TODO: uncomment after status testing
-    # valid, error, outputs = verify_tx_out(data.get('result'), action, contract)
-    # result = None
-    # if valid:
-    #     result = handle_order_status(
-    #         valid=valid,
-    #         action=action,
-    #         txid=txid,
-    #         contract=contract,
-    #         outputs=outputs,
-    #         error=error
-    #     )
-    # else:
-    #     result = {
-    #         'success': valid,
-    #         'error': error
-    #     }
+    valid, error, outputs = verify_tx_out(data.get('result'), action, contract)
+    result = None
+    if valid:
+        result = handle_order_status(
+            valid=valid,
+            action=action,
+            txid=txid,
+            contract=contract,
+            outputs=outputs,
+            error=error
+        )
+    else:
+        result = {
+            'success': valid,
+            'error': error
+        }
     # TODO: uncomment after status testing
     # TODO: delete below after status testing
-    '''Skips the transaction verification (via verify_tx_out) and goes directly to handle_order_status'''
-    result = handle_order_status(
-        valid=True,
-        action=action,
-        txid=txid,
-        contract=contract
-    )
+    # '''Skips the transaction verification (via verify_tx_out) and goes directly to handle_order_status'''
+    # result = handle_order_status(
+    #     valid=True,
+    #     action=action,
+    #     txid=txid,
+    #     contract=contract
+    # )
     # TODO: delete above after status testing
     send_order_update(
         result, 

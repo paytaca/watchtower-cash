@@ -103,7 +103,7 @@ class ArbiterFeedbackListCreate(APIView):
             raise ValidationError(err.args[0])
 
         order_creator = order.owner.id == from_peer.id
-        order_ad_creator = order.ad_snapshot.owner.id == from_peer.id
+        order_ad_creator = order.ad_snapshot.ad.owner.id == from_peer.id
 
         if not (order_creator or order_ad_creator):
             raise ValidationError('not allowed to feedback this order')
@@ -193,14 +193,14 @@ class PeerFeedbackListCreate(APIView):
             raise ValidationError(err.args[0])
 
         order_creator = order.owner.id == from_peer.id
-        order_ad_creator = order.ad_snapshot.owner.id == from_peer.id
+        order_ad_creator = order.ad_snapshot.ad.owner.id == from_peer.id
 
         if not (order_creator or order_ad_creator):
             raise ValidationError('not allowed to feedback this order')
         
         to_peer = None
         if order_creator:
-            to_peer = order.ad_snapshot.owner
+            to_peer = order.ad_snapshot.ad.owner
         else:
             to_peer = order.owner
         

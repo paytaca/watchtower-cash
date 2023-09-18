@@ -4,7 +4,9 @@ from rampp2p.models import (
     Appeal, 
     Peer, 
     Order,
-    Status
+    Status,
+    AdSnapshot,
+    PriceType
 )
 import json
 
@@ -26,9 +28,7 @@ class AppealCreateSerializer(serializers.ModelSerializer):
            'owner',
            'order',
            'type',
-           'reasons',
-           'resolved_at',
-           'created_at'
+           'reasons'
         ]
 
 class AppealSerializer(AppealCreateSerializer):
@@ -37,7 +37,10 @@ class AppealSerializer(AppealCreateSerializer):
     order = serializers.SerializerMethodField()
     class Meta:
         model = Appeal
-        fields = AppealCreateSerializer.Meta.fields
+        fields = AppealCreateSerializer.Meta.fields + [
+            'resolved_at',
+            'created_at'
+        ]
     
     def get_owner(self, instance: Appeal):
         return {

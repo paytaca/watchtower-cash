@@ -88,6 +88,7 @@ INSTALLED_APPS=[
     'notifications',
     'jpp',
     'ramp',
+    'rampp2p',
     'cts'
 ]
 
@@ -246,13 +247,16 @@ if DEPLOYMENT_INSTANCE == 'prod':
     DB_NUM = [0,1,2]
 
 REDIS_HOST = decipher(config('REDIS_HOST'))
-REDIS_PASSWORD = decipher(config('REDIS_PASSWORD'))
+REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', ''))
 REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = (
     'main.tasks',
     'smartbch.tasks',
     'anyhedge.tasks',
     'ramp.tasks',
+    'rampp2p.tasks.contract_tasks',
+    'rampp2p.tasks.market_rate_tasks',
+    'rampp2p.tasks.transaction_tasks',
     'vouchers.tasks',
 )
 
@@ -356,6 +360,14 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'smartbch.tasks.parse_missed_records_task',
         'schedule': 60 * 20 # run every 20 minutes.
     },
+    'update_shift_status': {
+        'task': 'ramp.tasks.update_shift_status',
+        'schedule': 60
+    },
+    'update_market_rates': {
+        'task': 'rampp2p.tasks.market_rate_tasks.update_market_rates',
+        'schedule': 60 * 10 # run every 10 minutes
+    },
     'check_unfunded_gifts': {
         'task': 'paytacagifts.tasks.check_unfunded_gifts',
         'schedule': 5
@@ -374,6 +386,10 @@ from corsheaders.defaults import default_headers
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-paypro-version",
+    "wallet-hash",
+    "signature",
+    "timestamp",
+    "public-key"
 ]
 
 REST_FRAMEWORK = {
@@ -574,6 +590,14 @@ DEFAULT_TOKEN_DETAILS = {
         'symbol': 'CASH'
     }
 }
+
+# p2p-ramp
+BCHJS_TOKEN = config('BCHJS_TOKEN', '')
+SERVICER_PK = config('SERVICER_PK', '')
+SERVICER_ADDR = config('SERVICER_ADDR', '')
+SERVICE_FEE = config('SERVICE_FEE', '')
+ARBITRATION_FEE = config('ARBITRATION_FEE', '')
+HARDCODED_FEE = config('HARDCODED_FEE', 1000)
 
 
 # vouchers

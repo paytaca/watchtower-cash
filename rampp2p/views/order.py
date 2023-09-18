@@ -14,7 +14,6 @@ from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.viewcodes import ViewCode
-from rampp2p.permissions import *
 from rampp2p.validators import *
 from rampp2p.serializers import (
     OrderSerializer, 
@@ -37,7 +36,8 @@ from rampp2p.models import (
     Transaction,
     PriceType,
     MarketRate,
-    Appeal
+    Appeal,
+    TradeType
 )
 
 import json
@@ -191,7 +191,6 @@ class OrderListCreate(APIView):
         # Create snapshot of ad
         ad_snapshot = AdSnapshot(
             ad = ad,
-            owner = ad.owner,
             trade_type = ad.trade_type,
             price_type = ad.price_type,
             fiat_currency = ad.fiat_currency,
@@ -270,15 +269,15 @@ class OrderListCreate(APIView):
         buyer_address = None
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
-            seller_pubkey = order.ad_snapshot.owner.public_key
+            seller_pubkey = order.ad_snapshot.ad.owner.public_key
             buyer_pubkey = order.owner.public_key
-            seller_address = order.ad_snapshot.owner.address
+            seller_address = order.ad_snapshot.ad.owner.address
             buyer_address = order.owner.address
         else:
             seller_pubkey = order.owner.public_key
-            buyer_pubkey = order.ad_snapshot.owner.public_key
+            buyer_pubkey = order.ad_snapshot.ad.owner.public_key
             seller_address = order.owner.address
-            buyer_address = order.ad_snapshot.owner.address
+            buyer_address = order.ad_snapshot.ad.owner.address
 
         if (arbiter_pubkey is None or 
             seller_pubkey is None or 
@@ -437,7 +436,7 @@ class ConfirmOrder(APIView):
         except (Peer.DoesNotExist, Order.DoesNotExist) as err:
             raise ValidationError(err.args[0])
 
-        if order.ad_snapshot.owner.wallet_hash != caller.wallet_hash:
+        if order.ad_snapshot.ad.owner.wallet_hash != caller.wallet_hash:
             raise ValidationError('caller must be ad owner')
 
 class PendingEscrowOrder(APIView):
@@ -520,7 +519,7 @@ class PendingEscrowOrder(APIView):
         
         seller = None
         if order.ad_snapshot.trade_type == TradeType.SELL:
-            seller = order.ad_snapshot.owner
+            seller = order.ad_snapshot.ad.owner
         else:
             seller = order.owner
 
@@ -589,7 +588,7 @@ class VerifyEscrow(APIView):
             raise ValidationError(err.args[0])
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
-            seller = order.ad_snapshot.owner
+            seller = order.ad_snapshot.ad.owner
             # require caller is seller
             if caller.wallet_hash != seller.wallet_hash:
                 raise ValidationError('caller must be seller')
@@ -649,7 +648,7 @@ class CryptoBuyerConfirmPayment(APIView):
     if order.ad_snapshot.trade_type == TradeType.SELL:
        buyer = order.owner
     else:
-       buyer = order.ad_snapshot.owner
+       buyer = order.ad_snapshot.ad.owner
 
     if caller.wallet_hash != buyer.wallet_hash:
         raise ValidationError('caller must be buyer')
@@ -703,7 +702,7 @@ class CryptoSellerConfirmPayment(APIView):
         
         seller = None
         if order.ad_snapshot.trade_type == TradeType.SELL:
-            seller = order.ad_snapshot.owner
+            seller = order.ad_snapshot.ad.owner
         else:
             seller = order.owner
 
@@ -753,6 +752,6 @@ class CancelOrder(APIView):
             raise ValidationError(err.args[0])
         
         order_owner = order.owner.wallet_hash
-        ad_owner = order.ad_snapshot.owner.wallet_hash
+        ad_owner = order.ad_snapshot.ad.owner.wallet_hash
         if caller.wallet_hash != order_owner and caller.wallet_hash != ad_owner:
            raise ValidationError('caller must be order/ad owner')

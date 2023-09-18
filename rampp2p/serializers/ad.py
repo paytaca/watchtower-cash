@@ -3,6 +3,7 @@ from rampp2p.utils.utils import get_trading_fees
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import (
     Ad, 
+    AdSnapshot,
     PriceType,
     DurationChoices,
     Peer,
@@ -16,6 +17,38 @@ from rampp2p.models import (
 )
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer
+
+class AdSnapshotSerializer(serializers.ModelSerializer):
+    price = serializers.SerializerMethodField()
+    fiat_currency = FiatCurrencySerializer()
+    crypto_currency = CryptoCurrencySerializer()
+    payment_methods = RelatedPaymentMethodSerializer(many=True)
+
+    class Meta:
+        model = AdSnapshot
+        fields = [
+            'id',
+            'ad',
+            'trade_type',
+            'price_type',
+            'fiat_currency',
+            'crypto_currency',
+            'floating_price',
+            'price',
+            'market_price',
+            'fixed_price',
+            'trade_floor',
+            'trade_ceiling',
+            'crypto_amount',
+            'payment_methods',
+            'time_duration_choice',
+            'created_at'
+        ]
+
+    def get_price(self, instance: AdSnapshot):
+        if instance.price_type == PriceType.FIXED:
+            return instance.fixed_price
+        return instance.market_price * (instance.floating_price/100)
 
 class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SlugRelatedField(slug_field="nickname", queryset=Peer.objects.all())
@@ -69,7 +102,7 @@ class AdListSerializer(serializers.ModelSerializer):
     
     def get_trade_count(self, instance: Ad):
         # Count the number of trades (orders) related to ad owner
-        query = Q(ad_snapshot__owner__id=instance.owner.id)
+        query = Q(ad_snapshot__ad__owner__id=instance.owner.id)
         trade_count = Order.objects.filter(query).count()
         return trade_count
 
@@ -96,7 +129,7 @@ class AdListSerializer(serializers.ModelSerializer):
         latest_status_subquery = Status.objects.filter(query).order_by('-created_at').values('id')[:1]
         
         # Retrieve the latest statuses for each order
-        user_orders = Order.objects.filter(Q(ad_snapshot__owner__id=owner_id)).annotate(
+        user_orders = Order.objects.filter(Q(ad_snapshot__ad__owner__id=owner_id)).annotate(
             latest_status_id = Subquery(latest_status_subquery)
         )
 
