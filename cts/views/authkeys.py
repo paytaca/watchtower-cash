@@ -32,7 +32,7 @@ class AuthKey(APIView):
         responses={status.HTTP_200_OK: AuthKeySerializer},
         manual_parameters=[
             openapi.Parameter('authkey_owner_address', openapi.IN_PATH, description="The current owner of the AuthKey.", type=openapi.TYPE_STRING),
-            openapi.Parameter('exclude_unused_keys', openapi.IN_QUERY, description="Return only AuthKeys with has atleast 1 locked tokens.", type=openapi.TYPE_BOOLEAN),
+            # openapi.Parameter('exclude_unused_keys', openapi.IN_QUERY, description="Return only AuthKeys with has atleast 1 locked tokens.", type=openapi.TYPE_BOOLEAN),
             openapi.Parameter('offset', openapi.IN_QUERY, description="Pagination's offset.", type=openapi.TYPE_STRING),
             openapi.Parameter('limit', openapi.IN_QUERY, description="Pagination's page limit.Maximum rows per page.", type=openapi.TYPE_INTEGER),
         ]
@@ -48,29 +48,29 @@ class AuthKey(APIView):
             Q(cashtoken_nft__category__isnull=False) & 
             Q(cashtoken_nft__commitment='00')
           )
-        
+        authkeys = authkeys.annotate(authKeyOwner=Value(owner_address, output_field=CharField()))
         token_authguard_addresses = []
+        urls = []
+        for authkey in authkeys:
+          if authkey.cashtoken_nft.category:
+                urls.append(f'http://localhost:3001/cts/js/authguard-token-deposit-address/{authkey.cashtoken_nft.category}')
+        
+        threads = []
+        for url in urls:
+            thread = threading.Thread(
+                target = lambda u = url: token_authguard_addresses.append(requests.get(u).json())
+            )
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
 
         if self.request.query_params.get('exclude_unused_keys') == 'true':
+          # TODO
+          # exclude keys that has no unlockable tokens
+          # 
           pass
-        else:
-          urls = []
-          for authkey in authkeys:
-            if authkey.cashtoken_nft.category:
-                  urls.append(f'http://localhost:3001/cts/js/authguard-token-deposit-address/{authkey.cashtoken_nft.category}')
-          
-          threads = []
-          for url in urls:
-              thread = threading.Thread(
-                  target = lambda u = url: token_authguard_addresses.append(requests.get(u).json())
-              )
-              thread.start()
-              threads.append(thread)
-
-          for thread in threads:
-              thread.join()
-
-          authkeys = authkeys.annotate(authKeyOwner=Value(owner_address, output_field=CharField()))
                   
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(authkeys, request)
