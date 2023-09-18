@@ -69,6 +69,7 @@ class AuthKeyOwnerIdentityOutputs(APIView):
 
         authguard_addresses_set = set(map(lambda x: x[list(x.keys())[0]], token_authguard_addresses))
         identity_outputs = Transaction.objects.filter(
+            Q(spent=False),
             Q(index=0), Q(address__token_address__in=authguard_addresses_set) | Q(address__token_address__in=authguard_addresses_set)
         )
         
