@@ -89,7 +89,8 @@ class VoucherViewSet(
         voucher_nfts = CashNonFungibleToken.objects.all()
         if wallet_hash:
             voucher_nfts = voucher_nfts.filter(
-                transaction__wallet__wallet_hash=wallet_hash
+                transaction__wallet__wallet_hash=wallet_hash,
+                transaction__spent=False
             )
 
         voucher_nfts = voucher_nfts.distinct()
