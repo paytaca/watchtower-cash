@@ -14,7 +14,7 @@ from smartbch.pagination import CustomLimitOffsetPagination
 
 from cts.serializers import AuthKeySerializer
 
-class AuthKey(APIView):
+class AuthKeys(APIView):
     
     serializer_class = AuthKeySerializer
     pagination_class = CustomLimitOffsetPagination
