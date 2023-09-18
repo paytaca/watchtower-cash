@@ -25,7 +25,7 @@ from rampp2p.serializers import (
     AppealCreateSerializer,
     TransactionSerializer,
     OrderSerializer,
-    ContractSerializer,
+    ContractDetailSerializer,
     AdSnapshotSerializer
 )
 from rampp2p.viewcodes import ViewCode
@@ -33,7 +33,7 @@ from rampp2p.validators import *
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.transaction import validate_transaction
-from rampp2p.utils.utils import is_order_expired
+from rampp2p.utils.utils import is_order_expired, get_trading_fees
 from rampp2p.utils.handler import update_order_status
 
 import logging
@@ -124,18 +124,23 @@ class AppealRequest(APIView):
             statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
             serialized_statuses = StatusSerializer(statuses, many=True)
             contract = Contract.objects.filter(order=appeal.order.id).first()
-            serialized_contract = ContractSerializer(contract)
+            serialized_contract = ContractDetailSerializer(contract)
             transactions = Transaction.objects.filter(contract=contract.id)
             serialized_transactions = TransactionSerializer(transactions, many=True)
             serialized_ad_snapshot =  AdSnapshotSerializer(appeal.order.ad_snapshot)
 
+        total_fee, fees = get_trading_fees()
         response = {
             'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data,
             'order': serialized_order.data,
             'ad_snapshot': serialized_ad_snapshot.data,
             'statuses': serialized_statuses.data,
             'contract': serialized_contract.data,
-            'transactions': serialized_transactions.data
+            'transactions': serialized_transactions.data,
+            'fees': {
+                'total': total_fee,
+                'fees': fees
+            }
         }
         
         return Response(response, status=status.HTTP_200_OK)
