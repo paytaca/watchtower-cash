@@ -10,7 +10,7 @@ def validate_transaction(txid: str, **kwargs):
     validation, then updates the order's status if valid.
     '''
     logger.warning(f'Validating tx: {txid}')
-    path = './rampp2p/escrow/src/'
+    path = './rampp2p/js/src/'
     command = 'node {}transaction.js {}'.format(
         path,
         txid

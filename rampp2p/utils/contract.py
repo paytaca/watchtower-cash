@@ -7,7 +7,7 @@ def create_contract(**kwargs):
     '''
     Executes a subprocess task to generate the contract address
     '''
-    path = './rampp2p/escrow/src/'
+    path = './rampp2p/js/src/'
     command = 'node {}escrow.js {} {} {} {}'.format(
         path,        
         kwargs.get('arbiter_pubkey'), 

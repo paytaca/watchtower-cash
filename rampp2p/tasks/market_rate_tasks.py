@@ -15,7 +15,7 @@ def update_market_rates():
     Updates the market price records.
     '''
     logger.warning('Retrieving the market price of BCH')
-    path = './rampp2p/escrow/src/'
+    path = './rampp2p/js/src/'
     command = 'node {}rates.js'.format(path)
     return execute_subprocess.apply_async(
                 (command,), 
