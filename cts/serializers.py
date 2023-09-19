@@ -195,9 +195,9 @@ class AuthKeySerializer(UtxoSerializer):
 class FungibleTokenBalanceSerializer(serializers.Serializer):
 
   owner = serializers.CharField()
-  balance = serializers.CharField()
+  balance = serializers.IntegerField()
   tokenId = serializers.SerializerMethodField()
-  utxoCount = serializers.CharField()
+  utxoCount = serializers.IntegerField()
 
   def get_tokenId(self, obj):
     return obj.get('cashtoken_ft__category')
