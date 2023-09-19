@@ -493,6 +493,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False    
+        },
+        'rampp2p': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False    
         }
     },
 }
