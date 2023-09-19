@@ -192,3 +192,15 @@ class AuthKeySerializer(UtxoSerializer):
     model = Transaction
     fields = ['txid','vout', 'satoshis', 'height', 'coinbase', 'token', 'authGuard', 'authKeyOwner', 'unlockableTokens', 'unlockableTokensCount']
 
+class FungibleTokenBalanceSerializer(serializers.Serializer):
+
+  owner = serializers.CharField()
+  balance = serializers.CharField()
+  tokenId = serializers.SerializerMethodField()
+  utxoCount = serializers.CharField()
+
+  def get_tokenId(self, obj):
+    return obj.get('cashtoken_ft__category')
+
+  class Meta:
+    fields = ['owner', 'tokenId', 'balance', 'utxoCount']
