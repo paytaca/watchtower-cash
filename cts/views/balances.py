@@ -21,7 +21,7 @@ class FungibleTokenBalances(APIView):
     serializer_class = FungibleTokenBalanceSerializer
     pagination_class = CustomLimitOffsetPagination
     @swagger_auto_schema(
-        operation_description="Fetche of the provided address",
+        operation_description="Fetches the total fungible token balances of each token that the address have",
         responses={status.HTTP_200_OK: FungibleTokenBalanceSerializer},
         manual_parameters=[
             openapi.Parameter('address', openapi.IN_PATH, description="Returns aggregated fungible balance of address", type=openapi.TYPE_STRING),
