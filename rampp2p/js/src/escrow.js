@@ -29,7 +29,7 @@ const NETWORK = process.env.BCH_NETWORK;
     const [arbiterPkh, buyerPkh, sellerPkh, servicerPkh] = getPubKeyHash();
     
     // Generate contract hash with timestamp
-    const contractHash = await calculateSHA256('rampp2p/escrow/src/escrow.cash', TIMESTAMP)
+    const contractHash = await calculateSHA256('rampp2p/js/src/escrow.cash', TIMESTAMP)
 
     // Instantiate a new contract providing the constructor parameters
     const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, SERVICE_FEE, ARBITRATION_FEE, contractHash];

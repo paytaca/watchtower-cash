@@ -15,7 +15,7 @@ def update_market_rates():
     Updates the market price records.
     '''
     logger.warning('Retrieving the market price of BCH')
-    path = './rampp2p/escrow/src/'
+    path = './rampp2p/js/src/'
     command = 'node {}rates.js'.format(path)
     return execute_subprocess.apply_async(
                 (command,), 
@@ -31,7 +31,7 @@ def execute_subprocess(command):
 
     stderr = stderr.decode("utf-8")
     stdout = stdout.decode('utf-8')
-    logger.warning(f'stdout: {stdout}, stderr: {stderr}')
+    # logger.warning(f'stdout: {stdout}, stderr: {stderr}')
 
     if stdout is not '':
         # Define the pattern for matching control characters
