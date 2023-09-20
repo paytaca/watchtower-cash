@@ -31,7 +31,7 @@ def execute_subprocess(command):
 
     stderr = stderr.decode("utf-8")
     stdout = stdout.decode('utf-8')
-    logger.warning(f'stdout: {stdout}, stderr: {stderr}')
+    # logger.warning(f'stdout: {stdout}, stderr: {stderr}')
 
     if stdout is not '':
         # Define the pattern for matching control characters
