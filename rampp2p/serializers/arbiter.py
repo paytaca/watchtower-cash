@@ -1,7 +1,17 @@
 from rest_framework import serializers
 from rampp2p.models import Arbiter
 
-class ArbiterSerializer(serializers.ModelSerializer):
+class ArbiterWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Arbiter
+        fields = [
+            'name',
+            'wallet_hash',
+            'public_key',
+            'address'
+        ]
+
+class ArbiterReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Arbiter
         fields = [

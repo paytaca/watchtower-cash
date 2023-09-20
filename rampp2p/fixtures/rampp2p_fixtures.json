@@ -45,19 +45,6 @@
             "created_at": "2023-09-11T04:19:17.964Z",
             "modified_at": "2023-09-11T04:19:17.964Z"
         }
-    },
-    {
-        "model": "rampp2p.arbiter",
-        "pk": 1,
-        "fields": {
-            "name": "Test Arbiter",
-            "public_key": "02becec12d10df682eee87f51006b2926c4ea4ea5eea212410025f472f0afbd236",
-            "address": "bchtest:qrf0kpcs92kfqcwyghas3rwuzkdkc5p33c0jdyupf3",
-            "wallet_hash": "5a59cdb1b152cef3e65d7cb5b1f01a39fc644f282a283ddee5197ff10fc7af06",
-            "is_disabled": false,
-            "created_at": "2023-09-18T06:54:41.228Z",
-            "modified_at": "2023-09-18T06:54:41.228Z"
-        }
     }
 ]
     
