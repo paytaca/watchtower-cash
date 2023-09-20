@@ -51,7 +51,7 @@ class ArbiterListCreate(APIView):
 class ArbiterDetail(APIView):
     def get(self, request):
         try:
-            public_key = request.data.get('public_key')
+            public_key = request.query_params.get('public_key')
             if public_key is None:
                 raise ValidationError('public_key is required')
             
@@ -97,6 +97,10 @@ class ArbiterDetail(APIView):
             if new_address is not None:
                 arbiter.address = new_address
             
+            new_name = request.data.get('name')
+            if new_name is not None:
+                arbiter.name = new_name
+
             arbiter.save()
         except (Arbiter.DoesNotExist, Exception) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
