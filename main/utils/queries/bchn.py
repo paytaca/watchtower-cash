@@ -55,7 +55,7 @@ class BCHN(object):
                         break
                     else:
                         logging.exception(f'ERROR IN FETCHING TXN DETAILS: {txid}', exception)
-                        raise exception
+                        raise Exception("Maximum number of retries exceeded") from exception
                 time.sleep(1)
 
     def _decode_raw_transaction(self, tx_hash):
@@ -82,7 +82,7 @@ class BCHN(object):
                 retries += 1
                 logging.exception(exception)
                 if retries >= self.max_retries:
-                    raise exception
+                    raise Exception("Maximum number of retries exceeded") from exception
                 time.sleep(1)
 
     def _parse_transaction(self, txn):

@@ -32,7 +32,7 @@ def execute_subprocess(command):
 
     stderr = stderr.decode("utf-8")
     stdout = stdout.decode('utf-8')
-    # logger.warning(f'stdout: {stdout}, stderr: {stderr}')
+    logger.warning(f'stdout: {stdout}, stderr: {stderr}')
 
     if stdout is not None:
         # Define the pattern for matching control characters
@@ -44,56 +44,49 @@ def execute_subprocess(command):
         stdout = json.loads(clean_stdout)
     
     response = {'result': stdout, 'stderr': stderr} 
-    # logger.warning(f'response: {response}')
+    logger.warning(f'response: {response}')
 
     return response
 
 @shared_task(queue='rampp2p__contract_execution')
-def handle_transaction(data: Dict, **kwargs):
-    action = kwargs.get('action')
-    txid = kwargs.get('txid')
-    contract = Contract.objects.get(pk=kwargs.get('contract_id'))
-
-    # TODO: uncomment after status testing
-    valid, error, outputs = verify_tx_out(data.get('result'), action, contract)
+def handle_transaction(txn: Dict, action: str, contract_id: int):
+    '''
+    Verifies if `txn` is valid given `action` and `contract_id`.
+    Automatically updates the order's status if txn is valid and 
+    sends the result through a websocket channel.
+    '''
+    logger.warning(f'txn: {txn}')
+    contract = Contract.objects.get(pk=contract_id)
+    valid, error, outputs = verify_txn(action, contract, txn)
     result = None
+    
     if valid:
-        result = handle_order_status(
-            valid=valid,
-            action=action,
-            txid=txid,
-            contract=contract,
-            outputs=outputs,
-            error=error
-        )
+        txn = {
+            'valid': valid,
+            'error': error,
+            'details': {
+                'txid': txn.get('txid'),
+                'outputs': outputs,
+            }
+        }
+        result = handle_order_status(action, contract, txn)
     else:
         result = {
             'success': valid,
             'error': error
         }
-    # TODO: uncomment after status testing
-    # TODO: delete below after status testing
-    # '''Skips the transaction verification (via verify_tx_out) and goes directly to handle_order_status'''
-    # result = handle_order_status(
-    #     valid=True,
-    #     action=action,
-    #     txid=txid,
-    #     contract=contract
-    # )
-    # TODO: delete above after status testing
-    send_order_update(
+
+    return send_order_update(
         result, 
         contract.order.id
     )
 
 # @shared_task(queue='rampp2p__contract_execution')
-def handle_order_status(**kwargs):
-    valid = kwargs.get('valid')
-    action = kwargs.get('action')
-    txid = kwargs.get('txid')
-    contract = kwargs.get('contract')
-    outputs = kwargs.get('outputs')
-    error = kwargs.get('error')
+def handle_order_status(action: str, contract: Contract, txn: Dict):    
+    valid = txn.get('valid')
+    error = txn.get('details').get('error')
+    txid = txn.get('details').get('txid')
+    outputs = txn.get('details').get('outputs')
 
     errors = []
     if error is not None:
@@ -128,7 +121,7 @@ def handle_order_status(**kwargs):
                 out_data = {
                     "transaction": transaction.id,
                     "address": output.get('address'),
-                    "amount": output.get('amount')
+                    "value": output.get('value')
                 }
                 recipient_serializer = RecipientSerializer(data=out_data)
                 if recipient_serializer.is_valid():
@@ -180,87 +173,84 @@ def handle_order_status(**kwargs):
 
 
 # @shared_task(queue='rampp2p__contract_execution')
-def verify_tx_out(result: Dict, action, contract):
+def verify_txn(action, contract, txn: Dict):
     '''
-    Verifies if transaction details (input, outputs, and amounts) satisfy the prerequisites of its contract.
-    Automatically updates the order's status if transaction is valid and sends the result through a websocket channel.
+    Verifies if transaction details (input, outputs, and amounts) satisfy the requisites of its contract.
     '''
 
     # Logs for debugging
-    logger.warning(f'result: {result}')
-    # logger.warning(f'kwargs: {kwargs}')
+    logger.warning(f'txn: {txn}')
 
     outputs = []
     error = None
-    valid = result.get('success') if (result.get('success') is not None) else True
+    valid = txn.get('valid')
     if not valid:
-        error = result.get('error') if (result.get('error') is not None) else None
+        error = txn.get('error')
         return valid, error, outputs
 
-    # transaction must have at least 1 confirmation
-    confirmations = result.get('confirmations')
-    min_req_confirmations = 1
-    if confirmations != None and confirmations < min_req_confirmations:
-        error = {"error": f"transaction needs to have at least {min_req_confirmations} confirmations."}
-        return send_order_update(
-            error,
-            contract.order.id
-        )
+    # # transaction must have at least 1 confirmation
+    # confirmations = result.get('confirmations')
+    # min_req_confirmations = 1
+    # if confirmations != None and confirmations < min_req_confirmations:
+    #     error = {"error": f"transaction needs to have at least {min_req_confirmations} confirmations."}
+    #     return send_order_update(
+    #         error,
+    #         contract.order.id
+    #     )
     
-    tx_inputs = result.get('inputs')
-    tx_outputs = result.get('outputs')
+    txn_details = txn.get('details')
+    inputs = txn_details.get('inputs')
+    outputs = txn_details.get('outputs')
 
     # The transaction is invalid, if inputs or outputs are empty
-    if tx_inputs is None or tx_outputs is None:
-        error = result.get('error')
-        return send_order_update(
-            error,
-            contract.order.id
-        )
+    if inputs is None or outputs is None:
+        error = txn.get('error')
+        return False, error, None
     
     if action == Transaction.ActionType.ESCROW:
         '''
-        If the transaction is ActionType.ESCROW (transaction that is required to update status
-        from ESCROW_PENDING to ESCROWED) the transaction's:
-            (1) output amount must be correct, and 
-            (2) output address must be the contract address.
+        If the transaction ActionType is ESCROW, the:
+            (1) output value must be correct 
+            (2) output address must be the contract address
         '''
         fees, _ = get_trading_fees()
-        amount = contract.order.crypto_amount + (fees/100000000)
-        logger.warn(f'amount:{amount}')
+        expected_value = contract.order.crypto_amount + (fees/100000000)
+
         # Find the output where address = contract address
-        match_amount = None
-        for output in tx_outputs:
+        actual_value = None
+        for output in outputs:
             address = output.get('address')
 
             if address == contract.address:
-                # Convert amount value to decimal (8 decimal places)
-                match_amount = Decimal(output.get('amount'))
-                match_amount = match_amount.quantize(Decimal('0.00000000'))
+                # Get the value transferred and convert to represent 8 decimal places
+                actual_value = Decimal(output.get('value'))
+                actual_value = actual_value.quantize(Decimal('0.00000000'))
 
                 outputs.append({
                     "address": address,
-                    "amount": str(match_amount)
+                    "value": str(actual_value)
                 })
                 break
 
         # Check if the amount is correct
-        if match_amount != amount:
+        logger.warn(f'expected_value:{expected_value}')
+        logger.warn(f'actual_value:{actual_value}')
+        if actual_value != expected_value:
             valid = False
+            error = 'txn value does not match expected value'
     
     else:
         '''
-        If the transaction is for ActionType.RELEASE or ActionType.REFUND (transactions that are required
-        to move from status RELEASE_PENDING to RELEASED or REFUND_PENDING to REFUNDED), the transaction's:
+        If the transaction ActionType is RELEASE or REFUND, the:
             (1) input address must be the contract address,
             (2) outputs must include the:
-                (i)   servicer address with correct trading fee,
-                (ii)  arbiter address with correct arbitration fee,
-                (iii) buyer (if RELEASE) or seller (if REFUND) address with correct amount minus fees.
+                (i)   servicer address with value == trading fee,
+                (ii)  arbiter address with value == arbitration fee,
+                (iii) buyer (if RELEASE) or seller (if REFUND) address with correct value minus fees.
         '''
         # Find the contract address in the list of transaction's inputs
         sender_is_contract = False
-        for input in tx_inputs:
+        for input in inputs:
             address = input.get('address')
             if address == contract.address:
                 sender_is_contract = True
@@ -268,76 +258,70 @@ def verify_tx_out(result: Dict, action, contract):
         
         # Set valid=False if contract address is not in transaction inputs and return
         if sender_is_contract == False:
-            result = {
-                "success": False,
-                "error": "contract address not found in tx inputs"
-            }
-            # Send result through websocket
-            return send_order_update(
-                result, 
-                contract.order.id
-            )
+            valid = False
+            error = 'contract address not found in tx inputs'
+            return valid, error, outputs
         
         # Retrieve expected transaction output addresses
-        arbiter, buyer, seller, servicer = get_order_peer_addresses(contract.order)
+        arbiter_addr, buyer_addr, seller_addr, servicer_addr = get_order_peer_addresses(contract.order)
 
         # Calculate expected transaction amount and fees
         arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
         service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))/100000000
-        amount = contract.order.crypto_amount
+        expected_value = contract.order.crypto_amount
         
         arbiter_exists = False
         servicer_exists = False
         buyer_exists = False
         seller_exists = False
 
-        for out in tx_outputs:
-            output_address = out.get('address')
-            output_amount = Decimal(out.get('amount')).quantize(Decimal('0.00000000'))
+        for output in outputs:
+            address = output.get('address')
+            actual_value = Decimal(output.get('value')).quantize(Decimal('0.00000000'))
 
             outputs.append({
-                "address": output_address,
-                "amount": str(output_amount)
+                "address": address,
+                "value": str(actual_value)
             })
             
             # Checks if the current address is the arbiter
             # and set valid=False if fee is incorrect
-            if output_address == arbiter:
-                if output_amount != arbitration_fee:
-                    error = 'arbiter incorrect output_amount'
-                    logger.error(error)
+            if address == arbiter_addr:
+                if actual_value != arbitration_fee:
                     valid = False
+                    error = 'incorrect arbiter output value'
+                    logger.warning(f'[validate_txn] error: {error}')
                     break
                 arbiter_exists = True
             
             # Checks if the current address is the servicer 
             # and set valid=False if fee is incorrect
-            if output_address == servicer:    
-                if output_amount != service_fee:
-                    error = 'servicer incorrect output_amount'
-                    logger.error(error)
+            if address == servicer_addr:    
+                if actual_value != service_fee:
                     valid = False
+                    error = 'incorrect servicer output value'
+                    logger.warning(f'[validate_txn] error: {error}')
                     break
                 servicer_exists = True
 
             if action == Transaction.ActionType.RELEASE:
-                # If the action type is RELEASE, check if the current address is the buyer
-                # and set valid=False if the amount is incorrect
-                if output_address == buyer:
-                    if output_amount != amount:
-                        error = 'buyer incorrect output_amount'
-                        logger.warn(error)
+                # If the action type is RELEASE, check if the address is the buyer
+                # and if the value is correct
+                if address == buyer_addr:
+                    if actual_value != expected_value:
+                        error = 'incorrect buyer output value'
+                        logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break
                     buyer_exists = True
                 
             if action == Transaction.ActionType.REFUND:
-                # If the action type is REFUND, check if the current address is the seller
-                # and set valid=False if the amount is incorrect
-                if output_address == seller:
-                    if output_amount != amount:
-                        error = 'seller incorrect output_amount'
-                        logger.warn(error)
+                # If the action type is REFUND, check if the address is the seller
+                # and if the value is correct
+                if address == seller_addr:
+                    if actual_value != expected_value:
+                        error = 'incorrect seller output value'
+                        logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break
                     seller_exists = True
