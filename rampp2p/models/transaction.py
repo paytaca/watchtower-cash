@@ -20,5 +20,5 @@ class Transaction(models.Model):
 class Recipient(models.Model):
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="recipients", editable=False)
     address = models.CharField(max_length=200)
-    amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
+    value = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)

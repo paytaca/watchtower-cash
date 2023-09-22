@@ -65,7 +65,7 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
             'valid': valid,
             'error': error,
             'details': {
-                'txid': txn.get('txid'),
+                'txid': txn.get('details').get('txid'),
                 'outputs': outputs,
             }
         }
@@ -76,17 +76,22 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
             'error': error
         }
 
-    return send_order_update(
+    send_order_update(
         result, 
         contract.order.id
     )
+    return result
 
 # @shared_task(queue='rampp2p__contract_execution')
-def handle_order_status(action: str, contract: Contract, txn: Dict):    
+def handle_order_status(action: str, contract: Contract, txn: Dict): 
+    logger.warning(f'>>txn: {txn}')   
     valid = txn.get('valid')
-    error = txn.get('details').get('error')
+    error = txn.get('error')
     txid = txn.get('details').get('txid')
     outputs = txn.get('details').get('outputs')
+    details = txn.get('details')
+    logger.warning(f'>>txid: {txid}')
+    logger.warning(f'>>txn.details: {details}')
 
     errors = []
     if error is not None:
@@ -224,7 +229,7 @@ def verify_txn(action, contract, txn: Dict):
             if address == contract.address:
                 # Get the value transferred and convert to represent 8 decimal places
                 actual_value = Decimal(output.get('value'))
-                actual_value = actual_value.quantize(Decimal('0.00000000'))
+                actual_value = actual_value.quantize(Decimal('0.00000000'))/100000000
 
                 outputs.append({
                     "address": address,
@@ -233,8 +238,6 @@ def verify_txn(action, contract, txn: Dict):
                 break
 
         # Check if the amount is correct
-        logger.warn(f'expected_value:{expected_value}')
-        logger.warn(f'actual_value:{actual_value}')
         if actual_value != expected_value:
             valid = False
             error = 'txn value does not match expected value'
@@ -268,7 +271,7 @@ def verify_txn(action, contract, txn: Dict):
         # Calculate expected transaction amount and fees
         arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
         service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))/100000000
-        expected_value = contract.order.crypto_amount
+        expected_value = Decimal(contract.order.crypto_amount).quantize(Decimal('0.00000000'))
         
         arbiter_exists = False
         servicer_exists = False
@@ -277,12 +280,7 @@ def verify_txn(action, contract, txn: Dict):
 
         for output in outputs:
             address = output.get('address')
-            actual_value = Decimal(output.get('value')).quantize(Decimal('0.00000000'))
-
-            outputs.append({
-                "address": address,
-                "value": str(actual_value)
-            })
+            actual_value = Decimal(output.get('value')).quantize(Decimal('0.00000000'))/100000000
             
             # Checks if the current address is the arbiter
             # and set valid=False if fee is incorrect
@@ -290,6 +288,7 @@ def verify_txn(action, contract, txn: Dict):
                 if actual_value != arbitration_fee:
                     valid = False
                     error = 'incorrect arbiter output value'
+                    logger.warning(f'actual_value: {actual_value} | arbitration_fee: {arbitration_fee}')
                     logger.warning(f'[validate_txn] error: {error}')
                     break
                 arbiter_exists = True
@@ -300,6 +299,7 @@ def verify_txn(action, contract, txn: Dict):
                 if actual_value != service_fee:
                     valid = False
                     error = 'incorrect servicer output value'
+                    logger.warning(f'actual_value: {actual_value} | service_fee: {service_fee}')
                     logger.warning(f'[validate_txn] error: {error}')
                     break
                 servicer_exists = True
@@ -310,6 +310,9 @@ def verify_txn(action, contract, txn: Dict):
                 if address == buyer_addr:
                     if actual_value != expected_value:
                         error = 'incorrect buyer output value'
+                        logger.warning(f'typeof actual_value: {type(actual_value)}')
+                        logger.warning(f'typeof expected_value: {type(expected_value)}')
+                        logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
                         logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break
@@ -321,6 +324,7 @@ def verify_txn(action, contract, txn: Dict):
                 if address == seller_addr:
                     if actual_value != expected_value:
                         error = 'incorrect seller output value'
+                        logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
                         logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break

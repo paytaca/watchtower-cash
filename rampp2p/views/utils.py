@@ -95,9 +95,9 @@ class ValidateTransaction(APIView):
         if contract_id is None:
             return Response({'error': 'contract_id is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        validate_transaction(
+        response = validate_transaction(
             txid=txid,
             action=Transaction.ActionType.RELEASE,
             contract_id=contract_id
         )
-        return Response(status=status.HTTP_200_OK)
+        return Response(response, status=status.HTTP_200_OK)
