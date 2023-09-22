@@ -272,7 +272,7 @@ class AppealPendingRelease(APIView):
         # notify order update subscribers
         send_order_update(json.dumps(serialized_status.data), pk)
 
-        return Response(status=status.HTTP_200_OK)
+        return Response(serialized_status.data, status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -334,7 +334,7 @@ class AppealPendingRefund(APIView):
         # notify order update subscribers
         send_order_update(json.dumps(serialized_status.data), pk)
         
-        return Response(status=status.HTTP_200_OK)
+        return Response(serialized_status.data, status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''
