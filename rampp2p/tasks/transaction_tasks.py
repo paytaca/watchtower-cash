@@ -84,14 +84,14 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
 
 # @shared_task(queue='rampp2p__contract_execution')
 def handle_order_status(action: str, contract: Contract, txn: Dict): 
-    logger.warning(f'>>txn: {txn}')   
+    # logger.warning(f'>>txn: {txn}')   
     valid = txn.get('valid')
     error = txn.get('error')
     txid = txn.get('details').get('txid')
     outputs = txn.get('details').get('outputs')
     details = txn.get('details')
-    logger.warning(f'>>txid: {txid}')
-    logger.warning(f'>>txn.details: {details}')
+    # logger.warning(f'>>txid: {txid}')
+    # logger.warning(f'>>txn.details: {details}')
 
     errors = []
     if error is not None:

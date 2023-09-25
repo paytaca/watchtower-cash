@@ -42,8 +42,10 @@ class ContractList(APIView):
 class ContractDetail(APIView):
     def get_object(self, pk):
         try:
-            return Contract.objects.get(pk=pk)
-        except Contract.DoesNotExist:
+            order = Order.objects.get(pk=pk)
+            contract = Contract.objects.get(order__id=order.id)
+            return contract
+        except (Order.DoesNotExist, Contract.DoesNotExist):
             raise Http404
 
     def get(self, request, pk):
@@ -53,11 +55,11 @@ class ContractDetail(APIView):
         transactions = Transaction.objects.filter(contract__id=contract_instance.id)
 
         tx_data = []
-        for index, tx in enumerate(transactions):
+        for _, tx in enumerate(transactions):
             tx_outputs = Recipient.objects.filter(transaction__id=tx.id)
             data = {}
-            data[index] = TransactionSerializer(tx).data
-            data[index]["outputs"] = RecipientSerializer(tx_outputs, many=True).data
+            data["txn"] = TransactionSerializer(tx).data
+            data["txn"]["outputs"] = RecipientSerializer(tx_outputs, many=True).data
             tx_data.append(data)
 
         response = {
