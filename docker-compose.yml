@@ -29,18 +29,6 @@ services:
       REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
       LOCAL_PORT: 60001
       REMOTE_PORT: 60001
-  # bchn:
-  #   image: cagataygurturk/docker-ssh-tunnel
-  #   volumes:
-  #     - ~/.ssh:/root/ssh:ro
-  #   environment:
-  #     SSH_DEBUG: "-v"
-  #     # TUNNEL_HOST: bchn-mainnet
-  #     # REMOTE_HOST: ec2-13-251-63-215.ap-southeast-1.compute.amazonaws.com
-  #     TUNNEL_HOST: bchn-chipnet
-  #     REMOTE_HOST: ec2-18-138-226-25.ap-southeast-1.compute.amazonaws.com
-  #     LOCAL_PORT: 8332
-  #     REMOTE_PORT: 8332
   postgres:
     image: "postgres:11.1-alpine"
     volumes:
