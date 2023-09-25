@@ -2,8 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.exceptions import ValidationError
-
-from rampp2p.models import Peer, MarketRate
+from rampp2p.utils.transaction import validate_transaction
+from rampp2p.models import Peer, MarketRate, Transaction
 from rampp2p.serializers import MarketRateSerializer
 # from main.utils.subscription import new_subscription, remove_subscription
 
@@ -76,3 +76,28 @@ class MarketRates(APIView):
         serializer = MarketRateSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
+class ValidateTransaction(APIView):
+    def post(self, request):
+        txid = request.data.get('txid')
+        if txid is None:
+            return Response({'error': 'txid is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        action = request.data.get('action')
+        if action is None:
+            return Response({'error': 'action is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if (action != Transaction.ActionType.ESCROW and
+            action != Transaction.ActionType.RELEASE and 
+            action != Transaction.ActionType.REFUND):
+            return Response({'error': 'invalid action'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        contract_id = request.data.get('contract_id')
+        if contract_id is None:
+            return Response({'error': 'contract_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        response = validate_transaction(
+            txid=txid,
+            action=Transaction.ActionType.RELEASE,
+            contract_id=contract_id
+        )
+        return Response(response, status=status.HTTP_200_OK)

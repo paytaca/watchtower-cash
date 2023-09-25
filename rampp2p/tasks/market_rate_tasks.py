@@ -51,7 +51,7 @@ def execute_subprocess(command):
 def market_rates_beat_handler(result):
     rates = result.get('result').get('rates')
     subbed_currencies = FiatCurrency.objects.values('symbol').all()
-    logger.warn(f'subbed_currencies: {subbed_currencies}')
+    # logger.warn(f'subbed_currencies: {subbed_currencies}')
 
     for currency in subbed_currencies:
         symbol = currency.get('symbol')

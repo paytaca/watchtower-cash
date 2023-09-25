@@ -55,18 +55,16 @@ class AppealSerializer(AppealCreateSerializer):
         }
 
     def get_order(self, instance: Appeal):
-        prev_status = self.get_previous_order_status(instance.order)
+        status = self.get_latest_order_status(instance.order)
         return {
             'id': instance.order.id,
             'status': {
-                'label': prev_status.get_status_display(),
-                'value': prev_status.status
+                'label': status.get_status_display(),
+                'value': status.status
             }
         }
     
-    def get_previous_order_status(self, instance: Order):
+    def get_latest_order_status(self, instance: Order):
         statuses = Status.objects.filter(Q(order=instance))
-        prev_status = None
-        if statuses.exists() and statuses.count() > 1:
-            prev_status = statuses[statuses.count() - 2]
-        return prev_status
+        if statuses.exists():
+            return statuses.last()

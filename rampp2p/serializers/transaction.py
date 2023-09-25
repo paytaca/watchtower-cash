@@ -18,12 +18,12 @@ class TransactionSerializer(serializers.ModelSerializer):
 
 class RecipientSerializer(serializers.ModelSerializer):
   transaction = serializers.PrimaryKeyRelatedField(queryset=Transaction.objects.all())
-  amount = serializers.DecimalField(decimal_places=8, max_digits=18)
+  value = serializers.DecimalField(decimal_places=8, max_digits=18)
   class Meta:
     model = Recipient
     fields = [
       'transaction',
       'address',
-      'amount',
+      'value',
       'created_at'
     ]

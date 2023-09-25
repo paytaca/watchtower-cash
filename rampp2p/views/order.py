@@ -26,6 +26,7 @@ from rampp2p.serializers import (
 )
 from rampp2p.models import (
     Ad,
+    Arbiter,
     AdSnapshot,
     StatusType,
     Status,
