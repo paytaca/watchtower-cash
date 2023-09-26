@@ -22,8 +22,7 @@ class VoucherSerializer(serializers.ModelSerializer):
             'value',
             'minting_txid',
             'claim_txid',
-            'key_category',
-            'lock_category',
+            'category',
             'commitment',
             'capability',
             'claimed',
@@ -62,5 +61,5 @@ class VoucherClaimedResponseSerializer(serializers.Serializer):
 
 
 class VoucherClaimedSerializer(serializers.Serializer):
-    lock_category = serializers.CharField(max_length=100, required=True)
+    category = serializers.CharField(max_length=100, required=True)
     txid = serializers.CharField(max_length=100, required=True)

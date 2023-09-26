@@ -28,8 +28,7 @@ class Voucher(models.Model):
     value = models.FloatField(default=0.0)  # in BCH
     minting_txid = models.CharField(max_length=100, default='')
     claim_txid = models.CharField(max_length=100, null=True, blank=True)
-    key_category = models.CharField(max_length=100)
-    lock_category = models.CharField(max_length=100 ,unique=True)
+    category = models.CharField(max_length=100 ,unique=True)
     claimed = models.BooleanField(default=False)
     expired = models.BooleanField(default=False)
     duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
@@ -43,7 +42,7 @@ class Voucher(models.Model):
 
     @property
     def commitment(self):
-        nft = CashNonFungibleToken.objects.filter(category=self.lock_category)
+        nft = CashNonFungibleToken.objects.filter(category=self.category)
         if nft.exists():
             nft = nft.first()
             return nft.commitment
