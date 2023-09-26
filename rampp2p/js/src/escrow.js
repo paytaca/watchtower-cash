@@ -2,7 +2,6 @@ const { ElectrumNetworkProvider, Contract } = require('cashscript');
 const { compileFile } = require('cashc');
 const path = require('path');
 const BCHJS = require('@psf/bch-js');
-const fs = require('fs');
 const CryptoJS = require('crypto-js');
 
 const ARBITER_PUBKEY = process.argv[2]
@@ -29,7 +28,7 @@ const NETWORK = process.env.BCH_NETWORK;
     const [arbiterPkh, buyerPkh, sellerPkh, servicerPkh] = getPubKeyHash();
     
     // Generate contract hash with timestamp
-    const contractHash = await calculateSHA256('rampp2p/js/src/escrow.cash', TIMESTAMP)
+    const contractHash = await calculateSHA256(arbiterPkh, buyerPkh, sellerPkh, servicerPkh, TIMESTAMP)
 
     // Instantiate a new contract providing the constructor parameters
     const contractParams = [arbiterPkh, buyerPkh, sellerPkh, servicerPkh, SERVICE_FEE, ARBITRATION_FEE, contractHash];
@@ -48,22 +47,9 @@ function getPubKeyHash() {
     return [arbiterPkh, buyerPkh, sellerPkh, servicerPkh];
 }
 
-async function calculateSHA256(filePath, timestamp) {
-    const fileData = await readFile(filePath)
-    const dataWithTimestamp = fileData + timestamp
-    const hash = CryptoJS.SHA256(dataWithTimestamp);
+async function calculateSHA256(arbiterPkh, buyerPkh, sellerPkh, servicerPkh, timestamp) {
+    const message = arbiterPkh + buyerPkh + sellerPkh + servicerPkh + timestamp
+    const hash = CryptoJS.SHA256(message);
     const contractHash = hash.toString()
     return contractHash
-}
-
-function readFile(filePath) {
-    return new Promise((resolve, reject) => {
-        fs.readFile(filePath, (error, fileData) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            resolve(fileData);
-        });
-    });
 }
