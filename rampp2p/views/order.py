@@ -9,7 +9,7 @@ from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
 
-from rampp2p.utils.utils import get_trading_fees
+from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -26,7 +26,6 @@ from rampp2p.serializers import (
 )
 from rampp2p.models import (
     Ad,
-    Arbiter,
     AdSnapshot,
     StatusType,
     Status,
@@ -187,7 +186,6 @@ class OrderListCreate(APIView):
 
         except (Ad.DoesNotExist, Peer.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
 
         # Create snapshot of ad
         ad_snapshot = AdSnapshot(
@@ -201,7 +199,7 @@ class OrderListCreate(APIView):
             market_price = market_price.price,
             trade_floor = ad.trade_floor,
             trade_ceiling = ad.trade_ceiling,
-            crypto_amount = ad.crypto_amount,
+            trade_amount = ad.trade_amount,
             time_duration_choice = ad.time_duration_choice,
         )
         ad_snapshot.save()
@@ -407,6 +405,16 @@ class ConfirmOrder(APIView):
             validate_status(pk, StatusType.SUBMITTED)
             validate_status_inst_count(StatusType.CONFIRMED, pk)
             validate_status_progression(StatusType.CONFIRMED, pk)
+
+            order = Order.objects.get(pk=pk)
+            trade_amount = order.ad_snapshot.ad.trade_amount - order.crypto_amount
+            if trade_amount < 0:
+                raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
+            
+            # Update Ad trade_amount
+            ad = Ad.objects.get(pk=order.ad_snapshot.ad.id)
+            ad.trade_amount = trade_amount
+            ad.save()
                 
             # create CONFIRMED status for order
             status_serializer = StatusSerializer(data={
@@ -422,7 +430,7 @@ class ConfirmOrder(APIView):
             # notify order update subscribers
             send_order_update(json.dumps(status_serializer.data), pk)
             
-        except (ValidationError, IntegrityError) as err:
+        except (ValidationError, IntegrityError, Order.DoesNotExist, Ad.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(status_serializer.data, status=status.HTTP_200_OK)  
@@ -731,6 +739,16 @@ class CancelOrder(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Update Ad trade_amount if order was CONFIRMED
+        order = Order.objects.get(pk=pk)
+        latest_status = get_latest_status(order.id)
+        # Update Ad trade_amount
+        if latest_status.status == StatusType.CONFIRMED:
+            trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
+            ad = Ad.objects.get(pk=order.ad_snapshot.ad.id)
+            ad.trade_amount = trade_amount
+            ad.save()
+            
         # create CANCELED status for order
         serializer = StatusSerializer(data={
             'status': StatusType.CANCELED,

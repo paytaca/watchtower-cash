@@ -47,9 +47,8 @@ def validate_status_progression(new_status, order_id):
                 raise ValidationError(f'{prefix} {StatusType.CONFIRMED.label} orders can only be {StatusType.ESCROW_PENDING.label} | {StatusType.CANCELED.label}')
 
     if current_status.status == StatusType.ESCROW_PENDING:
-        if (new_status != StatusType.ESCROWED and
-            new_status != StatusType.CANCELED):
-                raise ValidationError(f'{prefix} {StatusType.ESCROW_PENDING.label} orders can only be {StatusType.ESCROWED.label} | {StatusType.CANCELED.label}')
+        if (new_status != StatusType.ESCROWED):
+                raise ValidationError(f'{prefix} {StatusType.ESCROW_PENDING.label} orders can only be {StatusType.ESCROWED.label}')
          
     if current_status.status == StatusType.ESCROWED:
         if (new_status != StatusType.PAID_PENDING and 

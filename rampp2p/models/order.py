@@ -7,7 +7,11 @@ from .payment import PaymentMethod
 from datetime import timedelta
 
 class Order(models.Model):
-    ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
+    ad_snapshot = models.ForeignKey(
+        AdSnapshot,
+        on_delete=models.PROTECT,
+        editable=False
+    )
     owner = models.ForeignKey(
         Peer, 
         on_delete=models.PROTECT, 

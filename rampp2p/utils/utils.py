@@ -61,3 +61,9 @@ def get_trading_fees():
         'service_fee': service_fee
     }
     return total_fee, fees
+
+def get_latest_status(order_id: int):
+    latest_status = Status.objects.filter(order__pk=order_id)
+    if latest_status.exists():
+        return latest_status.last()
+    return None
