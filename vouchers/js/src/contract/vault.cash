@@ -29,6 +29,13 @@ contract Vault (
         require(tx.outputs[0].lockingBytecode == merchant);
     }
 
+    function emergencyRefund (pubkey senderPk) {
+        // ensure utxo is from sender and gets sent back to that wallets
+        bytes25 sender = new LockingBytecodeP2PKH(hash160(senderPk));
+        require(tx.inputs[0].lockingBytecode == sender);
+        require(tx.outputs[0].lockingBytecode == sender);
+    }
+
     function claim (
         bytes32 voucherCategory,
         sig merchantSignerSig
