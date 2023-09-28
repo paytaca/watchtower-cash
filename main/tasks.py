@@ -117,7 +117,7 @@ def client_acknowledgement(self, txid):
                 image_url = None
                 token_details_key = None
                 __is_key_nft = False
-                lock_nft_category = None
+                category = None
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
@@ -126,7 +126,7 @@ def client_acknowledgement(self, txid):
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
-                    __is_key_nft, lock_nft_category = is_key_nft(subscription.address, category)
+                    __is_key_nft = is_key_nft(category)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
@@ -162,10 +162,7 @@ def client_acknowledgement(self, txid):
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
                         'is_nft': False,
-                        'voucher': {
-                            'is_key_nft': __is_key_nft,
-                            'lock_nft_category': None
-                        }
+                        'voucher': None
                     }
 
                     if transaction.cashtoken_nft:
@@ -175,7 +172,7 @@ def client_acknowledgement(self, txid):
                         data['is_nft'] = True
 
                     if __is_key_nft:
-                        data['voucher']['lock_nft_category'] = lock_nft_category
+                        data['voucher'] = category
 
                 elif wallet_version == 1:
                     data = {
