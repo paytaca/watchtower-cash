@@ -77,6 +77,7 @@ class AdListSerializer(serializers.ModelSerializer):
             'trade_count',
             'completion_rate',
             'is_owned',
+            'is_public',
             'created_at',
             'modified_at'
         ]
@@ -182,6 +183,7 @@ class AdCreateSerializer(serializers.ModelSerializer):
             'trade_amount',
             'time_duration_choice',
             'payment_methods',
+            'is_public',
             'modified_at',
         ]
     
@@ -199,5 +201,6 @@ class AdUpdateSerializer(serializers.ModelSerializer):
             'trade_amount',
             'time_duration_choice',
             'payment_methods',
+            'is_public',
             'modified_at',
         ]

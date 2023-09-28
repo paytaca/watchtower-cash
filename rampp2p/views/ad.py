@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 class AdListCreate(APIView):
     def get(self, request):
-        queryset = Ad.objects.filter(is_deleted=False)
+        queryset = Ad.objects.filter(Q(is_deleted=False) and Q(is_public=True) and Q(trade_amount__gt=0))
 
         wallet_hash = request.headers.get('wallet_hash')
         owner_id = request.query_params.get('owner_id')
