@@ -21,7 +21,7 @@ class Order(models.Model):
     
     crypto_currency = models.ForeignKey(CryptoCurrency, on_delete=models.PROTECT, editable=False)
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT, editable=False)
-    locked_price = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
+    locked_price = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
 
     crypto_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
