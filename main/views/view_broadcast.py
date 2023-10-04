@@ -41,17 +41,13 @@ class BroadcastViewSet(generics.GenericAPIView):
         if serializer.is_valid():
             job = broadcast_transaction.delay(serializer.data['transaction'])
             success, result = job.get()
-            # try:
-            #     success, result = job.get()
-            # except:
-            #     success, result = broadcast_transaction(serializer.data['transaction'])
             if 'already have transaction' in result:
                 success = True
             if success:
                 txid = result.split(' ')[-1]
                 response['txid'] = txid
                 response['success'] = True
-                process_mempool_transaction.delay(txid)
+                process_mempool_transaction(txid, immediate=True)
                 return Response(response, status=status.HTTP_200_OK)
             else:
                 # Do a wallet utxo rescan if failed

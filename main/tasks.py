@@ -2044,7 +2044,7 @@ def populate_token_addresses():
 
 
 @shared_task(queue='mempool_processing')
-def process_mempool_transaction(tx_hash):
+def process_mempool_transaction(tx_hash, immediate=False):
     from main.mqtt import client as mqtt_client
 
     LOGGER.info('Processing mempool tx: ' + tx_hash)
@@ -2056,8 +2056,9 @@ def process_mempool_transaction(tx_hash):
     if 'coinbase' in inputs[0].keys():
         return
 
-    has_subscribed_input = False
-    has_updated_output = False
+    # has_subscribed_input = False
+    # has_updated_output = False
+    save_histories = False
     inputs_data = []
 
     for _input in inputs:
@@ -2080,7 +2081,9 @@ def process_mempool_transaction(tx_hash):
                     spent_transactions = Transaction.objects.filter(txid=txid, index=index)
                     spent_transactions.update(spent=True, spending_txid=tx_hash)
                     has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
-                    has_subscribed_input = has_subscribed_input or has_existing_wallet
+                    # has_subscribed_input = has_subscribed_input or has_existing_wallet
+
+                    save_histories = True
 
                 subscription = Subscription.objects.filter(
                     address__address=address
@@ -2102,6 +2105,7 @@ def process_mempool_transaction(tx_hash):
 
             address_check = Address.objects.filter(address=bchaddress)
             if address_check.exists():
+                save_histories = True
                 value = int(output['value'] * (10 ** 8))
                 source = NODE.BCH.source
                 index = output['n']
@@ -2144,7 +2148,7 @@ def process_mempool_transaction(tx_hash):
                         inputs=inputs_data,
                         tx_timestamp=timestamp
                     )
-                    has_updated_output = has_updated_output or created
+                    # has_updated_output = has_updated_output or created
 
                     if obj_id:
                         txn_obj = Transaction.objects.get(id=obj_id)
@@ -2166,10 +2170,17 @@ def process_mempool_transaction(tx_hash):
                     LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
                     mqtt_client.loop_stop()
                     
-                    client_acknowledgement.delay(obj_id)
+                    if immediate:
+                        client_acknowledgement(obj_id)
+                    else:
+                        client_acknowledgement.delay(obj_id)
 
                     LOGGER.info(data)
 
-    if has_subscribed_input and not has_updated_output:
-        LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
-        parse_tx_wallet_histories.delay(tx_hash)
+    # if has_subscribed_input and not has_updated_output:
+    if save_histories:
+        LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
+        if immediate:
+            parse_tx_wallet_histories(tx_hash, immediate=True)
+        else:
+            parse_tx_wallet_histories.delay(tx_hash)
