@@ -43,7 +43,7 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
             block_setter(instance.number)
         
 
-@receiver(post_save, sender=Transaction)
+@receiver(post_save, sender=Transaction, dispatch_uid='main.tasks.transaction_post_save_task')
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
     address = instance.address.address
     blockheight_id = None
@@ -56,7 +56,7 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
     )
 
 
-@receiver(post_save, sender=WalletPreferences)
+@receiver(post_save, sender=WalletPreferences, dispatch_uid='main.tasks.update_wallet_history_currency')
 def walletpreferences_post_save(sender, instance=None, created=False, **kwargs):
     if instance and instance.selected_currency and instance.wallet:
         update_wallet_history_currency.delay(instance.wallet.wallet_hash, instance.selected_currency)

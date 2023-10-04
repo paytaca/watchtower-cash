@@ -1476,9 +1476,18 @@ def send_wallet_history_push_notification_task(wallet_history_id):
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
-    txid = Transaction.objects.values_list("txid", flat=True).filter(id=transaction_id).first()
+    # txid = Transaction.objects.values_list("txid", flat=True).filter(id=transaction_id).first()
+    # if not txid: return
+    txid = None
+    try:
+        txn_obj = Transaction.objects.get(id=transaction_id)
+        txid = txn_obj.txid
+        if txn_obj.post_save_processed:
+            return
+    except Transaction.DoesNotExist:
+        return
+    
     if not txid: return
-
     LOGGER.info(f"TX POST SAVE TASK: {address} | {txid} | {blockheight_id}")
 
     if not BlockHeight.objects.filter(id=blockheight_id).exists():
@@ -1650,6 +1659,9 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     senders['bch'],
                     recipients['bch']
                 )
+    
+    # Mark txn as processed
+    Transaction.objects.filter(id=transaction_id).update(post_save_processed=timezone.now())
 
     return list(set(wallets))
 
@@ -1701,6 +1713,10 @@ def rebuild_wallet_history(wallet_hash):
 
 @shared_task(queue='wallet_history_1', max_retries=3)
 def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=False):
+    history_check = WalletHistory.objects.filter(txid=txid)
+    if history_check.exists():
+        return
+
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
 
     bch_tx = NODE.BCH.get_transaction(txid)
@@ -1947,6 +1963,10 @@ def parse_wallet_history_market_values(wallet_history_id):
     # block for bch txs only
     if wallet_history_obj.token.name != "bch":
         return
+    
+    # do not proceed if both usd_price and market_prices are already populated
+    if wallet_history_obj.usd_price and wallet_history_obj.market_prices:
+        return
 
     LOGGER.info(" | ".join([
         f"WALLET_HISTORY_MARKET_VALUES",
@@ -2060,8 +2080,6 @@ def process_mempool_transaction(tx_hash, immediate=False):
     if 'coinbase' in inputs[0].keys():
         return
 
-    # has_subscribed_input = False
-    # has_updated_output = False
     save_histories = False
     inputs_data = []
 
@@ -2077,16 +2095,11 @@ def process_mempool_transaction(tx_hash, immediate=False):
 
             if 'addresses' in ancestor_spubkey.keys():
                 address = ancestor_spubkey['addresses'][0]
-                txn_check = Transaction.objects.filter(
-                    txid=txid,
-                    index=index
-                )
-                if not txn_check.exists():
-                    spent_transactions = Transaction.objects.filter(txid=txid, index=index)
-                    spent_transactions.update(spent=True, spending_txid=tx_hash)
-                    # has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
-                    # has_subscribed_input = has_subscribed_input or has_existing_wallet
+                spent_transactions = Transaction.objects.filter(txid=txid, index=index)
+                spent_transactions.update(spent=True, spending_txid=tx_hash)
 
+                # save wallet history only if tx is associated with a wallet
+                if tx_check.first().wallet:
                     save_histories = True
 
                 subscription = Subscription.objects.filter(
@@ -2110,7 +2123,6 @@ def process_mempool_transaction(tx_hash, immediate=False):
 
             address_check = Address.objects.filter(address=bchaddress)
             if address_check.exists():
-                save_histories = True
                 value = int(output['value'] * (10 ** 8))
                 source = NODE.BCH.source
                 index = output['n']
@@ -2158,6 +2170,10 @@ def process_mempool_transaction(tx_hash, immediate=False):
                     if obj_id:
                         txn_obj = Transaction.objects.get(id=obj_id)
                         decimals = txn_obj.get_token_decimals()
+
+                        # save wallet history only if tx is associated with a wallet
+                        if txn_obj.wallet:
+                            save_histories = True
                     
                 if obj_id and created:
                     # Publish MQTT message
@@ -2183,7 +2199,6 @@ def process_mempool_transaction(tx_hash, immediate=False):
     
     mqtt_client.loop_stop()
 
-    # if has_subscribed_input and not has_updated_output:
     if save_histories:
         LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
         if immediate:
