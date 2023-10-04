@@ -87,17 +87,19 @@ class OrderListCreate(APIView):
             order=OuterRef('pk'), 
         ).order_by('-created_at')
 
-        owned_orders = owned_orders.annotate(
-            last_modified_at=Subquery(
-                latest_status.values('created_at')[:1]
+        order_by = request.query_params.get('order_by')
+        if order_by == 'last_modified':
+            owned_orders = owned_orders.annotate(
+                last_modified_at=Subquery(
+                    latest_status.values('created_at')[:1]
+                )
             )
-        )
 
-        ad_orders = ad_orders.annotate(
-            last_modified_at=Subquery(
-                latest_status.values('created_at')[:1]
+            ad_orders = ad_orders.annotate(
+                last_modified_at=Subquery(
+                    latest_status.values('created_at')[:1]
+                )
             )
-        )
 
         # Create subquery to filter/exclude completed status
         completed_status = [
@@ -121,8 +123,14 @@ class OrderListCreate(APIView):
 
         # Combine owned and ad orders
         queryset = owned_orders.union(ad_orders)
-        queryset = queryset.order_by('-last_modified_at')
-
+        if order_by == 'last_modified':
+            queryset = queryset.order_by('-last_modified_at')
+        else:
+            if order_state == 'ONGOING':
+                queryset = queryset.order_by('-created_at')
+            if order_state == 'COMPLETED':
+                queryset = queryset.order_by('-created_at')
+        
         # Count total pages
         count = queryset.count()
         total_pages = page
@@ -213,7 +221,7 @@ class OrderListCreate(APIView):
 
         price = None
         if ad_snapshot.price_type == PriceType.FLOATING:
-            market_price = market_price.first().price
+            market_price = market_price.price
             price = market_price * (ad_snapshot.floating_price/100)
         else:
             price = ad_snapshot.fixed_price

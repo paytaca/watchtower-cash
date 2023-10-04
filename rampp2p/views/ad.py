@@ -34,10 +34,16 @@ from django.db.models import (
     When
 )
 
+from authentication.token import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+
 import logging
 logger = logging.getLogger(__name__)
 
 class AdListCreate(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         queryset = Ad.objects.filter(Q(is_deleted=False) and Q(is_public=True) and Q(trade_amount__gt=0))
 

@@ -82,6 +82,7 @@ class OrderSerializer(serializers.ModelSerializer):
                 'id': instance.ad_snapshot.ad.owner.id,
                 'nickname': instance.ad_snapshot.ad.owner.nickname
             },
+            'time_duration': instance.ad_snapshot.time_duration_choice,
             'payment_methods': serialized_payment_methods.data
         }
     

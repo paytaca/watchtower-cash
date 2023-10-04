@@ -89,7 +89,8 @@ INSTALLED_APPS=[
     'jpp',
     'ramp',
     'rampp2p',
-    'cts'
+    'cts',
+    'authentication'
 ]
 
 MIDDLEWARE=[

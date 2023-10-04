@@ -9,6 +9,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.db.models.constraints import UniqueConstraint
 from django.db.models import Q
 from django.conf import settings
+from django.utils.crypto import get_random_string
 
 from main.utils.address_validator import *
 from main.utils.address_converter import *
@@ -165,10 +166,16 @@ class Wallet(PostgresModel):
         blank=True
     )
     version = models.IntegerField()
+    auth_token = models.CharField(max_length=40, unique=True, null=True)
     date_created = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return self.wallet_hash
+    
+    def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = get_random_string(40)
+        super().save(*args, **kwargs)
 
 class Address(PostgresModel):
     address = models.CharField(max_length=100, unique=True, db_index=True)
