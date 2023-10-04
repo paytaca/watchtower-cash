@@ -849,6 +849,8 @@ def get_bch_utxos(self, address):
                         qs = BlockHeight.objects.filter(id=block.id)
                         count = qs.first().transactions.count()
                         qs.update(processed=True, transactions_count=count)
+                    
+                    parse_tx_wallet_histories.delay(tx_hash, immediate=True)
             
             if transaction_obj.exists():
                 # Mark as unspent, just in case it's already marked spent
@@ -1719,15 +1721,17 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
 
     utxos = extract_tx_utxos(bch_tx)
     has_saved_output = Transaction.objects.filter(txid=txid).exists()
-    for i, utxo in enumerate(utxos):
+    for i, utxo in enumerate(utxos, 1):
         is_output = not utxo['is_input']
 
         force_create = False
-        if i == len(utxos)-1 and not has_saved_output: force_create = True
+        # If this tx has no saved outputs (which is required for recording wallet history)
+        # force create a transaction output record
+        if i == len(utxos) and not has_saved_output: force_create = True
 
         if not force_create:
             txn_check = Transaction.objects.filter(txid=utxo['txid'], index=utxo['index'])
-            if txn_check.exists():
+            if txn_check.exists() and not is_output:
                 txn_check.update(spent=True, spending_txid=txid)
                 continue
 
@@ -2080,7 +2084,7 @@ def process_mempool_transaction(tx_hash, immediate=False):
                 if not txn_check.exists():
                     spent_transactions = Transaction.objects.filter(txid=txid, index=index)
                     spent_transactions.update(spent=True, spending_txid=tx_hash)
-                    has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
+                    # has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
                     # has_subscribed_input = has_subscribed_input or has_existing_wallet
 
                     save_histories = True
@@ -2097,6 +2101,7 @@ def process_mempool_transaction(tx_hash, immediate=False):
                         "outpoint_index": index,
                     })
 
+    mqtt_client.loop_start()
     for output in outputs:
         scriptPubKey = output['scriptPubKey']
 
@@ -2164,11 +2169,10 @@ def process_mempool_transaction(tx_hash, immediate=False):
                         'amount': amount,
                         'value': value
                     }
-                    mqtt_client.loop_start()
+                    
                     LOGGER.info('Sending MQTT message: ' + str(data))
                     msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
                     LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
-                    mqtt_client.loop_stop()
                     
                     if immediate:
                         client_acknowledgement(obj_id)
@@ -2176,6 +2180,8 @@ def process_mempool_transaction(tx_hash, immediate=False):
                         client_acknowledgement.delay(obj_id)
 
                     LOGGER.info(data)
+    
+    mqtt_client.loop_stop()
 
     # if has_subscribed_input and not has_updated_output:
     if save_histories:
