@@ -286,7 +286,7 @@ class CashFungibleToken(models.Model):
                     description=data.get('description', ''),
                     symbol=data.get('token').get('symbol'),
                     decimals=data.get('token').get('decimals'),
-                    image_url=uris.get('icon')
+                    image_url=uris.get('icon') if uris and uris.get('icon') else ''
                 )
                 self.info = info
                 self.save()
