@@ -16,7 +16,7 @@ from vouchers.js.runner import ScriptFunctions
 @shared_task(queue='claim_expired_unclaimed_vouchers')
 def claim_expired_unclaimed_vouchers():
     unclaimed_vouchers = Voucher.objects.filter(
-        used=False,
+        claimed=False,
         expired=False
     ).annotate(
         expiration_date=ExpressionWrapper(
@@ -38,7 +38,7 @@ def claim_expired_unclaimed_vouchers():
             merchant_receiving_address,
             None,
             {
-                'lock_nft_category': voucher.lock_category
+                'category': voucher.category
             },
             room_name=settings.VOUCHER_ROOM
         )

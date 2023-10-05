@@ -11,16 +11,20 @@ class VaultSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class VoucherSerializer(serializers.ModelSerializer):    
+class VoucherSerializer(serializers.ModelSerializer):
+    capability = serializers.SerializerMethodField()
+
     class Meta:
         model = Voucher
         fields = (
+            'id',
             'vault',
             'value',
             'minting_txid',
             'claim_txid',
-            'key_category',
-            'lock_category',
+            'category',
+            'commitment',
+            'capability',
             'claimed',
             'expired',
             'duration_days',
@@ -32,23 +36,24 @@ class VoucherSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'expiration_date',
             'id',
+            'capability',
         )
+
+    def get_capability(self, obj):
+        return 'none'
 
 
 class VoucherClaimCheckSerializer(serializers.Serializer):
     address = serializers.CharField(max_length=100, required=True)  # vault token address
-    key_nft_categories = serializers.ListField(
-        child=serializers.CharField(max_length=100),
+    voucher_ids = serializers.ListField(
+        child=serializers.IntegerField(),
         allow_empty=True
     )
 
 
 class VoucherClaimCheckResponseSerializer(serializers.Serializer):
     proceed = serializers.BooleanField(default=False)
-    expired = serializers.BooleanField(default=False)
-    voucher_belongs_to_merchant = serializers.BooleanField(default=False)
-    is_merchant_address = serializers.BooleanField(default=False)
-    category_with_err = serializers.CharField(max_length=100)
+    voucher_id = serializers.JSONField()
 
 
 class VoucherClaimedResponseSerializer(serializers.Serializer):
@@ -56,5 +61,5 @@ class VoucherClaimedResponseSerializer(serializers.Serializer):
 
 
 class VoucherClaimedSerializer(serializers.Serializer):
-    lock_category = serializers.CharField(max_length=100, required=True)
+    category = serializers.CharField(max_length=100, required=True)
     txid = serializers.CharField(max_length=100, required=True)

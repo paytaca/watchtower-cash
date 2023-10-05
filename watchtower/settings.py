@@ -269,7 +269,21 @@ if REDIS_PASSWORD:
         redis_prefix = 'user'
         
     CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_BROKER_CONN = redis.StrictRedis(
+        host=REDIS_HOST,
+        password=REDIS_PASSWORD,
+        port=6379,
+        db=DB_NUM[0]
+    )
+
     CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    CELERY_BROKER_CONN = redis.StrictRedis(
+        host=REDIS_HOST,
+        password=REDIS_PASSWORD,
+        port=6379,
+        db=DB_NUM[0]
+    )
+    
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
@@ -278,6 +292,12 @@ if REDIS_PASSWORD:
     )
 else:
     CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_BROKER_CONN = redis.StrictRedis(
+        host=REDIS_HOST,
+        port=6379,
+        db=DB_NUM[0]
+    )
+
     CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,

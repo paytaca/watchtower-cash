@@ -439,6 +439,7 @@ class Transaction(PostgresModel):
         null=True,
         blank=True
     )
+    post_save_processed = models.DateTimeField(null=True, blank=True)
     tx_timestamp = models.DateTimeField(null=True, blank=True)
     date_created = models.DateTimeField(default=timezone.now)
 

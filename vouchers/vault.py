@@ -25,8 +25,10 @@ def generate_merchant_vault(merchant_id):
 
     contract = ScriptFunctions.compileVaultContract(dict(
         params=dict(
-            merchantReceiverPk=receiving_pubkey,
-            merchantSignerPk=signer_pubkey
+            merchant={
+                'receiverPk': receiving_pubkey,
+                'signerPk': signer_pubkey
+            }
         ),
         options=dict(network=settings.BCH_NETWORK)
     ))

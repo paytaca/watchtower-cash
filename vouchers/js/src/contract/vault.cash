@@ -1,7 +1,7 @@
 pragma cashscript ^0.8.0;
 
 
-contract Vault(
+contract Vault (
     pubkey merchantReceiverPK,
     pubkey merchantSignerPK
 ) {
@@ -29,19 +29,27 @@ contract Vault(
         require(tx.outputs[0].lockingBytecode == merchant);
     }
 
-    function claim(
-        bytes32 keyNftCategory,
+    function emergencyRefund (pubkey senderPk) {
+        // ensure utxo is from sender and gets sent back to that wallets
+        bytes25 sender = new LockingBytecodeP2PKH(hash160(senderPk));
+        require(tx.inputs[0].lockingBytecode == sender);
+        require(tx.outputs[0].lockingBytecode == sender);
+    }
+
+    function claim (
+        bytes32 voucherCategory,
         sig merchantSignerSig
     ) {
         require(checkSig(merchantSignerSig, merchantSignerPK));
 
-        // 2 outputs: lock & key nft
+        // 2 inputs: lock & key nft
         // 1 output: recipient of BCH stored in lock NFT
         require(tx.inputs.length >= 2);
         require(tx.outputs.length >= 1);
 
-        // key NFT must be an immutable NFT
-        require(tx.inputs[1].tokenCategory == keyNftCategory);
+        // key NFT must be an immutable NFT & lock/key should be the same category
+        require(tx.inputs[0].tokenCategory == voucherCategory);
+        require(tx.inputs[1].tokenCategory == voucherCategory);
 
         // lock & key nft must have the same commitment
         // 20 bytes - claim expiration timestamp
@@ -53,8 +61,8 @@ contract Vault(
         int claimAmount = int(claimAmountBytes);
         require(tx.outputs[0].value == claimAmount);
 
-        // the amount sent must be from lock nft's output
-        require(tx.inputs[this.activeInputIndex].value == claimAmount);
+        // the amount sent must be from lock nft's input
+        require(tx.inputs[0].value == claimAmount);
 
         // the funds must be sent to the merchant receiving address
         bytes20 merchantPKH = hash160(merchantReceiverPK);

@@ -41,7 +41,22 @@ class Round(Func):
     template = "%(function)s(%(expressions)s::numeric, 0)"
 
 
-def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_address_index=False, minting_baton=None):
+def parse_boolean_query_param(value):
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        normalized = value.lower().strip()
+
+        if normalized == "true": return True
+        elif normalized == "false": return False
+
+        return None
+
+    return None
+
+
+def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_address_index=False, minting_baton=None, confirmed=None):
     qs = Transaction.objects.filter(query)
     if minting_baton is not None and not is_cashtoken:
         subquery = Exists(
@@ -59,6 +74,9 @@ def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addr
             qs = qs.filter(subquery)
         else:
             qs = qs.exclude(subquery)
+
+    if isinstance(confirmed, bool):
+        qs = qs.filter(blockheight__isnull=not confirmed)
 
     utxos_values = qs.annotate(
         vout=F('index'),
@@ -147,16 +165,17 @@ def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addr
     return utxos_values
 
 
-def _get_ct_utxos(query, is_cashtoken_nft=None, show_address_index=False):
+def _get_ct_utxos(query, is_cashtoken_nft=None, show_address_index=False, confirmed=None):
     return _get_token_utxos(
         query,
         is_cashtoken=True,
         is_cashtoken_nft=is_cashtoken_nft,
-        show_address_index=show_address_index
+        show_address_index=show_address_index,
+        confirmed=confirmed,
     )
 
 
-def _get_bch_utxos(query, show_address_index=False):
+def _get_bch_utxos(query, show_address_index=False, confirmed=None):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
     # dust = 546 / (10 ** 8)
@@ -165,6 +184,10 @@ def _get_bch_utxos(query, show_address_index=False):
     # NOTE: removed dust filter here since amount for BCH txns are always 0 now
     query = query & Q(token__name='bch')
     qs = Transaction.objects.filter(query)
+    
+    if isinstance(confirmed, bool):
+        qs = qs.filter(blockheight__isnull=not confirmed)
+
     if show_address_index:
         utxos_values = qs.annotate(
             vout=F('index'),
@@ -199,6 +222,7 @@ class UTXO(APIView):
             openapi.Parameter(name="baton", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="is_cashtoken", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
             openapi.Parameter(name="is_cashtoken_nft", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="confirmed", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
         ]
     )
     def get(self, request, *args, **kwargs):
@@ -209,30 +233,10 @@ class UTXO(APIView):
         tokenid_or_category = kwargs.get('tokenid_or_category', '')
         category = kwargs.get('category', '')
         wallet_hash = kwargs.get('wallethash', '')
-        baton = request.query_params.get('baton', '').lower().strip()
-        is_cashtoken_nft = request.query_params.get('is_cashtoken_nft', '').lower().strip()
-        is_cashtoken = request.query_params.get('is_cashtoken', '').lower().strip()
-
-        if baton == "true":
-            baton = True
-        elif baton == "false":
-            baton = False
-        else:
-            baton = None
-
-        if is_cashtoken_nft == "true":
-            is_cashtoken_nft = True
-        elif is_cashtoken_nft == "false":
-            is_cashtoken_nft = False
-        else:
-            is_cashtoken_nft = None
-
-        if is_cashtoken == "true":
-            is_cashtoken = True
-        elif is_cashtoken == "false":
-            is_cashtoken = False
-        else:
-            is_cashtoken = False
+        baton = parse_boolean_query_param(request.query_params.get('baton', ''))
+        is_cashtoken_nft = parse_boolean_query_param(request.query_params.get('is_cashtoken_nft', ''))
+        is_cashtoken = parse_boolean_query_param(request.query_params.get('is_cashtoken', ''))
+        confirmed = parse_boolean_query_param(request.query_params.get('confirmed', ''))
 
         data = { 'valid': False }
         qs = None
@@ -242,7 +246,7 @@ class UTXO(APIView):
         if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
-            utxos_values = _get_bch_utxos(query)
+            utxos_values = _get_bch_utxos(query, confirmed=confirmed)
         
         if is_slp_address(slpaddress) or is_token_addr:
             data['address'] = slpaddress
@@ -291,21 +295,21 @@ class UTXO(APIView):
                             query = query & Q(cashtoken_ft__isnull=False)
 
             if is_token_addr:
-                utxos_values = _get_ct_utxos(query, is_cashtoken_nft=is_cashtoken_nft)
+                utxos_values = _get_ct_utxos(query, is_cashtoken_nft=is_cashtoken_nft, confirmed=confirmed)
             else:
-                utxos_values = _get_token_utxos(query, minting_baton=baton)
+                utxos_values = _get_token_utxos(query, minting_baton=baton, confirmed=confirmed)
 
         if wallet_hash:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
             data['wallet'] = wallet_hash
-            
+
             if wallet.wallet_type == 'slp':
                 if tokenid_or_category:
                     query = Q(wallet=wallet) & Q(spent=False) & Q(token__tokenid=tokenid_or_category)
                 else:
                     query = Q(wallet=wallet) & Q(spent=False)
 
-                utxos_values = _get_token_utxos(query, show_address_index=True, minting_baton=baton)
+                utxos_values = _get_token_utxos(query, show_address_index=True, minting_baton=baton, confirmed=confirmed)
 
             elif wallet.wallet_type == 'bch':
                 query = Q(wallet=wallet) & Q(spent=False)
@@ -334,9 +338,9 @@ class UTXO(APIView):
                             if is_cashtoken_nft is not None:
                                 query = query & Q(cashtoken_ft__isnull=False)
 
-                    utxos_values = _get_ct_utxos(query, is_cashtoken_nft=is_cashtoken_nft, show_address_index=True)
+                    utxos_values = _get_ct_utxos(query, is_cashtoken_nft=is_cashtoken_nft, show_address_index=True, confirmed=confirmed)
                 else:
-                    utxos_values = _get_bch_utxos(query, show_address_index=True)
+                    utxos_values = _get_bch_utxos(query, show_address_index=True, confirmed=confirmed)
                 
 
         if baton is not None:
