@@ -10,11 +10,11 @@ from main.tasks import broadcast_transaction
 from main.tasks import process_mempool_transaction
 
 
-def _get_wallet_hash(tx_hash):
+def _get_wallet_hash(tx_hex):
     bchn = BCHN()
     wallet_hash = None
     try:
-        tx = bchn._decode_raw_transaction(tx_hash)
+        tx = bchn._decode_raw_transaction(tx_hex)
         input0 = tx['vin'][0]
         input0_tx = bchn._get_raw_transaction(input0['txid'])
         vout_data = input0_tx['vout'][input0['vout']]
@@ -48,7 +48,7 @@ class BroadcastViewSet(generics.GenericAPIView):
                 txid = result.split(' ')[-1]
                 response['txid'] = txid
                 response['success'] = True
-                process_mempool_transaction(txid, immediate=True)
+                process_mempool_transaction.delay(txid, tx_hex=serializer.data['transaction'], immediate=True)
                 return Response(response, status=status.HTTP_200_OK)
             else:
                 # Do a wallet utxo rescan if failed

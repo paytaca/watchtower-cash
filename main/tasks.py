@@ -1625,7 +1625,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     value=tx_output['value']
                 )
             else:
-                value = tx_output['value'] / 10 ** 8
+                value = tx_output['value']
                 obj_id, created = save_record(
                     'bch',
                     tx_output['address'],
@@ -1712,14 +1712,16 @@ def rebuild_wallet_history(wallet_hash):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=False):
+def parse_tx_wallet_histories(txid, parsed_tx=None, proceed_with_zero_amount=False, immediate=False):
     history_check = WalletHistory.objects.filter(txid=txid)
     if history_check.exists():
         return
 
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
-
-    bch_tx = NODE.BCH.get_transaction(txid)
+    if parsed_tx:
+        bch_tx = parsed_tx
+    else:
+        bch_tx = NODE.BCH.get_transaction(txid)
 
     tx_fee = bch_tx['tx_fee']
     tx_timestamp = bch_tx['timestamp']
@@ -2068,12 +2070,16 @@ def populate_token_addresses():
 
 
 @shared_task(queue='mempool_processing')
-def process_mempool_transaction(tx_hash, immediate=False):
+def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
     from main.mqtt import client as mqtt_client
 
     LOGGER.info('Processing mempool tx: ' + tx_hash)
 
-    tx = NODE.BCH._get_raw_transaction(tx_hash)
+    if tx_hex:
+        tx = NODE.BCH.build_tx_from_hex(tx_hex)
+    else:
+        tx = NODE.BCH._get_raw_transaction(tx_hash)
+
     inputs = tx['vin']
     outputs = tx['vout']
 
@@ -2185,23 +2191,25 @@ def process_mempool_transaction(tx_hash, immediate=False):
                         'amount': amount,
                         'value': value
                     }
+                    LOGGER.info(data)
+                    
+                    try:
+                        if immediate:
+                            client_acknowledgement(obj_id)
+                        else:
+                            client_acknowledgement.delay(obj_id)
+                    except:
+                        pass
                     
                     LOGGER.info('Sending MQTT message: ' + str(data))
                     msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
                     LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
-                    
-                    if immediate:
-                        client_acknowledgement(obj_id)
-                    else:
-                        client_acknowledgement.delay(obj_id)
-
-                    LOGGER.info(data)
     
     mqtt_client.loop_stop()
 
     if save_histories:
         LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
         if immediate:
-            parse_tx_wallet_histories(tx_hash, immediate=True)
+            parse_tx_wallet_histories(tx_hash, parsed_tx=tx, immediate=True)
         else:
-            parse_tx_wallet_histories.delay(tx_hash)
+            parse_tx_wallet_histories.delay(tx_hash, parsed_tx=tx)

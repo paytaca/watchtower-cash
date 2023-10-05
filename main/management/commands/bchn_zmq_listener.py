@@ -49,7 +49,7 @@ class ZMQHandler():
                 if topic == "hashtx":
                     tx_hash = binascii.hexlify(body).decode()
                     data = {
-                        'txid': tx_hash
+                        'txid': tx_hash,
                     }
                     msg = mqtt_client.publish('mempool', json.dumps(data), qos=1)
                     LOGGER.info('New mempool tx pushed to MQTT: ' + tx_hash)

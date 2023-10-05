@@ -58,17 +58,25 @@ class BCHN(object):
                         raise exception
                 time.sleep(1)
 
-    def _decode_raw_transaction(self, tx_hash):
+    def _decode_raw_transaction(self, tx_hex):
         retries = 0
         while retries < self.max_retries:
             try:
-                txn = self.rpc_connection.decoderawtransaction(tx_hash)
+                txn = self.rpc_connection.decoderawtransaction(tx_hex)
                 return txn
             except Exception as exception:
                 retries += 1
                 if retries >= self.max_retries:
                     raise exception
                 time.sleep(1)
+
+    def build_tx_from_hex(self, tx_hex, tx_fee=None, fee_rate=1.2):
+        txn = self._decode_raw_transaction(tx_hex)
+        if not tx_fee:
+            tx_fee = txn['size'] * fee_rate
+        txn['tx_fee'] = tx_fee
+        txn['timestamp'] = None
+        return txn
 
     def get_transaction(self, tx_hash):
         retries = 0
