@@ -1,0 +1,11 @@
+[{
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.paytaca.app",
+      "sha256_cert_fingerprints": [
+        "A9:CB:80:6D:16:F1:ED:11:DA:DD:2D:1D:FB:08:52:94:22:8A:5E:44:EB:47:5D:77:6F:91:3D:78:0B:7B:D4:F6",
+        "16:AF:A4:EF:9E:97:5A:56:64:D5:56:DC:74:79:E6:EC:54:E5:F7:D6:79:D9:49:80:1C:7F:AF:63:63:55:DA:E1"
+      ]
+    }
+}]

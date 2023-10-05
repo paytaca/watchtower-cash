@@ -56,6 +56,20 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('', TemplateView.as_view(template_name="main/index.html")),
+    path(
+        '.well-known/apple-app-site-association',
+        TemplateView.as_view(
+            template_name="main/apple-app-site-association.json",
+            content_type="application/json"
+        )
+    ),
+    path(
+        '.well-known/assetlinks.json',
+        TemplateView.as_view(
+            template_name="main/assetlinks.json",
+            content_type="application/json"
+        )
+    ),
     path('admin/', admin.site.urls),
     path('api/', include(main_urls)),
     path('api/smartbch/', include(sbch_urlpatterns)),
