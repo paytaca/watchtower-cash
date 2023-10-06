@@ -35,14 +35,12 @@ from django.db.models import (
 )
 
 from authentication.token import TokenAuthentication
-from rest_framework.permissions import IsAuthenticated
 
 import logging
 logger = logging.getLogger(__name__)
 
 class AdListCreate(APIView):
     authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         queryset = Ad.objects.filter(Q(is_deleted=False) and Q(is_public=True) and Q(trade_amount__gt=0))
@@ -65,13 +63,13 @@ class AdListCreate(APIView):
         if page < 1:
             return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
         
-        try:
-            # Verify owner signature
-            signature, timestamp, _ = get_verification_headers(request)
-            message = ViewCode.AD_LIST.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        # try:
+        #     # Verify owner signature
+        #     signature, timestamp, _ = get_verification_headers(request)
+        #     message = ViewCode.AD_LIST.value + '::' + timestamp
+        #     verify_signature(wallet_hash, signature, message)
+        # except ValidationError as err:
+        #     return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         if not owned and currency is None:
             # Require currency param if fetching data for store page

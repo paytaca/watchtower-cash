@@ -9,7 +9,6 @@ from django.contrib.postgres.fields import ArrayField
 from django.db.models.constraints import UniqueConstraint
 from django.db.models import Q
 from django.conf import settings
-from django.utils.crypto import get_random_string
 
 from main.utils.address_validator import *
 from main.utils.address_converter import *
@@ -17,6 +16,9 @@ import requests
 import re
 import uuid
 import web3
+
+from django.utils.crypto import get_random_string
+import random
 
 
 class Token(PostgresModel):
@@ -167,14 +169,23 @@ class Wallet(PostgresModel):
     )
     version = models.IntegerField()
     auth_token = models.CharField(max_length=40, unique=True, null=True)
+    auth_nonce = models.CharField(max_length=6, null=True)
     date_created = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return self.wallet_hash
+
+    def create_auth_token(self):
+        self.auth_token = get_random_string(40)
+        self.save()
+
+    def update_auth_nonce(self):
+        self.auth_nonce = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        self.save()
     
     def save(self, *args, **kwargs):
-        if not self.token:
-            self.token = get_random_string(40)
+        if not self.auth_token:
+            self.auth_token = get_random_string(40)
         super().save(*args, **kwargs)
 
 class Address(PostgresModel):

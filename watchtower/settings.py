@@ -105,6 +105,8 @@ MIDDLEWARE=[
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+AUTHENTICATION_BACKENDS = ['authentication.backends.SignatureBackend']
+
 ROOT_URLCONF = 'watchtower.urls'
 
 TEMPLATES = [
