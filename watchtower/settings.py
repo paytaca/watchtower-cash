@@ -599,3 +599,7 @@ DEFAULT_TOKEN_DETAILS = {
 
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
+
+
+# Used for fallback computation of tx fee
+TX_FEE_RATE = 1.2

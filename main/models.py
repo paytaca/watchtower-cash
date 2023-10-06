@@ -440,7 +440,7 @@ class Transaction(PostgresModel):
         blank=True
     )
     post_save_processed = models.DateTimeField(null=True, blank=True)
-    tx_timestamp = models.DateTimeField(null=True, blank=True)
+    tx_timestamp = models.DateTimeField(null=True, blank=True, db_index=True)
     date_created = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -731,7 +731,7 @@ class WalletNftToken(PostgresModel):
         null=True,
         blank=True
     )
-    date_dispensed = models.DateTimeField(null=True, blank=True)
+    date_dispensed = models.DateTimeField(null=True, blank=True, db_index=True)
     dispensation_transaction = models.ForeignKey(
         Transaction,
         related_name='dispensations',

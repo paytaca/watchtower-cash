@@ -29,7 +29,13 @@ def on_message(client, userdata, msg):
         payload = json.loads(msg.payload)
         if 'txid' in payload.keys():
             txid = payload['txid']
-            process_mempool_transaction.delay(txid)
+            tx_hex = None
+            if 'tx_hex' in payload.keys():
+                tx_hex = payload['tx_hex']
+            process_mempool_transaction.apply_async(
+                (txid, tx_hex),
+                queue="mempool_processing_general"
+            )
     except JSONDecodeError:
         pass
 

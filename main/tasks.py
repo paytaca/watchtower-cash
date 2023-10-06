@@ -1723,8 +1723,14 @@ def parse_tx_wallet_histories(txid, parsed_tx=None, proceed_with_zero_amount=Fal
     else:
         bch_tx = NODE.BCH.get_transaction(txid)
 
-    tx_fee = bch_tx['tx_fee']
-    tx_timestamp = bch_tx['timestamp']
+    if 'tx_fee' in bch_tx.keys():
+        tx_fee = bch_tx['tx_fee']
+    else:
+        tx_fee = bch_tx['size'] * settings.TX_FEE_RATE
+
+    tx_timestamp = None
+    if 'timestamp' in bch_tx.keys():
+        tx_timestamp = bch_tx['timestamp']
 
     # parse inputs and outputs to desired structure
     inputs = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
@@ -2069,147 +2075,169 @@ def populate_token_addresses():
             obj.save()
 
 
-@shared_task(queue='mempool_processing')
+@shared_task()
 def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
-    from main.mqtt import client as mqtt_client
-
     LOGGER.info('Processing mempool tx: ' + tx_hash)
-
+    proceed = False
+    
     if tx_hex:
         tx = NODE.BCH.build_tx_from_hex(tx_hex)
-    else:
-        tx = NODE.BCH._get_raw_transaction(tx_hash)
 
-    inputs = tx['vin']
-    outputs = tx['vout']
+        output_addresses = []
+        for output in tx['vout']:
+            if 'scriptPubKey' in output.keys():
+                if 'addresses' in output['scriptPubKey']:
+                    output_addresses += output['scriptPubKey']['addresses']
+        output_addresses_check = Address.objects.filter(address__in=output_addresses)
 
-    if 'coinbase' in inputs[0].keys():
-        return
 
-    save_histories = False
-    inputs_data = []
-
-    for _input in inputs:
-        txid = _input['txid']
-        value = int(_input['value'] * (10 ** 8))
-        index = _input['vout']
-
-        tx_check = Transaction.objects.filter(txid=txid, index=index)
-        if tx_check.exists():
-            ancestor_tx = NODE.BCH._get_raw_transaction(txid)
-            ancestor_spubkey = ancestor_tx['vout'][index]['scriptPubKey']
-
-            if 'addresses' in ancestor_spubkey.keys():
-                address = ancestor_spubkey['addresses'][0]
-                spent_transactions = Transaction.objects.filter(txid=txid, index=index)
-                spent_transactions.update(spent=True, spending_txid=tx_hash)
-
-                # save wallet history only if tx is associated with a wallet
-                if tx_check.first().wallet:
-                    save_histories = True
-
-                subscription = Subscription.objects.filter(
-                    address__address=address
-                )
-                if subscription.exists():
-                    inputs_data.append({
-                        "token": "bch",
-                        "address": address,
-                        "value": value,
-                        "outpoint_txid": txid,
-                        "outpoint_index": index,
-                    })
-
-    mqtt_client.loop_start()
-    for output in outputs:
-        scriptPubKey = output['scriptPubKey']
-
-        if 'addresses' in scriptPubKey.keys():
-            bchaddress = scriptPubKey['addresses'][0]
-
-            address_check = Address.objects.filter(address=bchaddress)
-            if address_check.exists():
-                value = int(output['value'] * (10 ** 8))
-                source = NODE.BCH.source
-                index = output['n']
-
-                token_id = 'bch'
-                amount = ''
-                decimals = None
-                created = False
-                obj_id = None
-
-                if 'tokenData' in output.keys():
-                    saved_token_data = process_cashtoken_tx(
-                        output['tokenData'],
-                        output['scriptPubKey']['addresses'][0],
-                        tx_hash,
-                        index=index,
-                        value=value
-                    )
-                    token_id = saved_token_data['token_id']
-                    decimals = saved_token_data['decimals']
-                    amount = str(saved_token_data['amount'])
-                    created = saved_token_data['created']
-                    obj_id = saved_token_data['transaction_id']
-                else:
-                    args = (
-                        token_id,
-                        bchaddress,
-                        tx_hash,
-                        source
-                    )
-                    if 'time' in tx.keys():
-                        timestamp = tx['time']
-                    else:
-                        timestamp = timezone.now().timestamp()
-                    obj_id, created = save_record(
-                        *args,
-                        value=value,
-                        blockheightid=None,
-                        index=index,
-                        inputs=inputs_data,
-                        tx_timestamp=timestamp
-                    )
-                    # has_updated_output = has_updated_output or created
-
-                    if obj_id:
-                        txn_obj = Transaction.objects.get(id=obj_id)
-                        decimals = txn_obj.get_token_decimals()
-
-                        # save wallet history only if tx is associated with a wallet
-                        if txn_obj.wallet:
-                            save_histories = True
-                    
-                if obj_id and created:
-                    # Publish MQTT message
-                    data = {
-                        'txid': tx_hash,
-                        'recipient': bchaddress,
-                        'token': token_id,
-                        'decimals': decimals,
-                        'amount': amount,
-                        'value': value
-                    }
-                    LOGGER.info(data)
-                    
-                    try:
-                        if immediate:
-                            client_acknowledgement(obj_id)
-                        else:
-                            client_acknowledgement.delay(obj_id)
-                    except:
-                        pass
-                    
-                    LOGGER.info('Sending MQTT message: ' + str(data))
-                    msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
-                    LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
-    
-    mqtt_client.loop_stop()
-
-    if save_histories:
-        LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
-        if immediate:
-            parse_tx_wallet_histories(tx_hash, parsed_tx=tx, immediate=True)
+        if output_addresses_check.exists():
+            proceed = True
         else:
-            parse_tx_wallet_histories.delay(tx_hash, parsed_tx=tx)
+            input_txids = [x['txid'] for x in tx['vin']]
+            input_txids_check = Transaction.objects.filter(txid__in=input_txids)
+            if input_txids_check.exists():
+                proceed = True
+            else:
+                proceed = False
+    else:
+        proceed = True
+
+    if proceed:
+        tx = NODE.BCH._get_raw_transaction(tx_hash)
+    
+        from main.mqtt import client as mqtt_client
+
+        inputs = tx['vin']
+        outputs = tx['vout']
+
+        if 'coinbase' in inputs[0].keys():
+            return
+
+        save_histories = False
+        inputs_data = []
+
+        for _input in inputs:
+            txid = _input['txid']
+            value = int(_input['value'] * (10 ** 8))
+            index = _input['vout']
+
+            tx_check = Transaction.objects.filter(txid=txid, index=index)
+            if tx_check.exists():
+                ancestor_tx = NODE.BCH._get_raw_transaction(txid)
+                ancestor_spubkey = ancestor_tx['vout'][index]['scriptPubKey']
+
+                if 'addresses' in ancestor_spubkey.keys():
+                    address = ancestor_spubkey['addresses'][0]
+                    spent_transactions = Transaction.objects.filter(txid=txid, index=index)
+                    spent_transactions.update(spent=True, spending_txid=tx_hash)
+
+                    # save wallet history only if tx is associated with a wallet
+                    if tx_check.first().wallet:
+                        save_histories = True
+
+                    subscription = Subscription.objects.filter(
+                        address__address=address
+                    )
+                    if subscription.exists():
+                        inputs_data.append({
+                            "token": "bch",
+                            "address": address,
+                            "value": value,
+                            "outpoint_txid": txid,
+                            "outpoint_index": index,
+                        })
+
+        mqtt_client.loop_start()
+        for output in outputs:
+            scriptPubKey = output['scriptPubKey']
+
+            if 'addresses' in scriptPubKey.keys():
+                bchaddress = scriptPubKey['addresses'][0]
+
+                address_check = Address.objects.filter(address=bchaddress)
+                if address_check.exists():
+                    value = int(output['value'] * (10 ** 8))
+                    source = NODE.BCH.source
+                    index = output['n']
+
+                    token_id = 'bch'
+                    amount = ''
+                    decimals = None
+                    created = False
+                    obj_id = None
+
+                    if 'tokenData' in output.keys():
+                        saved_token_data = process_cashtoken_tx(
+                            output['tokenData'],
+                            output['scriptPubKey']['addresses'][0],
+                            tx_hash,
+                            index=index,
+                            value=value
+                        )
+                        token_id = saved_token_data['token_id']
+                        decimals = saved_token_data['decimals']
+                        amount = str(saved_token_data['amount'])
+                        created = saved_token_data['created']
+                        obj_id = saved_token_data['transaction_id']
+                    else:
+                        args = (
+                            token_id,
+                            bchaddress,
+                            tx_hash,
+                            source
+                        )
+                        if 'time' in tx.keys():
+                            timestamp = tx['time']
+                        else:
+                            timestamp = timezone.now().timestamp()
+                        obj_id, created = save_record(
+                            *args,
+                            value=value,
+                            blockheightid=None,
+                            index=index,
+                            inputs=inputs_data,
+                            tx_timestamp=timestamp
+                        )
+                        # has_updated_output = has_updated_output or created
+
+                        if obj_id:
+                            txn_obj = Transaction.objects.get(id=obj_id)
+                            decimals = txn_obj.get_token_decimals()
+
+                            # save wallet history only if tx is associated with a wallet
+                            if txn_obj.wallet:
+                                save_histories = True
+                        
+                    if obj_id and created:
+                        # Publish MQTT message
+                        data = {
+                            'txid': tx_hash,
+                            'recipient': bchaddress,
+                            'token': token_id,
+                            'decimals': decimals,
+                            'amount': amount,
+                            'value': value
+                        }
+                        LOGGER.info(data)
+                        
+                        try:
+                            if immediate:
+                                client_acknowledgement(obj_id)
+                            else:
+                                client_acknowledgement.delay(obj_id)
+                        except:
+                            pass
+                        
+                        LOGGER.info('Sending MQTT message: ' + str(data))
+                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                        LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+        
+        mqtt_client.loop_stop()
+
+        if save_histories:
+            LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
+            if immediate:
+                parse_tx_wallet_histories(tx_hash, parsed_tx=tx, immediate=True)
+            else:
+                parse_tx_wallet_histories.delay(tx_hash, parsed_tx=tx)

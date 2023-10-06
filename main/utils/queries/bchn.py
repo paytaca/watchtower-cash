@@ -70,10 +70,10 @@ class BCHN(object):
                     raise exception
                 time.sleep(1)
 
-    def build_tx_from_hex(self, tx_hex, tx_fee=None, fee_rate=1.2):
+    def build_tx_from_hex(self, tx_hex, tx_fee=None):
         txn = self._decode_raw_transaction(tx_hex)
         if not tx_fee:
-            tx_fee = txn['size'] * fee_rate
+            tx_fee = txn['size'] * settings.TX_FEE_RATE
         txn['tx_fee'] = tx_fee
         txn['timestamp'] = None
         return txn

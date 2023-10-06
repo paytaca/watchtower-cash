@@ -48,7 +48,10 @@ class BroadcastViewSet(generics.GenericAPIView):
                 txid = result.split(' ')[-1]
                 response['txid'] = txid
                 response['success'] = True
-                process_mempool_transaction.delay(txid, tx_hex=serializer.data['transaction'], immediate=True)
+                process_mempool_transaction.apply_async(
+                    (txid, serializer.data['transaction'], True),
+                    queue="mempool_processing_paytaca"
+                )
                 return Response(response, status=status.HTTP_200_OK)
             else:
                 # Do a wallet utxo rescan if failed
