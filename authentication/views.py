@@ -19,9 +19,8 @@ class LoginView(APIView):
         wallet = authenticate(request, wallet_hash=wallet_hash, signature=signature, public_key=public_key)
         if wallet is not None:
             # User is authenticated
+            # Checking if token is valid:
             cipher_suite = Fernet(settings.FERNET_KEY)
-            logger.warn(f'settings.FERNET_KEY: {settings.FERNET_KEY}')
-            logger.warn(f'wallet.auth_token: {wallet.auth_token}')
             try:
                 auth_token = cipher_suite.decrypt(wallet.auth_token).decode()
             except InvalidToken:

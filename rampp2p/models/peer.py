@@ -39,7 +39,6 @@ class Peer(models.Model):
         token = get_random_string(40)
         cipher_suite = Fernet(settings.FERNET_KEY)
         self.auth_token = cipher_suite.encrypt(token.encode()).decode()
-        logger.warn(f'self.auth_token: {self.auth_token}')
         self.save()
 
     def update_auth_nonce(self):
