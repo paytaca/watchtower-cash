@@ -166,6 +166,8 @@ class AdListCreate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AdDetail(APIView):
+    authentication_classes = [TokenAuthentication]
+    
     def get_object(self, pk):
         try:
             return Ad.objects.get(pk=pk)

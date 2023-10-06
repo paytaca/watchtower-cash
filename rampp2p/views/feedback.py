@@ -13,11 +13,14 @@ from rampp2p.serializers import (
     ArbiterFeedbackCreateSerializer
 )
 from rampp2p.viewcodes import ViewCode
+from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
 
 class ArbiterFeedbackListCreate(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         queryset = ArbiterFeedback.objects.all()
 
@@ -112,6 +115,8 @@ class ArbiterFeedbackListCreate(APIView):
         return from_peer, arbiter, order
     
 class PeerFeedbackListCreate(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         queryset = Feedback.objects.all()
         
@@ -207,6 +212,7 @@ class PeerFeedbackListCreate(APIView):
         return from_peer, to_peer, order
     
 class FeedbackDetail(generics.RetrieveUpdateAPIView):
-  queryset = Feedback.objects.all()
-  serializer_class = FeedbackSerializer
+    authentication_classes = [TokenAuthentication]
+    queryset = Feedback.objects.all()
+    serializer_class = FeedbackSerializer
 

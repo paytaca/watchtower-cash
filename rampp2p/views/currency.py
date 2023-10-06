@@ -6,13 +6,19 @@ from django.http import Http404
 from rampp2p.models import FiatCurrency, CryptoCurrency
 from rampp2p.serializers import FiatCurrencySerializer, CryptoCurrencySerializer
 
+from authentication.token import TokenAuthentication
+
 class FiatCurrencyList(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         queryset = FiatCurrency.objects.all()
         serializer = FiatCurrencySerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
 class FiatCurrencyDetail(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get_object(self, pk):
         try:
             return FiatCurrency.objects.get(pk=pk)
@@ -25,12 +31,16 @@ class FiatCurrencyDetail(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class CryptoCurrencyList(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         queryset = CryptoCurrency.objects.all()
         serializer = CryptoCurrencySerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
 class CryptoCurrencyDetail(APIView):
+    authentication_classes = [TokenAuthentication]
+    
     def get_object(self, pk):
         try:
             return CryptoCurrency.objects.get(pk=pk)

@@ -13,7 +13,11 @@ from rampp2p.serializers import (
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
+from authentication.token import TokenAuthentication
+
 class PeerView(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         queryset = Peer.objects.all()
         

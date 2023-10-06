@@ -49,7 +49,10 @@ from django.db.models import (
     Subquery
 )
 
+from authentication.token import TokenAuthentication
+
 class OrderListCreate(APIView):
+    authentication_classes = [TokenAuthentication]
 
     def get(self, request):
         try:
@@ -328,66 +331,71 @@ class OrderListCreate(APIView):
                 raise ValidationError('invalid payment method, not caller owned')
 
 class OrderListStatus(APIView):
-  def get(self, request, pk):
-    queryset = Status.objects.filter(order=pk)
-    serializer = StatusSerializer(queryset, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    authentication_classes = [TokenAuthentication]
+    def get(self, request, pk):
+        queryset = Status.objects.filter(order=pk)
+        serializer = StatusSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class OrderDetail(APIView):
-  def get_object(self, pk):
-    try:
-      return Order.objects.get(pk=pk)
-    except Order.DoesNotExist:
-      raise Http404
+    authentication_classes = [TokenAuthentication]
 
-  def get(self, request, pk):
-    order = self.get_object(pk)
-    wallet_hash = request.headers.get('wallet_hash')
-    if wallet_hash is None:
-        return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    context = { 'wallet_hash': wallet_hash }
-    serialized_order = OrderSerializer(order, context=context).data
-    response = {
-        'order': serialized_order
-    }
+    def get_object(self, pk):
+        try:
+            return Order.objects.get(pk=pk)
+        except Order.DoesNotExist:
+            raise Http404
 
-    order_contract = Contract.objects.filter(order__pk=pk)
-    if order_contract.count() > 0:
-        order_contract = order_contract.first()
-        # serialized_contract = None
-        # serialized_transactions = None
-        # if (serialized_order['status']['value'] == StatusType.CONFIRMED or
-        #     serialized_order['status']['value'] == StatusType.PAID):
-        serialized_contract = ContractDetailSerializer(order_contract).data
-        contract_txs = Transaction.objects.filter(contract__id=order_contract.id)
-        serialized_transactions = TransactionSerializer(contract_txs, many=True).data
+    def get(self, request, pk):
+        order = self.get_object(pk)
+        wallet_hash = request.headers.get('wallet_hash')
+        if wallet_hash is None:
+            return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        response['contract'] = serialized_contract
-        response['contract']['transactions'] = serialized_transactions
-    
-    if serialized_order['status']['value'] == StatusType.APPEALED:
-        appeal = Appeal.objects.filter(order_id=order.id)
-        if appeal.exists():
-            serialized_appeal = AppealSerializer(appeal.first()).data
-            # response['appeal'] = serialized_appeal
-            response['appeal'] = {
-                'id': serialized_appeal['id'],
-                'type': serialized_appeal['type'],
-                'reasons': serialized_appeal['reasons'],
-                'resolved_at': serialized_appeal['resolved_at'],
-                'created_at': serialized_appeal['created_at']
-            }
+        context = { 'wallet_hash': wallet_hash }
+        serialized_order = OrderSerializer(order, context=context).data
+        response = {
+            'order': serialized_order
+        }
 
-    total_fee, fees = get_trading_fees()
-    response['fees'] = {
-        'total': total_fee,
-        'fees': fees
-    }
+        order_contract = Contract.objects.filter(order__pk=pk)
+        if order_contract.count() > 0:
+            order_contract = order_contract.first()
+            # serialized_contract = None
+            # serialized_transactions = None
+            # if (serialized_order['status']['value'] == StatusType.CONFIRMED or
+            #     serialized_order['status']['value'] == StatusType.PAID):
+            serialized_contract = ContractDetailSerializer(order_contract).data
+            contract_txs = Transaction.objects.filter(contract__id=order_contract.id)
+            serialized_transactions = TransactionSerializer(contract_txs, many=True).data
+            
+            response['contract'] = serialized_contract
+            response['contract']['transactions'] = serialized_transactions
+        
+        if serialized_order['status']['value'] == StatusType.APPEALED:
+            appeal = Appeal.objects.filter(order_id=order.id)
+            if appeal.exists():
+                serialized_appeal = AppealSerializer(appeal.first()).data
+                # response['appeal'] = serialized_appeal
+                response['appeal'] = {
+                    'id': serialized_appeal['id'],
+                    'type': serialized_appeal['type'],
+                    'reasons': serialized_appeal['reasons'],
+                    'resolved_at': serialized_appeal['resolved_at'],
+                    'created_at': serialized_appeal['created_at']
+                }
 
-    return Response(response, status=status.HTTP_200_OK)
+        total_fee, fees = get_trading_fees()
+        response['fees'] = {
+            'total': total_fee,
+            'fees': fees
+        }
+
+        return Response(response, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     ConfirmOrder creates a status=CONFIRMED for an order. This is callable only by the order's ad owner.
     '''
@@ -452,6 +460,8 @@ class ConfirmOrder(APIView):
             raise ValidationError('caller must be ad owner')
 
 class PendingEscrowOrder(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     EscrowPendingOrder creates a status=ESCROW_PENDING for the given order.
     If transaction id is given, it is sent to a task queue for validation, if valid, 
@@ -539,6 +549,8 @@ class PendingEscrowOrder(APIView):
             raise ValidationError('caller must be seller')
 
 class VerifyEscrow(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     Manually marks the order as ESCROWED by submitting the transaction id
     for validation (should only be used as fallback when listener fails to update the status 
@@ -608,83 +620,87 @@ class VerifyEscrow(APIView):
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
     
 class CryptoBuyerConfirmPayment(APIView):
-  def post(self, request, pk):
+    authentication_classes = [TokenAuthentication]
 
-    try:
-        # validate signature
-        signature, timestamp, wallet_hash = get_verification_headers(request)
-        message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
-        verify_signature(wallet_hash, signature, message)
+    def post(self, request, pk):
 
-        # validate permissions
-        order = Order.objects.get(pk=pk)
-        self.validate_permissions(wallet_hash, order)
+        try:
+            # validate signature
+            signature, timestamp, wallet_hash = get_verification_headers(request)
+            message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
+            verify_signature(wallet_hash, signature, message)
 
-    except ValidationError as err:
-        return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-    except Order.DoesNotExist as err:
-        return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            # validate permissions
+            order = Order.objects.get(pk=pk)
+            self.validate_permissions(wallet_hash, order)
+
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        except Order.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # validations
+            validate_status_inst_count(StatusType.PAID_PENDING, pk)
+            validate_status_progression(StatusType.PAID_PENDING, pk)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        payment_method_ids = request.data.get('payment_methods')
+        if payment_method_ids is None or len(payment_method_ids) == 0:
+            return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        payment_methods = PaymentMethod.objects.filter(id__in=payment_method_ids)
+        order.payment_methods.add(*payment_methods)
+        order.save()    
+
+        context = { 'wallet_hash': wallet_hash }
+        serialized_order = OrderSerializer(order, context=context)
+
+        # create PAID_PENDING status for order
+        serialized_status = StatusSerializer(data={
+            'status': StatusType.PAID_PENDING,
+            'order': pk
+        })
+
+        if not serialized_status.is_valid():
+            return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        serialized_status = StatusReadSerializer(serialized_status.save())
+        result = {
+            'success' : True,
+            'status': serialized_status.data
+        }
+        
+        send_order_update(result, pk)
+        response = {
+            "order": serialized_order.data,
+            "status": serialized_status.data
+        }
+        return Response(response, status=status.HTTP_200_OK)    
     
-    try:
-        # validations
-        validate_status_inst_count(StatusType.PAID_PENDING, pk)
-        validate_status_progression(StatusType.PAID_PENDING, pk)
-    except ValidationError as err:
-      return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-    
-    payment_method_ids = request.data.get('payment_methods')
-    if payment_method_ids is None or len(payment_method_ids) == 0:
-        return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    payment_methods = PaymentMethod.objects.filter(id__in=payment_method_ids)
-    order.payment_methods.add(*payment_methods)
-    order.save()    
+    def validate_permissions(self, wallet_hash, order):
+        '''
+        Only buyers can set order status to PAID_PENDING
+        '''
 
-    context = { 'wallet_hash': wallet_hash }
-    serialized_order = OrderSerializer(order, context=context)
+        try:
+            caller = Peer.objects.get(wallet_hash=wallet_hash)
+        except Peer.DoesNotExist as err:
+            raise ValidationError(err.args[0])
+        
+        buyer = None
+        if order.ad_snapshot.trade_type == TradeType.SELL:
+            buyer = order.owner
+        else:
+            buyer = order.ad_snapshot.ad.owner
 
-    # create PAID_PENDING status for order
-    serialized_status = StatusSerializer(data={
-        'status': StatusType.PAID_PENDING,
-        'order': pk
-    })
-
-    if not serialized_status.is_valid():
-        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    serialized_status = StatusReadSerializer(serialized_status.save())
-    result = {
-        'success' : True,
-        'status': serialized_status.data
-    }
-    
-    send_order_update(result, pk)
-    response = {
-        "order": serialized_order.data,
-        "status": serialized_status.data
-    }
-    return Response(response, status=status.HTTP_200_OK)    
-  
-  def validate_permissions(self, wallet_hash, order):
-    '''
-    Only buyers can set order status to PAID_PENDING
-    '''
-
-    try:
-        caller = Peer.objects.get(wallet_hash=wallet_hash)
-    except Peer.DoesNotExist as err:
-        raise ValidationError(err.args[0])
-    
-    buyer = None
-    if order.ad_snapshot.trade_type == TradeType.SELL:
-       buyer = order.owner
-    else:
-       buyer = order.ad_snapshot.ad.owner
-
-    if caller.wallet_hash != buyer.wallet_hash:
-        raise ValidationError('caller must be buyer')
+        if caller.wallet_hash != buyer.wallet_hash:
+            raise ValidationError('caller must be buyer')
     
 class CryptoSellerConfirmPayment(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def post(self, request, pk):
         
         try:
@@ -741,6 +757,8 @@ class CryptoSellerConfirmPayment(APIView):
             raise ValidationError('caller must be seller')
 
 class CancelOrder(APIView):
+    authentication_classes = [TokenAuthentication]
+        
     def post(self, request, pk):
 
         try:

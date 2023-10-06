@@ -11,8 +11,11 @@ from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
 from django.conf import settings
+from authentication.token import TokenAuthentication
 
 class ArbiterListCreate(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         queryset = Arbiter.objects.filter(is_disabled=False)
         id = request.query_params.get('id')
@@ -49,6 +52,8 @@ class ArbiterListCreate(APIView):
         return Response(serialized_arbiter.data, status=status.HTTP_200_OK)
 
 class ArbiterDetail(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         try:
             public_key = request.query_params.get('public_key')
@@ -109,6 +114,8 @@ class ArbiterDetail(APIView):
         return Response(serialized_arbiter, status=status.HTTP_200_OK)
 
 class ArbiterConfig(APIView):
+    authentication_classes = [TokenAuthentication]
+    
     """
     This view allows users to disable or enable an arbiter instance.
     """

@@ -27,10 +27,14 @@ from rampp2p.serializers import (
     RecipientSerializer
 )
 
+from authentication.token import TokenAuthentication
+
 import logging
 logger = logging.getLogger(__name__)
 
 class ContractList(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         queryset = Contract.objects.all()
 
@@ -40,6 +44,8 @@ class ContractList(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
 
 class ContractDetail(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get_object(self, pk):
         try:
             order = Order.objects.get(pk=pk)
@@ -70,6 +76,8 @@ class ContractDetail(APIView):
         return Response(response, status=status.HTTP_200_OK)
 
 class CreateContract(APIView):
+    authentication_classes = [TokenAuthentication]
+    
     def post(self, request, pk):
         
         try:

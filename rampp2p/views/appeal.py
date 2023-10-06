@@ -35,11 +35,14 @@ from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired, get_trading_fees
 from rampp2p.utils.handler import update_order_status
+from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
     
 class AppealList(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         try:
             # validate signature
@@ -101,6 +104,8 @@ class AppealList(APIView):
             raise ValidationError(err.args[0])        
 
 class AppealRequest(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request, pk):
         try:
             # validate signature
@@ -233,6 +238,8 @@ class AppealRequest(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 class AppealPendingRelease(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     Marks an appealed order for release of escrowed funds, updating the order status to RELEASE_PENDING.
     The order status is automatically updated to RELEASED when the contract address receives an 
@@ -298,6 +305,8 @@ class AppealPendingRelease(APIView):
             raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class AppealPendingRefund(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     Marks an appealed order for refund of escrowed funds, updating the order status to REFUND_PENDING.
     The order status is automatically updated to REFUNDED when the contract address receives an 
@@ -360,6 +369,8 @@ class AppealPendingRefund(APIView):
                 raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class VerifyRelease(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
@@ -449,6 +460,8 @@ class VerifyRelease(APIView):
             raise ValidationError(f'{prefix} action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')
 
 class VerifyRefund(APIView):
+    authentication_classes = [TokenAuthentication]
+        
     '''
     Manually marks the order as (status) REFUNDED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.

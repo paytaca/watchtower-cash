@@ -14,17 +14,22 @@ from rampp2p.serializers import (
     PaymentMethodUpdateSerializer
 )
 from rampp2p.viewcodes import ViewCode
+from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
 
 class PaymentTypeList(APIView):
+    authentication_classes = [TokenAuthentication]
+
     def get(self, _):
         queryset = PaymentType.objects.all()
         serializer = PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-class PaymentMethodListCreate(APIView):   
+class PaymentMethodListCreate(APIView):  
+    authentication_classes = [TokenAuthentication]
+
     def get(self, request):
         try:
             signature, timestamp, wallet_hash = get_verification_headers(request)
@@ -67,6 +72,8 @@ class PaymentMethodListCreate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
 class PaymentMethodDetail(APIView):
+    authentication_classes = [TokenAuthentication]
+    
     def get_object(self, pk):
         try:
             payment_method = PaymentMethod.objects.get(pk=pk)
