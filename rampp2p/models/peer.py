@@ -2,7 +2,12 @@ from django.db import models
 from .currency import FiatCurrency
 
 from django.utils.crypto import get_random_string
+from cryptography.fernet import Fernet
+from django.conf import settings
 import random
+
+import logging
+logger = logging.getLogger(__name__)
 
 class Peer(models.Model):
     nickname = models.CharField(max_length=100)
@@ -24,14 +29,17 @@ class Peer(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
 
     # Temporary fields to test authentication
-    auth_token = models.CharField(max_length=40, unique=True, null=True)
+    auth_token = models.CharField(max_length=200, unique=True, null=True)
     auth_nonce = models.CharField(max_length=6, null=True)
 
     def __str__(self):
         return self.wallet_hash
 
     def create_auth_token(self):
-        self.auth_token = get_random_string(40)
+        token = get_random_string(40)
+        cipher_suite = Fernet(settings.FERNET_KEY)
+        self.auth_token = cipher_suite.encrypt(token.encode()).decode()
+        logger.warn(f'self.auth_token: {self.auth_token}')
         self.save()
 
     def update_auth_nonce(self):

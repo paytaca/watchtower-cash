@@ -612,3 +612,6 @@ HARDCODED_FEE = config('HARDCODED_FEE', 1000)
 
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
+
+# authentication
+FERNET_KEY = config('FERNET_KEY', '')
