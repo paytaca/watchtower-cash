@@ -139,9 +139,12 @@ DATABASES = {
         'HOST': POSTGRES_HOST,
         'PORT': POSTGRES_PORT,
         'USER': POSTGRES_USER,
-        'PASSWORD': POSTGRES_PASSWORD
+        'PASSWORD': POSTGRES_PASSWORD,
+        'CONN_MAX_AGE': None,
+        'CONN_HEALTH_CHECKS': True
     }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
