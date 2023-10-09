@@ -33,6 +33,9 @@ class Appeal(models.Model):
     resolved_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return str(self.id)
+
     def set_reasons(self, reasons):
         self.reasons = json.dumps(reasons)
     
