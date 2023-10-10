@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 # from main.models import Wallet
 from rampp2p.models import Peer as Wallet
+from rampp2p.serializers import PeerSerializer
 
 from django.conf import settings
 from cryptography.fernet import Fernet, InvalidToken
@@ -25,17 +26,25 @@ class LoginView(APIView):
                 auth_token = cipher_suite.decrypt(wallet.auth_token).decode()
             except InvalidToken:
                 return Response({'error': 'token is invalid'}, status=status.HTTP_400_BAD_REQUEST)
-            return Response({'token': auth_token})
+            
+            serialized_wallet = PeerSerializer(wallet)
+            response = {
+                'token': auth_token,
+                'user': serialized_wallet.data
+            }
+            return Response(response)
         else:
             # Authentication failed
             return Response({'error': 'Invalid signature'}, status=400)
 
 class AuthNonceView(APIView):
-    def get(self, request, wallet_hash):
+    def get(self, request):
         try:
+            # TODO: cooldown
+            wallet_hash = request.headers.get('wallet_hash')
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
             wallet.update_auth_nonce()
             wallet.create_auth_token()
-            return Response({'auth_nonce': wallet.auth_nonce})
+            return Response({'otp': wallet.auth_nonce})
         except Wallet.DoesNotExist:
             return Response({'error': 'Wallet not found'}, status=404)

@@ -31,19 +31,7 @@ class PaymentMethodListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        try:
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.PAYMENT_METHOD_LIST.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-           owner = Peer.objects.get(wallet_hash=wallet_hash)
-        except Peer.DoesNotExist as err:
-           return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-            
-        queryset = PaymentMethod.objects.filter(owner=owner)
+        queryset = PaymentMethod.objects.filter(owner=request.user)
         serializer = PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
@@ -83,11 +71,12 @@ class PaymentMethodDetail(APIView):
     
     def get(self, request, pk):
         try:
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.PAYMENT_METHOD_GET.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            # signature, timestamp, wallet_hash = get_verification_headers(request)
+            # message = ViewCode.PAYMENT_METHOD_GET.value + '::' + timestamp
+            # verify_signature(wallet_hash, signature, message)
 
             # Validate that caller is payment method owner
+            wallet_hash = request.headers.get('wallet_hash')
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -116,11 +105,12 @@ class PaymentMethodDetail(APIView):
 
     def delete(self, request, pk):
         try:
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.PAYMENT_METHOD_DELETE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            # signature, timestamp, wallet_hash = get_verification_headers(request)
+            # message = ViewCode.PAYMENT_METHOD_DELETE.value + '::' + timestamp
+            # verify_signature(wallet_hash, signature, message)
 
             # Validate that caller is payment method owner
+            wallet_hash = request.headers.get('wallet_hash')
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)

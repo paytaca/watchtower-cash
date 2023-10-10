@@ -39,12 +39,12 @@ class Ad(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
-    is_deleted = models.BooleanField(default=False)
+    # is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(blank=True, null=True)
 
     # modified for soft deletion
     def delete(self, *args, **kwargs):
-        self.is_deleted = True
+        # self.is_deleted = True
         self.deleted_at = timezone.now()
         self.save()
     

@@ -13,11 +13,11 @@ from rampp2p.serializers import (
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
+from rest_framework.decorators import authentication_classes
 from authentication.token import TokenAuthentication
 
 class PeerView(APIView):
-    authentication_classes = [TokenAuthentication]
-
+    @authentication_classes([TokenAuthentication])
     def get(self, request):
         queryset = Peer.objects.all()
         
@@ -31,9 +31,9 @@ class PeerView(APIView):
 
         serializer = PeerSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
+    
 
     def post(self, request):
-
         try:
             signature, timestamp, wallet_hash = get_verification_headers(request)
             public_key = request.headers.get('public_key')
@@ -54,23 +54,12 @@ class PeerView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @authentication_classes([TokenAuthentication])
     def put(self, request):
-        try:
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.PEER_UPDATE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
-            peer = Peer.objects.get(wallet_hash=wallet_hash)
-        except Peer.DoesNotExist as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
         # TODO: allow users to update their public key and address, but this needs checking:
         # public key must match address
         
-        serializer = PeerUpdateSerializer(peer, data=request.data)
+        serializer = PeerUpdateSerializer(request.user, data=request.data)
         if serializer.is_valid():
             serializer = PeerSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_200_OK)

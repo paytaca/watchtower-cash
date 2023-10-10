@@ -4,6 +4,10 @@ from rampp2p.models import Peer as Wallet
 import hashlib
 import ecdsa
 
+
+import logging
+logger = logging.getLogger(__name__)
+
 class SignatureBackend(ModelBackend):
     def authenticate(self, request, wallet_hash=None, signature=None, public_key=None):
         try:
@@ -29,8 +33,8 @@ class SignatureBackend(ModelBackend):
                 if not wallet.auth_token:
                     wallet.create_auth_token()
                 return wallet
-        except Wallet.DoesNotExist:
-            pass
+        except (Wallet.DoesNotExist, TypeError) as err:
+            logger.error(err.args[0])
 
     def get_user(self, wallet_id):
         try:

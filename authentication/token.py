@@ -31,7 +31,7 @@ class TokenAuthentication(BaseAuthentication):
             
         except Wallet.DoesNotExist:
             raise AuthenticationFailed('No such user')
-        except InvalidToken:
+        except (InvalidToken, TypeError):
             raise AuthenticationFailed('Invalid token')
 
         return (wallet, None)

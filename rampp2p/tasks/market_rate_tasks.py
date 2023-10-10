@@ -49,6 +49,8 @@ def execute_subprocess(command):
 
 @shared_task(queue='rampp2p__subprocess_execution')
 def market_rates_beat_handler(result):
+    if result.get('results') == '':
+        return
     rates = result.get('result').get('rates')
     subbed_currencies = FiatCurrency.objects.values('symbol').all()
     # logger.warn(f'subbed_currencies: {subbed_currencies}')

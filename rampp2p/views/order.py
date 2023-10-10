@@ -12,8 +12,6 @@ import math
 from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
-from rampp2p.utils.signature import verify_signature, get_verification_headers
-from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
 from rampp2p.serializers import (
     OrderSerializer, 
@@ -55,15 +53,9 @@ class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_LIST.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
         order_state = request.query_params.get('state')
+        wallet_hash = request.user.wallet_hash
+
         if order_state is None:
             return Response({'error': 'parameter "state" is required'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -154,16 +146,7 @@ class OrderListCreate(APIView):
         return Response(data, status.HTTP_200_OK)
 
     def post(self, request):
-
-        try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_CREATE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
+        wallet_hash = request.user.wallet_hash
         try:
             ad_id = request.data.get('ad', None)
             if ad_id is None:
@@ -397,18 +380,13 @@ class ConfirmOrder(APIView):
     authentication_classes = [TokenAuthentication]
 
     '''
-    ConfirmOrder creates a status=CONFIRMED for an order. This is callable only by the order's ad owner.
+        ConfirmOrder creates a status=CONFIRMED for an order. 
+        This is callable only by the order's ad owner.
     '''
     def post(self, request, pk):
+        wallet_hash = request.user.wallet_hash
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_CONFIRM.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
             self.validate_permissions(wallet_hash, pk)
-
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -451,13 +429,12 @@ class ConfirmOrder(APIView):
         Only ad owners can set order status to CONFIRMED
         '''
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
 
-        if order.ad_snapshot.ad.owner.wallet_hash != caller.wallet_hash:
-            raise ValidationError('caller must be ad owner')
+        if order.ad_snapshot.ad.owner.wallet_hash != wallet_hash:
+            raise ValidationError('Caller must be ad owner.')
 
 class PendingEscrowOrder(APIView):
     authentication_classes = [TokenAuthentication]
@@ -470,14 +447,7 @@ class PendingEscrowOrder(APIView):
     '''
     def post(self, request, pk):
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_ESCROW_PENDING.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-
+            self.validate_permissions(request.user.wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -534,9 +504,8 @@ class PendingEscrowOrder(APIView):
         Only order sellers can set order status to ESCROW_PENDING
         '''
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
         
         seller = None
@@ -545,8 +514,8 @@ class PendingEscrowOrder(APIView):
         else:
             seller = order.owner
 
-        if caller.wallet_hash != seller.wallet_hash:
-            raise ValidationError('caller must be seller')
+        if wallet_hash != seller.wallet_hash:
+            raise ValidationError('Caller must be seller.')
 
 class VerifyEscrow(APIView):
     authentication_classes = [TokenAuthentication]
@@ -558,14 +527,7 @@ class VerifyEscrow(APIView):
     '''
     def post(self, request, pk):
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_ESCROW_VERIFY.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-
+            self.validate_permissions(request.user.wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -606,15 +568,14 @@ class VerifyEscrow(APIView):
         '''
 
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
             # require caller is seller
-            if caller.wallet_hash != seller.wallet_hash:
+            if wallet_hash != seller.wallet_hash:
                 raise ValidationError('caller must be seller')
         else:
             raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
@@ -623,17 +584,10 @@ class CryptoBuyerConfirmPayment(APIView):
     authentication_classes = [TokenAuthentication]
 
     def post(self, request, pk):
-
+        wallet_hash = request.user.wallet_hash
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_BUYER_CONF_PAYMENT.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
             order = Order.objects.get(pk=pk)
             self.validate_permissions(wallet_hash, order)
-
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         except Order.DoesNotExist as err:
@@ -682,34 +636,22 @@ class CryptoBuyerConfirmPayment(APIView):
     def validate_permissions(self, wallet_hash, order):
         '''
         Only buyers can set order status to PAID_PENDING
-        '''
-
-        try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-        except Peer.DoesNotExist as err:
-            raise ValidationError(err.args[0])
-        
+        '''        
         buyer = None
         if order.ad_snapshot.trade_type == TradeType.SELL:
             buyer = order.owner
         else:
             buyer = order.ad_snapshot.ad.owner
 
-        if caller.wallet_hash != buyer.wallet_hash:
+        if wallet_hash != buyer.wallet_hash:
             raise ValidationError('caller must be buyer')
     
 class CryptoSellerConfirmPayment(APIView):
     authentication_classes = [TokenAuthentication]
 
     def post(self, request, pk):
-        
+        wallet_hash = request.user.wallet_hash
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_SELLER_CONF_PAYMENT.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -742,9 +684,8 @@ class CryptoSellerConfirmPayment(APIView):
         Only the seller can set the order status to PAID
         '''
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
         
         seller = None
@@ -753,21 +694,15 @@ class CryptoSellerConfirmPayment(APIView):
         else:
             seller = order.owner
 
-        if caller.wallet_hash != seller.wallet_hash:
-            raise ValidationError('caller must be seller')
+        if wallet_hash != seller.wallet_hash:
+            raise ValidationError('Caller must be seller')
 
 class CancelOrder(APIView):
     authentication_classes = [TokenAuthentication]
         
     def post(self, request, pk):
-
+        wallet_hash = request.user.wallet_hash
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_CANCEL.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # validate permissions
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -805,12 +740,11 @@ class CancelOrder(APIView):
         CancelOrder is callable by the order/ad owner.
         '''
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
         
         order_owner = order.owner.wallet_hash
         ad_owner = order.ad_snapshot.ad.owner.wallet_hash
-        if caller.wallet_hash != order_owner and caller.wallet_hash != ad_owner:
+        if wallet_hash != order_owner and wallet_hash != ad_owner:
            raise ValidationError('caller must be order/ad owner')

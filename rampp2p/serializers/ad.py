@@ -83,7 +83,11 @@ class AdListSerializer(serializers.ModelSerializer):
         ]
     
     def get_is_owned(self, instance: Ad):
-        wallet_hash = self.context['wallet_hash']
+        wallet_hash = ''
+        try:
+            wallet_hash = self.context['wallet_hash']
+        except KeyError:
+            pass
         if instance.owner.wallet_hash == wallet_hash:
             return True
         return False
