@@ -35,16 +35,6 @@ services:
       REMOTE_HOST: "${BCHN_CHIPNET_HOST}"
       LOCAL_PORT: 60001
       REMOTE_PORT: 60001
-  # bchd:
-  #   image: cagataygurturk/docker-ssh-tunnel
-  #   volumes:
-  #     - /home/ubuntu/.ssh:/root/ssh:ro
-  #   environment:
-  #     SSH_DEBUG: "-v"
-  #     TUNNEL_HOST: bchd-chipnet
-  #     REMOTE_HOST: "${BCHD_CHIPNET_HOST}"
-  #     LOCAL_PORT: 8335
-  #     REMOTE_PORT: 8335
   postgres:
     image: "postgres:11.1-alpine"
     volumes:

@@ -53,7 +53,7 @@ class ZMQHandler():
                         'txid': txid,
                         'tx_hex': tx_hex
                     }
-                    msg = mqtt_client.publish('mempool', json.dumps(data), qos=1)
+                    msg = mqtt_client.publish('mempool', json.dumps(data), qos=2)
                     LOGGER.info('New mempool tx pushed to MQTT: ' + txid)
 
         except KeyboardInterrupt:
