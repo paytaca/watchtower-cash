@@ -106,8 +106,8 @@ MIDDLEWARE=[
 ]
 
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-    'authentication.backends.SignatureBackend'
+    'authentication.backends.SignatureBackend',
+    'django.contrib.auth.backends.ModelBackend'
 ]
 
 ROOT_URLCONF = 'watchtower.urls'

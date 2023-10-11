@@ -13,26 +13,9 @@ from rampp2p.serializers import (
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
-from rest_framework.decorators import authentication_classes
 from authentication.token import TokenAuthentication
 
-class PeerView(APIView):
-    @authentication_classes([TokenAuthentication])
-    def get(self, request):
-        queryset = Peer.objects.all()
-        
-        id = request.query_params.get('id')
-        if id is not None:
-            queryset = queryset.filter(id=id)
-
-        wallet_hash = request.headers.get('wallet_hash')
-        if wallet_hash is not None:
-            queryset = queryset.filter(wallet_hash=wallet_hash)
-
-        serializer = PeerSerializer(queryset, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
-    
-
+class PeerCreateView(APIView):
     def post(self, request):
         try:
             signature, timestamp, wallet_hash = get_verification_headers(request)
@@ -52,9 +35,24 @@ class PeerView(APIView):
         if serializer.is_valid():
             serializer = PeerSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class PeerDetailView(APIView):
+    authentication_classes = [TokenAuthentication]
+    
+    def get(self, request):
+        queryset = Peer.objects.all()
+        
+        id = request.query_params.get('id')
+        if id is not None:
+            queryset = queryset.filter(id=id)
 
-    @authentication_classes([TokenAuthentication])
+        wallet_hash = request.headers.get('wallet_hash')
+        if wallet_hash is not None:
+            queryset = queryset.filter(wallet_hash=wallet_hash)
+
+        serializer = PeerSerializer(queryset, many=True)
+        return Response(serializer.data, status.HTTP_200_OK)
+
     def put(self, request):
         # TODO: allow users to update their public key and address, but this needs checking:
         # public key must match address
