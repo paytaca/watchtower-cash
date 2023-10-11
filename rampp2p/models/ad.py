@@ -42,6 +42,9 @@ class Ad(models.Model):
     # is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(blank=True, null=True)
 
+    def __str__(self):
+        return str(self.id)
+
     # modified for soft deletion
     def delete(self, *args, **kwargs):
         # self.is_deleted = True
@@ -70,6 +73,9 @@ class AdSnapshot(models.Model):
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots') # TODO: payment_method snapshots
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return str(self.id)
     
     @property
     def time_duration(self):

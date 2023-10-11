@@ -34,6 +34,9 @@ class Order(models.Model):
     payment_methods = models.ManyToManyField(PaymentMethod)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
+    def __str__(self):
+        return str(self.id)
+
     @property
     def time_duration(self):
         # convert the duration choice to a timedelta object

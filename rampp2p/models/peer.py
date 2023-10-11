@@ -32,9 +32,6 @@ class Peer(models.Model):
     auth_token = models.CharField(max_length=200, unique=True, null=True)
     auth_nonce = models.CharField(max_length=6, null=True)
 
-    def __str__(self):
-        return self.wallet_hash
-
     def create_auth_token(self):
         token = get_random_string(40)
         cipher_suite = Fernet(settings.FERNET_KEY)
@@ -44,3 +41,6 @@ class Peer(models.Model):
     def update_auth_nonce(self):
         self.auth_nonce = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         self.save()
+
+    def __str__(self):
+        return self.nickname
