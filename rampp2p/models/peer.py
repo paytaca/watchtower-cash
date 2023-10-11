@@ -28,7 +28,6 @@ class Peer(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
-    # Temporary fields to test authentication
     auth_token = models.CharField(max_length=200, unique=True, null=True)
     auth_nonce = models.CharField(max_length=6, null=True)
 

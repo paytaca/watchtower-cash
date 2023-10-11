@@ -79,22 +79,10 @@ class CreateContract(APIView):
     authentication_classes = [TokenAuthentication]
     
     def post(self, request, pk):
-        
         try:
-            # signature validation
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.CONTRACT_CREATE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
-            # permission validations
-            self.validate_permissions(wallet_hash, pk)
-
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
-            # requires that the current order status is CONFIRMED
+            self.validate_permissions(request.user.wallet_hash, pk)
             validate_status(pk, StatusType.CONFIRMED)
+            
             order = Order.objects.get(pk=pk)
             arbiter = Arbiter.objects.get(pk=request.data.get('arbiter'))
             params = self.get_params(arbiter.public_key, order)

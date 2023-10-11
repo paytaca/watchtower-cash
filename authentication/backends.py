@@ -1,6 +1,8 @@
 from django.contrib.auth.backends import ModelBackend
-# from main.models import Wallet
-from rampp2p.models import Peer as Wallet
+from main.models import Wallet as MainWallet
+from rampp2p.models import Peer as PeerWallet
+from rampp2p.models import Arbiter as ArbiterWallet
+
 import hashlib
 import ecdsa
 
@@ -9,10 +11,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SignatureBackend(ModelBackend):
-    def authenticate(self, request, wallet_hash=None, signature=None, public_key=None):
+    def authenticate(self, app='main', wallet_hash=None, signature=None, public_key=None):
         try:
-            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-            # TODO: convert public_key to address and check if a matching address associated to wallet exists. Return if None.
+            wallet = None
+            if app == 'main':
+                wallet = MainWallet.objects.get(wallet_hash=wallet_hash)
+                # TODO: convert public_key to address and check if a matching address associated to wallet exists. Return if None.
+            if app == 'ramp-peer':
+                wallet = PeerWallet.objects.get(wallet_hash=wallet_hash)
+            if app == 'ramp-arbiter':
+                wallet = ArbiterWallet.objects.get(wallet_hash=wallet_hash)
 
             # Convert the signature and public key to bytes
             der_signature_bytes = bytearray.fromhex(signature)
@@ -33,11 +41,11 @@ class SignatureBackend(ModelBackend):
                 if not wallet.auth_token:
                     wallet.create_auth_token()
                 return wallet
-        except (Wallet.DoesNotExist, TypeError) as err:
+        except (MainWallet.DoesNotExist, PeerWallet.DoesNotExist, ArbiterWallet.DoesNotExist, TypeError) as err:
             logger.error(err.args[0])
 
-    def get_user(self, wallet_id):
-        try:
-            return Wallet.objects.get(pk=wallet_id)
-        except Wallet.DoesNotExist:
-            return None
+    # def get_user(self, wallet_id):
+    #     try:
+    #         return Wallet.objects.get(pk=wallet_id)
+    #     except Wallet.DoesNotExist:
+    #         return None

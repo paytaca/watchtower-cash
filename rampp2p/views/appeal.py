@@ -45,13 +45,8 @@ class AppealList(APIView):
 
     def get(self, request):
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_LIST.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # validate permissions
-            self.validate_permissions(wallet_hash)
+            self.validate_permissions(request.user.wallet_hash)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
@@ -107,12 +102,8 @@ class AppealRequest(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request, pk):
+        wallet_hash = request.user.wallet_hash
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_GET.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
@@ -185,12 +176,8 @@ class AppealRequest(APIView):
         (3) The seller/buyer cannot appeal before the funds are escrowed (i.e. status = 'SBM', 'CNF', 'ESCRW_PN')
     '''
     def post(self, request, pk):
+        wallet_hash = request.user.wallet_hash
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_REQUEST.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
@@ -251,19 +238,10 @@ class AppealPendingRelease(APIView):
         (2) Order must have an existing appeal
     '''
     def post(self, request, pk):
-
         try:
-            # Validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_PENDING_RELEASE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # Validate permissions
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            self.validate_permissions(request.user.wallet_hash, pk)
 
-        try:
             # Status validations
             status_type = StatusType.RELEASE_PENDING
             validate_status_inst_count(status_type, pk)
@@ -320,13 +298,8 @@ class AppealPendingRefund(APIView):
     def post(self, request, pk):
         
         try:
-            # Validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_PENDING_REFUND.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # Validate permissions
-            self.validate_permissions(wallet_hash, pk)
+            self.validate_permissions(request.user.wallet_hash, pk)
         
             # Status validations
             status_type = StatusType.REFUND_PENDING
@@ -382,24 +355,15 @@ class VerifyRelease(APIView):
         (3) TODO: An amount of time must already have passed since status RELEASE_PENDING was created
     '''
     def post(self, request, pk):
-
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            # Validate permissions
+            self.validate_permissions(request.user.wallet_hash, pk)
 
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
             # status validations
             status_type = StatusType.RELEASED
             validate_status_inst_count(status_type, pk)
             validate_exclusive_stats(status_type, pk)
-            validate_status_progression(status_type, pk)            
+            validate_status_progression(status_type, pk)      
             
             txid = request.data.get('txid')
             if txid is None:
@@ -475,13 +439,8 @@ class VerifyRefund(APIView):
     def post(self, request, pk):
 
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # validate permissions
-            self.validate_permissions(wallet_hash, pk)
+            self.validate_permissions(request.user.wallet_hash, pk)
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
