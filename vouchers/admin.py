@@ -17,8 +17,7 @@ class VaultAdmin(admin.ModelAdmin):
 
 class VoucherAdmin(admin.ModelAdmin):
     search_fields = [
-        'key_category',
-        'lock_category',
+        'category',
     ]
     list_filter = [
         'claimed',
@@ -26,8 +25,7 @@ class VoucherAdmin(admin.ModelAdmin):
     ]
     list_display = [
         'vault',
-        'key_category',
-        'lock_category',
+        'category',
         'claimed',
         'expired',
         'duration_days',

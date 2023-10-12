@@ -151,7 +151,7 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
     def save_wallet_history(self, request, queryset):
         for tr in queryset:
-            parse_tx_wallet_histories(tr.txid)
+            parse_tx_wallet_histories(tr.txid, immediate=True)
 
 
 class RecipientAdmin(admin.ModelAdmin):
@@ -264,7 +264,8 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
     search_fields = [
-        'wallet__wallet_hash'
+        'wallet__wallet_hash',
+        'txid'
     ]
 
     def cashtoken(self, obj):

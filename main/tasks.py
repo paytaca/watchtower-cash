@@ -48,8 +48,6 @@ from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
 
-from main.mqtt import client as mqtt_client
-
 LOGGER = logging.getLogger(__name__)
 
 REDIS_STORAGE = settings.REDISKV
@@ -118,7 +116,7 @@ def client_acknowledgement(self, txid):
                 image_url = None
                 token_details_key = None
                 __is_key_nft = False
-                lock_nft_category = None
+                category = None
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
@@ -127,7 +125,7 @@ def client_acknowledgement(self, txid):
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
-                    __is_key_nft, lock_nft_category = is_key_nft(subscription.address, category)
+                    __is_key_nft = is_key_nft(category)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
@@ -163,10 +161,7 @@ def client_acknowledgement(self, txid):
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
                         'is_nft': False,
-                        'voucher': {
-                            'is_key_nft': __is_key_nft,
-                            'lock_nft_category': None
-                        }
+                        'voucher': None
                     }
 
                     if transaction.cashtoken_nft:
@@ -176,7 +171,7 @@ def client_acknowledgement(self, txid):
                         data['is_nft'] = True
 
                     if __is_key_nft:
-                        data['voucher']['lock_nft_category'] = lock_nft_category
+                        data['voucher'] = category
 
                 elif wallet_version == 1:
                     data = {
@@ -595,6 +590,7 @@ def process_cashtoken_tx(
         client_acknowledgement(obj_id)
     
     return {
+        'transaction_id': obj_id,
         'created': created,
         'token_id': 'ct/' + token_id,
         'decimals': decimals,
@@ -852,6 +848,8 @@ def get_bch_utxos(self, address):
                         qs = BlockHeight.objects.filter(id=block.id)
                         count = qs.first().transactions.count()
                         qs.update(processed=True, transactions_count=count)
+                    
+                    parse_tx_wallet_histories.delay(tx_hash, immediate=True)
             
             if transaction_obj.exists():
                 # Mark as unspent, just in case it's already marked spent
@@ -1477,9 +1475,18 @@ def send_wallet_history_push_notification_task(wallet_history_id):
 
 @shared_task(bind=True, queue='post_save_record', max_retries=10)
 def transaction_post_save_task(self, address, transaction_id, blockheight_id=None):
-    txid = Transaction.objects.values_list("txid", flat=True).filter(id=transaction_id).first()
+    # txid = Transaction.objects.values_list("txid", flat=True).filter(id=transaction_id).first()
+    # if not txid: return
+    txid = None
+    try:
+        txn_obj = Transaction.objects.get(id=transaction_id)
+        txid = txn_obj.txid
+        if txn_obj.post_save_processed:
+            return
+    except Transaction.DoesNotExist:
+        return
+    
     if not txid: return
-
     LOGGER.info(f"TX POST SAVE TASK: {address} | {txid} | {blockheight_id}")
 
     if not BlockHeight.objects.filter(id=blockheight_id).exists():
@@ -1617,7 +1624,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     value=tx_output['value']
                 )
             else:
-                value = tx_output['value'] / 10 ** 8
+                value = tx_output['value']
                 obj_id, created = save_record(
                     'bch',
                     tx_output['address'],
@@ -1651,6 +1658,9 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     senders['bch'],
                     recipients['bch']
                 )
+    
+    # Mark txn as processed
+    Transaction.objects.filter(id=transaction_id).update(post_save_processed=timezone.now())
 
     return list(set(wallets))
 
@@ -1701,13 +1711,25 @@ def rebuild_wallet_history(wallet_hash):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=False):
+def parse_tx_wallet_histories(txid, parsed_tx=None, proceed_with_zero_amount=False, immediate=False):
+    history_check = WalletHistory.objects.filter(txid=txid)
+    if history_check.exists():
+        return
+
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
+    if parsed_tx:
+        bch_tx = parsed_tx
+    else:
+        bch_tx = NODE.BCH.get_transaction(txid)
 
-    bch_tx = NODE.BCH.get_transaction(txid)
+    if 'tx_fee' in bch_tx.keys():
+        tx_fee = bch_tx['tx_fee']
+    else:
+        tx_fee = bch_tx['size'] * settings.TX_FEE_RATE
 
-    tx_fee = bch_tx['tx_fee']
-    tx_timestamp = bch_tx['timestamp']
+    tx_timestamp = None
+    if 'timestamp' in bch_tx.keys():
+        tx_timestamp = bch_tx['timestamp']
 
     # parse inputs and outputs to desired structure
     inputs = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
@@ -1722,15 +1744,17 @@ def parse_tx_wallet_histories(txid, proceed_with_zero_amount=False, immediate=Fa
 
     utxos = extract_tx_utxos(bch_tx)
     has_saved_output = Transaction.objects.filter(txid=txid).exists()
-    for i, utxo in enumerate(utxos):
+    for i, utxo in enumerate(utxos, 1):
         is_output = not utxo['is_input']
 
         force_create = False
-        if i == len(utxos)-1 and not has_saved_output: force_create = True
+        # If this tx has no saved outputs (which is required for recording wallet history)
+        # force create a transaction output record
+        if i == len(utxos) and not has_saved_output: force_create = True
 
         if not force_create:
             txn_check = Transaction.objects.filter(txid=utxo['txid'], index=utxo['index'])
-            if txn_check.exists():
+            if txn_check.exists() and not is_output:
                 txn_check.update(spent=True, spending_txid=txid)
                 continue
 
@@ -1946,6 +1970,10 @@ def parse_wallet_history_market_values(wallet_history_id):
     # block for bch txs only
     if wallet_history_obj.token.name != "bch":
         return
+    
+    # do not proceed if both usd_price and market_prices are already populated
+    if wallet_history_obj.usd_price and wallet_history_obj.market_prices:
+        return
 
     LOGGER.info(" | ".join([
         f"WALLET_HISTORY_MARKET_VALUES",
@@ -2046,130 +2074,169 @@ def populate_token_addresses():
             obj.save()
 
 
-@shared_task(queue='mempool_processing')
-def process_mempool_transaction(tx_hash):
+@shared_task()
+def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
     LOGGER.info('Processing mempool tx: ' + tx_hash)
+    proceed = False
+    
+    if tx_hex:
+        tx = NODE.BCH.build_tx_from_hex(tx_hex)
 
-    tx = NODE.BCH._get_raw_transaction(tx_hash)
-    inputs = tx['vin']
-    outputs = tx['vout']
+        output_addresses = []
+        for output in tx['vout']:
+            if 'scriptPubKey' in output.keys():
+                if 'addresses' in output['scriptPubKey']:
+                    output_addresses += output['scriptPubKey']['addresses']
+        output_addresses_check = Address.objects.filter(address__in=output_addresses)
 
-    if 'coinbase' in inputs[0].keys():
-        return
 
-    has_subscribed_input = False
-    has_updated_output = False
-    inputs_data = []
+        if output_addresses_check.exists():
+            proceed = True
+        else:
+            input_txids = [x['txid'] for x in tx['vin']]
+            input_txids_check = Transaction.objects.filter(txid__in=input_txids)
+            if input_txids_check.exists():
+                proceed = True
+            else:
+                proceed = False
+    else:
+        proceed = True
 
-    for _input in inputs:
-        txid = _input['txid']
-        value = int(_input['value'] * (10 ** 8))
-        index = _input['vout']
+    if proceed:
+        tx = NODE.BCH._get_raw_transaction(tx_hash)
+    
+        from main.mqtt import client as mqtt_client
 
-        tx_check = Transaction.objects.filter(txid=txid, index=index)
-        if tx_check.exists():
-            ancestor_tx = NODE.BCH._get_raw_transaction(txid)
-            ancestor_spubkey = ancestor_tx['vout'][index]['scriptPubKey']
+        inputs = tx['vin']
+        outputs = tx['vout']
 
-            if 'addresses' in ancestor_spubkey.keys():
-                address = ancestor_spubkey['addresses'][0]
-                txn_check = Transaction.objects.filter(
-                    txid=txid,
-                    index=index
-                )
-                if not txn_check.exists():
+        if 'coinbase' in inputs[0].keys():
+            return
+
+        save_histories = False
+        inputs_data = []
+
+        for _input in inputs:
+            txid = _input['txid']
+            value = int(_input['value'] * (10 ** 8))
+            index = _input['vout']
+
+            tx_check = Transaction.objects.filter(txid=txid, index=index)
+            if tx_check.exists():
+                ancestor_tx = NODE.BCH._get_raw_transaction(txid)
+                ancestor_spubkey = ancestor_tx['vout'][index]['scriptPubKey']
+
+                if 'addresses' in ancestor_spubkey.keys():
+                    address = ancestor_spubkey['addresses'][0]
                     spent_transactions = Transaction.objects.filter(txid=txid, index=index)
                     spent_transactions.update(spent=True, spending_txid=tx_hash)
-                    has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
-                    has_subscribed_input = has_subscribed_input or has_existing_wallet
 
-                subscription = Subscription.objects.filter(
-                    address__address=address
-                )
-                if subscription.exists():
-                    inputs_data.append({
-                        "token": "bch",
-                        "address": address,
-                        "value": value,
-                        "outpoint_txid": txid,
-                        "outpoint_index": index,
-                    })
+                    # save wallet history only if tx is associated with a wallet
+                    if tx_check.first().wallet:
+                        save_histories = True
 
-    for output in outputs:
-        scriptPubKey = output['scriptPubKey']
-
-        if 'addresses' in scriptPubKey.keys():
-            bchaddress = scriptPubKey['addresses'][0]
-
-            address_check = Address.objects.filter(address=bchaddress)
-            if address_check.exists():
-                value = int(output['value'] * (10 ** 8))
-                source = NODE.BCH.source
-                index = output['n']
-
-                token_id = 'bch'
-                amount = ''
-                decimals = None
-                created = False
-                obj_id = None
-
-                if 'tokenData' in output.keys():
-                    saved_token_data = process_cashtoken_tx(
-                        output['tokenData'],
-                        output['scriptPubKey']['addresses'][0],
-                        tx_hash,
-                        index=index,
-                        value=value
+                    subscription = Subscription.objects.filter(
+                        address__address=address
                     )
-                    token_id = saved_token_data['token_id']
-                    decimals = saved_token_data['decimals']
-                    amount = str(saved_token_data['amount'])
-                    created = saved_token_data['created']
-                else:
-                    args = (
-                        token_id,
-                        bchaddress,
-                        tx_hash,
-                        source
-                    )
-                    if 'time' in tx.keys():
-                        timestamp = tx['time']
+                    if subscription.exists():
+                        inputs_data.append({
+                            "token": "bch",
+                            "address": address,
+                            "value": value,
+                            "outpoint_txid": txid,
+                            "outpoint_index": index,
+                        })
+
+        mqtt_client.loop_start()
+        for output in outputs:
+            scriptPubKey = output['scriptPubKey']
+
+            if 'addresses' in scriptPubKey.keys():
+                bchaddress = scriptPubKey['addresses'][0]
+
+                address_check = Address.objects.filter(address=bchaddress)
+                if address_check.exists():
+                    value = int(output['value'] * (10 ** 8))
+                    source = NODE.BCH.source
+                    index = output['n']
+
+                    token_id = 'bch'
+                    amount = ''
+                    decimals = None
+                    created = False
+                    obj_id = None
+
+                    if 'tokenData' in output.keys():
+                        saved_token_data = process_cashtoken_tx(
+                            output['tokenData'],
+                            output['scriptPubKey']['addresses'][0],
+                            tx_hash,
+                            index=index,
+                            value=value
+                        )
+                        token_id = saved_token_data['token_id']
+                        decimals = saved_token_data['decimals']
+                        amount = str(saved_token_data['amount'])
+                        created = saved_token_data['created']
+                        obj_id = saved_token_data['transaction_id']
                     else:
-                        timestamp = timezone.now().timestamp()
-                    obj_id, created = save_record(
-                        *args,
-                        value=value,
-                        blockheightid=None,
-                        index=index,
-                        inputs=inputs_data,
-                        tx_timestamp=timestamp
-                    )
-                    has_updated_output = has_updated_output or created
+                        args = (
+                            token_id,
+                            bchaddress,
+                            tx_hash,
+                            source
+                        )
+                        if 'time' in tx.keys():
+                            timestamp = tx['time']
+                        else:
+                            timestamp = timezone.now().timestamp()
+                        obj_id, created = save_record(
+                            *args,
+                            value=value,
+                            blockheightid=None,
+                            index=index,
+                            inputs=inputs_data,
+                            tx_timestamp=timestamp
+                        )
+                        # has_updated_output = has_updated_output or created
 
-                    if obj_id:
-                        txn_obj = Transaction.objects.get(id=obj_id)
-                        decimals = txn_obj.get_token_decimals()
-                    
-                if obj_id and created:
-                    # Publish MQTT message
-                    data = {
-                        'txid': tx_hash,
-                        'recipient': bchaddress,
-                        'token': token_id,
-                        'decimals': decimals,
-                        'amount': amount,
-                        'value': value
-                    }
+                        if obj_id:
+                            txn_obj = Transaction.objects.get(id=obj_id)
+                            decimals = txn_obj.get_token_decimals()
 
-                    if mqtt_client:
+                            # save wallet history only if tx is associated with a wallet
+                            if txn_obj.wallet:
+                                save_histories = True
+                        
+                    if obj_id and created:
+                        # Publish MQTT message
+                        data = {
+                            'txid': tx_hash,
+                            'recipient': bchaddress,
+                            'token': token_id,
+                            'decimals': decimals,
+                            'amount': amount,
+                            'value': value
+                        }
+                        LOGGER.info(data)
+                        
+                        try:
+                            if immediate:
+                                client_acknowledgement(obj_id)
+                            else:
+                                client_acknowledgement.delay(obj_id)
+                        except:
+                            pass
+                        
                         LOGGER.info('Sending MQTT message: ' + str(data))
                         msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
                         LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+        
+        mqtt_client.loop_stop()
 
-                    client_acknowledgement.delay(obj_id)
-
-                    LOGGER.info(data)
-
-    if has_subscribed_input and not has_updated_output:
-        LOGGER.info(f"manually parsing wallet history of tx({tx_hash})")
-        parse_tx_wallet_histories.delay(tx_hash)
+        if save_histories:
+            LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
+            if immediate:
+                parse_tx_wallet_histories(tx_hash, parsed_tx=tx, immediate=True)
+            else:
+                parse_tx_wallet_histories.delay(tx_hash, parsed_tx=tx)

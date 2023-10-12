@@ -8,15 +8,14 @@ import {
 export class Vault {
 
   constructor (opts) {
-    this.merchantReceiverPk = opts?.params?.merchantReceiverPk
-    this.merchantSignerPk = opts?.params?.merchantSignerPk
+    this.merchant = opts?.params?.merchant
     this.network = opts?.options?.network
   }
 
   get contractCreationParams () {
     return [
-      this.merchantReceiverPk,
-      this.merchantSignerPk,
+      this.merchant?.receiverPk,
+      this.merchant?.signerPk,
     ]
   }
 

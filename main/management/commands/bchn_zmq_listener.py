@@ -7,8 +7,9 @@
 from django.core.management.base import BaseCommand
 from django.conf import settings
 
-from main.utils.queries.bchn import BCHN
+from main.utils.queries.node import Node
 
+from bitcash import transaction
 import logging
 import binascii
 import zmq
@@ -22,17 +23,16 @@ mqtt_client.loop_start()
 
 
 LOGGER = logging.getLogger(__name__)
-
+node = Node()
 
 class ZMQHandler():
 
     def __init__(self):
         self.url = f"tcp://{settings.BCHN_HOST}:28332"
-        self.BCHN = BCHN()
 
         self.zmqContext = zmq.Context()
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)
-        self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "hashtx")
+        self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "rawtx")
         self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE,1)
         self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_CNT,10)
         self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_IDLE,1)
@@ -46,13 +46,15 @@ class ZMQHandler():
                 topic = msg[0].decode()
                 body = msg[1]
 
-                if topic == "hashtx":
-                    tx_hash = binascii.hexlify(body).decode()
+                if topic == "rawtx":
+                    tx_hex = binascii.hexlify(body).decode()
+                    txid = transaction.calc_txid(tx_hex)
                     data = {
-                        'txid': tx_hash
+                        'txid': txid,
+                        'tx_hex': tx_hex
                     }
-                    msg = mqtt_client.publish('mempool', json.dumps(data), qos=1)
-                    LOGGER.info('New mempool tx pushed to MQTT: ' + tx_hash)
+                    msg = mqtt_client.publish('mempool', json.dumps(data), qos=2)
+                    LOGGER.info('New mempool tx pushed to MQTT: ' + txid)
 
         except KeyboardInterrupt:
             self.zmqContext.destroy()

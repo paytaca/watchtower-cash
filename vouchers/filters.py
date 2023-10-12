@@ -41,4 +41,4 @@ class VoucherFilter(filters.FilterSet):
                 flat=True
             )
         )
-        return queryset.filter(key_category__in=nft_categories)
+        return queryset.filter(category__in=nft_categories)

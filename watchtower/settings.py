@@ -147,9 +147,12 @@ DATABASES = {
         'HOST': POSTGRES_HOST,
         'PORT': POSTGRES_PORT,
         'USER': POSTGRES_USER,
-        'PASSWORD': POSTGRES_PASSWORD
+        'PASSWORD': POSTGRES_PASSWORD,
+        'CONN_MAX_AGE': None,
+        'CONN_HEALTH_CHECKS': True
     }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
@@ -275,7 +278,21 @@ if REDIS_PASSWORD:
         redis_prefix = 'user'
         
     CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_BROKER_CONN = redis.StrictRedis(
+        host=REDIS_HOST,
+        password=REDIS_PASSWORD,
+        port=6379,
+        db=DB_NUM[0]
+    )
+
     CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
+    CELERY_BROKER_CONN = redis.StrictRedis(
+        host=REDIS_HOST,
+        password=REDIS_PASSWORD,
+        port=6379,
+        db=DB_NUM[0]
+    )
+    
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
@@ -284,6 +301,12 @@ if REDIS_PASSWORD:
     )
 else:
     CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    CELERY_BROKER_CONN = redis.StrictRedis(
+        host=REDIS_HOST,
+        port=6379,
+        db=DB_NUM[0]
+    )
+
     CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
@@ -618,3 +641,6 @@ VOUCHER_ROOM = 'voucher_room'
 
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')
+
+# Used for fallback computation of tx fee
+TX_FEE_RATE = 1.2
