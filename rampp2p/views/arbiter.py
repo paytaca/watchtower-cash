@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 
-from rampp2p.models import Arbiter
+from rampp2p.models import Arbiter, Peer
 from rampp2p.serializers import ArbiterWriteSerializer, ArbiterReadSerializer
 
 from rampp2p.viewcodes import ViewCode
@@ -25,19 +25,19 @@ class ArbiterListCreate(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
     
     def post(self, request):
-        try:
-            public_key = request.data.get('public_key')
-            if public_key is None:
-                raise ValidationError('public_key is required')
+        public_key = request.data.get('public_key')
+        if public_key is None:
+            return Response({'error': 'public_key is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ARBITER_CREATE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message, public_key=public_key)
-
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
+        # validate signature
+        signature, timestamp, wallet_hash = get_verification_headers(request)
+        message = ViewCode.ARBITER_CREATE.value + '::' + timestamp
+        verify_signature(wallet_hash, signature, message, public_key=public_key)
+        
+        peer = Peer.objects.filter(wallet_hash=wallet_hash)
+        if peer.exists():
+            return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
+        
         data = request.data.copy()
         data['wallet_hash'] = wallet_hash
 

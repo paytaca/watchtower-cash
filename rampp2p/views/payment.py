@@ -31,7 +31,7 @@ class PaymentMethodListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        queryset = PaymentMethod.objects.filter(owner=request.user)
+        queryset = PaymentMethod.objects.filter(owner__wallet_hash=request.user.wallet_hash)
         serializer = PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
