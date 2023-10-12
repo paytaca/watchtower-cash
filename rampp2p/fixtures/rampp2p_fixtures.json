@@ -1,0 +1,50 @@
+[
+    {
+        "model": "rampp2p.fiatcurrency",
+        "pk": 1,
+        "fields": {
+            "name": "United States Dollar",
+            "symbol": "USD",
+            "created_at": "2023-09-11T04:18:56.405Z"
+        }
+    },
+    {
+        "model": "rampp2p.fiatcurrency",
+        "pk": 2,
+        "fields": {
+            "name": "Philippine Peso",
+            "symbol": "PHP",
+            "created_at": "2023-09-11T04:19:00.166Z"
+        }
+    },
+    {
+        "model": "rampp2p.cryptocurrency",
+        "pk": 1,
+        "fields": {
+            "name": "Bitcoin Cash",
+            "symbol": "BCH",
+            "created_at": "2023-09-11T04:18:44.198Z"
+        }
+    },
+    {
+        "model": "rampp2p.paymenttype",
+        "pk": 2,
+        "fields": {
+            "name": "Paypal",
+            "is_disabled": false,
+            "created_at": "2023-09-11T04:19:13.152Z",
+            "modified_at": "2023-09-11T04:19:13.152Z"
+        }
+    },
+    {
+        "model": "rampp2p.paymenttype",
+        "pk": 3,
+        "fields": {
+            "name": "Gcash",
+            "is_disabled": false,
+            "created_at": "2023-09-11T04:19:17.964Z",
+            "modified_at": "2023-09-11T04:19:17.964Z"
+        }
+    }
+]
+    
