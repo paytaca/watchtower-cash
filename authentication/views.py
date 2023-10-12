@@ -59,21 +59,9 @@ class LoginView(APIView):
             #     # serialized_wallet = WalletSerialized(wallet)
             if app == 'ramp-peer':
                 serialized_wallet = PeerSerializer(wallet)
-                # # disabled arbiter account if user logs in as peer
-                # arbiter_account = ArbiterWallet.objects.filter(wallet_hash=wallet_hash)
-                # if arbiter_account.exists():
-                #     arbiter_account = arbiter_account.first()
-                #     arbiter_account.is_disabled = True
-                #     arbiter_account.save()
                 
             if app == 'ramp-arbiter':
                 serialized_wallet = ArbiterReadSerializer(wallet)
-                # # disabled peer account if user logs in as arbiter
-                # peer_account = PeerWallet.objects.filter(wallet_hash=wallet_hash)
-                # if peer_account.exists():
-                #     peer_account = peer_account.first()
-                #     peer_account.is_disabled = True
-                #     peer_account.save()
 
             if serialized_wallet is not None:
                 response['user'] = serialized_wallet.data

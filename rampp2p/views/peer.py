@@ -18,14 +18,11 @@ from rampp2p.exceptions import InvalidSignature
 
 class PeerCreateView(APIView):
     def post(self, request):
-        # try:
         signature, timestamp, wallet_hash = get_verification_headers(request)
         public_key = request.headers.get('public_key')
         
         message = ViewCode.PEER_CREATE.value + '::' + timestamp
         verify_signature(wallet_hash, signature, message, public_key=public_key)
-        # except InvalidSignature as err:
-        #     return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
         arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
         if arbiter.exists():
