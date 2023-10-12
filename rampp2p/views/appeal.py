@@ -44,9 +44,10 @@ class AppealList(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
+        wallet_hash = request.user.wallet_hash
         try:
             # validate permissions
-            self.validate_permissions(request.user.wallet_hash)
+            self.validate_permissions(wallet_hash)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         

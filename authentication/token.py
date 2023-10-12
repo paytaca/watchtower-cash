@@ -33,11 +33,11 @@ class TokenAuthentication(BaseAuthentication):
                 peer_wallet = peer_wallet.first()
                 if not peer_wallet.is_disabled:
                     wallet = peer_wallet
-            elif arbiter_wallet.exists():
+            if arbiter_wallet.exists():
                 arbiter_wallet = arbiter_wallet.first()
                 if not arbiter_wallet.is_disabled:
                     wallet = arbiter_wallet
-            else:
+            if wallet is None:
                 raise AuthenticationFailed('User disabled or does not exist')
 
             cipher_suite = Fernet(settings.FERNET_KEY)

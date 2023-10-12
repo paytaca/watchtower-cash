@@ -55,7 +55,7 @@ class LoginView(APIView):
             #     # serialized_wallet = WalletSerialized(wallet)
             if app == 'ramp-peer':
                 serialized_wallet = PeerSerializer(wallet)
-            if app == 'arbiter-peer':
+            if app == 'ramp-arbiter':
                 serialized_wallet = ArbiterReadSerializer(wallet)
 
             if serialized_wallet is not None:
