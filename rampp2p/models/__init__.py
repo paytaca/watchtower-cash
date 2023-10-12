@@ -1,5 +1,4 @@
 from .ad import *
-from .chat import *
 from .currency import *
 from .feedback import *
 from .order import *

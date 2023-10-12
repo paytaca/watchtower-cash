@@ -3,6 +3,7 @@ from .peer import Peer
 
 class PaymentType(models.Model):
   name = models.CharField(max_length=100)
+  format_string = models.CharField(max_length=100, null=True)
   is_disabled = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True)
   modified_at = models.DateTimeField(auto_now=True)
@@ -21,4 +22,4 @@ class PaymentMethod(models.Model):
   modified_at = models.DateTimeField(auto_now=True)
 
   def __str__(self):
-    return self.id
+    return str(self.id)

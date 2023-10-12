@@ -39,7 +39,7 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             'fixed_price',
             'trade_floor',
             'trade_ceiling',
-            'crypto_amount',
+            'trade_amount',
             'payment_methods',
             'time_duration_choice',
             'created_at'
@@ -72,11 +72,12 @@ class AdListSerializer(serializers.ModelSerializer):
             'price',
             'trade_floor',
             'trade_ceiling',
-            'crypto_amount',
+            'trade_amount',
             'payment_methods',
             'trade_count',
             'completion_rate',
             'is_owned',
+            'is_public',
             'created_at',
             'modified_at'
         ]
@@ -146,7 +147,8 @@ class AdDetailSerializer(AdListSerializer):
             'time_duration',
             'fees',
             'floating_price',
-            'fixed_price'
+            'fixed_price',
+            'trade_amount'
         ]
     
     def get_time_duration(self, instance: Ad):
@@ -155,7 +157,7 @@ class AdDetailSerializer(AdListSerializer):
     def get_fees(self, _):
         _, fees = get_trading_fees()
         return fees
-
+    
 class AdOwnerSerializer(AdDetailSerializer):
     payment_methods = PaymentMethodSerializer(many=True)
 
@@ -178,9 +180,10 @@ class AdCreateSerializer(serializers.ModelSerializer):
             'floating_price',
             'trade_floor',
             'trade_ceiling',
-            'crypto_amount',
+            'trade_amount',
             'time_duration_choice',
             'payment_methods',
+            'is_public',
             'modified_at',
         ]
     
@@ -195,8 +198,9 @@ class AdUpdateSerializer(serializers.ModelSerializer):
             'floating_price',
             'trade_floor',
             'trade_ceiling',
-            'crypto_amount',
+            'trade_amount',
             'time_duration_choice',
             'payment_methods',
+            'is_public',
             'modified_at',
         ]

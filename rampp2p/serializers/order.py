@@ -23,6 +23,7 @@ class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentMethod
         fields = [
+            'id',
             'payment_type',
             'account_name',
             'account_number'
@@ -71,25 +72,28 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
 
     def get_ad(self, instance: Order):
+        serialized_payment_methods = OrderAdPaymentMethodSerializer(
+            instance.ad_snapshot.payment_methods.all(), 
+            many=True
+        )
         return {
             'id': instance.ad_snapshot.ad.id,
             'owner': {
                 'id': instance.ad_snapshot.ad.owner.id,
                 'nickname': instance.ad_snapshot.ad.owner.nickname
-            }
+            },
+            'payment_methods': serialized_payment_methods.data
         }
     
     def get_payment_methods(self, instance: Order):
-        latest_status = self.get_latest_order_status(instance)
-        payment_methods = None
-        if latest_status is not None:
-            if latest_status.status == StatusType.ESCROWED:
-                serialized_payment_methods = OrderAdPaymentMethodSerializer(
-                    instance.ad_snapshot.payment_methods.all(), 
-                    many=True
-                )
-                payment_methods = serialized_payment_methods.data
-        return payment_methods
+        escrowed_status = Status.objects.filter(Q(order=instance) & Q(status=StatusType.ESCROWED))
+        if escrowed_status.exists():            
+            serialized_payment_methods = OrderAdPaymentMethodSerializer(
+                instance.payment_methods.all(), 
+                many=True
+            )
+            payment_methods = serialized_payment_methods.data
+            return payment_methods
 
     def get_latest_order_status(self, instance: Order):
         latest_status = Status.objects.filter(Q(order=instance)).last()
@@ -145,7 +149,9 @@ class OrderWriteSerializer(serializers.ModelSerializer):
     arbiter = serializers.PrimaryKeyRelatedField(queryset=Arbiter.objects.all(), required=False)
     locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
-    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices,required=True)
+    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices, required=True)
+    payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), required=False, many=True)
+
     class Meta:
         model = Order
         fields = [

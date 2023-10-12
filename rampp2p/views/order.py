@@ -9,7 +9,7 @@ from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
 
-from rampp2p.utils.utils import get_trading_fees
+from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.websocket import send_order_update
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -26,7 +26,6 @@ from rampp2p.serializers import (
 )
 from rampp2p.models import (
     Ad,
-    Arbiter,
     AdSnapshot,
     StatusType,
     Status,
@@ -165,16 +164,11 @@ class OrderListCreate(APIView):
 
             ad = Ad.objects.get(pk=ad_id)
             owner = Peer.objects.get(wallet_hash=wallet_hash)
-            payment_method_ids = request.data.get('payment_methods')
+            payment_method_ids = request.data.get('payment_methods', [])
 
-            if ad.trade_type == TradeType.SELL:
-                # order will inherit ad's payment methods
-                # TODO: Let order creator decide which payment methods to use
-                payment_methods = ad.payment_methods.all()
-                payment_method_ids = list(payment_methods.values_list('id', flat=True))
-            else:
-                if payment_method_ids is None:
-                    raise ValidationError('payment_methods field is required')
+            if ad.trade_type == TradeType.BUY:
+                if len(payment_method_ids) == 0:
+                    raise ValidationError('payment_methods field is required')            
                 self.validate_payment_methods_ownership(wallet_hash, payment_method_ids)
             
             # validate permissions
@@ -187,7 +181,6 @@ class OrderListCreate(APIView):
 
         except (Ad.DoesNotExist, Peer.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
 
         # Create snapshot of ad
         ad_snapshot = AdSnapshot(
@@ -201,7 +194,7 @@ class OrderListCreate(APIView):
             market_price = market_price.price,
             trade_floor = ad.trade_floor,
             trade_ceiling = ad.trade_ceiling,
-            crypto_amount = ad.crypto_amount,
+            trade_amount = ad.trade_amount,
             time_duration_choice = ad.time_duration_choice,
         )
         ad_snapshot.save()
@@ -407,6 +400,16 @@ class ConfirmOrder(APIView):
             validate_status(pk, StatusType.SUBMITTED)
             validate_status_inst_count(StatusType.CONFIRMED, pk)
             validate_status_progression(StatusType.CONFIRMED, pk)
+
+            order = Order.objects.get(pk=pk)
+            trade_amount = order.ad_snapshot.ad.trade_amount - order.crypto_amount
+            if trade_amount < 0:
+                raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
+            
+            # Update Ad trade_amount
+            ad = Ad.objects.get(pk=order.ad_snapshot.ad.id)
+            ad.trade_amount = trade_amount
+            ad.save()
                 
             # create CONFIRMED status for order
             status_serializer = StatusSerializer(data={
@@ -422,7 +425,7 @@ class ConfirmOrder(APIView):
             # notify order update subscribers
             send_order_update(json.dumps(status_serializer.data), pk)
             
-        except (ValidationError, IntegrityError) as err:
+        except (ValidationError, IntegrityError, Order.DoesNotExist, Ad.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(status_serializer.data, status=status.HTTP_200_OK)  
@@ -606,9 +609,13 @@ class CryptoBuyerConfirmPayment(APIView):
         verify_signature(wallet_hash, signature, message)
 
         # validate permissions
-        self.validate_permissions(wallet_hash, pk)
+        order = Order.objects.get(pk=pk)
+        self.validate_permissions(wallet_hash, order)
+
     except ValidationError as err:
         return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+    except Order.DoesNotExist as err:
+        return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
         # validations
@@ -616,6 +623,17 @@ class CryptoBuyerConfirmPayment(APIView):
         validate_status_progression(StatusType.PAID_PENDING, pk)
     except ValidationError as err:
       return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
+    payment_method_ids = request.data.get('payment_methods')
+    if payment_method_ids is None or len(payment_method_ids) == 0:
+        return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    payment_methods = PaymentMethod.objects.filter(id__in=payment_method_ids)
+    order.payment_methods.add(*payment_methods)
+    order.save()    
+
+    context = { 'wallet_hash': wallet_hash }
+    serialized_order = OrderSerializer(order, context=context)
 
     # create PAID_PENDING status for order
     serialized_status = StatusSerializer(data={
@@ -623,26 +641,30 @@ class CryptoBuyerConfirmPayment(APIView):
         'order': pk
     })
 
-    if serialized_status.is_valid():
-        serialized_status = StatusReadSerializer(serialized_status.save())
-        result = {
-            'success' : True,
-            'status': serialized_status.data
-        }
-        send_order_update(result, pk)
-        return Response(serialized_status.data, status=status.HTTP_200_OK)
+    if not serialized_status.is_valid():
+        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
+    serialized_status = StatusReadSerializer(serialized_status.save())
+    result = {
+        'success' : True,
+        'status': serialized_status.data
+    }
+    
+    send_order_update(result, pk)
+    response = {
+        "order": serialized_order.data,
+        "status": serialized_status.data
+    }
+    return Response(response, status=status.HTTP_200_OK)    
   
-  def validate_permissions(self, wallet_hash, pk):
+  def validate_permissions(self, wallet_hash, order):
     '''
     Only buyers can set order status to PAID_PENDING
     '''
 
     try:
         caller = Peer.objects.get(wallet_hash=wallet_hash)
-        order = Order.objects.get(pk=pk)
-    except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+    except Peer.DoesNotExist as err:
         raise ValidationError(err.args[0])
     
     buyer = None
@@ -731,6 +753,16 @@ class CancelOrder(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Update Ad trade_amount if order was CONFIRMED
+        order = Order.objects.get(pk=pk)
+        latest_status = get_latest_status(order.id)
+        # Update Ad trade_amount
+        if latest_status.status == StatusType.CONFIRMED:
+            trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
+            ad = Ad.objects.get(pk=order.ad_snapshot.ad.id)
+            ad.trade_amount = trade_amount
+            ad.save()
+            
         # create CANCELED status for order
         serializer = StatusSerializer(data={
             'status': StatusType.CANCELED,

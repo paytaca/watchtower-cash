@@ -19,3 +19,6 @@ class Peer(models.Model):
     is_disabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.nickname

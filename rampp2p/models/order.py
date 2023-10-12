@@ -7,7 +7,11 @@ from .payment import PaymentMethod
 from datetime import timedelta
 
 class Order(models.Model):
-    ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
+    ad_snapshot = models.ForeignKey(
+        AdSnapshot,
+        on_delete=models.PROTECT,
+        editable=False
+    )
     owner = models.ForeignKey(
         Peer, 
         on_delete=models.PROTECT, 
@@ -17,7 +21,7 @@ class Order(models.Model):
     
     crypto_currency = models.ForeignKey(CryptoCurrency, on_delete=models.PROTECT, editable=False)
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT, editable=False)
-    locked_price = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
+    locked_price = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
 
     crypto_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
@@ -29,6 +33,9 @@ class Order(models.Model):
         related_name="arbitrated_orders")
     payment_methods = models.ManyToManyField(PaymentMethod)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    def __str__(self):
+        return str(self.id)
 
     @property
     def time_duration(self):
