@@ -279,7 +279,7 @@ class CashFungibleToken(models.Model):
             if 'error' not in data.keys():
                 uris = data.get('token').get('uris')
                 if not uris:
-                    uris = data.get('uris')
+                    uris = data.get('uris') or {'icon': None}
 
                 info, _ = CashTokenInfo.objects.get_or_create(
                     name=data.get('name', f'CT-{self.category[0:4]}'),

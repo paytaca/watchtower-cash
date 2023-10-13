@@ -1,0 +1,17 @@
+{
+  "name": "watchtowercts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "CTS_APP_ENV=development node ./server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "hantyrram",
+  "license": "ISC",
+  "dependencies": {
+    "@mainnet-cash/contract": "^1.1.34",
+    "express": "^4.18.2"
+  },
+  "type": "module"
+}
