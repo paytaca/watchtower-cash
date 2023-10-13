@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 import paho.mqtt.client as mqtt
+from django.conf import settings
 import json
 import time
 import logging
@@ -10,9 +11,13 @@ from main.tasks import process_mempool_transaction
 LOGGER = logging.getLogger(__name__)
 
 
-mqtt_client = mqtt.Client(transport='websockets')
-mqtt_client.tls_set()
-mqtt_client.connect('mqtt.watchtower.cash', 443, 10)
+if settings.BCH_NETWORK == 'mainnet':
+    mqtt_client = mqtt.Client(transport='websockets')
+    mqtt_client.tls_set()
+else:
+    mqtt_client = mqtt.Client()
+
+mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
 
 
 # The callback for when the client receives a CONNACK response from the server.

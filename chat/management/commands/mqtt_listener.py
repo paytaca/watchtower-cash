@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 import paho.mqtt.client as mqtt
 from django.utils import timezone
+from django.conf import settings
 import json
 import logging
 import time
@@ -94,14 +95,18 @@ def on_disconnect(client, userdata, rc):
     LOGGER.info(f"Reconnect failed after {reconnect_count} attempts. Exiting...")
 
 
-client = mqtt.Client(transport='websockets')
-client.tls_set()
+if settings.BCH_NETWORK == 'mainnet':
+    client = mqtt.Client(transport='websockets')
+    client.tls_set()
+else:
+    client = mqtt.Client()
+
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_disconnect = on_disconnect
 
 
-client.connect('mqtt.watchtower.cash', 443, 10)
+client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
