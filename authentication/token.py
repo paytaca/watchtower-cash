@@ -3,6 +3,7 @@ from rest_framework.exceptions import AuthenticationFailed
 # from main.models import Wallet
 from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
+from .models import AuthToken
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
@@ -39,14 +40,19 @@ class TokenAuthentication(BaseAuthentication):
                     wallet = arbiter_wallet
             if wallet is None:
                 raise AuthenticationFailed('User disabled or does not exist')
+            
+            auth_token = AuthToken.objects.get(wallet_hash=wallet_hash)
 
             cipher_suite = Fernet(settings.FERNET_KEY)
-            token = cipher_suite.decrypt(wallet.auth_token).decode()
+            token = cipher_suite.decrypt(auth_token.key).decode()
 
             if token != auth_header[1]:
                 raise InvalidToken
             
-        except (InvalidToken, TypeError):
+            if auth_token.is_key_expired():
+                raise AuthenticationFailed('Token expired')
+            
+        except (InvalidToken, TypeError, AuthToken.DoesNotExist):
             raise AuthenticationFailed('Invalid token')
         
         return (wallet, None)

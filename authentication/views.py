@@ -7,6 +7,7 @@ from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
 from rampp2p.serializers import PeerSerializer, ArbiterReadSerializer
 from authentication.backends import SignatureBackend
+from authentication.models import AuthToken
 
 from django.conf import settings
 from cryptography.fernet import Fernet, InvalidToken
@@ -31,27 +32,28 @@ class LoginView(APIView):
             app = 'ramp-arbiter'
 
         backend = SignatureBackend()
-        wallet = backend.authenticate(
+        wallet, token, error = backend.authenticate(
             app=app,
             wallet_hash=wallet_hash,
             signature=signature,
             public_key=public_key
         )
         
-        if wallet is not None:
+        if wallet is not None and token is not None:
             # Check if user is disabled
             if wallet.is_disabled:
                 return Response({'error': 'Wallet is disabled'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Checking if token generated is valid:
+            # Checking if token is valid:
             try:
                 cipher_suite = Fernet(settings.FERNET_KEY)
-                auth_token = cipher_suite.decrypt(wallet.auth_token).decode()
+                key = cipher_suite.decrypt(token.key).decode()
             except InvalidToken:
                 return Response({'error': 'Token is invalid'}, status=status.HTTP_400_BAD_REQUEST)
             
             response = {
-                'token': auth_token,
+                'token': key,
+                'expires_at': token.key_expires_at
             }
 
             serialized_wallet = None
@@ -69,7 +71,10 @@ class LoginView(APIView):
             return Response(response)
         else:
             # Authentication failed
-            return Response({'error': 'Invalid signature'}, status=400)
+            response = {
+                'error': error if error is not None else 'Invalid signature'
+            }
+            return Response(response, status=400)
 
 class AuthNonceView(APIView):
     def get(self, request):
@@ -87,9 +92,15 @@ class AuthNonceView(APIView):
             if wallet is None:
                 return Response({'error': 'Wallet not found'}, status=404)
             
-            wallet.update_auth_nonce()
-            wallet.create_auth_token()
-            return Response({'otp': wallet.auth_nonce})
+            auth_token, created = AuthToken.objects.get_or_create(wallet_hash=wallet_hash)
+            auth_token.update_nonce()
+            if created or auth_token.is_key_expired():
+                auth_token.update_key()
+            
+            return Response({
+                'otp': auth_token.nonce,
+                'expires_at': auth_token.nonce_expires_at,
+            })
         
         except (MainWallet.DoesNotExist, PeerWallet.DoesNotExist, ArbiterWallet.DoesNotExist):
             return Response({'error': 'Wallet not found'}, status=404)

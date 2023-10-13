@@ -59,3 +59,4 @@ services:
 volumes:
   watchtower_db_data:
     external: true
+    # driver: 'local'
