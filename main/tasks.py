@@ -742,6 +742,13 @@ def save_transaction(tx, block_id=None):
     """
         tx must be parsed by 'BCHN._parse_transaction()'
     """
+    tx_check = Transaction.objects.filter(txid=tx['txid'])
+    if tx_check.exists():
+        tx_obj = tx_check.last()
+        tx_obj.block_id = block_id
+        tx_obj.save()
+        return
+    
     txid = tx['txid']
     if 'coinbase' in tx['inputs'][0].keys():
         return
@@ -1482,11 +1489,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         txn_obj = Transaction.objects.get(id=transaction_id)
         txid = txn_obj.txid
         if txn_obj.post_save_processed:
-            return
+            return transaction_id
     except Transaction.DoesNotExist:
-        return
+        return transaction_id
     
-    if not txid: return
+    if not txid: return transaction_id
     LOGGER.info(f"TX POST SAVE TASK: {address} | {txid} | {blockheight_id}")
 
     if not BlockHeight.objects.filter(id=blockheight_id).exists():
@@ -1509,11 +1516,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     if parse_slp and not isinstance(slp_tx, dict) and not slp_tx.get('valid'):
         self.retry(countdown=5)
-        return
+        return transaction_id
 
     if not bch_tx:
         self.retry(countdown=5)
-        return
+        return transaction_id
 
     tx_timestamp = bch_tx['timestamp']
     # use batch update to not trigger the post save signal and potentially create an infinite loop
@@ -2076,9 +2083,12 @@ def populate_token_addresses():
 
 @shared_task()
 def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
+    tx_check = Transaction.objects.filter(txid=tx_hash)
+    if tx_check.exists():
+        return
+    
     LOGGER.info('Processing mempool tx: ' + tx_hash)
     proceed = False
-    
     if tx_hex:
         tx = NODE.BCH.build_tx_from_hex(tx_hex)
 
