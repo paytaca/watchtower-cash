@@ -35,18 +35,17 @@ from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired, get_trading_fees
 from rampp2p.utils.handler import update_order_status
+from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
     
 class AppealList(APIView):
-    def get(self, request):
-        try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_LIST.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+    authentication_classes = [TokenAuthentication]
 
+    def get(self, request):
+        wallet_hash = request.user.wallet_hash
+        try:
             # validate permissions
             self.validate_permissions(wallet_hash)
         except ValidationError as err:
@@ -101,13 +100,11 @@ class AppealList(APIView):
             raise ValidationError(err.args[0])        
 
 class AppealRequest(APIView):
-    def get(self, request, pk):
-        try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_GET.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+    authentication_classes = [TokenAuthentication]
 
+    def get(self, request, pk):
+        wallet_hash = request.user.wallet_hash
+        try:
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
@@ -180,12 +177,8 @@ class AppealRequest(APIView):
         (3) The seller/buyer cannot appeal before the funds are escrowed (i.e. status = 'SBM', 'CNF', 'ESCRW_PN')
     '''
     def post(self, request, pk):
+        wallet_hash = request.user.wallet_hash
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_REQUEST.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # validate permissions
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
@@ -233,10 +226,12 @@ class AppealRequest(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 class AppealPendingRelease(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     Marks an appealed order for release of escrowed funds, updating the order status to RELEASE_PENDING.
-    The order status is automatically updated to RELEASED when the contract address receives an 
-    outgoing transaction that matches the requisites of the contract.
+    TODO: The order status should automatically be updated to RELEASED when the contract address receives
+    an outgoing transaction that matches the requirements of the contract.
     Note: This endpoint must be invoked before the actual transfer of funds.
 
     Requirements:
@@ -244,19 +239,11 @@ class AppealPendingRelease(APIView):
         (2) Order must have an existing appeal
     '''
     def post(self, request, pk):
-
         try:
-            # Validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_PENDING_RELEASE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # Validate permissions
+            wallet_hash = request.user.wallet_hash
             self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
-        try:
             # Status validations
             status_type = StatusType.RELEASE_PENDING
             validate_status_inst_count(status_type, pk)
@@ -276,21 +263,20 @@ class AppealPendingRelease(APIView):
     
     def validate_permissions(self, wallet_hash, pk):
         '''
-        validate_permissions will raise a ValidationError if:
-            (1) caller is not order's arbiter,
-            (2) order's current status is not APPEALED
+        Validates if:
+            (1) Caller is the order's arbiter
+            (2) Order has an existing appeal
         '''
         prefix = "ValidationError:"
 
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
         # Raise error if caller is not order's arbiter
-        if caller.wallet_hash != order.arbiter.wallet_hash:
+        if wallet_hash != order.arbiter.wallet_hash:
             raise ValidationError(f'{prefix} Caller must be order arbiter.')
         
         # Raise error if order's current status is not APPEALED
@@ -298,10 +284,12 @@ class AppealPendingRelease(APIView):
             raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class AppealPendingRefund(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
-    Marks an appealed order for refund of escrowed funds, updating the order status to REFUND_PENDING.
-    The order status is automatically updated to REFUNDED when the contract address receives an 
-    outgoing transaction that matches the requisites of the contract.
+    Marks an appealed order for refund, updating the order status to REFUND_PENDING.
+    TODO: The order status should automatically be updated to REFUNDED when the contract 
+    address receives an outgoing transaction that matches the requisites of the contract.
     Note: This endpoint must be invoked before the actual transfer of funds.
 
     Requirements:
@@ -311,12 +299,8 @@ class AppealPendingRefund(APIView):
     def post(self, request, pk):
         
         try:
-            # Validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.APPEAL_PENDING_REFUND.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # Validate permissions
+            wallet_hash = request.user.wallet_hash
             self.validate_permissions(wallet_hash, pk)
         
             # Status validations
@@ -338,28 +322,29 @@ class AppealPendingRefund(APIView):
     
     def validate_permissions(self, wallet_hash, pk):
         '''
-        validate_permissions will raise a ValidationError if:
-            (1) caller is not order's arbiter,
-            (2) order's current status is not APPEALED
+        Validates if:
+            (1) Caller is the order's arbiter
+            (2) Order has an existing appeal
         '''
         prefix = "ValidationError:"
 
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
         # Raise error if caller is not order's arbiter
-        if caller.wallet_hash != order.arbiter.wallet_hash:
+        if wallet_hash != order.arbiter.wallet_hash:
             raise ValidationError(f'{prefix} Caller must be order arbiter.')
         
         # Raise error if order's current status is not APPEALED
         if curr_status.status != StatusType.APPEALED:
-                raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
+            raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class VerifyRelease(APIView):
+    authentication_classes = [TokenAuthentication]
+
     '''
     Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
@@ -371,24 +356,15 @@ class VerifyRelease(APIView):
         (3) TODO: An amount of time must already have passed since status RELEASE_PENDING was created
     '''
     def post(self, request, pk):
-
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_RELEASE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            # Validate permissions
+            self.validate_permissions(request.user.wallet_hash, pk)
 
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
             # status validations
             status_type = StatusType.RELEASED
             validate_status_inst_count(status_type, pk)
             validate_exclusive_stats(status_type, pk)
-            validate_status_progression(status_type, pk)            
+            validate_status_progression(status_type, pk)      
             
             txid = request.data.get('txid')
             if txid is None:
@@ -420,26 +396,25 @@ class VerifyRelease(APIView):
     
     def validate_permissions(self, wallet_hash, pk):
         '''
-        validate_permissions will raise a ValidationError if:
-            (1) caller is not the order's arbiter nor seller
-            (2) the order's current status is not RELEASE_PENDING nor PAID
+        Validates if:
+            (1) caller is the order's arbiter/seller,
+            (2) the order's current status is RELEASE_PENDING or PAID
         '''
         prefix = "ValidationError:"
 
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except (Peer.DoesNotExist, Order.DoesNotExist) as err:
+        except Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
         is_arbiter = False
         is_seller = False
-        if caller.wallet_hash == order.arbiter.wallet_hash:
+        if wallet_hash == order.arbiter.wallet_hash:
             is_arbiter = True
         elif order.ad_snapshot.trade_type == TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
-            if caller.wallet_hash == seller.wallet_hash:
+            if wallet_hash == seller.wallet_hash:
                 is_seller = True
 
         if (not is_arbiter) and (not is_seller):
@@ -449,6 +424,8 @@ class VerifyRelease(APIView):
             raise ValidationError(f'{prefix} action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')
 
 class VerifyRefund(APIView):
+    authentication_classes = [TokenAuthentication]
+        
     '''
     Manually marks the order as (status) REFUNDED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
@@ -462,13 +439,8 @@ class VerifyRefund(APIView):
     def post(self, request, pk):
 
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ORDER_REFUND.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-
             # validate permissions
-            self.validate_permissions(wallet_hash, pk)
+            self.validate_permissions(request.user.wallet_hash, pk)
         except ValidationError as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_403_FORBIDDEN)
 
@@ -504,20 +476,19 @@ class VerifyRefund(APIView):
     
     def validate_permissions(self, wallet_hash, pk):
         '''
-        validate_permissions will raise a ValidationError if:
-            (1) caller is not the order's arbiter
+        Validates if:
+            (1) caller is not the order's arbiter,
             (2) the order's current status is not REFUND_PENDING
         '''
         prefix = "ValidationError:"
 
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
             order = Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
         except Peer.DoesNotExist or Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
-        if caller.wallet_hash != order.arbiter.wallet_hash:
+        if wallet_hash != order.arbiter.wallet_hash:
             raise ValidationError(f'{prefix} Caller must be order arbiter.')
         
         if (curr_status.status != StatusType.REFUND_PENDING):

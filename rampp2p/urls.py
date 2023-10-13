@@ -10,7 +10,8 @@ urlpatterns = [
     path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
     path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
 
-    path('peer/', PeerView.as_view(), name='peer-view'),
+    path('peer/create', PeerCreateView.as_view(), name='peer-create'),
+    path('peer/detail', PeerDetailView.as_view(), name='peer-detail'),
     path('arbiter/', ArbiterListCreate.as_view(), name='arbiter-list-create'),
     path('arbiter/detail', ArbiterDetail.as_view(), name='arbiter-detail'),
     path('arbiter/config', ArbiterConfig.as_view(), name='arbiter-config'),
@@ -46,10 +47,6 @@ urlpatterns = [
     path('order/contract/', ContractList.as_view(), name='contract-list'),
     path('order/<int:pk>/contract', ContractDetail.as_view(), name='contract-detail'),
     
-    path('utils/transactions/validate', ValidateTransaction.as_view(), name='transaction-validate'),
-    path('utils/transaction-detail', TransactionDetail.as_view(), name='transaction-detail'),
-    path('utils/verify-message', VerifyMessageView.as_view(), name='verify-message'),
-    path('utils/subscribe-address', SubscribeAddress.as_view(), name='subscribe-address'),
     path('utils/market-price', MarketRates.as_view(), name='market-price'),
     
 ]

@@ -17,6 +17,10 @@ import re
 import uuid
 import web3
 
+from django.utils.crypto import get_random_string
+from cryptography.fernet import Fernet
+from django.conf import settings
+import random
 
 class Token(PostgresModel):
     class Capability(models.TextChoices):
@@ -167,8 +171,26 @@ class Wallet(PostgresModel):
     version = models.IntegerField()
     date_created = models.DateTimeField(default=timezone.now)
 
+    auth_token = models.CharField(max_length=200, unique=True, null=True)
+    auth_nonce = models.CharField(max_length=6, null=True)
+
     def __str__(self):
         return self.wallet_hash
+
+    def create_auth_token(self):
+        token = get_random_string(40)
+        cipher_suite = Fernet(settings.FERNET_KEY)
+        self.auth_token = cipher_suite.encrypt(token.encode()).decode()
+        self.save()
+
+    def update_auth_nonce(self):
+        self.auth_nonce = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        self.save()
+    
+    def save(self, *args, **kwargs):
+        if not self.auth_token:
+            self.auth_token = get_random_string(40)
+        super().save(*args, **kwargs)
 
 class Address(PostgresModel):
     address = models.CharField(max_length=100, unique=True, db_index=True)

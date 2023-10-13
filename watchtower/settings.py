@@ -89,7 +89,8 @@ INSTALLED_APPS=[
     'jpp',
     'ramp',
     'rampp2p',
-    'cts'
+    'cts',
+    'authentication'
 ]
 
 MIDDLEWARE=[
@@ -102,6 +103,11 @@ MIDDLEWARE=[
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+AUTHENTICATION_BACKENDS = [
+    'authentication.backends.SignatureBackend',
+    'django.contrib.auth.backends.ModelBackend'
 ]
 
 ROOT_URLCONF = 'watchtower.urls'
@@ -633,6 +639,8 @@ HARDCODED_FEE = config('HARDCODED_FEE', 1000)
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
 
+# authentication
+FERNET_KEY = config('FERNET_KEY', '')
 
 # Used for fallback computation of tx fee
 TX_FEE_RATE = 1.2
