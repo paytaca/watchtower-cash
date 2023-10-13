@@ -17,8 +17,9 @@ import json
 import paho.mqtt.client as mqtt
 
 
-mqtt_client = mqtt.Client()
-mqtt_client.connect("docker-host", 1883, 10)
+mqtt_client = mqtt.Client(transport='websockets')
+mqtt_client.tls_set()
+mqtt_client.connect('mqtt.watchtower.cash', 443, 10)
 mqtt_client.loop_start()
 
 

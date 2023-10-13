@@ -94,13 +94,14 @@ def on_disconnect(client, userdata, rc):
     LOGGER.info(f"Reconnect failed after {reconnect_count} attempts. Exiting...")
 
 
-client = mqtt.Client()
+client = mqtt.Client(transport='websockets')
+client.tls_set()
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_disconnect = on_disconnect
 
 
-client.connect('docker-host', 1883, 60)
+client.connect('mqtt.watchtower.cash', 443, 10)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.

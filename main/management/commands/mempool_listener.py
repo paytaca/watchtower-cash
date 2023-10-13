@@ -10,8 +10,9 @@ from main.tasks import process_mempool_transaction
 LOGGER = logging.getLogger(__name__)
 
 
-mqtt_client = mqtt.Client()
-mqtt_client.connect("docker-host", 1883, 10)
+mqtt_client = mqtt.Client(transport='websockets')
+mqtt_client.tls_set()
+mqtt_client.connect('mqtt.watchtower.cash', 443, 10)
 
 
 # The callback for when the client receives a CONNACK response from the server.
