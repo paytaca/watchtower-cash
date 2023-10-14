@@ -2103,7 +2103,7 @@ def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         if output_addresses_check.exists():
             proceed = True
         else:
-            input_txids = [x['txid'] for x in tx['vin']]
+            input_txids = [x['txid'] for x in tx['vin'] if 'txid' in x.keys()]
             input_txids_check = Transaction.objects.filter(txid__in=input_txids)
             if input_txids_check.exists():
                 proceed = True
