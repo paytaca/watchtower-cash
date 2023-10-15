@@ -77,13 +77,19 @@ class GiftViewSet(viewsets.GenericViewSet):
             if campaign:
                 campaign_id = str(campaign.id)
                 campaign_name = str(campaign.name)
+            recovered = False
+            claim = gift.claims.first()
+            if claim:
+                if gift.wallet_id == claim.wallet_id:
+                    recovered = True
             gifts.append({
                 "gift_code_hash": str(gift.gift_code_hash),
                 "date_created": str(gift.date_created),
                 "amount": gift.amount,
                 "campaign_id": campaign_id,
                 "campaign_name": campaign_name,
-                "date_claimed": str(gift.date_claimed)
+                "date_claimed": str(gift.date_claimed),
+                "recovered": recovered
             })
 
         data = {
@@ -180,3 +186,31 @@ class GiftViewSet(viewsets.GenericViewSet):
             })
         else:
             raise Exception("This gift has been claimed")
+
+
+    @action(detail=True, methods=['post'])
+    @swagger_auto_schema(
+        operation_description="Recover funds from a gift.",
+        request_body=RecoverGiftPayloadSerializer,
+        responses={
+            status.HTTP_200_OK: RecoverGiftResponseSerializer
+        }
+    )
+    def recover(self, request, gift_code_hash):
+        wallet_hash = request.data["wallet_hash"]
+        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
+        gift_qs = Gift.objects.filter(wallet=wallet, gift_code_hash=gift_code_hash)
+        if not gift_qs.exists():
+            raise Exception("Gift does not exist!")
+        gift = gift_qs.first()
+        if gift:
+            Claim.objects.create(
+                wallet=wallet,
+                amount=gift.amount,
+                gift=gift
+            )
+            return Response({
+                "share": gift.share
+            })
+        else:
+            raise Exception("This gift does not exist.")
