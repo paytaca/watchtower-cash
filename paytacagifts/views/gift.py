@@ -107,7 +107,7 @@ class GiftViewSet(viewsets.GenericViewSet):
         data = request.data
         wallet_hash = kwargs.get("wallet_hash", "")
         if not wallet_hash: raise Exception('Wallet Hash Required')
-        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
         if "campaign" in data:
             if "limit_per_wallet" in data["campaign"]:
                 limit = data["campaign"]["limit_per_wallet"]
