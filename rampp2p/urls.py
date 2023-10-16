@@ -12,6 +12,7 @@ urlpatterns = [
 
     path('peer/create', PeerCreateView.as_view(), name='peer-create'),
     path('peer/detail', PeerDetailView.as_view(), name='peer-detail'),
+    path('peer/profile', PeerProfileView.as_view(), name='peer-profile'),
     path('arbiter/', ArbiterListCreate.as_view(), name='arbiter-list-create'),
     path('arbiter/detail', ArbiterDetail.as_view(), name='arbiter-detail'),
     path('arbiter/config', ArbiterConfig.as_view(), name='arbiter-config'),
@@ -48,5 +49,6 @@ urlpatterns = [
     path('order/<int:pk>/contract', ContractDetail.as_view(), name='contract-detail'),
     
     path('utils/market-price', MarketRates.as_view(), name='market-price'),
+    path('utils/subscribe-address', SubscribeContractAddress.as_view(), name='subscribe-address')
     
 ]

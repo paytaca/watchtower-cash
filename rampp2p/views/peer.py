@@ -1,20 +1,18 @@
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.http import Http404
-from django.core.exceptions import ValidationError
 
 from rampp2p.models import Peer, Arbiter
 from rampp2p.serializers import (
     PeerSerializer, 
     PeerCreateSerializer,
-    PeerUpdateSerializer
+    PeerUpdateSerializer,
+    PeerProfileSerializer
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
 from authentication.token import TokenAuthentication
-from rampp2p.exceptions import InvalidSignature
 
 class PeerCreateView(APIView):
     def post(self, request):
@@ -64,3 +62,18 @@ class PeerDetailView(APIView):
             serializer = PeerSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class PeerProfileView(APIView):
+    def get(self, request):
+        wallet_hash = request.headers.get('wallet_hash')
+        if wallet_hash is None:
+            return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            peer = Peer.objects.get(wallet_hash=wallet_hash)
+            serialized_peer = PeerProfileSerializer(peer)
+        except Peer.DoesNotExist:
+            arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
+            return Response({'is_arbiter': arbiter.exists()}, status=404)
+        
+        return Response(serialized_peer.data, status.HTTP_200_OK)

@@ -58,5 +58,5 @@ services:
       - /code/cts/js/node_modules
 volumes:
   watchtower_db_data:
-    external: true
-    # driver: 'local'
+    # external: true
+    driver: 'local'

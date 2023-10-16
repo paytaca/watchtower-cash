@@ -2,6 +2,15 @@ from rest_framework import serializers
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import Peer, Order, Status, StatusType
 
+class PeerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Peer
+        fields = [
+            'id',
+            'nickname',
+            'is_disabled'
+        ]
+
 class PeerSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
