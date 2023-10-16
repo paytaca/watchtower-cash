@@ -7,6 +7,11 @@ from .models import (
     Branch,
 )
 
+from main.models import (
+    Wallet,
+    WalletHistory
+)
+
 def IsNullListFilter(parameter_name):
     """
         https://docs.djangoproject.com/en/dev/ref/contrib/admin/filters/#modeladmin-list-filters
@@ -66,9 +71,39 @@ class MerchantAdmin(admin.ModelAdmin):
     ]
 
     list_display = [
-        "wallet_hash",
         "name",
+        "merchant_location",
+        "incoming_txs",
+        "outgoing_txs",
+        "last_transaction"
     ]
+
+    def country(self, obj):
+        return 
+    
+    def merchant_location(self, obj):
+        _location = ''
+        if obj.location.city:
+            _location = obj.location.city
+        if obj.location.country:
+            if _location:
+                _location += f', {obj.location.country}'
+            else:
+                _location = obj.location.country
+        return _location
+    
+    def incoming_txs(self, obj):
+        wallet = Wallet.objects.get(wallet_hash=obj.wallet_hash)
+        in_history = WalletHistory.objects.filter(wallet=wallet, record_type='incoming')
+        return in_history.count()
+
+    def outgoing_txs(self, obj):
+        wallet = Wallet.objects.get(wallet_hash=obj.wallet_hash)
+        out_history = WalletHistory.objects.filter(wallet=wallet, record_type='outgoing')
+        return out_history.count()
+
+    def last_transaction(self, obj):
+        return obj.last_transaction_date
 
 
 @admin.register(Branch)

@@ -826,13 +826,19 @@ def get_bch_utxos(self, address):
                 token_id = 'bch'
 
             block, created = BlockHeight.objects.get_or_create(number=block)
-            transaction_obj = Transaction.objects.filter(
+            transaction_check = Transaction.objects.filter(
                 txid=tx_hash,
                 address__address=address,
                 value=value,
                 index=index
             )
-            if not transaction_obj.exists():
+            if transaction_check.exists():
+                # Mark as unspent, just in case it's already marked spent
+                # and also update the blockheight
+                transaction_check.update(spent=False, blockheight=block)
+                for obj in transaction_check:
+                    saved_utxo_ids.append(obj.id)
+            else:
                 txn_id, created = save_record(
                     token_id,
                     address,
@@ -857,12 +863,6 @@ def get_bch_utxos(self, address):
                         qs.update(processed=True, transactions_count=count)
                     
                     parse_tx_wallet_histories.delay(tx_hash, immediate=True)
-            
-            if transaction_obj.exists():
-                # Mark as unspent, just in case it's already marked spent
-                transaction_obj.update(spent=False)
-                for obj in transaction_obj:
-                    saved_utxo_ids.append(obj.id)
 
         # Mark other transactions of the same address as spent
         txn_check = Transaction.objects.filter(
@@ -1673,7 +1673,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
 
 @shared_task(queue='rescan_utxos')
-def rescan_utxos(wallet_hash, full=False):
+def rescan_utxos(wallet_hash, full=False, bch_only=False):
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
     if full:
         addresses = wallet.addresses.all()

@@ -238,6 +238,9 @@ class UTXO(APIView):
         is_cashtoken = parse_boolean_query_param(request.query_params.get('is_cashtoken', ''))
         confirmed = parse_boolean_query_param(request.query_params.get('confirmed', ''))
 
+        if wallet_hash and confirmed:
+            rescan_utxos(wallet_hash, full=True, bch_only=True)
+
         data = { 'valid': False }
         qs = None
 
