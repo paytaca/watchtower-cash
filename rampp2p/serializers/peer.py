@@ -7,7 +7,7 @@ class PeerProfileSerializer(serializers.ModelSerializer):
         model = Peer
         fields = [
             'id',
-            'nickname',
+            'name',
             'is_disabled'
         ]
 
@@ -19,7 +19,7 @@ class PeerSerializer(serializers.ModelSerializer):
         model = Peer
         fields = [
             'id',
-            'nickname',
+            'name',
             'public_key',
             'address',
             'is_disabled',
@@ -73,7 +73,7 @@ class PeerCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Peer
         fields = [
-            'nickname',
+            'name',
             'wallet_hash',
             'public_key',
             'address'
@@ -83,7 +83,7 @@ class PeerUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Peer
         fields = [
-           'nickname',
+           'name',
         #    'public_key',
         #    'address',
         ]

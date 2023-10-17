@@ -7,7 +7,8 @@ from rampp2p.serializers import (
     PeerSerializer, 
     PeerCreateSerializer,
     PeerUpdateSerializer,
-    PeerProfileSerializer
+    PeerProfileSerializer,
+    ArbiterProfileSerializer
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -63,17 +64,26 @@ class PeerDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-class PeerProfileView(APIView):
+class UserProfileView(APIView):
     def get(self, request):
         wallet_hash = request.headers.get('wallet_hash')
         if wallet_hash is None:
             return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        user = None
+        is_arbiter = False
         try:
             peer = Peer.objects.get(wallet_hash=wallet_hash)
-            serialized_peer = PeerProfileSerializer(peer)
+            user = PeerProfileSerializer(peer).data
         except Peer.DoesNotExist:
             arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
-            return Response({'is_arbiter': arbiter.exists()}, status=404)
+            if (arbiter.exists()):
+                is_arbiter = True
+                user = ArbiterProfileSerializer(arbiter.first()).data
         
-        return Response(serialized_peer.data, status.HTTP_200_OK)
+        response = {
+            "is_arbiter": is_arbiter,
+            "user": user
+        }
+
+        return Response(response, status.HTTP_200_OK)

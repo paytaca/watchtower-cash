@@ -12,7 +12,7 @@ urlpatterns = [
 
     path('peer/create', PeerCreateView.as_view(), name='peer-create'),
     path('peer/detail', PeerDetailView.as_view(), name='peer-detail'),
-    path('peer/profile', PeerProfileView.as_view(), name='peer-profile'),
+    path('user', UserProfileView.as_view(), name='user-profile'),
     path('arbiter/', ArbiterListCreate.as_view(), name='arbiter-list-create'),
     path('arbiter/detail', ArbiterDetail.as_view(), name='arbiter-detail'),
     path('arbiter/config', ArbiterConfig.as_view(), name='arbiter-config'),

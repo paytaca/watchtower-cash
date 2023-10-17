@@ -1,6 +1,15 @@
 from rest_framework import serializers
 from rampp2p.models import Arbiter
 
+class ArbiterProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Arbiter
+        fields = [
+            'id',
+            'name',
+            'is_disabled'
+        ]
+
 class ArbiterWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Arbiter

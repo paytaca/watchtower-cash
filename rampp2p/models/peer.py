@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Peer(models.Model):
-    nickname = models.CharField(max_length=100)
+    name = models.CharField(max_length=100)
     public_key = models.CharField(max_length=100)
     address = models.CharField(max_length=100)
     wallet_hash = models.CharField(
@@ -29,4 +29,4 @@ class Peer(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.nickname
+        return self.name
