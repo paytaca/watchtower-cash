@@ -10,4 +10,6 @@ urlpatterns = [
     path('login/main', LoginView.as_view(), name='main-login'),
     path('login/peer', LoginView.as_view(), name='ramp-peer-login'),
     path('login/arbiter', LoginView.as_view(), name='ramp-arbiter-login'),
+
+    path('revoke', RevokeTokenView.as_view(), name='ramp-revoke-token'),
 ]

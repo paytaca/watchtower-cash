@@ -7,6 +7,8 @@ class ArbiterProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'name',
+            'public_key',
+            'address',
             'is_disabled'
         ]
 

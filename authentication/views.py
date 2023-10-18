@@ -5,12 +5,14 @@ from rest_framework.response import Response
 from main.models import Wallet as MainWallet
 from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
-from rampp2p.serializers import PeerSerializer, ArbiterReadSerializer
+from rampp2p.serializers import PeerProfileSerializer, ArbiterProfileSerializer
 from authentication.backends import SignatureBackend
 from authentication.models import AuthToken
 
 from django.conf import settings
 from cryptography.fernet import Fernet, InvalidToken
+
+from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
@@ -60,10 +62,10 @@ class LoginView(APIView):
             # if app == 'main':
             #     # serialized_wallet = WalletSerialized(wallet)
             if app == 'ramp-peer':
-                serialized_wallet = PeerSerializer(wallet)
+                serialized_wallet = PeerProfileSerializer(wallet)
                 
             if app == 'ramp-arbiter':
-                serialized_wallet = ArbiterReadSerializer(wallet)
+                serialized_wallet = ArbiterProfileSerializer(wallet)
 
             if serialized_wallet is not None:
                 response['user'] = serialized_wallet.data
@@ -104,3 +106,17 @@ class AuthNonceView(APIView):
         
         except (MainWallet.DoesNotExist, PeerWallet.DoesNotExist, ArbiterWallet.DoesNotExist):
             return Response({'error': 'Wallet not found'}, status=404)
+
+class RevokeTokenView(APIView):
+    authentication_classes = [TokenAuthentication]
+
+    def post(self, request):
+
+        try:
+            wallet_hash = request.headers.get('wallet_hash')
+            auth_token = AuthToken.objects.get(wallet_hash=wallet_hash)
+            auth_token.delete()
+        except AuthToken.DoesNotExist:
+            return Response({'error': 'Token does not exist'}, status=400)
+        
+        return Response(status=200)
