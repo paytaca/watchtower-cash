@@ -10,12 +10,12 @@ from main.tasks import process_mempool_transaction
 
 LOGGER = logging.getLogger(__name__)
 
-
+mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-mempool"
 if settings.BCH_NETWORK == 'mainnet':
-    mqtt_client = mqtt.Client(transport='websockets')
+    mqtt_client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=False)
     mqtt_client.tls_set()
 else:
-    mqtt_client = mqtt.Client()
+    mqtt_client = mqtt.Client(client_id=mqtt_client_id, clean_session=False)
 
 mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
 

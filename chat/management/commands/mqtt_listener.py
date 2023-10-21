@@ -95,11 +95,12 @@ def on_disconnect(client, userdata, rc):
     LOGGER.info(f"Reconnect failed after {reconnect_count} attempts. Exiting...")
 
 
+mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-chat"
 if settings.BCH_NETWORK == 'mainnet':
-    client = mqtt.Client(transport='websockets')
+    client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=False)
     client.tls_set()
 else:
-    client = mqtt.Client()
+    client = mqtt.Client(client_id=mqtt_client_id, clean_session=False)
 
 client.on_connect = on_connect
 client.on_message = on_message
