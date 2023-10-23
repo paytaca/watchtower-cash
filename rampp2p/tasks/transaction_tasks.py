@@ -6,7 +6,8 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 
 from rampp2p.utils.handler import update_order_status
-from rampp2p.utils.websocket import send_order_update
+# from rampp2p.utils.websocket import send_order_update
+import rampp2p.utils.websocket as websocket
 from rampp2p.utils.utils import get_order_peer_addresses, get_trading_fees
 from rampp2p.serializers import TransactionSerializer, RecipientSerializer
 from rampp2p.models import (
@@ -76,7 +77,7 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
             'error': error
         }
 
-    send_order_update(
+    websocket.send_order_update(
         result, 
         contract.order.id
     )
@@ -84,14 +85,12 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
 
 # @shared_task(queue='rampp2p__contract_execution')
 def handle_order_status(action: str, contract: Contract, txn: Dict): 
-    # logger.warning(f'>>txn: {txn}')   
+    
     valid = txn.get('valid')
     error = txn.get('error')
     txid = txn.get('details').get('txid')
     outputs = txn.get('details').get('outputs')
     details = txn.get('details')
-    # logger.warning(f'>>txid: {txid}')
-    # logger.warning(f'>>txn.details: {details}')
 
     errors = []
     if error is not None:

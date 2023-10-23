@@ -28,13 +28,11 @@ from rampp2p.serializers import (
     ContractDetailSerializer,
     AdSnapshotSerializer
 )
-from rampp2p.viewcodes import ViewCode
 from rampp2p.validators import *
-from rampp2p.utils.websocket import send_order_update
-from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired, get_trading_fees
 from rampp2p.utils.handler import update_order_status
+import rampp2p.utils.websocket as websocket
 from authentication.token import TokenAuthentication
 
 import logging
@@ -139,7 +137,7 @@ class AppealRequest(APIView):
                 'fees': fees
             }
         }
-        
+
         return Response(response, status=status.HTTP_200_OK)
         
     def validate_permissions(self, wallet_hash, pk):
@@ -179,51 +177,45 @@ class AppealRequest(APIView):
     def post(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
             if not is_order_expired(pk):
                 raise ValidationError('order is not expired')
+            
+            self.validate_permissions(wallet_hash, pk)
             validate_status_inst_count(StatusType.APPEALED, pk)
             validate_status_progression(StatusType.APPEALED, pk)
             appeal_type = request.data.get('type')
             AppealType(appeal_type)
-        except (ValidationError, ValueError) as err:
+
+            peer = Peer.objects.get(wallet_hash=wallet_hash)
+
+        except (ValidationError, ValueError, Peer.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # create and Appeal record
-        peer = Peer.objects.get(wallet_hash=wallet_hash)
         data = {
             'order': pk,
             'owner': peer.id,
             'type': appeal_type,
             'reasons': request.data.get('reasons')
         }
-        logger.warn(f'data;{data}')
         serialized_appeal = AppealCreateSerializer(data=data)
-        if not serialized_appeal.is_valid():
+        if serialized_appeal.is_valid():
+            serialized_appeal = AppealSerializer(serialized_appeal.save())
+            serialized_status = StatusSerializer(data={
+                'status': StatusType.APPEALED,
+                'order': pk
+            })
+            if serialized_status.is_valid():
+                serialized_status = StatusSerializer(serialized_status.save())
+                response_data = {
+                    'appeal': serialized_appeal.data,
+                    'status': serialized_status.data
+                }
+                websocket.send_order_update(response_data, pk)
+                return Response(response_data, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': serialized_status.errors}, status=status.HTTP_400_BAD_REQUEST)
+        else:
             return Response({'error': serialized_appeal.errors}, status=status.HTTP_400_BAD_REQUEST)        
-        serialized_appeal = AppealSerializer(serialized_appeal.save())
-
-        # create APPEALED status for order
-        serialized_status = StatusSerializer(data={
-            'status': StatusType.APPEALED,
-            'order': pk
-        })
-        if not serialized_status.is_valid():
-            return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
-        serialized_status = StatusSerializer(serialized_status.save())
-
-        response_data = {
-            'appeal': serialized_appeal.data,
-            'status': serialized_status.data
-        }
-        # notify order update subscribers
-        send_order_update(json.dumps(response_data), pk)
-        return Response(response_data, status=status.HTTP_200_OK)
 
 class AppealPendingRelease(APIView):
     authentication_classes = [TokenAuthentication]
@@ -257,7 +249,7 @@ class AppealPendingRelease(APIView):
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
         # notify order update subscribers
-        send_order_update(json.dumps(serialized_status.data), pk)
+        websocket.send_order_update(json.dumps(serialized_status.data), pk)
 
         return Response(serialized_status.data, status=status.HTTP_200_OK)
     
@@ -316,7 +308,7 @@ class AppealPendingRefund(APIView):
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # notify order update subscribers
-        send_order_update(json.dumps(serialized_status.data), pk)
+        websocket.send_order_update(json.dumps(serialized_status.data), pk)
         
         return Response(serialized_status.data, status=status.HTTP_200_OK)
     
