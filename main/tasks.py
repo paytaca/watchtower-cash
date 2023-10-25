@@ -48,6 +48,8 @@ from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
 
+import rampp2p.utils.transaction as rampp2p_utils
+
 LOGGER = logging.getLogger(__name__)
 
 REDIS_STORAGE = settings.REDISKV
@@ -396,6 +398,9 @@ def save_record(
     # that spend previous transactions with outputs involving tracked addresses
     if not subscription.exists() and not force_create:
         return None, None
+
+    LOGGER.info(f'Saving txid: {transactionid} | {transaction_address}')
+    rampp2p_utils.process_transaction(transactionid, transaction_address, inputs=inputs)
 
     address_obj, _ = Address.objects.get_or_create(address=transaction_address)
 

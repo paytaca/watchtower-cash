@@ -7,6 +7,8 @@ from django.core.exceptions import ValidationError
 
 from rampp2p.utils.handler import update_order_status
 # from rampp2p.utils.websocket import send_order_update
+# from main.utils.subscription import remove_subscription
+from main.models import Subscription
 import rampp2p.utils.websocket as websocket
 from rampp2p.utils.utils import get_order_peer_addresses, get_trading_fees
 from rampp2p.serializers import TransactionSerializer, RecipientSerializer
@@ -33,7 +35,7 @@ def execute_subprocess(command):
 
     stderr = stderr.decode("utf-8")
     stdout = stdout.decode('utf-8')
-    logger.warning(f'stdout: {stdout}, stderr: {stderr}')
+    # logger.warning(f'stdout: {stdout}, stderr: {stderr}')
 
     if stdout is not None:
         # Define the pattern for matching control characters
@@ -45,9 +47,9 @@ def execute_subprocess(command):
         stdout = json.loads(clean_stdout)
     
     response = {'result': stdout, 'stderr': stderr} 
-    logger.warning(f'response: {response}')
+    # logger.warning(f'response: {response}')
 
-    return response
+    return response    
 
 @shared_task(queue='rampp2p__contract_execution')
 def handle_transaction(txn: Dict, action: str, contract_id: int):
@@ -56,7 +58,7 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
     Automatically updates the order's status if txn is valid and 
     sends the result through a websocket channel.
     '''
-    logger.warning(f'txn: {txn}')
+    # logger.warning(f'Handling txn: {txn}')
     contract = Contract.objects.get(pk=contract_id)
     valid, error, outputs = verify_txn(action, contract, txn)
     result = None
@@ -108,13 +110,14 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
     status = None
     if valid:
 
-        try:
-            # Update transaction details 
-            transaction = Transaction.objects.get(txid=txid)
+        # Update transaction details 
+        transaction = Transaction.objects.filter(contract__id=contract.id, action=action)
+        if transaction.exists():
+            transaction = transaction.last()
             transaction.valid = True
-
-        except Transaction.DoesNotExist as err:
-            errors.append(err.args[0])
+            transaction.txid = txid
+        else:
+            errors.append(f'Transaction with contract_id={contract.id} and action={action} does not exist')
             result["errors"] = errors
             result["success"] = False
             return result
@@ -131,7 +134,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                 if recipient_serializer.is_valid():
                     recipient_serializer = RecipientSerializer(recipient_serializer.save())
                 else:
-                    logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
+                    # logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
                     result["errors"] = errors
                     result["success"] = False
                     return result
@@ -146,7 +149,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             status_type = StatusType.ESCROWED
 
         try:
-            # If status_type is RELEASED or REFUNDED and order was APPEALED, update the appeal to resolved
+            # Resolve order appeal once order is RELEASED/REFUNDED
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
                 appeal = Appeal.objects.filter(order=contract.order.id)
                 if appeal.exists():
@@ -156,6 +159,12 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
 
             # Update order status
             status = update_order_status(contract.order.id, status_type).data
+
+            # Remove subscription once order is complete
+            if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
+                logger.warn(f'Removing subscription to contract {transaction.contract.address}')
+                remove_subscription(transaction.contract.address, transaction.contract.id)
+
         except ValidationError as err:
             errors.append(err.args[0])
             result["errors"] = errors
@@ -171,7 +180,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             transaction.verifying = False
             transaction.save()
     
-    logger.warning(f'result: {result}')
+    # logger.warning(f'result: {result}')
 
     return result
 
@@ -183,7 +192,7 @@ def verify_txn(action, contract, txn: Dict):
     '''
 
     # Logs for debugging
-    logger.warning(f'txn: {txn}')
+    # logger.warning(f'txn: {txn}')
 
     outputs = []
     error = None
@@ -287,8 +296,8 @@ def verify_txn(action, contract, txn: Dict):
                 if actual_value != arbitration_fee:
                     valid = False
                     error = 'incorrect arbiter output value'
-                    logger.warning(f'actual_value: {actual_value} | arbitration_fee: {arbitration_fee}')
-                    logger.warning(f'[validate_txn] error: {error}')
+                    # logger.warning(f'actual_value: {actual_value} | arbitration_fee: {arbitration_fee}')
+                    # logger.warning(f'[validate_txn] error: {error}')
                     break
                 arbiter_exists = True
             
@@ -298,8 +307,8 @@ def verify_txn(action, contract, txn: Dict):
                 if actual_value != service_fee:
                     valid = False
                     error = 'incorrect servicer output value'
-                    logger.warning(f'actual_value: {actual_value} | service_fee: {service_fee}')
-                    logger.warning(f'[validate_txn] error: {error}')
+                    # logger.warning(f'actual_value: {actual_value} | service_fee: {service_fee}')
+                    # logger.warning(f'[validate_txn] error: {error}')
                     break
                 servicer_exists = True
 
@@ -309,10 +318,10 @@ def verify_txn(action, contract, txn: Dict):
                 if address == buyer_addr:
                     if actual_value != expected_value:
                         error = 'incorrect buyer output value'
-                        logger.warning(f'typeof actual_value: {type(actual_value)}')
-                        logger.warning(f'typeof expected_value: {type(expected_value)}')
-                        logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
-                        logger.warning(f'[validate_txn] error: {error}')
+                        # logger.warning(f'typeof actual_value: {type(actual_value)}')
+                        # logger.warning(f'typeof expected_value: {type(expected_value)}')
+                        # logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
+                        # logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break
                     buyer_exists = True
@@ -323,8 +332,8 @@ def verify_txn(action, contract, txn: Dict):
                 if address == seller_addr:
                     if actual_value != expected_value:
                         error = 'incorrect seller output value'
-                        logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
-                        logger.warning(f'[validate_txn] error: {error}')
+                        # logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
+                        # logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break
                     seller_exists = True
@@ -341,3 +350,13 @@ def verify_txn(action, contract, txn: Dict):
             valid = False
     
     return valid, error, outputs
+
+def remove_subscription(address, subscriber_id):
+    subscription = Subscription.objects.filter(
+        address__address=address,
+        recipient__telegram_id=subscriber_id
+    )
+    if subscription.exists():
+        subscription.delete()
+        return True
+    return False

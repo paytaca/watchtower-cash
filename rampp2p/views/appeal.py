@@ -244,10 +244,16 @@ class AppealPendingRelease(APIView):
 
             # Update status to RELEASE_PENDING
             serialized_status = update_order_status(pk, status_type)
+
+            contract = Contract.objects.get(order__id=pk)
+            _, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.RELEASE,
+            )
             
-        except ValidationError as err:
+        except (ValidationError, Contract.DoesNotExist) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-  
+
         # notify order update subscribers
         websocket.send_order_update(json.dumps(serialized_status.data), pk)
 
@@ -303,8 +309,14 @@ class AppealPendingRefund(APIView):
 
             # Update status to REFUND_PENDING
             serialized_status = update_order_status(pk, status_type)
+
+            contract = Contract.objects.get(order__id=pk)
+            _, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.REFUND,
+            )
             
-        except ValidationError as err:
+        except (ValidationError, Contract.DoesNotExist) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # notify order update subscribers

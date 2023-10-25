@@ -9,6 +9,7 @@ from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
 
+from main.utils.subscription import save_subscription
 from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 # from rampp2p.utils.websocket import send_order_update
@@ -455,10 +456,6 @@ class PendingEscrowOrder(APIView):
             validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
             validate_status_progression(StatusType.ESCROW_PENDING, pk)
 
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid is required')
-
             contract = Contract.objects.get(order__id=pk)
             
             # create ESCROW_PENDING status for order
@@ -475,23 +472,20 @@ class PendingEscrowOrder(APIView):
             # notify order update subscribers
             websocket_msg = {
                 'success' : True,
-                'txid': txid,
                 'status': status_serializer.data
             }
 
             transaction, _ = Transaction.objects.get_or_create(
                 contract=contract,
                 action=Transaction.ActionType.ESCROW,
-                txid=txid
             )
             websocket_msg['transaction'] = TransactionSerializer(transaction).data
 
-            # Validate the transaction
-            validate_transaction(
-                txid=transaction.txid,
-                action=Transaction.ActionType.ESCROW,
-                contract_id=contract.id
-            )
+            # Subscribe to contract address
+            created = save_subscription(contract.address, contract.id)
+            if created: logger.warn(f'Subscribed to contract {contract.address}')
+            websocket_msg['subscribed'] = created
+            
             websocket.send_order_update(websocket_msg, pk)
             response = websocket_msg
             
@@ -669,6 +663,13 @@ class CryptoSellerConfirmPayment(APIView):
 
         if serialized_status.is_valid():
             serialized_status = StatusReadSerializer(serialized_status.save())
+
+            contract = Contract.objects.get(order__id=pk)
+            _, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.RELEASE,
+            )
+
             websocket.send_order_update({
                 'success' : True,
                 'status': serialized_status.data

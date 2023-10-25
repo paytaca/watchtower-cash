@@ -3,8 +3,35 @@ from django.conf import settings
 from main.utils.queries.node import Node
 import requests
 
+from rampp2p.models import Transaction
+
 import logging
 logger = logging.getLogger(__name__)
+
+def process_transaction(txid, output_address, inputs=None):
+    logger.warn(f'RampP2P processing tx {txid}')
+    pending_transactions = Transaction.objects.filter(txid__isnull=True)
+    transaction = pending_transactions.filter(contract__address=output_address)
+    if transaction.exists():
+        transaction = transaction.first()
+        validate_transaction(
+            txid=txid,
+            action=Transaction.ActionType.ESCROW,
+            contract_id=transaction.contract.id
+        )
+    else:
+        if inputs is not None:
+            logger.warn(f'inputs: {inputs}')
+            for tx_input in inputs:
+                input_address = tx_input["address"]
+                transaction = pending_transactions.filter(contract__address=input_address)
+                if transaction.exists():
+                    transaction = transaction.first()
+                    validate_transaction(
+                        txid=txid,
+                        action=transaction.action,
+                        contract_id=transaction.contract.id
+                    )
 
 def validate_transaction(txid: str, **kwargs):
     '''

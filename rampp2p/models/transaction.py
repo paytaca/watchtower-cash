@@ -12,7 +12,7 @@ class Transaction(models.Model):
 
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, editable=False)
     action = models.CharField(max_length=50, choices=ActionType.choices)
-    txid = models.CharField(max_length=200, unique=True)
+    txid = models.CharField(max_length=200, unique=True, null=True)
     valid = models.BooleanField(default=False)
     verifying = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
