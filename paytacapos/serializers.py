@@ -375,30 +375,47 @@ class PosDeviceSerializer(serializers.ModelSerializer):
 
 class POSDevicePaymentSerializer(serializers.Serializer):
     posid = serializers.IntegerField(help_text='Resolves to a new posid if negative value')
-    receiving_address = serializers.CharField()
+    # NOTE: either receiving_address (latest POS) or wallet_hash (old POS versions)
+    receiving_address = serializers.CharField(required=False)
+    wallet_hash = serializers.CharField(required=False)
+
+    def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
+        self.supress_merchant_info_validations = supress_merchant_info_validations
+        return super().__init__(*args, **kwargs)
 
     def validate_posid(self, value):
         if self.instance and self.instance.posid != value:
             raise serializers.ValidationError("editing posid is not allowed")
         return value
 
+    def validate_wallet_hash(self, value):
+        if self.instance and self.instance.wallet_hash != value:
+            raise serializers.ValidationError("editing posid is not allowed")
+
+        if not self.supress_merchant_info_validations:
+            if not Merchant.objects.filter(wallet_hash = value).exists():
+                raise serializers.ValidationError("Wallet hash does not have merchant information", code="missing_merchant_info")
+
 
 class POSPaymentSerializer(serializers.Serializer):
     transaction = serializers.CharField()
     otp = serializers.CharField(required=False)
     payment_timestamp = TimestampField()
-    pos_device = POSDevicePaymentSerializer()
+    pos_device = POSDevicePaymentSerializer(supress_merchant_info_validations=True)
 
     def save(self):
         validated_data = self.validated_data
         otp = validated_data.get("otp", None)
         payment_timestamp = validated_data.get("payment_timestamp", timezone.now())
         pos_device_data = validated_data["pos_device"]
-        receiving_address = pos_device_data['receiving_address']
         posid = pos_device_data['posid']
 
-        address = get_address_or_err(receiving_address)
-        wallet_hash = address.wallet.wallet_hash
+        if 'receiving_address' in pos_device_data.keys():
+            receiving_address = pos_device_data['receiving_address']
+            address = get_address_or_err(receiving_address)
+            wallet_hash = address.wallet.wallet_hash
+        else:
+            wallet_hash = pos_device_data['wallet_hash']
 
         response = {
             "success": False,
