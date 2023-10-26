@@ -1,10 +1,6 @@
 from django.db import models
 from .currency import FiatCurrency
-
-from django.utils.crypto import get_random_string
-from cryptography.fernet import Fernet
-from django.conf import settings
-import random
+from django.apps import apps
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,3 +26,7 @@ class Peer(models.Model):
 
     def __str__(self):
         return self.name
+
+    def average_rating(self):
+        Feedback = apps.get_model('rampp2p', 'Feedback')
+        return Feedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']

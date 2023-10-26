@@ -67,7 +67,6 @@ class AdListCreate(APIView):
         if not owned:
             # Fetch only public ads and those with trade amount > 0
             queryset = queryset.filter(Q(is_public=True) & Q(trade_amount__gt=0))
-            # Require currency filter
             if currency is None:
                 return Response({'error': 'currency is required'}, status=status.HTTP_400_BAD_REQUEST)
         
