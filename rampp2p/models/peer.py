@@ -29,4 +29,5 @@ class Peer(models.Model):
 
     def average_rating(self):
         Feedback = apps.get_model('rampp2p', 'Feedback')
-        return Feedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']
+        avg_rating = Feedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']
+        return "{:.1f}".format(avg_rating) if avg_rating is not None else None

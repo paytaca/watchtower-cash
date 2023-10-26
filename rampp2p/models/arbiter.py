@@ -18,4 +18,5 @@ class Arbiter(models.Model):
     
     def average_rating(self):
         ArbiterFeedback = apps.get_model('rampp2p', 'ArbiterFeedback')
-        return ArbiterFeedback.objects.filter(to_arbiter=self).aggregate(models.Avg('rating'))['rating__avg']
+        avg_rating = ArbiterFeedback.objects.filter(to_arbiter=self).aggregate(models.Avg('rating'))['rating__avg']
+        return "{:.1f}".format(avg_rating) if avg_rating is not None else None
