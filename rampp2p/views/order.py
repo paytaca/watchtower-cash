@@ -12,8 +12,9 @@ import math
 from main.utils.subscription import save_subscription
 from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
-# from rampp2p.utils.websocket import send_order_update
 import rampp2p.utils.websocket as websocket
+from rampp2p.utils.notifications import send_push_notification
+
 from rampp2p.validators import *
 from rampp2p.serializers import (
     OrderSerializer, 
@@ -223,10 +224,6 @@ class OrderListCreate(APIView):
         
         # save order and mark it with status=SUBMITTED
         order = serialized_order.save()
-        # order_status = Status.objects.create(
-        #     status=StatusType.SUBMITTED,
-        #     order=Order.objects.get(pk=order.id)
-        # )
         serialized_status = StatusSerializer(
             data={
                 'status': StatusType.SUBMITTED,
@@ -236,17 +233,23 @@ class OrderListCreate(APIView):
 
         if serialized_status.is_valid():
             order_status = serialized_status.save()
-            serialized_status = StatusSerializer(order_status)
+            serialized_status = StatusSerializer(order_status).data
         else:
             return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        
+
         context = { 'wallet_hash': wallet_hash }
-        serializer = OrderSerializer(order, context=context)        
+        serialized_order = OrderSerializer(order, context=context).data    
         response = {
             'success': True,
-            'order': serializer.data,
-            'status': serialized_status.data
+            'order': serialized_order,
+            'status': serialized_status
         }
+
+        # send push notification
+        extra = {'order_id': serialized_order['id']}
+        send_push_notification([ad.owner.wallet_hash], "Received new order", extra=extra)
     
         return Response(response, status=status.HTTP_201_CREATED)
     
@@ -417,10 +420,17 @@ class ConfirmOrder(APIView):
 
         if serialized_status.is_valid():
             serialized_status = StatusSerializer(serialized_status.save())
+            
+            # send websocket notification
             websocket.send_order_update({
-                'success' : True,
+                'success': True,
                 'status': serialized_status.data
             }, pk)
+            
+            # send push notification
+            message = f'Order {order.id} confirmed'
+            send_push_notification([order.owner.wallet_hash], message, extra={'order_id': order.id})
+            
             return Response(serialized_status.data, status=status.HTTP_200_OK)
         return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
 

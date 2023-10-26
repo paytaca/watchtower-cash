@@ -6,12 +6,12 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 
 from rampp2p.utils.handler import update_order_status
-# from rampp2p.utils.websocket import send_order_update
-# from main.utils.subscription import remove_subscription
-from main.models import Subscription
-import rampp2p.utils.websocket as websocket
+from rampp2p.utils.notifications import send_push_notification
 from rampp2p.utils.utils import get_order_peer_addresses, get_trading_fees
-from rampp2p.serializers import TransactionSerializer, RecipientSerializer
+import rampp2p.utils.websocket as websocket
+
+from rampp2p.serializers import RecipientSerializer
+from main.models import Subscription
 from rampp2p.models import (
     Transaction, 
     StatusType, 
@@ -85,7 +85,6 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
     )
     return result
 
-# @shared_task(queue='rampp2p__contract_execution')
 def handle_order_status(action: str, contract: Contract, txn: Dict): 
     
     valid = txn.get('valid')
@@ -150,9 +149,11 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
 
         try:
             # Resolve order appeal once order is RELEASED/REFUNDED
+            appeal_exists = False
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
                 appeal = Appeal.objects.filter(order=contract.order.id)
-                if appeal.exists():
+                appeal_exists = appeal.exists()
+                if appeal_exists:
                     appeal = appeal.first()
                     appeal.resolved_at = timezone.now()
                     appeal.save()
@@ -164,6 +165,15 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
                 logger.warn(f'Removing subscription to contract {transaction.contract.address}')
                 remove_subscription(transaction.contract.address, transaction.contract.id)
+
+            # Send push notifications to contract parties
+            party_a = contract.order.owner.wallet_hash
+            party_b = contract.order.ad_snapshot.ad.owner.wallet_hash
+            recipients = [party_a, party_b]
+            if appeal_exists:
+                recipients.append(contract.order.arbiter.wallet_hash)
+            message = f'Order {contract.order.id} funds {status_type.label.lower()}'
+            send_push_notification(recipients, message, extra={ 'order_id': contract.order.id })
 
         except ValidationError as err:
             errors.append(err.args[0])
@@ -184,15 +194,11 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
 
     return result
 
-
-# @shared_task(queue='rampp2p__contract_execution')
 def verify_txn(action, contract, txn: Dict):
     '''
-    Verifies if transaction details (input, outputs, and amounts) satisfy the requisites of its contract.
+    Verifies if transaction details (input, outputs, and amounts) 
+    satisfy the requisites of its contract.
     '''
-
-    # Logs for debugging
-    # logger.warning(f'txn: {txn}')
 
     outputs = []
     error = None

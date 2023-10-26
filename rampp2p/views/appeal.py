@@ -32,6 +32,7 @@ from rampp2p.validators import *
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired, get_trading_fees
 from rampp2p.utils.handler import update_order_status
+from rampp2p.utils.notifications import send_push_notification
 import rampp2p.utils.websocket as websocket
 from authentication.token import TokenAuthentication
 
@@ -199,7 +200,8 @@ class AppealRequest(APIView):
         }
         serialized_appeal = AppealCreateSerializer(data=data)
         if serialized_appeal.is_valid():
-            serialized_appeal = AppealSerializer(serialized_appeal.save())
+            appeal = serialized_appeal.save()
+            serialized_appeal = AppealSerializer(appeal)
             serialized_status = StatusSerializer(data={
                 'status': StatusType.APPEALED,
                 'order': pk
@@ -211,6 +213,19 @@ class AppealRequest(APIView):
                     'status': serialized_status.data
                 }
                 websocket.send_order_update(response_data, pk)
+
+                # send push notifications
+                party_a = appeal.order.ad_snapshot.ad.owner.wallet_hash
+                party_b = appeal.order.owner.wallet_hash
+                arbiter = appeal.order.arbiter.wallet_hash
+                recipients = [arbiter]
+                if wallet_hash == party_a:
+                    recipients.append(party_b)
+                if wallet_hash == party_b:
+                    recipients.append(party_a)
+                message = f'Order {pk} {appeal_type} appealed'
+                send_push_notification(recipients, message, extra={ 'order_id': pk })
+
                 return Response(response_data, status=status.HTTP_200_OK)
             else:
                 return Response({'error': serialized_status.errors}, status=status.HTTP_400_BAD_REQUEST)
