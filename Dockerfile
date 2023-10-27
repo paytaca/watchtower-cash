@@ -1,4 +1,4 @@
-FROM nikolaik/python-nodejs:python3.7-nodejs15-slim
+FROM nikolaik/python-nodejs:python3.8-nodejs15-slim
 
 RUN apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
 RUN apt-get update -y

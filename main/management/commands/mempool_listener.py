@@ -5,7 +5,7 @@ import json
 import time
 import logging
 from json.decoder import JSONDecodeError
-from main.tasks import process_mempool_transaction
+from main.tasks import process_mempool_transaction_throttled
 
 
 LOGGER = logging.getLogger(__name__)
@@ -38,9 +38,8 @@ def on_message(client, userdata, msg):
             tx_hex = None
             if 'tx_hex' in payload.keys():
                 tx_hex = payload['tx_hex']
-            process_mempool_transaction.apply_async(
-                (txid, tx_hex),
-                queue="mempool_processing_general"
+            process_mempool_transaction_throttled.apply_async(
+                (txid, tx_hex)
             )
     except JSONDecodeError:
         pass

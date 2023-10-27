@@ -7,7 +7,7 @@ from main.models import Address
 from main.tasks import rescan_utxos
 from main.utils.queries.bchn import BCHN
 from main.tasks import broadcast_transaction
-from main.tasks import process_mempool_transaction
+from main.tasks import process_mempool_transaction_fast
 
 
 def _get_wallet_hash(tx_hex):
@@ -48,9 +48,8 @@ class BroadcastViewSet(generics.GenericAPIView):
                 txid = result.split(' ')[-1]
                 response['txid'] = txid
                 response['success'] = True
-                process_mempool_transaction.apply_async(
-                    (txid, serializer.data['transaction'], True),
-                    queue="mempool_processing_paytaca"
+                process_mempool_transaction_fast.apply_async(
+                    (txid, serializer.data['transaction'], True)
                 )
                 return Response(response, status=status.HTTP_200_OK)
             else:

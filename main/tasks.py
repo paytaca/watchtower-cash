@@ -7,6 +7,7 @@ from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
+from celery_heimdall import HeimdallTask, RateLimit
 from main.models import *
 from main.utils.address_validator import *
 from main.utils.ipfs import (
@@ -1430,7 +1431,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             except Exception as exception:
                 LOGGER.exception(exception)
 
-        # for older token records 
+        # for older token records
         if (
             txn.token and
             txn.token.tokenid and
@@ -2081,8 +2082,7 @@ def populate_token_addresses():
             obj.save()
 
 
-@shared_task()
-def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
+def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
     tx_check = Transaction.objects.filter(txid=tx_hash)
     if tx_check.exists():
         return
@@ -2250,3 +2250,24 @@ def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
                 parse_tx_wallet_histories(tx_hash, parsed_tx=tx, immediate=True)
             else:
                 parse_tx_wallet_histories.delay(tx_hash, parsed_tx=tx)
+
+@shared_task(
+  base=HeimdallTask,
+  queue='mempool_processing_throttled',
+  heimdall={
+    'rate_limit': RateLimit((20, 60))
+  }
+)
+def process_mempool_transaction_throttled(tx_hash, tx_hex=None, immediate=False):
+    _process_mempool_transaction(tx_hash, tx_hex, immediate)
+
+
+@shared_task(
+  base=HeimdallTask,
+  queue='mempool_processing_fast',
+  heimdall={
+    'rate_limit': RateLimit((100, 60))
+  }
+)
+def process_mempool_transaction_fast(tx_hash, tx_hex=None, immediate=False):
+    _process_mempool_transaction(tx_hash, tx_hex, immediate)
