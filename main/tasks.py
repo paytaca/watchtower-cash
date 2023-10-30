@@ -834,9 +834,16 @@ def get_bch_utxos(self, address):
                 index=index
             )
             if transaction_check.exists():
-                # Mark as unspent, just in case it's already marked spent
+                # Check if transaction wallet matches with address's wallet
+                # Correct this if not matching
+                # Also, Mark as unspent, just in case it's already marked spent
                 # and also update the blockheight
-                transaction_check.update(spent=False, blockheight=block)
+                _txn = transaction_check.first()
+                if _txn.wallet == _txn.address.wallet:
+                    transaction_check.update(spent=False, blockheight=block)
+                else:
+                    transaction_check.update(wallet=_txn.address.wallet, spent=False, blockheight=block)
+                
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
             else:
@@ -932,8 +939,16 @@ def get_slp_utxos(self, address):
                             qs.update(processed=True, transactions_count=count)
                 
                 if transaction_obj.exists():
-                    # Mark as unspent, just in case it's already marked spent
-                    transaction_obj.update(spent=False)
+                    # Check if transaction wallet matches with address's wallet
+                    # Correct this if not matching
+                    # Also, Mark as unspent, just in case it's already marked spent
+                    # and also update the blockheight
+                    _txn = transaction_obj.first()
+                    if _txn.wallet == _txn.address.wallet:
+                        transaction_obj.update(spent=False, blockheight=block)
+                    else:
+                        transaction_obj.update(wallet=_txn.address.wallet, spent=False, blockheight=block)
+                    
                     for obj in transaction_obj:
                         saved_utxo_ids.append(obj.id)
         
