@@ -2104,11 +2104,13 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
     
     LOGGER.info('Processing mempool tx: ' + tx_hash)
     proceed = False
+    tx = None
     if tx_hex:
-        tx = NODE.BCH.build_tx_from_hex(tx_hex)
+        _tx = NODE.BCH.build_tx_from_hex(tx_hex)
 
         output_addresses = []
-        for output in tx['vout']:
+        tx
+        for output in _tx['vout']:
             if 'scriptPubKey' in output.keys():
                 if 'addresses' in output['scriptPubKey']:
                     output_addresses += output['scriptPubKey']['addresses']
@@ -2118,17 +2120,19 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         if output_addresses_check.exists():
             proceed = True
         else:
-            input_txids = [x['txid'] for x in tx['vin'] if 'txid' in x.keys()]
+            input_txids = [x['txid'] for x in _tx['vin'] if 'txid' in x.keys()]
             input_txids_check = Transaction.objects.filter(txid__in=input_txids)
             if input_txids_check.exists():
                 proceed = True
+                tx = NODE.BCH._parse_transaction(_tx)
             else:
                 proceed = False
     else:
         proceed = True
 
     if proceed:
-        tx = NODE.BCH._get_raw_transaction(tx_hash)
+        if not tx:
+            tx = NODE.BCH._get_raw_transaction(tx_hash)
     
         from main.mqtt import client as mqtt_client
 
