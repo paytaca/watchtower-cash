@@ -39,7 +39,7 @@ def on_message(client, userdata, msg):
             if 'tx_hex' in payload.keys():
                 tx_hex = payload['tx_hex']
             process_mempool_transaction_throttled.apply_async(
-                (txid, tx_hex)
+                (txid,)
             )
     except JSONDecodeError:
         pass

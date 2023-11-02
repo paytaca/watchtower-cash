@@ -74,6 +74,9 @@ class BCHN(object):
         txn = self._decode_raw_transaction(tx_hex)
         if not tx_fee:
             tx_fee = txn['size'] * settings.TX_FEE_RATE
+        for i, tx_input in enumerate(txn['vin']):
+            _input_details = self.get_input_details(tx_input['txid'], tx_input['vout'])
+            txn['vin'][i]['value'] = _input_details['value']
         txn['tx_fee'] = tx_fee
         txn['timestamp'] = None
         return txn

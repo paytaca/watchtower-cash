@@ -1734,14 +1734,14 @@ def rebuild_wallet_history(wallet_hash):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, parsed_tx=None, proceed_with_zero_amount=False, immediate=False):
+def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=False, immediate=False):
     history_check = WalletHistory.objects.filter(txid=txid)
     if history_check.exists():
         return
 
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
-    if parsed_tx:
-        bch_tx = parsed_tx
+    if txn_details:
+        bch_tx = NODE.BCH._parse_transaction(txn_details)
     else:
         bch_tx = NODE.BCH.get_transaction(txid)
 
@@ -2105,12 +2105,12 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
     LOGGER.info('Processing mempool tx: ' + tx_hash)
     proceed = False
     tx = None
-    if tx_hex:
-        _tx = NODE.BCH.build_tx_from_hex(tx_hex)
+    if tx_hex and immediate:
+        tx = NODE.BCH.build_tx_from_hex(tx_hex)
 
         output_addresses = []
         tx
-        for output in _tx['vout']:
+        for output in tx['vout']:
             if 'scriptPubKey' in output.keys():
                 if 'addresses' in output['scriptPubKey']:
                     output_addresses += output['scriptPubKey']['addresses']
@@ -2120,11 +2120,11 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         if output_addresses_check.exists():
             proceed = True
         else:
-            input_txids = [x['txid'] for x in _tx['vin'] if 'txid' in x.keys()]
+            input_txids = [x['txid'] for x in tx['vin'] if 'txid' in x.keys()]
             input_txids_check = Transaction.objects.filter(txid__in=input_txids)
             if input_txids_check.exists():
                 proceed = True
-                tx = NODE.BCH._parse_transaction(_tx)
+
             else:
                 proceed = False
     else:
@@ -2133,6 +2133,13 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
     if proceed:
         if not tx:
             tx = NODE.BCH._get_raw_transaction(tx_hash)
+
+        # if passed through the throttled task queue
+        # skip processing if it already has at least 1 confirmation
+        if not immediate:
+            if 'confirmations' in tx.keys():
+                LOGGER.info('Skipped confirmed tx: ' + str(tx_hash))
+                return
     
         from main.mqtt import client as mqtt_client
 
@@ -2250,12 +2257,9 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
                         LOGGER.info(data)
                         
                         try:
-                            if immediate:
-                                client_acknowledgement(obj_id)
-                            else:
-                                client_acknowledgement.delay(obj_id)
+                            client_acknowledgement(obj_id)
                         except:
-                            pass
+                            LOGGER.error('Failed to send client acknowledgement for txid:' + str(tx_hash))
                         
                         LOGGER.info('Sending MQTT message: ' + str(data))
                         msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
@@ -2266,9 +2270,9 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         if save_histories:
             LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
             if immediate:
-                parse_tx_wallet_histories(tx_hash, parsed_tx=tx, immediate=True)
+                parse_tx_wallet_histories(tx_hash, txn_details=tx, immediate=True)
             else:
-                parse_tx_wallet_histories.delay(tx_hash, parsed_tx=tx)
+                parse_tx_wallet_histories.delay(tx_hash, txn_details=tx)
 
 @shared_task(
   base=HeimdallTask,
