@@ -22,7 +22,15 @@ class BCHN(object):
         }
 
     def get_latest_block(self):
-        return self.rpc_connection.getblockcount()
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                return self.rpc_connection.getblockcount()
+            except Exception as exception:
+                retries += 1
+                if retries >= self.max_retries:
+                    raise exception
+                time.sleep(1)
 
     def get_block_chain_info(self):
         return self.rpc_connection.getblockchaininfo()
