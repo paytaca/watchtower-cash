@@ -31,7 +31,7 @@ class Ad(models.Model):
     fixed_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     floating_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    # trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
@@ -39,7 +39,6 @@ class Ad(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
-    # is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
@@ -68,7 +67,7 @@ class AdSnapshot(models.Model):
     floating_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     market_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    # trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots') # TODO: payment_method snapshots
