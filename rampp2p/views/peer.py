@@ -50,8 +50,9 @@ class PeerDetailView(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         if wallet_hash is not None:
             queryset = queryset.filter(wallet_hash=wallet_hash)
+        queryset = queryset.first()
 
-        serializer = PeerSerializer(queryset, many=True)
+        serializer = PeerSerializer(queryset)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def put(self, request):

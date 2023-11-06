@@ -16,6 +16,7 @@ class PeerProfileSerializer(serializers.ModelSerializer):
 class PeerSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
 
     class Meta:
         model = Peer
@@ -27,9 +28,13 @@ class PeerSerializer(serializers.ModelSerializer):
             'is_disabled',
             'trade_count',
             'completion_rate',
+            'rating',
             'created_at',
             'modified_at'
         ]
+
+    def get_rating(self, instance: Peer):
+        return instance.average_rating()
     
     def get_trade_count(self, instance: Peer):
         # Count the number of trades (orders) related to ad owner
