@@ -164,7 +164,7 @@ class OrderListCreate(APIView):
             payment_method_ids = request.data.get('payment_methods', [])
 
             crypto_amount = Decimal(crypto_amount)
-            if crypto_amount < ad.trade_floor or crypto_amount > ad.trade_amount:
+            if crypto_amount < ad.trade_floor or crypto_amount > ad.trade_amount or crypto_amount > ad.trade_ceiling:
                 raise ValidationError('crypto_amount exceeds trade limits')
 
             if ad.trade_type == TradeType.BUY:
@@ -194,6 +194,7 @@ class OrderListCreate(APIView):
             floating_price = ad.floating_price,
             market_price = market_price.price,
             trade_floor = ad.trade_floor,
+            trade_ceiling = ad.trade_ceiling,
             trade_amount = ad.trade_amount,
             time_duration_choice = ad.time_duration_choice,
         )
