@@ -40,7 +40,7 @@ class PeerSerializer(serializers.ModelSerializer):
         # Count the number of trades (orders) related to ad owner
         order_ad_owner = Q(ad_snapshot__ad__owner__id=instance.id)
         order_owner = Q(owner__id=instance.id)
-        trade_count = Order.objects.filter(order_ad_owner or order_owner).count()
+        trade_count = Order.objects.filter(Q(order_ad_owner) | Q(order_owner)).count()
         return trade_count
 
     def get_completion_rate(self, instance: Peer):
@@ -68,7 +68,7 @@ class PeerSerializer(serializers.ModelSerializer):
         # Retrieve the latest statuses for each order
         order_ad_owner = Q(ad_snapshot__ad__owner__id=owner_id)
         order_owner = Q(owner__id=owner_id)
-        user_orders = Order.objects.filter(order_ad_owner or order_owner).annotate(
+        user_orders = Order.objects.filter(Q(order_ad_owner) | Q(order_owner)).annotate(
             latest_status_id = Subquery(latest_status_subquery)
         )
 
