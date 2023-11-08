@@ -5,7 +5,12 @@ import json
 import time
 import logging
 from json.decoder import JSONDecodeError
-from main.tasks import process_mempool_transaction_throttled
+from main.models import Address
+from main.tasks import (
+    process_mempool_transaction_fast,
+    process_mempool_transaction_throttled
+)
+from main.utils.queries.bchn import BCHN
 
 
 LOGGER = logging.getLogger(__name__)
@@ -29,18 +34,42 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("mempool")
 
 
+def _addresses_subscribed(tx_hex):
+    bchn = BCHN()
+    subscribed = False
+    tx_addresses = []
+    tx = bchn._decode_raw_transaction(tx_hex)
+    for tx_in in tx['vin']:
+        if 'address' in tx_in.keys():
+            tx_addresses.append(tx_in['address'])
+    for tx_out in tx['vout']:
+        _addrs = tx_out.get('scriptPubKey').get('addresses')
+        if _addrs:
+            tx_addresses += _addrs
+    addrs_check = Address.objects.filter(address__in=tx_addresses)
+    if addrs_check.exists():
+        subscribed = True
+    return subscribed
+
+
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload)
         if 'txid' in payload.keys():
             txid = payload['txid']
-            tx_hex = None
+            subscribed = False
             if 'tx_hex' in payload.keys():
                 tx_hex = payload['tx_hex']
-            process_mempool_transaction_throttled.apply_async(
-                (txid,)
-            )
+                subscribed = _addresses_subscribed(tx_hex)
+            if subscribed:
+                process_mempool_transaction_fast.apply_async(
+                    (txid, tx_hex, True)
+                )
+            else:
+                process_mempool_transaction_throttled.apply_async(
+                    (txid,)
+                )
     except JSONDecodeError:
         pass
 
