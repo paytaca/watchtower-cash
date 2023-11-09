@@ -35,7 +35,6 @@ def execute_subprocess(command):
 
     stderr = stderr.decode("utf-8")
     stdout = stdout.decode('utf-8')
-    # logger.warning(f'stdout: {stdout}, stderr: {stderr}')
 
     if stdout is not None:
         # Define the pattern for matching control characters
@@ -47,7 +46,6 @@ def execute_subprocess(command):
         stdout = json.loads(clean_stdout)
     
     response = {'result': stdout, 'stderr': stderr} 
-    # logger.warning(f'response: {response}')
 
     return response    
 
@@ -91,7 +89,6 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
     error = txn.get('error')
     txid = txn.get('details').get('txid')
     outputs = txn.get('details').get('outputs')
-    details = txn.get('details')
 
     errors = []
     if error is not None:
@@ -133,7 +130,6 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                 if recipient_serializer.is_valid():
                     recipient_serializer = RecipientSerializer(recipient_serializer.save())
                 else:
-                    # logger.error(f'recipient_serializer.errors: {recipient_serializer.errors}')
                     result["errors"] = errors
                     result["success"] = False
                     return result
@@ -190,8 +186,6 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             transaction.verifying = False
             transaction.save()
     
-    # logger.warning(f'result: {result}')
-
     return result
 
 def verify_txn(action, contract, txn: Dict):
@@ -302,8 +296,6 @@ def verify_txn(action, contract, txn: Dict):
                 if actual_value != arbitration_fee:
                     valid = False
                     error = 'incorrect arbiter output value'
-                    # logger.warning(f'actual_value: {actual_value} | arbitration_fee: {arbitration_fee}')
-                    # logger.warning(f'[validate_txn] error: {error}')
                     break
                 arbiter_exists = True
             
@@ -313,8 +305,6 @@ def verify_txn(action, contract, txn: Dict):
                 if actual_value != service_fee:
                     valid = False
                     error = 'incorrect servicer output value'
-                    # logger.warning(f'actual_value: {actual_value} | service_fee: {service_fee}')
-                    # logger.warning(f'[validate_txn] error: {error}')
                     break
                 servicer_exists = True
 
@@ -324,10 +314,6 @@ def verify_txn(action, contract, txn: Dict):
                 if address == buyer_addr:
                     if actual_value != expected_value:
                         error = 'incorrect buyer output value'
-                        # logger.warning(f'typeof actual_value: {type(actual_value)}')
-                        # logger.warning(f'typeof expected_value: {type(expected_value)}')
-                        # logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
-                        # logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break
                     buyer_exists = True
@@ -338,8 +324,6 @@ def verify_txn(action, contract, txn: Dict):
                 if address == seller_addr:
                     if actual_value != expected_value:
                         error = 'incorrect seller output value'
-                        # logger.warning(f'actual_value: {actual_value} | expected_value: {expected_value}')
-                        # logger.warning(f'[validate_txn] error: {error}')
                         valid = False
                         break
                     seller_exists = True
