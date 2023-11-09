@@ -47,13 +47,13 @@ class FeedbackSerializer(serializers.ModelSerializer):
   def get_from_peer(self, instance: Feedback):
     return {
       'id':       instance.from_peer.id,
-      'nickname': instance.from_peer.nickname
+      'name': instance.from_peer.name
     }
   
   def get_to_peer(self, instance: Feedback):
      return {
       'id':       instance.to_peer.id,
-      'nickname': instance.to_peer.nickname
+      'name': instance.to_peer.name
     }
 
 class ArbiterFeedbackCreateSerializer(serializers.ModelSerializer):
@@ -92,7 +92,7 @@ class ArbiterFeedbackSerializer(serializers.ModelSerializer):
     def get_peer(self, instance: ArbiterFeedback):
       return {
         'id': instance.from_peer.id,
-        'nickname': instance.from_peer.nickname
+        'name': instance.from_peer.name
       }
     
     def get_arbiter(self, instance: ArbiterFeedback):

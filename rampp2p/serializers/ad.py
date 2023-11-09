@@ -51,7 +51,8 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
         return instance.market_price * (instance.floating_price/100)
 
 class AdListSerializer(serializers.ModelSerializer):
-    owner = serializers.SlugRelatedField(slug_field="nickname", queryset=Peer.objects.all())
+    # owner = serializers.SlugRelatedField(slug_field="name", queryset=Peer.objects.all())
+    owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     price = serializers.SerializerMethodField()
@@ -81,6 +82,12 @@ class AdListSerializer(serializers.ModelSerializer):
             'created_at',
             'modified_at'
         ]
+    
+    def get_owner(self, instance: Ad):
+        return {
+            'name': instance.owner.name,
+            'rating':  instance.owner.average_rating()
+        }
     
     def get_is_owned(self, instance: Ad):
         wallet_hash = ''

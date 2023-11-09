@@ -2,29 +2,45 @@ from rest_framework import serializers
 from django.db.models import Q, Subquery, OuterRef, F
 from rampp2p.models import Peer, Order, Status, StatusType
 
+class PeerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Peer
+        fields = [
+            'id',
+            'name',
+            'public_key',
+            'address',
+            'is_disabled'
+        ]
+
 class PeerSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
 
     class Meta:
         model = Peer
         fields = [
             'id',
-            'nickname',
+            'name',
             'public_key',
             'address',
             'is_disabled',
             'trade_count',
             'completion_rate',
+            'rating',
             'created_at',
             'modified_at'
         ]
+
+    def get_rating(self, instance: Peer):
+        return instance.average_rating()
     
     def get_trade_count(self, instance: Peer):
         # Count the number of trades (orders) related to ad owner
         order_ad_owner = Q(ad_snapshot__ad__owner__id=instance.id)
         order_owner = Q(owner__id=instance.id)
-        trade_count = Order.objects.filter(order_ad_owner or order_owner).count()
+        trade_count = Order.objects.filter(Q(order_ad_owner) | Q(order_owner)).count()
         return trade_count
 
     def get_completion_rate(self, instance: Peer):
@@ -52,7 +68,7 @@ class PeerSerializer(serializers.ModelSerializer):
         # Retrieve the latest statuses for each order
         order_ad_owner = Q(ad_snapshot__ad__owner__id=owner_id)
         order_owner = Q(owner__id=owner_id)
-        user_orders = Order.objects.filter(order_ad_owner or order_owner).annotate(
+        user_orders = Order.objects.filter(Q(order_ad_owner) | Q(order_owner)).annotate(
             latest_status_id = Subquery(latest_status_subquery)
         )
 
@@ -64,7 +80,7 @@ class PeerCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Peer
         fields = [
-            'nickname',
+            'name',
             'wallet_hash',
             'public_key',
             'address'
@@ -74,7 +90,7 @@ class PeerUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Peer
         fields = [
-           'nickname',
+           'name',
         #    'public_key',
         #    'address',
         ]

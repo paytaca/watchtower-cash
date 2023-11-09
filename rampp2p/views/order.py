@@ -9,9 +9,12 @@ from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
 
+from main.utils.subscription import save_subscription
 from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
-from rampp2p.utils.websocket import send_order_update
+import rampp2p.utils.websocket as websocket
+from rampp2p.utils.notifications import send_push_notification
+
 from rampp2p.validators import *
 from rampp2p.serializers import (
     OrderSerializer, 
@@ -160,6 +163,10 @@ class OrderListCreate(APIView):
             owner = Peer.objects.get(wallet_hash=wallet_hash)
             payment_method_ids = request.data.get('payment_methods', [])
 
+            crypto_amount = Decimal(crypto_amount)
+            if crypto_amount < ad.trade_floor or crypto_amount > ad.trade_amount or crypto_amount > ad.trade_ceiling:
+                raise ValidationError('crypto_amount exceeds trade limits')
+
             if ad.trade_type == TradeType.BUY:
                 if len(payment_method_ids) == 0:
                     raise ValidationError('payment_methods field is required')            
@@ -221,10 +228,6 @@ class OrderListCreate(APIView):
         
         # save order and mark it with status=SUBMITTED
         order = serialized_order.save()
-        # order_status = Status.objects.create(
-        #     status=StatusType.SUBMITTED,
-        #     order=Order.objects.get(pk=order.id)
-        # )
         serialized_status = StatusSerializer(
             data={
                 'status': StatusType.SUBMITTED,
@@ -234,17 +237,21 @@ class OrderListCreate(APIView):
 
         if serialized_status.is_valid():
             order_status = serialized_status.save()
-            serialized_status = StatusSerializer(order_status)
+            serialized_status = StatusSerializer(order_status).data
         else:
             return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
 
         context = { 'wallet_hash': wallet_hash }
-        serializer = OrderSerializer(order, context=context)        
+        serialized_order = OrderSerializer(order, context=context).data    
         response = {
             'success': True,
-            'order': serializer.data,
-            'status': serialized_status.data
+            'order': serialized_order,
+            'status': serialized_status
         }
+
+        # send push notification
+        extra = {'order_id': serialized_order['id']}
+        send_push_notification([ad.owner.wallet_hash], "Received new order", extra=extra)
     
         return Response(response, status=status.HTTP_201_CREATED)
     
@@ -380,8 +387,8 @@ class ConfirmOrder(APIView):
     authentication_classes = [TokenAuthentication]
 
     '''
-        ConfirmOrder creates a status=CONFIRMED for an order. 
-        This is callable only by the order's ad owner.
+    ConfirmOrder creates a status=CONFIRMED for an order. 
+    This is callable only by the order's ad owner.
     '''
     def post(self, request, pk):
         wallet_hash = request.user.wallet_hash
@@ -399,30 +406,35 @@ class ConfirmOrder(APIView):
             trade_amount = order.ad_snapshot.ad.trade_amount - order.crypto_amount
             if trade_amount < 0:
                 raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
-            
+        
             # Update Ad trade_amount
             ad = Ad.objects.get(pk=order.ad_snapshot.ad.id)
             ad.trade_amount = trade_amount
             ad.save()
-                
-            # create CONFIRMED status for order
-            status_serializer = StatusSerializer(data={
-                'status': StatusType.CONFIRMED,
-                'order': pk
-            })
 
-            if status_serializer.is_valid():
-                status_serializer = StatusSerializer(status_serializer.save())
-            else: 
-                raise ValidationError(f"Encountered error saving status for order#{pk}")
-
-            # notify order update subscribers
-            send_order_update(json.dumps(status_serializer.data), pk)
-            
         except (ValidationError, IntegrityError, Order.DoesNotExist, Ad.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(status_serializer.data, status=status.HTTP_200_OK)  
+                
+        serialized_status = StatusSerializer(data={
+            'status': StatusType.CONFIRMED,
+            'order': pk
+        })
+
+        if serialized_status.is_valid():
+            serialized_status = StatusSerializer(serialized_status.save())
+            
+            # send websocket notification
+            websocket.send_order_update({
+                'success': True,
+                'status': serialized_status.data
+            }, pk)
+            
+            # send push notification
+            message = f'Order {order.id} confirmed'
+            send_push_notification([order.owner.wallet_hash], message, extra={'order_id': order.id})
+            
+            return Response(serialized_status.data, status=status.HTTP_200_OK)
+        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -456,10 +468,6 @@ class PendingEscrowOrder(APIView):
             validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
             validate_status_progression(StatusType.ESCROW_PENDING, pk)
 
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid is required')
-
             contract = Contract.objects.get(order__id=pk)
             
             # create ESCROW_PENDING status for order
@@ -474,30 +482,28 @@ class PendingEscrowOrder(APIView):
                 raise ValidationError(f"Encountered error saving status for order#{pk}")
 
             # notify order update subscribers
-            result = {
+            websocket_msg = {
                 'success' : True,
-                'txid': txid,
                 'status': status_serializer.data
             }
 
             transaction, _ = Transaction.objects.get_or_create(
                 contract=contract,
                 action=Transaction.ActionType.ESCROW,
-                txid=txid
             )
-            result['transaction'] = TransactionSerializer(transaction).data
+            websocket_msg['transaction'] = TransactionSerializer(transaction).data
 
-            # Validate the transaction
-            validate_transaction(
-                txid=transaction.txid,
-                action=Transaction.ActionType.ESCROW,
-                contract_id=contract.id
-            )
-            send_order_update(result, pk)
+            # Subscribe to contract address
+            created = save_subscription(contract.address, contract.id)
+            if created: logger.warn(f'Subscribed to contract {contract.address}')
+            websocket_msg['subscribed'] = created
+            
+            websocket.send_order_update(websocket_msg, pk)
+            response = websocket_msg
             
         except (ValidationError, IntegrityError, Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(result, status=status.HTTP_200_OK)  
+        return Response(response, status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -553,6 +559,7 @@ class VerifyEscrow(APIView):
                 action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id
             )
+
         except (ValidationError, Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as err:
@@ -617,21 +624,18 @@ class CryptoBuyerConfirmPayment(APIView):
             'order': pk
         })
 
-        if not serialized_status.is_valid():
-            return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        serialized_status = StatusReadSerializer(serialized_status.save())
-        result = {
-            'success' : True,
-            'status': serialized_status.data
-        }
-        
-        send_order_update(result, pk)
-        response = {
-            "order": serialized_order.data,
-            "status": serialized_status.data
-        }
-        return Response(response, status=status.HTTP_200_OK)    
+        if serialized_status.is_valid():            
+            serialized_status = StatusReadSerializer(serialized_status.save())
+            websocket.send_order_update({
+                'success' : True,
+                'status': serialized_status.data
+            }, pk)
+            response = {
+                "order": serialized_order.data,
+                "status": serialized_status.data
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def validate_permissions(self, wallet_hash, order):
         '''
@@ -671,11 +675,17 @@ class CryptoSellerConfirmPayment(APIView):
 
         if serialized_status.is_valid():
             serialized_status = StatusReadSerializer(serialized_status.save())
-            result = {
+
+            contract = Contract.objects.get(order__id=pk)
+            _, _ = Transaction.objects.get_or_create(
+                contract=contract,
+                action=Transaction.ActionType.RELEASE,
+            )
+
+            websocket.send_order_update({
                 'success' : True,
                 'status': serialized_status.data
-            }
-            send_order_update(result, pk)
+            }, pk)
             return Response(serialized_status.data, status=status.HTTP_200_OK)        
         return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
   
@@ -717,6 +727,7 @@ class CancelOrder(APIView):
         # Update Ad trade_amount if order was CONFIRMED
         order = Order.objects.get(pk=pk)
         latest_status = get_latest_status(order.id)
+
         # Update Ad trade_amount
         if latest_status.status == StatusType.CONFIRMED:
             trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
@@ -731,8 +742,13 @@ class CancelOrder(APIView):
         })
 
         if serializer.is_valid():
-            stat = StatusSerializer(serializer.save())
-            return Response(stat.data, status=status.HTTP_200_OK)        
+            serialized_status = StatusSerializer(serializer.save())
+            websocket_msg = {
+                'success' : True,
+                'status': serialized_status.data
+            }
+            websocket.send_order_update(websocket_msg, pk)
+            return Response(serialized_status.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def validate_permissions(self, wallet_hash, pk):

@@ -51,25 +51,11 @@ class ArbiterFeedbackListCreate(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
-
-        order_id = request.data.get('order_id')
-        if order_id is None:
-            return Response({'error': 'order_id field may not be blank'}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
-            # Validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.FEEDBACK_ARBITER_CREATE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
-            
-            # Validate if user is allowed to feedback this order
-            from_peer, arbiter, order = self.validate_permissions(wallet_hash, order_id)
-        except (ValidationError, Peer.DoesNotExist, Order.DoesNotExist) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
+            order_id = request.data.get('order_id')
+            from_peer, arbiter, order = self.validate_permissions(request.user.wallet_hash, order_id)
             self.validate_limit(from_peer, order)
-        except AssertionError as err:
+        except (AssertionError, Peer.DoesNotExist, Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # TODO: block feedback if order is not yet completed
@@ -146,32 +132,17 @@ class PeerFeedbackListCreate(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
-        
-        order_id = request.data.get('order_id')
-        if order_id is None:
-            return Response({'error': 'order_id field may not be blank'}, status=status.HTTP_400_BAD_REQUEST)
-        
-            
         try:
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.FEEDBACK_PEER_CREATE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message)
+            order_id = request.data.get('order_id')
+            from_peer, to_peer, order = self.validate_permissions(request.user.wallet_hash, order_id)
 
-            # validate permissions
-            from_peer, to_peer, order = self.validate_permissions(wallet_hash, order_id)
-
-        except (ValidationError, Peer.DoesNotExist, Order.DoesNotExist) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
             data = request.data.copy()
             data['from_peer'] = from_peer.id
             data['to_peer'] = to_peer.id
             data['order'] = order.id
             self.validate_limit(data['from_peer'], data['to_peer'], data['order'])
-        except AssertionError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        except (AssertionError, Peer.DoesNotExist, Order.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_404_BAD_REQUEST)
             
         serializer = FeedbackCreateSerializer(data=data)
         if serializer.is_valid():

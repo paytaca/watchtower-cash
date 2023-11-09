@@ -1,20 +1,19 @@
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.http import Http404
-from django.core.exceptions import ValidationError
 
 from rampp2p.models import Peer, Arbiter
 from rampp2p.serializers import (
     PeerSerializer, 
     PeerCreateSerializer,
-    PeerUpdateSerializer
+    PeerUpdateSerializer,
+    PeerProfileSerializer,
+    ArbiterProfileSerializer
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
 from authentication.token import TokenAuthentication
-from rampp2p.exceptions import InvalidSignature
 
 class PeerCreateView(APIView):
     def post(self, request):
@@ -51,8 +50,9 @@ class PeerDetailView(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         if wallet_hash is not None:
             queryset = queryset.filter(wallet_hash=wallet_hash)
+        queryset = queryset.first()
 
-        serializer = PeerSerializer(queryset, many=True)
+        serializer = PeerSerializer(queryset)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def put(self, request):
@@ -64,3 +64,27 @@ class PeerDetailView(APIView):
             serializer = PeerSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class UserProfileView(APIView):
+    def get(self, request):
+        wallet_hash = request.headers.get('wallet_hash')
+        if wallet_hash is None:
+            return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = None
+        is_arbiter = False
+        try:
+            peer = Peer.objects.get(wallet_hash=wallet_hash)
+            user = PeerProfileSerializer(peer).data
+        except Peer.DoesNotExist:
+            arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
+            if (arbiter.exists()):
+                is_arbiter = True
+                user = ArbiterProfileSerializer(arbiter.first()).data
+        
+        response = {
+            "is_arbiter": is_arbiter,
+            "user": user
+        }
+
+        return Response(response, status.HTTP_200_OK)

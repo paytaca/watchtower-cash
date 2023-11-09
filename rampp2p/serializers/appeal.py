@@ -45,7 +45,7 @@ class AppealSerializer(AppealCreateSerializer):
     def get_owner(self, instance: Appeal):
         return {
             'id': instance.owner.id,
-            'nickname': instance.owner.nickname
+            'name': instance.owner.name
         }
 
     def get_type(self, instance: Appeal):
