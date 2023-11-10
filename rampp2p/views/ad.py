@@ -41,11 +41,12 @@ class AdListCreate(APIView):
         owner_id = request.query_params.get('owner_id')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
-        price_type = request.query_params.get('price_type')
+        price_types = request.query_params.getlist('price_types')
         payment_types = request.query_params.getlist('payment_types')
         time_limits = request.query_params.getlist('time_limits')
         price_order = request.query_params.get('price_order')
         owned = request.query_params.get('owned', False)
+        owned = owned == 'true'
 
         try:
             limit = int(request.query_params.get('limit', 0))
@@ -75,8 +76,8 @@ class AdListCreate(APIView):
         if trade_type is not None:
             queryset = queryset.filter(Q(trade_type=trade_type))
         
-        if price_type is not None:
-            queryset = queryset.filter(Q(price_type=price_type))
+        if len(price_types) > 0:
+            queryset = queryset.filter(Q(price_type__in=price_types))
         
         if len(payment_types) > 0:
             payment_types = list(map(int, payment_types))
@@ -102,13 +103,13 @@ class AdListCreate(APIView):
 
         # Order ads by price (if store listings) or created_at (if owned ads)
         # Default order: ascending, descending if trade type is BUY, 
-        # `descending_order` filter overrides this order
+        # `price_order` filter overrides this order
         if not owned:            
-            descending = False
-            if trade_type == TradeType.BUY: descending = True
+            order_field = 'price'
+            if trade_type == TradeType.BUY: 
+                order_field = '-price'
             if price_order is not None:
-                descending = price_order == 'descending'
-            order_field = '-price' if descending else 'price'
+                order_field = 'price' if price_order == 'ascending' else '-price'
             queryset = queryset.order_by(order_field, 'created_at')
         else:
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
