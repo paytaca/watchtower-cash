@@ -1,10 +1,14 @@
-from django.db import IntegrityError
-from rest_framework.views import APIView
 from rest_framework import status
+from rest_framework.views import APIView
 from rest_framework.response import Response
+
+from django.db import IntegrityError
 from django.core.exceptions import ValidationError
+
 import math
 import json
+
+from authentication.token import TokenAuthentication
 
 from rampp2p.models import (
     TradeType,
@@ -18,7 +22,6 @@ from rampp2p.models import (
     Arbiter,
     Status
 )
-
 from rampp2p.serializers import (
     StatusSerializer,
     AppealSerializer,
@@ -34,7 +37,6 @@ from rampp2p.utils.utils import is_order_expired, get_trading_fees
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
 import rampp2p.utils.websocket as websocket
-from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)

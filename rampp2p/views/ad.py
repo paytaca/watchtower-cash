@@ -1,14 +1,15 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
 from django.db.models import Q
-from django.utils import timezone
 from django.http import Http404
 from django.core.exceptions import ValidationError
-import math
+from django.db.models import F, ExpressionWrapper, DecimalField, Case, When
 
-from rampp2p.viewcodes import ViewCode
-from rampp2p.utils.signature import verify_signature, get_verification_headers
+import math
+from authentication.token import TokenAuthentication
+
 from rampp2p.serializers import (
     AdListSerializer, 
     AdDetailSerializer,
@@ -26,15 +27,6 @@ from rampp2p.models import (
     PriceType,
     MarketRate
 )
-from django.db.models import (
-    F, 
-    ExpressionWrapper, 
-    DecimalField, 
-    Case, 
-    When
-)
-
-from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
@@ -50,7 +42,7 @@ class AdListCreate(APIView):
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
         price_type = request.query_params.get('price_type')
-        payment_methods = request.query_params.getlist('payment_methods')
+        payment_types = request.query_params.getlist('payment_types')
         time_limits = request.query_params.getlist('time_limits')
         price_order = request.query_params.get('price_order')
         owned = request.query_params.get('owned', False)
@@ -86,9 +78,9 @@ class AdListCreate(APIView):
         if price_type is not None:
             queryset = queryset.filter(Q(price_type=price_type))
         
-        if len(payment_methods) > 0:
-            payment_methods = list(map(int, payment_methods))
-            queryset = queryset.filter(payment_methods__payment_type__id__in=payment_methods).distinct()
+        if len(payment_types) > 0:
+            payment_types = list(map(int, payment_types))
+            queryset = queryset.filter(payment_methods__payment_type__id__in=payment_types).distinct()
 
         if len(time_limits) > 0:
             time_limits = list(map(int, time_limits))

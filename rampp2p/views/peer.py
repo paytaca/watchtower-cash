@@ -1,6 +1,8 @@
-from rest_framework import generics, status
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
+from authentication.token import TokenAuthentication
 
 from rampp2p.models import Peer, Arbiter
 from rampp2p.serializers import (
@@ -12,8 +14,6 @@ from rampp2p.serializers import (
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
-
-from authentication.token import TokenAuthentication
 
 class PeerCreateView(APIView):
     def post(self, request):

@@ -1,12 +1,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+
 from django.http import Http404
+
+from authentication.token import TokenAuthentication
 
 from rampp2p.models import FiatCurrency, CryptoCurrency
 from rampp2p.serializers import FiatCurrencySerializer, CryptoCurrencySerializer
-
-from authentication.token import TokenAuthentication
 
 class FiatCurrencyList(APIView):
     authentication_classes = [TokenAuthentication]

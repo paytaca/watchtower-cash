@@ -1,10 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+
+from main.utils.subscription import save_subscription
+
 from rampp2p.models import MarketRate
 from rampp2p.serializers import MarketRateSerializer
-from main.utils.subscription import save_subscription, remove_subscription
-
 
 import logging
 logger = logging.getLogger(__name__)
