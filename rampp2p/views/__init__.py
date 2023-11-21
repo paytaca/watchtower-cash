@@ -1,7 +1,6 @@
 from .ad import *
 from .appeal import *
 from .contract import *
-from .conversation import *
 from .currency import *
 from .feedback import *
 from .order import *

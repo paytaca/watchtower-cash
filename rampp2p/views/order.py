@@ -1,20 +1,23 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
 from django.http import Http404
-from django.core.exceptions import ValidationError
-from django.db.models import Q
 from django.db import IntegrityError
+from django.db.models import Q, OuterRef, Subquery
+from django.core.exceptions import ValidationError
+
+import math
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
-import math
 
+from authentication.token import TokenAuthentication
 from main.utils.subscription import save_subscription
+
+import rampp2p.utils.websocket as websocket
 from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
-import rampp2p.utils.websocket as websocket
 from rampp2p.utils.notifications import send_push_notification
-
 from rampp2p.validators import *
 from rampp2p.serializers import (
     OrderSerializer, 
@@ -41,16 +44,8 @@ from rampp2p.models import (
     TradeType
 )
 
-import json
 import logging
 logger = logging.getLogger(__name__)
-
-from django.db.models import (
-    OuterRef,
-    Subquery
-)
-
-from authentication.token import TokenAuthentication
 
 class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]

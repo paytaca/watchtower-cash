@@ -1,17 +1,17 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
+from django.conf import settings
 
-from rampp2p.models import Arbiter, Peer
-from rampp2p.serializers import ArbiterWriteSerializer, ArbiterReadSerializer
+from authentication.token import TokenAuthentication
 
 from rampp2p.viewcodes import ViewCode
+from rampp2p.models import Arbiter, Peer
+from rampp2p.serializers import ArbiterWriteSerializer, ArbiterReadSerializer
 from rampp2p.utils.signature import verify_signature, get_verification_headers
-
-from django.conf import settings
-from authentication.token import TokenAuthentication
 
 class ArbiterListCreate(APIView):
     authentication_classes = [TokenAuthentication]

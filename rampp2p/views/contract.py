@@ -1,14 +1,14 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
 from django.core.exceptions import ValidationError
 from django.http import Http404
 
-from rampp2p.utils.signature import verify_signature, get_verification_headers
-from rampp2p.utils.contract import create_contract
-from rampp2p.viewcodes import ViewCode
-from rampp2p.validators import *
+from authentication.token import TokenAuthentication
 
+from rampp2p.utils.contract import create_contract
+from rampp2p.validators import *
 from rampp2p.models import (
     StatusType,
     Order,
@@ -19,15 +19,12 @@ from rampp2p.models import (
     Arbiter,
     TradeType
 )
-
 from rampp2p.serializers import (
     ContractSerializer, 
     ContractDetailSerializer,
     TransactionSerializer, 
     RecipientSerializer
 )
-
-from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)

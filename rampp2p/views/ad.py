@@ -1,14 +1,15 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
 from django.db.models import Q
-from django.utils import timezone
 from django.http import Http404
 from django.core.exceptions import ValidationError
-import math
+from django.db.models import F, ExpressionWrapper, DecimalField, Case, When
 
-from rampp2p.viewcodes import ViewCode
-from rampp2p.utils.signature import verify_signature, get_verification_headers
+import math
+from authentication.token import TokenAuthentication
+
 from rampp2p.serializers import (
     AdListSerializer, 
     AdDetailSerializer,
@@ -26,15 +27,6 @@ from rampp2p.models import (
     PriceType,
     MarketRate
 )
-from django.db.models import (
-    F, 
-    ExpressionWrapper, 
-    DecimalField, 
-    Case, 
-    When
-)
-
-from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
@@ -49,7 +41,12 @@ class AdListCreate(APIView):
         owner_id = request.query_params.get('owner_id')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
+        price_types = request.query_params.getlist('price_types')
+        payment_types = request.query_params.getlist('payment_types')
+        time_limits = request.query_params.getlist('time_limits')
+        price_order = request.query_params.get('price_order')
         owned = request.query_params.get('owned', False)
+        owned = owned == 'true'
 
         try:
             limit = int(request.query_params.get('limit', 0))
@@ -63,13 +60,13 @@ class AdListCreate(APIView):
         if page < 1:
             return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # If not fetching owned ads: 
         if not owned:
-            # Fetch only public ads and those with trade amount > 0
+            # If not fetching owned ads: fetch only public ads and those with trade amount > 0
             queryset = queryset.filter(Q(is_public=True) & Q(trade_amount__gt=0))
             if currency is None:
                 return Response({'error': 'currency is required'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # filters
         if owner_id is not None:
             queryset = queryset.filter(owner_id=owner_id)
 
@@ -78,6 +75,17 @@ class AdListCreate(APIView):
         
         if trade_type is not None:
             queryset = queryset.filter(Q(trade_type=trade_type))
+        
+        if len(price_types) > 0:
+            queryset = queryset.filter(Q(price_type__in=price_types))
+        
+        if len(payment_types) > 0:
+            payment_types = list(map(int, payment_types))
+            queryset = queryset.filter(payment_methods__payment_type__id__in=payment_types).distinct()
+
+        if len(time_limits) > 0:
+            time_limits = list(map(int, time_limits))
+            queryset = queryset.filter(time_duration_choice__in=time_limits).distinct()
 
         market_rate = MarketRate.objects.filter(currency=currency)
 
@@ -93,14 +101,16 @@ class AdListCreate(APIView):
             )
         )
 
-        # Order ads by price (store listings) or created_at (owned ads)
-        if not owned:
-            # Default order: ascending
-            field = 'price'
-            # If trade type is BUY: descending
-            if trade_type == TradeType.BUY:
-                field = '-price'
-            queryset = queryset.order_by(field, 'created_at')
+        # Order ads by price (if store listings) or created_at (if owned ads)
+        # Default order: ascending, descending if trade type is BUY, 
+        # `price_order` filter overrides this order
+        if not owned:            
+            order_field = 'price'
+            if trade_type == TradeType.BUY: 
+                order_field = '-price'
+            if price_order is not None:
+                order_field = 'price' if price_order == 'ascending' else '-price'
+            queryset = queryset.order_by(order_field, 'created_at')
         else:
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
 
@@ -123,12 +133,6 @@ class AdListCreate(APIView):
 
     def post(self, request):
         try:
-            # # validate signature
-            # signature, timestamp, wallet_hash = get_verification_headers(request)
-            # message = ViewCode.AD_CREATE.value + '::' + timestamp
-            # verify_signature(wallet_hash, signature, message)
-
-            # Validate that user owns the payment methods
             wallet_hash = request.headers.get('wallet_hash')
             payment_methods = request.data.get('payment_methods')
             validate_payment_methods_ownership(wallet_hash, payment_methods)
@@ -173,43 +177,21 @@ class AdDetail(APIView):
 
     def get(self, request, pk):
         ad = self.get_object(pk)
-        wallet_hash = request.headers.get('wallet_hash')
-        # if (wallet_hash is None):
-        #     return Response({'error': 'wallet_hash is None'}, status=status.HTTP_403_FORBIDDEN)
-        # try:
-        #     # validate signature
-        #     signature, timestamp, wallet_hash = get_verification_headers(request)
-        #     message = ViewCode.AD_GET.value + '::' + timestamp
-        #     verify_signature(wallet_hash, signature, message)
-
-        # except ValidationError as err:
-        #     return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = None
+        wallet_hash = request.user.wallet_hash
         context = { 'wallet_hash': wallet_hash }
+        serializer = None
         if ad.owner.wallet_hash == wallet_hash:
-            serializer = AdOwnerSerializer(ad, context=context)
+            serializer = AdOwnerSerializer(ad, context=context).data
         else:
-            serializer = AdDetailSerializer(ad, context=context)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            serializer = AdDetailSerializer(ad, context=context).data
+        return Response(serializer, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
-
         try:
-            # # validate signature
-            # signature, timestamp, wallet_hash = get_verification_headers(request)
-            # message = ViewCode.AD_UPDATE.value + '::' + timestamp
-            # verify_signature(wallet_hash, signature, message)
-
-            wallet_hash = request.headers.get('wallet_hash')
-
-            # validate permissions
-            self.validate_permissions(wallet_hash, pk)
-            
-            # Validate that user owns the payment methods
+            wallet_hash = request.user.wallet_hash
             payment_methods = request.data.get('payment_methods')
+            self.validate_permissions(wallet_hash, pk)
             validate_payment_methods_ownership(wallet_hash, payment_methods)
-
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
@@ -224,12 +206,7 @@ class AdDetail(APIView):
     
     def delete(self, request, pk):
         try:
-            # # validate signature
-            # signature, timestamp, wallet_hash = get_verification_headers(request)
-            # message = ViewCode.AD_DELETE.value + '::' + timestamp
-            # verify_signature(wallet_hash, signature, message)
-
-            wallet_hash = request.headers.get('wallet_hash')
+            wallet_hash = request.user.wallet_hash
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
@@ -247,28 +224,11 @@ class AdDetail(APIView):
         ad = Ad.objects.filter(Q(pk=ad_id) & Q(owner__wallet_hash=wallet_hash))
         if (not ad.exists()):
             raise ValidationError('No such Ad with owner exists')
-        
-        # try:
-        #     ad = Ad.objects.get(pk=ad_id)
-        #     caller = Peer.objects.get(wallet_hash=wallet_hash)
-        # except (Ad.DoesNotExist, Peer.DoesNotExist) as err:
-        #     raise ValidationError(err.args[0])
-        
-        # if caller.wallet_hash != ad.owner.wallet_hash:
-        #     raise ValidationError('caller must be ad owner')
 
 def validate_payment_methods_ownership(wallet_hash, payment_method_ids):
     '''
     Validates if caller owns the payment methods
     '''
-    # if payment_method_ids is None:
-    #     raise ValidationError('payment_methods field is required')
-    
-    # try:
-    #     caller = Peer.objects.get(wallet_hash=wallet_hash)
-    # except Peer.DoesNotExist as err:
-    #     raise ValidationError(err.args[0])
-
     payment_methods = PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
     if not payment_methods.exists():
         raise ValidationError('caller must be owner of payment method')

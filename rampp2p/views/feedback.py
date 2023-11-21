@@ -1,19 +1,24 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
+
 from django.db.models import Q
 from django.core.exceptions import ValidationError
 
-from rampp2p.utils.signature import verify_signature, get_verification_headers
-from rampp2p.models import Feedback, Peer, Order, ArbiterFeedback
+from authentication.token import TokenAuthentication
+
+from rampp2p.models import (
+    Feedback,
+    Peer,
+    Order,
+    ArbiterFeedback
+)
 from rampp2p.serializers import (
     FeedbackSerializer, 
     FeedbackCreateSerializer,
     ArbiterFeedbackSerializer, 
     ArbiterFeedbackCreateSerializer
 )
-from rampp2p.viewcodes import ViewCode
-from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)

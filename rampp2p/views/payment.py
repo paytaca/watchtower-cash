@@ -1,20 +1,19 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.utils import timezone
+
 from django.http import Http404
 from django.core.exceptions import ValidationError
 
+from authentication.token import TokenAuthentication
+
 from rampp2p.models import PaymentType, PaymentMethod, Peer
-from rampp2p.utils.signature import verify_signature, get_verification_headers
 from rampp2p.serializers import (
     PaymentMethodCreateSerializer,
     PaymentTypeSerializer, 
     PaymentMethodSerializer,
     PaymentMethodUpdateSerializer
 )
-from rampp2p.viewcodes import ViewCode
-from authentication.token import TokenAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
