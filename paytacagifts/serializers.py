@@ -13,6 +13,7 @@ class GiftPayloadSerializer(serializers.Serializer):
     amount = serializers.FloatField()
     campaign_id = serializers.CharField()
     date_claimed = serializers.DateTimeField()
+    recovered = serializers.BooleanField(default=False)
 
 
 class CampaignPayloadSerializer(serializers.Serializer):

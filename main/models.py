@@ -301,7 +301,7 @@ class CashFungibleToken(models.Model):
             if 'error' not in data.keys():
                 uris = data.get('token').get('uris')
                 if not uris:
-                    uris = data.get('uris')
+                    uris = data.get('uris') or {'icon': None}
 
                 info, _ = CashTokenInfo.objects.get_or_create(
                     name=data.get('name', f'CT-{self.category[0:4]}'),
@@ -624,6 +624,7 @@ class WalletHistory(PostgresModel):
     record_type = models.CharField(
         max_length=10,
         blank=True,
+        db_index=True,
         choices=RECORD_TYPE_OPTIONS
     )
     amount = models.FloatField(default=0)
@@ -681,14 +682,6 @@ class WalletHistory(PostgresModel):
                 name='ctft_ctnft_not_none'
             )
         ]
-        # unique_together = [
-        #     'wallet',
-        #     'txid',
-        #     # 'token_index',
-        #     'token',
-        #     'cashtoken_ft',
-        #     'cashtoken_nft',
-        # ]
 
     def __str__(self):
         return self.txid

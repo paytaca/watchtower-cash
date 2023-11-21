@@ -22,7 +22,15 @@ class BCHN(object):
         }
 
     def get_latest_block(self):
-        return self.rpc_connection.getblockcount()
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                return self.rpc_connection.getblockcount()
+            except Exception as exception:
+                retries += 1
+                if retries >= self.max_retries:
+                    raise exception
+                time.sleep(1)
 
     def get_block_chain_info(self):
         return self.rpc_connection.getblockchaininfo()
@@ -74,6 +82,10 @@ class BCHN(object):
         txn = self._decode_raw_transaction(tx_hex)
         if not tx_fee:
             tx_fee = txn['size'] * settings.TX_FEE_RATE
+        for i, tx_input in enumerate(txn['vin']):
+            _input_details = self.get_input_details(tx_input['txid'], tx_input['vout'])
+            txn['vin'][i]['value'] = _input_details['value']
+            txn['vin'][i]['address'] = _input_details['address']
         txn['tx_fee'] = tx_fee
         txn['timestamp'] = None
         return txn
@@ -125,14 +137,15 @@ class BCHN(object):
                     input_address = scriptPubKey['address']
                 else:
                     # for multisig input prevouts (no address given on data)
-                    input_address = self.get_input_address(input_txid, tx_input['vout'])
+                    input_address = self.get_input_details(input_txid, tx_input['vout'])['address']
 
                 if 'tokenData' in prevout.keys():
                     input_token_data = prevout['tokenData']
             else:
-                value = int(float(tx_input['value'] * (10 ** 8)))
-                input_token_data = self.get_input_token_data(input_txid, tx_input['vout'])
-                input_address = self.get_input_address(input_txid, tx_input['vout'])
+                _input_details = self.get_input_details(input_txid, tx_input['vout'])
+                value = int(float(_input_details['value'] * (10 ** 8)))
+                input_token_data = _input_details.get('tokenData')
+                input_address = _input_details['address']
             input_txid = tx_input['txid']
             data = {
                 'txid': input_txid,
@@ -174,19 +187,17 @@ class BCHN(object):
                     raise exception
                 time.sleep(1)
     
-    def get_input_address(self, txid, vout_index):
+    def get_input_details(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
         if previous_tx:
             previous_out = previous_tx['vout'][vout_index]
-            return previous_out['scriptPubKey']['addresses'][0]
-
-    def get_input_token_data(self, txid, vout_index):
-        previous_tx = self._get_raw_transaction(txid)
-        if previous_tx:
-            previous_out = previous_tx['vout'][vout_index]
+            details = {
+                'address': previous_out['scriptPubKey']['addresses'][0],
+                'value': previous_out['value']
+            }
             if 'tokenData' in previous_out.keys():
-                return previous_out['tokenData']
-        return None
+                details['tokenData'] = previous_out['tokenData']
+            return details
     
     def _recvall(self, sock):
         BUFF_SIZE = 4096
@@ -211,16 +222,3 @@ class BCHN(object):
             response = response_byte.decode()
             response = json.loads(response.strip())
             return response['result']
-
-    def get_input_address(self, txid, vout_index):
-        previous_tx = self._get_raw_transaction(txid)
-        previous_out = previous_tx['vout'][vout_index]
-        return previous_out['scriptPubKey']['addresses'][0]
-
-    def get_input_token_data(self, txid, vout_index):
-        previous_tx = self._get_raw_transaction(txid)
-        previous_out = previous_tx['vout'][vout_index]
-
-        if 'tokenData' in previous_out.keys():
-            return previous_out['tokenData']
-        return None

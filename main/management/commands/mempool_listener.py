@@ -1,17 +1,28 @@
 from django.core.management.base import BaseCommand
 import paho.mqtt.client as mqtt
+from django.conf import settings
 import json
 import time
 import logging
 from json.decoder import JSONDecodeError
-from main.tasks import process_mempool_transaction
+from main.models import Address
+from main.tasks import (
+    process_mempool_transaction_fast,
+    process_mempool_transaction_throttled
+)
+from main.utils.queries.bchn import BCHN
 
 
 LOGGER = logging.getLogger(__name__)
 
+mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-mempool"
+if settings.BCH_NETWORK == 'mainnet':
+    mqtt_client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=False)
+    mqtt_client.tls_set()
+else:
+    mqtt_client = mqtt.Client(client_id=mqtt_client_id, clean_session=False)
 
-mqtt_client = mqtt.Client()
-mqtt_client.connect("docker-host", 1883, 10)
+mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
 
 
 # The callback for when the client receives a CONNACK response from the server.
@@ -23,19 +34,42 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("mempool")
 
 
+def _addresses_subscribed(tx_hex):
+    bchn = BCHN()
+    subscribed = False
+    tx_addresses = []
+    tx = bchn._decode_raw_transaction(tx_hex)
+    for tx_in in tx['vin']:
+        if 'address' in tx_in.keys():
+            tx_addresses.append(tx_in['address'])
+    for tx_out in tx['vout']:
+        _addrs = tx_out.get('scriptPubKey').get('addresses')
+        if _addrs:
+            tx_addresses += _addrs
+    addrs_check = Address.objects.filter(address__in=tx_addresses)
+    if addrs_check.exists():
+        subscribed = True
+    return subscribed
+
+
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload)
         if 'txid' in payload.keys():
             txid = payload['txid']
-            tx_hex = None
+            subscribed = False
             if 'tx_hex' in payload.keys():
                 tx_hex = payload['tx_hex']
-            process_mempool_transaction.apply_async(
-                (txid, tx_hex),
-                queue="mempool_processing_general"
-            )
+                subscribed = _addresses_subscribed(tx_hex)
+            if subscribed:
+                process_mempool_transaction_fast.apply_async(
+                    (txid, tx_hex, True)
+                )
+            else:
+                process_mempool_transaction_throttled.apply_async(
+                    (txid,)
+                )
     except JSONDecodeError:
         pass
 

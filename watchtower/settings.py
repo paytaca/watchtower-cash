@@ -644,3 +644,6 @@ FERNET_KEY = config('FERNET_KEY', '')
 
 # Used for fallback computation of tx fee
 TX_FEE_RATE = 1.2
+
+MQTT_HOST = config('MQTT_HOST', '')
+MQTT_PORT = config('MQTT_PORT', '', cast=int)

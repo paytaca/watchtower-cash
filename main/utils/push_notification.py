@@ -4,6 +4,7 @@ from django.conf import settings
 
 def send_wallet_history_push_notification(wallet_history_obj):
     fiat_value = None
+    decimals = 0
     if wallet_history_obj.cashtoken_ft:
         token = wallet_history_obj.cashtoken_ft
         token_name = settings.DEFAULT_TOKEN_DETAILS['fungible']['name']

@@ -7,6 +7,7 @@ from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from bitcash.transaction import calc_txid
 from celery import shared_task
+from celery_heimdall import HeimdallTask, RateLimit
 from main.models import *
 from main.utils.address_validator import *
 from main.utils.ipfs import (
@@ -747,6 +748,13 @@ def save_transaction(tx, block_id=None):
     """
         tx must be parsed by 'BCHN._parse_transaction()'
     """
+    tx_check = Transaction.objects.filter(txid=tx['txid'])
+    if tx_check.exists():
+        tx_obj = tx_check.last()
+        tx_obj.block_id = block_id
+        tx_obj.save()
+        return
+    
     txid = tx['txid']
     if 'coinbase' in tx['inputs'][0].keys():
         return
@@ -824,13 +832,26 @@ def get_bch_utxos(self, address):
                 token_id = 'bch'
 
             block, created = BlockHeight.objects.get_or_create(number=block)
-            transaction_obj = Transaction.objects.filter(
+            transaction_check = Transaction.objects.filter(
                 txid=tx_hash,
                 address__address=address,
                 value=value,
                 index=index
             )
-            if not transaction_obj.exists():
+            if transaction_check.exists():
+                # Check if transaction wallet matches with address's wallet
+                # Correct this if not matching
+                # Also, Mark as unspent, just in case it's already marked spent
+                # and also update the blockheight
+                _txn = transaction_check.first()
+                if _txn.wallet == _txn.address.wallet:
+                    transaction_check.update(spent=False, blockheight=block)
+                else:
+                    transaction_check.update(wallet=_txn.address.wallet, spent=False, blockheight=block)
+                
+                for obj in transaction_check:
+                    saved_utxo_ids.append(obj.id)
+            else:
                 txn_id, created = save_record(
                     token_id,
                     address,
@@ -855,12 +876,6 @@ def get_bch_utxos(self, address):
                         qs.update(processed=True, transactions_count=count)
                     
                     parse_tx_wallet_histories.delay(tx_hash, immediate=True)
-            
-            if transaction_obj.exists():
-                # Mark as unspent, just in case it's already marked spent
-                transaction_obj.update(spent=False)
-                for obj in transaction_obj:
-                    saved_utxo_ids.append(obj.id)
 
         # Mark other transactions of the same address as spent
         txn_check = Transaction.objects.filter(
@@ -929,8 +944,16 @@ def get_slp_utxos(self, address):
                             qs.update(processed=True, transactions_count=count)
                 
                 if transaction_obj.exists():
-                    # Mark as unspent, just in case it's already marked spent
-                    transaction_obj.update(spent=False)
+                    # Check if transaction wallet matches with address's wallet
+                    # Correct this if not matching
+                    # Also, Mark as unspent, just in case it's already marked spent
+                    # and also update the blockheight
+                    _txn = transaction_obj.first()
+                    if _txn.wallet == _txn.address.wallet:
+                        transaction_obj.update(spent=False, blockheight=block)
+                    else:
+                        transaction_obj.update(wallet=_txn.address.wallet, spent=False, blockheight=block)
+                    
                     for obj in transaction_obj:
                         saved_utxo_ids.append(obj.id)
         
@@ -1428,7 +1451,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             except Exception as exception:
                 LOGGER.exception(exception)
 
-        # for older token records 
+        # for older token records
         if (
             txn.token and
             txn.token.tokenid and
@@ -1487,11 +1510,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         txn_obj = Transaction.objects.get(id=transaction_id)
         txid = txn_obj.txid
         if txn_obj.post_save_processed:
-            return
+            return transaction_id
     except Transaction.DoesNotExist:
-        return
+        return transaction_id
     
-    if not txid: return
+    if not txid: return transaction_id
     LOGGER.info(f"TX POST SAVE TASK: {address} | {txid} | {blockheight_id}")
 
     if not BlockHeight.objects.filter(id=blockheight_id).exists():
@@ -1514,11 +1537,11 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
     if parse_slp and not isinstance(slp_tx, dict) and not slp_tx.get('valid'):
         self.retry(countdown=5)
-        return
+        return transaction_id
 
     if not bch_tx:
         self.retry(countdown=5)
-        return
+        return transaction_id
 
     tx_timestamp = bch_tx['timestamp']
     # use batch update to not trigger the post save signal and potentially create an infinite loop
@@ -1671,7 +1694,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
 
 @shared_task(queue='rescan_utxos')
-def rescan_utxos(wallet_hash, full=False):
+def rescan_utxos(wallet_hash, full=False, bch_only=False):
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
     if full:
         addresses = wallet.addresses.all()
@@ -1716,14 +1739,14 @@ def rebuild_wallet_history(wallet_hash):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, parsed_tx=None, proceed_with_zero_amount=False, immediate=False):
+def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=False, immediate=False):
     history_check = WalletHistory.objects.filter(txid=txid)
     if history_check.exists():
         return
 
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
-    if parsed_tx:
-        bch_tx = parsed_tx
+    if txn_details:
+        bch_tx = NODE.BCH._parse_transaction(txn_details)
     else:
         bch_tx = NODE.BCH.get_transaction(txid)
 
@@ -2079,15 +2102,19 @@ def populate_token_addresses():
             obj.save()
 
 
-@shared_task()
-def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
+def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
+    tx_check = Transaction.objects.filter(txid=tx_hash)
+    if tx_check.exists():
+        return
+    
     LOGGER.info('Processing mempool tx: ' + tx_hash)
     proceed = False
-    
-    if tx_hex:
+    tx = None
+    if tx_hex and immediate:
         tx = NODE.BCH.build_tx_from_hex(tx_hex)
 
         output_addresses = []
+        tx
         for output in tx['vout']:
             if 'scriptPubKey' in output.keys():
                 if 'addresses' in output['scriptPubKey']:
@@ -2098,17 +2125,26 @@ def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         if output_addresses_check.exists():
             proceed = True
         else:
-            input_txids = [x['txid'] for x in tx['vin']]
+            input_txids = [x['txid'] for x in tx['vin'] if 'txid' in x.keys()]
             input_txids_check = Transaction.objects.filter(txid__in=input_txids)
             if input_txids_check.exists():
                 proceed = True
+
             else:
                 proceed = False
     else:
         proceed = True
 
     if proceed:
-        tx = NODE.BCH._get_raw_transaction(tx_hash)
+        if not tx:
+            tx = NODE.BCH._get_raw_transaction(tx_hash)
+
+        # if passed through the throttled task queue
+        # skip processing if it already has at least 1 confirmation
+        if not immediate:
+            if 'confirmations' in tx.keys():
+                LOGGER.info('Skipped confirmed tx: ' + str(tx_hash))
+                return
     
         from main.mqtt import client as mqtt_client
 
@@ -2226,12 +2262,9 @@ def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
                         LOGGER.info(data)
                         
                         try:
-                            if immediate:
-                                client_acknowledgement(obj_id)
-                            else:
-                                client_acknowledgement.delay(obj_id)
+                            client_acknowledgement(obj_id)
                         except:
-                            pass
+                            LOGGER.error('Failed to send client acknowledgement for txid:' + str(tx_hash))
                         
                         LOGGER.info('Sending MQTT message: ' + str(data))
                         msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
@@ -2242,6 +2275,27 @@ def process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         if save_histories:
             LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
             if immediate:
-                parse_tx_wallet_histories(tx_hash, parsed_tx=tx, immediate=True)
+                parse_tx_wallet_histories(tx_hash, txn_details=tx, immediate=True)
             else:
-                parse_tx_wallet_histories.delay(tx_hash, parsed_tx=tx)
+                parse_tx_wallet_histories.delay(tx_hash, txn_details=tx)
+
+@shared_task(
+  base=HeimdallTask,
+  queue='mempool_processing_throttled',
+  heimdall={
+    'rate_limit': RateLimit((20, 60))
+  }
+)
+def process_mempool_transaction_throttled(tx_hash, tx_hex=None, immediate=False):
+    _process_mempool_transaction(tx_hash, tx_hex, immediate)
+
+
+@shared_task(
+  base=HeimdallTask,
+  queue='mempool_processing_fast',
+  heimdall={
+    'rate_limit': RateLimit((100, 60))
+  }
+)
+def process_mempool_transaction_fast(tx_hash, tx_hex=None, immediate=False):
+    _process_mempool_transaction(tx_hash, tx_hex, immediate)

@@ -17,8 +17,13 @@ from main.tasks import (
 import paho.mqtt.client as mqtt
 
 
-mqtt_client = mqtt.Client()
-mqtt_client.connect("docker-host", 1883, 10)
+if settings.BCH_NETWORK == 'mainnet':
+    mqtt_client = mqtt.Client(transport='websockets')
+    mqtt_client.tls_set()
+else:
+    mqtt_client = mqtt.Client()
+
+mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
 mqtt_client.loop_start()
 
 
