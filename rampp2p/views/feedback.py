@@ -4,8 +4,8 @@ from rest_framework import status, generics
 
 from django.db.models import Q
 from django.core.exceptions import ValidationError
-
 from authentication.token import TokenAuthentication
+import math
 
 from rampp2p.models import (
     Feedback,
@@ -34,6 +34,18 @@ class ArbiterFeedbackListCreate(APIView):
         arbiter = request.query_params.get('arbiter')
         rating = request.query_params.get('rating')
         ad_id = request.query_params.get('ad_id')
+
+        try:
+            limit = int(request.query_params.get('limit', 0))
+            page = int(request.query_params.get('page', 1))
+        except ValueError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if limit < 0:
+            return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if page < 1:
+            return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
         
         if ad_id is not None:
             queryset = queryset.filter(Q(order__ad_snapshot__ad_id=ad_id))
@@ -50,10 +62,22 @@ class ArbiterFeedbackListCreate(APIView):
         if rating is not None:
             queryset = queryset.filter(Q(rating=rating))
 
-        # TODO pagination
+        # pagination
+        count = queryset.count()
+        total_pages = page
+        if limit > 0:
+            total_pages = math.ceil(count / limit)
 
-        serializer = ArbiterFeedbackSerializer(queryset, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
+        offset = (page - 1) * limit
+        paged_queryset = queryset[offset:offset + limit]
+
+        serializer = ArbiterFeedbackSerializer(paged_queryset, many=True)
+        data = {
+            'feedbacks': serializer.data,
+            'count': count,
+            'total_pages': total_pages
+        }
+        return Response(data, status.HTTP_200_OK)
 
     def post(self, request):
         try:
@@ -110,31 +134,57 @@ class PeerFeedbackListCreate(APIView):
 
     def get(self, request):
         queryset = Feedback.objects.all()
-        
+
         ad_id = request.query_params.get('ad_id')
+        order_id = request.query_params.get('order_id')
+        from_peer = request.query_params.get('from_peer', None)
+        to_peer = request.query_params.get('to_peer', None)
+        rating = request.query_params.get('rating', None)
+
+        try:
+            limit = int(request.query_params.get('limit', 0))
+            page = int(request.query_params.get('page', 1))
+        except ValueError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        if limit < 0:
+            return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if page < 1:
+            return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
+        
         if ad_id is not None:
             queryset = queryset.filter(Q(order__ad_snapshot__ad_id=ad_id))
         
-        order_id = request.query_params.get('order_id')
         if order_id is not None:
             queryset = queryset.filter(Q(order=order_id))
         
-        from_peer = request.query_params.get('from_peer', None)
         if from_peer is not None:
             queryset = queryset.filter(Q(from_peer=from_peer))
         
-        to_peer = request.query_params.get('to_peer', None)
         if to_peer is not None:
             queryset = queryset.filter(Q(to_peer=to_peer))
         
-        rating = request.query_params.get('rating', None)
         if rating is not None:
             queryset = queryset.filter(Q(rating=rating))
 
-        # TODO pagination
+        # pagination
+        count = queryset.count()
+        total_pages = page
+        if limit > 0:
+            total_pages = math.ceil(count / limit)
 
-        serializer = FeedbackSerializer(queryset, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
+        offset = (page - 1) * limit
+        paged_queryset = queryset[offset:offset + limit]
+
+        serializer = FeedbackSerializer(paged_queryset, many=True)
+        data = {
+            'feedbacks': serializer.data,
+            'count': count,
+            'total_pages': total_pages
+        }
+
+        return Response(data, status.HTTP_200_OK)
 
     def post(self, request):
         try:

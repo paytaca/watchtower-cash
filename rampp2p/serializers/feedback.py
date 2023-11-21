@@ -42,6 +42,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
       "order",
       "rating",
       "comment",
+      "created_at"
     ]
   
   def get_from_peer(self, instance: Feedback):
