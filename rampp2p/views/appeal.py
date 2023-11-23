@@ -214,7 +214,11 @@ class AppealRequest(APIView):
                     'appeal': serialized_appeal.data,
                     'status': serialized_status.data
                 }
-                websocket.send_order_update(response_data, pk)
+                websocket_msg = {
+                    'success' : True,
+                    'status': serialized_status.data
+                }
+                websocket.send_order_update(websocket_msg, pk)
 
                 # send push notifications
                 party_a = appeal.order.ad_snapshot.ad.owner.wallet_hash
@@ -272,7 +276,11 @@ class AppealPendingRelease(APIView):
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # notify order update subscribers
-        websocket.send_order_update(json.dumps(serialized_status.data), pk)
+        websocket_msg = {
+            'success' : True,
+            'status': serialized_status.data
+        }
+        websocket.send_order_update(websocket_msg, pk)
 
         return Response(serialized_status.data, status=status.HTTP_200_OK)
     
@@ -337,7 +345,11 @@ class AppealPendingRefund(APIView):
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # notify order update subscribers
-        websocket.send_order_update(json.dumps(serialized_status.data), pk)
+        websocket_msg = {
+            'success' : True,
+            'status': serialized_status.data
+        }
+        websocket.send_order_update(websocket_msg, pk)
         
         return Response(serialized_status.data, status=status.HTTP_200_OK)
     
