@@ -416,7 +416,7 @@ class ConfirmOrder(APIView):
         })
 
         if serialized_status.is_valid():
-            serialized_status = StatusSerializer(serialized_status.save())
+            serialized_status = StatusReadSerializer(serialized_status.save())
             
             # send websocket notification
             websocket.send_order_update({
@@ -737,7 +737,7 @@ class CancelOrder(APIView):
         })
 
         if serializer.is_valid():
-            serialized_status = StatusSerializer(serializer.save())
+            serialized_status = StatusReadSerializer(serializer.save())
             websocket_msg = {
                 'success' : True,
                 'status': serialized_status.data

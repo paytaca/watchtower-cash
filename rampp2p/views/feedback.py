@@ -197,7 +197,7 @@ class PeerFeedbackListCreate(APIView):
             data['order'] = order.id
             self.validate_limit(data['from_peer'], data['to_peer'], data['order'])
         except (AssertionError, Peer.DoesNotExist, Order.DoesNotExist) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_404_BAD_REQUEST)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             
         serializer = FeedbackCreateSerializer(data=data)
         if serializer.is_valid():
