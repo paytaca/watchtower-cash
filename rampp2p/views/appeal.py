@@ -445,13 +445,15 @@ class VerifyRelease(APIView):
         is_seller = False
         if wallet_hash == order.arbiter.wallet_hash:
             is_arbiter = True
-        elif order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
-            if wallet_hash == seller.wallet_hash:
-                is_seller = True
+        else:
+            seller = order.owner
+        if wallet_hash == seller.wallet_hash:
+            is_seller = True
 
         if (not is_arbiter) and (not is_seller):
-            raise ValidationError(f'{prefix} Caller must be seller or arbiter.')
+            raise ValidationError(f'{prefix} Caller is not seller nor arbiter.')
         
         if not (curr_status.status == StatusType.RELEASE_PENDING or curr_status.status == StatusType.PAID):
             raise ValidationError(f'{prefix} action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')

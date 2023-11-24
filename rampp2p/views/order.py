@@ -530,7 +530,7 @@ class VerifyEscrow(APIView):
         try:
             self.validate_permissions(request.user.wallet_hash, pk)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             validate_status(pk, StatusType.ESCROW_PENDING)
@@ -565,8 +565,7 @@ class VerifyEscrow(APIView):
 
     def validate_permissions(self, wallet_hash, pk):
         '''
-        Only owners of SELL ads can set order statuses to CONFIRMED.
-        Creators of SELL orders skip the order status to CONFIRMED on creation.
+        Only SELLERS can verify the ESCROW status of order.
         '''
 
         try:
@@ -576,11 +575,12 @@ class VerifyEscrow(APIView):
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
-            # require caller is seller
-            if wallet_hash != seller.wallet_hash:
-                raise ValidationError('caller must be seller')
         else:
-            raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
+            seller = order.owner
+        
+        # Caller must be seller
+        if wallet_hash != seller.wallet_hash:
+            raise ValidationError('Caller is not seller')
     
 class CryptoBuyerConfirmPayment(APIView):
     authentication_classes = [TokenAuthentication]
