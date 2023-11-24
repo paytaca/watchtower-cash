@@ -404,20 +404,10 @@ class VerifyRelease(APIView):
                 raise ValidationError('txid field is required')
 
             contract = Contract.objects.get(order__id=pk)
-            transaction, _ = Transaction.objects.get_or_create(
-                contract=contract,
-                action=Transaction.ActionType.RELEASE,
-                txid=txid
-            )
-
-            result = {
-                'txid': txid,
-                'transaction': TransactionSerializer(transaction).data
-            }
-
+            
             # Validate the transaction
             validate_transaction(
-                txid=transaction.txid,
+                txid=txid,
                 action=Transaction.ActionType.RELEASE,
                 contract_id=contract.id
             )
@@ -425,7 +415,7 @@ class VerifyRelease(APIView):
         except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
-        return Response(result, status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''

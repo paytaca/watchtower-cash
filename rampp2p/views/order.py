@@ -542,15 +542,10 @@ class VerifyEscrow(APIView):
                 raise ValidationError('txid is required')
                 
             contract = Contract.objects.get(order_id=pk)
-            transaction, _ = Transaction.objects.get_or_create(
-                contract=contract,
-                action=Transaction.ActionType.ESCROW,
-                txid=txid
-            )
 
             # Validate the transaction
             validate_transaction(
-                txid=transaction.txid,
+                txid=txid,
                 action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id
             )
@@ -560,8 +555,7 @@ class VerifyEscrow(APIView):
         except IntegrityError as err:
             return Response({'error': 'duplicate txid'}, status=status.HTTP_400_BAD_REQUEST)
         
-        serialized_tx = TransactionSerializer(transaction)
-        return Response(serialized_tx.data, status=status.HTTP_200_OK)  
+        return Response(status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
