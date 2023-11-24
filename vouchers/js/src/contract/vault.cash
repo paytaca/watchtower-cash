@@ -16,9 +16,9 @@ contract Vault (
 
         // sent amount must be equal to the commitment data
         bytes claimExpiryTimestampBytes, bytes claimAmountBytes = tx.inputs[0].nftCommitment.split(20);
-        int claimAmount = int(claimAmountBytes);
+        int refundedAmount = int(claimAmountBytes) - 1000;
         int claimExpiryTimestamp = int(claimExpiryTimestampBytes);
-        require(tx.outputs[0].value == claimAmount);
+        require(tx.outputs[0].value == refundedAmount);
 
         // lock nft must be expired
         require(tx.time >= claimExpiryTimestamp);
