@@ -171,7 +171,9 @@ class GiftViewSet(viewsets.GenericViewSet):
                     campaign=gift.campaign
                 )
             else:
-                raise Exception("You have exceeded the limit of gifts to claim for this campaign")
+                return Response({
+                    "message": "You have exceeded the limit of gifts to claim for this campaign",
+                }, status=400)
         else:
             claim = Claim.objects.create(
                 wallet=wallet,
@@ -185,7 +187,9 @@ class GiftViewSet(viewsets.GenericViewSet):
                 "claim_id": str(claim.id)
             })
         else:
-            raise Exception("This gift has been claimed")
+            return Response({
+                "message": "This gift has been claimed",
+            }, status=400)
 
 
     @action(detail=True, methods=['post'])
