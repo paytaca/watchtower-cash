@@ -647,3 +647,7 @@ TX_FEE_RATE = 1.2
 
 MQTT_HOST = config('MQTT_HOST', '')
 MQTT_PORT = config('MQTT_PORT', '', cast=int)
+
+# CoinGecko
+
+COINGECKO_API_KEY = config('COINGECKO_API_KEY', '')

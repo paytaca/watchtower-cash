@@ -1948,10 +1948,14 @@ def fetch_latest_usd_price():
     to_timestamp = timezone.now()
     from_timestamp = to_timestamp - timezone.timedelta(minutes=10)
     coingecko_resp = requests.get(
-        "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
+        # "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
+        "https://pro-api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
         f"vs_currency={CURRENCY}" + \
         f"&from={from_timestamp.timestamp()}" + \
-        f"&to={to_timestamp.timestamp()}"
+        f"&to={to_timestamp.timestamp()}",
+        headers={
+            'x-cg-pro-api-key': settings.COINGECKO_API_KEY
+        }
     )
 
     coingecko_prices_list = None
