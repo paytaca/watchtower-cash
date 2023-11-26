@@ -116,6 +116,7 @@ class BCHN(object):
         transaction = {
             'txid': tx_hash,
             'timestamp': time,
+            'size': txn['size'],
             'valid': True
         }
         transaction['inputs'] = []

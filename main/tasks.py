@@ -45,6 +45,7 @@ from main.utils.queries.parse_utils import (
     parse_utxo_to_tuple,
     extract_tx_utxos,
 )
+import paho.mqtt.client as mqtt
 from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
@@ -2149,8 +2150,6 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
             if 'confirmations' in tx.keys():
                 LOGGER.info('Skipped confirmed tx: ' + str(tx_hash))
                 return
-    
-        from main.mqtt import client as mqtt_client
 
         inputs = tx['vin']
         outputs = tx['vout']
@@ -2192,7 +2191,14 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
                             "outpoint_index": index,
                         })
 
+        if settings.BCH_NETWORK == 'mainnet':
+            mqtt_client = mqtt.Client(transport='websockets')
+            mqtt_client.tls_set()
+        else:
+            mqtt_client = mqtt.Client()
+        mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
         mqtt_client.loop_start()
+
         for output in outputs:
             scriptPubKey = output['scriptPubKey']
 
