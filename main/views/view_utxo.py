@@ -78,7 +78,7 @@ def _get_token_utxos(query, is_cashtoken=False, is_cashtoken_nft=None, show_addr
     if isinstance(confirmed, bool):
         qs = qs.filter(blockheight__isnull=not confirmed)
 
-    utxos_values = qs.annotate(
+    utxos_values = qs.all().annotate(
         vout=F('index'),
         capability=(F('cashtoken_nft__capability')),
         commitment=(F('cashtoken_nft__commitment')),
@@ -189,7 +189,7 @@ def _get_bch_utxos(query, show_address_index=False, confirmed=None):
         qs = qs.filter(blockheight__isnull=not confirmed)
 
     if show_address_index:
-        utxos_values = qs.annotate(
+        utxos_values = qs.all().annotate(
             vout=F('index'),
             block=F('blockheight__number'),
             wallet_index=F('address__wallet_index'),
@@ -203,7 +203,7 @@ def _get_bch_utxos(query, show_address_index=False, confirmed=None):
             'address_path'
         )
     else:
-        utxos_values = qs.annotate(
+        utxos_values = qs.all().annotate(
             vout=F('index'),
             block=F('blockheight__number'),
         ).values(
