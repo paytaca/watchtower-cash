@@ -63,9 +63,7 @@ def on_message(client, userdata, msg):
                 tx_hex = payload['tx_hex']
                 subscribed = _addresses_subscribed(tx_hex)
             if subscribed:
-                process_mempool_transaction_fast.apply_async(
-                    (txid, tx_hex, True)
-                )
+                process_mempool_transaction_fast(txid, tx_hex, True)
             else:
                 process_mempool_transaction_throttled.apply_async(
                     (txid,)
