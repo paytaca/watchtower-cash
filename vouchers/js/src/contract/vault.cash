@@ -9,9 +9,9 @@ contract Vault (
     function refund (sig merchantSignerSig) {
         require(checkSig(merchantSignerSig, merchantSignerPK));
 
-        // 2 inputs: lock nft & fee funder utxo
+        // 1 input: lock nft
         // 1 output: satoshis refund reward from burned lock nft
-        require(tx.inputs.length >= 2);
+        require(tx.inputs.length >= 1);
         require(tx.outputs.length >= 1);
 
         // sent amount must be equal to the commitment data
