@@ -92,7 +92,7 @@ class UtxoSerializer(serializers.Serializer):
     if obj.cashtoken_nft and not token.get('tokenId'):
       token['tokenId'] = obj.cashtoken_nft.category
 
-    if obj.cashtoken_nft.commitment:
+    if obj.cashtoken_nft and obj.cashtoken_nft.commitment:
       token['commitment'] = obj.cashtoken_nft.commitment
     
     if obj.cashtoken_nft and obj.cashtoken_nft.capability:
