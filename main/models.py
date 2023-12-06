@@ -600,12 +600,14 @@ class WalletHistory(PostgresModel):
     senders = ArrayField(
         ArrayField(models.CharField(max_length=70)),
         default=list,
-        blank=True
+        blank=True,
+        db_index=True
     )
     recipients = ArrayField(
         ArrayField(models.CharField(max_length=70)),
         default=list,
-        blank=True
+        blank=True,
+        db_index=True
     )
     wallet = models.ForeignKey(
         Wallet,
@@ -650,8 +652,8 @@ class WalletHistory(PostgresModel):
         blank=True
     )
     tx_fee = models.FloatField(null=True, blank=True)
-    tx_timestamp = models.DateTimeField(null=True,blank=True)
-    date_created = models.DateTimeField(default=timezone.now)
+    tx_timestamp = models.DateTimeField(null=True,blank=True, db_index=True)
+    date_created = models.DateTimeField(default=timezone.now, db_index=True)
 
     usd_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     market_prices = JSONField(null=True, blank=True)
