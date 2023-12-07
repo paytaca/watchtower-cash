@@ -42,6 +42,7 @@ class OrderArbiterSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
+    owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     arbiter = OrderArbiterSerializer()
@@ -57,6 +58,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'ad',
+            'owner',
             'crypto_currency',
             'fiat_currency',
             'crypto_amount',
@@ -86,6 +88,13 @@ class OrderSerializer(serializers.ModelSerializer):
             'payment_methods': serialized_payment_methods.data
         }
     
+    def get_owner(self, instance: Order):
+        return {
+            'id': instance.id,
+            'name': instance.owner.name,
+            'rating': instance.owner.average_rating()
+        }
+
     def get_payment_methods(self, instance: Order):
         escrowed_status = Status.objects.filter(Q(order=instance) & Q(status=StatusType.ESCROWED))
         if escrowed_status.exists():            

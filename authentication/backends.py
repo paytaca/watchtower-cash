@@ -22,7 +22,8 @@ class SignatureBackend(ModelBackend):
         try:
             if app == 'main':
                 wallet = MainWallet.objects.get(wallet_hash=wallet_hash)
-                # TODO: convert public_key to address and check if a matching address associated to wallet exists. Return if None.
+                # TODO: convert public_key to address and check if a matching 
+                # address associated to wallet exists. Return if None.
             if app == 'ramp-peer':
                 wallet = PeerWallet.objects.get(wallet_hash=wallet_hash)
             if app == 'ramp-arbiter':

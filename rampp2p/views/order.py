@@ -51,11 +51,27 @@ class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        order_state = request.query_params.get('state')
+        status_type = request.query_params.get('status_type')
         wallet_hash = request.user.wallet_hash
 
-        if order_state is None:
-            return Response({'error': 'parameter "state" is required'}, status=status.HTTP_400_BAD_REQUEST)
+        # currency = request.query_params.get('currency')
+        appealed = request.query_params.get('appealed')
+        expired = request.query_params.get('expired')
+        trade_type = request.query_params.get('trade_type')
+        filtered_status = request.query_params.getlist('status')
+        payment_types = request.query_params.getlist('payment_types')
+        time_limits = request.query_params.getlist('time_limits')
+        sort_by = request.query_params.get('sort_by')
+        sort_type = request.query_params.get('sort_type')
+        owned = request.query_params.get('owned')
+        if owned is not None:
+            owned = owned == 'true'
+
+        if status_type is None:
+            return Response(
+                {'error': 'parameter status_type is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             limit = int(request.query_params.get('limit', 0))
@@ -69,60 +85,87 @@ class OrderListCreate(APIView):
         if page < 1:
             return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Fetch orders created by user
-        owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash)
+        queryset = Order.objects.all()
 
-        # Fetch orders created for ads owned by user
-        ads = list(Ad.objects.filter(owner__wallet_hash=wallet_hash).values_list('id', flat=True))
-        ad_orders = Order.objects.filter(ad_snapshot__ad__pk__in=ads)
+        # fetches orders created by user
+        owned_orders = Q(owner__wallet_hash=wallet_hash)
 
-        latest_status = Status.objects.filter(
-            order=OuterRef('pk'), 
-        ).order_by('-created_at')
+        # fetches the orders that have ad ids owned by user
+        ad_orders = Q(ad_snapshot__ad__pk__in=list(
+                        # fetches the flat ids of ads owned by user
+                        Ad.objects.filter(
+                            owner__wallet_hash=wallet_hash
+                        ).values_list('id', flat=True)
+                    ))
+                    
+        if owned == True:
+            queryset = queryset.filter(owned_orders)
+        elif owned == False:
+            queryset = queryset.filter(ad_orders)
+        else:
+            queryset = queryset.filter(owned_orders | ad_orders)
 
-        order_by = request.query_params.get('order_by')
-        if order_by == 'last_modified':
-            owned_orders = owned_orders.annotate(
-                last_modified_at=Subquery(
-                    latest_status.values('created_at')[:1]
-                )
-            )
-
-            ad_orders = ad_orders.annotate(
-                last_modified_at=Subquery(
-                    latest_status.values('created_at')[:1]
-                )
-            )
-
-        # Create subquery to filter/exclude completed status
+        # filter or exclude orders according to their latest status
         completed_status = [
             StatusType.CANCELED,
             StatusType.RELEASED,
             StatusType.REFUNDED
         ]
-
-        latest_status = Status.objects.filter(
-            order=OuterRef('pk'), 
+        last_status = Status.objects.filter(
+            order=OuterRef('pk'),
             status__in=completed_status
-        ).order_by('-created_at')
+        ).order_by('-created_at').values('order')[:1]
 
-        # Filter or exclude orders according to their latest status
-        if order_state == 'COMPLETED':            
-            owned_orders = owned_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
-            ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
-        elif order_state == 'ONGOING':
-            owned_orders = owned_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
-            ad_orders = ad_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
+        if status_type == 'COMPLETED':            
+            queryset = queryset.filter(pk__in=Subquery(last_status))
+        elif status_type == 'ONGOING':
+            queryset = queryset.exclude(pk__in=Subquery(last_status))
+        
+        if len(filtered_status) > 0:
+            filtered_status = Status.objects.filter(
+                order=OuterRef('pk'),
+                status__in=list(map(str, filtered_status))
+            ).order_by('-created_at').values('order')[:1]
+            queryset = queryset.filter(pk__in=Subquery(filtered_status))
 
-        # Combine owned and ad orders
-        queryset = owned_orders.union(ad_orders)
-        if order_by == 'last_modified':
-            queryset = queryset.order_by('-last_modified_at')
+        if len(payment_types) > 0:
+            payment_types = list(map(int, payment_types))
+            queryset = queryset.filter(ad_snapshot__payment_methods__payment_type__id__in=payment_types).distinct()
+
+        if len(time_limits) > 0:
+            time_limits = list(map(int, time_limits))
+            queryset = queryset.filter(ad_snapshot__time_duration_choice__in=time_limits).distinct()
+
+        if trade_type is not None:
+            queryset = queryset.exclude(Q(ad_snapshot__trade_type=trade_type))
+        
+        if appealed is not None:
+            subquery = Appeal.objects.filter(order=OuterRef('pk')).values('order')
+            if appealed:
+                queryset = queryset.filter(pk__in=Subquery(subquery))
+            else:
+                queryset = queryset.exclude(pk__in=Subquery(subquery))
+
+        if expired is not None:
+            queryset = queryset.exclude(Q(ad_snapshot__trade_type=trade_type))
+
+        if sort_by == 'last_modified_at':
+            sort_field = 'last_modified_at'
+            if sort_type == 'descending':
+                sort_field = f'-{sort_field}'
+            last_status_created_at = Status.objects.filter(
+                order=OuterRef('pk')).order_by('-created_at').values('created_at')[:1]
+            queryset = queryset.annotate(
+                last_modified_at=Subquery(last_status_created_at)
+            ).order_by(sort_field)
         else:
-            if order_state == 'ONGOING':
-                queryset = queryset.order_by('-created_at')
-            if order_state == 'COMPLETED':
-                queryset = queryset.order_by('-created_at')
+            sort_field = 'created_at'
+            if (sort_type == 'descending'):
+                sort_field = f'-{sort_field}'
+            if status_type == 'ONGOING':
+                queryset = queryset.order_by(sort_field)
+            if status_type == 'COMPLETED':
+                queryset = queryset.order_by(sort_field)
         
         # Count total pages
         count = queryset.count()
