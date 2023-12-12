@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 import math
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
+from django.utils import timezone
 
 from authentication.token import TokenAuthentication
 from main.utils.subscription import save_subscription
@@ -55,8 +56,6 @@ class OrderListCreate(APIView):
         wallet_hash = request.user.wallet_hash
 
         # currency = request.query_params.get('currency')
-        appealed = request.query_params.get('appealed')
-        expired = request.query_params.get('expired')
         trade_type = request.query_params.get('trade_type')
         filtered_status = request.query_params.getlist('status')
         payment_types = request.query_params.getlist('payment_types')
@@ -66,6 +65,14 @@ class OrderListCreate(APIView):
         owned = request.query_params.get('owned')
         if owned is not None:
             owned = owned == 'true'
+        
+        appealed = request.query_params.get('appealed')
+        if appealed is not None:
+            appealed = appealed == 'true'
+        
+        expired = request.query_params.get('expired')
+        if expired is not None:
+            expired = expired == 'true'
 
         if status_type is None:
             return Response(
@@ -139,15 +146,12 @@ class OrderListCreate(APIView):
         if trade_type is not None:
             queryset = queryset.exclude(Q(ad_snapshot__trade_type=trade_type))
         
-        if appealed is not None:
+        if appealed is False:
             subquery = Appeal.objects.filter(order=OuterRef('pk')).values('order')
-            if appealed:
-                queryset = queryset.filter(pk__in=Subquery(subquery))
-            else:
-                queryset = queryset.exclude(pk__in=Subquery(subquery))
+            queryset = queryset.exclude(pk__in=Subquery(subquery))
 
-        if expired is not None:
-            queryset = queryset.exclude(Q(ad_snapshot__trade_type=trade_type))
+        if expired is False:
+            queryset = queryset.exclude(Q(expires_at__isnull=False) & Q(expires_at__lt=timezone.now()))
 
         if sort_by == 'last_modified_at':
             sort_field = 'last_modified_at'
