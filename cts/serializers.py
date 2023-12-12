@@ -198,7 +198,7 @@ class AuthKeySerializer(UtxoSerializer):
 class FungibleTokenBalanceSerializer(serializers.Serializer):
 
   owner = serializers.CharField()
-  balance = serializers.IntegerField()
+  balance = serializers.CharField()
   tokenId = serializers.SerializerMethodField()
   utxoCount = serializers.IntegerField()
 
