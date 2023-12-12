@@ -84,10 +84,7 @@ class UtxoSerializer(serializers.Serializer):
     }
 
     if obj.amount:
-      if obj.amount > 9007199254740991:
-        token['amount'] = str(obj.amount)
-      else:
-        token['amount'] = obj.amount
+      token['amount'] = str(obj.amount)
 
     if obj.cashtoken_ft and obj.cashtoken_ft.category:
       token['tokenId'] = obj.cashtoken_ft.category
