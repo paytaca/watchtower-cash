@@ -51,11 +51,11 @@ logger = logging.getLogger(__name__)
 class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def get(self, request):
+    def unwrap_request(self, request):
+        limit = request.query_params.get('limit', 0)
+        page = request.query_params.get('page', 1)
         status_type = request.query_params.get('status_type')
-        wallet_hash = request.user.wallet_hash
-
-        # currency = request.query_params.get('currency')
+        currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
         filtered_status = request.query_params.getlist('status')
         payment_types = request.query_params.getlist('payment_types')
@@ -63,34 +63,46 @@ class OrderListCreate(APIView):
         sort_by = request.query_params.get('sort_by')
         sort_type = request.query_params.get('sort_type')
         owned = request.query_params.get('owned')
+        expired_only = request.query_params.get('expired_only')
         if owned is not None:
             owned = owned == 'true'
-        
-        appealed = request.query_params.get('appealed')
-        if appealed is not None:
-            appealed = appealed == 'true'
-        
-        expired = request.query_params.get('expired')
-        if expired is not None:
-            expired = expired == 'true'
+        if expired_only is not None:
+            expired_only = expired_only == 'true'
 
-        if status_type is None:
+        return {
+            'limit': limit,
+            'page': page,
+            'status_type': status_type,
+            'currency': currency,
+            'trade_type': trade_type,
+            'filtered_status': filtered_status,
+            'payment_types': payment_types,
+            'time_limits': time_limits,
+            'sort_by': sort_by,
+            'sort_type': sort_type,
+            'owned': owned,
+            'expired_only': expired_only
+        }
+
+    def get(self, request):
+        wallet_hash = request.user.wallet_hash
+        params = self.unwrap_request(request=request)
+
+        if params['status_type'] is None:
             return Response(
                 {'error': 'parameter status_type is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            limit = int(request.query_params.get('limit', 0))
-            page = int(request.query_params.get('page', 1))
-        except ValueError as err:
+            limit = int(params['limit'])
+            page = int(params['page'])
+            if limit < 0:
+                raise ValidationError('limit must be a non-negative number')
+            if page < 1:
+                raise ValidationError('invalid page number')
+        except (ValueError, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        if limit < 0:
-            return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if page < 1:
-            return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
 
         queryset = Order.objects.all()
 
@@ -105,14 +117,14 @@ class OrderListCreate(APIView):
                         ).values_list('id', flat=True)
                     ))
                     
-        if owned == True:
+        if params['owned'] == True:
             queryset = queryset.filter(owned_orders)
-        elif owned == False:
+        elif params['owned'] == False:
             queryset = queryset.filter(ad_orders)
         else:
             queryset = queryset.filter(owned_orders | ad_orders)
 
-        # filter or exclude orders according to their latest status
+        # filter or exclude orders based to their latest status
         completed_status = [
             StatusType.CANCELED,
             StatusType.RELEASED,
@@ -123,39 +135,39 @@ class OrderListCreate(APIView):
             status__in=completed_status
         ).order_by('-created_at').values('order')[:1]
 
-        if status_type == 'COMPLETED':            
+        if params['status_type'] == 'COMPLETED':            
             queryset = queryset.filter(pk__in=Subquery(last_status))
-        elif status_type == 'ONGOING':
+        elif params['status_type'] == 'ONGOING':
             queryset = queryset.exclude(pk__in=Subquery(last_status))
         
-        if len(filtered_status) > 0:
+        if len(params['filtered_status']) > 0:
             filtered_status = Status.objects.filter(
                 order=OuterRef('pk'),
-                status__in=list(map(str, filtered_status))
+                status__in=list(map(str, params['filtered_status']))
             ).order_by('-created_at').values('order')[:1]
             queryset = queryset.filter(pk__in=Subquery(filtered_status))
 
-        if len(payment_types) > 0:
-            payment_types = list(map(int, payment_types))
+        # filters by ad payment types
+        if len(params['payment_types']) > 0:
+            payment_types = list(map(int, params['payment_types']))
             queryset = queryset.filter(ad_snapshot__payment_methods__payment_type__id__in=payment_types).distinct()
 
-        if len(time_limits) > 0:
-            time_limits = list(map(int, time_limits))
+        # filters by ad time limits
+        if len(params['time_limits']) > 0:
+            time_limits = list(map(int, params['time_limits']))
             queryset = queryset.filter(ad_snapshot__time_duration_choice__in=time_limits).distinct()
 
-        if trade_type is not None:
-            queryset = queryset.exclude(Q(ad_snapshot__trade_type=trade_type))
-        
-        if appealed is False:
-            subquery = Appeal.objects.filter(order=OuterRef('pk')).values('order')
-            queryset = queryset.exclude(pk__in=Subquery(subquery))
+        # filters by order trade type
+        if params['trade_type'] is not None:
+            queryset = queryset.exclude(Q(ad_snapshot__trade_type=params['trade_type']))
 
-        if expired is False:
-            queryset = queryset.exclude(Q(expires_at__isnull=False) & Q(expires_at__lt=timezone.now()))
+        # filters expired orders only
+        if params['expired_only'] is True:
+            queryset = queryset.filter(Q(expires_at__isnull=False) & Q(expires_at__lt=timezone.now()))
 
-        if sort_by == 'last_modified_at':
+        if params['sort_by'] == 'last_modified_at':
             sort_field = 'last_modified_at'
-            if sort_type == 'descending':
+            if params['sort_type'] == 'descending':
                 sort_field = f'-{sort_field}'
             last_status_created_at = Status.objects.filter(
                 order=OuterRef('pk')).order_by('-created_at').values('created_at')[:1]
@@ -164,11 +176,11 @@ class OrderListCreate(APIView):
             ).order_by(sort_field)
         else:
             sort_field = 'created_at'
-            if (sort_type == 'descending'):
+            if (params['sort_type'] == 'descending'):
                 sort_field = f'-{sort_field}'
-            if status_type == 'ONGOING':
+            if params['status_type'] == 'ONGOING':
                 queryset = queryset.order_by(sort_field)
-            if status_type == 'COMPLETED':
+            if params['status_type'] == 'COMPLETED':
                 queryset = queryset.order_by(sort_field)
         
         # Count total pages
