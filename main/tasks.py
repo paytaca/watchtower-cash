@@ -1284,10 +1284,16 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
 @shared_task(bind=True, queue='wallet_history_1')
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[], proceed_with_zero_amount=False):
     wallet_hash = wallet_handle.split('|')[1]
+    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+
+    # Do not record wallet history record if all recipients are from the same wallet
+    recipient_addresses = [i[0] for i in recipients if i[0]]
+    recipients_check = Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
+    if len(recipient_addresses) == recipients_check.count():
+        return
+
     parser = HistoryParser(txid, wallet_hash)
     parsed_history = parser.parse()
-    
-    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
     if type(tx_fee) is str:
         tx_fee = float(tx_fee)
