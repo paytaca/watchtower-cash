@@ -6,6 +6,7 @@ import time
 import logging
 from json.decoder import JSONDecodeError
 from main.models import Address
+from anyhedge.models import HedgePosition
 from main.tasks import (
     process_mempool_transaction_fast,
     process_mempool_transaction_throttled
@@ -47,7 +48,8 @@ def _addresses_subscribed(tx_hex):
         if _addrs:
             tx_addresses += _addrs
     addrs_check = Address.objects.filter(address__in=tx_addresses)
-    if addrs_check.exists():
+    hedge_position_check = HedgePosition.objects.filter(address__in=tx_addresses)
+    if addrs_check.exists() or hedge_position_check.exists():
         subscribed = True
     return subscribed
 
