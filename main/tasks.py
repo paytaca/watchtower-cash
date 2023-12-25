@@ -1286,11 +1286,14 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
     wallet_hash = wallet_handle.split('|')[1]
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
-    # Do not record wallet history record if all recipients are from the same wallet
-    recipient_addresses = [i[0] for i in recipients if i[0]]
+    # Do not record wallet history record if all senders and recipients are from the same wallet (i.e. UTXO consolidation txs)
+    sender_addresses = set([i[0] for i in senders if i[0]])
+    senders_check = Address.objects.filter(address__in=sender_addresses, wallet=wallet)
+    recipient_addresses = set([i[0] for i in recipients if i[0]])
     recipients_check = Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
-    if len(recipient_addresses) == recipients_check.count():
-        return
+    if len(sender_addresses) == senders_check.count():
+        if len(recipient_addresses) == recipients_check.count():
+            return
 
     parser = HistoryParser(txid, wallet_hash)
     parsed_history = parser.parse()
