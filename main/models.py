@@ -420,6 +420,7 @@ class Transaction(PostgresModel):
     )
     amount = models.BigIntegerField(
         null=True,
+        blank=True,
         db_index=True
     )
     value = models.BigIntegerField(

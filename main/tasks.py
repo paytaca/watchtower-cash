@@ -853,7 +853,7 @@ def get_bch_utxos(self, address):
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
             else:
-                txn_id, created = save_record(
+                _, created = save_record(
                     token_id,
                     address,
                     tx_hash,
@@ -868,15 +868,15 @@ def get_bch_utxos(self, address):
                     commitment=commitment,
                     capability=capability
                 )
-                transaction_obj = Transaction.objects.filter(id=txn_id)
+                # transaction_obj = Transaction.objects.filter(id=txn_id)
 
                 if created:
                     if not block.requires_full_scan:
                         qs = BlockHeight.objects.filter(id=block.id)
                         count = qs.first().transactions.count()
                         qs.update(processed=True, transactions_count=count)
-                    
-                    parse_tx_wallet_histories.delay(tx_hash, immediate=True)
+     
+            parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
         txn_check = Transaction.objects.filter(
@@ -887,6 +887,8 @@ def get_bch_utxos(self, address):
         ).update(
             spent=True
         )
+
+
 
     except Exception as exc:
         try:
@@ -1293,6 +1295,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
     recipients_check = Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
     if len(sender_addresses) == senders_check.count():
         if len(recipient_addresses) == recipients_check.count():
+            # Remove wallet history record of this, if any
+            WalletHistory.objects.filter(txid=txid).delete()
             return
 
     parser = HistoryParser(txid, wallet_hash)
