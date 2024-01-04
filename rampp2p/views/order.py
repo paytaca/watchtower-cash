@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 import math
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
+from django.utils import timezone
 
 from authentication.token import TokenAuthentication
 from main.utils.subscription import save_subscription
@@ -50,79 +51,137 @@ logger = logging.getLogger(__name__)
 class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def get(self, request):
-        order_state = request.query_params.get('state')
-        wallet_hash = request.user.wallet_hash
+    def unwrap_request(self, request):
+        limit = request.query_params.get('limit', 0)
+        page = request.query_params.get('page', 1)
+        status_type = request.query_params.get('status_type')
+        currency = request.query_params.get('currency')
+        trade_type = request.query_params.get('trade_type')
+        filtered_status = request.query_params.getlist('status')
+        payment_types = request.query_params.getlist('payment_types')
+        time_limits = request.query_params.getlist('time_limits')
+        sort_by = request.query_params.get('sort_by')
+        sort_type = request.query_params.get('sort_type')
+        owned = request.query_params.get('owned')
+        expired_only = request.query_params.get('expired_only')
+        if owned is not None:
+            owned = owned == 'true'
+        if expired_only is not None:
+            expired_only = expired_only == 'true'
 
-        if order_state is None:
-            return Response({'error': 'parameter "state" is required'}, status=status.HTTP_400_BAD_REQUEST)
+        return {
+            'limit': limit,
+            'page': page,
+            'status_type': status_type,
+            'currency': currency,
+            'trade_type': trade_type,
+            'filtered_status': filtered_status,
+            'payment_types': payment_types,
+            'time_limits': time_limits,
+            'sort_by': sort_by,
+            'sort_type': sort_type,
+            'owned': owned,
+            'expired_only': expired_only
+        }
+
+    def get(self, request):
+        wallet_hash = request.user.wallet_hash
+        params = self.unwrap_request(request=request)
+
+        if params['status_type'] is None:
+            return Response(
+                {'error': 'parameter status_type is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            limit = int(request.query_params.get('limit', 0))
-            page = int(request.query_params.get('page', 1))
-        except ValueError as err:
+            limit = int(params['limit'])
+            page = int(params['page'])
+            if limit < 0:
+                raise ValidationError('limit must be a non-negative number')
+            if page < 1:
+                raise ValidationError('invalid page number')
+        except (ValueError, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        if limit < 0:
-            return Response({'error': 'limit must be a non-negative number'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if page < 1:
-            return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = Order.objects.all()
 
-        # Fetch orders created by user
-        owned_orders = Order.objects.filter(owner__wallet_hash=wallet_hash)
+        # fetches orders created by user
+        owned_orders = Q(owner__wallet_hash=wallet_hash)
 
-        # Fetch orders created for ads owned by user
-        ads = list(Ad.objects.filter(owner__wallet_hash=wallet_hash).values_list('id', flat=True))
-        ad_orders = Order.objects.filter(ad_snapshot__ad__pk__in=ads)
+        # fetches the orders that have ad ids owned by user
+        ad_orders = Q(ad_snapshot__ad__pk__in=list(
+                        # fetches the flat ids of ads owned by user
+                        Ad.objects.filter(
+                            owner__wallet_hash=wallet_hash
+                        ).values_list('id', flat=True)
+                    ))
+                    
+        if params['owned'] == True:
+            queryset = queryset.filter(owned_orders)
+        elif params['owned'] == False:
+            queryset = queryset.filter(ad_orders)
+        else:
+            queryset = queryset.filter(owned_orders | ad_orders)
 
-        latest_status = Status.objects.filter(
-            order=OuterRef('pk'), 
-        ).order_by('-created_at')
-
-        order_by = request.query_params.get('order_by')
-        if order_by == 'last_modified':
-            owned_orders = owned_orders.annotate(
-                last_modified_at=Subquery(
-                    latest_status.values('created_at')[:1]
-                )
-            )
-
-            ad_orders = ad_orders.annotate(
-                last_modified_at=Subquery(
-                    latest_status.values('created_at')[:1]
-                )
-            )
-
-        # Create subquery to filter/exclude completed status
+        # filter or exclude orders based to their latest status
         completed_status = [
             StatusType.CANCELED,
             StatusType.RELEASED,
             StatusType.REFUNDED
         ]
-
-        latest_status = Status.objects.filter(
-            order=OuterRef('pk'), 
+        last_status = Status.objects.filter(
+            order=OuterRef('pk'),
             status__in=completed_status
-        ).order_by('-created_at')
+        ).order_by('-created_at').values('order')[:1]
 
-        # Filter or exclude orders according to their latest status
-        if order_state == 'COMPLETED':            
-            owned_orders = owned_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
-            ad_orders = ad_orders.filter(pk__in=Subquery(latest_status.values('order')[:1]))
-        elif order_state == 'ONGOING':
-            owned_orders = owned_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
-            ad_orders = ad_orders.exclude(pk__in=Subquery(latest_status.values('order')[:1]))
+        if params['status_type'] == 'COMPLETED':            
+            queryset = queryset.filter(pk__in=Subquery(last_status))
+        elif params['status_type'] == 'ONGOING':
+            queryset = queryset.exclude(pk__in=Subquery(last_status))
+        
+        if len(params['filtered_status']) > 0:
+            filtered_status = Status.objects.filter(
+                order=OuterRef('pk'),
+                status__in=list(map(str, params['filtered_status']))
+            ).order_by('-created_at').values('order')[:1]
+            queryset = queryset.filter(pk__in=Subquery(filtered_status))
 
-        # Combine owned and ad orders
-        queryset = owned_orders.union(ad_orders)
-        if order_by == 'last_modified':
-            queryset = queryset.order_by('-last_modified_at')
+        # filters by ad payment types
+        if len(params['payment_types']) > 0:
+            payment_types = list(map(int, params['payment_types']))
+            queryset = queryset.filter(ad_snapshot__payment_methods__payment_type__id__in=payment_types).distinct()
+
+        # filters by ad time limits
+        if len(params['time_limits']) > 0:
+            time_limits = list(map(int, params['time_limits']))
+            queryset = queryset.filter(ad_snapshot__time_duration_choice__in=time_limits).distinct()
+
+        # filters by order trade type
+        if params['trade_type'] is not None:
+            queryset = queryset.exclude(Q(ad_snapshot__trade_type=params['trade_type']))
+
+        # filters expired orders only
+        if params['expired_only'] is True:
+            queryset = queryset.filter(Q(expires_at__isnull=False) & Q(expires_at__lt=timezone.now()))
+
+        if params['sort_by'] == 'last_modified_at':
+            sort_field = 'last_modified_at'
+            if params['sort_type'] == 'descending':
+                sort_field = f'-{sort_field}'
+            last_status_created_at = Status.objects.filter(
+                order=OuterRef('pk')).order_by('-created_at').values('created_at')[:1]
+            queryset = queryset.annotate(
+                last_modified_at=Subquery(last_status_created_at)
+            ).order_by(sort_field)
         else:
-            if order_state == 'ONGOING':
-                queryset = queryset.order_by('-created_at')
-            if order_state == 'COMPLETED':
-                queryset = queryset.order_by('-created_at')
+            sort_field = 'created_at'
+            if (params['sort_type'] == 'descending'):
+                sort_field = f'-{sort_field}'
+            if params['status_type'] == 'ONGOING':
+                queryset = queryset.order_by(sort_field)
+            if params['status_type'] == 'COMPLETED':
+                queryset = queryset.order_by(sort_field)
         
         # Count total pages
         count = queryset.count()
@@ -416,7 +475,7 @@ class ConfirmOrder(APIView):
         })
 
         if serialized_status.is_valid():
-            serialized_status = StatusSerializer(serialized_status.save())
+            serialized_status = StatusReadSerializer(serialized_status.save())
             
             # send websocket notification
             websocket.send_order_update({
@@ -530,7 +589,7 @@ class VerifyEscrow(APIView):
         try:
             self.validate_permissions(request.user.wallet_hash, pk)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             validate_status(pk, StatusType.ESCROW_PENDING)
@@ -542,15 +601,10 @@ class VerifyEscrow(APIView):
                 raise ValidationError('txid is required')
                 
             contract = Contract.objects.get(order_id=pk)
-            transaction, _ = Transaction.objects.get_or_create(
-                contract=contract,
-                action=Transaction.ActionType.ESCROW,
-                txid=txid
-            )
 
             # Validate the transaction
             validate_transaction(
-                txid=transaction.txid,
+                txid=txid,
                 action=Transaction.ActionType.ESCROW,
                 contract_id=contract.id
             )
@@ -560,13 +614,11 @@ class VerifyEscrow(APIView):
         except IntegrityError as err:
             return Response({'error': 'duplicate txid'}, status=status.HTTP_400_BAD_REQUEST)
         
-        serialized_tx = TransactionSerializer(transaction)
-        return Response(serialized_tx.data, status=status.HTTP_200_OK)  
+        return Response(status=status.HTTP_200_OK)  
 
     def validate_permissions(self, wallet_hash, pk):
         '''
-        Only owners of SELL ads can set order statuses to CONFIRMED.
-        Creators of SELL orders skip the order status to CONFIRMED on creation.
+        Only SELLERS can verify the ESCROW status of order.
         '''
 
         try:
@@ -576,11 +628,12 @@ class VerifyEscrow(APIView):
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
-            # require caller is seller
-            if wallet_hash != seller.wallet_hash:
-                raise ValidationError('caller must be seller')
         else:
-            raise ValidationError('ad trade_type is not {}'.format(TradeType.SELL))
+            seller = order.owner
+        
+        # Caller must be seller
+        if wallet_hash != seller.wallet_hash:
+            raise ValidationError('Caller is not seller')
     
 class CryptoBuyerConfirmPayment(APIView):
     authentication_classes = [TokenAuthentication]
@@ -737,7 +790,7 @@ class CancelOrder(APIView):
         })
 
         if serializer.is_valid():
-            serialized_status = StatusSerializer(serializer.save())
+            serialized_status = StatusReadSerializer(serializer.save())
             websocket_msg = {
                 'success' : True,
                 'status': serialized_status.data

@@ -23,7 +23,6 @@ class Order(models.Model):
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT, editable=False)
     locked_price = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
-
     crypto_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
     arbiter = models.ForeignKey(
         Arbiter, 
@@ -33,6 +32,7 @@ class Order(models.Model):
         related_name="arbitrated_orders")
     payment_methods = models.ManyToManyField(PaymentMethod)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    expires_at = models.DateTimeField(null=True)
 
     def __str__(self):
         return str(self.id)

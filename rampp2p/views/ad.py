@@ -120,10 +120,10 @@ class AdListCreate(APIView):
             total_pages = math.ceil(count / limit)
 
         offset = (page - 1) * limit
-        page_results = queryset[offset:offset + limit]
+        paged_queryset = queryset[offset:offset + limit]
 
         context = { 'wallet_hash': wallet_hash }
-        serializer = AdListSerializer(page_results, many=True, context=context)
+        serializer = AdListSerializer(paged_queryset, many=True, context=context)
         data = {
             'ads': serializer.data,
             'count': count,

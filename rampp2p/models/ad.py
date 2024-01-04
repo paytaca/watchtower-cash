@@ -45,8 +45,7 @@ class Ad(models.Model):
         return str(self.id)
 
     # modified for soft deletion
-    def delete(self, *args, **kwargs):
-        # self.is_deleted = True
+    def delete(self):
         self.deleted_at = timezone.now()
         self.save()
     

@@ -56,7 +56,7 @@ def handle_transaction(txn: Dict, action: str, contract_id: int):
     Automatically updates the order's status if txn is valid and 
     sends the result through a websocket channel.
     '''
-    # logger.warning(f'Handling txn: {txn}')
+    logger.warning(f'Handling txn: {txn}')
     contract = Contract.objects.get(pk=contract_id)
     valid, error, outputs = verify_txn(action, contract, txn)
     result = None
@@ -153,6 +153,11 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                     appeal = appeal.first()
                     appeal.resolved_at = timezone.now()
                     appeal.save()
+
+            # Update order expires_at if status is ESCROWED
+            if status_type == StatusType.ESCROWED:
+                contract.order.expires_at = timezone.now() + contract.order.time_duration
+                contract.order.save()
 
             # Update order status
             status = update_order_status(contract.order.id, status_type).data

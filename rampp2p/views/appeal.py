@@ -214,7 +214,11 @@ class AppealRequest(APIView):
                     'appeal': serialized_appeal.data,
                     'status': serialized_status.data
                 }
-                websocket.send_order_update(response_data, pk)
+                websocket_msg = {
+                    'success' : True,
+                    'status': serialized_status.data
+                }
+                websocket.send_order_update(websocket_msg, pk)
 
                 # send push notifications
                 party_a = appeal.order.ad_snapshot.ad.owner.wallet_hash
@@ -272,7 +276,11 @@ class AppealPendingRelease(APIView):
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # notify order update subscribers
-        websocket.send_order_update(json.dumps(serialized_status.data), pk)
+        websocket_msg = {
+            'success' : True,
+            'status': serialized_status.data
+        }
+        websocket.send_order_update(websocket_msg, pk)
 
         return Response(serialized_status.data, status=status.HTTP_200_OK)
     
@@ -337,7 +345,11 @@ class AppealPendingRefund(APIView):
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # notify order update subscribers
-        websocket.send_order_update(json.dumps(serialized_status.data), pk)
+        websocket_msg = {
+            'success' : True,
+            'status': serialized_status.data
+        }
+        websocket.send_order_update(websocket_msg, pk)
         
         return Response(serialized_status.data, status=status.HTTP_200_OK)
     
@@ -392,20 +404,10 @@ class VerifyRelease(APIView):
                 raise ValidationError('txid field is required')
 
             contract = Contract.objects.get(order__id=pk)
-            transaction, _ = Transaction.objects.get_or_create(
-                contract=contract,
-                action=Transaction.ActionType.RELEASE,
-                txid=txid
-            )
-
-            result = {
-                'txid': txid,
-                'transaction': TransactionSerializer(transaction).data
-            }
-
+            
             # Validate the transaction
             validate_transaction(
-                txid=transaction.txid,
+                txid=txid,
                 action=Transaction.ActionType.RELEASE,
                 contract_id=contract.id
             )
@@ -413,7 +415,7 @@ class VerifyRelease(APIView):
         except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
-        return Response(result, status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
         '''
@@ -433,13 +435,15 @@ class VerifyRelease(APIView):
         is_seller = False
         if wallet_hash == order.arbiter.wallet_hash:
             is_arbiter = True
-        elif order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
-            if wallet_hash == seller.wallet_hash:
-                is_seller = True
+        else:
+            seller = order.owner
+        if wallet_hash == seller.wallet_hash:
+            is_seller = True
 
         if (not is_arbiter) and (not is_seller):
-            raise ValidationError(f'{prefix} Caller must be seller or arbiter.')
+            raise ValidationError(f'{prefix} Caller is not seller nor arbiter.')
         
         if not (curr_status.status == StatusType.RELEASE_PENDING or curr_status.status == StatusType.PAID):
             raise ValidationError(f'{prefix} action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')

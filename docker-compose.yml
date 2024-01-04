@@ -32,7 +32,7 @@ services:
   bchn:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
-      - ~/.ssh:/root/ssh:ro
+      - $HOME/.ssh:/root/ssh:ro
     environment:
       SSH_DEBUG: "-v"
       # TUNNEL_HOST: bchn-mainnet

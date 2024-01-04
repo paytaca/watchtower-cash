@@ -42,12 +42,12 @@ class OrderArbiterSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
+    owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     arbiter = OrderArbiterSerializer()
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
-    expiration_date = serializers.SerializerMethodField()
     payment_methods = serializers.SerializerMethodField()
     last_modified_at = serializers.SerializerMethodField() # lastest order status created_at
     is_ad_owner = serializers.SerializerMethodField()
@@ -57,6 +57,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'ad',
+            'owner',
             'crypto_currency',
             'fiat_currency',
             'crypto_amount',
@@ -64,9 +65,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'arbiter',
             'trade_type',
             'status',
-            'expiration_date',
             'payment_methods',
             'created_at',
+            'expires_at',
             'last_modified_at',
             'is_ad_owner'
         ]
@@ -86,6 +87,13 @@ class OrderSerializer(serializers.ModelSerializer):
             'payment_methods': serialized_payment_methods.data
         }
     
+    def get_owner(self, instance: Order):
+        return {
+            'id': instance.id,
+            'name': instance.owner.name,
+            'rating': instance.owner.average_rating()
+        }
+
     def get_payment_methods(self, instance: Order):
         escrowed_status = Status.objects.filter(Q(order=instance) & Q(status=StatusType.ESCROWED))
         if escrowed_status.exists():            
@@ -122,19 +130,6 @@ class OrderSerializer(serializers.ModelSerializer):
         if latest_status is not None:
             last_modified_at = latest_status['created_at']
         return last_modified_at
-    
-    def get_expiration_date(self, instance: Order):
-        '''
-        Returns the datetime the order expires.
-        '''
-        time_duration = instance.time_duration
-        escrowed_at = Status.objects.values('created_at').filter(Q(order__id=instance.id) & Q(status=StatusType.ESCROWED)).first()
-        
-        expiration_date = None
-        if escrowed_at is not None:
-            expiration_date = escrowed_at['created_at'] + time_duration
-        
-        return expiration_date
     
     def get_is_ad_owner(self, instance: Order):
         wallet_hash = self.context['wallet_hash']
