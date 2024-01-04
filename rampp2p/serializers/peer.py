@@ -7,6 +7,7 @@ class PeerProfileSerializer(serializers.ModelSerializer):
         model = Peer
         fields = [
             'id',
+            'chat_identity_id',
             'name',
             'public_key',
             'address',
@@ -22,6 +23,7 @@ class PeerSerializer(serializers.ModelSerializer):
         model = Peer
         fields = [
             'id',
+            'chat_identity_id',
             'name',
             'public_key',
             'address',
@@ -87,10 +89,12 @@ class PeerCreateSerializer(serializers.ModelSerializer):
         ]
 
 class PeerUpdateSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(required=False)
+    chat_identity_id = serializers.CharField(required=False)
+    
     class Meta:
         model = Peer
         fields = [
            'name',
-        #    'public_key',
-        #    'address',
+            'chat_identity_id'
         ]

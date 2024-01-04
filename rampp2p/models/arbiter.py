@@ -2,6 +2,7 @@ from django.db import models
 from django.apps import apps
 
 class Arbiter(models.Model):
+    chat_identity_id = models.CharField(max_length=100, null=True)
     name = models.CharField(max_length=100)
     public_key = models.CharField(max_length=100)
     address = models.CharField(max_length=100)
