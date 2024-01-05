@@ -601,14 +601,12 @@ class WalletHistory(PostgresModel):
     senders = ArrayField(
         ArrayField(models.CharField(max_length=70)),
         default=list,
-        blank=True,
-        db_index=True
+        blank=True
     )
     recipients = ArrayField(
         ArrayField(models.CharField(max_length=70)),
         default=list,
-        blank=True,
-        db_index=True
+        blank=True
     )
     wallet = models.ForeignKey(
         Wallet,

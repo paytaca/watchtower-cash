@@ -638,7 +638,7 @@ def query_transaction(txid, block_id, for_slp=False):
 
             if 'addresses' in output['scriptPubKey'].keys():
                 address = output['scriptPubKey']['addresses'][0]
-                value = int(output['value'] * (10 ** 8))
+                value = round(output['value'] * (10 ** 8))
                 
                 if 'tokenData' in output.keys():
                     process_cashtoken_tx(
@@ -836,7 +836,6 @@ def get_bch_utxos(self, address):
             transaction_check = Transaction.objects.filter(
                 txid=tx_hash,
                 address__address=address,
-                value=value,
                 index=index
             )
             if transaction_check.exists():
@@ -846,9 +845,9 @@ def get_bch_utxos(self, address):
                 # and also update the blockheight
                 _txn = transaction_check.first()
                 if _txn.wallet == _txn.address.wallet:
-                    transaction_check.update(spent=False, blockheight=block)
+                    transaction_check.update(spent=False, value=value, blockheight=block)
                 else:
-                    transaction_check.update(wallet=_txn.address.wallet, spent=False, blockheight=block)
+                    transaction_check.update(wallet=_txn.address.wallet, value=value, spent=False, blockheight=block)
                 
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
@@ -2175,7 +2174,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
 
         for _input in inputs:
             txid = _input['txid']
-            value = int(_input['value'] * (10 ** 8))
+            value = round(_input['value'] * (10 ** 8))
             index = _input['vout']
 
             tx_check = Transaction.objects.filter(txid=txid, index=index)
@@ -2220,7 +2219,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
 
                 address_check = Address.objects.filter(address=bchaddress)
                 if address_check.exists():
-                    value = int(output['value'] * (10 ** 8))
+                    value = round(output['value'] * (10 ** 8))
                     source = NODE.BCH.source
                     index = output['n']
 

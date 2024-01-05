@@ -144,7 +144,7 @@ class BCHN(object):
                     input_token_data = prevout['tokenData']
             else:
                 _input_details = self.get_input_details(input_txid, tx_input['vout'])
-                value = int(float(_input_details['value'] * (10 ** 8)))
+                value = round(_input_details['value'] * (10 ** 8))
                 input_token_data = _input_details.get('tokenData')
                 input_address = _input_details['address']
             input_txid = tx_input['txid']
@@ -162,7 +162,7 @@ class BCHN(object):
 
         for tx_output in outputs:
             if 'value' in tx_output.keys() and 'addresses' in tx_output['scriptPubKey'].keys():
-                sats_value = int(float(tx_output['value'] * (10 ** 8)))
+                sats_value = round(tx_output['value'] * (10 ** 8))
                 data = {
                     'address': tx_output['scriptPubKey']['addresses'][0],
                     'value': sats_value,
@@ -174,7 +174,7 @@ class BCHN(object):
                 transaction['outputs'].append(data)
 
         if 'fee' in txn:
-            transaction['tx_fee'] = int(txn['fee'] * (10 ** 8))
+            transaction['tx_fee'] = round(txn['fee'] * (10 ** 8))
         return transaction
 
     def broadcast_transaction(self, hex_str):

@@ -12,13 +12,8 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterField(
-            model_name='wallethistory',
-            name='recipients',
-            field=django.contrib.postgres.fields.ArrayField(base_field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=70), size=None), blank=True, db_index=True, default=list, size=None),
-        ),
-        migrations.AlterField(
-            model_name='wallethistory',
-            name='senders',
-            field=django.contrib.postgres.fields.ArrayField(base_field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=70), size=None), blank=True, db_index=True, default=list, size=None),
-        ),
+            model_name='transaction',
+            name='amount',
+            field=models.BigIntegerField(blank=True, db_index=True, null=True),
+        )
     ]
