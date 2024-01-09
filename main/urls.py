@@ -64,6 +64,7 @@ main_urls += [
     re_path(r"^transactions/(?P<txid>[\w+]+)/$", views.TransactionDetailsView.as_view(),name='transaction-details'),
 
     # re_path(r"^tokens/(?P<tokenid>[\w+:]+)/$", views.TokensView.as_view(),name='tokens'),
+    path('transaction/spender/', views.SpenderTransactionView.as_view(), name='find-transaction-spender'),
     path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction")
 ]
 
