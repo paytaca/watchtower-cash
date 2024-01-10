@@ -45,6 +45,7 @@ from rampp2p.models import (
     Appeal,
     TradeType
 )
+import rampp2p.models as models
 
 import logging
 logger = logging.getLogger(__name__)
@@ -383,7 +384,19 @@ class OrderMembers(APIView):
             members = [order.owner, order.ad_snapshot.ad.owner]
             if order.arbiter:
                 members.append(order.arbiter)
-            members = serializers.OrderMemberSerializer(members, many=True)
+
+            member_info = []
+            for member in members:
+                member_info.append({
+                    'id': member.id,
+                    'chat_identity_id': member.chat_identity_id,
+                    'public_key': member.public_key,
+                    'name': member.name,
+                    'address': member.address,
+                    'is_arbiter': isinstance(member, models.Arbiter)
+                })
+            
+            members = serializers.OrderMemberSerializer(member_info, many=True)
         except Order.DoesNotExist:
             raise Http404
         except Exception as err:

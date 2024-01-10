@@ -18,17 +18,13 @@ from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 import logging
 logger = logging.getLogger(__name__)
 
-class OrderMemberSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Peer
-        fields = [
-            'id',
-            'chat_identity_id',
-            'public_key',
-            'name',
-            'address'
-        ]
-
+class OrderMemberSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    chat_identity_id = serializers.IntegerField()
+    public_key = serializers.CharField()
+    name = serializers.CharField()
+    address = serializers.CharField()
+    is_arbiter = serializers.BooleanField()
 
 class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = serializers.SerializerMethodField()
