@@ -20,6 +20,7 @@ from rampp2p.utils.utils import get_trading_fees, get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.validators import *
+import rampp2p.serializers as serializers
 from rampp2p.serializers import (
     OrderSerializer, 
     OrderWriteSerializer, 
@@ -374,6 +375,21 @@ class OrderListCreate(APIView):
             if payment_method.owner.wallet_hash != caller.wallet_hash:
                 raise ValidationError('invalid payment method, not caller owned')
 
+class OrderMembers(APIView):
+    authentication_classes = [TokenAuthentication]
+    def get(self, _, pk):
+        try:
+            order = Order.objects.get(pk=pk)
+            members = [order.owner, order.ad_snapshot.ad.owner]
+            if order.arbiter:
+                members.append(order.arbiter)
+            members = serializers.OrderMemberSerializer(members, many=True)
+        except Order.DoesNotExist:
+            raise Http404
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(members.data, status=status.HTTP_200_OK)
+
 class OrderListStatus(APIView):
     authentication_classes = [TokenAuthentication]
     def get(self, request, pk):
@@ -603,11 +619,7 @@ class VerifyEscrow(APIView):
             contract = Contract.objects.get(order_id=pk)
 
             # Validate the transaction
-            validate_transaction(
-                txid=txid,
-                action=Transaction.ActionType.ESCROW,
-                contract_id=contract.id
-            )
+            validate_transaction(txid, Transaction.ActionType.ESCROW, contract.id)
 
         except (ValidationError, Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

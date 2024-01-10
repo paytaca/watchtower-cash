@@ -6,6 +6,7 @@ class ArbiterProfileSerializer(serializers.ModelSerializer):
         model = Arbiter
         fields = [
             'id',
+            'chat_identity_id',
             'name',
             'public_key',
             'address',
@@ -17,6 +18,7 @@ class ArbiterWriteSerializer(serializers.ModelSerializer):
         model = Arbiter
         fields = [
             'name',
+            'chat_identity_id',
             'wallet_hash',
             'public_key',
             'address'
@@ -27,6 +29,7 @@ class ArbiterReadSerializer(serializers.ModelSerializer):
         model = Arbiter
         fields = [
             'id',
+            'chat_identity_id',
             'name',
             'public_key',
             'address',
