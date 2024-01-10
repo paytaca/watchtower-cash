@@ -22,15 +22,7 @@ from rampp2p.models import (
     Arbiter,
     Status
 )
-from rampp2p.serializers import (
-    StatusSerializer,
-    AppealSerializer,
-    AppealCreateSerializer,
-    TransactionSerializer,
-    OrderSerializer,
-    ContractDetailSerializer,
-    AdSnapshotSerializer
-)
+import rampp2p.serializers as serializers
 from rampp2p.validators import *
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.utils import is_order_expired, get_trading_fees
@@ -83,7 +75,7 @@ class AppealList(APIView):
         offset = (page - 1) * limit
         page_results = queryset[offset:offset + limit]
 
-        serializer = AppealSerializer(page_results, many=True)
+        serializer = serializers.AppealSerializer(page_results, many=True)
         data = {
             'appeals': serializer.data,
             'count': count,
@@ -115,17 +107,17 @@ class AppealRequest(APIView):
         appeal = Appeal.objects.filter(order=pk)
         if appeal.exists():
             appeal = appeal.first()
-            serialized_appeal = AppealSerializer(appeal)
+            serialized_appeal = serializers.AppealSerializer(appeal)
         
             context = { 'wallet_hash': wallet_hash }
-            serialized_order = OrderSerializer(appeal.order, context=context)
+            serialized_order = serializers.OrderSerializer(appeal.order, context=context)
             statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
-            serialized_statuses = StatusSerializer(statuses, many=True)
+            serialized_statuses = serializers.StatusSerializer(statuses, many=True)
             contract = Contract.objects.filter(order=appeal.order.id).first()
-            serialized_contract = ContractDetailSerializer(contract)
+            serialized_contract = serializers.ContractDetailSerializer(contract)
             transactions = Transaction.objects.filter(contract=contract.id)
-            serialized_transactions = TransactionSerializer(transactions, many=True)
-            serialized_ad_snapshot =  AdSnapshotSerializer(appeal.order.ad_snapshot)
+            serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
+            serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
 
         total_fee, fees = get_trading_fees()
         response = {
@@ -200,16 +192,16 @@ class AppealRequest(APIView):
             'type': appeal_type,
             'reasons': request.data.get('reasons')
         }
-        serialized_appeal = AppealCreateSerializer(data=data)
+        serialized_appeal = serializers.AppealCreateSerializer(data=data)
         if serialized_appeal.is_valid():
             appeal = serialized_appeal.save()
-            serialized_appeal = AppealSerializer(appeal)
-            serialized_status = StatusSerializer(data={
+            serialized_appeal = serializers.AppealSerializer(appeal)
+            serialized_status = serializers.StatusSerializer(data={
                 'status': StatusType.APPEALED,
                 'order': pk
             })
             if serialized_status.is_valid():
-                serialized_status = StatusSerializer(serialized_status.save())
+                serialized_status = serializers.StatusReadSerializer(serialized_status.save())
                 response_data = {
                     'appeal': serialized_appeal.data,
                     'status': serialized_status.data
