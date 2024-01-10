@@ -50,13 +50,13 @@ def execute_subprocess(command):
     return response    
 
 @shared_task(queue='rampp2p__contract_execution')
-def handle_transaction(txn: Dict, action: str, contract_id: int):
+def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
     '''
-    Verifies if `txn` is valid given `action` and `contract_id`.
-    Automatically updates the order's status if txn is valid and 
-    sends the result through a websocket channel.
+    Checks if `txn` is valid given `action` and `contract_id`. If valid:
+    automatically updates the related order's status. The result is sent 
+    through a websocket channel.
     '''
-    logger.warning(f'Handling txn: {txn}')
+    logger.warning(f'Validating txn: {txn}')
     contract = Contract.objects.get(pk=contract_id)
     valid, error, outputs = verify_txn(action, contract, txn)
     result = None
@@ -194,34 +194,19 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
     return result
 
 def verify_txn(action, contract, txn: Dict):
-    '''
-    Verifies if transaction details (input, outputs, and amounts) 
-    satisfy the requisites of its contract.
-    '''
-
     outputs = []
     error = None
     valid = txn.get('valid')
     if not valid:
         error = txn.get('error')
         return valid, error, outputs
-
-    # # transaction must have at least 1 confirmation
-    # confirmations = result.get('confirmations')
-    # min_req_confirmations = 1
-    # if confirmations != None and confirmations < min_req_confirmations:
-    #     error = {"error": f"transaction needs to have at least {min_req_confirmations} confirmations."}
-    #     return send_order_update(
-    #         error,
-    #         contract.order.id
-    #     )
     
     txn_details = txn.get('details')
     inputs = txn_details.get('inputs')
     outputs = txn_details.get('outputs')
 
     # The transaction is invalid, if inputs or outputs are empty
-    if inputs is None or outputs is None:
+    if not inputs or not outputs:
         error = txn.get('error')
         return False, error, None
     

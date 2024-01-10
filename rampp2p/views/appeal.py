@@ -406,11 +406,7 @@ class VerifyRelease(APIView):
             contract = Contract.objects.get(order__id=pk)
             
             # Validate the transaction
-            validate_transaction(
-                txid=txid,
-                action=Transaction.ActionType.RELEASE,
-                contract_id=contract.id
-            )
+            validate_transaction(txid, Transaction.ActionType.RELEASE, contract.id)
             
         except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -488,11 +484,7 @@ class VerifyRefund(APIView):
             )
 
             # Validate the transaction
-            validate_transaction(
-                txid=transaction.txid, 
-                action=Transaction.ActionType.REFUND,
-                contract_id=contract.id
-            )
+            validate_transaction(transaction.txid, Transaction.ActionType.REFUND, contract.id)
             
         except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
