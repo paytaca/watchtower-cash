@@ -9,6 +9,9 @@ from rampp2p.serializers import PeerProfileSerializer, ArbiterProfileSerializer
 from authentication.backends import SignatureBackend
 from authentication.models import AuthToken
 
+import authentication.serializers as serializers
+import rampp2p.models as rampmodels
+
 from django.conf import settings
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -109,9 +112,7 @@ class AuthNonceView(APIView):
 
 class RevokeTokenView(APIView):
     authentication_classes = [TokenAuthentication]
-
     def post(self, request):
-
         try:
             wallet_hash = request.headers.get('wallet_hash')
             auth_token = AuthToken.objects.get(wallet_hash=wallet_hash)
@@ -120,3 +121,34 @@ class RevokeTokenView(APIView):
             return Response({'error': 'Token does not exist'}, status=400)
         
         return Response(status=200)
+    
+class UserView(APIView):
+    def get(self, request):
+        wallet_hash = request.headers.get('wallet_hash')
+        if wallet_hash is None:
+            return Response({'error': 'wallet_hash is required'}, status=400)
+        
+        # get user
+        user = rampmodels.Arbiter.objects.filter(wallet_hash=wallet_hash)
+        if not user.exists():
+            user = rampmodels.Peer.objects.filter(wallet_hash=wallet_hash)
+        if not user.exists():
+            return Response({'error': 'user does not exist'}, status=404)
+        
+        # get auth token
+        auth_token = AuthToken.objects.filter(wallet_hash=wallet_hash)
+        is_authenticated = False
+        if auth_token.exists() and not auth_token.first().is_key_expired():
+            is_authenticated = True
+        
+        user = user.first()
+        user_info = {
+            'id': user.id,
+            'chat_identity_id': user.chat_identity_id,
+            'public_key': user.public_key,
+            'name': user.name,
+            'address': user.address,
+            'is_arbiter': isinstance(user, rampmodels.Arbiter),
+            'is_authenticated': is_authenticated
+        }
+        return Response(serializers.UserSerializer(user_info).data, status=200)
