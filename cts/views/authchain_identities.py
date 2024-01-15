@@ -115,7 +115,7 @@ class AuthchainIdentity(APIView):
 class Authhead(APIView):
     serializer_class = UtxoSerializer
     @swagger_auto_schema(
-        operation_description="Fetches the identity outputs associated with the (owner's) address",
+        operation_description="Returns the current authhead of the authchain.",
         responses={status.HTTP_200_OK: UtxoSerializer},
         manual_parameters=[
             openapi.Parameter('authbase', openapi.IN_QUERY, description="The authbase(txid) of the authchain", type=openapi.TYPE_STRING),
