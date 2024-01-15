@@ -111,4 +111,38 @@ class AuthchainIdentity(APIView):
         if page is not None:
             serializer = self.serializer_class(page, many=True, context={'token_id_authguard_pairs': token_authguard_addresses})
             return paginator.get_paginated_response(serializer.data)
+        
+class Authhead(APIView):
+    serializer_class = UtxoSerializer
+    @swagger_auto_schema(
+        operation_description="Fetches the identity outputs associated with the (owner's) address",
+        responses={status.HTTP_200_OK: UtxoSerializer},
+        manual_parameters=[
+            openapi.Parameter('authbase', openapi.IN_QUERY, description="The authbase(txid) of the authchain", type=openapi.TYPE_STRING),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        authbase = self.request.query_params.get('authbase')
+        identity_output = None
+        identity_output_tx = authbase 
+        authhead = None
+        while authhead == None:
+            identity_output = Transaction.objects.filter(txid=identity_output_tx, index=0)
+            if identity_output:
+                identity_output = identity_output.first()
+                identity_output_tx = identity_output.spending_txid
+                if identity_output.spent == True:
+                    continue
+                else:
+                    authhead = identity_output
+                    break
+            else:
+                break
+
+        if authhead:
+            s = UtxoSerializer(authhead, many=False)
+            return Response(s.data)
+        else: 
+            Response(None)
+
 
