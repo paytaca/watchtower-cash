@@ -1,5 +1,6 @@
 
-from rampp2p.models import Order, TradeType, Status, StatusType
+# from rampp2p.models import Order, TradeType, Status, StatusType
+import rampp2p.models as models
 from django.db.models import Q
 from django.conf import settings
 from datetime import datetime
@@ -9,13 +10,29 @@ from decimal import Decimal
 import logging
 logger = logging.getLogger(__name__)
 
+def is_seller(order: models.Order, wallet_hash: str):
+    seller = order.owner
+    if order.ad_snapshot.trade_type == models.TradeType.SELL:
+        seller = order.ad_snapshot.ad.owner
+    if wallet_hash == seller.wallet_hash:
+        return True
+    return False
+
+def is_buyer(order: models.Order, wallet_hash: str):
+    buyer = order.owner
+    if order.ad_snapshot.trade_type == models.TradeType.BUY:
+        buyer = order.ad_snapshot.ad.owner
+    if wallet_hash == buyer.wallet_hash:
+        return True
+    return False
+
 def is_order_expired(order_pk: int):
     '''
     Checks if the order has expired
     '''
     # get the created_at field of order's ESCROWED status
-    time_duration = Order.objects.get(pk=order_pk).time_duration
-    start_time = Status.objects.values('created_at').filter(Q(order__id=order_pk) & Q(status=StatusType.ESCROWED)).first()
+    time_duration = models.Order.objects.get(pk=order_pk).time_duration
+    start_time = models.Status.objects.values('created_at').filter(Q(order__id=order_pk) & Q(status=StatusType.ESCROWED)).first()
     
     if start_time is None:
         return False
@@ -29,17 +46,17 @@ def is_order_expired(order_pk: int):
         return True
     return False
 
-def get_order_peer_addresses(order: Order):
+def get_order_peer_addresses(order: models.Order):
     arbiter, buyer, seller = get_order_peers(order)
     return arbiter.address, buyer.address, seller.address, settings.SERVICER_ADDR
 
-def get_order_peers(order: Order):
+def get_order_peers(order: models.Order):
     # if order.ad is SELL, ad owner is seller
     # else order owner is seller
     seller = None
     buyer = None
     arbiter = order.arbiter
-    if order.ad_snapshot.trade_type == TradeType.SELL:
+    if order.ad_snapshot.trade_type == models.TradeType.SELL:
         seller = order.ad_snapshot.ad.owner
         buyer = order.owner
     else:
@@ -63,7 +80,7 @@ def get_trading_fees():
     return total_fee, fees
 
 def get_latest_status(order_id: int):
-    latest_status = Status.objects.filter(order__pk=order_id)
+    latest_status = models.Status.objects.filter(order__pk=order_id)
     if latest_status.exists():
         return latest_status.last()
     return None

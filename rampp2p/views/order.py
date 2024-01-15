@@ -427,44 +427,20 @@ class OrderDetail(APIView):
         
         context = { 'wallet_hash': wallet_hash }
         serialized_order = OrderSerializer(order, context=context).data
-        response = {
-            'order': serialized_order
-        }
-
-        order_contract = Contract.objects.filter(order__pk=pk)
-        if order_contract.count() > 0:
-            order_contract = order_contract.first()
-            # serialized_contract = None
-            # serialized_transactions = None
-            # if (serialized_order['status']['value'] == StatusType.CONFIRMED or
-            #     serialized_order['status']['value'] == StatusType.PAID):
-            serialized_contract = ContractDetailSerializer(order_contract).data
-            contract_txs = Transaction.objects.filter(contract__id=order_contract.id)
-            serialized_transactions = TransactionSerializer(contract_txs, many=True).data
-            
-            response['contract'] = serialized_contract
-            response['contract']['transactions'] = serialized_transactions
         
         if serialized_order['status']['value'] == StatusType.APPEALED:
             appeal = Appeal.objects.filter(order_id=order.id)
             if appeal.exists():
                 serialized_appeal = AppealSerializer(appeal.first()).data
-                # response['appeal'] = serialized_appeal
-                response['appeal'] = {
-                    'id': serialized_appeal['id'],
-                    'type': serialized_appeal['type'],
-                    'reasons': serialized_appeal['reasons'],
-                    'resolved_at': serialized_appeal['resolved_at'],
-                    'created_at': serialized_appeal['created_at']
-                }
-
-        total_fee, fees = get_trading_fees()
-        response['fees'] = {
-            'total': total_fee,
-            'fees': fees
-        }
-
-        return Response(response, status=status.HTTP_200_OK)
+                serialized_order['appeal'] = serialized_appeal
+                # serialized_order['appeal'] = {
+                #     'id': serialized_appeal['id'],
+                #     'type': serialized_appeal['type'],
+                #     'reasons': serialized_appeal['reasons'],
+                #     'resolved_at': serialized_appeal['resolved_at'],
+                #     'created_at': serialized_appeal['created_at']
+                # }
+        return Response(serialized_order, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
     authentication_classes = [TokenAuthentication]

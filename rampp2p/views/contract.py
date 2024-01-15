@@ -6,7 +6,8 @@ from django.core.exceptions import ValidationError
 from django.http import Http404
 
 from authentication.token import TokenAuthentication
-
+# from rampp2p.utils.utils import get_trading_fees
+import rampp2p.utils as utils
 from rampp2p.utils.contract import create_contract
 from rampp2p.validators import *
 from rampp2p.models import (
@@ -29,59 +30,36 @@ from rampp2p.serializers import (
 import logging
 logger = logging.getLogger(__name__)
 
-class ContractList(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    def get(self, request):
-        queryset = Contract.objects.all()
-
-        # TODO pagination
-
-        serializer = ContractSerializer(queryset, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
-
-class ContractDetail(APIView):
+class ContractDetailsView(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get_object(self, pk):
         try:
-            order = Order.objects.get(pk=pk)
-            contract = Contract.objects.get(order__id=order.id)
-            return contract
-        except (Order.DoesNotExist, Contract.DoesNotExist):
+            return Contract.objects.get(pk=pk)
+        except Contract.DoesNotExist:
             raise Http404
 
-    def get(self, request, pk):
-        contract_instance = self.get_object(pk)
-        contract_serializer = ContractDetailSerializer(contract_instance)
+    def get(self, _, pk):
+        contract = self.get_object(pk)
+        serialized_contract = ContractDetailSerializer(contract)
+        return Response(serialized_contract.data, status=status.HTTP_200_OK)
 
-        transactions = Transaction.objects.filter(contract__id=contract_instance.id)
-
-        tx_data = []
-        for _, tx in enumerate(transactions):
-            tx_outputs = Recipient.objects.filter(transaction__id=tx.id)
-            data = {}
-            data["txn"] = TransactionSerializer(tx).data
-            data["txn"]["outputs"] = RecipientSerializer(tx_outputs, many=True).data
-            tx_data.append(data)
-
-        response = {
-            "contract": contract_serializer.data,
-            "timestamp": contract_instance.created_at.timestamp(),
-            "transactions": tx_data
-        }
-        return Response(response, status=status.HTTP_200_OK)
-
-class CreateContract(APIView):
+class ContractCreateView(APIView):
     authentication_classes = [TokenAuthentication]
     
-    def post(self, request, pk):
+    def post(self, request):
         try:
-            self.validate_permissions(request.user.wallet_hash, pk)
-            validate_status(pk, StatusType.CONFIRMED)
+            order_pk = request.data.get('order_id')
+            arbiter_pk = request.data.get('arbiter_id')
+            if order_pk is None or arbiter_pk is None:
+                return Response({'error': 'order_id or arbiter_id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            order = Order.objects.get(pk=pk)
-            arbiter = Arbiter.objects.get(pk=request.data.get('arbiter'))
+            validate_status(order_pk, StatusType.CONFIRMED)
+            order = Order.objects.get(pk=order_pk)
+            if not self.has_permissions(order, request.user.wallet_hash):
+                return Response(status=status.HTTP_401_UNAUTHORIZED)
+
+            arbiter = Arbiter.objects.get(pk=arbiter_pk)
             params = self.get_params(arbiter.public_key, order)
 
         except (Order.DoesNotExist, Arbiter.DoesNotExist, ValidationError) as err:
@@ -90,7 +68,7 @@ class CreateContract(APIView):
         generate = False
         address = None
         timestamp = None
-        contract = Contract.objects.filter(order__id=pk)
+        contract = Contract.objects.filter(order__id=order_pk)
 
         if not contract.exists():
             # Create contract (& address) if not already existing
@@ -181,24 +159,40 @@ class CreateContract(APIView):
 
         return params
     
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        Owners of SELL ads can set order statuses to CONFIRMED.
-        Owners of orders for sell ads can set order statuses to CONFIRMED.
-        '''
+    def has_permissions(self, order: Order, wallet_hash: str):
+        return utils.is_seller(order, wallet_hash)
+        
+class ContractTransactionsView(APIView):
+    authentication_classes = [TokenAuthentication]
 
+    def get_object(self, pk):
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-            order = Order.objects.get(pk=pk)
-        except Peer.DoesNotExist or Order.DoesNotExist:
-            raise ValidationError('Peer/Order DoesNotExist')
-
-        seller = None
-        if order.ad_snapshot.trade_type == TradeType.SELL:
-            seller = order.ad_snapshot.ad.owner
-        else:
-            seller = order.owner
+            contract = Contract.objects.get(pk=pk)
+        except Contract.DoesNotExist:
+            raise Http404
+        return contract
     
-        # require caller is seller
-        if caller.wallet_hash != seller.wallet_hash:
-            raise ValidationError('caller must be seller')
+    def get(self, _, pk):
+        contract = self.get_object(pk)
+        transactions = Transaction.objects.filter(contract__id=contract.id)
+
+        tx_data = []
+        for _, tx in enumerate(transactions):
+            tx_outputs = Recipient.objects.filter(transaction__id=tx.id)
+            data = {}
+            data["txn"] = TransactionSerializer(tx).data
+            data["txn"]["outputs"] = RecipientSerializer(tx_outputs, many=True).data
+            tx_data.append(data)
+
+        return Response(tx_data, status=status.HTTP_200_OK)
+
+class ContractFeesView(APIView):
+    authentication_classes = [TokenAuthentication]
+
+    def get(self, _,):
+        total_fee, breakdown = utils.get_trading_fees()
+        response = {
+            'total': total_fee,
+            'breakdown': breakdown
+        }
+        return Response(response, status=status.HTTP_200_OK)

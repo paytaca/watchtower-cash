@@ -1,18 +1,6 @@
 from rest_framework import serializers
 from django.db.models import Q
-from rampp2p.models import (
-    Order,
-    CryptoCurrency, 
-    FiatCurrency,
-    Peer,
-    AdSnapshot,
-    TradeType,
-    DurationChoices,
-    Status,
-    StatusType,
-    Arbiter,
-    PaymentMethod
-)
+import rampp2p.models as models
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 
 import logging
@@ -29,7 +17,7 @@ class OrderMemberSerializer(serializers.Serializer):
 class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = serializers.SerializerMethodField()
     class Meta:
-        model = PaymentMethod
+        model = models.PaymentMethod
         fields = [
             'id',
             'payment_type',
@@ -37,12 +25,12 @@ class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
             'account_number'
         ]
     
-    def get_payment_type(self, instance: PaymentMethod):
-        return instance.payment_type.name
+    def get_payment_type(self, obj):
+        return obj.payment_type.name
 
 class OrderArbiterSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Arbiter
+        model = models.Arbiter
         fields = [
             'id',
             'name'
@@ -51,6 +39,7 @@ class OrderArbiterSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
+    contract  = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     arbiter = OrderArbiterSerializer()
@@ -61,11 +50,12 @@ class OrderSerializer(serializers.ModelSerializer):
     is_ad_owner = serializers.SerializerMethodField()
     
     class Meta:
-        model = Order
+        model = models.Order
         fields = [
             'id',
             'ad',
             'owner',
+            'contract',
             'crypto_currency',
             'fiat_currency',
             'crypto_amount',
@@ -80,51 +70,58 @@ class OrderSerializer(serializers.ModelSerializer):
             'is_ad_owner'
         ]
 
-    def get_ad(self, instance: Order):
+    def get_ad(self, obj):
         serialized_payment_methods = OrderAdPaymentMethodSerializer(
-            instance.ad_snapshot.payment_methods.all(), 
+            obj.ad_snapshot.payment_methods.all(), 
             many=True
         )
         return {
-            'id': instance.ad_snapshot.ad.id,
+            'id': obj.ad_snapshot.ad.id,
             'owner': {
-                'id': instance.ad_snapshot.ad.owner.id,
-                'name': instance.ad_snapshot.ad.owner.name
+                'id': obj.ad_snapshot.ad.owner.id,
+                'name': obj.ad_snapshot.ad.owner.name
             },
-            'time_duration': instance.ad_snapshot.time_duration_choice,
+            'time_duration': obj.ad_snapshot.time_duration_choice,
             'payment_methods': serialized_payment_methods.data
         }
     
-    def get_owner(self, instance: Order):
+    def get_owner(self, obj):
         return {
-            'id': instance.id,
-            'name': instance.owner.name,
-            'rating': instance.owner.average_rating()
+            'id': obj.id,
+            'name': obj.owner.name,
+            'rating': obj.owner.average_rating()
         }
 
-    def get_payment_methods(self, instance: Order):
-        escrowed_status = Status.objects.filter(Q(order=instance) & Q(status=StatusType.ESCROWED))
+    def get_contract(self, obj):
+        try:
+            contract = models.Contract.objects.get(order=obj)
+        except models.Contract.DoesNotExist:
+            return None
+        return contract.id
+
+    def get_payment_methods(self, obj):
+        escrowed_status = models.Status.objects.filter(Q(order=obj) & Q(status=models.StatusType.ESCROWED))
         if escrowed_status.exists():            
             serialized_payment_methods = OrderAdPaymentMethodSerializer(
-                instance.payment_methods.all(), 
+                obj.payment_methods.all(), 
                 many=True
             )
             payment_methods = serialized_payment_methods.data
             return payment_methods
 
-    def get_latest_order_status(self, instance: Order):
-        latest_status = Status.objects.filter(Q(order=instance)).last()
+    def get_latest_order_status(self, obj):
+        latest_status = models.Status.objects.filter(Q(order=obj)).last()
         return latest_status
     
-    def get_trade_type(self, instance: Order):
-        ad_trade_type = instance.ad_snapshot.trade_type
-        order_trade_type = TradeType.BUY
-        if ad_trade_type == TradeType.BUY:
-            order_trade_type = TradeType.SELL
+    def get_trade_type(self, obj):
+        ad_trade_type = obj.ad_snapshot.trade_type
+        order_trade_type = models.TradeType.BUY
+        if ad_trade_type == models.TradeType.BUY:
+            order_trade_type = models.TradeType.SELL
         return order_trade_type
     
-    def get_status(self, instance: Order):
-        latest_status = self.get_latest_order_status(instance)
+    def get_status(self, obj):
+        latest_status = self.get_latest_order_status(obj)
         if latest_status is not None:
             latest_status = {
                 'label': latest_status.get_status_display(),
@@ -132,32 +129,32 @@ class OrderSerializer(serializers.ModelSerializer):
             }
         return latest_status
     
-    def get_last_modified_at(self, instance: Order):
+    def get_last_modified_at(self, obj):
         last_modified_at = None
-        latest_status = Status.objects.values('created_at').filter(order__id=instance.id).order_by('-created_at').first()
+        latest_status = models.Status.objects.values('created_at').filter(order__id=obj.id).order_by('-created_at').first()
         if latest_status is not None:
             last_modified_at = latest_status['created_at']
         return last_modified_at
     
-    def get_is_ad_owner(self, instance: Order):
+    def get_is_ad_owner(self, obj):
         wallet_hash = self.context['wallet_hash']
-        if instance.ad_snapshot.ad.owner.wallet_hash == wallet_hash:
+        if obj.ad_snapshot.ad.owner.wallet_hash == wallet_hash:
             return True
         return False
 
 class OrderWriteSerializer(serializers.ModelSerializer):
-    ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=AdSnapshot.objects.all())
-    owner = serializers.PrimaryKeyRelatedField(required=True, queryset=Peer.objects.all())
-    crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
-    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
-    arbiter = serializers.PrimaryKeyRelatedField(queryset=Arbiter.objects.all(), required=False)
+    ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
+    owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
+    crypto_currency = serializers.PrimaryKeyRelatedField(queryset=models.CryptoCurrency.objects.all())
+    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all())
+    arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
     locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
-    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices, required=True)
-    payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), required=False, many=True)
+    time_duration_choice = serializers.ChoiceField(choices=models.DurationChoices.choices, required=True)
+    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), required=False, many=True)
 
     class Meta:
-        model = Order
+        model = models.Order
         fields = [
             'ad_snapshot', 
             'owner',
