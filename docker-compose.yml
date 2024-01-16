@@ -57,7 +57,7 @@ services:
     build: .
     command: [ "supervisord", "-c", "/code/supervisor/webserver.conf", "--nodaemon" ]
     ports:
-      - "8001:8000"
+      - "8000:8000"
     env_file:
       - .env_dev
     depends_on:
