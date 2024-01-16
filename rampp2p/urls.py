@@ -27,7 +27,6 @@ urlpatterns = [
     path('order/<int:pk>/members', OrderMembers.as_view(), name='order-members'),
     path('order/<int:pk>/status', OrderListStatus.as_view(), name='order-list-status'),
     path('order/<int:pk>/cancel', CancelOrder.as_view(), name='order-cancel'),
-    path('order/<int:pk>/generate-contract', CreateContract.as_view(), name='generate-contract'),
     path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),
     path('order/<int:pk>/pending-escrow', PendingEscrowOrder.as_view(), name='pending-escrow'),
     path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
@@ -46,8 +45,10 @@ urlpatterns = [
     path('order/feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
     path('order/feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
 
-    path('order/contract/', ContractList.as_view(), name='contract-list'),
-    path('order/<int:pk>/contract', ContractDetail.as_view(), name='contract-detail'),
+    path('order/contracts/create', ContractCreateView.as_view(), name='generate-contract'),
+    path('order/contracts/<int:pk>', ContractDetailsView.as_view(), name='contract-detail'),
+    path('order/contracts/<int:pk>/transactions', ContractTransactionsView.as_view(), name='contract-transactions'),
+    path('order/contracts/fees', ContractFeesView.as_view(), name='contract-fees'),
     
     path('utils/market-price', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address', SubscribeContractAddress.as_view(), name='subscribe-address')

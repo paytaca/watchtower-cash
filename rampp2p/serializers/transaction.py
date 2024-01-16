@@ -11,7 +11,6 @@ class TransactionSerializer(serializers.ModelSerializer):
       'action',
       'txid',
       'valid',
-      'verifying',
       'created_at'
     ]
     depth = 1

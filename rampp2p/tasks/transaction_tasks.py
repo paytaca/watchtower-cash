@@ -188,7 +188,6 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
         result["txdata"] = txdata
 
         if result["success"]:
-            transaction.verifying = False
             transaction.save()
     
     return result

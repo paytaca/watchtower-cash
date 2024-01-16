@@ -19,57 +19,52 @@ class ContractSerializer(serializers.ModelSerializer):
         depth = 1
 
 class ContractDetailSerializer(ContractSerializer):
-    arbiter = serializers.SerializerMethodField()
-    seller = serializers.SerializerMethodField()
-    buyer = serializers.SerializerMethodField()
-    servicer = serializers.SerializerMethodField()
+    pubkeys = serializers.SerializerMethodField()
+    addresses = serializers.SerializerMethodField()
     timestamp = serializers.SerializerMethodField()
     class Meta:
         model = Contract
         fields = ContractSerializer.Meta.fields + [
-            'arbiter',
-            'seller',
-            'buyer',
-            'servicer',
+            'pubkeys',
+            'addresses',
             'timestamp'
         ]
     
-    def get_arbiter(self, instance: Contract):
-        arbiter, _, _ = self.get_parties(instance)
+    def get_pubkeys(self, contract):
+        arbiter, seller, buyer = self.get_parties(contract)
+        servicer = self.get_servicer()
         return {
-            'public_key': arbiter.public_key,
-            'address': arbiter.address
+            'arbiter': arbiter.public_key,
+            'seller': seller.public_key,
+            'buyer': buyer.public_key,
+            'servicer': servicer.get('public_key')
         }
     
-    def get_seller(self, instance: Contract):
-        _, seller, _ = self.get_parties(instance)
+    def get_addresses(self, contract):
+        arbiter, seller, buyer = self.get_parties(contract)
+        servicer = self.get_servicer()
         return {
-            'public_key': seller.public_key,
-            'address': seller.address
+            'arbiter': arbiter.address,
+            'seller': seller.address,
+            'buyer': buyer.address,
+            'servicer': servicer.get('address')
         }
 
-    def get_buyer(self, instance: Contract):
-        _, _, buyer = self.get_parties(instance)
-        return {
-            'public_key': buyer.public_key,
-            'address': buyer.address
-        }
-
-    def get_servicer(self, _):
+    def get_servicer(self):
         return {
             'public_key': settings.SERVICER_PK,
             'address': settings.SERVICER_ADDR
         }
     
-    def get_timestamp(self, instance: Contract):
-        return instance.created_at.timestamp()
+    def get_timestamp(self, contract):
+        return contract.created_at.timestamp()
 
-    def get_parties(self, instance: Contract):
-        arbiter = instance.order.arbiter
+    def get_parties(self, contract):
+        arbiter = contract.order.arbiter
         seller = None
         buyer = None
-        ad_snapshot = instance.order.ad_snapshot
-        order = instance.order
+        ad_snapshot = contract.order.ad_snapshot
+        order = contract.order
         if ad_snapshot.trade_type == TradeType.SELL:
             seller = ad_snapshot.ad.owner
             buyer = order.owner

@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Peer(models.Model):
-    chat_identity_id = models.CharField(max_length=100, null=True)
+    chat_identity_id = models.IntegerField(null=True, blank=True)
     name = models.CharField(max_length=100)
     public_key = models.CharField(max_length=100)
     address = models.CharField(max_length=100)

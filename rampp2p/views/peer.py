@@ -74,15 +74,17 @@ class UserProfileView(APIView):
 
         user = None
         is_arbiter = False
-        try:
-            peer = Peer.objects.get(wallet_hash=wallet_hash)
-            user = PeerProfileSerializer(peer).data
-        except Peer.DoesNotExist:
-            arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
-            if (arbiter.exists()):
-                is_arbiter = True
-                user = ArbiterProfileSerializer(arbiter.first()).data
+
+        arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
+        if arbiter.exists():
+            user = ArbiterProfileSerializer(arbiter.first()).data
+            is_arbiter = True
         
+        if not is_arbiter:
+            peer = Peer.objects.filter(wallet_hash=wallet_hash)
+            if peer.exists():    
+                user = PeerProfileSerializer(peer.first()).data
+            
         response = {
             "is_arbiter": is_arbiter,
             "user": user
