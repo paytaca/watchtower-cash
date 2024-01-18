@@ -307,7 +307,7 @@ class OrderListCreate(APIView):
 
         # send push notification
         extra = {'order_id': serialized_order['id']}
-        send_push_notification([ad.owner.wallet_hash], "Received new order", extra=extra)
+        send_push_notification([ad.owner.wallet_hash], "Received a new order", extra=extra)
     
         return Response(response, status=status.HTTP_201_CREATED)
     
@@ -489,7 +489,7 @@ class ConfirmOrder(APIView):
             }, pk)
             
             # send push notification
-            message = f'Order {order.id} confirmed'
+            message = f'Order #{order.id} confirmed'
             send_push_notification([order.owner.wallet_hash], message, extra={'order_id': order.id})
             
             return Response(serialized_status.data, status=status.HTTP_200_OK)

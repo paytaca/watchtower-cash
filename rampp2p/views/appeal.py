@@ -221,7 +221,7 @@ class AppealRequest(APIView):
                     recipients.append(party_b)
                 if wallet_hash == party_b:
                     recipients.append(party_a)
-                message = f'Order {pk} {appeal_type} appealed'
+                message = f'Order #{pk} {appeal_type} appealed'
                 send_push_notification(recipients, message, extra={ 'order_id': pk })
 
                 return Response(response_data, status=status.HTTP_200_OK)
