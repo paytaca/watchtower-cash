@@ -1,11 +1,10 @@
-
-# from rampp2p.models import Order, TradeType, Status, StatusType
 import rampp2p.models as models
 from django.db.models import Q
 from django.conf import settings
-from datetime import datetime
 from django.utils import timezone
+
 from decimal import Decimal
+from datetime import datetime
 
 import logging
 logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ def is_order_expired(order_pk: int):
     '''
     # get the created_at field of order's ESCROWED status
     time_duration = models.Order.objects.get(pk=order_pk).time_duration
-    start_time = models.Status.objects.values('created_at').filter(Q(order__id=order_pk) & Q(status=StatusType.ESCROWED)).first()
+    start_time = models.Status.objects.values('created_at').filter(Q(order__id=order_pk) & Q(status=models.StatusType.ESCROWED)).first()
     
     if start_time is None:
         return False
