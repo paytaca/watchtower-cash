@@ -129,7 +129,7 @@ def client_acknowledgement(self, txid):
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
-                    __is_key_nft = is_key_nft(category, address.address)
+                    __is_key_nft = is_key_nft(category, transaction.value)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
