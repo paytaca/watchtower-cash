@@ -93,13 +93,13 @@ def send_transaction_transfer_notification_to_subscriber(
                     \n Token: {tx_transfer_obj.token_contract.name}
                     \n Token Address: {tx_transfer_obj.token_contract.address}
                     \n Amount: {tx_transfer_obj.amount}
-                    \nhttps://www.smartscan.cash/transaction/{tx_transfer_obj.transaction.txid}
+                    \nhttps://www.smartscout.cash/transaction/{tx_transfer_obj.transaction.txid}
                 """
             else:
                 message=f"""<b>WatchTower Notification</b> ℹ️
                     \n Address: {subscription.address.address}
                     \n Amount: {tx_transfer_obj.amount} BCH
-                    \nhttps://www.smartscan.cash/transaction/{tx_transfer_obj.transaction.txid}
+                    \nhttps://www.smartscout.cash/transaction/{tx_transfer_obj.transaction.txid}
                 """
 
             send_telegram_message(message, recipient.telegram_id)
