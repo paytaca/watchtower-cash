@@ -45,10 +45,10 @@ urlpatterns = [
     path('order/feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
     path('order/feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
 
-    path('order/contracts/create', ContractCreateView.as_view(), name='generate-contract'),
-    path('order/contracts/<int:pk>', ContractDetailsView.as_view(), name='contract-detail'),
-    path('order/contracts/<int:pk>/transactions', ContractTransactionsView.as_view(), name='contract-transactions'),
-    path('order/contracts/fees', ContractFeesView.as_view(), name='contract-fees'),
+    path('order/contract/create', ContractCreateView.as_view(), name='generate-contract'),
+    path('order/contract', ContractDetailsView.as_view(), name='contract-detail'),
+    path('order/contract/transactions', ContractTransactionsView.as_view(), name='contract-transactions'),
+    path('order/contract/fees', ContractFeesView.as_view(), name='contract-fees'),
     
     path('utils/market-price', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address', SubscribeContractAddress.as_view(), name='subscribe-address')

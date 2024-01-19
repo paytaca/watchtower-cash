@@ -173,7 +173,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             recipients = [party_a, party_b]
             if appeal_exists:
                 recipients.append(contract.order.arbiter.wallet_hash)
-            message = f'Order {contract.order.id} funds {status_type.label.lower()}'
+            message = f'Order #{contract.order.id} {status_type.label.lower()}'
             send_push_notification(recipients, message, extra={ 'order_id': contract.order.id })
 
         except ValidationError as err:

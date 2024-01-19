@@ -6,7 +6,6 @@ from django.core.exceptions import ValidationError
 from django.http import Http404
 
 from authentication.token import TokenAuthentication
-# from rampp2p.utils.utils import get_trading_fees
 import rampp2p.utils as utils
 from rampp2p.utils.contract import create_contract
 from rampp2p.validators import *
@@ -33,14 +32,26 @@ logger = logging.getLogger(__name__)
 class ContractDetailsView(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def get_object(self, pk):
+    def get_object(self, order_id, contract_id):
         try:
-            return Contract.objects.get(pk=pk)
+            if not order_id and not contract_id:
+                raise Contract.DoesNotExist
+            query = Contract.objects.all()
+            if contract_id:
+                query = query.filter(pk=contract_id)
+            if order_id:
+                query = query.filter(order__id=order_id)
+            if query.exists():
+                return query.first()
+            else:
+                raise Contract.DoesNotExist
         except Contract.DoesNotExist:
             raise Http404
 
-    def get(self, _, pk):
-        contract = self.get_object(pk)
+    def get(self, request):
+        order_id = request.query_params.get('order_id')
+        contract_id = request.query_params.get('contract_id')
+        contract = self.get_object(order_id, contract_id)
         serialized_contract = ContractDetailSerializer(contract)
         return Response(serialized_contract.data, status=status.HTTP_200_OK)
 
@@ -165,15 +176,26 @@ class ContractCreateView(APIView):
 class ContractTransactionsView(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def get_object(self, pk):
+    def get_object(self, order_id, contract_id):
         try:
-            contract = Contract.objects.get(pk=pk)
+            if not order_id and not contract_id:
+                raise Contract.DoesNotExist
+            query = Contract.objects.all()
+            if contract_id:
+                query = query.filter(pk=contract_id)
+            if order_id:
+                query = query.filter(order__id=order_id)
+            if query.exists():
+                return query.first()
+            else:
+                raise Contract.DoesNotExist
         except Contract.DoesNotExist:
             raise Http404
-        return contract
-    
-    def get(self, _, pk):
-        contract = self.get_object(pk)
+
+    def get(self, request):
+        order_id = request.query_params.get('order_id')
+        contract_id = request.query_params.get('contract_id')
+        contract = self.get_object(order_id, contract_id)
         transactions = Transaction.objects.filter(contract__id=contract.id)
 
         tx_data = []
