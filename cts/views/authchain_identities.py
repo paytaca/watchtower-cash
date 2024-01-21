@@ -169,16 +169,11 @@ class Authenticate(APIView):
     )
     def post(self, request, *args, **kwargs):
         authhead = Authhead.get_authhead(request)
-        authhead_param = authbase = request.query_params.get('authhead')
+        authhead_param = request.query_params.get('authhead')
         if authhead.txid == authhead_param and not authhead.spent:
             s = UtxoSerializer(authhead, many=False)
             return Response(data={'authhead': s.data, 'address': authhead.address.address, 'success': 'Authhead checked ok'})
-        
-        reason = 'Zeroeth-descendant-check failed'
-        if authhead and authhead.spent:
-            reason = 'Zeroeth-descendant-check ok, but unspent-check failed'
-            
-        return Response(data={'failed': f'Authhead checked nok.{reason}'})
+        return Response(data={'failed': f'Authhead checked nok'})
 
 
 
