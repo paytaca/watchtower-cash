@@ -131,7 +131,7 @@ class Authhead(APIView):
         while authhead == None:
             count += 1
             if count == max_chain_length:
-                return Response(None if not authhead or authhead.spent else authhead)
+                break
             identity_output = Transaction.objects.filter(txid=identity_output_tx, index=0)
             if identity_output:
                 identity_output = identity_output.first()
@@ -144,9 +144,9 @@ class Authhead(APIView):
             else:
                 break
 
-        if authhead:
+        if authhead and not authhead.spent:
             s = UtxoSerializer(authhead, many=False)
-            return Response(s.data)
+            return Response(data={'authhead': s.data, 'address': authhead.address.address})
         else: 
             Response(None)
 
