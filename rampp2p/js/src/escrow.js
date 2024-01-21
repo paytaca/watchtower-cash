@@ -17,14 +17,15 @@ const bchjs = new BCHJS({
     apiToken: process.env.BCHJS_TOKEN
   });
 
-const NETWORK = process.env.BCH_NETWORK;
+const NETWORK = process.env.ESCROW_NETWORK;
 
 (async () => {
 
     // Compile the escrow contract to an artifact object
     const artifact = compileFile(path.join(__dirname, 'escrow.cash'));
     // Initialise a network provider for network operations
-    const provider = new ElectrumNetworkProvider(NETWORK);
+    let provider = new ElectrumNetworkProvider();
+    if (NETWORK === 'chipnet') provider = new ElectrumNetworkProvider(NETWORK)
     const [arbiterPkh, buyerPkh, sellerPkh, servicerPkh] = getPubKeyHash();
     
     // Generate contract hash with timestamp

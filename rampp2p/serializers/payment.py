@@ -14,7 +14,12 @@ class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
 class PaymentTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentType
-        fields = ['id', 'name', 'is_disabled']
+        fields = [
+            'id',
+            'name',
+            'format',
+            'is_disabled'
+        ]
 
 class PaymentMethodCreateSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
@@ -26,7 +31,7 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
             'payment_type',
             'owner',
             'account_name',
-            'account_number'
+            'account_identifier'
         ]
     depth = 1
 
@@ -51,7 +56,7 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
             'payment_type',
             'owner',
             'account_name',
-            'account_number'
+            'account_identifier'
         ]
 
 class PaymentMethodUpdateSerializer(serializers.ModelSerializer):
@@ -59,5 +64,5 @@ class PaymentMethodUpdateSerializer(serializers.ModelSerializer):
         model = PaymentMethod
         fields = [
             'account_name',
-            'account_number'
+            'account_identifier'
         ]

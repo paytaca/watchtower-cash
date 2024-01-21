@@ -91,10 +91,14 @@ class PeerCreateSerializer(serializers.ModelSerializer):
 class PeerUpdateSerializer(serializers.ModelSerializer):
     name = serializers.CharField(required=False)
     chat_identity_id = serializers.CharField(required=False)
+    public_key = serializers.CharField(required=False)
+    address = serializers.CharField(required=False)
     
     class Meta:
         model = Peer
         fields = [
            'name',
-            'chat_identity_id'
+            'chat_identity_id',
+            'public_key',
+            'address'
         ]

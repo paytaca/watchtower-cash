@@ -2,6 +2,7 @@ from rampp2p.tasks.transaction_tasks import execute_subprocess, handle_transacti
 from django.conf import settings
 from rampp2p.models import Transaction
 from main.utils.queries.node import Node
+import requests
 
 import logging
 logger = logging.getLogger(__name__)
@@ -49,7 +50,16 @@ def get_transaction_details(txid):
     if txid:
         node = Node()
         txn = node.BCH.get_transaction(txid)
-        response['valid'] = True
-        response['details'] = txn
+        if txn is None:
+            try:
+                url = f'https://watchtower.cash/api/transactions/{txid}/' 
+                txn = (requests.get(url)).json().get('details')
+                logger(f'txn: {txn}')
+            except Exception as err:
+                logger.warning(f'err: {err.args[0]}')
+        
+        if txn != None:
+            response['valid'] = True
+            response['details'] = txn
     
     return response
