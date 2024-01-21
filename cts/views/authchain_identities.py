@@ -122,7 +122,16 @@ class Authhead(APIView):
         ]
     )
     def get(self, request, *args, **kwargs):
-        authbase = self.request.query_params.get('authbase')
+        authhead = Authhead.get_authhead(request)
+        if authhead and not authhead.spent:
+            s = UtxoSerializer(authhead, many=False)
+            return Response(data={'authhead': s.data, 'address': authhead.address.address})
+        else: 
+            Response(None)
+
+    @staticmethod
+    def get_authhead(request):
+        authbase = request.query_params.get('authbase')
         identity_output = None
         identity_output_tx = authbase 
         authhead = None
@@ -144,10 +153,31 @@ class Authhead(APIView):
             else:
                 break
 
+        return authhead
+        
+      
+
+class Authenticate(APIView):
+    serializer_class = UtxoSerializer
+    @swagger_auto_schema(
+        operation_description="Authenticates the authhead. Checks that the authhead is the last, unspent, zeroeth descendant output of the authbase.",
+        responses={status.HTTP_200_OK: UtxoSerializer},
+        manual_parameters=[
+            openapi.Parameter('authbase', openapi.IN_QUERY, description="The authbase (txid, is usually also the tokenId)", type=openapi.TYPE_STRING),
+            openapi.Parameter('authhead', openapi.IN_QUERY, description="The authhead (txid)", type=openapi.TYPE_STRING),
+        ]
+    )
+    def post(self, request, *args, **kwargs):
+        authhead = Authhead.get_authhead(request)
         if authhead and not authhead.spent:
             s = UtxoSerializer(authhead, many=False)
-            return Response(data={'authhead': s.data, 'address': authhead.address.address})
-        else: 
-            Response(None)
+            return Response(data={'authhead': s.data, 'address': authhead.address.address, 'success': 'Authhead checked ok'})
+        
+        reason = 'Zeroeth-descendant-check failed'
+        if authhead and authhead.spent:
+            reason = 'Zeroeth-descendant-check ok, but unspent-check failed'
+            
+        Response(data={'failed': f'Authhead checked nok.{reason}'})
+
 
 
