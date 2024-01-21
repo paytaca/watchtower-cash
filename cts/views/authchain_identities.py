@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q, F, CharField, Value
 
-from main.models import (Transaction)
+from main.models import (Transaction, BlockHeight)
 
 from smartbch.pagination import CustomLimitOffsetPagination
 
@@ -126,7 +126,12 @@ class Authhead(APIView):
         identity_output = None
         identity_output_tx = authbase 
         authhead = None
+        max_chain_length = BlockHeight.objects.order_by('number').last().number
+        count = 0
         while authhead == None:
+            count += 1
+            if count == max_chain_length:
+                return Response(None if not authhead or authhead.spent else authhead)
             identity_output = Transaction.objects.filter(txid=identity_output_tx, index=0)
             if identity_output:
                 identity_output = identity_output.first()
