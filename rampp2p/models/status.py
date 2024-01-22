@@ -17,10 +17,8 @@ class StatusType(models.TextChoices):
   CANCELED          = 'CNCL', _('Canceled')
 
 class Status(models.Model):
-  # status = models.CharField(max_length=10, choices=StatusType.choices, editable=False, blank=False)
-  # order = models.ForeignKey(Order, on_delete=models.CASCADE, editable=False)
-  status = models.CharField(max_length=10, choices=StatusType.choices, blank=False)
-  order = models.ForeignKey(Order, on_delete=models.CASCADE)
+  status = models.CharField(max_length=10, choices=StatusType.choices, blank=False, db_index=True)
+  order = models.ForeignKey(Order, on_delete=models.CASCADE, db_index=True)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
   def __str__(self):

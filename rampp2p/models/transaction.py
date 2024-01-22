@@ -8,7 +8,7 @@ class Transaction(models.Model):
         REFUND = 'REFUND'
         RELEASE = 'RELEASE'
 
-    contract = models.ForeignKey(Contract, on_delete=models.CASCADE, editable=False)
+    contract = models.ForeignKey(Contract, on_delete=models.CASCADE, editable=False, db_index=True)
     action = models.CharField(max_length=50, choices=ActionType.choices)
     txid = models.CharField(max_length=200, unique=True, null=True)
     valid = models.BooleanField(default=False)

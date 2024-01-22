@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def unwrap_request(self, request):
+    def _parse_params(self, request):
         limit = request.query_params.get('limit', 0)
         page = request.query_params.get('page', 1)
         status_type = request.query_params.get('status_type')
@@ -88,7 +88,7 @@ class OrderListCreate(APIView):
 
     def get(self, request):
         wallet_hash = request.user.wallet_hash
-        params = self.unwrap_request(request=request)
+        params = self._parse_params(request=request)
 
         if params['status_type'] is None:
             return Response(
@@ -433,13 +433,6 @@ class OrderDetail(APIView):
             if appeal.exists():
                 serialized_appeal = AppealSerializer(appeal.first()).data
                 serialized_order['appeal'] = serialized_appeal
-                # serialized_order['appeal'] = {
-                #     'id': serialized_appeal['id'],
-                #     'type': serialized_appeal['type'],
-                #     'reasons': serialized_appeal['reasons'],
-                #     'resolved_at': serialized_appeal['resolved_at'],
-                #     'created_at': serialized_appeal['created_at']
-                # }
         return Response(serialized_order, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):

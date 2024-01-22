@@ -3,13 +3,10 @@ from django.apps import apps
 
 class Arbiter(models.Model):
     chat_identity_id = models.IntegerField(null=True, blank=True)
+    wallet_hash = models.CharField(max_length=100, unique=True, db_index=True)
     name = models.CharField(max_length=100)
     public_key = models.CharField(max_length=100)
     address = models.CharField(max_length=100)
-    wallet_hash = models.CharField(
-        max_length=100,
-        unique=True
-    )
     is_disabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
