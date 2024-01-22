@@ -2,7 +2,7 @@ from django.db import models
 from .peer import Peer
 
 class PaymentType(models.Model):
-  name = models.CharField(max_length=100)
+  name = models.CharField(max_length=100, db_index=True)
   format = models.CharField(max_length=100)
   is_disabled = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True)

@@ -23,7 +23,7 @@ class PriceType(models.TextChoices):
     FLOATING = 'FLOATING'
 
 class Ad(models.Model):
-    owner = models.ForeignKey(Peer, on_delete=models.PROTECT, db_index=True)
+    owner = models.ForeignKey(Peer, on_delete=models.PROTECT)
     trade_type = models.CharField(max_length=4, choices=TradeType.choices, db_index=True)
     price_type = models.CharField(max_length=10, choices=PriceType.choices)
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT)
@@ -34,7 +34,7 @@ class Ad(models.Model):
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
-    payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads', db_index=True)
+    payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
     is_public = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
@@ -56,9 +56,9 @@ class Ad(models.Model):
 
 '''A snapshot of the ad is created everytime an order is created.'''
 class AdSnapshot(models.Model):
-    ad = models.ForeignKey(Ad, on_delete=models.CASCADE, related_name="snapshots", db_index=True)
+    ad = models.ForeignKey(Ad, on_delete=models.CASCADE, related_name="snapshots")
     trade_type = models.CharField(max_length=4, choices=TradeType.choices, db_index=True)
-    price_type = models.CharField(max_length=10, choices=PriceType.choices)
+    price_type = models.CharField(max_length=10, choices=PriceType.choices, db_index=True)
     fiat_currency = models.ForeignKey(FiatCurrency, on_delete=models.PROTECT)
     crypto_currency = models.ForeignKey(CryptoCurrency, on_delete=models.PROTECT)
     fixed_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
@@ -68,7 +68,7 @@ class AdSnapshot(models.Model):
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
-    payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots', db_index=True)
+    payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots')
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
