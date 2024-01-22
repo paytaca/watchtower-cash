@@ -9,8 +9,8 @@ class Transaction(models.Model):
         RELEASE = 'RELEASE'
 
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, editable=False)
-    action = models.CharField(max_length=50, choices=ActionType.choices)
-    txid = models.CharField(max_length=200, unique=True, null=True)
+    action = models.CharField(max_length=50, choices=ActionType.choices, db_index=True)
+    txid = models.CharField(max_length=200, unique=True, null=True, db_index=True)
     valid = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 

@@ -56,10 +56,7 @@ class PeerDetailView(APIView):
         serializer = PeerSerializer(queryset)
         return Response(serializer.data, status.HTTP_200_OK)
 
-    def put(self, request):
-        # TODO: allow users to update their public key and address, but this needs checking:
-        # public key must match address
-        
+    def put(self, request):        
         serializer = PeerUpdateSerializer(request.user, data=request.data)
         if serializer.is_valid():
             serializer = PeerSerializer(serializer.save())

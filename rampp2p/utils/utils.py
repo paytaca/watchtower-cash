@@ -47,7 +47,12 @@ def is_order_expired(order_pk: int):
 
 def get_order_peer_addresses(order: models.Order):
     arbiter, buyer, seller = get_order_peers(order)
-    return arbiter.address, buyer.address, seller.address, settings.SERVICER_ADDR
+    return {
+        'arbiter': arbiter.address,
+        'buyer': buyer.address,
+        'seller': seller.address,
+        'servicer': settings.SERVICER_ADDR
+    }
 
 def get_order_peers(order: models.Order):
     # if order.ad is SELL, ad owner is seller

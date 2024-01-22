@@ -56,7 +56,7 @@ def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
     automatically updates the related order's status. The result is sent 
     through a websocket channel.
     '''
-    logger.warning(f'Validating txn: {txn}')
+    logger.warning(f'Validating txn: {txn} | {action} | contract: {contract_id}')
     contract = Contract.objects.get(pk=contract_id)
     valid, error, outputs = verify_txn(action, contract, txn)
     result = None
@@ -81,10 +81,10 @@ def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
         result, 
         contract.order.id
     )
+
     return result
 
-def handle_order_status(action: str, contract: Contract, txn: Dict): 
-    
+def handle_order_status(action: str, contract: Contract, txn: Dict):
     valid = txn.get('valid')
     error = txn.get('error')
     txid = txn.get('details').get('txid')
@@ -206,8 +206,8 @@ def verify_txn(action, contract, txn: Dict):
 
     # The transaction is invalid, if inputs or outputs are empty
     if not inputs or not outputs:
-        error = txn.get('error')
-        return False, error, None
+        error = 'Txn inputs/outputs empty' if not txn.get('error') else txn.get('error')
+        return False, error, outputs
     
     if action == Transaction.ActionType.ESCROW:
         '''
@@ -237,7 +237,7 @@ def verify_txn(action, contract, txn: Dict):
         # Check if the amount is correct
         if actual_value != expected_value:
             valid = False
-            error = 'txn value does not match expected value'
+            error = 'Transaction value does not match expected value'
     
     else:
         '''
@@ -259,63 +259,57 @@ def verify_txn(action, contract, txn: Dict):
         # Set valid=False if contract address is not in transaction inputs and return
         if sender_is_contract == False:
             valid = False
-            error = 'contract address not found in tx inputs'
+            error = 'Contract address not in transaction inputs'
             return valid, error, outputs
         
         # Retrieve expected transaction output addresses
-        arbiter_addr, buyer_addr, seller_addr, servicer_addr = get_order_peer_addresses(contract.order)
+        expected_addresses = get_order_peer_addresses(contract.order)
 
         # Calculate expected transaction amount and fees
         arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
         service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))/100000000
         expected_value = Decimal(contract.order.crypto_amount).quantize(Decimal('0.00000000'))
         
-        arbiter_exists = False
-        servicer_exists = False
-        buyer_exists = False
-        seller_exists = False
+        sends_to_arbiter = False
+        sends_to_servicer = False
+        sends_to_buyer = False
+        sends_to_seller = False
 
-        for output in outputs:
-            address = output.get('address')
-            actual_value = Decimal(output.get('value')).quantize(Decimal('0.00000000'))/100000000
-            
-            # Checks if the current address is the arbiter
-            # and set valid=False if fee is incorrect
-            if address == arbiter_addr:
-                if actual_value != arbitration_fee:
-                    valid = False
-                    error = 'incorrect arbiter output value'
-                    break
-                arbiter_exists = True
-            
-            # Checks if the current address is the servicer 
-            # and set valid=False if fee is incorrect
-            if address == servicer_addr:    
-                if actual_value != service_fee:
-                    valid = False
-                    error = 'incorrect servicer output value'
-                    break
-                servicer_exists = True
-
+        if len(outputs) >= 3:
             if action == Transaction.ActionType.RELEASE:
-                # If the action type is RELEASE, check if the address is the buyer
-                # and if the value is correct
-                if address == buyer_addr:
-                    if actual_value != expected_value:
-                        error = 'incorrect buyer output value'
+                # If the action type is RELEASE, 
+                # checks if outputs[0] sends to buyer and if the value sent is correct
+                value = Decimal(outputs[0].get('value')).quantize(Decimal('0.00000000'))/100000000
+                if outputs[0].get('address') == expected_addresses['buyer']:
+                    if value != expected_value:
                         valid = False
-                        break
-                    buyer_exists = True
-                
-            if action == Transaction.ActionType.REFUND:
-                # If the action type is REFUND, check if the address is the seller
-                # and if the value is correct
-                if address == seller_addr:
-                    if actual_value != expected_value:
-                        error = 'incorrect seller output value'
+                        error = f'Incorrect buyer output value {value} (needed {expected_value})'
+                    sends_to_buyer = True
+            elif action == Transaction.ActionType.REFUND:
+                # If the action type is REFUND, 
+                # checks if outputs[0] sends to seller and if the value sent is correct
+                value = Decimal(outputs[0].get('value')).quantize(Decimal('0.00000000'))/100000000
+                if outputs[0].get('address') == expected_addresses['seller']:
+                    if value != expected_value:
                         valid = False
-                        break
-                    seller_exists = True
+                        error = f'Incorrect seller output value {value} (needed {expected_value})'
+                    sends_to_seller = True
+
+            # Checks if outputs[2] sends to arbiter and if value sent is correct
+            if outputs[2].get('address') == expected_addresses['arbiter']:
+                value = Decimal(outputs[2].get('value')).quantize(Decimal('0.00000000'))/100000000
+                if value != arbitration_fee:
+                    valid = False
+                    error = f'Incorrect arbiter output value {value} (needed {arbitration_fee})'
+                sends_to_arbiter = True
+            
+            # Checks if outputs[1] sends to servicer and if value sent is correct
+            if outputs[1].get('address') == expected_addresses['servicer']:
+                value = Decimal(outputs[1].get('value')).quantize(Decimal('0.00000000'))/100000000
+                if value != service_fee:
+                    valid = False
+                    error = f'Incorrect servicer output value {value} (needed {service_fee})'
+                sends_to_servicer = True
         
         '''
         Transaction is not valid if:
@@ -323,11 +317,14 @@ def verify_txn(action, contract, txn: Dict):
             (2) the transaction is for RELEASE but the buyer was not found, or
             (3) the transaction is for REFUND but the seller was not found
         '''
-        if (not(arbiter_exists and servicer_exists) or
-            ((action == Transaction.ActionType.RELEASE and not buyer_exists) or 
-            (action == Transaction.ActionType.REFUND and not seller_exists))):
+        NANS = not(sends_to_arbiter and sends_to_servicer)
+        RLS_NSTB = (action == Transaction.ActionType.RELEASE and not sends_to_buyer)
+        RFN_NSTS = (action == Transaction.ActionType.REFUND and not sends_to_seller)
+        if NANS or (RLS_NSTB or RFN_NSTS):
             valid = False
+            error = f'Transaction requirements not met NANS={NANS} RLS_NSTB={RLS_NSTB} RFN_NSTS={RFN_NSTS}'
     
+    logger.warn(f'Result: valid = {valid} | {error} | {outputs}')
     return valid, error, outputs
 
 def remove_subscription(address, subscriber_id):

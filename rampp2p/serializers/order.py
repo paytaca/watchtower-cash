@@ -22,7 +22,7 @@ class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
             'id',
             'payment_type',
             'account_name',
-            'account_number'
+            'account_identifier'
         ]
     
     def get_payment_type(self, obj):
