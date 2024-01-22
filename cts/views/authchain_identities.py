@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q, F, CharField, Value
 
-from main.models import (Transaction)
+from main.models import (Transaction, BlockHeight)
 
 from smartbch.pagination import CustomLimitOffsetPagination
 
@@ -111,4 +111,69 @@ class AuthchainIdentity(APIView):
         if page is not None:
             serializer = self.serializer_class(page, many=True, context={'token_id_authguard_pairs': token_authguard_addresses})
             return paginator.get_paginated_response(serializer.data)
+        
+class Authhead(APIView):
+    serializer_class = UtxoSerializer
+    @swagger_auto_schema(
+        operation_description="Returns the current authhead of the authchain.",
+        responses={status.HTTP_200_OK: UtxoSerializer},
+        manual_parameters=[
+            openapi.Parameter('authbase', openapi.IN_QUERY, description="The authbase(txid) of the authchain", type=openapi.TYPE_STRING),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        authhead = Authhead.get_authhead(request)
+        if authhead and not authhead.spent:
+            s = UtxoSerializer(authhead, many=False)
+            return Response(data={'authhead': s.data, 'address': authhead.address.address})
+        else: 
+            Response(None)
+
+    @staticmethod
+    def get_authhead(request):
+        authbase = request.query_params.get('authbase')
+        identity_output = None
+        identity_output_tx = authbase 
+        authhead = None
+        max_chain_length = BlockHeight.objects.order_by('number').last().number
+        count = 0
+        while authhead == None:
+            count += 1
+            if count == max_chain_length:
+                break
+            identity_output = Transaction.objects.filter(txid=identity_output_tx, index=0)
+            if identity_output:
+                identity_output = identity_output.first()
+                identity_output_tx = identity_output.spending_txid
+                if identity_output.spent == True:
+                    continue
+                else:
+                    authhead = identity_output
+                    break
+            else:
+                break
+
+        return authhead
+        
+      
+
+class Authenticate(APIView):
+    serializer_class = UtxoSerializer
+    @swagger_auto_schema(
+        operation_description="Authenticates the authhead. Checks that the authhead is the last, unspent, zeroeth descendant output of the authbase.",
+        responses={status.HTTP_200_OK: UtxoSerializer},
+        manual_parameters=[
+            openapi.Parameter('authbase', openapi.IN_QUERY, description="The authbase (txid, is usually also the tokenId)", type=openapi.TYPE_STRING),
+            openapi.Parameter('authhead', openapi.IN_QUERY, description="The authhead (txid)", type=openapi.TYPE_STRING),
+        ]
+    )
+    def post(self, request, *args, **kwargs):
+        authhead = Authhead.get_authhead(request)
+        authhead_param = request.query_params.get('authhead')
+        if authhead.txid == authhead_param and not authhead.spent:
+            s = UtxoSerializer(authhead, many=False)
+            return Response(data={'authhead': s.data, 'address': authhead.address.address, 'success': 'Authhead checked ok'})
+        return Response(data={'failed': f'Authhead checked nok'})
+
+
 
