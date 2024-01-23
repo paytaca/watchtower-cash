@@ -215,29 +215,22 @@ def verify_txn(action, contract, txn: Dict):
             (1) output value must be correct 
             (2) output address must be the contract address
         '''
-        fees, _ = get_trading_fees()
-        expected_value = contract.order.crypto_amount + (fees/100000000)
+        total_fees, _ = get_trading_fees()
+        expected_value = Decimal(contract.order.crypto_amount + (total_fees/100000000)).quantize(Decimal('0.00000000'))
 
-        # Find the output where address = contract address
-        actual_value = None
-        for output in outputs:
-            address = output.get('address')
-
-            if address == contract.address:
-                # Get the value transferred and convert to represent 8 decimal places
-                actual_value = Decimal(output.get('value'))
+        if len(outputs) >= 1:
+            if outputs[0].get('address') == contract.address:
+                # Get the amount transferred and convert to represent 8 decimal places
+                actual_value = Decimal(outputs[0].get('value'))
                 actual_value = actual_value.quantize(Decimal('0.00000000'))/100000000
-
-                outputs.append({
-                    "address": address,
-                    "value": str(actual_value)
-                })
-                break
-
-        # Check if the amount is correct
-        if actual_value != expected_value:
-            valid = False
-            error = 'Transaction value does not match expected value'
+                
+                # Check if the amount is correct
+                if actual_value != expected_value:
+                    valid = False
+                    error = f'Transaction value {actual_value} does not match expected value {expected_value}'
+            else:
+                valid = False
+                error = f'Transaction outputs[0] address {outputs[0].get("address")} does not match expected contract address {contract.address}'
     
     else:
         '''
