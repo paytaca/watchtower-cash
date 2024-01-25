@@ -76,36 +76,18 @@ class ContractCreateView(APIView):
         except (Order.DoesNotExist, Arbiter.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        generate = False
         address = None
         timestamp = None
-        contract = Contract.objects.filter(order__id=order_pk)
-
-        if not contract.exists():
-            # Create contract (& address) if not already existing
-            contract = Contract.objects.create(order=order)
-            generate = True
-        else:
-            contract = contract.first()
-            # (Re)generate contract address if:
-            #   - address is None
-            #   - arbiter is None
-            #   - arbiter has been changed
-            if ((contract.address is None) 
-                or (order.arbiter is None) 
-                or (order.arbiter.id != arbiter.id)):
-                generate = True
-            else:
-                # return contract if already existing
-                address = contract.address
-        
-        timestamp = contract.created_at.timestamp()
-        if generate:
-            # if contract.address != None:
-                # unsubscribe to contract address
+        contract, created = Contract.objects.get_or_create(order=order)
+        if (created or
+            contract.address == None or
+            contract.arbiter == None or
+            contract.arbiter.id != arbiter.id):
+            
+            # execute subprocess (generate the contract)
             contract.address = None
             contract.save()
-            # Execute subprocess
+            timestamp = contract.created_at.timestamp()
             create_contract(
                 order_id=contract.order.id,
                 arbiter_pubkey=params['arbiter_pubkey'], 
@@ -113,6 +95,8 @@ class ContractCreateView(APIView):
                 buyer_pubkey=params['buyer_pubkey'],
                 timestamp=timestamp
             )
+        else:
+            address = contract.address
         
         # update order arbiter
         order.arbiter = arbiter

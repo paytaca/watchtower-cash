@@ -5,6 +5,7 @@ from decimal import Decimal
 from datetime import timedelta, datetime
 from django.db import models
 from django.apps import apps
+from django.conf import settings
 from django.utils import timezone as tz
 from main.models import (
     AssetPriceLog,
@@ -86,8 +87,12 @@ def get_latest_bch_rates(currencies=[]):
         currencies.append("usd")
     vs_currencies = ",".join(currencies)
     response = requests.get(
-        f"https://api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
+        # f"https://api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
+        f"https://pro-api.coingecko.com/api/v3/simple/price/?ids=bitcoin-cash&vs_currencies={vs_currencies}",
         timeout=15,
+        headers={
+            'x-cg-pro-api-key': settings.COINGECKO_API_KEY
+        }
     )
     response_timestamp = datetime.strptime(response.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
     response_data = response.json()

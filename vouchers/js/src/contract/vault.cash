@@ -9,16 +9,16 @@ contract Vault (
     function refund (sig merchantSignerSig) {
         require(checkSig(merchantSignerSig, merchantSignerPK));
 
-        // 2 inputs: lock nft & fee funder utxo
+        // 1 input: lock nft
         // 1 output: satoshis refund reward from burned lock nft
-        require(tx.inputs.length >= 2);
+        require(tx.inputs.length >= 1);
         require(tx.outputs.length >= 1);
 
         // sent amount must be equal to the commitment data
         bytes claimExpiryTimestampBytes, bytes claimAmountBytes = tx.inputs[0].nftCommitment.split(20);
-        int claimAmount = int(claimAmountBytes);
+        int refundedAmount = int(claimAmountBytes) - 1000;
         int claimExpiryTimestamp = int(claimExpiryTimestampBytes);
-        require(tx.outputs[0].value == claimAmount);
+        require(tx.outputs[0].value == refundedAmount);
 
         // lock nft must be expired
         require(tx.time >= claimExpiryTimestamp);

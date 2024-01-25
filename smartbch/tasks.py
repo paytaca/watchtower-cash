@@ -380,7 +380,7 @@ def save_token_icons_task():
     address_image_map = contract_utils.fetch_icons_from_marketcap() or {}
     results = []
     for token_contract in token_contracts:
-        url = f"https://www.smartscan.cash/assets/images/tokens/{token_contract.address}.png"
+        url = f"https://www.smartscout.cash/assets/images/tokens/{token_contract.address}.png"
         src = "smartscan"
         if token_contract.address.lower() in address_image_map and address_image_map[token_contract.address.lower()]:
             url = address_image_map[token_contract.address.lower()]

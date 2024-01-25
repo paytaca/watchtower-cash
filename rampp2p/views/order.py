@@ -13,7 +13,6 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.utils import timezone
 
 from authentication.token import TokenAuthentication
-from main.utils.subscription import save_subscription
 
 import rampp2p.utils.websocket as websocket
 from rampp2p.utils.utils import get_trading_fees, get_latest_status
@@ -544,12 +543,6 @@ class PendingEscrowOrder(APIView):
                 action=Transaction.ActionType.ESCROW,
             )
             websocket_msg['transaction'] = TransactionSerializer(transaction).data
-
-            # Subscribe to contract address
-            created = save_subscription(contract.address, contract.id)
-            if created: logger.warn(f'Subscribed to contract {contract.address}')
-            websocket_msg['subscribed'] = created
-            
             websocket.send_order_update(websocket_msg, pk)
             response = websocket_msg
             

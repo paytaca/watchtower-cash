@@ -45,6 +45,7 @@ from main.utils.queries.parse_utils import (
     parse_utxo_to_tuple,
     extract_tx_utxos,
 )
+import paho.mqtt.client as mqtt
 from PIL import Image, ImageFile
 from io import BytesIO 
 import pytz
@@ -128,7 +129,7 @@ def client_acknowledgement(self, txid):
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
-                    __is_key_nft = is_key_nft(category)
+                    __is_key_nft = is_key_nft(category, transaction.value)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
@@ -637,7 +638,7 @@ def query_transaction(txid, block_id, for_slp=False):
 
             if 'addresses' in output['scriptPubKey'].keys():
                 address = output['scriptPubKey']['addresses'][0]
-                value = int(output['value'] * (10 ** 8))
+                value = round(output['value'] * (10 ** 8))
                 
                 if 'tokenData' in output.keys():
                     process_cashtoken_tx(
@@ -835,7 +836,6 @@ def get_bch_utxos(self, address):
             transaction_check = Transaction.objects.filter(
                 txid=tx_hash,
                 address__address=address,
-                value=value,
                 index=index
             )
             if transaction_check.exists():
@@ -845,14 +845,14 @@ def get_bch_utxos(self, address):
                 # and also update the blockheight
                 _txn = transaction_check.first()
                 if _txn.wallet == _txn.address.wallet:
-                    transaction_check.update(spent=False, blockheight=block)
+                    transaction_check.update(spent=False, value=value, blockheight=block)
                 else:
-                    transaction_check.update(wallet=_txn.address.wallet, spent=False, blockheight=block)
+                    transaction_check.update(wallet=_txn.address.wallet, value=value, spent=False, blockheight=block)
                 
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
             else:
-                txn_id, created = save_record(
+                _, created = save_record(
                     token_id,
                     address,
                     tx_hash,
@@ -867,15 +867,15 @@ def get_bch_utxos(self, address):
                     commitment=commitment,
                     capability=capability
                 )
-                transaction_obj = Transaction.objects.filter(id=txn_id)
+                # transaction_obj = Transaction.objects.filter(id=txn_id)
 
                 if created:
                     if not block.requires_full_scan:
                         qs = BlockHeight.objects.filter(id=block.id)
                         count = qs.first().transactions.count()
                         qs.update(processed=True, transactions_count=count)
-                    
-                    parse_tx_wallet_histories.delay(tx_hash, immediate=True)
+     
+            parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
         txn_check = Transaction.objects.filter(
@@ -886,6 +886,8 @@ def get_bch_utxos(self, address):
         ).update(
             spent=True
         )
+
+
 
     except Exception as exc:
         try:
@@ -1283,10 +1285,21 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
 @shared_task(bind=True, queue='wallet_history_1')
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[], proceed_with_zero_amount=False):
     wallet_hash = wallet_handle.split('|')[1]
+    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+
+    # Do not record wallet history record if all senders and recipients are from the same wallet (i.e. UTXO consolidation txs)
+    sender_addresses = set([i[0] for i in senders if i[0]])
+    senders_check = Address.objects.filter(address__in=sender_addresses, wallet=wallet)
+    recipient_addresses = set([i[0] for i in recipients if i[0]])
+    recipients_check = Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
+    if len(sender_addresses) == senders_check.count():
+        if len(recipient_addresses) == recipients_check.count():
+            # Remove wallet history record of this, if any
+            WalletHistory.objects.filter(txid=txid).delete()
+            return
+
     parser = HistoryParser(txid, wallet_hash)
     parsed_history = parser.parse()
-    
-    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
     if type(tx_fee) is str:
         tx_fee = float(tx_fee)
@@ -1343,8 +1356,16 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 _txns = txns.exclude(token__name='bch')
                 if _txns.exists():
                     txns = _txns
-                    cashtoken_ft = txns.last().cashtoken_ft
-                    cashtoken_nft = txns.last().cashtoken_nft
+                    ft_tx = txns.filter(cashtoken_ft__isnull=False).last()
+                    if ft_tx:
+                        cashtoken_ft = ft_tx.cashtoken_ft
+                    if not cashtoken_ft:
+                        nft_tx = txns.filter(
+                            cashtoken_nft__isnull=False,
+                            cashtoken_nft__category=cashtoken_ft.category
+                        ).last()
+                        if nft_tx:
+                            cashtoken_nft = nft_tx.cashtoken_nft
                 else:
                     # Get the cashtoken record if transaction does not have this info
                     ct_recipient = None
@@ -1948,10 +1969,14 @@ def fetch_latest_usd_price():
     to_timestamp = timezone.now()
     from_timestamp = to_timestamp - timezone.timedelta(minutes=10)
     coingecko_resp = requests.get(
-        "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
+        # "https://api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
+        "https://pro-api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range?" + \
         f"vs_currency={CURRENCY}" + \
         f"&from={from_timestamp.timestamp()}" + \
-        f"&to={to_timestamp.timestamp()}"
+        f"&to={to_timestamp.timestamp()}",
+        headers={
+            'x-cg-pro-api-key': settings.COINGECKO_API_KEY
+        }
     )
 
     coingecko_prices_list = None
@@ -2145,8 +2170,6 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
             if 'confirmations' in tx.keys():
                 LOGGER.info('Skipped confirmed tx: ' + str(tx_hash))
                 return
-    
-        from main.mqtt import client as mqtt_client
 
         inputs = tx['vin']
         outputs = tx['vout']
@@ -2159,7 +2182,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
 
         for _input in inputs:
             txid = _input['txid']
-            value = int(_input['value'] * (10 ** 8))
+            value = round(_input['value'] * (10 ** 8))
             index = _input['vout']
 
             tx_check = Transaction.objects.filter(txid=txid, index=index)
@@ -2188,7 +2211,14 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
                             "outpoint_index": index,
                         })
 
+        if settings.BCH_NETWORK == 'mainnet':
+            mqtt_client = mqtt.Client(transport='websockets')
+            mqtt_client.tls_set()
+        else:
+            mqtt_client = mqtt.Client()
+        mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
         mqtt_client.loop_start()
+
         for output in outputs:
             scriptPubKey = output['scriptPubKey']
 
@@ -2197,7 +2227,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
 
                 address_check = Address.objects.filter(address=bchaddress)
                 if address_check.exists():
-                    value = int(output['value'] * (10 ** 8))
+                    value = round(output['value'] * (10 ** 8))
                     source = NODE.BCH.source
                     index = output['n']
 

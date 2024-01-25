@@ -1,6 +1,7 @@
 from celery import shared_task
 from typing import Dict
 from rampp2p.utils.websocket import send_order_update
+from main.utils.subscription import save_subscription
 from rampp2p.models import Contract
 import subprocess
 import json
@@ -47,5 +48,9 @@ def contract_handler(response: Dict, **kwargs):
         contract = Contract.objects.get(order__id=order_id)
         contract.address = address
         contract.save()
+
+        # Subscribe to contract address
+        created = save_subscription(contract.address, contract.id)
+        if created: logger.warn(f'Subscribed to contract {contract.address}')
     
     return send_order_update(data, contract.order.id)

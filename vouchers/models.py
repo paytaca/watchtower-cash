@@ -28,7 +28,8 @@ class Voucher(models.Model):
     value = models.FloatField(default=0.0)  # in BCH
     minting_txid = models.CharField(max_length=100, default='')
     claim_txid = models.CharField(max_length=100, null=True, blank=True)
-    category = models.CharField(max_length=100 ,unique=True)
+    category = models.CharField(max_length=100, unique=True)
+    commitment = models.CharField(max_length=255, default='', blank=True)
     claimed = models.BooleanField(default=False)
     expired = models.BooleanField(default=False)
     duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
@@ -39,11 +40,3 @@ class Voucher(models.Model):
     def expiration_date(self):
         expiration_date = self.date_created + timedelta(days=self.duration_days)
         return expiration_date
-
-    @property
-    def commitment(self):
-        nft = CashNonFungibleToken.objects.filter(category=self.category)
-        if nft.exists():
-            nft = nft.first()
-            return nft.commitment
-        return None

@@ -18,11 +18,13 @@ def fetch_icons_from_marketcap():
     address_image_url_map: Map<Address, URL>
         address is in lowercase to prevent mismatch due to case sensitivity
     """
-    marketcap_token_list_json_url = "https://raw.githubusercontent.com/MarketCap-Cash/SmartBCH-Token-List/main/tokens.json"
-    response = requests.get(marketcap_token_list_json_url)
-    if not response.ok:
+    try:
+        marketcap_token_list_json_url = "https://raw.githubusercontent.com/MarketCap-Cash/SmartBCH-Token-List/main/tokens.json"
+        response = requests.get(marketcap_token_list_json_url)
+        if not response.ok:
+            return None
+    except:
         return None
-
     data = {}
     try:
         data = response.json()

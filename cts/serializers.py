@@ -84,7 +84,7 @@ class UtxoSerializer(serializers.Serializer):
     }
 
     if obj.amount:
-      token['amount'] = obj.amount
+      token['amount'] = str(obj.amount)
 
     if obj.cashtoken_ft and obj.cashtoken_ft.category:
       token['tokenId'] = obj.cashtoken_ft.category
@@ -92,7 +92,7 @@ class UtxoSerializer(serializers.Serializer):
     if obj.cashtoken_nft and not token.get('tokenId'):
       token['tokenId'] = obj.cashtoken_nft.category
 
-    if obj.cashtoken_nft.commitment:
+    if obj.cashtoken_nft and obj.cashtoken_nft.commitment:
       token['commitment'] = obj.cashtoken_nft.commitment
     
     if obj.cashtoken_nft and obj.cashtoken_nft.capability:
@@ -195,7 +195,7 @@ class AuthKeySerializer(UtxoSerializer):
 class FungibleTokenBalanceSerializer(serializers.Serializer):
 
   owner = serializers.CharField()
-  balance = serializers.IntegerField()
+  balance = serializers.CharField()
   tokenId = serializers.SerializerMethodField()
   utxoCount = serializers.IntegerField()
 
