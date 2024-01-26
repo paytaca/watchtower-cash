@@ -1233,42 +1233,48 @@ def _get_wallet_hash(tx_hex):
     return wallet_hash
 
 
-@shared_task(bind=True, queue='broadcast', max_retries=2)
-def broadcast_transaction(self, transaction, txid):
+@shared_task(bind=True, queue='broadcast', max_retries=10)
+def broadcast_transaction(self, transaction, txid, broadcast_id):
     LOGGER.info(f'Broadcasting {txid}: {transaction}')
-
     txn_check = Transaction.objects.filter(txid=txid)
     success = False
 
     if txn_check.exists():
         success = True
-        # return success, txid
     else:
-        try:
+        txn_broadcast = TransactionBroadcast.objects.get(id=broadcast_id)
+        if txn_broadcast.num_retries < 7:
             try:
-                txid = NODE.BCH.broadcast_transaction(transaction)
-                if txid:
-                    success = True
-                    return success, txid
-                else:
-                    self.retry(countdown=1)
-            except Exception as exc:
+                try:
+                    txid = NODE.BCH.broadcast_transaction(transaction)
+                    if txid:
+                        success = True
+                    else:
+                        self.retry(countdown=1)
+                except Exception as exc:
+                    LOGGER.exception(exc)
+                    error = str(exc)
+                    if 'already have transaction' in error:
+                        success = True
+            except AttributeError as exc:
                 LOGGER.exception(exc)
-                error = str(exc)
-                if 'already have transaction' in error:
-                    success = True
-        except AttributeError as exc:
-            LOGGER.exception(exc)
-            self.retry(countdown=1)
+                self.retry(countdown=1)
 
     if success:
-        txid = error.split(' ')[-1]
+        TransactionBroadcast.objects.filter(id=broadcast_id).update(
+            date_succeeded=timezone.now()
+        )
         process_mempool_transaction_fast(txid, transaction, True)
     else:
-        # Do a wallet utxo rescan if failed
-        wallet_hash = _get_wallet_hash(transaction)
-        rescan_utxos(wallet_hash)
-        self.retry(countdown=3)
+        TransactionBroadcast.objects.filter(id=broadcast_id).update(
+            num_retries=models.F('num_retries') + 1
+        )
+        if txn_broadcast.num_retries >= 3:
+            if txn_broadcast.num_retries == 3:
+                # Do a wallet utxo rescan if failed 3 times
+                wallet_hash = _get_wallet_hash(transaction)
+                rescan_utxos(wallet_hash)
+            self.retry(countdown=3)
 
 
 def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):

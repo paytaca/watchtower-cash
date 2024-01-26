@@ -359,6 +359,15 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
         if obj.info:
             return obj.info.nft_details
         return None
+    
+
+class TransactionBroadcastAdmin(admin.ModelAdmin):
+    list_display = [
+        'txid',
+        'num_retries',
+        'date_received',
+        'date_succeeded'
+    ]
 
 
 admin.site.unregister(User)
@@ -378,3 +387,4 @@ admin.site.register(Wallet, WalletAdmin)
 admin.site.register(Project, ProjectAdmin)
 admin.site.register(WalletHistory, WalletHistoryAdmin)
 admin.site.register(WalletNftToken, WalletNftTokenAdmin)
+admin.site.register(TransactionBroadcast, TransactionBroadcastAdmin)

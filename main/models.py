@@ -792,3 +792,14 @@ class TransactionMetaAttribute(PostgresModel):
         unique_together = (
             ("txid", "wallet_hash", "key", "system_generated"),
         )
+
+
+class TransactionBroadcast(PostgresModel):
+    txid = models.CharField(max_length=70, db_index=True)
+    tx_hex = models.TextField()
+    num_retries = models.IntegerField(default=0)
+    date_received = models.DateTimeField(default=timezone.now)
+    date_succeeded = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    def __str__(self):
+        return self.txid
