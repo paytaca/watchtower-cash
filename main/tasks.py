@@ -5,7 +5,6 @@ from datetime import datetime
 from urllib.parse import urlparse
 from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
-from bitcash.transaction import calc_txid
 from celery import shared_task
 from celery_heimdall import HeimdallTask, RateLimit
 from main.models import *
@@ -1214,9 +1213,28 @@ def update_nft_owner(tokenid):
     return f"token({token}) | wallet_nft_token: ({wallet_nft_token}) | dispensed: ({dispensed_wallets})"
 
 
+def _get_wallet_hash(tx_hex):
+    wallet_hash = None
+    try:
+        tx = NODE.BCH._decode_raw_transaction(tx_hex)
+        input0 = tx['vin'][0]
+        input0_tx = NODE.BCH._get_raw_transaction(input0['txid'])
+        vout_data = input0_tx['vout'][input0['vout']]
+        if vout_data['scriptPubKey']['type'] == 'pubkeyhash':
+            address = vout_data['scriptPubKey']['addresses'][0]
+            try:
+                address_obj = Address.objects.get(address=address)
+                if address_obj.wallet:
+                    wallet_hash = address_obj.wallet.wallet_hash
+            except Address.DoesNotExist:
+                pass
+    except:
+        pass
+    return wallet_hash
+
+
 @shared_task(bind=True, queue='broadcast', max_retries=2)
-def broadcast_transaction(self, transaction):
-    txid = calc_txid(transaction)
+def broadcast_transaction(self, transaction, txid):
     LOGGER.info(f'Broadcasting {txid}: {transaction}')
 
     txn_check = Transaction.objects.filter(txid=txid)
@@ -1224,7 +1242,7 @@ def broadcast_transaction(self, transaction):
 
     if txn_check.exists():
         success = True
-        return success, txid
+        # return success, txid
     else:
         try:
             try:
@@ -1237,10 +1255,20 @@ def broadcast_transaction(self, transaction):
             except Exception as exc:
                 LOGGER.exception(exc)
                 error = str(exc)
-                return False, error
+                if 'already have transaction' in error:
+                    success = True
         except AttributeError as exc:
             LOGGER.exception(exc)
             self.retry(countdown=1)
+
+    if success:
+        txid = error.split(' ')[-1]
+        process_mempool_transaction_fast(txid, transaction, True)
+    else:
+        # Do a wallet utxo rescan if failed
+        wallet_hash = _get_wallet_hash(transaction)
+        rescan_utxos(wallet_hash)
+        self.retry(countdown=3)
 
 
 def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
