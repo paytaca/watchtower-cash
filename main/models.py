@@ -800,6 +800,7 @@ class TransactionBroadcast(PostgresModel):
     num_retries = models.IntegerField(default=0)
     date_received = models.DateTimeField(default=timezone.now)
     date_succeeded = models.DateTimeField(null=True, blank=True, db_index=True)
+    error = models.TextField()
 
     def __str__(self):
         return self.txid

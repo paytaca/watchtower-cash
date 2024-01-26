@@ -1233,7 +1233,7 @@ def _get_wallet_hash(tx_hex):
     return wallet_hash
 
 
-@shared_task(bind=True, queue='broadcast', max_retries=10)
+@shared_task(bind=True, queue='broadcast', max_retries=7)
 def broadcast_transaction(self, transaction, txid, broadcast_id):
     LOGGER.info(f'Broadcasting {txid}: {transaction}')
     txn_check = Transaction.objects.filter(txid=txid)
@@ -1256,6 +1256,10 @@ def broadcast_transaction(self, transaction, txid, broadcast_id):
                     error = str(exc)
                     if 'already have transaction' in error:
                         success = True
+                    else:
+                        TransactionBroadcast.objects.filter(id=broadcast_id).update(
+                            error=error
+                        )
             except AttributeError as exc:
                 LOGGER.exception(exc)
                 self.retry(countdown=1)
