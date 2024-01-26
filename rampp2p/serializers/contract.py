@@ -1,15 +1,22 @@
 from rest_framework import serializers
 from django.conf import settings
-from rampp2p.models import (
-    Contract, 
-    Order,
-    TradeType
-)
+import rampp2p.models as models
+
+class ContractMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ContractMember
+        fields = [
+            'id',
+            'member_ref_id',
+            'member_type',
+            'address',
+            'pubkey'
+        ]
 
 class ContractSerializer(serializers.ModelSerializer):
-    order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+    order = serializers.PrimaryKeyRelatedField(queryset=models.Order.objects.all())
     class Meta:
-        model = Contract
+        model = models.Contract
         fields = [
             'id',
             'order',
@@ -18,25 +25,27 @@ class ContractSerializer(serializers.ModelSerializer):
         ]
         depth = 1
 
-class ContractDetailSerializer(ContractSerializer):
+class ContractDetailSerializer(ContractSerializer): 
+    members = ContractMemberSerializer(many=True, read_only=True)
     pubkeys = serializers.SerializerMethodField()
     addresses = serializers.SerializerMethodField()
     timestamp = serializers.SerializerMethodField()
     class Meta:
-        model = Contract
+        model = models.Contract
         fields = ContractSerializer.Meta.fields + [
+            'members',
             'pubkeys',
             'addresses',
             'timestamp'
         ]
-    
+
     def get_pubkeys(self, contract):
         arbiter, seller, buyer = self.get_parties(contract)
         servicer = self.get_servicer()
         return {
-            'arbiter': arbiter.public_key,
-            'seller': seller.public_key,
-            'buyer': buyer.public_key,
+            'arbiter': arbiter.pubkey,
+            'seller': seller.pubkey,
+            'buyer': buyer.pubkey,
             'servicer': servicer.get('public_key')
         }
     
@@ -60,15 +69,15 @@ class ContractDetailSerializer(ContractSerializer):
         return contract.created_at.timestamp()
 
     def get_parties(self, contract):
-        arbiter = contract.order.arbiter
-        seller = None
-        buyer = None
-        ad_snapshot = contract.order.ad_snapshot
-        order = contract.order
-        if ad_snapshot.trade_type == TradeType.SELL:
-            seller = ad_snapshot.ad.owner
-            buyer = order.owner
-        else:
-            seller = order.owner
-            buyer = ad_snapshot.ad.owner
+        members = models.ContractMember.objects.filter(contract__id=contract.id)
+        arbiter, seller, buyer = None, None, None
+        for member in members:
+            type = member.member_type
+            if (type == models.ContractMember.MemberType.ARBITER):
+                arbiter = member
+            if (type == models.ContractMember.MemberType.SELLER):
+                seller = member
+            if (type == models.ContractMember.MemberType.BUYER):
+                buyer = member
+
         return arbiter, seller, buyer

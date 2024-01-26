@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from main.models import Wallet as MainWallet
 from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
-from rampp2p.serializers import PeerProfileSerializer, ArbiterProfileSerializer
+from rampp2p.serializers import PeerProfileSerializer, ArbiterSerializer
 from authentication.backends import SignatureBackend
 from authentication.models import AuthToken
 
@@ -68,7 +68,7 @@ class LoginView(APIView):
                 serialized_wallet = PeerProfileSerializer(wallet)
                 
             if app == 'ramp-arbiter':
-                serialized_wallet = ArbiterProfileSerializer(wallet)
+                serialized_wallet = ArbiterSerializer(wallet)
 
             if serialized_wallet is not None:
                 response['user'] = serialized_wallet.data

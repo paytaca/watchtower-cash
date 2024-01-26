@@ -1,36 +1,22 @@
 from rest_framework import serializers
 from rampp2p.models import Arbiter
 
-class ArbiterProfileSerializer(serializers.ModelSerializer):
+class ArbiterSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(read_only=True)
+    wallet_hash = serializers.CharField(required=False, write_only=True)
+    name = serializers.CharField(required=False)
+    chat_identity_id = serializers.CharField(required=False)
+    public_key = serializers.CharField(required=False)
+    address = serializers.CharField(required=False)
+    is_disabled = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = Arbiter
         fields = [
             'id',
-            'chat_identity_id',
-            'name',
-            'public_key',
-            'address',
-            'is_disabled'
-        ]
-
-class ArbiterWriteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Arbiter
-        fields = [
-            'name',
-            'chat_identity_id',
             'wallet_hash',
-            'public_key',
-            'address'
-        ]
-
-class ArbiterReadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Arbiter
-        fields = [
-            'id',
-            'chat_identity_id',
             'name',
+            'chat_identity_id',
             'public_key',
             'address',
             'is_disabled'

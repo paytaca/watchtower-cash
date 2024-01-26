@@ -12,19 +12,14 @@ from rampp2p.validators import *
 from rampp2p.models import (
     StatusType,
     Order,
-    Peer,
+    ContractMember,
     Contract,
     Transaction,
     Recipient,
     Arbiter,
     TradeType
 )
-from rampp2p.serializers import (
-    ContractSerializer, 
-    ContractDetailSerializer,
-    TransactionSerializer, 
-    RecipientSerializer
-)
+import rampp2p.serializers as serializers
 
 import logging
 logger = logging.getLogger(__name__)
@@ -52,7 +47,7 @@ class ContractDetailsView(APIView):
         order_id = request.query_params.get('order_id')
         contract_id = request.query_params.get('contract_id')
         contract = self.get_object(order_id, contract_id)
-        serialized_contract = ContractDetailSerializer(contract)
+        serialized_contract = serializers.ContractDetailSerializer(contract)
         return Response(serialized_contract.data, status=status.HTTP_200_OK)
 
 class ContractCreateView(APIView):
@@ -71,88 +66,127 @@ class ContractCreateView(APIView):
                 return Response(status=status.HTTP_401_UNAUTHORIZED)
 
             arbiter = Arbiter.objects.get(pk=arbiter_pk)
-            params = self.get_params(arbiter.public_key, order)
+            contract_params = self.get_contract_params(arbiter, order)
 
         except (Order.DoesNotExist, Arbiter.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         address = None
-        timestamp = None
         contract, created = Contract.objects.get_or_create(order=order)
+        timestamp = contract.created_at.timestamp()
         if (created or
             contract.address == None or
-            contract.arbiter == None or
-            contract.arbiter.id != arbiter.id):
+            contract.order.arbiter == None or
+            contract.order.arbiter.id != arbiter.id):
             
             # execute subprocess (generate the contract)
             contract.address = None
             contract.save()
-            timestamp = contract.created_at.timestamp()
+
             create_contract(
                 order_id=contract.order.id,
-                arbiter_pubkey=params['arbiter_pubkey'], 
-                seller_pubkey=params['seller_pubkey'], 
-                buyer_pubkey=params['buyer_pubkey'],
+                arbiter_pubkey=contract_params['arbiter']['pubkey'], 
+                seller_pubkey=contract_params['seller']['pubkey'], 
+                buyer_pubkey=contract_params['buyer']['pubkey'],
                 timestamp=timestamp
             )
+
         else:
             address = contract.address
         
+        # save contract member pubkeys and addresses
+        arbiter_member, _ = ContractMember.objects.update_or_create(
+            contract = contract,
+            member_type = ContractMember.MemberType.ARBITER,
+            defaults={
+                'member_ref_id': contract_params['arbiter']['id'],
+                'address': contract_params['arbiter']['address'],
+                'pubkey': contract_params['arbiter']['pubkey']
+            }
+        )
+        seller_member, _ = ContractMember.objects.update_or_create(
+            contract = contract,
+            member_type = ContractMember.MemberType.SELLER,
+            defaults={
+                'member_ref_id': contract_params['seller']['id'],
+                'address': contract_params['seller']['address'],
+                'pubkey': contract_params['seller']['pubkey']
+            }
+        )
+        buyer_member, _ = ContractMember.objects.update_or_create(
+            contract = contract,
+            member_type = ContractMember.MemberType.BUYER,
+            defaults={
+                'member_ref_id': contract_params['buyer']['id'],
+                'address': contract_params['buyer']['address'],
+                'pubkey': contract_params['buyer']['pubkey']
+            }
+        )
+        members = [arbiter_member, seller_member, buyer_member]
+        serialized_members = serializers.ContractMemberSerializer(members, many=True)
+
         # update order arbiter
         order.arbiter = arbiter
         order.save()
         
         response = {
-            'success': True,
-            'data': {
-                'order': order.id,
-                'contract': contract.id,
-                'timestamp': timestamp,
-                'arbiter_address': order.arbiter.address,
-                'buyer_address': params['buyer_address'],
-                'seller_address': params['seller_address']
-            }
+            'order': order.id,
+            'contract': contract.id,
+            'timestamp': timestamp,
+            'members': serialized_members.data,
+            'address': address
         }
-        
-        if not (address is None):
-            response['data']['contract_address'] = address
         
         return Response(response, status=status.HTTP_200_OK)
 
-    def get_params(self, arbiter_pubkey, order: Order):
+    def get_contract_params(self, arbiter, order: Order):
 
+        seller_id = None
         seller_pubkey = None
-        buyer_pubkey = None
         seller_address = None
+        
+        buyer_id = None
+        buyer_pubkey = None
         buyer_address = None
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
+            seller_id = order.ad_snapshot.ad.owner.id
             seller_pubkey = order.ad_snapshot.ad.owner.public_key
-            buyer_pubkey = order.owner.public_key
             seller_address = order.ad_snapshot.ad.owner.address
+            
+            buyer_id = order.owner.id
+            buyer_pubkey = order.owner.public_key
             buyer_address = order.owner.address
         else:
+            seller_id = order.owner.id
             seller_pubkey = order.owner.public_key
-            buyer_pubkey = order.ad_snapshot.ad.owner.public_key
             seller_address = order.owner.address
+            
+            buyer_id = order.ad_snapshot.ad.owner.id
+            buyer_pubkey = order.ad_snapshot.ad.owner.public_key
             buyer_address = order.ad_snapshot.ad.owner.address
 
-        if (arbiter_pubkey is None or 
-            seller_pubkey is None or 
-            buyer_pubkey is None or
-            seller_address is None or
-            buyer_address is None):
-            raise ValidationError('contract parameters are required')
+        if (not seller_id or not seller_pubkey or not seller_address or
+            not buyer_id or not buyer_pubkey or not buyer_address):
+                raise ValidationError('contract parameters are required')
         
-        params = {
-            'arbiter_pubkey': arbiter_pubkey,
-            'seller_pubkey': seller_pubkey,
-            'buyer_pubkey': buyer_pubkey,
-            'seller_address': seller_address,
-            'buyer_address': buyer_address,
+        return {
+            'arbiter': {
+                'id': arbiter.id,
+                'pubkey': arbiter.public_key,
+                'address': arbiter.address
+            },
+            'seller': {
+                'id': seller_id,
+                'pubkey': seller_pubkey,
+                'address': seller_address
+            },
+            'buyer': {
+                'id': buyer_id,
+                'pubkey': buyer_pubkey,
+                'address': buyer_address
+            }
         }
-
-        return params
     
     def has_permissions(self, order: Order, wallet_hash: str):
         return utils.is_seller(order, wallet_hash)
@@ -186,8 +220,8 @@ class ContractTransactionsView(APIView):
         for _, tx in enumerate(transactions):
             tx_outputs = Recipient.objects.filter(transaction__id=tx.id)
             data = {}
-            data["txn"] = TransactionSerializer(tx).data
-            data["txn"]["outputs"] = RecipientSerializer(tx_outputs, many=True).data
+            data["txn"] = serializers.TransactionSerializer(tx).data
+            data["txn"]["outputs"] = serializers.RecipientSerializer(tx_outputs, many=True).data
             tx_data.append(data)
 
         return Response(tx_data, status=status.HTTP_200_OK)

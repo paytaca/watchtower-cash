@@ -10,7 +10,8 @@ from authentication.token import TokenAuthentication
 
 from rampp2p.viewcodes import ViewCode
 from rampp2p.models import Arbiter, Peer
-from rampp2p.serializers import ArbiterWriteSerializer, ArbiterReadSerializer
+# from rampp2p.serializers import ArbiterWriteSerializer, ArbiterReadSerializer
+from rampp2p.serializers import ArbiterSerializer
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
 class ArbiterListCreate(APIView):
@@ -21,7 +22,7 @@ class ArbiterListCreate(APIView):
         id = request.query_params.get('id')
         if id is not None:
             queryset = queryset.filter(id=id)
-        serializer = ArbiterReadSerializer(queryset, many=True)
+        serializer = ArbiterSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
     
     def post(self, request):
@@ -41,12 +42,12 @@ class ArbiterListCreate(APIView):
         data = request.data.copy()
         data['wallet_hash'] = wallet_hash
 
-        serialized_arbiter = ArbiterWriteSerializer(data=data)
+        serialized_arbiter = ArbiterSerializer(data=data)
         if not serialized_arbiter.is_valid():
             return Response(serialized_arbiter.errors, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            serialized_arbiter = ArbiterReadSerializer(serialized_arbiter.save())
+            serialized_arbiter = ArbiterSerializer(serialized_arbiter.save())
         except IntegrityError:
             return Response({'error': 'arbiter with wallet_hash already exists'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serialized_arbiter.data, status=status.HTTP_200_OK)
@@ -55,63 +56,26 @@ class ArbiterDetail(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        try:
-            public_key = request.query_params.get('public_key')
-            if public_key is None:
-                raise ValidationError('public_key is required')
-            
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ARBITER_GET.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message, public_key=public_key)
-
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_200_OK)
-
-        response = {}
-        try:
-            arbiter = Arbiter.objects.get(wallet_hash=wallet_hash)
-            response['arbiter'] = ArbiterReadSerializer(arbiter).data
-        except Arbiter.DoesNotExist:
-            response['arbiter'] = None
+        queryset = Arbiter.objects.all()
         
-        return Response(response, status=status.HTTP_200_OK)
+        id = request.query_params.get('id')
+        if id is not None:
+            queryset = queryset.filter(id=id)
+        else:
+            wallet_hash = request.headers.get('wallet_hash')
+            if wallet_hash is not None:
+                queryset = queryset.filter(wallet_hash=wallet_hash)
+
+        queryset = queryset.first()
+        serializer = ArbiterSerializer(queryset)
+        return Response(serializer.data, status.HTTP_200_OK)
 
     def put(self, request):
-        try:
-            public_key = request.data.get('public_key')
-            if public_key is None:
-                raise ValidationError('public_key is required')
-            
-            # validate signature
-            signature, timestamp, wallet_hash = get_verification_headers(request)
-            message = ViewCode.ARBITER_UPDATE.value + '::' + timestamp
-            verify_signature(wallet_hash, signature, message, public_key=public_key)
-
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            arbiter = Arbiter.objects.get(wallet_hash=wallet_hash)
-            
-            new_public_key = request.data.get('public_key')
-            if new_public_key is not None:
-                arbiter.public_key = new_public_key
-            
-            new_address = request.data.get('address')
-            if new_address is not None:
-                arbiter.address = new_address
-            
-            new_name = request.data.get('name')
-            if new_name is not None:
-                arbiter.name = new_name
-
-            arbiter.save()
-        except (Arbiter.DoesNotExist, Exception) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        serialized_arbiter = ArbiterReadSerializer(arbiter).data
-        return Response(serialized_arbiter, status=status.HTTP_200_OK)
+        serializer = ArbiterSerializer(request.user, data=request.data)
+        if serializer.is_valid():
+            serializer = ArbiterSerializer(serializer.save())
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ArbiterConfig(APIView):
     authentication_classes = [TokenAuthentication]
@@ -144,7 +108,7 @@ class ArbiterConfig(APIView):
             arbiter.is_disabled = disable
             arbiter.save()
 
-            serialized_arbiter = ArbiterReadSerializer(arbiter)
+            serialized_arbiter = ArbiterSerializer(arbiter)
 
         except Arbiter.DoesNotExist as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

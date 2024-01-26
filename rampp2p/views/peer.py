@@ -10,7 +10,7 @@ from rampp2p.serializers import (
     PeerCreateSerializer,
     PeerUpdateSerializer,
     PeerProfileSerializer,
-    ArbiterProfileSerializer
+    ArbiterSerializer
 )
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -74,7 +74,7 @@ class UserProfileView(APIView):
 
         arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
         if arbiter.exists():
-            user = ArbiterProfileSerializer(arbiter.first()).data
+            user = ArbiterSerializer(arbiter.first()).data
             is_arbiter = True
         
         if not is_arbiter:
