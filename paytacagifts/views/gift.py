@@ -208,13 +208,17 @@ class GiftViewSet(viewsets.GenericViewSet):
             raise Exception("Gift does not exist!")
         gift = gift_qs.first()
         if gift:
-            Claim.objects.create(
-                wallet=wallet,
-                amount=gift.amount,
-                gift=gift
-            )
-            return Response({
-                "share": gift.share
-            })
+            claim_check = Claim.objects.filter(gift=gift)
+            if claim_check.exists():
+                raise Exception("This gift has been claimed.")
+            else:
+                Claim.objects.create(
+                    wallet=wallet,
+                    amount=gift.amount,
+                    gift=gift
+                )
+                return Response({
+                    "share": gift.share
+                })
         else:
             raise Exception("This gift does not exist.")
