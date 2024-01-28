@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from main.utils.address_validator import *
 from main.utils.address_converter import *
+from main.utils.bch_yield import compute_wallet_yield
 from main import serializers
 from main.utils.tx_fee import (
     get_tx_fee_sats,
@@ -241,6 +242,7 @@ class Balance(APIView):
                     data['spendable'] = self.truncate(data['spendable'], 8)
 
                     data['balance'] = self.truncate(bch_balance, 8)
+                    data['yield'] = compute_wallet_yield(wallet_hash)
                     data['valid'] = True
                 else:
                     if is_cashtoken_nft:
