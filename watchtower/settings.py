@@ -408,6 +408,10 @@ CELERY_BEAT_SCHEDULE = {
     'claim_expired_unclaimed_vouchers': {
         'task': 'vouchers.tasks.claim_expired_unclaimed_vouchers',
         'schedule': 60 * 60
+    },
+    'bulk_rebroadcast': {
+        'task': 'main.tasks.bulk_rebroadcast',
+        'schedule': 30
     }
 }
 

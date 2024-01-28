@@ -1234,7 +1234,7 @@ def _get_wallet_hash(tx_hex):
 
 
 @shared_task(bind=True, queue='broadcast', max_retries=7)
-def broadcast_transaction(self, transaction, txid, broadcast_id):
+def broadcast_transaction(self, transaction, txid, broadcast_id, auto_retry=True):
     LOGGER.info(f'Broadcasting {txid}: {transaction}')
     txn_check = Transaction.objects.filter(txid=txid)
     success = False
@@ -1250,7 +1250,7 @@ def broadcast_transaction(self, transaction, txid, broadcast_id):
                     if txid:
                         success = True
                     else:
-                        self.retry(countdown=1)
+                        if auto_retry: self.retry(countdown=1)
                 except Exception as exc:
                     LOGGER.exception(exc)
                     error = str(exc)
@@ -1262,7 +1262,7 @@ def broadcast_transaction(self, transaction, txid, broadcast_id):
                         )
             except AttributeError as exc:
                 LOGGER.exception(exc)
-                self.retry(countdown=1)
+                if auto_retry: self.retry(countdown=1)
 
     if success:
         TransactionBroadcast.objects.filter(id=broadcast_id).update(
@@ -1278,7 +1278,26 @@ def broadcast_transaction(self, transaction, txid, broadcast_id):
                 # Do a wallet utxo rescan if failed 3 times
                 wallet_hash = _get_wallet_hash(transaction)
                 rescan_utxos(wallet_hash)
-            self.retry(countdown=3)
+            if auto_retry: self.retry(countdown=3)
+
+
+@shared_task(bind=True, queue='broadcast', max_retries=2)
+def bulk_rebroadcast():
+    """ Find broadcasts that got interrupted by temporary disruptions in the background
+    task queue (e.g. due to deployments, redis or celery issues, congestions) and rebroadcast them. """
+    threshold = timezone.now() - datetime.timedelta(seconds=30)
+    pending_broadcasts = TransactionBroadcast.objects.filter(
+        date_created__lte=threshold,
+        date_succeeded__isnull=True,
+        num_retries__lt=7
+    )
+    for broadcast in pending_broadcasts:
+        broadcast_transaction.delay(
+            broadcast.tx_hex,
+            broadcast.txid,
+            broadcast.id,
+            auto_retry=False
+        )
 
 
 def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
