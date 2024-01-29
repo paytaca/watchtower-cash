@@ -1270,24 +1270,25 @@ def broadcast_transaction(self, transaction, txid, broadcast_id, auto_retry=True
         )
         process_mempool_transaction_fast(txid, transaction, True)
     else:
-        TransactionBroadcast.objects.filter(id=broadcast_id).update(
-            num_retries=models.F('num_retries') + 1
-        )
-        if txn_broadcast.num_retries >= 3:
-            if txn_broadcast.num_retries == 3:
-                # Do a wallet utxo rescan if failed 3 times
-                wallet_hash = _get_wallet_hash(transaction)
-                rescan_utxos(wallet_hash)
-            if auto_retry: self.retry(countdown=3)
+        if txn_broadcast.num_retries < 7:
+            TransactionBroadcast.objects.filter(id=broadcast_id).update(
+                num_retries=models.F('num_retries') + 1
+            )
+            if txn_broadcast.num_retries >= 3:
+                if txn_broadcast.num_retries == 3:
+                    # Do a wallet utxo rescan if failed 3 times
+                    wallet_hash = _get_wallet_hash(transaction)
+                    rescan_utxos(wallet_hash)
+                if auto_retry: self.retry(countdown=3)
 
 
-@shared_task(bind=True, queue='broadcast', max_retries=2)
+@shared_task(queue='broadcast', max_retries=2)
 def bulk_rebroadcast():
     """ Find broadcasts that got interrupted by temporary disruptions in the background
     task queue (e.g. due to deployments, redis or celery issues, congestions) and rebroadcast them. """
-    threshold = timezone.now() - datetime.timedelta(seconds=30)
+    threshold = timezone.now() - timezone.timedelta(seconds=30)
     pending_broadcasts = TransactionBroadcast.objects.filter(
-        date_created__lte=threshold,
+        date_received__lte=threshold,
         date_succeeded__isnull=True,
         num_retries__lt=7
     )

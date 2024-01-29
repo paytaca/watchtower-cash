@@ -177,6 +177,9 @@ class BCHN(object):
             transaction['tx_fee'] = round(txn['fee'] * (10 ** 8))
         return transaction
 
+    def test_mempool_accept(self, hex_str):
+        return self.rpc_connection.testmempoolaccept([hex_str])[0]
+
     def broadcast_transaction(self, hex_str):
         retries = 0
         while retries < self.max_retries:

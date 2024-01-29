@@ -2,11 +2,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import generics
 from rest_framework import status
-from bitcash.transaction import calc_txid
 from main import serializers
 from main.models import TransactionBroadcast
+from main.utils.queries.node import Node
 from main.tasks import broadcast_transaction
 
+NODE = Node()
 
 class BroadcastViewSet(generics.GenericAPIView):
     serializer_class = serializers.BroadcastSerializer
@@ -17,14 +18,18 @@ class BroadcastViewSet(generics.GenericAPIView):
         response = {'success': False}
         if serializer.is_valid():
             transaction = serializer.data['transaction']
-            txid = calc_txid(transaction)
-            txn_broadcast = TransactionBroadcast(
-                txid=txid,
-                tx_hex=transaction
-            )
-            txn_broadcast.save()
-            broadcast_transaction.delay(transaction, txid, txn_broadcast.id)
-            response['txid'] = txid
-            response['success'] = True
+            test_accept = NODE.BCH.test_mempool_accept(transaction)
+            txid = test_accept['txid']
+            if test_accept['allowed']:
+                txn_broadcast = TransactionBroadcast(
+                    txid=txid,
+                    tx_hex=transaction
+                )
+                txn_broadcast.save()
+                broadcast_transaction.delay(transaction, txid, txn_broadcast.id)
+                response['txid'] = txid
+                response['success'] = True
+            else:
+                response['error'] = test_accept['reject-reason']
             return Response(response, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

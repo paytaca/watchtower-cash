@@ -33,21 +33,22 @@ def compute_wallet_yield(wallet_hash):
 
     if agg_values and price_log:
         total_bch = agg_values['amount__sum']
-        query = incoming_txs.annotate(total_usd=Sum(F('amount') * F('usd_price'), output_field=FloatField())).aggregate(Sum('total_usd'))
-        total_usd_worth = query['total_usd__sum']
+        if total_bch:
+            query = incoming_txs.annotate(total_usd=Sum(F('amount') * F('usd_price'), output_field=FloatField())).aggregate(Sum('total_usd'))
+            total_usd_worth = query['total_usd__sum']
 
-        current_usd_price = price_log.price_value
-        current_usd_worth = Decimal(total_bch) * Decimal(current_usd_price)
+            current_usd_price = price_log.price_value
+            current_usd_worth = Decimal(total_bch) * Decimal(current_usd_price)
 
-        computed_yield = Decimal(current_usd_worth) - Decimal(total_usd_worth)
+            computed_yield = Decimal(current_usd_worth) - Decimal(total_usd_worth)
 
-        wallet_pref = WalletPreferences.objects.get(wallet__wallet_hash=wallet_hash)
-        if wallet_pref.selected_currency != 'USD':
-            usd_exchange_rate = get_yadio_rate(wallet_pref.selected_currency, 'USD')
-            computed_yield = Decimal(usd_exchange_rate['rate']) * computed_yield
-        
-        result = {
-            wallet_pref.selected_currency: round(computed_yield, 2)
-        }
+            wallet_pref = WalletPreferences.objects.get(wallet__wallet_hash=wallet_hash)
+            if wallet_pref.selected_currency != 'USD':
+                usd_exchange_rate = get_yadio_rate(wallet_pref.selected_currency, 'USD')
+                computed_yield = Decimal(usd_exchange_rate['rate']) * computed_yield
+            
+            result = {
+                wallet_pref.selected_currency: round(computed_yield, 2)
+            }
     
     return result
