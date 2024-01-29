@@ -79,10 +79,10 @@ class ContractCreateView(APIView):
             contract.order.arbiter == None or
             contract.order.arbiter.id != arbiter.id):
             
-            # execute subprocess (generate the contract)
             contract.address = None
             contract.save()
-
+            
+            # execute subprocess (generate the contract)
             create_contract(
                 order_id=contract.order.id,
                 arbiter_pubkey=contract_params['arbiter']['pubkey'], 
@@ -90,7 +90,6 @@ class ContractCreateView(APIView):
                 buyer_pubkey=contract_params['buyer']['pubkey'],
                 timestamp=timestamp
             )
-
         else:
             address = contract.address
         
@@ -100,8 +99,9 @@ class ContractCreateView(APIView):
             member_type = ContractMember.MemberType.ARBITER,
             defaults={
                 'member_ref_id': contract_params['arbiter']['id'],
+                'pubkey': contract_params['arbiter']['pubkey'],
                 'address': contract_params['arbiter']['address'],
-                'pubkey': contract_params['arbiter']['pubkey']
+                'address_path': contract_params['arbiter']['address_path']
             }
         )
         seller_member, _ = ContractMember.objects.update_or_create(
@@ -109,8 +109,9 @@ class ContractCreateView(APIView):
             member_type = ContractMember.MemberType.SELLER,
             defaults={
                 'member_ref_id': contract_params['seller']['id'],
+                'pubkey': contract_params['seller']['pubkey'],
                 'address': contract_params['seller']['address'],
-                'pubkey': contract_params['seller']['pubkey']
+                'address_path': contract_params['seller']['address_path']
             }
         )
         buyer_member, _ = ContractMember.objects.update_or_create(
@@ -118,8 +119,9 @@ class ContractCreateView(APIView):
             member_type = ContractMember.MemberType.BUYER,
             defaults={
                 'member_ref_id': contract_params['buyer']['id'],
+                'pubkey': contract_params['buyer']['pubkey'],
                 'address': contract_params['buyer']['address'],
-                'pubkey': contract_params['buyer']['pubkey']
+                'address_path': contract_params['buyer']['address_path']
             }
         )
         members = [arbiter_member, seller_member, buyer_member]
@@ -144,47 +146,52 @@ class ContractCreateView(APIView):
         seller_id = None
         seller_pubkey = None
         seller_address = None
+        seller_address_path = None
         
         buyer_id = None
         buyer_pubkey = None
         buyer_address = None
+        buyer_address_path = None
 
         if order.ad_snapshot.trade_type == TradeType.SELL:
             seller_id = order.ad_snapshot.ad.owner.id
             seller_pubkey = order.ad_snapshot.ad.owner.public_key
             seller_address = order.ad_snapshot.ad.owner.address
+            seller_address_path = order.ad_snapshot.ad.owner.address_path
             
             buyer_id = order.owner.id
             buyer_pubkey = order.owner.public_key
             buyer_address = order.owner.address
+            buyer_address_path = order.owner.address_path
         else:
             seller_id = order.owner.id
             seller_pubkey = order.owner.public_key
             seller_address = order.owner.address
+            seller_address_path = order.owner.address_path
             
             buyer_id = order.ad_snapshot.ad.owner.id
             buyer_pubkey = order.ad_snapshot.ad.owner.public_key
             buyer_address = order.ad_snapshot.ad.owner.address
-
-        if (not seller_id or not seller_pubkey or not seller_address or
-            not buyer_id or not buyer_pubkey or not buyer_address):
-                raise ValidationError('contract parameters are required')
+            buyer_address_path = order.ad_snapshot.ad.owner.address_path
         
         return {
             'arbiter': {
                 'id': arbiter.id,
                 'pubkey': arbiter.public_key,
-                'address': arbiter.address
+                'address': arbiter.address,
+                'address_path': arbiter.address_path
             },
             'seller': {
                 'id': seller_id,
                 'pubkey': seller_pubkey,
-                'address': seller_address
+                'address': seller_address,
+                'address_path': seller_address_path
             },
             'buyer': {
                 'id': buyer_id,
                 'pubkey': buyer_pubkey,
-                'address': buyer_address
+                'address': buyer_address,
+                'address_path': buyer_address_path
             }
         }
     

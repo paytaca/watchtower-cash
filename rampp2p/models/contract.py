@@ -18,8 +18,9 @@ class ContractMember(models.Model):
     contract = models.ForeignKey(Contract, on_delete=models.CASCADE, related_name='members')
     member_ref_id = models.IntegerField()
     member_type = models.CharField(max_length=10, choices=MemberType.choices)
-    address = models.CharField(max_length=100)
-    pubkey = models.CharField(max_length=100)
+    pubkey = models.CharField(max_length=75)
+    address = models.CharField(max_length=75)
+    address_path = models.CharField(max_length=10, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     class Meta:

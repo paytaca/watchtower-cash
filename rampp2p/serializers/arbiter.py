@@ -8,6 +8,7 @@ class ArbiterSerializer(serializers.ModelSerializer):
     chat_identity_id = serializers.CharField(required=False)
     public_key = serializers.CharField(required=False)
     address = serializers.CharField(required=False)
+    address_path = serializers.CharField(required=False)
     is_disabled = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -19,5 +20,6 @@ class ArbiterSerializer(serializers.ModelSerializer):
             'chat_identity_id',
             'public_key',
             'address',
+            'address_path',
             'is_disabled'
         ]

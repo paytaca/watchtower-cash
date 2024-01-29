@@ -148,6 +148,7 @@ class UserView(APIView):
             'public_key': user.public_key,
             'name': user.name,
             'address': user.address,
+            'address_path': user.address_path,
             'is_arbiter': isinstance(user, rampmodels.Arbiter),
             'is_authenticated': is_authenticated
         }

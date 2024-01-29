@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from authentication.token import TokenAuthentication
-
+from authentication.serializers import UserSerializer
 from rampp2p.models import Peer, Arbiter
 from rampp2p.serializers import (
     PeerSerializer, 
@@ -59,8 +59,16 @@ class PeerDetailView(APIView):
     def put(self, request):        
         serializer = PeerUpdateSerializer(request.user, data=request.data)
         if serializer.is_valid():
-            serializer = PeerSerializer(serializer.save())
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            peer = serializer.save()
+            user_info = {
+                'id': peer.id,
+                'chat_identity_id': peer.chat_identity_id,
+                'public_key': peer.public_key,
+                'name': peer.name,
+                'address': peer.address,
+                'address_path': peer.address_path
+            }
+            return Response(UserSerializer(user_info).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class UserProfileView(APIView):
