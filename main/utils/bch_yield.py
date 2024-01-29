@@ -5,6 +5,17 @@ from decimal import Decimal
 
 
 def compute_wallet_yield(wallet_hash):
+    """
+    Computes the yield of all incoming BCH in a given wallet
+
+    # TODO -- Improvements needed:
+    1. We need to track which incoming BCH has been spent and exclude those from the computation
+    2. We need to track change outputs from the same wallet, those ones should have the average price of the inputs
+    3. We need to refactor UTXO selection for spending so that those BCH acquired at the cheapest price are spent last
+
+    To implement these improvements, it's best to indicate the market price on each UTXO. The price in the wallet history
+    record will just be the average from outputs of the transaction that goes to the same wallet.
+    """
     incoming_txs = WalletHistory.objects.filter(
         wallet__wallet_hash=wallet_hash,
         token__name='bch',
