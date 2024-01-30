@@ -11,6 +11,7 @@ class PeerProfileSerializer(serializers.ModelSerializer):
             'name',
             'public_key',
             'address',
+            'address_path',
             'is_disabled'
         ]
 
@@ -85,7 +86,8 @@ class PeerCreateSerializer(serializers.ModelSerializer):
             'name',
             'wallet_hash',
             'public_key',
-            'address'
+            'address',
+            'address_path'
         ]
 
 class PeerUpdateSerializer(serializers.ModelSerializer):
@@ -93,6 +95,7 @@ class PeerUpdateSerializer(serializers.ModelSerializer):
     chat_identity_id = serializers.CharField(required=False)
     public_key = serializers.CharField(required=False)
     address = serializers.CharField(required=False)
+    address_path = serializers.CharField(required=False)
     
     class Meta:
         model = Peer
@@ -100,5 +103,6 @@ class PeerUpdateSerializer(serializers.ModelSerializer):
            'name',
             'chat_identity_id',
             'public_key',
-            'address'
+            'address',
+            'address_path'
         ]

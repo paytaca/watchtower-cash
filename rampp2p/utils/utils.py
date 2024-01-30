@@ -45,8 +45,8 @@ def is_order_expired(order_pk: int):
         return True
     return False
 
-def get_order_peer_addresses(order: models.Order):
-    arbiter, buyer, seller = get_order_peers(order)
+def get_order_members_addresses(contract_id: int):
+    arbiter, seller, buyer = get_order_members(contract_id)
     return {
         'arbiter': arbiter.address,
         'buyer': buyer.address,
@@ -54,20 +54,19 @@ def get_order_peer_addresses(order: models.Order):
         'servicer': settings.SERVICER_ADDR
     }
 
-def get_order_peers(order: models.Order):
-    # if order.ad is SELL, ad owner is seller
-    # else order owner is seller
-    seller = None
-    buyer = None
-    arbiter = order.arbiter
-    if order.ad_snapshot.trade_type == models.TradeType.SELL:
-        seller = order.ad_snapshot.ad.owner
-        buyer = order.owner
-    else:
-        seller = order.owner
-        buyer = order.ad_snapshot.ad.owner
-    
-    return arbiter, buyer, seller
+def get_order_members(contract_id: int):
+    members = models.ContractMember.objects.filter(contract__id=contract_id)
+    arbiter, seller, buyer = None, None, None
+    for member in members:
+        type = member.member_type
+        if (type == models.ContractMember.MemberType.ARBITER):
+            arbiter = member
+        if (type == models.ContractMember.MemberType.SELLER):
+            seller = member
+        if (type == models.ContractMember.MemberType.BUYER):
+            buyer = member
+
+    return arbiter, seller, buyer
 
 def get_trading_fees():
     # Retrieve fee values. Format must be in satoshi
