@@ -11,7 +11,7 @@ from django.db.models import (
 from django.db.models.functions import Substr, Cast, Floor
 from django.db.models import ExpressionWrapper, FloatField
 from rest_framework import status
-from main.models import Wallet, Address, WalletHistory
+from main.models import Wallet, Address, WalletHistory, TransactionMetaAttribute
 from django.core.paginator import Paginator
 from main.serializers import PaginatedWalletHistorySerializer
 from main.throttles import RebuildHistoryThrottle
@@ -79,7 +79,18 @@ class WalletHistoryView(APIView):
                 Q(senders__overlap=addresses_subquery) | Q(recipients__overlap=addresses_subquery),
             )
 
+        # get voucher claim transaction history per POS_ID
+        voucher_transactions = TransactionMetaAttribute.objects.filter(
+            key=f'voucher_claim_{posid}'
+        ).values('txid')
+
+        voucher_wallet_history = WalletHistory.objects.filter(
+            txid__in=voucher_transactions,
+            record_type=WalletHistory.INCOMING
+        )
+        
         wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        qs = voucher_wallet_history.union(qs)
         qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
 
         if include_attrs:
