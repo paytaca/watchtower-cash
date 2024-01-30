@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from django_filters import rest_framework as filters
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import F, Q
+from django.db.models import F, Q, ExpressionWrapper, DateTimeField
 from django.utils import timezone
 
 from vouchers.serializers import (
@@ -27,13 +27,23 @@ from main.utils.address_converter import bch_address_converter
 from main.models import CashNonFungibleToken
 from main.serializers import EmptySerializer
 
+from datetime import timedelta
+
 
 class VoucherViewSet(
     viewsets.GenericViewSet,
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
 ):
-    queryset = Voucher.objects.all()
+    queryset = Voucher.objects.annotate(
+        expiration_date=ExpressionWrapper(
+            F('date_created') + (timedelta(days=1) * F('duration_days')),
+            output_field=DateTimeField()
+        )
+    ).order_by(
+        'expiration_date',
+        'value'
+    )
     serializer_class = EmptySerializer
     filter_class = (filters.DjangoFilterBackend, )
     filterset_class = VoucherFilter
@@ -45,6 +55,25 @@ class VoucherViewSet(
         'claim_check': VoucherClaimCheckSerializer,
         'claimed': VoucherClaimedSerializer,
     }
+
+    def list(self, request, *args, **kwargs):
+        query_params = self.request.query_params
+        queryset = self.filter_queryset(self.get_queryset())
+
+        has_pagination = True
+        if 'has_pagination' in query_params.keys():
+            if query_params['has_pagination'].lower() == 'false':
+                has_pagination = False
+
+        if has_pagination:
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 
     @action(methods=['POST'], detail=False)
     @swagger_auto_schema(responses={200: VoucherClaimedResponseSerializer})

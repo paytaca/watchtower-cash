@@ -208,7 +208,7 @@ def client_acknowledgement(self, txid):
                             this_transaction.update(acknowledged=True)
 
                 if websocket:
-                    tokenid = ''
+                    tokenid = transaction.token.tokenid
                     room_name = transaction.address.address.replace(':','_')
                     room_name += f'_{tokenid}'
                     channel_layer = get_channel_layer()
@@ -219,17 +219,7 @@ def client_acknowledgement(self, txid):
                             "data": data
                         }
                     )
-                    if transaction.token:
-                        tokenid = transaction.token.tokenid
-                        room_name += f'_{tokenid}'
-                        channel_layer = get_channel_layer()
-                        async_to_sync(channel_layer.group_send)(
-                            f"{room_name}", 
-                            {
-                                "type": "send_update",
-                                "data": data
-                            }
-                        )
+
     return third_parties
 
 
