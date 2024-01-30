@@ -9,8 +9,9 @@ class ContractMemberSerializer(serializers.ModelSerializer):
             'id',
             'member_ref_id',
             'member_type',
+            'pubkey',
             'address',
-            'pubkey'
+            'address_path'
         ]
 
 class ContractSerializer(serializers.ModelSerializer):

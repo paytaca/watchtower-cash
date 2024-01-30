@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
-from rampp2p.utils.utils import get_order_peer_addresses, get_trading_fees
+from rampp2p.utils.utils import get_order_members_addresses, get_trading_fees
 import rampp2p.utils.websocket as websocket
 
 from rampp2p.serializers import RecipientSerializer
@@ -256,7 +256,7 @@ def verify_txn(action, contract, txn: Dict):
             return valid, error, outputs
         
         # Retrieve expected transaction output addresses
-        expected_addresses = get_order_peer_addresses(contract.order)
+        expected_addresses = get_order_members_addresses(contract.id)
 
         # Calculate expected transaction amount and fees
         arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
