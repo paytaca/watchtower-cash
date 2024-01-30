@@ -178,7 +178,15 @@ class BCHN(object):
         return transaction
 
     def test_mempool_accept(self, hex_str):
-        return self.rpc_connection.testmempoolaccept([hex_str])[0]
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                return self.rpc_connection.testmempoolaccept([hex_str])[0]
+            except Exception as exception:
+                retries += 1
+                if retries >= self.max_retries:
+                    raise exception
+                time.sleep(1)
 
     def broadcast_transaction(self, hex_str):
         retries = 0
