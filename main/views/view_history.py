@@ -92,7 +92,7 @@ class WalletHistoryView(APIView):
             record_type=record_type
         )
         
-        qs = voucher_wallet_history.union(qs)
+        qs |= voucher_wallet_history
         qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
 
         if include_attrs:
