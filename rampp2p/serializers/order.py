@@ -87,7 +87,7 @@ class OrderSerializer(serializers.ModelSerializer):
     
     def get_owner(self, obj):
         return {
-            'id': obj.id,
+            'id': obj.owner.id,
             'name': obj.owner.name,
             'rating': obj.owner.average_rating()
         }
