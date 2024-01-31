@@ -16,6 +16,12 @@ def compute_wallet_yield(wallet_hash):
     To implement these improvements, it's best to indicate the market price on each UTXO. The price in the wallet history
     record will just be the average from outputs of the transaction that goes to the same wallet.
     """
+    result = None
+    try:
+        wallet_pref = WalletPreferences.objects.get(wallet__wallet_hash=wallet_hash)
+    except WalletPreferences.DoesNotExist:
+        return result
+
     incoming_txs = WalletHistory.objects.filter(
         wallet__wallet_hash=wallet_hash,
         token__name='bch',
@@ -23,7 +29,6 @@ def compute_wallet_yield(wallet_hash):
         usd_price__isnull=False
     )
     
-    result = None
     agg_values = incoming_txs.aggregate(Avg('usd_price'), Sum('amount'))
 
     price_log = AssetPriceLog.objects.filter(
@@ -42,7 +47,6 @@ def compute_wallet_yield(wallet_hash):
 
             computed_yield = Decimal(current_usd_worth) - Decimal(total_usd_worth)
 
-            wallet_pref = WalletPreferences.objects.get(wallet__wallet_hash=wallet_hash)
             if wallet_pref.selected_currency != 'USD':
                 usd_exchange_rate = get_yadio_rate(wallet_pref.selected_currency, 'USD')
                 computed_yield = Decimal(usd_exchange_rate['rate']) * computed_yield
