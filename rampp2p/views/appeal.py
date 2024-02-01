@@ -25,7 +25,7 @@ from rampp2p.models import (
 import rampp2p.serializers as serializers
 from rampp2p.validators import *
 from rampp2p.utils.transaction import validate_transaction
-from rampp2p.utils.utils import is_order_expired, get_trading_fees
+from rampp2p.utils.utils import is_appealable, get_trading_fees
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
 import rampp2p.utils.websocket as websocket
@@ -172,8 +172,13 @@ class AppealRequest(APIView):
     def post(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            if not is_order_expired(pk):
-                raise ValidationError('order is not expired')
+            appealable, appealable_at = is_appealable(pk)
+            if not appealable:
+                response_data = {
+                    'error': 'order is not appealable now',
+                    'appealable_at': appealable_at
+                }
+                return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
             
             self.validate_permissions(wallet_hash, pk)
             validate_status_inst_count(StatusType.APPEALED, pk)

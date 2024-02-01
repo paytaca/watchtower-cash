@@ -85,7 +85,7 @@ class AdListCreate(APIView):
 
         if len(time_limits) > 0:
             time_limits = list(map(int, time_limits))
-            queryset = queryset.filter(time_duration_choice__in=time_limits).distinct()
+            queryset = queryset.filter(appeal_cooldown_choice__in=time_limits).distinct()
 
         market_rate = MarketRate.objects.filter(currency=currency)
 

@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.db.models import Q
 import rampp2p.models as models
-from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
+from .ad import SubsetAdSnapshotSerializer
+from .payment import SubsetPaymentMethodSerializer
 
 import logging
 logger = logging.getLogger(__name__)
@@ -14,34 +15,15 @@ class OrderMemberSerializer(serializers.Serializer):
     address = serializers.CharField()
     is_arbiter = serializers.BooleanField()
 
-class OrderAdPaymentMethodSerializer(serializers.ModelSerializer):
-    payment_type = serializers.SerializerMethodField()
-    class Meta:
-        model = models.PaymentMethod
-        fields = [
-            'id',
-            'payment_type',
-            'account_name',
-            'account_identifier'
-        ]
-    
-    def get_payment_type(self, obj):
-        return obj.payment_type.name
-
 class OrderArbiterSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Arbiter
-        fields = [
-            'id',
-            'name'
-        ]
+        fields = ['id', 'name']
 
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
     contract  = serializers.SerializerMethodField()
-    fiat_currency = FiatCurrencySerializer()
-    crypto_currency = CryptoCurrencySerializer()
     arbiter = OrderArbiterSerializer()
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
@@ -56,34 +38,21 @@ class OrderSerializer(serializers.ModelSerializer):
             'ad',
             'owner',
             'contract',
-            'crypto_currency',
-            'fiat_currency',
+            'arbiter',
+            'payment_methods',
             'crypto_amount',
             'locked_price',
-            'arbiter',
             'trade_type',
             'status',
-            'payment_methods',
             'created_at',
-            'expires_at',
+            'appealable_at',
             'last_modified_at',
             'is_ad_owner'
         ]
 
     def get_ad(self, obj):
-        serialized_payment_methods = OrderAdPaymentMethodSerializer(
-            obj.ad_snapshot.payment_methods.all(), 
-            many=True
-        )
-        return {
-            'id': obj.ad_snapshot.ad.id,
-            'owner': {
-                'id': obj.ad_snapshot.ad.owner.id,
-                'name': obj.ad_snapshot.ad.owner.name
-            },
-            'time_duration': obj.ad_snapshot.time_duration_choice,
-            'payment_methods': serialized_payment_methods.data
-        }
+        serialized_ad_snapshot = SubsetAdSnapshotSerializer(obj.ad_snapshot)
+        return serialized_ad_snapshot.data
     
     def get_owner(self, obj):
         return {
@@ -102,7 +71,7 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_payment_methods(self, obj):
         escrowed_status = models.Status.objects.filter(Q(order=obj) & Q(status=models.StatusType.ESCROWED))
         if escrowed_status.exists():            
-            serialized_payment_methods = OrderAdPaymentMethodSerializer(
+            serialized_payment_methods = SubsetPaymentMethodSerializer(
                 obj.payment_methods.all(), 
                 many=True
             )
@@ -145,12 +114,9 @@ class OrderSerializer(serializers.ModelSerializer):
 class OrderWriteSerializer(serializers.ModelSerializer):
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
-    crypto_currency = serializers.PrimaryKeyRelatedField(queryset=models.CryptoCurrency.objects.all())
-    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all())
     arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
     locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
-    time_duration_choice = serializers.ChoiceField(choices=models.DurationChoices.choices, required=True)
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), required=False, many=True)
 
     class Meta:
@@ -158,11 +124,8 @@ class OrderWriteSerializer(serializers.ModelSerializer):
         fields = [
             'ad_snapshot', 
             'owner',
-            'crypto_currency',
-            'fiat_currency',
             'arbiter',
             'locked_price',
-            'time_duration_choice',
             'crypto_amount',
             'payment_methods'
         ]

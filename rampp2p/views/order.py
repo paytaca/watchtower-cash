@@ -25,7 +25,6 @@ from rampp2p.serializers import (
     OrderWriteSerializer, 
     StatusSerializer, 
     StatusReadSerializer,
-    ContractDetailSerializer,
     TransactionSerializer,
     AppealSerializer
 )
@@ -64,11 +63,11 @@ class OrderListCreate(APIView):
         sort_by = request.query_params.get('sort_by')
         sort_type = request.query_params.get('sort_type')
         owned = request.query_params.get('owned')
-        expired_only = request.query_params.get('expired_only')
+        appealable_only = request.query_params.get('appealable_only')
         if owned is not None:
             owned = owned == 'true'
-        if expired_only is not None:
-            expired_only = expired_only == 'true'
+        if appealable_only is not None:
+            appealable_only = appealable_only == 'true'
 
         return {
             'limit': limit,
@@ -82,7 +81,7 @@ class OrderListCreate(APIView):
             'sort_by': sort_by,
             'sort_type': sort_type,
             'owned': owned,
-            'expired_only': expired_only
+            'appealable_only': appealable_only
         }
 
     def get(self, request):
@@ -156,15 +155,15 @@ class OrderListCreate(APIView):
         # filters by ad time limits
         if len(params['time_limits']) > 0:
             time_limits = list(map(int, params['time_limits']))
-            queryset = queryset.filter(ad_snapshot__time_duration_choice__in=time_limits).distinct()
+            queryset = queryset.filter(ad_snapshot__appeal_cooldown_choice__in=time_limits).distinct()
 
         # filters by order trade type
         if params['trade_type'] is not None:
             queryset = queryset.exclude(Q(ad_snapshot__trade_type=params['trade_type']))
 
-        # filters expired orders only
-        if params['expired_only'] is True:
-            queryset = queryset.filter(Q(expires_at__isnull=False) & Q(expires_at__lt=timezone.now()))
+        # filters appealable orders only
+        if params['appealable_only'] is True:
+            queryset = queryset.filter(Q(appealable_at__isnull=False) & Q(appealable_at__lt=timezone.now()))
 
         if params['sort_by'] == 'last_modified_at':
             sort_field = 'last_modified_at'
@@ -251,7 +250,7 @@ class OrderListCreate(APIView):
             trade_floor = ad.trade_floor,
             trade_ceiling = ad.trade_ceiling,
             trade_amount = ad.trade_amount,
-            time_duration_choice = ad.time_duration_choice,
+            appeal_cooldown_choice = ad.appeal_cooldown_choice,
         )
         ad_snapshot.save()
         ad_snapshot.payment_methods.set(ad.payment_methods.all())
@@ -260,9 +259,9 @@ class OrderListCreate(APIView):
         data = {
             'owner': owner.id,
             'ad_snapshot': ad_snapshot.id,
-            'crypto_currency': ad_snapshot.crypto_currency.id,
-            'fiat_currency': ad_snapshot.fiat_currency.id,
-            'time_duration_choice': ad_snapshot.time_duration_choice,
+            # 'crypto_currency': ad_snapshot.crypto_currency.id,
+            # 'fiat_currency': ad_snapshot.fiat_currency.id,
+            # 'time_duration_choice': ad_snapshot.time_duration_choice,
             'payment_methods': payment_method_ids,
             'crypto_amount': crypto_amount
         }

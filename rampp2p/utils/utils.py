@@ -25,25 +25,10 @@ def is_buyer(order: models.Order, wallet_hash: str):
         return True
     return False
 
-def is_order_expired(order_pk: int):
-    '''
-    Checks if the order has expired
-    '''
-    # get the created_at field of order's ESCROWED status
-    time_duration = models.Order.objects.get(pk=order_pk).time_duration
-    start_time = models.Status.objects.values('created_at').filter(Q(order__id=order_pk) & Q(status=models.StatusType.ESCROWED)).first()
-    
-    if start_time is None:
-        return False
-    
-    current_time = datetime.now()
-    timezone_aware_time = timezone.make_aware(current_time)
-    elapsed_time = timezone_aware_time - start_time['created_at']
-
-    # order is expired if elapsed time is greater than the time duration
-    if elapsed_time >= time_duration:
-        return True
-    return False
+def is_appealable(id: int):
+    appealable_at = models.Order.objects.get(pk=id).appealable_at    
+    time_now = timezone.make_aware(datetime.now())
+    return time_now >= appealable_at, appealable_at
 
 def get_order_members_addresses(contract_id: int):
     arbiter, seller, buyer = get_order_members(contract_id)

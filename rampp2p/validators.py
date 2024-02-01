@@ -65,11 +65,6 @@ def validate_status_progression(new_status, order_id):
             new_status != StatusType.APPEALED):
                 raise ValidationError(f'{prefix} {StatusType.PAID.label} orders can only be {StatusType.RELEASED.label} | {StatusType.APPEALED.label}')
     
-    # if (current_status.status == StatusType.APPEALED):
-    #     if (new_status != StatusType.RELEASE_PENDING and 
-    #         new_status != StatusType.REFUND_PENDING):
-    #             raise ValidationError(f'{prefix} {StatusType.APPEALED.label} orders can only be {StatusType.RELEASE_PENDING.label} | {StatusType.REFUND_PENDING.label}')
-
     if (current_status.status == StatusType.APPEALED):
         was_marked_paid = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.PAID)).count() > 0
         if was_marked_paid:
