@@ -154,9 +154,9 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                     appeal.resolved_at = timezone.now()
                     appeal.save()
 
-            # Update order expires_at if status is ESCROWED
+            # Update order appealable_at if status is ESCROWED
             if status_type == StatusType.ESCROWED:
-                contract.order.expires_at = timezone.now() + contract.order.time_duration
+                contract.order.appealable_at = timezone.now() + contract.order.ad_snapshot.appeal_cooldown
                 contract.order.save()
 
             # Update order status

@@ -5,7 +5,7 @@ from .peer import Peer
 from .currency import FiatCurrency, CryptoCurrency
 from .payment import PaymentMethod
 
-class DurationChoices(models.IntegerChoices):
+class CooldownChoices(models.IntegerChoices):
     FIVE_MINUTES    =   5, '5 minutes'
     FIFTEEN_MINUTES =   15, '15 minutes'
     THIRTY_MINUTES  =   30, '30 minutes'
@@ -33,7 +33,7 @@ class Ad(models.Model):
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
+    appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
     is_public = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -49,9 +49,9 @@ class Ad(models.Model):
         self.save()
     
     @property
-    def time_duration(self):
-        # convert the duration choice to a timedelta object
-        minutes = self.time_limit_choice
+    def appeal_cooldown(self):
+        # convert to a timedelta object
+        minutes = self.appeal_cooldown_choice
         return timedelta(minutes=minutes)
 
 '''A snapshot of the ad is created everytime an order is created.'''
@@ -67,7 +67,7 @@ class AdSnapshot(models.Model):
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    time_duration_choice = models.IntegerField(choices=DurationChoices.choices)
+    appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots')
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -75,7 +75,7 @@ class AdSnapshot(models.Model):
         return str(self.id)
     
     @property
-    def time_duration(self):
-        # convert the duration choice to a timedelta object
-        minutes = self.time_limit_choice
+    def appeal_cooldown(self):
+        # convert to a timedelta object
+        minutes = self.appeal_cooldown_choice
         return timedelta(minutes=minutes)

@@ -14,10 +14,14 @@ class MarketRates(APIView):
     def get(self, request):
         queryset = MarketRate.objects.all()
         currency = request.query_params.get('currency')
+        response = {}
         if currency is not None:
             queryset = MarketRate.objects.filter(currency=currency)
-        serializer = MarketRateSerializer(queryset, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
+            if (queryset.exists()):
+                response = MarketRateSerializer(queryset.first()).data
+        else:
+            response = MarketRateSerializer(queryset, many=True).data
+        return Response(response, status.HTTP_200_OK)
     
 class SubscribeContractAddress(APIView):
     def post(self, request):

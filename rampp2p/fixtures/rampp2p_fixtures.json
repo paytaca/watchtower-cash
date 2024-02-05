@@ -42,7 +42,7 @@
         "pk": 3,
         "fields": {
             "name": "Gcash",
-            "format": "number",
+            "format": "phone",
             "is_disabled": false,
             "created_at": "2023-09-11T04:19:17.964Z",
             "modified_at": "2023-09-11T04:19:17.964Z"

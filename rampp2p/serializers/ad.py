@@ -5,7 +5,7 @@ from rampp2p.models import (
     Ad, 
     AdSnapshot,
     PriceType,
-    DurationChoices,
+    CooldownChoices,
     Peer,
     FiatCurrency, 
     CryptoCurrency,
@@ -16,7 +16,7 @@ from rampp2p.models import (
     MarketRate
 )
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
-from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer
+from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
 
 class AdSnapshotSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
@@ -41,7 +41,7 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             'trade_ceiling',
             'trade_amount',
             'payment_methods',
-            'time_duration_choice',
+            'appeal_cooldown_choice',
             'created_at'
         ]
 
@@ -50,8 +50,32 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             return instance.fixed_price
         return instance.market_price * (instance.floating_price/100)
 
+class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
+    id = serializers.SerializerMethodField()
+    fiat_currency = FiatCurrencySerializer()
+    crypto_currency = CryptoCurrencySerializer()
+    payment_methods = SubsetPaymentMethodSerializer(many=True)
+    appeal_cooldown = serializers.SerializerMethodField()
+
+    class Meta(AdSnapshotSerializer.Meta):
+        fields = [
+            'id',
+            'payment_methods',
+            'trade_type',
+            'price_type',
+            'fiat_currency',
+            'crypto_currency',
+            'appeal_cooldown',
+            'created_at'
+        ]
+    
+    def get_id(self, obj):
+        return obj.ad.id
+    
+    def get_appeal_cooldown(self, obj):
+        return obj.appeal_cooldown
+
 class AdListSerializer(serializers.ModelSerializer):
-    # owner = serializers.SlugRelatedField(slug_field="name", queryset=Peer.objects.all())
     owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
@@ -150,20 +174,20 @@ class AdListSerializer(serializers.ModelSerializer):
         return filtered_orders_count
 
 class AdDetailSerializer(AdListSerializer):
-    time_duration = serializers.SerializerMethodField()
+    appeal_cooldown = serializers.SerializerMethodField()
     fees = serializers.SerializerMethodField()
 
     class Meta(AdListSerializer.Meta):
         fields = AdListSerializer.Meta.fields + [
-            'time_duration',
+            'appeal_cooldown',
             'fees',
             'floating_price',
             'fixed_price',
             'trade_amount'
         ]
     
-    def get_time_duration(self, instance: Ad):
-        return DurationChoices(instance.time_duration_choice).value
+    def get_appeal_cooldown(self, instance: Ad):
+        return CooldownChoices(instance.appeal_cooldown_choice).value
 
     def get_fees(self, _):
         _, fees = get_trading_fees()
@@ -177,7 +201,7 @@ class AdCreateSerializer(serializers.ModelSerializer):
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
     crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
-    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices,required=True)
+    appeal_cooldown_choice = serializers.ChoiceField(choices=CooldownChoices.choices,required=True)
     class Meta:
         model = Ad
         fields = [
@@ -192,7 +216,7 @@ class AdCreateSerializer(serializers.ModelSerializer):
             'trade_floor',
             'trade_ceiling',
             'trade_amount',
-            'time_duration_choice',
+            'appeal_cooldown_choice',
             'payment_methods',
             'is_public',
             'modified_at',
@@ -200,7 +224,7 @@ class AdCreateSerializer(serializers.ModelSerializer):
     
 class AdUpdateSerializer(serializers.ModelSerializer):
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
-    time_duration_choice = serializers.ChoiceField(choices=DurationChoices.choices)
+    appeal_cooldown_choice = serializers.ChoiceField(choices=CooldownChoices.choices)
     class Meta:
         model = Ad
         fields = [
@@ -210,7 +234,7 @@ class AdUpdateSerializer(serializers.ModelSerializer):
             'trade_floor',
             'trade_ceiling',
             'trade_amount',
-            'time_duration_choice',
+            'appeal_cooldown_choice',
             'payment_methods',
             'is_public',
             'modified_at',
