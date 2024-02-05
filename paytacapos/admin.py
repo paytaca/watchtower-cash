@@ -73,6 +73,8 @@ class MerchantAdmin(admin.ModelAdmin):
     list_display = [
         "name",
         "merchant_location",
+        "verified",
+        "active",
         "incoming_txs",
         "outgoing_txs",
         "last_transaction"
