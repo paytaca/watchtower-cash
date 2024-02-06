@@ -49,6 +49,9 @@ def generate_merchant_vault(merchant_id):
     except:
         pass
 
+    # delete existing old vault
+    Vault.objects.filter(merchant=merchant).delete()
+
     Vault(
         merchant=merchant,
         address=contract['address'],
