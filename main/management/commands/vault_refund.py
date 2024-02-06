@@ -27,8 +27,7 @@ class Command(BaseCommand):
         transaction = ScriptFunctions.emergencyRefund(dict(
             params=dict(
                 merchant={
-                    'receiverPk': merchant.receiving_pubkey,
-                    'signerPk': merchant.signer_pubkey
+                    'receiverPk': merchant.receiving_pubkey
                 },
                 sender={
                     'pubkey': sender_pubkey,

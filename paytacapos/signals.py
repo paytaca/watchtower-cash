@@ -9,7 +9,7 @@ from vouchers.vault import generate_merchant_vault
 @receiver(post_save, sender=Merchant)
 def post_create_merchant(sender, instance=None, created=False, **kwargs):
     proceed = False
-    if instance.receiving_pubkey and instance.signer_pubkey:
+    if instance.receiving_pubkey:
         if created:
             proceed = True
         try:

@@ -8,7 +8,6 @@ import { Vault } from '../contract/vault.js'
  * @param {Object} opts.params
  * @param {Object} opts.params.merchant
  * @param {String} opts.params.merchant.receiverPk
- * @param {String} opts.params.merchant.signerPk
  * 
  * @param {Object} opts.options
  * @param {String} opts.options.network = 'mainnet | chipnet'
@@ -36,7 +35,6 @@ export async function compileVaultContract (opts) {
  * @param {Object} opts.params
  * @param {Object} opts.params.merchant
  * @param {String} opts.params.merchant.receiverPk
- * @param {String} opts.params.merchant.signerPk
  * @param {Object} opts.params.sender
  * @param {String} opts.params.sender.pubkey
  * @param {String} opts.params.sender.address

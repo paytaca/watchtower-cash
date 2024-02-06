@@ -481,7 +481,6 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "gmap_business_link",
             "last_transaction_date",
             "receiving_pubkey",
-            "signer_pubkey",
             "vault",
             "logo_url",
         ]
@@ -506,7 +505,6 @@ class MerchantSerializer(serializers.ModelSerializer):
             "primary_contact_number",
             "location",
             "receiving_pubkey",
-            "signer_pubkey",
             "vault",
         ]
 

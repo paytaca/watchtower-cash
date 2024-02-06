@@ -15,7 +15,6 @@ export class Vault {
   get contractCreationParams () {
     return [
       this.merchant?.receiverPk,
-      this.merchant?.signerPk,
     ]
   }
 
