@@ -84,6 +84,7 @@ class AdListSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
     is_owned = serializers.SerializerMethodField()
+    appeal_cooldown = serializers.SerializerMethodField()
 
     class Meta:
         model = Ad
@@ -101,11 +102,15 @@ class AdListSerializer(serializers.ModelSerializer):
             'payment_methods',
             'trade_count',
             'completion_rate',
+            'appeal_cooldown',
             'is_owned',
             'is_public',
             'created_at',
             'modified_at'
         ]
+    
+    def get_appeal_cooldown(self, instance: Ad):
+        return CooldownChoices(instance.appeal_cooldown_choice).value
     
     def get_owner(self, instance: Ad):
         return {
@@ -174,20 +179,15 @@ class AdListSerializer(serializers.ModelSerializer):
         return filtered_orders_count
 
 class AdDetailSerializer(AdListSerializer):
-    appeal_cooldown = serializers.SerializerMethodField()
     fees = serializers.SerializerMethodField()
 
     class Meta(AdListSerializer.Meta):
         fields = AdListSerializer.Meta.fields + [
-            'appeal_cooldown',
             'fees',
             'floating_price',
             'fixed_price',
             'trade_amount'
         ]
-    
-    def get_appeal_cooldown(self, instance: Ad):
-        return CooldownChoices(instance.appeal_cooldown_choice).value
 
     def get_fees(self, _):
         _, fees = get_trading_fees()
