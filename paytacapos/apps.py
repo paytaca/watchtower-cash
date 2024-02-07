@@ -6,8 +6,8 @@ def generate_vault_for_existing_merchants(*args, **kwargs):
     from vouchers.vault import generate_merchant_vault
     from paytacapos.models import Merchant
 
-    for merchant in Merchant.objects.filter(vault__isnull=True):
-        if merchant.receiving_pubkey and merchant.signer_pubkey:
+    for merchant in Merchant.objects.all():
+        if merchant.receiving_pubkey:
             generate_merchant_vault(merchant.id)
 
 

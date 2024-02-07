@@ -102,7 +102,6 @@ class Merchant(models.Model):
     logo = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
-    signer_pubkey = models.CharField(max_length=70, null=True, blank=True)
 
     def __str__(self):
         return f"Merchant ({self.name})"

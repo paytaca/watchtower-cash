@@ -1,14 +1,9 @@
 pragma cashscript ^0.8.0;
 
 
-contract Vault (
-    pubkey merchantReceiverPK,
-    pubkey merchantSignerPK
-) {
+contract Vault (pubkey merchantReceiverPK) {
 
-    function refund (sig merchantSignerSig) {
-        require(checkSig(merchantSignerSig, merchantSignerPK));
-
+    function refund () {
         // 1 input: lock nft
         // 1 output: satoshis refund reward from burned lock nft
         require(tx.inputs.length >= 1);
@@ -36,12 +31,7 @@ contract Vault (
         require(tx.outputs[0].lockingBytecode == sender);
     }
 
-    function claim (
-        bytes32 voucherCategory,
-        sig merchantSignerSig
-    ) {
-        require(checkSig(merchantSignerSig, merchantSignerPK));
-
+    function claim (bytes32 voucherCategory) {
         // 2 inputs: lock & key nft
         // 1 output: recipient of BCH stored in lock NFT
         require(tx.inputs.length >= 2);
