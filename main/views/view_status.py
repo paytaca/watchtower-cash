@@ -7,7 +7,7 @@ NODE = Node()
 
 class StatusView(View):
 
-    def post(self, request):
+    def get(self, request):
         response = {'status': 'up', 'health_checks': {}}
         # Test if node is down
         if NODE.BCH.get_latest_block():
