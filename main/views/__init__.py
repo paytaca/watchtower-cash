@@ -16,3 +16,4 @@ from main.views.view_paymentrequest import *
 from main.views.view_cashtokens import *
 from main.views.view_webhook import *
 from main.views.view_spender import *
+from main.views.view_status import *

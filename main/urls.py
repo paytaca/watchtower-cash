@@ -22,6 +22,7 @@ main_urls = router.urls
 
 
 main_urls += [
+    re_path(r"^status/$", views.StatusView.as_view(), name='api-status'),
     re_path(r"^task/(?P<task_id>[\w+:-]+)/$", views.TaskStatusView.as_view(), name='task-status'),
 
     re_path(r"^subscription/$", views.SubscribeViewSet.as_view(), name='subscribe'),

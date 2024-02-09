@@ -13,7 +13,7 @@ import json
 class BCHN(object):
 
     def __init__(self):
-        self.max_retries = 20
+        self.max_retries = 10
         self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE)
         self.source = 'bchn'
         self.fulcrum = {
@@ -187,7 +187,7 @@ class BCHN(object):
                 if retries >= self.max_retries:
                     raise exception
                 time.sleep(1)
-
+                
     def broadcast_transaction(self, hex_str):
         retries = 0
         while retries < self.max_retries:

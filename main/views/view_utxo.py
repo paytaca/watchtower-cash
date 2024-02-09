@@ -176,14 +176,10 @@ def _get_ct_utxos(query, is_cashtoken_nft=None, show_address_index=False, confir
 
 
 def _get_bch_utxos(query, show_address_index=False, confirmed=None):
-    # Exclude dust amounts as they're likely to be SLP transactions
-    # TODO: Needs another more sure way to exclude SLP transactions
-    # dust = 546 / (10 ** 8)
-    # query = query & Q(amount__gt=dust) & Q(token__name='bch')
-    
-    # NOTE: removed dust filter here since amount for BCH txns are always 0 now
     query = query & Q(token__name='bch')
-    qs = Transaction.objects.filter(query)
+    qs = Transaction.objects.filter(query).filter(
+        value__gt=546  # Exclude 546 dust amounts as they're likely to be SLP transactions 
+    )
     
     if isinstance(confirmed, bool):
         qs = qs.filter(blockheight__isnull=not confirmed)
