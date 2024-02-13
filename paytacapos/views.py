@@ -13,29 +13,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, decorators, exceptions
 from rest_framework import status
-from .serializers import (
-    SalesSummarySerializer,
-    SuspendDeviceSerializer,
-    PosDeviceLinkSerializer,
-    PosDeviceLinkRequestSerializer,
-    LinkedDeviceInfoSerializer,
-    UnlinkDeviceSerializer,
-    UnlinkDeviceRequestSerializer,
-    POSPaymentSerializer,
-    POSPaymentResponseSerializer,
-    PosDeviceSerializer,
-    MerchantSerializer,
-    MerchantListSerializer,
-    BranchSerializer,
-)
+from .serializers import *
 from .filters import (
     PosDevicetFilter,
     BranchFilter,
+    MerchantFilter,
 )
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 
+from .models import Location
 
 
 class BroadcastPaymentView(APIView):
@@ -220,6 +208,8 @@ class MerchantViewSet(
 ):
     lookup_field="wallet_hash"
     pagination_class = CustomLimitOffsetPagination
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = MerchantFilter
 
     @swagger_auto_schema(
         manual_parameters=[
@@ -230,6 +220,20 @@ class MerchantViewSet(
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @decorators.action(methods=['get'], detail=False)
+    @swagger_auto_schema(responses={200: LocationSerializer})
+    def locations(self, request, *args, **kwargs):
+        locations = Location.objects.filter(
+            country__isnull=False,
+            latitude__isnull=False,
+            longitude__isnull=False,
+            merchant__isnull=False,
+            merchant__active=True,
+            merchant__verified=True
+        )
+        serializer = LocationSerializer(locations, many=True)
+        return Response(serializer.data)
     
     def get_serializer_class(self):
         if self.action in ['list']:
