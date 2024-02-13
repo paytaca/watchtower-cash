@@ -470,7 +470,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
     vault = VaultSerializer(required=False)
-    logo_url = serializers.SerializerMethodField()
+    logos = serializers.SerializerMethodField()
     
     class Meta:
         model = Merchant
@@ -482,13 +482,24 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "last_transaction_date",
             "receiving_pubkey",
             "vault",
-            "logo_url",
+            "logos",
         ]
     
-    def get_logo_url(self, obj):
-        if obj.logo:
-            return f'{settings.DOMAIN}{obj.logo.url}'
-        return None
+    def get_logos(self, obj):
+        logos = {
+            '30x30': obj.logo_30,
+            '60x60': obj.logo_60,
+            '90x90': obj.logo_90,
+            '120x120': obj.logo_120
+        }
+
+        for key, logo in logos.items():
+            if logo:
+                logos[key] = f'{settings.DOMAIN}{logo.url}'
+            else:
+                logos[key] = None
+                
+        return logos
 
 
 class MerchantSerializer(serializers.ModelSerializer):

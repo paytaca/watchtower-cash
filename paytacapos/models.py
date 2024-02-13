@@ -2,6 +2,8 @@ from django.db import transaction
 from django.db import models
 from main.models import WalletHistory
 
+from PIL import Image
+
 
 class LinkedDeviceInfo(models.Model):
     link_code = models.CharField(max_length=100, unique=True)
@@ -100,11 +102,34 @@ class Merchant(models.Model):
     active = models.BooleanField(default=False)
 
     logo = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
+    logo_30 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
+    logo_60 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
+    logo_90 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
+    logo_120 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
 
     def __str__(self):
         return f"Merchant ({self.name})"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        logos = [
+            { 'size': 30, 'media_path': self.image_30.path },
+            { 'size': 60, 'media_path': self.image_60.path },
+            { 'size': 90, 'media_path': self.image_90.path },
+            { 'size': 120, 'media_path': self.image_120.path }
+        ]
+
+        for logo in logos:
+            size = logo['size']
+            path = logo['media_path']
+
+            img = Image.open(self.logo.path)
+            output_size = (size, size)
+            img.thumbnail(output_size)
+            img.save(path)
 
     @property
     def last_transaction_date(self):
