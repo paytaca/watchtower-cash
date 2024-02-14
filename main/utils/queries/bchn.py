@@ -13,7 +13,7 @@ import json
 class BCHN(object):
 
     def __init__(self):
-        self.max_retries = 10
+        self.max_retries = 20
         self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE)
         self.source = 'bchn'
         self.fulcrum = {
