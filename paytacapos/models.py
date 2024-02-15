@@ -190,8 +190,7 @@ class Merchant(models.Model):
 
 class Review(models.Model):
     rating = models.PositiveIntegerField()
-    comments = ArrayField(base_field=models.TextField())
-    # comment = models.TextField(blank=True, null=True)
+    comment = models.TextField(blank=True, null=True)
     merchant = models.ForeignKey(Merchant, related_name="reviews", on_delete=models.CASCADE)
     date = models.DateTimeField(default=timezone.now)
 

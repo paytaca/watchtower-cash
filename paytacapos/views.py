@@ -14,11 +14,7 @@ from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, decorators, exceptions
 from rest_framework import status
 from .serializers import *
-from .filters import (
-    PosDevicetFilter,
-    BranchFilter,
-    MerchantFilter,
-)
+from .filters import *
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
@@ -284,6 +280,28 @@ class MerchantViewSet(
         streets = locations.values('street').distinct()
         streets = streets.values_list('street', flat=True)
         return Response(list(streets))
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="merchant", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
+    @decorators.action(methods=['get'], detail=False)
+    def reviews(self, request, *args, **kwargs):
+        merchant_id = self.request.query_params.get('merchant', None)
+        reviews = Review.objects.all()
+
+        if merchant_id:
+            merchant = Merchant.objects.get(id=merchant_id)
+            reviews = merchant.reviews.all()
+
+        page = self.paginate_queryset(reviews)
+        if page is not None:
+            serializer = ReviewSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = ReviewSerializer(reviews, many=True)
+        return Response(serializer.data)
     
     def get_serializer_class(self):
         if self.action in ['list']:
@@ -325,4 +343,3 @@ class BranchViewSet(viewsets.ModelViewSet):
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove branches linked to a device")
         return super().destroy(request, *args, **kwargs)
- 

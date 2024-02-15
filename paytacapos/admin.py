@@ -71,6 +71,7 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     list_display = [
+        'merchant',
         'rating',
         'date',
     ]

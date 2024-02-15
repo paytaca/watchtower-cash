@@ -1,10 +1,7 @@
 from django_filters import rest_framework as filters
 
-from .models import (
-    PosDevice,
-    Branch,
-    Merchant,
-)
+from .models import *
+
 
 class PosDevicetFilter(filters.FilterSet):
     class Meta:
