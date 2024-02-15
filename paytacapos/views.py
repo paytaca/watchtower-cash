@@ -25,6 +25,10 @@ from .utils.report import SalesSummary
 
 from .models import Location
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class BroadcastPaymentView(APIView):
     @swagger_auto_schema(
@@ -222,18 +226,64 @@ class MerchantViewSet(
         return super().list(request, *args, **kwargs)
 
     @decorators.action(methods=['get'], detail=False)
-    @swagger_auto_schema(responses={200: LocationSerializer})
-    def locations(self, request, *args, **kwargs):
+    def countries(self, request, *args, **kwargs):
         locations = Location.objects.filter(
             country__isnull=False,
-            latitude__isnull=False,
-            longitude__isnull=False,
             merchant__isnull=False,
             merchant__active=True,
             merchant__verified=True
         )
-        serializer = LocationSerializer(locations, many=True)
-        return Response(serializer.data)
+        locations = locations.values('country').distinct()
+        locations = locations.values_list('country', flat=True)
+        return Response(list(locations))
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="country", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
+    @decorators.action(methods=['get'], detail=False)
+    def cities(self, request, *args, **kwargs):
+        country = request.query_params.get('country', None)
+        locations = Location.objects.filter(
+            country__isnull=False,
+            merchant__isnull=False,
+            merchant__active=True,
+            merchant__verified=True
+        )
+
+        if country:
+            locations = locations.filter(country__icontains=country)
+
+        cities = locations.values('city').distinct()
+        cities = cities.values_list('city', flat=True)
+        return Response(list(cities))
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(name="country", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="city", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
+    @decorators.action(methods=['get'], detail=False)
+    def streets(self, request, *args, **kwargs):
+        country = request.query_params.get('country', None)
+        city = request.query_params.get('city', None)
+        locations = Location.objects.filter(
+            country__isnull=False,
+            merchant__isnull=False,
+            merchant__active=True,
+            merchant__verified=True
+        )
+
+        if country:
+            locations = locations.filter(country__icontains=country)
+        if city:
+            locations = locations.filter(city__icontains=city)
+
+        streets = locations.values('street').distinct()
+        streets = streets.values_list('street', flat=True)
+        return Response(list(streets))
     
     def get_serializer_class(self):
         if self.action in ['list']:
@@ -247,10 +297,15 @@ class MerchantViewSet(
             .prefetch_related('location')\
             .all()
         if self.action == 'list':
-            active = self.request.query_params.get('active') == 'true' or False
-            verified = self.request.query_params.get('verified') == 'true' or False
+            __active = self.request.query_params.get('active', '')
+            __verified = self.request.query_params.get('verified', '')
+            __name = self.request.query_params.get('name', '')
+
+            active = __active.lower() == 'true' or False
+            verified = __verified.lower() == 'true' or False
+            name = __name.lower()
+
             queryset = queryset.filter(active=active, verified=verified)
-            name = self.request.query_params.get('name')
             if name: queryset = queryset.filter(name__icontains=name)
         return queryset
 
