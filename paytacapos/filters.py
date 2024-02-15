@@ -25,10 +25,16 @@ class BranchFilter(filters.FilterSet):
 
 
 class MerchantFilter(filters.FilterSet):
+    country = filters.CharFilter(field_name="location__country", lookup_expr="icontains")
+    city = filters.CharFilter(field_name="location__city", lookup_expr="icontains")
+    street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
+    category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
+
     class Meta:
         model = Merchant
-        fields = (
-            'location__country',
-            'location__latitude',
-            'location__longitude',
-        )
+        fields = [
+            "country",
+            "city",
+            "street",
+            "category",
+        ]
