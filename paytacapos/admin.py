@@ -1,11 +1,6 @@
 from django.contrib import admin
 
-from .models import (
-    PosDevice,
-    Location,
-    Merchant,
-    Branch,
-)
+from .models import *
 
 from main.models import (
     Wallet,
@@ -62,12 +57,35 @@ class PosDeviceAdmin(admin.ModelAdmin):
         "name",
     ]
 
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    search_fields = [
+        'name',
+    ]
+
+    list_display = [
+        'name',
+    ]
+
+
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = [
+        'merchant',
+        'rating',
+        'date',
+    ]
+
 
 @admin.register(Merchant)
 class MerchantAdmin(admin.ModelAdmin):
+    list_filter = [
+        'category__name',
+    ]
     search_fields = [
         "wallet_hash",
         "name",
+        "category__name",
     ]
 
     list_display = [
@@ -79,19 +97,17 @@ class MerchantAdmin(admin.ModelAdmin):
         "outgoing_txs",
         "last_transaction"
     ]
-
-    def country(self, obj):
-        return 
     
     def merchant_location(self, obj):
         _location = ''
-        if obj.location.city:
-            _location = obj.location.city
-        if obj.location.country:
-            if _location:
-                _location += f', {obj.location.country}'
-            else:
-                _location = obj.location.country
+        if obj.location:
+            if obj.location.city:
+                _location = obj.location.city
+            if obj.location.country:
+                if _location:
+                    _location += f', {obj.location.country}'
+                else:
+                    _location = obj.location.country
         return _location
     
     def incoming_txs(self, obj):
