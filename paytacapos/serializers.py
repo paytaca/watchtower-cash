@@ -10,14 +10,7 @@ from rest_framework import serializers
 
 from vouchers.serializers import VaultSerializer
 from main.models import Address
-from .models import (
-    LinkedDeviceInfo,
-    UnlinkDeviceRequest,
-    PosDevice,
-    Location,
-    Merchant,
-    Branch,
-)
+from .models import *
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 from .utils.websocket import send_device_update
@@ -466,6 +459,20 @@ class LocationSerializer(serializers.ModelSerializer):
         ]
 
 
+class ReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = '__all__'
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = (
+            'name',
+        )
+
+
 class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
@@ -478,6 +485,9 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "location",
+            "website_url",
+            "category",
+            "description",
             "gmap_business_link",
             "last_transaction_date",
             "receiving_pubkey",
@@ -513,6 +523,9 @@ class MerchantSerializer(serializers.ModelSerializer):
             "id",
             "wallet_hash",
             "name",
+            "website_url",
+            "category",
+            "description",
             "primary_contact_number",
             "location",
             "receiving_pubkey",

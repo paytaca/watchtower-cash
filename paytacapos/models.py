@@ -1,5 +1,7 @@
 from django.db import transaction
 from django.db import models
+from django.utils import timezone
+from django.contrib.postgres.fields import ArrayField
 from main.models import WalletHistory
 
 from PIL import Image
@@ -88,6 +90,14 @@ class Location(models.Model):
     latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
 
 
+class Category(models.Model):
+    name = models.CharField(max_length=255, unique=True, primary_key=True)
+
+    class Meta:
+        ordering = ('name', )
+        verbose_name_plural = 'Categories'
+
+
 class Merchant(models.Model):
     wallet_hash = models.CharField(max_length=75, unique=True, db_index=True)
     name = models.CharField(max_length=75)
@@ -99,6 +109,9 @@ class Merchant(models.Model):
     )
     verified = models.BooleanField(default=False)
     gmap_business_link = models.URLField(default=None, blank=True, null=True)
+    website_url = models.URLField(max_length=255, null=True, blank=True)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    description = models.TextField(default='', blank=True)
     active = models.BooleanField(default=False)
 
     logo = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
@@ -114,22 +127,22 @@ class Merchant(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
+        # TODO: fix logo resized logo not saving
+        # logos = [
+        #     { 'size': 30, 'media_path': self.image_30.path },
+        #     { 'size': 60, 'media_path': self.image_60.path },
+        #     { 'size': 90, 'media_path': self.image_90.path },
+        #     { 'size': 120, 'media_path': self.image_120.path }
+        # ]
 
-        logos = [
-            { 'size': 30, 'media_path': self.image_30.path },
-            { 'size': 60, 'media_path': self.image_60.path },
-            { 'size': 90, 'media_path': self.image_90.path },
-            { 'size': 120, 'media_path': self.image_120.path }
-        ]
+        # for logo in logos:
+        #     size = logo['size']
+        #     path = logo['media_path']
 
-        for logo in logos:
-            size = logo['size']
-            path = logo['media_path']
-
-            img = Image.open(self.logo.path)
-            output_size = (size, size)
-            img.thumbnail(output_size)
-            img.save(path)
+        #     img = Image.open(self.logo.path)
+        #     output_size = (size, size)
+        #     img.thumbnail(output_size)
+        #     img.save(path)
 
     @property
     def last_transaction_date(self):
@@ -172,6 +185,18 @@ class Merchant(models.Model):
             location=location
         )
         return branch, True
+
+
+
+class Review(models.Model):
+    rating = models.PositiveIntegerField()
+    comments = ArrayField(base_field=models.TextField())
+    # comment = models.TextField(blank=True, null=True)
+    merchant = models.ForeignKey(Merchant, related_name="reviews", on_delete=models.CASCADE)
+    date = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('-date', 'rating', )
 
 
 class Branch(models.Model):
