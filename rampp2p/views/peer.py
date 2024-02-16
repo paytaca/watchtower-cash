@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.http import Http404
 
 from authentication.token import TokenAuthentication
 from authentication.serializers import UserSerializer
@@ -42,18 +43,12 @@ class PeerDetailView(APIView):
     authentication_classes = [TokenAuthentication]
     
     def get(self, request):
-        queryset = Peer.objects.all()
-        
         id = request.query_params.get('id')
-        if id is not None:
-            queryset = queryset.filter(id=id)
-
-        wallet_hash = request.headers.get('wallet_hash')
-        if wallet_hash is not None:
-            queryset = queryset.filter(wallet_hash=wallet_hash)
-        queryset = queryset.first()
-
-        serializer = PeerSerializer(queryset)
+        try:
+            peer = Peer.objects.get(id=id)
+        except Peer.DoesNotExist:
+            raise Http404
+        serializer = PeerSerializer(peer)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def put(self, request):        

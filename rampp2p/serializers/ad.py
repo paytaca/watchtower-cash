@@ -114,6 +114,7 @@ class AdListSerializer(serializers.ModelSerializer):
     
     def get_owner(self, instance: Ad):
         return {
+            'id': instance.owner.id,
             'name': instance.owner.name,
             'rating':  instance.owner.average_rating()
         }
