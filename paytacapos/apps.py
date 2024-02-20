@@ -18,4 +18,4 @@ class PaytacaposConfig(AppConfig):
     def ready(self):
         import paytacapos.signals
 
-        post_migrate.connect(generate_vault_for_existing_merchants, sender=self)
+        # post_migrate.connect(generate_vault_for_existing_merchants, sender=self)

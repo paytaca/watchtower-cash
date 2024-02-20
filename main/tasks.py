@@ -1808,10 +1808,13 @@ def rebuild_wallet_history(wallet_hash):
 
 
 @shared_task(queue='wallet_history_1', max_retries=3)
-def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=False, immediate=False):
+def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=False, immediate=False, force=False):
     history_check = WalletHistory.objects.filter(txid=txid)
     if history_check.exists():
-        return
+        if force:
+            history_check.delete()
+        else:
+            return
 
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
     if txn_details:
@@ -2175,9 +2178,9 @@ def populate_token_addresses():
             obj.save()
 
 
-def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
+def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=False):
     tx_check = Transaction.objects.filter(txid=tx_hash)
-    if tx_check.exists():
+    if tx_check.exists() and not force:
         return
     
     LOGGER.info('Processing mempool tx: ' + tx_hash)
@@ -2215,7 +2218,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         # if passed through the throttled task queue
         # skip processing if it already has at least 1 confirmation
         if not immediate:
-            if 'confirmations' in tx.keys():
+            if 'confirmations' in tx.keys() and not force:
                 LOGGER.info('Skipped confirmed tx: ' + str(tx_hash))
                 return
 
@@ -2353,9 +2356,9 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False):
         if save_histories:
             LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
             if immediate:
-                parse_tx_wallet_histories(tx_hash, txn_details=tx, immediate=True)
+                parse_tx_wallet_histories(tx_hash, txn_details=tx, immediate=True, force=force)
             else:
-                parse_tx_wallet_histories.delay(tx_hash, txn_details=tx)
+                parse_tx_wallet_histories.delay(tx_hash, txn_details=tx, force=force)
 
 @shared_task(
   base=HeimdallTask,
