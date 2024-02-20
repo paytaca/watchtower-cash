@@ -32,8 +32,7 @@ class PeerSerializer(serializers.ModelSerializer):
             'trade_count',
             'completion_rate',
             'rating',
-            'created_at',
-            'modified_at'
+            'created_at'
         ]
 
     def get_rating(self, instance: Peer):

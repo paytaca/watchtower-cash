@@ -4,7 +4,7 @@ from rest_framework.response import Response
 
 from django.http import Http404
 from django.db import IntegrityError
-from django.db.models import Q, OuterRef, Subquery
+from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
 from django.core.exceptions import ValidationError
 
 import math
@@ -57,17 +57,20 @@ class OrderListCreate(APIView):
         status_type = request.query_params.get('status_type')
         currency = request.query_params.get('currency')
         trade_type = request.query_params.get('trade_type')
-        filtered_status = request.query_params.getlist('status')
+        statuses = request.query_params.getlist('status')
         payment_types = request.query_params.getlist('payment_types')
         time_limits = request.query_params.getlist('time_limits')
         sort_by = request.query_params.get('sort_by')
         sort_type = request.query_params.get('sort_type')
         owned = request.query_params.get('owned')
-        appealable_only = request.query_params.get('appealable_only')
+        appealable = request.query_params.get('appealable')
+        not_appealable = request.query_params.get('not_appealable')
         if owned is not None:
             owned = owned == 'true'
-        if appealable_only is not None:
-            appealable_only = appealable_only == 'true'
+        if appealable is not None:
+            appealable = appealable == 'true'
+        if not_appealable is not None:
+            not_appealable = not_appealable == 'true'
 
         return {
             'limit': limit,
@@ -75,13 +78,14 @@ class OrderListCreate(APIView):
             'status_type': status_type,
             'currency': currency,
             'trade_type': trade_type,
-            'filtered_status': filtered_status,
+            'statuses': statuses,
             'payment_types': payment_types,
             'time_limits': time_limits,
             'sort_by': sort_by,
             'sort_type': sort_type,
             'owned': owned,
-            'appealable_only': appealable_only
+            'appealable': appealable,
+            'not_appealable': not_appealable
         }
 
     def get(self, request):
@@ -140,12 +144,20 @@ class OrderListCreate(APIView):
         elif params['status_type'] == 'ONGOING':
             queryset = queryset.exclude(pk__in=Subquery(last_status))
         
-        if len(params['filtered_status']) > 0:
-            filtered_status = Status.objects.filter(
-                order=OuterRef('pk'),
-                status__in=list(map(str, params['filtered_status']))
-            ).order_by('-created_at').values('order')[:1]
-            queryset = queryset.filter(pk__in=Subquery(filtered_status))
+        if len(params['statuses']) > 0:
+            # get the order's last status
+            last_status_subq = Status.objects.filter(order=OuterRef('id')).order_by('-created_at').values('status')[:1]
+            # check if the last status is a subset of filtered statuses
+            temp = queryset.annotate(
+                last_status=Subquery(last_status_subq)
+                ).annotate(
+                    is_in_filtered_status = Case(
+                        When(last_status__in=list(map(str, params['statuses'])), then=Value(True)),
+                        default=Value(False),
+                        output_field=BooleanField(),
+                    )                    
+                )
+            queryset = temp.filter(is_in_filtered_status=True)
 
         # filters by ad payment types
         if len(params['payment_types']) > 0:
@@ -161,9 +173,13 @@ class OrderListCreate(APIView):
         if params['trade_type'] is not None:
             queryset = queryset.exclude(Q(ad_snapshot__trade_type=params['trade_type']))
 
-        # filters appealable orders only
-        if params['appealable_only'] is True:
-            queryset = queryset.filter(Q(appealable_at__isnull=False) & Q(appealable_at__lt=timezone.now()))
+        # filter/exclude appealable orders
+        filter = not(params['appealable'] and params['not_appealable'] )
+        if filter is True:
+            if params['appealable'] is True:
+                queryset = queryset.filter(Q(appealable_at__isnull=False))
+            if params['not_appealable'] is True:
+                queryset = queryset.exclude(Q(appealable_at__isnull=False))
 
         if params['sort_by'] == 'last_modified_at':
             sort_field = 'last_modified_at'

@@ -31,6 +31,7 @@ class ArbiterFeedbackListCreate(APIView):
 
         order_id = request.query_params.get('order_id')
         from_peer = request.query_params.get('from_peer')
+        to_peer = request.query_params.get('to_peer')
         arbiter = request.query_params.get('arbiter')
         rating = request.query_params.get('rating')
         ad_id = request.query_params.get('ad_id')
@@ -55,6 +56,9 @@ class ArbiterFeedbackListCreate(APIView):
 
         if from_peer is not None:
             queryset = queryset.filter(Q(from_peer=from_peer))
+        
+        if to_peer is not None:
+            queryset = queryset.filter(Q(to_peer=to_peer))
         
         if arbiter is not None:
             queryset = queryset.filter(Q(to_arbiter=arbiter))
