@@ -19,7 +19,7 @@ from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 
-from .models import Location
+from .models import Location, Category
 
 import logging
 
@@ -228,6 +228,8 @@ class MerchantViewSet(
             merchant__isnull=False,
             merchant__active=True,
             merchant__verified=True
+        ).exclude(
+            country=""
         )
         locations = locations.values('country').distinct()
         locations = locations.values_list('country', flat=True)
@@ -243,9 +245,12 @@ class MerchantViewSet(
         country = request.query_params.get('country', None)
         locations = Location.objects.filter(
             country__isnull=False,
+            city__isnull=False,
             merchant__isnull=False,
             merchant__active=True,
             merchant__verified=True
+        ).exclude(
+            city=""
         )
 
         if country:
@@ -267,9 +272,13 @@ class MerchantViewSet(
         city = request.query_params.get('city', None)
         locations = Location.objects.filter(
             country__isnull=False,
+            city__isnull=False,
+            street__isnull=False,
             merchant__isnull=False,
             merchant__active=True,
             merchant__verified=True
+        ).exclude(
+            street=""
         )
 
         if country:
@@ -280,6 +289,11 @@ class MerchantViewSet(
         streets = locations.values('street').distinct()
         streets = streets.values_list('street', flat=True)
         return Response(list(streets))
+
+    @decorators.action(methods=['get'], detail=False)
+    def categories(self, request, *args, **kwargs):
+        categories = Category.objects.values_list('name', flat=True)
+        return Response(list(categories))
 
     @swagger_auto_schema(
         manual_parameters=[
