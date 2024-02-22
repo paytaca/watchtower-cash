@@ -5,6 +5,7 @@ from rampp2p.models import *
 
 
 admin.site.register(Ad)
+admin.site.register(AdSnapshot)
 admin.site.register(FiatCurrency)
 admin.site.register(CryptoCurrency)
 admin.site.register(Feedback)
