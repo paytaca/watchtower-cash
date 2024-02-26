@@ -24,7 +24,6 @@ class ContractSerializer(serializers.ModelSerializer):
             'address',
             'created_at'
         ]
-        depth = 1
 
 class ContractDetailSerializer(ContractSerializer): 
     members = ContractMemberSerializer(many=True, read_only=True)

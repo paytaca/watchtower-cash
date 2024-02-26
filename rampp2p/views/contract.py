@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from django.core.exceptions import ValidationError
 from django.http import Http404
+from django.conf import settings
 
 from authentication.token import TokenAuthentication
 import rampp2p.utils as utils
@@ -78,7 +79,7 @@ class ContractCreateView(APIView):
             contract.address == None or
             contract.order.arbiter == None or
             contract.order.arbiter.id != arbiter.id):
-            
+            contract.version = settings.SMART_CONTRACT_VERSION
             contract.address = None
             contract.save()
             
