@@ -465,14 +465,6 @@ class ReviewSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class CategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Category
-        fields = (
-            'name',
-        )
-
-
 class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()

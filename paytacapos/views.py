@@ -19,7 +19,7 @@ from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 
-from .models import Location
+from .models import Location, Category
 
 import logging
 
@@ -216,10 +216,21 @@ class MerchantViewSet(
             openapi.Parameter(name="active", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
             openapi.Parameter(name="verified", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
             openapi.Parameter(name="name", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="has_pagination", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
         ]
     )
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        has_pagination = self.request.query_params.get('has_pagination', 'true')
+        has_pagination = has_pagination.lower() == 'true'
+
+        if page is not None and has_pagination:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
@@ -228,6 +239,8 @@ class MerchantViewSet(
             merchant__isnull=False,
             merchant__active=True,
             merchant__verified=True
+        ).exclude(
+            country=""
         )
         locations = locations.values('country').distinct()
         locations = locations.values_list('country', flat=True)
@@ -243,9 +256,12 @@ class MerchantViewSet(
         country = request.query_params.get('country', None)
         locations = Location.objects.filter(
             country__isnull=False,
+            city__isnull=False,
             merchant__isnull=False,
             merchant__active=True,
             merchant__verified=True
+        ).exclude(
+            city=""
         )
 
         if country:
@@ -267,9 +283,13 @@ class MerchantViewSet(
         city = request.query_params.get('city', None)
         locations = Location.objects.filter(
             country__isnull=False,
+            city__isnull=False,
+            street__isnull=False,
             merchant__isnull=False,
             merchant__active=True,
             merchant__verified=True
+        ).exclude(
+            street=""
         )
 
         if country:
@@ -280,6 +300,11 @@ class MerchantViewSet(
         streets = locations.values('street').distinct()
         streets = streets.values_list('street', flat=True)
         return Response(list(streets))
+
+    @decorators.action(methods=['get'], detail=False)
+    def categories(self, request, *args, **kwargs):
+        categories = Category.objects.values_list('name', flat=True)
+        return Response(list(categories))
 
     @swagger_auto_schema(
         manual_parameters=[

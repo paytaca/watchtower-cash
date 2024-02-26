@@ -5,6 +5,7 @@ from django.contrib.postgres.fields import ArrayField
 from main.models import WalletHistory
 
 from PIL import Image
+import os
 
 
 class LinkedDeviceInfo(models.Model):
@@ -122,27 +123,46 @@ class Merchant(models.Model):
     
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
 
+    class Meta:
+        ordering = ('name', )
+
     def __str__(self):
         return f"Merchant ({self.name})"
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # TODO: fix logo resized logo not saving
-        # logos = [
-        #     { 'size': 30, 'media_path': self.image_30.path },
-        #     { 'size': 60, 'media_path': self.image_60.path },
-        #     { 'size': 90, 'media_path': self.image_90.path },
-        #     { 'size': 120, 'media_path': self.image_120.path }
-        # ]
 
-        # for logo in logos:
-        #     size = logo['size']
-        #     path = logo['media_path']
+        if self.logo:
+            sizes = [
+                (30,30),
+                (60,60),
+                (90,90),
+                (120,120),
+            ]
 
-        #     img = Image.open(self.logo.path)
-        #     output_size = (size, size)
-        #     img.thumbnail(output_size)
-        #     img.save(path)
+            for size in sizes:
+                img = Image.open(self.logo.path)
+                img.thumbnail(size)
+                django_image_name, django_image_ext = os.path.splitext(self.logo.name)
+                server_image_name, server_image_ext = os.path.splitext(self.logo.path)
+
+                _size = size[0]
+
+                logo_server_path = f'{server_image_name}_{_size}{server_image_ext}'
+                logo_django_path = f'{django_image_name}_{_size}{django_image_ext}'
+                img.save(logo_server_path)
+
+                if _size == 30:
+                    self.logo_30 = logo_django_path
+                elif _size == 60:
+                    self.logo_60 = logo_django_path
+                elif _size == 90:
+                    self.logo_90 = logo_django_path
+                elif _size == 120:
+                    self.logo_120 = logo_django_path
+
+            super().save(*args, **kwargs)
+
 
     @property
     def last_transaction_date(self):
