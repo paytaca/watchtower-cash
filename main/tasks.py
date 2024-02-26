@@ -7,6 +7,7 @@ from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from celery import shared_task
 from celery_heimdall import HeimdallTask, RateLimit
+from watchtower.celery import app as celery_app
 from main.models import *
 from main.utils.address_validator import *
 from main.utils.ipfs import (
@@ -17,6 +18,7 @@ from main.utils.vouchers import is_key_nft
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
+    get_and_save_latest_bch_rates,
     save_wallet_history_currency,
 )
 from celery.exceptions import MaxRetriesExceededError 
@@ -2380,3 +2382,65 @@ def process_mempool_transaction_throttled(tx_hash, tx_hex=None, immediate=False)
 )
 def process_mempool_transaction_fast(tx_hash, tx_hex=None, immediate=False):
     _process_mempool_transaction(tx_hash, tx_hex, immediate)
+
+
+@shared_task(queue='save_record')
+def get_latest_bch_prices_task(currencies=[]):
+    assert isinstance(currencies, list)
+    for index, currency in enumerate(currencies):
+        assert isinstance(currency, str), f"[{index}] not a string: {currency}"
+
+    currencies = [currency.upper().strip() for currency in currencies]
+    results = get_and_save_latest_bch_rates(currencies=currencies)
+    response = {}
+    for currency, asset_price_log in results.items():
+        response[currency] = {
+            'currency': asset_price_log.currency,
+            'timestamp': str(asset_price_log.timestamp),
+            'source': asset_price_log.source,
+        }
+    return response
+
+
+def get_latest_bch_price(currency):
+    """
+        Fetch latest price BCH price from a currency.
+        Has a mechanism to check other running tasks to prevent
+        running duplicate tasks
+
+        Returns: AssetPriceLog | None
+    """
+    assert isinstance(currency, str), "currency param is not a string"
+    currency = currency.upper().strip()
+
+    get_latest = lambda: AssetPriceLog.objects.filter(
+        currency=currency,
+        relative_currency="BCH",
+        timestamp__gt = timezone.now()-timezone.timedelta(seconds=30),
+        timestamp__lte = timezone.now()+timezone.timedelta(seconds=30),
+    ).order_by("-timestamp").first()
+
+    latest = get_latest()
+    if latest: return latest
+
+    task_key = f"latest_bch_price_task_{currency}"
+    existing_task_id = REDIS_STORAGE.get(task_key)
+    if existing_task_id:
+        existing_task_id = existing_task_id.decode()
+        existing_task = celery_app.AsyncResult(existing_task_id)
+        try:
+            existing_task.get(timeout=30)
+        except celery.exceptions.TimeoutError:
+            pass
+        finally:
+            latest = get_latest()
+            if latest: return latest
+
+    task = get_latest_bch_prices_task.delay(currencies=[currency])
+    REDIS_STORAGE.set(task_key, task.id)
+    try:
+        task.get()
+        latest = get_latest()
+        if latest: return latest
+    finally:
+        REDIS_STORAGE.delete(task_key)

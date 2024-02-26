@@ -166,6 +166,47 @@ def get_yadio_rates(currencies=[], source_currency="USD"):
 
         return results
 
+
+def get_and_save_latest_bch_rates(currencies=[], max_age=30):
+    assert max_age > 0, "Max age must be positive"
+    assert max_age < 60, "Max age must not be more than 60seconds=1minute"
+    response = {}
+    fresh_rates = AssetPriceLog.objects.filter(
+        relative_currency="BCH", currency__in=currencies,
+        timestamp__gte=tz.now() - timedelta(seconds=max_age),
+    )
+
+    fresh_rate_currencies = fresh_rates.values_list("currency", flat=True).distinct()
+    missing_currencies = [currency for currency in currencies if currency not in fresh_rate_currencies]
+
+    bch_rates = get_latest_bch_rates(currencies=missing_currencies)
+    for currency in missing_currencies:
+        bch_rate = bch_rates.get(currency.lower(), None)
+        if not bch_rate: continue
+        price_log_data = {
+            'currency': currency,
+            'relative_currency': "BCH",
+            'timestamp': bch_rate[1],
+            'source': bch_rate[2]
+        }
+
+        price_log_check = AssetPriceLog.objects.filter(**price_log_data)
+        if price_log_check.exists():
+            price_log_check.update(price_value = bch_rate[0])
+            price_log = price_log_check.first()
+        else:
+            price_log = AssetPriceLog.objects.create(
+                **price_log_data, price_value=bch_rate[0],
+            )
+
+        response[currency] = price_log
+
+    for price_log in fresh_rates:
+        response[price_log.currency] = price_log
+
+    return response
+
+
 def save_wallet_history_currency(wallet_hash, currency):
     if not currency:
         return

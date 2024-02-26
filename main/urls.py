@@ -22,6 +22,7 @@ main_urls = router.urls
 
 
 main_urls += [
+    re_path(r"^bch-prices/$", views.LatestBCHPriceView.as_view(),name='latest-bch-price'),
     re_path(r"^status/$", views.StatusView.as_view(), name='api-status'),
     re_path(r"^task/(?P<task_id>[\w+:-]+)/$", views.TaskStatusView.as_view(), name='task-status'),
 
