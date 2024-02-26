@@ -94,7 +94,9 @@ def get_latest_bch_rates(currencies=[]):
             'x-cg-pro-api-key': settings.COINGECKO_API_KEY
         }
     )
-    response_timestamp = datetime.strptime(response.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
+    response_timestamp = tz.make_aware(
+        datetime.strptime(response.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
+    )
     response_data = response.json()
     bch_rates = response_data["bitcoin-cash"]
 
@@ -121,7 +123,9 @@ def get_latest_bch_rates(currencies=[]):
                 price_value = usd_rate_resp["rate"] * usd_rate
                 response[currency] = (
                     Decimal(price_value),
-                    datetime.fromtimestamp(usd_rate_resp["timestamp"] / 1000),
+                    tz.make_aware(
+                        datetime.fromtimestamp(usd_rate_resp["timestamp"] / 1000)
+                    ),
                     "coingecko-yadio",
                 )
 
