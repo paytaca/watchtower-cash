@@ -15,17 +15,20 @@ from rampp2p.serializers import (
     AdDetailSerializer,
     AdCreateSerializer, 
     AdUpdateSerializer,
-    AdOwnerSerializer
+    AdOwnerSerializer,
+    AdSnapshotSerializer
 )
 from rampp2p.models import (
     Ad, 
+    AdSnapshot,
     Peer, 
     PaymentMethod,
     FiatCurrency,
     CryptoCurrency,
     TradeType,
     PriceType,
-    MarketRate
+    MarketRate,
+    Order
 )
 
 import logging
@@ -222,6 +225,24 @@ class AdDetail(APIView):
         ad = Ad.objects.filter(Q(pk=ad_id) & Q(owner__wallet_hash=wallet_hash))
         if (not ad.exists()):
             raise ValidationError('No such Ad with owner exists')
+
+class AdSnapshotView(APIView):
+    authentication_classes = [TokenAuthentication]
+    def get(self, request):
+        ad_snapshot_id = request.query_params.get('ad_snapshot_id')
+        order_id = request.query_params.get('order_id')
+        
+        ad = None
+        try:
+            if ad_snapshot_id is not None:
+                ad = AdSnapshot.objects.get(pk=ad_snapshot_id)
+            elif order_id is not None:
+                ad = Order.objects.get(pk=order_id).ad_snapshot
+        except (AdSnapshot.DoesNotExist, Order.DoesNotExist):
+            raise Http404
+
+        serializer = AdSnapshotSerializer(ad)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 def validate_payment_methods_ownership(wallet_hash, payment_method_ids):
     '''
