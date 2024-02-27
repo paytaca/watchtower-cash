@@ -94,7 +94,9 @@ def get_latest_bch_rates(currencies=[]):
             'x-cg-pro-api-key': settings.COINGECKO_API_KEY
         }
     )
-    response_timestamp = datetime.strptime(response.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
+    response_timestamp = tz.make_aware(
+        datetime.strptime(response.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
+    )
     response_data = response.json()
     bch_rates = response_data["bitcoin-cash"]
 
@@ -121,7 +123,9 @@ def get_latest_bch_rates(currencies=[]):
                 price_value = usd_rate_resp["rate"] * usd_rate
                 response[currency] = (
                     Decimal(price_value),
-                    datetime.fromtimestamp(usd_rate_resp["timestamp"] / 1000),
+                    tz.make_aware(
+                        datetime.fromtimestamp(usd_rate_resp["timestamp"] / 1000)
+                    ),
                     "coingecko-yadio",
                 )
 
@@ -161,6 +165,47 @@ def get_yadio_rates(currencies=[], source_currency="USD"):
                 results[currency] = error
 
         return results
+
+
+def get_and_save_latest_bch_rates(currencies=[], max_age=30):
+    assert max_age > 0, "Max age must be positive"
+    assert max_age < 60, "Max age must not be more than 60seconds=1minute"
+    response = {}
+    fresh_rates = AssetPriceLog.objects.filter(
+        relative_currency="BCH", currency__in=currencies,
+        timestamp__gte=tz.now() - timedelta(seconds=max_age),
+    )
+
+    fresh_rate_currencies = fresh_rates.values_list("currency", flat=True).distinct()
+    missing_currencies = [currency for currency in currencies if currency not in fresh_rate_currencies]
+
+    bch_rates = get_latest_bch_rates(currencies=missing_currencies)
+    for currency in missing_currencies:
+        bch_rate = bch_rates.get(currency.lower(), None)
+        if not bch_rate: continue
+        price_log_data = {
+            'currency': currency,
+            'relative_currency': "BCH",
+            'timestamp': bch_rate[1],
+            'source': bch_rate[2]
+        }
+
+        price_log_check = AssetPriceLog.objects.filter(**price_log_data)
+        if price_log_check.exists():
+            price_log_check.update(price_value = bch_rate[0])
+            price_log = price_log_check.first()
+        else:
+            price_log = AssetPriceLog.objects.create(
+                **price_log_data, price_value=bch_rate[0],
+            )
+
+        response[currency] = price_log
+
+    for price_log in fresh_rates:
+        response[price_log.currency] = price_log
+
+    return response
+
 
 def save_wallet_history_currency(wallet_hash, currency):
     if not currency:
@@ -222,3 +267,141 @@ def save_wallet_history_currency(wallet_hash, currency):
                 wallet_history.save()
 
     return results
+
+
+class CoingeckoAPI:
+    REQUIRED_YADIO_RATE = ["ars"]
+
+    class CoingeckoAPIError(Exception):
+        pass
+
+    def __init__(self, pro_api_key=settings.COINGECKO_API_KEY):
+        self.pro_api_key = pro_api_key
+
+    @classmethod
+    def coin_id_to_asset_name(cls, value) -> str:
+        if isinstance(value, bytes):
+            value = value.decode()
+        if value == "bitcoin-cash": return "BCH"
+        return value
+
+    @classmethod
+    def asset_name_to_coin_id(cls, value) -> str:
+        if isinstance(value, bytes):
+            value = value.decode()
+
+        if value == "BCH": return "bitcoin-cash"
+        return value
+
+    @classmethod
+    def parse_currency(cls, value) -> str:
+        if isinstance(value, bytes):
+            value = value.decode()
+        return value.strip().lower()
+
+    def get_market_prices(self, currencies=["USD"], coin_ids=["bitcoin-cash"], save=False):
+        vs_currencies = []
+        use_yadio_rates = []
+        for c in currencies:
+            currency = self.parse_currency(c)
+            if not currency: continue
+
+            if currency in self.REQUIRED_YADIO_RATE:
+                use_yadio_rates.append(currency)
+            else:
+                vs_currencies.append(currency)
+
+        if use_yadio_rates and "usd" not in vs_currencies:
+            vs_currencies.append("usd")
+
+        coin_ids = [self.asset_name_to_coin_id(coin_id) for coin_id in coin_ids]
+        params = dict(vs_currencies=",".join(vs_currencies), ids=",".join(coin_ids))
+        if self.pro_api_key: url = "https://pro-api.coingecko.com/api/v3/simple/price/"
+        else: url = "https://api.coingecko.com/api/v3/simple/price/"
+        response = requests.get(url,
+            headers={'x-cg-pro-api-key': self.pro_api_key},
+            params=params,
+            timeout=15,
+        )
+
+        response_timestamp = tz.make_aware(
+            datetime.strptime(response.headers["Date"], "%a, %d %b %Y %H:%M:%S %Z")
+        )
+        response_data = response.json()
+        if "error" in response_data: raise CoingeckoAPIError(response_data)
+
+        result = {}
+        coin_id_usd_rates = {}
+        for coin_id in coin_ids:
+            rates_per_currency = response_data.get(coin_id)
+            if not rates_per_currency: continue
+
+            result_rates = {}
+            for currency in vs_currencies:
+                if currency not in rates_per_currency: continue
+                price_data = {
+                    'currency': currency.upper(),
+                    'relative_currency': self.coin_id_to_asset_name(coin_id),
+                    'timestamp': response_timestamp,
+                    'source': "coingecko",
+                    'price_value': round(Decimal(rates_per_currency[currency]), 3),
+                }
+                result_rates[currency.upper()] = price_data
+                if currency == "usd": coin_id_usd_rates[coin_id] = price_data
+
+            if result_rates: result[coin_id] = result_rates
+
+        if use_yadio_rates and len(coin_id_usd_rates.keys()):
+            usd_rates_resp = get_yadio_rates(currencies=use_yadio_rates, source_currency="USD")
+            for currency, usd_rate_resp in usd_rates_resp.items():
+                if not isinstance(usd_rate_resp, dict): continue
+                if "rate" not in usd_rate_resp: continue
+                if "timestamp" not in usd_rate_resp: continue
+
+                yadio_rate_timestamp = tz.make_aware(
+                    datetime.fromtimestamp(usd_rate_resp["timestamp"] / 1000)
+                )
+
+                currency_usd_rate = Decimal(usd_rate_resp["rate"])
+                for coin_id, price_data in coin_id_usd_rates.items():
+                    coin_usd_rate = price_data["price_value"]
+
+                    new_price_data = {**price_data}
+                    new_price_data["currency"] = currency.upper()
+                    new_price_data["price_value"] = round(currency_usd_rate * coin_usd_rate, 3)
+                    new_price_data["source"] = "coingecko-yadio"
+                    new_price_data["timestamp"] = max(
+                        yadio_rate_timestamp,
+                        new_price_data["timestamp"],
+                    )
+
+                    result[coin_id][currency.upper()] = new_price_data
+
+        if save:
+            for coin_rates in result.values():
+                for price_data in coin_rates.values():
+                    kwargs = {
+                        "currency": price_data["currency"],
+                        "relative_currency": price_data["relative_currency"],
+                        "source": price_data["source"],
+                    }
+                    existing_similar_records = AssetPriceLog.objects.filter(
+                        **kwargs,
+                        timestamp__gte=price_data["timestamp"]-timedelta(seconds=30),
+                        timestamp__lte=price_data["timestamp"]+timedelta(seconds=15),
+                    )
+                    if existing_similar_records.exists():
+                        existing_similar_records.update(
+                            price_value=price_data["price_value"],
+                            timestamp=price_data["timestamp"],
+                        )
+                        price_data["id"] = existing_similar_records.values_list("id", flat=True).first()
+                    else:
+                        asset_price_log = AssetPriceLog.objects.create(
+                            **kwargs,
+                            price_value=price_data["price_value"],
+                            timestamp=price_data["timestamp"],
+                        )
+                        price_data["id"] = asset_price_log.id
+
+        return result
