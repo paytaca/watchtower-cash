@@ -1,5 +1,5 @@
 import logging, json, requests
-import pytz
+import pytz, time
 from decimal import Decimal
 from datetime import datetime
 from urllib.parse import urlparse
@@ -20,6 +20,7 @@ from main.utils.market_price import (
     get_latest_bch_rates,
     get_and_save_latest_bch_rates,
     save_wallet_history_currency,
+    CoingeckoAPI,
 )
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils.nft import (
@@ -2444,3 +2445,175 @@ def get_latest_bch_price(currency):
         if latest: return latest
     finally:
         REDIS_STORAGE.delete(task_key)
+
+
+class MarketPriceTaskQueueManager(celery_app.Task):
+    abstract = True
+
+    class RedisKeys:
+        LAST_CALL_TIMESTAMP = "last_call_timestamp"
+        # COIN_IDS = "market_price__coin_ids"
+        # CURRENCIES = "market_price__currencies"
+
+        PAIR_TASK_ID_MAP = "market_price__pair_task_ids_map"
+        PAIR_QUEUE = "market_price__pair_queue"
+
+    @classmethod
+    def enqueue(cls, coin_id="", currency=""):
+        """
+            Add a pair to the queue. Returns a dict that contain either keys:
+
+            task_id:str - the price rate for the pair is already being fetched by the task
+            wait_time:float - the pair is queued but needs to wait since the last fetch was recent
+            run:bool - the pair is queued and last fetch was not recent (note that this doesn't actually do the fetching)
+        """
+        pair_name = cls.construct_pair(coin_id=coin_id, currency=currency)
+        if not pair_name: return
+
+        existing_task_id = cls.get_running_task_id(pair_name)
+        if existing_task_id: return dict(task_id=existing_task_id)
+
+        cls.queue_pairs(pair_name)
+
+        wait_time = cls.get_wait_time()
+        if wait_time > 0: return dict(wait_time=wait_time)
+
+        return dict(run=True)
+
+    @classmethod
+    def get_latest(cls, coin_id="", currency="", pair_name="", return_id=False):
+        if pair_name: 
+            deconstructed = cls.deconstruct_pair_name(pair_name)
+            coin_id = deconstructed["coin_id"]
+            currency = deconstructed["currency"]
+
+        query = AssetPriceLog.objects.filter(
+            currency=CoingeckoAPI.parse_currency(currency).upper(),
+            relative_currency=CoingeckoAPI.coin_id_to_asset_name(coin_id),
+            timestamp__gt = timezone.now()-timezone.timedelta(seconds=30),
+            timestamp__lte = timezone.now()+timezone.timedelta(seconds=30),
+        ).order_by("-timestamp")
+
+        if return_id: query = query.values_list("id", flat=True)
+
+        return query.first()
+
+    @classmethod
+    def queue_pairs(cls, *pair_names):
+        return REDIS_STORAGE.sadd(cls.RedisKeys.PAIR_QUEUE, *pair_names)
+    
+    @classmethod
+    def get_wait_time(cls):
+        last_call_timestamp = REDIS_STORAGE.get(cls.RedisKeys.LAST_CALL_TIMESTAMP) or 0
+        if isinstance(last_call_timestamp, bytes):
+            last_call_timestamp = float(last_call_timestamp)
+
+        now = timezone.now().timestamp()
+        wait_time = last_call_timestamp - (now-5)
+        return wait_time
+
+    @classmethod
+    def get_running_task_id(cls, pair_name):
+        if not pair_name or not isinstance(pair_name, str): return
+        result = REDIS_STORAGE.hget(cls.RedisKeys.PAIR_TASK_ID_MAP, pair_name)
+        if isinstance(result, bytes): result = result.decode()
+        return result
+
+    @classmethod
+    def construct_pair(cls, coin_id="", currency=""):
+        coin_id = CoingeckoAPI.asset_name_to_coin_id(coin_id)
+        if not coin_id: return
+        currency = CoingeckoAPI.parse_currency(currency)
+        if not currency: return
+
+        return ":".join([coin_id, currency])
+
+    @classmethod
+    def deconstruct_pair_name(cls, pair_name):
+        if isinstance(pair_name, bytes): pair_name = pair_name.decode()
+        coin_id, currency = pair_name.split(":", maxsplit=1)
+        return dict(coin_id=coin_id, currency=currency)
+
+    def __call__(self, *args, **kwargs):
+        """
+            - Flush all queued and transfer to pair/task_id map
+            - Execute core task
+            - Clear remove the pair/task_id keys
+        """
+        task_id = self.request.id
+        pair_set = REDIS_STORAGE.smembers(self.RedisKeys.PAIR_QUEUE)
+        pair_task_id_map = {pair: task_id for pair in pair_set}
+
+        if not pair_set: return
+
+        pipeline = REDIS_STORAGE.pipeline()
+        pipeline.hset(self.RedisKeys.PAIR_TASK_ID_MAP, mapping=pair_task_id_map)
+        pipeline.srem(self.RedisKeys.PAIR_QUEUE, *pair_set)
+        pipeline.set(self.RedisKeys.LAST_CALL_TIMESTAMP, timezone.now().timestamp())
+        pipeline.execute()
+
+        try:
+            coin_ids = set()
+            currencies = set()      
+            for pair in pair_set:
+                pair_dict = self.deconstruct_pair_name(pair)
+                coin_ids.add(pair_dict["coin_id"])
+                currencies.add(pair_dict["currency"])
+
+            LOGGER.info(f"market_price_task | coin_ids={coin_ids} | currencies={currencies}")
+
+            coingecko_api = CoingeckoAPI()
+            result = coingecko_api.get_market_prices(
+                currencies=currencies, coin_ids=coin_ids, save=True
+            )
+            return result
+        finally:
+            REDIS_STORAGE.hdel(
+                self.RedisKeys.PAIR_TASK_ID_MAP,
+                *pair_task_id_map.keys(),
+            )
+            super().__call__(*args, **kwargs)
+
+
+@shared_task(base=MarketPriceTaskQueueManager, bind=True, queue="save_record")
+def market_price_task(self, *args, **kwargs):
+    """
+        - This will run after the base class function is done
+        - Return value here wont be the tasks result
+    """
+    pass
+
+@shared_task(queue="save_record")
+def get_latest_market_price_task(coin_id:str, currency:str):
+    latest = MarketPriceTaskQueueManager.get_latest(coin_id=coin_id, currency=currency)
+    if latest: return latest
+
+    queue_result = MarketPriceTaskQueueManager.enqueue(coin_id=coin_id, currency=currency)
+    if not queue_result: return
+
+    qr = [queue_result]
+    wait_time = queue_result.get("wait_time", 0)
+    if wait_time > 0:
+        time.sleep(wait_time)
+        queue_result = MarketPriceTaskQueueManager.enqueue(coin_id=coin_id, currency=currency)
+        qr.append(queue_result)
+
+    LOGGER.info(f"coin_id={coin_id} | currency={currency} | queue_result={qr}")
+
+    if not queue_result: return
+
+    existing_task_id = queue_result.get("task_id")
+    if existing_task_id:
+        existing_task_id = existing_task_id.decode()
+        existing_task = celery_app.AsyncResult(existing_task_id)
+        try:
+            existing_task.get(timeout=30)
+        except celery.exceptions.TimeoutError:
+            pass
+
+    if queue_result.get("run"):
+        # NOTE: may lead to deadlocks(due to waiting for tasks within a task)
+        # https://docs.celeryq.dev/en/latest/reference/celery.result.html#celery.result.AsyncResult.wait
+        market_price_task.delay().wait(timeout=30, interval=1)
+
+    return MarketPriceTaskQueueManager.get_latest(coin_id=coin_id, currency=currency)
