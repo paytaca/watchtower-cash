@@ -16,9 +16,14 @@ def execute_subprocess(command, **kwargs):
     logger.warning(f'executing: {command}')
     process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate() 
-
-    stderr = stderr.decode("utf-8")
-    stdout = stdout.decode('utf-8')
+    logger.warn(f'stdout: {stdout}')
+    logger.warn(f'stderr: {stderr}')
+    
+    if stderr is not None:
+        stderr = stderr.decode("utf-8") 
+    
+    if stdout is not None:
+        stdout = stdout.decode('utf-8')
 
     if stdout is not None:
         # Define the pattern for matching control characters
@@ -27,7 +32,8 @@ def execute_subprocess(command, **kwargs):
         # Remove all control characters from the JSON string
         clean_stdout = control_char_pattern.sub('', stdout)
 
-        stdout = json.loads(clean_stdout)
+        if clean_stdout is not None:
+            stdout = json.loads(clean_stdout)
     
     response = {'result': stdout, 'error': stderr}
 

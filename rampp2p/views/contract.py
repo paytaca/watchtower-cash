@@ -75,11 +75,13 @@ class ContractCreateView(APIView):
         address = None
         contract, created = Contract.objects.get_or_create(order=order)
         timestamp = contract.created_at.timestamp()
-        if (created or
+        force = request.data.get('force', False)
+        if (force or created or
             contract.address == None or
             contract.order.arbiter == None or
             contract.order.arbiter.id != arbiter.id):
             contract.version = settings.SMART_CONTRACT_VERSION
+            contract.address_type = settings.ADDRESS_TYPE
             contract.address = None
             contract.save()
             
