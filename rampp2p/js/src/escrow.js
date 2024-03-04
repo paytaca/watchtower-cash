@@ -17,7 +17,7 @@ const bchjs = new BCHJS({
   });
 
 const NETWORK = process.env.ESCROW_NETWORK || 'mainnet';
-const ADDRESS_TYPE = process.env.ADDRESS_TYPE || 'p2sh32';
+const ADDRESS_TYPE = 'p2sh32';
 
 (async () => {
 

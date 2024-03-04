@@ -81,7 +81,6 @@ class ContractCreateView(APIView):
             contract.order.arbiter == None or
             contract.order.arbiter.id != arbiter.id):
             contract.version = settings.SMART_CONTRACT_VERSION
-            contract.address_type = settings.ADDRESS_TYPE
             contract.address = None
             contract.save()
             
