@@ -4,8 +4,8 @@
     "bitbox-cli": "^0.3.9",
     "bitbox-sdk": "^8.11.2",
     "bitcore-lib-cash": "^8.25.46",
-    "cashc": "^0.7.5",
-    "cashscript": "^0.7.5",
+    "cashc": "^0.8.0",
+    "cashscript": "^0.8.0",
     "crypto-js": "^4.1.1",
     "elliptic": "^6.5.4",
     "request": "^2.88.2",
@@ -13,5 +13,6 @@
   },
   "devDependencies": {
     "chai": "^4.3.7"
-  }
+  },
+  "type": "module"
 }

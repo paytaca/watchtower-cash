@@ -75,7 +75,8 @@ class ContractCreateView(APIView):
         address = None
         contract, created = Contract.objects.get_or_create(order=order)
         timestamp = contract.created_at.timestamp()
-        if (created or
+        force = request.data.get('force', False)
+        if (force or created or
             contract.address == None or
             contract.order.arbiter == None or
             contract.order.arbiter.id != arbiter.id):
