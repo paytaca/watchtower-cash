@@ -36,12 +36,12 @@ class VoucherViewSet(
     mixins.ListModelMixin,
 ):
     queryset = Voucher.objects.annotate(
-        expiration_date=ExpressionWrapper(
+        __expiration_date=ExpressionWrapper(
             F('date_created') + (timedelta(days=1) * F('duration_days')),
             output_field=DateTimeField()
         )
     ).order_by(
-        'expiration_date',
+        '__expiration_date',
         'value'
     )
     serializer_class = EmptySerializer

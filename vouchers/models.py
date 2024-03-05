@@ -18,6 +18,9 @@ class Vault(models.Model):
     address = models.CharField(max_length=100, unique=True)
     token_address = models.CharField(max_length=100, unique=True)
 
+    class Meta:
+        ordering = ('merchant__name', )
+
 
 class Voucher(models.Model):
     vault = models.ForeignKey(
