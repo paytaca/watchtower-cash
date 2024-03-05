@@ -37,6 +37,7 @@ class AddressUtxos(APIView):
             openapi.Parameter('capability', openapi.IN_QUERY, description="Filters based on NFT capability. Valid values are 'none'|'minting'|'mutable'", type=openapi.TYPE_STRING),
             openapi.Parameter('commitment', openapi.IN_QUERY, description="Filters based on NFT commitment.", type=openapi.TYPE_STRING),
             openapi.Parameter('commitment_ne', openapi.IN_QUERY, description="Only return NFTs with commitment not equal to this value.", type=openapi.TYPE_STRING),
+            openapi.Parameter('category', openapi.IN_QUERY, description="Filter by token category", type=openapi.TYPE_STRING),
             openapi.Parameter('offset', openapi.IN_QUERY, description="Pagination's offset.", type=openapi.TYPE_STRING),
             openapi.Parameter('limit', openapi.IN_QUERY, description="Pagination's page limit.Maximum rows per page", type=openapi.TYPE_INTEGER),
         ]
@@ -49,6 +50,7 @@ class AddressUtxos(APIView):
         
         is_token = self.request.query_params.get('is_token')
         token_type = self.request.query_params.get('token_type')
+        category = self.request.query_params.get('category')
 
         if is_token == 'true':     # return only token utxos
             queryset = queryset.filter(Q(amount__gt=0) | Q(cashtoken_ft__category__isnull=False) | Q(cashtoken_nft__category__isnull=False))
@@ -72,6 +74,8 @@ class AddressUtxos(APIView):
                 queryset = queryset.filter(cashtoken_nft__commitment=commitment)
             if commitment_ne:
                 queryset = queryset.filter(~Q(cashtoken_nft__commitment=commitment_ne))
+        if category:
+            queryset = queryset.filter(~Q(cashtoken_nft__category=category))
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request)
