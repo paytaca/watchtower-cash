@@ -22,6 +22,7 @@ class OrderArbiterSerializer(serializers.ModelSerializer):
 
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
     contract  = serializers.SerializerMethodField()
     arbiter = OrderArbiterSerializer()
@@ -36,6 +37,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'ad',
+            'members',
             'owner',
             'contract',
             'arbiter',
@@ -54,6 +56,33 @@ class OrderSerializer(serializers.ModelSerializer):
         serialized_ad_snapshot = SubsetAdSnapshotSerializer(obj.ad_snapshot)
         return serialized_ad_snapshot.data
     
+    def get_members(self, obj):
+        ad_owner = None
+        members = {
+            'arbiter': obj.arbiter
+        }
+        if obj.ad_snapshot.trade_type == models.TradeType.SELL:
+            members['seller'] = obj.ad_snapshot.ad.owner
+            members['buyer'] = obj.owner
+            ad_owner = members['seller']
+        else:
+            members['seller'] = obj.owner
+            members['buyer'] = obj.ad_snapshot.ad.owner
+            ad_owner = members['buyer']
+            
+        for key, member in members.items():
+            if members[key] is not None:
+                members[key] = {
+                    'id': member.id,
+                    'chat_identity_id': member.chat_identity_id,
+                    'public_key': member.public_key,
+                    'name': member.name,
+                    'address': member.address,
+                    'rating': member.average_rating(),
+                    'is_ad_owner': member.wallet_hash == ad_owner.wallet_hash
+                }
+        return members
+         
     def get_owner(self, obj):
         return {
             'id': obj.owner.id,
