@@ -30,55 +30,60 @@ def validate_exclusive_stats(status, order_id):
         
 def validate_status_progression(new_status, order_id):
     current_status = Status.objects.filter(Q(order=order_id)).latest('created_at')
-    prefix = 'ValidationError: '
     if (current_status.status == StatusType.RELEASED or 
         current_status.status == StatusType.REFUNDED or
         current_status.status == StatusType.CANCELED):
-            raise ValidationError( f'{prefix} Cannot change a completed order\'s status')
+            raise ValidationError('Cannot change a completed order\'s status')
 
+    invalid_status = False
+    error_message = f'Invalid Status: Cannot change order status from {current_status.status} to {new_status}'
     if current_status.status == StatusType.SUBMITTED:
         if (new_status != StatusType.CONFIRMED and
             new_status != StatusType.CANCELED):
-            raise ValidationError(f'{prefix} {StatusType.SUBMITTED.label} orders can only be {StatusType.CONFIRMED.label} | {StatusType.CANCELED.label}')
+            invalid_status = True
         
     if current_status.status == StatusType.CONFIRMED:
         if (new_status != StatusType.ESCROW_PENDING and
             new_status != StatusType.CANCELED):
-                raise ValidationError(f'{prefix} {StatusType.CONFIRMED.label} orders can only be {StatusType.ESCROW_PENDING.label} | {StatusType.CANCELED.label}')
+                invalid_status = True
 
     if current_status.status == StatusType.ESCROW_PENDING:
         if (new_status != StatusType.ESCROWED):
-                raise ValidationError(f'{prefix} {StatusType.ESCROW_PENDING.label} orders can only be {StatusType.ESCROWED.label}')
+                invalid_status = True
          
     if current_status.status == StatusType.ESCROWED:
         if (new_status != StatusType.PAID_PENDING and 
             new_status != StatusType.APPEALED):
-                raise ValidationError(f'{prefix} {StatusType.ESCROWED.label} orders can only be {StatusType.PAID_PENDING.label} | {StatusType.APPEALED.label}')
+                invalid_status = True
     
     if current_status.status == StatusType.PAID_PENDING:
         if (new_status != StatusType.PAID and 
             new_status != StatusType.APPEALED):
-                raise ValidationError(f'{prefix} {StatusType.PAID_PENDING.label} orders can only be {StatusType.PAID.label} | {StatusType.APPEALED.label}')
+                invalid_status = True
        
     if current_status.status == StatusType.PAID:
         if (new_status != StatusType.RELEASED and 
             new_status != StatusType.APPEALED):
-                raise ValidationError(f'{prefix} {StatusType.PAID.label} orders can only be {StatusType.RELEASED.label} | {StatusType.APPEALED.label}')
+                invalid_status = True
     
     if (current_status.status == StatusType.APPEALED):
         was_marked_paid = Status.objects.filter(Q(order=order_id) & Q(status=StatusType.PAID)).count() > 0
         if was_marked_paid:
             if (new_status != StatusType.RELEASE_PENDING):
-                raise ValidationError(f'{prefix} {StatusType.APPEALED.label} orders previously marked as {StatusType.PAID.label} can only be {StatusType.RELEASE_PENDING.label}')
+                invalid_status = True
+                error_message = f'Cannot change order status from {current_status.status} to {new_status}. Order previously marked as {StatusType.PAID.label}.'
         else:
             if (new_status != StatusType.RELEASE_PENDING and 
                 new_status != StatusType.REFUND_PENDING):
-                    raise ValidationError(f'{prefix} {StatusType.APPEALED.label} orders can only be {StatusType.RELEASE_PENDING.label} | {StatusType.REFUND_PENDING.label}')
+                    invalid_status = True
     
     if (current_status.status == StatusType.RELEASE_PENDING):
         if (new_status != StatusType.RELEASED):
-            raise ValidationError(f'{prefix} {StatusType.RELEASE_PENDING} orders can only be {StatusType.RELEASED.label}')
+            invalid_status = True
         
     if (current_status.status == StatusType.REFUND_PENDING):
         if (new_status != StatusType.REFUNDED):
-            raise ValidationError(f'{prefix} {StatusType.REFUND_PENDING} orders can only be {StatusType.REFUNDED.label}')
+            invalid_status = True
+
+    if invalid_status:
+        raise ValidationError(error_message)

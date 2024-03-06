@@ -378,11 +378,10 @@ class VerifyRelease(APIView):
     '''
     Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
-    Note: This endpoint should only be used as fallback for the ReleaseCrypto endpoint.
 
     Requirements:
         (1) Caller must be the order's arbiter or seller
-        (2) The order's current status must be RELEASE_PENDING (created by calling ReleaseCrypto endpoint first)
+        (2) The order's current status must be RELEASE_PENDING
         (3) TODO: An amount of time must already have passed since status RELEASE_PENDING was created
     '''
     def post(self, request, pk):
@@ -451,7 +450,7 @@ class VerifyRefund(APIView):
 
     Requirements:
         (1) Caller must be the order's arbiter
-        (2) The order's current status must be REFUND_PENDING (created by calling RefundCrypto endpoint first)
+        (2) The order's current status must be REFUND_PENDING
         (3) TODO: An amount of time must already have passed since status REFUND_PENDING was created
     '''
     def post(self, request, pk):
@@ -467,7 +466,7 @@ class VerifyRefund(APIView):
             status_type = StatusType.REFUNDED
             validate_status_inst_count(status_type, pk)
             validate_exclusive_stats(status_type, pk)
-            validate_status_progression(status_type, pk)            
+            validate_status_progression(status_type, pk)
             
             txid = request.data.get('txid')
             if txid is None:
@@ -489,21 +488,10 @@ class VerifyRefund(APIView):
         return Response(status=status.HTTP_200_OK)
     
     def validate_permissions(self, wallet_hash, pk):
-        '''
-        Validates if:
-            (1) caller is not the order's arbiter,
-            (2) the order's current status is not REFUND_PENDING
-        '''
         prefix = "ValidationError:"
-
         try:
-            order = Order.objects.get(pk=pk)
-            curr_status = Status.objects.filter(order=order).latest('created_at')
-        except Peer.DoesNotExist or Order.DoesNotExist as err:
+            order = Order.objects.get(pk=pk)            
+            if wallet_hash != order.arbiter.wallet_hash:
+                raise ValidationError(f'{prefix} Caller must be order arbiter.')
+        except Exception as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
-        
-        if wallet_hash != order.arbiter.wallet_hash:
-            raise ValidationError(f'{prefix} Caller must be order arbiter.')
-        
-        if (curr_status.status != StatusType.REFUND_PENDING):
-            raise ValidationError(f'{prefix} action requires status={StatusType.REFUND_PENDING.label}')
