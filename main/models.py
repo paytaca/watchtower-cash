@@ -19,7 +19,6 @@ import web3
 
 from django.utils.crypto import get_random_string
 from cryptography.fernet import Fernet
-from django.conf import settings
 import random
 
 class Token(PostgresModel):
@@ -479,7 +478,7 @@ class Transaction(PostgresModel):
     
     def get_token_decimals(self):
         decimals = None
-        if self.token.tokenid == 'wt_cashtoken_token_id':
+        if self.token.tokenid == settings.WT_DEFAULT_CASHTOKEN_ID:
              if self.cashtoken_ft:
                  if self.cashtoken_ft.info:
                     decimals = self.cashtoken_ft.info.decimals
