@@ -213,7 +213,12 @@ def client_acknowledgement(self, txid):
                 if websocket:
                     tokenid = transaction.token.tokenid
                     room_name = transaction.address.address.replace(':','_')
+
+                    if tokenid == settings.WT_DEFAULT_CASHTOKEN_ID:
+                        tokenid = ''
+
                     room_name += f'_{tokenid}'
+
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
                         f"{room_name}", 
