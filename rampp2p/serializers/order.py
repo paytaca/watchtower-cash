@@ -31,6 +31,7 @@ class OrderSerializer(serializers.ModelSerializer):
     payment_methods = serializers.SerializerMethodField()
     last_modified_at = serializers.SerializerMethodField() # lastest order status created_at
     is_ad_owner = serializers.SerializerMethodField()
+    feedback = serializers.SerializerMethodField()
     
     class Meta:
         model = models.Order
@@ -49,7 +50,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'created_at',
             'appealable_at',
             'last_modified_at',
-            'is_ad_owner'
+            'is_ad_owner',
+            'feedback'
         ]
 
     def get_ad(self, obj):
@@ -139,6 +141,19 @@ class OrderSerializer(serializers.ModelSerializer):
         if obj.ad_snapshot.ad.owner.wallet_hash == wallet_hash:
             return True
         return False
+    
+    def get_feedback(self, obj):
+        wallet_hash = self.context['wallet_hash']
+        status = self.get_status(obj)
+        feedback = None
+        if status['value'] in ['CNCL', 'RLS', 'RFN']:
+            user_feedback = models.Feedback.objects.filter(Q(from_peer__wallet_hash=wallet_hash) and Q(order__id=obj.id)).first()
+            if user_feedback:
+                feedback = {
+                    'id': user_feedback.id,
+                    'rating': user_feedback.rating
+                }
+        return feedback
 
 class OrderWriteSerializer(serializers.ModelSerializer):
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
