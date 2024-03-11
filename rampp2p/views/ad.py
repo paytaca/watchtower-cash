@@ -48,6 +48,7 @@ class AdListCreate(APIView):
         payment_types = request.query_params.getlist('payment_types')
         time_limits = request.query_params.getlist('time_limits')
         price_order = request.query_params.get('price_order')
+        query_name = request.query_params.get('query_name')
         owned = request.query_params.get('owned', False)
         owned = owned == 'true'
 
@@ -114,6 +115,10 @@ class AdListCreate(APIView):
             queryset = queryset.order_by(order_field, 'created_at')
         else:
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
+
+        # search for ads with specific owner name
+        if query_name:
+            queryset = queryset.filter(owner__name__icontains=query_name)
 
         count = queryset.count()
         total_pages = page
