@@ -65,6 +65,8 @@ class OrderListCreate(APIView):
         owned = request.query_params.get('owned')
         appealable = request.query_params.get('appealable')
         not_appealable = request.query_params.get('not_appealable')
+        query_name = request.query_params.get('query_name')
+
         if owned is not None:
             owned = owned == 'true'
         if appealable is not None:
@@ -85,7 +87,8 @@ class OrderListCreate(APIView):
             'sort_type': sort_type,
             'owned': owned,
             'appealable': appealable,
-            'not_appealable': not_appealable
+            'not_appealable': not_appealable,
+            'query_name': query_name
         }
 
     def get(self, request):
@@ -199,6 +202,10 @@ class OrderListCreate(APIView):
             if params['status_type'] == 'COMPLETED':
                 queryset = queryset.order_by(sort_field)
         
+        # search for orders with specific owner name
+        if params['query_name']:
+            queryset = queryset.filter(owner__name__icontains=params['query_name'])
+
         # Count total pages
         count = queryset.count()
         total_pages = page

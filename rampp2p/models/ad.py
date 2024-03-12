@@ -6,13 +6,10 @@ from .currency import FiatCurrency, CryptoCurrency
 from .payment import PaymentMethod
 
 class CooldownChoices(models.IntegerChoices):
-    FIVE_MINUTES    =   5, '5 minutes'
-    FIFTEEN_MINUTES =   15, '15 minutes'
-    THIRTY_MINUTES  =   30, '30 minutes'
-    ONE_HOUR        =   60, '1 hour'
-    FIVE_HOURS      =   300, '5 hours'
-    TWELVE_HOURS    =   720, '12 hours'
-    ONE_DAY         =   1440, '1 day'
+    FIFTEEN     =   15, '15 minutes'
+    THIRTY      =   30, '30 minutes'
+    FORTY_FIVE  =   45, '45 minutes'
+    SIXTY       =   60, '60 minutes'
 
 class TradeType(models.TextChoices):
     SELL = 'SELL'
@@ -33,7 +30,7 @@ class Ad(models.Model):
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices)
+    appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices, default=CooldownChoices.SIXTY)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
     is_public = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
