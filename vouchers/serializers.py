@@ -13,12 +13,14 @@ class VaultSerializer(serializers.ModelSerializer):
 
 class VoucherSerializer(serializers.ModelSerializer):
     capability = serializers.SerializerMethodField()
+    merchant = serializers.SerializerMethodField()
 
     class Meta:
         model = Voucher
         fields = (
             'id',
             'vault',
+            'merchant',
             'value',
             'minting_txid',
             'claim_txid',
@@ -41,6 +43,9 @@ class VoucherSerializer(serializers.ModelSerializer):
 
     def get_capability(self, obj):
         return 'none'
+    
+    def get_merchant(self, obj):
+        return obj.vault.merchant.name
 
 
 class VoucherClaimCheckSerializer(serializers.Serializer):
