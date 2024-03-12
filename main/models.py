@@ -524,7 +524,7 @@ class Subscription(PostgresModel):
 class WalletHistoryQuerySet(PostgresQuerySet):
     POS_ID_MAX_DIGITS = 4
 
-    def filter_pos(self, wallet_hash, posid=None):
+    def filter_pos(self, wallet_hash, posid=None, include_claim_vouchers=True):
         try:
             posid = int(posid)
             posid = str(posid)
@@ -551,10 +551,15 @@ class WalletHistoryQuerySet(PostgresQuerySet):
         addresses = addresses.values("address").distinct()
         addresses_subquery = models.Func(models.Subquery(addresses), function="array")
 
-        return self.filter(
-            models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery),
-            wallet__wallet_hash=wallet_hash,
-        )
+        filter_arg = models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery)
+        if include_claim_vouchers:
+            voucher_transactions = TransactionMetaAttribute.objects.filter(
+                key=f'voucher_claim_{posid}',
+                wallet_hash=wallet_hash
+            ).values('txid')
+            filter_arg |= Q(txid__in=voucher_transactions)
+
+        return self.filter(filter_arg, wallet__wallet_hash=wallet_hash)
 
     def annotate_empty_attributes(self):
         return self.annotate(
