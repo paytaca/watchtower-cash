@@ -9,6 +9,8 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from vouchers.serializers import VaultSerializer
+from vouchers.js.runner import ScriptFunctions
+
 from main.models import Address
 from .models import *
 from .utils.broadcast import broadcast_transaction
@@ -470,6 +472,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
     last_transaction_date = serializers.CharField()
     vault = VaultSerializer(required=False)
     logos = serializers.SerializerMethodField()
+    receiving_address = serializers.SerializerMethodField()
     
     class Meta:
         model = Merchant
@@ -483,9 +486,15 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "gmap_business_link",
             "last_transaction_date",
             "receiving_pubkey",
+            "receiving_address",
             "vault",
             "logos",
         ]
+
+    def get_receiving_address(self, obj):
+        return ScriptFunctions.pubkeyToCashAddress(
+            dict(pubkey=obj.receiving_pubkey)
+        )
     
     def get_logos(self, obj):
         logos = {
