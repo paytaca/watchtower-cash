@@ -7,9 +7,8 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
-
+from bitcash.keygen import public_key_to_address
 from vouchers.serializers import VaultSerializer
-from vouchers.js.runner import ScriptFunctions
 
 from main.models import Address
 from .models import *
@@ -492,9 +491,14 @@ class MerchantListSerializer(serializers.ModelSerializer):
         ]
 
     def get_receiving_address(self, obj):
-        return ScriptFunctions.pubkeyToCashAddress(
-            dict(pubkey=obj.receiving_pubkey)
-        )
+        if obj.receiving_pubkey:
+            # return ScriptFunctions.pubkeyToCashAddress(
+            #     dict(pubkey=obj.receiving_pubkey)
+            # )
+            pk_bytes_str = bytearray.fromhex(obj.receiving_pubkey)
+            return public_key_to_address(pk_bytes_str)
+        else:
+            return ''
     
     def get_logos(self, obj):
         logos = {
