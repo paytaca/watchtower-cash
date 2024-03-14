@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class Peer(models.Model):
     chat_identity_id = models.IntegerField(null=True, blank=True)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     wallet_hash = models.CharField(max_length=75, unique=True, db_index=True)
     public_key = models.CharField(max_length=75)
     address = models.CharField(max_length=75)

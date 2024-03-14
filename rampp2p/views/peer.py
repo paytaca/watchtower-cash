@@ -28,6 +28,10 @@ class PeerCreateView(APIView):
         if arbiter.exists():
             return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # check if username already exists
+        if (Peer.objects.filter(name__iexact=request.data.get('name')).exists()):
+            return Response({'error': 'similar username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+        
         # create new Peer instance
         data = request.data.copy()
         data['wallet_hash'] = wallet_hash
