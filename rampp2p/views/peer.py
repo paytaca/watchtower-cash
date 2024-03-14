@@ -2,10 +2,10 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import Http404
-
+from django.utils import timezone
 from authentication.token import TokenAuthentication
 from authentication.serializers import UserSerializer
-from rampp2p.models import Peer, Arbiter
+from rampp2p.models import Peer, Arbiter, ReservedName
 from rampp2p.serializers import (
     PeerSerializer, 
     PeerCreateSerializer,
@@ -28,18 +28,31 @@ class PeerCreateView(APIView):
         if arbiter.exists():
             return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # check if username already exists
-        if (Peer.objects.filter(name__iexact=request.data.get('name')).exists()):
-            return Response({'error': 'similar username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+        # check if username is reserved
+        input_name = request.data.get('name')
+        prefix = 'reserved-'
+        reserved_name = None
+        if (input_name.startswith(prefix)):
+            subset_key = input_name[len(prefix):]
+            reserved_name = ReservedName.objects.filter(key=subset_key)
+            if reserved_name.exists():
+                input_name = reserved_name.first().name
+        else:
+            # check if username already exists
+            if (Peer.objects.filter(name__iexact=input_name).exists() or ReservedName.objects.filter(name__iexact=input_name).exists()):
+                return Response({'error': 'similar username already exists'}, status=status.HTTP_400_BAD_REQUEST)
         
         # create new Peer instance
         data = request.data.copy()
+        data['name'] = input_name
         data['wallet_hash'] = wallet_hash
         data['public_key'] = public_key
         
         serializer = PeerCreateSerializer(data=data)
         if serializer.is_valid():
             serializer = PeerSerializer(serializer.save())
+            if reserved_name:
+                reserved_name.redeemed_at = timezone.now()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -95,3 +108,4 @@ class UserProfileView(APIView):
         }
 
         return Response(response, status.HTTP_200_OK)
+    
