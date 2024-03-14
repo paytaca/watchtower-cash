@@ -555,7 +555,7 @@ class WalletHistoryQuerySet(PostgresQuerySet):
 
         filter_arg = models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery)
 
-        if include_claim_vouchers and raw_pos_id:
+        if include_claim_vouchers and raw_pos_id is not None:
             voucher_transactions = TransactionMetaAttribute.objects.filter(
                 key=f'voucher_claim_{raw_pos_id}',
                 wallet_hash=wallet_hash
