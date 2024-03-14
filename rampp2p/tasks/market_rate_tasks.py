@@ -54,14 +54,9 @@ def market_rates_beat_handler(result):
     for currency in subbed_currencies:
         symbol = currency.get('symbol')
         rate = rates.get(symbol)
-        obj, created = MarketRate.objects.get_or_create(currency=symbol)
-        obj.price = rate
-        obj.save()
-        
-        # if created:
-        #     logger.warn(f'New market price | {obj.currency} : {obj.price}')
-        # else:
-        #     logger.warn(f'Updated market price | {obj.currency} : {obj.price}')
-        
+        obj, _ = MarketRate.objects.get_or_create(currency=symbol)
+        if rate:
+            obj.price = rate
+            obj.save()
         data =  { 'currency': obj.currency, 'price' : obj.price }
         send_market_price(data, currency)
