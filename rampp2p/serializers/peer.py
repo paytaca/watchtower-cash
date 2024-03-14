@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db.models import Q, Subquery, OuterRef, F
-from rampp2p.models import Peer, Order, Status, StatusType
+from rampp2p.models import Peer, Order, Status, StatusType, ReservedName
 
 class PeerProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -105,3 +105,14 @@ class PeerUpdateSerializer(serializers.ModelSerializer):
             'address',
             'address_path'
         ]
+    
+    def update(self, instance, validated_data):
+        if validated_data['name']:
+            reserved_name = ReservedName.objects.filter(name__iexact=validated_data['name'])
+            if reserved_name.exists(): 
+                if not (reserved_name.first().peer and 
+                    instance.wallet_hash == reserved_name.first().peer.wallet_hash):
+                    validated_data['name'] = instance.name
+            if Peer.objects.filter(name__iexact=validated_data['name']).exists():
+                validated_data['name'] = instance.name
+        return super().update(instance=instance, validated_data=validated_data)
