@@ -29,30 +29,45 @@ class PeerCreateView(APIView):
             return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
 
         # check if username is reserved
-        input_name = request.data.get('name')
         prefix = 'reserved-'
-        reserved_name = None
-        if (input_name.startswith(prefix)):
-            subset_key = input_name[len(prefix):]
+        reserved = None
+        username = request.data.get('name')
+        duplicate_name_error = False
+        if (username.startswith(prefix)):
+            subset_key = username[len(prefix):]
             reserved_name = ReservedName.objects.filter(key=subset_key)
             if reserved_name.exists():
-                input_name = reserved_name.first().name
+                # accept key if reserved name is not yet associated with a Peer
+                if reserved_name.first().peer is None:
+                    reserved = reserved_name.first()
+                    username = reserved.name
+                else:
+                    duplicate_name_error = True
+            else:
+                return Response({'error': 'no such reserved username'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # check if username already exists
-            if (Peer.objects.filter(name__iexact=input_name).exists() or ReservedName.objects.filter(name__iexact=input_name).exists()):
-                return Response({'error': 'similar username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+            if (Peer.objects.filter(name__iexact=username).exists() or
+                ReservedName.objects.filter(name__iexact=username).exists()):
+                duplicate_name_error = True
+        
+        if duplicate_name_error:
+            return Response({'error': 'similar username already exists'}, status=status.HTTP_400_BAD_REQUEST)
         
         # create new Peer instance
         data = request.data.copy()
-        data['name'] = input_name
+        data['name'] = username
         data['wallet_hash'] = wallet_hash
         data['public_key'] = public_key
         
         serializer = PeerCreateSerializer(data=data)
         if serializer.is_valid():
-            serializer = PeerSerializer(serializer.save())
-            if reserved_name:
-                reserved_name.redeemed_at = timezone.now()
+            peer = serializer.save()
+            serializer = PeerSerializer(peer)
+            if reserved:
+                reserved.peer = peer
+                reserved.redeemed_at = timezone.now()
+                reserved.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
