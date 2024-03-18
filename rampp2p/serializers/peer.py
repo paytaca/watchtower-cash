@@ -107,7 +107,7 @@ class PeerUpdateSerializer(serializers.ModelSerializer):
         ]
     
     def update(self, instance, validated_data):
-        if validated_data['name']:
+        if validated_data.get('name'):
             reserved_name = ReservedName.objects.filter(name__iexact=validated_data['name'])
             if reserved_name.exists(): 
                 if not (reserved_name.first().peer and 
