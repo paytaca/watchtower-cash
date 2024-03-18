@@ -1067,7 +1067,7 @@
             "is_disabled": false,
             "created_at": "2023-09-11T04:19:13.152Z",
             "modified_at": "2024-03-18T04:52:02.257Z",
-            "format": [
+            "formats": [
                 2
             ]
         }
@@ -1080,7 +1080,7 @@
             "is_disabled": false,
             "created_at": "2023-09-11T04:19:17.964Z",
             "modified_at": "2024-03-18T04:51:59.343Z",
-            "format": [
+            "formats": [
                 1
             ]
         }
@@ -1093,7 +1093,7 @@
             "is_disabled": false,
             "created_at": "2024-02-16T07:15:22.003Z",
             "modified_at": "2024-03-18T04:51:53.273Z",
-            "format": [
+            "formats": [
                 1
             ]
         }
@@ -1106,7 +1106,7 @@
             "is_disabled": false,
             "created_at": "2024-03-18T04:34:35.221Z",
             "modified_at": "2024-03-18T04:51:41.197Z",
-            "format": [
+            "formats": [
                 2
             ]
         }
@@ -1119,7 +1119,7 @@
             "is_disabled": false,
             "created_at": "2024-03-18T04:52:26.531Z",
             "modified_at": "2024-03-18T04:52:26.531Z",
-            "format": [
+            "formats": [
                 1,
                 2
             ]

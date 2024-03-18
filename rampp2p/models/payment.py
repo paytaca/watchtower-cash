@@ -9,7 +9,7 @@ class PaymentTypeFormat(models.Model):
 
 class PaymentType(models.Model):
   name = models.CharField(max_length=100, db_index=True)
-  format = models.ManyToManyField(PaymentTypeFormat)
+  formats = models.ManyToManyField(PaymentTypeFormat)
   is_disabled = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True)
   modified_at = models.DateTimeField(auto_now=True)

@@ -5,12 +5,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PaymentTypeSerializer(serializers.ModelSerializer):
+    formats = serializers.SlugRelatedField(slug_field="format", queryset=models.PaymentTypeFormat.objects.all(), many=True)
     class Meta:
         model = models.PaymentType
         fields = [
             'id',
             'name',
-            'format',
+            'formats',
             'is_disabled'
         ]
 
