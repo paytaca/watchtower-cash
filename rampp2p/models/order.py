@@ -15,4 +15,4 @@ class Order(models.Model):
     appealable_at = models.DateTimeField(null=True)
 
     def __str__(self):
-        return str(self.id)
+        return f'{self.id}'

@@ -3,7 +3,6 @@ from django.contrib import admin
 # Register your models here.
 from rampp2p.models import *
 
-
 admin.site.register(Ad)
 admin.site.register(AdSnapshot)
 admin.site.register(FiatCurrency)
@@ -20,3 +19,4 @@ admin.site.register(Contract)
 admin.site.register(Appeal)
 admin.site.register(ContractMember)
 admin.site.register(ReservedName)
+admin.site.register(PaymentTypeFormat)
