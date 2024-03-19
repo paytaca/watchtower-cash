@@ -1,3 +1,4 @@
+from main.serializers.serializer_address import *
 from main.serializers.serializer_address_scan import *
 from main.serializers.serializer_asset_price_log import *
 from main.serializers.serializer_balance import *
