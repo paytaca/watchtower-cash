@@ -1,13 +1,21 @@
-from main.tasks import broadcast_transaction as broadcast_tx
+import bitcoin
+from main.tasks import NODE
+from main.models import Transaction
 
 def broadcast_transaction(tx_hex):
     response = { "success": False }
 
-    success, result = broadcast_tx(tx_hex)
+    txid = bitcoin.txhash(tx_hex)
+    if Transaction.objects.filter(txid=txid).exists():
+        success = True
+    else:
+        result = NODE.BCH.broadcast_transaction(tx_hex)
+        success = bool(result)
+
     if "already have transaction" in result:
         success = True
     if success:
-        response["txid"] = result.split(" ")[-1]
+        response["txid"] = txid
         response["success"] = True
         return response
     else:
