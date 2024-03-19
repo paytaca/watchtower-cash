@@ -7,11 +7,11 @@ from django.core.exceptions import ValidationError
 
 from authentication.token import TokenAuthentication
 
-from rampp2p.models import PaymentType, PaymentMethod, Peer
+from rampp2p.models import PaymentType, PaymentMethod, Peer, IdentifierFormat
 from rampp2p.serializers import (
-    PaymentMethodCreateSerializer,
     PaymentTypeSerializer, 
     PaymentMethodSerializer,
+    PaymentMethodCreateSerializer,
     PaymentMethodUpdateSerializer
 )
 
@@ -38,6 +38,11 @@ class PaymentMethodListCreate(APIView):
         data = request.data.copy()
         data['owner'] = request.user.id
 
+        format = IdentifierFormat.objects.filter(format=data.get('identifier_format'))
+        if not format.exists():
+            return Response({'error': 'identifier_format is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        data['identifier_format'] = format.first().id
         serializer = PaymentMethodCreateSerializer(data=data)
         if serializer.is_valid():
             payment_method = serializer.save()
@@ -71,8 +76,14 @@ class PaymentMethodDetail(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
+        data = request.data.copy()
+        format = IdentifierFormat.objects.filter(format=data.get('identifier_format'))
+        if not format.exists():
+            return Response({'error': 'identifier_format is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        data['identifier_format'] = format.first().id
         payment_method = self.get_object(pk=pk)
-        serializer = PaymentMethodUpdateSerializer(payment_method, data=request.data)
+        serializer = PaymentMethodUpdateSerializer(payment_method, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)

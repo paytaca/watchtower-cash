@@ -1,11 +1,12 @@
 from rest_framework import serializers
 import rampp2p.models as models
+from django.db.models import Q
 
 import logging
 logger = logging.getLogger(__name__)
 
 class PaymentTypeSerializer(serializers.ModelSerializer):
-    formats = serializers.SlugRelatedField(slug_field="format", queryset=models.PaymentTypeFormat.objects.all(), many=True)
+    formats = serializers.SlugRelatedField(slug_field="format", queryset=models.IdentifierFormat.objects.all(), many=True)
     class Meta:
         model = models.PaymentType
         fields = [
@@ -17,13 +18,15 @@ class PaymentTypeSerializer(serializers.ModelSerializer):
 
 class SubsetPaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all())
+    identifier_format = serializers.SlugRelatedField(slug_field="format", queryset=models.IdentifierFormat.objects.all())
     class Meta:
         model = models.PaymentMethod
         fields = [
             'id',
             'payment_type',
             'account_name',
-            'account_identifier'
+            'account_identifier',
+            'identifier_format'
         ]
 
 class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
@@ -35,6 +38,7 @@ class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
 class PaymentMethodCreateSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
     payment_type = serializers.PrimaryKeyRelatedField(queryset=models.PaymentType.objects.all())
+    identifier_format = serializers.PrimaryKeyRelatedField(queryset=models.IdentifierFormat.objects.all())
     class Meta:
         model = models.PaymentMethod
         fields = [
@@ -42,9 +46,9 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
             'payment_type',
             'owner',
             'account_name',
-            'account_identifier'
+            'account_identifier',
+            'identifier_format'
         ]
-    depth = 1
 
     def create(self, validated_data):
         owner_wallet_hash = validated_data['owner'].wallet_hash
@@ -58,8 +62,9 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
         return instance
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
-    owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
     payment_type = PaymentTypeSerializer()
+    owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
+    identifier_format = serializers.SlugRelatedField(slug_field="format", queryset=models.IdentifierFormat.objects.all())
     class Meta:
         model = models.PaymentMethod
         fields = [
@@ -67,13 +72,16 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
             'payment_type',
             'owner',
             'account_name',
-            'account_identifier'
+            'account_identifier',
+            'identifier_format'
         ]
 
 class PaymentMethodUpdateSerializer(serializers.ModelSerializer):
+    identifier_format = serializers.PrimaryKeyRelatedField(queryset=models.IdentifierFormat.objects.all())
     class Meta:
         model = models.PaymentMethod
         fields = [
             'account_name',
-            'account_identifier'
+            'account_identifier',
+            'identifier_format'
         ]

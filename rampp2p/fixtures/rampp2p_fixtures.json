@@ -1039,21 +1039,21 @@
         }
     },
     {
-        "model": "rampp2p.paymenttypeformat",
+        "model": "rampp2p.identifierformat",
         "pk": 1,
         "fields": {
             "format": "Mobile Number"
         }
     },
     {
-        "model": "rampp2p.paymenttypeformat",
+        "model": "rampp2p.identifierformat",
         "pk": 2,
         "fields": {
             "format": "Email Address"
         }
     },
     {
-        "model": "rampp2p.paymenttypeformat",
+        "model": "rampp2p.identifierformat",
         "pk": 3,
         "fields": {
             "format": "Alphanumeric String"
