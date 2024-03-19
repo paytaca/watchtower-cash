@@ -1,5 +1,6 @@
 import bitcoin
 import binascii
+from urllib.parse import urlencode
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import serializers
@@ -212,9 +213,12 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if not wallet_hashes:
             return
 
+        payment_url_params = urlencode({
+            "r": instance.get_absolute_uri(self.context["request"]),
+        })
         extra = {
             "type": NotificationTypes.PAYMENT_REQUEST,
-            "payment_url": instance.get_absolute_uri(self.context["request"]),
+            "payment_url": f"bitcoincash:?{payment_url_params}",
         }
         title = "Payment Request"
         message = f"You have a payment request of {instance.total_bch} BCH"
