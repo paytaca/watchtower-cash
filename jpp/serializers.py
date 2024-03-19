@@ -205,7 +205,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             return
 
         wallet_hashes = Wallet.objects.filter(addresses__address=address) \
-            .values("wallet_hash", flat=True) \
+            .values_list("wallet_hash", flat=True) \
             .distinct()
 
         wallet_hashes = [*wallet_hashes]
@@ -213,7 +213,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
             return
 
         extra = {
-            "address": address,
             "type": NotificationTypes.PAYMENT_REQUEST,
             "payment_url": instance.get_absolute_uri(self.context["request"]),
         }

@@ -25,9 +25,11 @@ class Invoice(models.Model):
     def currency(self):
         return "BCH"
 
+    @property
     def total_satoshis(self):
         return self.outputs.aggregate(total=models.Sum("amount"))["total"]
 
+    @property
     def total_bch(self):
         return round(self.total_satoshis / 10 ** 8, 8)
 
