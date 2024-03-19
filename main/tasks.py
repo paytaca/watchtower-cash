@@ -53,6 +53,7 @@ from io import BytesIO
 import pytz
 
 import rampp2p.utils.transaction as rampp2p_utils
+from jpp.models import Invoice as JPPInvoice
 
 LOGGER = logging.getLogger(__name__)
 
@@ -85,7 +86,11 @@ def client_acknowledgement(self, txid):
         block = None
         if transaction.blockheight:
             block = transaction.blockheight.number
-        
+
+        jpp_invoice_uuid = JPPInvoice.objects \
+            .filter(payment__txid=transaction.txid) \
+            .values("uuid", flat=True) \
+            .first()
         address = transaction.address
 
             
@@ -178,6 +183,9 @@ def client_acknowledgement(self, txid):
 
                     if __is_key_nft:
                         data['voucher'] = category
+                    
+                    if jpp_invoice_uuid:
+                        data['jpp_invoice_uuid'] = jpp_invoice_uuid
 
                 elif wallet_version == 1:
                     data = {
