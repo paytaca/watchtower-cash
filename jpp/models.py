@@ -25,6 +25,12 @@ class Invoice(models.Model):
     def currency(self):
         return "BCH"
 
+    def total_satoshis(self):
+        return self.outputs.aggregate(total=models.Sum("amount"))["total"]
+
+    def total_bch(self):
+        return round(self.total_satoshis / 10 ** 8, 8)
+
     def get_absolute_uri(self, request, url_type=None):
         return request.build_absolute_uri(self.get_url_path(url_type=url_type))
 

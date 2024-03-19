@@ -104,6 +104,8 @@ class NotificationTypes:
     MAIN_TRANSACTION = "transaction"
     SBCH_TRANSACTION = "sbch_transaction"
 
+    PAYMENT_REQUEST = "payment_request"
+
     ANYHEDGE_OFFER_SETTLED = "anyhedge_offer_settled"
     ANYHEDGE_MATURED = "anyhedge_matured"
     ANYHEDGE_CONTRACT_CANCELLED = "anyhedge_contract_cancelled"

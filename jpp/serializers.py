@@ -25,6 +25,13 @@ from .utils.verify import (
     tx_exists,
 )
 
+from main.models import Wallet
+from notifications.utils.send import (
+    send_push_notification_to_wallet_hashes,
+    NotificationTypes,
+)
+
+
 class InvoiceVerifySerializer(serializers.Serializer):
     raw_tx_hex = serializers.CharField(write_only=True)
     valid = serializers.BooleanField(read_only=True)
@@ -191,6 +198,35 @@ class InvoiceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("must have at least 1 output")
         return data
 
+    def send_push_notification(self, instance):
+        try:
+            address = instance.merchant_data["address"]
+        except (AttributeError, TypeError, KeyError):
+            return
+
+        wallet_hashes = Wallet.objects.filter(addresses__address=address) \
+            .values("wallet_hash", flat=True) \
+            .distinct()
+
+        wallet_hashes = [*wallet_hashes]
+        if not wallet_hashes:
+            return
+
+        extra = {
+            "address": address,
+            "type": NotificationTypes.PAYMENT_REQUEST,
+            "payment_url": instance.get_absolute_uri(self.context["request"]),
+        }
+        title = "Payment Request"
+        message = f"You have a payment request of {instance.total_bch} BCH"
+        return send_push_notification_to_wallet_hashes(
+            wallet_hashes,
+            message,
+            title=title,
+            extra=extra,
+        )
+
+
     @transaction.atomic
     def create(self, validated_data):
         output_data_list = validated_data.pop("outputs")
@@ -201,6 +237,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             output_data["invoice"] = instance
             InvoiceOutput.objects.create(**output_data)
 
+        self.send_push_notification(instance)
         return instance
 
 
