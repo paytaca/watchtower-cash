@@ -92,10 +92,12 @@ class PaymentMethodDetail(APIView):
     def delete(self, request, pk):
         try:
             self.validate_permissions(request.user.wallet_hash, pk)
-            payment_method = self.get_object(pk=pk)
-            payment_method.delete()
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            payment_method = self.get_object(pk=pk)
+            payment_method.delete()
         except Exception as err:
             return Response({'error': err.args[0]},status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_200_OK)

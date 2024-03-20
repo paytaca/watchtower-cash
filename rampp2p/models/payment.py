@@ -1,5 +1,7 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from .peer import Peer
+from django.apps import apps
 
 class IdentifierFormat(models.Model):
   format = models.CharField(max_length=64, unique=True)
@@ -28,3 +30,11 @@ class PaymentMethod(models.Model):
 
   def __str__(self):
     return f"{self.id} | {self.payment_type} | {self.owner.name}"
+  
+  def delete(self, *args, **kwargs):
+    # disable deleting of payment method if it is used by any Ad
+    Ad = apps.get_model('rampp2p', 'Ad')
+    ads_using_this = Ad.objects.filter(deleted_at__isnull=True, payment_methods__id=self.id)
+    if ads_using_this.exists():
+      raise ValidationError("Cannot delete Payment Method while it is used by an Ad")
+    super().delete(*args, **kwargs)
