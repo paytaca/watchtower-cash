@@ -89,7 +89,7 @@ def client_acknowledgement(self, txid):
 
         jpp_invoice_uuid = JPPInvoice.objects \
             .filter(payment__txid=transaction.txid) \
-            .values("uuid", flat=True) \
+            .values_list("uuid", flat=True) \
             .first()
         address = transaction.address
 
