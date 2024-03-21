@@ -2356,6 +2356,18 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             'amount': amount,
                             'value': value
                         }
+                        if token_id.startswith('ct/'):
+                            # Include cashtoken address in data
+                            try:
+                                addr_obj = Address.objects.get(address=bchaddress)
+                                if addr_obj.token_address:
+                                    data['recipient_cashtoken_address'] = addr_obj.token_address
+                            except Address.DoesNotExist:
+                                pass
+                            # If NFT, include NFT data (capability and commitment)
+                            if 'nft' in output['tokenData'].keys():
+                                data['nft'] = output['tokenData']['nft']
+
                         LOGGER.info(data)
                         
                         try:
