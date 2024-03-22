@@ -523,12 +523,28 @@ class MerchantListSerializer(serializers.ModelSerializer):
 
     def get_vouchers(self, obj):
         merchant_vouchers = Voucher.objects.filter(vault__merchant=obj)
-        total_vouchers_amount = merchant_vouchers.aggregate(total_amount=Sum('value'))
-        total_vouchers_amount = total_vouchers_amount['total_amount']
+        claimed_vouchers = merchant_vouchers.filter(claimed=True)
+        unclaimed_vouchers = merchant_vouchers.filter(claimed=False)
+
+        vouchers_amount = merchant_vouchers.aggregate(total_amount=Sum('value'))
+        claimed_vouchers_amount = claimed_vouchers.aggregate(total_amount=Sum('value'))
+        unclaimed_vouchers_amount = unclaimed_vouchers.aggregate(total_amount=Sum('value'))
+
+        total_vouchers_amount = vouchers_amount['total_amount']
+        total_claimed_vouchers_amount = claimed_vouchers_amount['total_amount']
+        total_unclaimed_vouchers_amount = unclaimed_vouchers_amount['total_amount']
 
         return {
-            'count': merchant_vouchers.count(),
-            'amount': total_vouchers_amount
+            'count': {
+                'total': merchant_vouchers.count(),
+                'claimed': claimed_vouchers.count(),
+                'unclaimed': unclaimed_vouchers.count()
+            },
+            'amount': {
+                'total': total_vouchers_amount or 0,
+                'claimed': total_claimed_vouchers_amount or 0,
+                'unclaimed': total_unclaimed_vouchers_amount or 0
+            }
         }
 
 
