@@ -235,6 +235,7 @@ class AdUpdateSerializer(serializers.ModelSerializer):
             'trade_floor',
             'trade_ceiling',
             'trade_amount',
+            'fiat_currency',
             'appeal_cooldown_choice',
             'payment_methods',
             'is_public',
