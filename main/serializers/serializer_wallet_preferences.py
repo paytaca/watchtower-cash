@@ -10,4 +10,5 @@ class WalletPreferencesSerializer(serializers.ModelSerializer):
         fields = [
             "wallet_hash",
             "selected_currency",
+            "wallet_name"
         ]
