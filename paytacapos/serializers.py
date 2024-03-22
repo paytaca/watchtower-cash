@@ -6,11 +6,13 @@ from datetime import datetime
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from django.db.models import Sum
 from rest_framework import serializers
 from bitcash.keygen import public_key_to_address
-from vouchers.serializers import VaultSerializer
 
-from main.models import Address
+from vouchers.serializers import VaultSerializer
+from vouchers.models import Voucher
+
 from .models import *
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
@@ -470,8 +472,10 @@ class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
     vault = VaultSerializer(required=False)
+
     logos = serializers.SerializerMethodField()
     receiving_address = serializers.SerializerMethodField()
+    vouchers = serializers.SerializerMethodField()
     
     class Meta:
         model = Merchant
@@ -487,6 +491,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "receiving_pubkey",
             "receiving_address",
             "vault",
+            "vouchers",
             "logos",
         ]
 
@@ -515,6 +520,16 @@ class MerchantListSerializer(serializers.ModelSerializer):
                 logos[key] = None
                 
         return logos
+
+    def get_vouchers(self, obj):
+        merchant_vouchers = Voucher.objects.filter(vault__merchant=obj)
+        total_vouchers_amount = merchant_vouchers.aggregate(total_amount=Sum('value'))
+        total_vouchers_amount = total_vouchers_amount['total_amount']
+
+        return {
+            'count': merchant_vouchers.count(),
+            'amount': total_vouchers_amount
+        }
 
 
 class MerchantSerializer(serializers.ModelSerializer):
