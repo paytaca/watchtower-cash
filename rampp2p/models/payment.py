@@ -12,6 +12,7 @@ class IdentifierFormat(models.Model):
 class PaymentType(models.Model):
   name = models.CharField(max_length=100, db_index=True)
   formats = models.ManyToManyField(IdentifierFormat)
+  notes = models.CharField(max_length=200, null=True, blank=True)
   is_disabled = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True)
   modified_at = models.DateTimeField(auto_now=True)

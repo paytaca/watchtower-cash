@@ -13,6 +13,7 @@ class PaymentTypeSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'formats',
+            'notes',
             'is_disabled'
         ]
 

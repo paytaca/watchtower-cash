@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 
 from authentication.token import TokenAuthentication
 
-from rampp2p.models import PaymentType, PaymentMethod, Peer, IdentifierFormat
+from rampp2p.models import PaymentType, PaymentMethod, Peer, IdentifierFormat, FiatCurrency
 from rampp2p.serializers import (
     PaymentTypeSerializer, 
     PaymentMethodSerializer,
@@ -21,8 +21,15 @@ logger = logging.getLogger(__name__)
 class PaymentTypeList(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def get(self, _):
+    def get(self, request):
         queryset = PaymentType.objects.all()
+        currency = request.query_params.get('currency')
+        if currency:
+            fiat_currency = FiatCurrency.objects.filter(symbol=currency)
+            if not fiat_currency.exists():
+                return Response({'error': f'no such fiat currency with symbol {currency}'}, status.HTTP_400_BAD_REQUEST)
+            fiat_currency = fiat_currency.first()
+            queryset = fiat_currency.payment_types
         serializer = PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
