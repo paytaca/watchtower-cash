@@ -13,6 +13,8 @@ from bitcash.keygen import public_key_to_address
 from vouchers.serializers import VaultSerializer
 from vouchers.models import Voucher
 
+from main.models import CashNonFungibleToken
+
 from .models import *
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
@@ -522,9 +524,25 @@ class MerchantListSerializer(serializers.ModelSerializer):
         return logos
 
     def get_vouchers(self, obj):
-        merchant_vouchers = Voucher.objects.filter(vault__merchant=obj)
+        request = self.context['request']
+        query_params = request.query_params
+        voucher_nfts = CashNonFungibleToken.objects.all()
+
+        if 'wallet_hash' in query_params.keys():
+            wallet_hash = query_params.get('wallet_hash', '')
+            if wallet_hash:
+                voucher_nfts = voucher_nfts.filter(
+                    transaction__wallet__wallet_hash=wallet_hash,
+                    transaction__spent=False
+                )
+                voucher_nfts = voucher_nfts.distinct()
+
+        merchant_vouchers = Voucher.objects.filter(
+            vault__merchant=obj,
+            category__in=voucher_nfts.values('category')
+        )
         claimed_vouchers = merchant_vouchers.filter(claimed=True)
-        unclaimed_vouchers = merchant_vouchers.filter(claimed=False)
+        unclaimed_vouchers = merchant_vouchers.filter(claimed=False, expired=False)
 
         vouchers_amount = merchant_vouchers.aggregate(total_amount=Sum('value'))
         claimed_vouchers_amount = claimed_vouchers.aggregate(total_amount=Sum('value'))
