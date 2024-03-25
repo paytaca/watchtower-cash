@@ -123,22 +123,9 @@ class VoucherViewSet(
             )
 
         voucher_nfts = voucher_nfts.distinct()
-        voucher_nfts_categories = list(
-            voucher_nfts.values_list(
-                'category',
-                flat=True
-            )
-        )
-        voucher_nfts_commitments = list(
-            voucher_nfts.values_list(
-                'commitment',
-                flat=True
-            )
-        )
-
         voucher_merchants = Merchant.objects.filter(
-            vault__vouchers__category__in=voucher_nfts_categories,
-            vault__vouchers__commitment__in=voucher_nfts_commitments
+            vault__vouchers__category__in=voucher_nfts.values('category'),
+            vault__vouchers__commitment__in=voucher_nfts.values('commitment')
         ).distinct()
 
         page = self.paginate_queryset(voucher_merchants)
