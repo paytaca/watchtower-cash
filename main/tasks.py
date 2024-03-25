@@ -54,11 +54,14 @@ import pytz
 
 import rampp2p.utils.transaction as rampp2p_utils
 from jpp.models import Invoice as JPPInvoice
+from vouchers.models import *
+
 
 LOGGER = logging.getLogger(__name__)
 
 REDIS_STORAGE = settings.REDISKV
 NODE = Node()
+
 
 # NOTIFICATIONS
 @shared_task(rate_limit='20/s', queue='send_telegram_message')
@@ -539,6 +542,42 @@ def save_record(
         return transaction_obj.id, transaction_created
 
 
+# NOTE: this function is mainly used to identify vouchers and save them in the database
+def process_nft_txn(txid):
+    txns = Transaction.objects.filter(txid=txid)
+    txns = txns.filter(cashtoken_nft__isnull=False)
+
+    # transaction count here should be exactly 3, from PurelyPeer voucher structure:
+    # 0 = key NFT (voucher)
+    # 1 = lock NFT
+    # 2 = quest NFT
+    if txns.exists() and txns.count() == 3:
+        txn_addresses = txns.values('address__address')
+        vault = Vault.objects.filter(address__in=txn_addresses)
+        
+        if vault.exists():
+            vault = vault.first()
+            lock_nft_txn = txns.filter(address__address=vault.address)
+            lock_nft_txn = lock_nft_txn.first()
+
+            if lock_nft_txn.current_index == 1:
+                voucher_txn = txns.filter(current_index=0)
+
+                if voucher_txn.exists():
+                    voucher_txn = voucher_txn.first()
+                    value = voucher_txn.value / 1e8
+                    nft = voucher_txn.cashtoken_nft
+
+                    Voucher(
+                        nft=nft,
+                        vault=vault,
+                        value=value,
+                        minting_txid=voucher_txn.txid,
+                        category=nft.category,
+                        commitment=nft.commitment
+                    ).save()
+
+
 def process_cashtoken_tx(
     token_data,
     address,
@@ -550,14 +589,14 @@ def process_cashtoken_tx(
     value=0
 ):
     token_id = token_data['category']
-
     amount = None
-    if 'amount' in token_data.keys():
-        amount = amount = int(token_data['amount'])
-
     created = False
-    # save nft transaction
+
+    if 'amount' in token_data.keys():
+        amount = int(token_data['amount'])
+
     if 'nft' in token_data.keys():
+        # save nft transaction
         nft_data = token_data['nft']
         capability = nft_data['capability']
         commitment = nft_data['commitment']
@@ -578,6 +617,7 @@ def process_cashtoken_tx(
             commitment=commitment,
             force_create=force_create
         )
+        process_nft_txn(txid)
     else:
         # save fungible token transaction
         obj_id, created = save_record(
@@ -598,7 +638,6 @@ def process_cashtoken_tx(
     if created:
         txn_obj = Transaction.objects.get(id=obj_id)
         decimals = txn_obj.get_token_decimals()
-
         client_acknowledgement(obj_id)
     
     return {
