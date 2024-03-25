@@ -782,6 +782,7 @@ class AssetPriceLog(models.Model):
 class WalletPreferences(PostgresModel):
     wallet = models.OneToOneField(Wallet, on_delete=models.CASCADE, related_name="preferences")
     selected_currency = models.CharField(max_length=5, default="USD")
+    wallet_name = models.CharField(max_length=75, blank=True)
 
 
 class TransactionMetaAttribute(PostgresModel):
