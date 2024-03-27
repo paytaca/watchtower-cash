@@ -32,7 +32,6 @@ from datetime import timedelta
 
 class VoucherViewSet(
     viewsets.GenericViewSet,
-    mixins.CreateModelMixin,
     mixins.ListModelMixin,
 ):
     queryset = Voucher.objects.annotate(
@@ -49,7 +48,6 @@ class VoucherViewSet(
     filterset_class = VoucherFilter
     pagination_class = CustomLimitOffsetPagination
     serializer_classes = {
-        'create': VoucherSerializer,
         'list': VoucherSerializer,
         'merchants': MerchantListSerializer,
         'claim_check': VoucherClaimCheckSerializer,

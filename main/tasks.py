@@ -560,8 +560,8 @@ def process_nft_txn(txid):
             lock_nft_txn = txns.filter(address__address=vault.address)
             lock_nft_txn = lock_nft_txn.first()
 
-            if lock_nft_txn.current_index == 1:
-                voucher_txn = txns.filter(current_index=0)
+            if lock_nft_txn.cashtoken_nft.current_index == 1:
+                voucher_txn = txns.filter(cashtoken_nft__current_index=0)
 
                 if voucher_txn.exists():
                     voucher_txn = voucher_txn.first()
