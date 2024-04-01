@@ -131,6 +131,10 @@ class OrderListCreate(APIView):
         else:
             queryset = queryset.filter(owned_orders | ad_orders)
 
+        # filter by currency
+        if params['currency']:
+            queryset = queryset.filter(ad_snapshot__fiat_currency__symbol=params['currency'])
+
         # filter or exclude orders based to their latest status
         completed_status = [
             StatusType.CANCELED,
