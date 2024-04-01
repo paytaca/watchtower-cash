@@ -84,13 +84,41 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
     gcm_send_response = None
     apns_send_response = None
     try:
-        
-        gcm_send_response = gcm_devices.send_message(gcm_message, **gcm_kwargs)
+        multi_wallet_indices = gcm_devices.values_list("device_wallets__multi_wallet_index", flat=True).distinct()
+        print(f"GCM indices: {multi_wallet_indices}")
+        for multi_wallet_index in multi_wallet_indices:
+            if "extra" not in gcm_kwargs: gcm_kwargs["extra"] = {}
+            gcm_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
+
+            filtered_gcm_devices = gcm_devices \
+                .filter(device_wallets__multi_wallet_index=multi_wallet_index) \
+                .distinct()
+
+            print(f"GCM({multi_wallet_index}) | {filtered_gcm_devices}")
+            _gcm_send_response = filtered_gcm_devices.send_message(gcm_message, **gcm_kwargs)
+
+            if not isinstance(gcm_send_response, list): gcm_send_response = []
+            gcm_send_response += _gcm_send_response
+
     except Exception as exception:
         gcm_send_response = exception
 
     try:
-        apns_send_response = apns_devices.send_message(apns_message, **apns_kwargs)
+        multi_wallet_indices = apns_devices.values_list("device_wallets__multi_wallet_index", flat=True).distinct()
+        print(f"APNS indices: {multi_wallet_indices}")
+        for multi_wallet_index in multi_wallet_indices:
+            if "extra" not in apns_kwargs: apns_kwargs["extra"] = {}
+            apns_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
+
+            filtered_apns_devices = apns_devices \
+                .filter(device_wallets__multi_wallet_index=multi_wallet_index) \
+                .distinct()
+
+            _apns_send_response = filtered_apns_devices.send_message(apns_message, **apns_kwargs)
+
+            if not isinstance(apns_send_response, list): apns_send_response = []
+            apns_send_response += _apns_send_response
+
     except Exception as exception:
         apns_send_response = exception
 
