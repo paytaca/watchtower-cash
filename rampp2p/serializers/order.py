@@ -51,7 +51,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'appealable_at',
             'last_modified_at',
             'is_ad_owner',
-            'feedback'
+            'feedback',
+            'chat_session_ref'
         ]
 
     def get_ad(self, obj):
@@ -155,7 +156,7 @@ class OrderSerializer(serializers.ModelSerializer):
                 }
         return feedback
 
-class OrderWriteSerializer(serializers.ModelSerializer):
+class UpdateOrderSerializer(serializers.ModelSerializer):
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
     arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
@@ -171,6 +172,7 @@ class OrderWriteSerializer(serializers.ModelSerializer):
             'arbiter',
             'locked_price',
             'crypto_amount',
-            'payment_methods'
+            'payment_methods',
+            'chat_session_ref'
         ]
 
