@@ -10,19 +10,18 @@ from django.core.exceptions import ValidationError
 import math
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
-from django.utils import timezone
 
 from authentication.token import TokenAuthentication
 
 import rampp2p.utils.websocket as websocket
-from rampp2p.utils.utils import get_trading_fees, get_latest_status
+from rampp2p.utils.utils import get_latest_status, generate_chat_session_ref
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.validators import *
 import rampp2p.serializers as serializers
 from rampp2p.serializers import (
     OrderSerializer, 
-    OrderWriteSerializer, 
+    UpdateOrderSerializer, 
     StatusSerializer, 
     StatusReadSerializer,
     TransactionSerializer,
@@ -130,6 +129,10 @@ class OrderListCreate(APIView):
             queryset = queryset.filter(ad_orders)
         else:
             queryset = queryset.filter(owned_orders | ad_orders)
+
+        # filter by currency
+        if params['currency']:
+            queryset = queryset.filter(ad_snapshot__fiat_currency__symbol=params['currency'])
 
         # filter or exclude orders based to their latest status
         completed_status = [
@@ -282,9 +285,6 @@ class OrderListCreate(APIView):
         data = {
             'owner': owner.id,
             'ad_snapshot': ad_snapshot.id,
-            # 'crypto_currency': ad_snapshot.crypto_currency.id,
-            # 'fiat_currency': ad_snapshot.fiat_currency.id,
-            # 'time_duration_choice': ad_snapshot.time_duration_choice,
             'payment_methods': payment_method_ids,
             'crypto_amount': crypto_amount
         }
@@ -297,7 +297,7 @@ class OrderListCreate(APIView):
             price = ad_snapshot.fixed_price
 
         data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        serialized_order = OrderWriteSerializer(data=data)
+        serialized_order = UpdateOrderSerializer(data=data)
 
         # return error if order isn't valid
         if not serialized_order.is_valid():
@@ -305,6 +305,13 @@ class OrderListCreate(APIView):
         
         # save order and mark it with status=SUBMITTED
         order = serialized_order.save()
+
+        # set chat session ref
+        formatted_timestamp = order.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        chat_session_ref = generate_chat_session_ref(f'{order.id}{formatted_timestamp}')
+        order.chat_session_ref = chat_session_ref
+        order.save()
+
         serialized_status = StatusSerializer(
             data={
                 'status': StatusType.SUBMITTED,

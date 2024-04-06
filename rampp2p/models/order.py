@@ -7,6 +7,7 @@ from .payment import PaymentMethod
 class Order(models.Model):
     ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
     owner = models.ForeignKey(Peer, on_delete=models.PROTECT, editable=False, related_name="created_orders")
+    chat_session_ref = models.CharField(max_length=100, null=True, blank=True)
     arbiter = models.ForeignKey(Arbiter, on_delete=models.PROTECT, blank=True, null=True, related_name="arbitrated_orders")
     locked_price = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
     crypto_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)

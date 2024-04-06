@@ -8,12 +8,13 @@ from authentication.token import TokenAuthentication
 
 from rampp2p.models import FiatCurrency, CryptoCurrency
 from rampp2p.serializers import FiatCurrencySerializer, CryptoCurrencySerializer
+from django.db.models import Count
 
 class FiatCurrencyList(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def get(self, request):
-        queryset = FiatCurrency.objects.all()
+    def get(self, _):
+        queryset = FiatCurrency.objects.annotate(paymenttypes_count=Count('payment_types')).filter(paymenttypes_count__gte=1)
         serializer = FiatCurrencySerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 

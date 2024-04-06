@@ -38,6 +38,14 @@ class PaymentMethodListCreate(APIView):
 
     def get(self, request):
         queryset = PaymentMethod.objects.filter(owner__wallet_hash=request.user.wallet_hash)
+        currency = request.query_params.get('currency')
+        if currency:
+            fiat_currency = FiatCurrency.objects.filter(symbol=currency)
+            if not fiat_currency.exists():
+                return Response({'error': f'no such fiat currency with symbol {currency}'}, status.HTTP_400_BAD_REQUEST)
+            fiat_currency = fiat_currency.first()
+            currency_paymenttype_ids = fiat_currency.payment_types.values_list('id', flat=True)
+            queryset = queryset.filter(payment_type__id__in=currency_paymenttype_ids)
         serializer = PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 

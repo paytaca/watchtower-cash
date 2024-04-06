@@ -5,9 +5,19 @@ from django.utils import timezone
 
 from decimal import Decimal
 from datetime import datetime
+import hashlib
 
 import logging
 logger = logging.getLogger(__name__)
+
+def generate_chat_session_ref(input_string):
+    # Encode the string to bytes
+    encoded_string = input_string.encode('utf-8')
+    # Create an SHA-256 hash object
+    sha256_hash = hashlib.sha256(encoded_string)
+    # Get the hexadecimal representation of the hash
+    hashed_string = sha256_hash.hexdigest()
+    return hashed_string
 
 def is_seller(order: models.Order, wallet_hash: str):
     seller = order.owner
