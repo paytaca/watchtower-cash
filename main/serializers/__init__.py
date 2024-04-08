@@ -14,3 +14,4 @@ from main.serializers.serializer_tx_attribute import *
 from main.serializers.serializer_wallet_preferences import *
 from main.serializers.serializer_cashtoken import *
 from main.serializers.serializer_webhook import *
+from main.serializers.serializer_wallet_shard import *
