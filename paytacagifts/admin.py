@@ -15,7 +15,7 @@ class GiftAdmin(admin.ModelAdmin):
 
 
 class ClaimAdmin(admin.ModelAdmin):
-    list_display = ['id', 'date_created', 'amount', 'wallet']
+    list_display = ['id', 'date_created', 'amount', 'wallet', 'succeeded']
 
 
 admin.site.register(Wallet, WalletAdmin)
