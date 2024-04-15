@@ -343,21 +343,16 @@ class MerchantViewSet(
         if self.action == 'list':
             __active = self.request.query_params.get('active', '')
             __verified = self.request.query_params.get('verified', '')
-            __has_vault = self.request.query_params.get('has_vault', '')
             __name = self.request.query_params.get('name', '')
 
             active = __active.lower() == 'true' or False
             verified = __verified.lower() == 'true' or False
-            has_vault = __has_vault.lower() == 'true' or False
             name = __name.lower()
 
             queryset = queryset.filter(
                 active=active,
                 verified=verified
             )
-
-            if __has_vault:
-                queryset = queryset.filter(vault__isnull=has_vault)
             if name:
                 queryset = queryset.filter(name__icontains=name)
         return queryset
