@@ -1,7 +1,6 @@
 from celery import shared_task
-from paytacagifts.models import Gift
+from paytacagifts.models import Gift, Claim
 from main.models import Transaction
-from django.utils import timezone
 
 
 @shared_task(queue='monitor-gifts')
@@ -24,5 +23,18 @@ def check_unclaimed_gifts():
         ).first()
         if funding_tx:
             if funding_tx.spent:
-                gift.date_claimed = timezone.now()
-                gift.save()
+                # Determine which claim succeeded
+                txs = Transaction.objects.filter(txid=funding_tx.spending_txid)
+                for tx in txs:
+                    if tx.wallet:
+                        claim_check = Claim.objects.filter(gift=gift, wallet__wallet_hash=tx.wallet.wallet_hash)
+                        if claim_check.exists():
+                            # Udpate gift fields
+                            gift.date_claimed = tx.tx_timestamp
+                            gift.claim_txid = funding_tx.spending_txid
+                            gift.save()
+
+                            # Mark claim as succeeded
+                            claim = claim_check.latest('date_created')
+                            claim.succeeded = True
+                            claim.save()

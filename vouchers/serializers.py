@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from datetime import timedelta
 
+from main.serializers import CashNonFungibleTokenSerializer
 from vouchers.models import *
 
 
@@ -13,12 +14,16 @@ class VaultSerializer(serializers.ModelSerializer):
 
 class VoucherSerializer(serializers.ModelSerializer):
     capability = serializers.SerializerMethodField()
+    merchant = serializers.SerializerMethodField()
+    nft = CashNonFungibleTokenSerializer()
 
     class Meta:
         model = Voucher
         fields = (
             'id',
             'vault',
+            'merchant',
+            'nft',
             'value',
             'minting_txid',
             'claim_txid',
@@ -41,6 +46,9 @@ class VoucherSerializer(serializers.ModelSerializer):
 
     def get_capability(self, obj):
         return 'none'
+    
+    def get_merchant(self, obj):
+        return obj.vault.merchant.name
 
 
 class VoucherClaimCheckSerializer(serializers.Serializer):

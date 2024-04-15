@@ -2,8 +2,6 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
-from main.models import CashNonFungibleToken
-
 from datetime import timedelta
 
 
@@ -27,6 +25,13 @@ class Voucher(models.Model):
         Vault,
         related_name='vouchers',
         on_delete=models.CASCADE
+    )
+    nft = models.OneToOneField(
+        'main.CashNonFungibleToken',
+        related_name='voucher',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
     )
     value = models.FloatField(default=0.0)  # in BCH
     minting_txid = models.CharField(max_length=100, default='')

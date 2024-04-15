@@ -242,7 +242,7 @@ class Balance(APIView):
                     data['spendable'] = self.truncate(data['spendable'], 8)
 
                     data['balance'] = self.truncate(bch_balance, 8)
-                    data['yield'] = compute_wallet_yield(wallet_hash)
+                    data['yield'] = None # compute_wallet_yield(wallet_hash)
                     data['valid'] = True
                 else:
                     if is_cashtoken_nft:

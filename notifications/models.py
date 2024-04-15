@@ -22,4 +22,5 @@ class DeviceWallet(models.Model):
     wallet_hash = models.CharField(max_length=70, db_index=True)
 
     # could add more settings later
+    multi_wallet_index = models.IntegerField(null=True, blank=True)
     last_active = models.DateTimeField()

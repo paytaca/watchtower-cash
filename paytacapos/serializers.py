@@ -6,10 +6,15 @@ from datetime import datetime
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from django.db.models import Sum
 from rest_framework import serializers
+from bitcash.keygen import public_key_to_address
 
 from vouchers.serializers import VaultSerializer
-from main.models import Address
+from vouchers.models import Voucher
+
+from main.models import CashNonFungibleToken
+
 from .models import *
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
@@ -469,7 +474,10 @@ class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
     vault = VaultSerializer(required=False)
+
     logos = serializers.SerializerMethodField()
+    receiving_address = serializers.SerializerMethodField()
+    vouchers = serializers.SerializerMethodField()
     
     class Meta:
         model = Merchant
@@ -483,9 +491,21 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "gmap_business_link",
             "last_transaction_date",
             "receiving_pubkey",
+            "receiving_address",
             "vault",
+            "vouchers",
             "logos",
         ]
+
+    def get_receiving_address(self, obj):
+        if obj.receiving_pubkey:
+            # return ScriptFunctions.pubkeyToCashAddress(
+            #     dict(pubkey=obj.receiving_pubkey)
+            # )
+            pk_bytes_str = bytearray.fromhex(obj.receiving_pubkey)
+            return public_key_to_address(pk_bytes_str)
+        else:
+            return ''
     
     def get_logos(self, obj):
         logos = {
@@ -502,6 +522,48 @@ class MerchantListSerializer(serializers.ModelSerializer):
                 logos[key] = None
                 
         return logos
+
+    def get_vouchers(self, obj):
+        request = self.context['request']
+        query_params = request.query_params
+        voucher_nfts = CashNonFungibleToken.objects.all()
+
+        if 'wallet_hash' in query_params.keys():
+            wallet_hash = query_params.get('wallet_hash', '')
+            if wallet_hash:
+                voucher_nfts = voucher_nfts.filter(
+                    transaction__wallet__wallet_hash=wallet_hash,
+                    transaction__spent=False
+                )
+                voucher_nfts = voucher_nfts.distinct()
+
+        merchant_vouchers = Voucher.objects.filter(
+            vault__merchant=obj,
+            category__in=voucher_nfts.values('category')
+        )
+        claimed_vouchers = merchant_vouchers.filter(claimed=True)
+        unclaimed_vouchers = merchant_vouchers.filter(claimed=False, expired=False)
+
+        vouchers_amount = merchant_vouchers.aggregate(total_amount=Sum('value'))
+        claimed_vouchers_amount = claimed_vouchers.aggregate(total_amount=Sum('value'))
+        unclaimed_vouchers_amount = unclaimed_vouchers.aggregate(total_amount=Sum('value'))
+
+        total_vouchers_amount = vouchers_amount['total_amount']
+        total_claimed_vouchers_amount = claimed_vouchers_amount['total_amount']
+        total_unclaimed_vouchers_amount = unclaimed_vouchers_amount['total_amount']
+
+        return {
+            'count': {
+                'total': merchant_vouchers.count(),
+                'claimed': claimed_vouchers.count(),
+                'unclaimed': unclaimed_vouchers.count()
+            },
+            'amount': {
+                'total': total_vouchers_amount or 0,
+                'claimed': total_claimed_vouchers_amount or 0,
+                'unclaimed': total_unclaimed_vouchers_amount or 0
+            }
+        }
 
 
 class MerchantSerializer(serializers.ModelSerializer):

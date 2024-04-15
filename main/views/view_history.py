@@ -3,9 +3,7 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import (
-    F, Q, Value,
-    OuterRef, Subquery,
-    Func, Count,
+    F, Q, Value, Count,
     BigIntegerField,
 )
 from django.db.models.functions import Substr, Cast, Floor
@@ -53,46 +51,26 @@ class WalletHistoryView(APIView):
         if isinstance(txids, str):
             txids = [txid for txid in txids.split(",") if txid]
 
+        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        qs = WalletHistory.objects.exclude(amount=0)
+        if posid:
+            try:
+                posid = int(posid)
+            except (TypeError, ValueError):
+                return Response(data=[f"invalid POS ID: {type(posid)}({posid})"], status=status.HTTP_400_BAD_REQUEST)
+            qs = qs.filter_pos(
+                wallet_hash,
+                posid,
+                include_claim_vouchers=True,
+            )
+        else:
+            qs = qs.filter(wallet=wallet)
 
-        qs = WalletHistory.objects.filter(wallet__wallet_hash=wallet_hash).exclude(amount=0)
-        
         if record_type in ['incoming', 'outgoing']:
             qs = qs.filter(record_type=record_type)
         if len(txids):
             qs = qs.filter(txid__in=txids)
 
-        if posid:
-            try:
-                posid = int(posid)
-                posid = str(posid)
-                pad = "0" * (POS_ID_MAX_DIGITS-len(posid))
-                posid = pad + posid
-            except (TypeError, ValueError):
-                return Response(data=[f"invalid POS ID: {type(posid)}({posid})"], status=status.HTTP_400_BAD_REQUEST)
-
-            addresses = Address.objects.filter(
-                wallet_id=OuterRef("wallet_id"),
-                address_path__iregex=f"((0|1)/)?0*\d+{posid}",
-            ).values("address").distinct()
-            addresses_subquery = Func(Subquery(addresses), function="array")
-            qs = qs.filter(
-                Q(senders__overlap=addresses_subquery) | Q(recipients__overlap=addresses_subquery),
-            )
-
-        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-
-        # get voucher claim transaction history per POS_ID
-        voucher_transactions = TransactionMetaAttribute.objects.filter(
-            key=f'voucher_claim_{posid}',
-            wallet_hash=wallet_hash
-        ).values('txid')
-
-        voucher_wallet_history = WalletHistory.objects.filter(
-            txid__in=voucher_transactions,
-            record_type=record_type
-        )
-        
-        qs |= voucher_wallet_history
         qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
 
         if include_attrs:

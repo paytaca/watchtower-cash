@@ -524,14 +524,16 @@ class Subscription(PostgresModel):
 class WalletHistoryQuerySet(PostgresQuerySet):
     POS_ID_MAX_DIGITS = 4
 
-    def filter_pos(self, wallet_hash, posid=None):
+    def filter_pos(self, wallet_hash, posid=None, include_claim_vouchers=True):
         try:
+            raw_pos_id = posid
             posid = int(posid)
             posid = str(posid)
             pad = "0" * (self.POS_ID_MAX_DIGITS-len(posid))
             posid = pad + posid
         except (ValueError, TypeError):
-            posid=None
+            posid = None
+            raw_pos_id = None
     
         addresses = Address.objects.filter(wallet__wallet_hash=models.OuterRef("wallet__wallet_hash"))
         if posid is None:
@@ -551,10 +553,16 @@ class WalletHistoryQuerySet(PostgresQuerySet):
         addresses = addresses.values("address").distinct()
         addresses_subquery = models.Func(models.Subquery(addresses), function="array")
 
-        return self.filter(
-            models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery),
-            wallet__wallet_hash=wallet_hash,
-        )
+        filter_arg = models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery)
+
+        if include_claim_vouchers and raw_pos_id is not None:
+            voucher_transactions = TransactionMetaAttribute.objects.filter(
+                key=f'voucher_claim_{raw_pos_id}',
+                wallet_hash=wallet_hash
+            ).values('txid')
+            filter_arg |= Q(txid__in=voucher_transactions)
+
+        return self.filter(filter_arg, wallet__wallet_hash=wallet_hash)
 
     def annotate_empty_attributes(self):
         return self.annotate(
@@ -774,6 +782,7 @@ class AssetPriceLog(models.Model):
 class WalletPreferences(PostgresModel):
     wallet = models.OneToOneField(Wallet, on_delete=models.CASCADE, related_name="preferences")
     selected_currency = models.CharField(max_length=5, default="USD")
+    wallet_name = models.CharField(max_length=75, blank=True)
 
 
 class TransactionMetaAttribute(PostgresModel):

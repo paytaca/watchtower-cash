@@ -339,6 +339,7 @@ class MerchantViewSet(
         queryset = serializer.Meta.model.objects\
             .prefetch_related('location')\
             .all()
+            
         if self.action == 'list':
             __active = self.request.query_params.get('active', '')
             __verified = self.request.query_params.get('verified', '')
@@ -348,8 +349,12 @@ class MerchantViewSet(
             verified = __verified.lower() == 'true' or False
             name = __name.lower()
 
-            queryset = queryset.filter(active=active, verified=verified)
-            if name: queryset = queryset.filter(name__icontains=name)
+            queryset = queryset.filter(
+                active=active,
+                verified=verified
+            )
+            if name:
+                queryset = queryset.filter(name__icontains=name)
         return queryset
 
 
