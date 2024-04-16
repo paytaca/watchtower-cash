@@ -1,31 +1,18 @@
 from rest_framework import serializers
 from rampp2p.utils.utils import get_trading_fees
 from django.db.models import Q, Subquery, OuterRef, F
-from rampp2p.models import (
-    Ad, 
-    AdSnapshot,
-    PriceType,
-    CooldownChoices,
-    Peer,
-    FiatCurrency, 
-    CryptoCurrency,
-    Order, 
-    Status, 
-    StatusType,
-    PaymentMethod,
-    MarketRate
-)
+import rampp2p.models as models
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
-from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
+from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer
 
 class AdSnapshotSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    payment_methods = RelatedPaymentMethodSerializer(many=True)
+    payment_types = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all(), many=True)
 
     class Meta:
-        model = AdSnapshot
+        model = models.AdSnapshot
         fields = [
             'id',
             'ad',
@@ -40,13 +27,13 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             'trade_floor',
             'trade_ceiling',
             'trade_amount',
-            'payment_methods',
+            'payment_types',
             'appeal_cooldown_choice',
             'created_at'
         ]
 
-    def get_price(self, instance: AdSnapshot):
-        if instance.price_type == PriceType.FIXED:
+    def get_price(self, instance: models.AdSnapshot):
+        if instance.price_type == models.PriceType.FIXED:
             return instance.fixed_price
         return instance.market_price * (instance.floating_price/100)
 
@@ -54,13 +41,13 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     id = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    payment_methods = SubsetPaymentMethodSerializer(many=True)
+    payment_types = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all(), many=True)
     appeal_cooldown = serializers.SerializerMethodField()
 
     class Meta(AdSnapshotSerializer.Meta):
         fields = [
             'id',
-            'payment_methods',
+            'payment_types',
             'trade_type',
             'price_type',
             'fiat_currency',
@@ -87,7 +74,7 @@ class AdListSerializer(serializers.ModelSerializer):
     appeal_cooldown = serializers.SerializerMethodField()
 
     class Meta:
-        model = Ad
+        model = models.Ad
         fields = [
             'id',
             'owner',
@@ -109,17 +96,17 @@ class AdListSerializer(serializers.ModelSerializer):
             'modified_at'
         ]
     
-    def get_appeal_cooldown(self, instance: Ad):
-        return CooldownChoices(instance.appeal_cooldown_choice).value
+    def get_appeal_cooldown(self, instance: models.Ad):
+        return models.CooldownChoices(instance.appeal_cooldown_choice).value
     
-    def get_owner(self, instance: Ad):
+    def get_owner(self, instance: models.Ad):
         return {
             'id': instance.owner.id,
             'name': instance.owner.name,
             'rating':  instance.owner.average_rating()
         }
     
-    def get_is_owned(self, instance: Ad):
+    def get_is_owned(self, instance: models.Ad):
         wallet_hash = ''
         try:
             wallet_hash = self.context['wallet_hash']
@@ -129,12 +116,12 @@ class AdListSerializer(serializers.ModelSerializer):
             return True
         return False
     
-    def get_price(self, instance: Ad):
-        if instance.price_type == PriceType.FIXED:
+    def get_price(self, instance: models.Ad):
+        if instance.price_type == models.PriceType.FIXED:
             return instance.fixed_price
         
         currency = instance.fiat_currency.symbol
-        market_price = MarketRate.objects.filter(currency=currency)
+        market_price = models.MarketRate.objects.filter(currency=currency)
         if market_price.exists():
             market_price = market_price.first().price
             price = market_price * (instance.floating_price/100)
@@ -142,21 +129,21 @@ class AdListSerializer(serializers.ModelSerializer):
             price = None
         return price
     
-    def get_trade_count(self, instance: Ad):
+    def get_trade_count(self, instance: models.Ad):
         # Count the number of trades (orders) related to ad owner
         query = Q(ad_snapshot__ad__owner__id=instance.owner.id)
-        trade_count = Order.objects.filter(query).count()
+        trade_count = models.Order.objects.filter(query).count()
         return trade_count
 
-    def get_completion_rate(self, instance: Ad):
+    def get_completion_rate(self, instance: models.Ad):
         ''' 
         completion_rate = released_count / (released_count + canceled_count + refunded_count)
         '''
         
         owner_id = instance.owner.id
-        released_count = self.get_orders_status_count(owner_id, StatusType.RELEASED)
-        canceled_count = self.get_orders_status_count(owner_id, StatusType.CANCELED)
-        refunded_count = self.get_orders_status_count(owner_id, StatusType.REFUNDED)
+        released_count = self.get_orders_status_count(owner_id, models.StatusType.RELEASED)
+        canceled_count = self.get_orders_status_count(owner_id, models.StatusType.CANCELED)
+        refunded_count = self.get_orders_status_count(owner_id, models.StatusType.REFUNDED)
         
         completion_rate = 0
         denum = released_count + canceled_count + refunded_count        
@@ -165,13 +152,13 @@ class AdListSerializer(serializers.ModelSerializer):
         
         return completion_rate
     
-    def get_orders_status_count(self, owner_id: int, status: StatusType):
+    def get_orders_status_count(self, owner_id: int, status: models.StatusType):
         # Subquery to get the latest status for each order
         query = Q(order_id=OuterRef('id')) & Q(status=status)
-        latest_status_subquery = Status.objects.filter(query).order_by('-created_at').values('id')[:1]
+        latest_status_subquery = models.Status.objects.filter(query).order_by('-created_at').values('id')[:1]
         
         # Retrieve the latest statuses for each order
-        user_orders = Order.objects.filter(Q(ad_snapshot__ad__owner__id=owner_id)).annotate(
+        user_orders = models.Order.objects.filter(Q(ad_snapshot__ad__owner__id=owner_id)).annotate(
             latest_status_id = Subquery(latest_status_subquery)
         )
 
@@ -198,13 +185,13 @@ class AdOwnerSerializer(AdDetailSerializer):
     payment_methods = PaymentMethodSerializer(many=True)
 
 class AdCreateSerializer(serializers.ModelSerializer):
-    owner = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
-    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=FiatCurrency.objects.all())
-    crypto_currency = serializers.PrimaryKeyRelatedField(queryset=CryptoCurrency.objects.all())
-    payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
-    appeal_cooldown_choice = serializers.ChoiceField(choices=CooldownChoices.choices,required=True)
+    owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
+    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all())
+    crypto_currency = serializers.PrimaryKeyRelatedField(queryset=models.CryptoCurrency.objects.all())
+    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True)
+    appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices,required=True)
     class Meta:
-        model = Ad
+        model = models.Ad
         fields = [
             'id',
             'owner',
@@ -224,10 +211,10 @@ class AdCreateSerializer(serializers.ModelSerializer):
         ]
     
 class AdUpdateSerializer(serializers.ModelSerializer):
-    payment_methods = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), many=True)
-    appeal_cooldown_choice = serializers.ChoiceField(choices=CooldownChoices.choices)
+    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True)
+    appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices)
     class Meta:
-        model = Ad
+        model = models.Ad
         fields = [
             'price_type',
             'fixed_price',

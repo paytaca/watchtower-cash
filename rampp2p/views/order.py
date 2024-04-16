@@ -168,7 +168,7 @@ class OrderListCreate(APIView):
         # filters by ad payment types
         if len(params['payment_types']) > 0:
             payment_types = list(map(int, params['payment_types']))
-            queryset = queryset.filter(ad_snapshot__payment_methods__payment_type__id__in=payment_types).distinct()
+            queryset = queryset.filter(Q(ad_snapshot__payment_types__id__in=payment_types) | Q(ad_snapshot__payment_types=None)).distinct()
 
         # filters by ad time limits
         if len(params['time_limits']) > 0:
@@ -279,7 +279,9 @@ class OrderListCreate(APIView):
             appeal_cooldown_choice = ad.appeal_cooldown_choice,
         )
         ad_snapshot.save()
-        ad_snapshot.payment_methods.set(ad.payment_methods.all())
+        ad_payment_methods = ad.payment_methods.all()
+        ad_payment_types = [pm.payment_type for pm in ad_payment_methods]
+        ad_snapshot.payment_types.set(ad_payment_types)
 
         # Create the order
         data = {
