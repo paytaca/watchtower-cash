@@ -1,4 +1,5 @@
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
+// import { AnyHedgeManager as AnyHedgeManagerOld } from '@generalprotocols/anyhedge-old'
 import { parseOracleMessage, getPriceMessages } from "./price.js"
 
 /**
@@ -13,11 +14,21 @@ export async function parseSettlementTransactions(rawTxs) {
     response.error = 'expected array of raw transactions'
   }
 
+  // const managerOld = new AnyHedgeManagerOld()
   const manager = new AnyHedgeManager()
   const txPromises = rawTxs.map(manager.parseSettlementTransaction)
   response.settlements = await Promise.allSettled(txPromises)
   response.settlements = response.settlements.map(result => result?.value)
   response.success = true
+  // response.settlements = await Promise.allSettled(rawTxs.map(async (rawTx) => {
+  //   try {
+  //     settlement = manager.parseSettlementTransaction(rawTx)
+  //     if (!settlement) throw new Error('No settlement')
+  //   } catch {
+  //     settlement = managerOld.parseSettlementTransaction(rawTx)
+  //   }
+  //   return settlement
+  // }))
   return response
 }
 

@@ -47,7 +47,7 @@ class HedgePositionFilter(filters.FilterSet):
     class Meta:
         model = HedgePosition
         fields = [
-            "hedge_wallet_hash",
+            "short_wallet_hash",
             "long_wallet_hash",
             "settled",
             "funding",
@@ -55,14 +55,14 @@ class HedgePositionFilter(filters.FilterSet):
 
     def filter_funding_status(self, queryset, name, value):
         if value == self.FUNDING_STATUS_PENDING:
-            queryset = queryset.filter(hedge_funding_proposal__isnull=True, long_funding_proposal__isnull=True, funding_tx_hash__isnull=True)
+            queryset = queryset.filter(short_funding_proposal__isnull=True, long_funding_proposal__isnull=True, funding_tx_hash__isnull=True)
         elif value == self.FUNDING_STATUS_PARTIAL:
             queryset = queryset.filter(
-                models.Q(hedge_funding_proposal__isnull=False) | models.Q(long_funding_proposal__isnull=False),
+                models.Q(short_funding_proposal__isnull=False) | models.Q(long_funding_proposal__isnull=False),
                 funding_tx_hash__isnull=True
             )
         elif value == self.FUNDING_STATUS_READY:
-            queryset = queryset.filter(hedge_funding_proposal__isnull=False, long_funding_proposal__isnull=False, funding_tx_hash__isnull=True)
+            queryset = queryset.filter(short_funding_proposal__isnull=False, long_funding_proposal__isnull=False, funding_tx_hash__isnull=True)
         elif value == self.FUNDING_STATUS_COMPLETE:
             queryset = queryset.filter(funding_tx_hash__isnull=False)
         return queryset

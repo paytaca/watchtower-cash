@@ -11,7 +11,7 @@ if (!func) {
 
 try {
     const response = await func(...(data.params || []))
-    console.log(JSON.stringify(response))
+    console.log(JSON.stringify(response, (_, value) => typeof value === 'bigint' ? value.toString() : value))
 } catch(error) {
     if (typeof error === 'string') console.error(error)
     else if (typeof error?.stack === 'string') console.error(error.stack)

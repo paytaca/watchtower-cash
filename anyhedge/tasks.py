@@ -4,7 +4,6 @@ from datetime import datetime
 from celery import shared_task
 from django.db import models
 from django.utils import timezone
-from main.tasks import broadcast_transaction
 from .models import (
     MutualRedemption,
     HedgePosition,
@@ -13,6 +12,7 @@ from .models import (
     Oracle,
     PriceOracleMessage,
 )
+from .utils.api import broadcast_transaction
 from .utils.auth_token import get_settlement_service_auth_token
 from .utils.contract import get_contract_status
 from .utils.funding import (
@@ -82,7 +82,7 @@ def check_new_oracle_price_messages(oracle_pubkey):
         count = round(count / 60)
 
         count = max(1, count)
-        count = min(count, 10) # setup a hard limit
+        count = min(count, 5) # setup a hard limit
 
     relay = None
     port = None
@@ -145,11 +145,11 @@ def __save_settlement(settlement_data, hedge_position_obj, funding_txid=None):
     #       using old one. remove old implementation after upgrade is stable
     if "settlementTransactionHash" in settlement_data:
         settlement_txid = settlement_data["settlementTransactionHash"]
-        hedge_satoshis = settlement_data["hedgePayoutInSatoshis"]
+        short_satoshis = settlement_data["shortPayoutInSatoshis"]
         long_satoshis = settlement_data["longPayoutInSatoshis"]
     else:
         settlement_txid = settlement_data["spendingTransaction"]
-        hedge_satoshis = settlement_data["hedgeSatoshis"]
+        short_satoshis = settlement_data["shortSatoshis"]
         long_satoshis = settlement_data["longSatoshis"]
 
     hedge_settlement = HedgeSettlement.objects.filter(
@@ -162,7 +162,7 @@ def __save_settlement(settlement_data, hedge_position_obj, funding_txid=None):
         hedge_settlement.spending_transaction = settlement_txid
 
     hedge_settlement.settlement_type = settlement_data["settlementType"]
-    hedge_settlement.hedge_satoshis = hedge_satoshis
+    hedge_settlement.short_satoshis = short_satoshis
     hedge_settlement.long_satoshis = long_satoshis
 
     if "settlementMessage" in settlement_data:
@@ -244,9 +244,9 @@ def update_contract_settlement_from_service(contract_address):
 
     access_pubkey = ""
     access_signature = ""
-    if hedge_position_obj.settlement_service.hedge_signature:
-        access_pubkey = hedge_position_obj.hedge_pubkey
-        access_signature = hedge_position_obj.settlement_service.hedge_signature
+    if hedge_position_obj.settlement_service.short_signature:
+        access_pubkey = hedge_position_obj.short_pubkey
+        access_signature = hedge_position_obj.settlement_service.short_signature
     elif hedge_position_obj.settlement_service.long_signature:
         access_pubkey = hedge_position_obj.long_pubkey
         access_signature = hedge_position_obj.settlement_service.long_signature
@@ -297,7 +297,7 @@ def update_contract_settlement_from_service(contract_address):
             )
 
     send_settlement_update(hedge_position_obj)
-    
+
     response["success"] = True
     response["settlements"] = settlements
     return response
@@ -541,9 +541,9 @@ def validate_contract_funding(contract_address, save=True):
         hedge_position_obj.funding_tx_hash_validated = True
         hedge_position_obj.save()
         try:
-            LOGGER.error(f"FUNDING TX META ERROR: {hedge_position_obj.address}")
             attach_funding_tx_to_wallet_history_meta(hedge_position_obj)
         except Exception as exception:
+            LOGGER.error(f"FUNDING TX META ERROR: {hedge_position_obj.address}")
             LOGGER.exception(exception)
 
     response["success"] = True
@@ -624,10 +624,10 @@ def parse_contracts_liquidity_fee():
         funding_tx_len=models.functions.Coalesce(
             models.functions.Length("funding_tx_hash"), models.Value(0)
         ),
-        hedge_wallet_hash_len=models.functions.Length("hedge_wallet_hash"),
+        short_wallet_hash_len=models.functions.Length("short_wallet_hash"),
         long_wallet_hash_len=models.functions.Length("long_wallet_hash"),
     ).filter(
-        models.Q(hedge_wallet_hash_len__gt=0, long_wallet_hash_len=0) | models.Q(hedge_wallet_hash_len=0, long_wallet_hash_len__gt=0),
+        models.Q(short_wallet_hash_len__gt=0, long_wallet_hash_len=0) | models.Q(short_wallet_hash_len=0, long_wallet_hash_len__gt=0),
         funding_tx_len__gt=0,
         metadata__isnull=True,
     )[:NO_CONTRACTS_TO_PARSE]

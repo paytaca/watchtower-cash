@@ -158,9 +158,9 @@ def complete_mutual_redemption(mutual_redemption_obj):
 
     mutual_redemption_data = {
         "redemptionType": mutual_redemption_obj.redemption_type,
-        "hedgeSatoshis": mutual_redemption_obj.hedge_satoshis,
+        "shortSatoshis": mutual_redemption_obj.short_satoshis,
         "longSatoshis": mutual_redemption_obj.long_satoshis,
-        "hedgeSchnorrSig": mutual_redemption_obj.hedge_schnorr_sig,
+        "shortSchnorrSig": mutual_redemption_obj.short_schnorr_sig,
         "longSchnorrSig": mutual_redemption_obj.long_schnorr_sig,
         "settlementPrice": mutual_redemption_obj.settlement_price,
     }
@@ -184,7 +184,7 @@ def save_settlement_data_from_mutual_redemption(hedge_position_obj):
 
     settlement_obj.spending_transaction = mutual_redemption_obj.tx_hash
     settlement_obj.settlement_type = "mutual"
-    settlement_obj.hedge_satoshis = mutual_redemption_obj.hedge_satoshis
+    settlement_obj.short_satoshis = mutual_redemption_obj.short_satoshis
     settlement_obj.long_satoshis = mutual_redemption_obj.long_satoshis
     settlement_obj.oracle_pubkey = hedge_position_obj.oracle_pubkey
     if mutual_redemption_obj.settlement_price:
