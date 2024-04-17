@@ -1,5 +1,7 @@
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
+// import { AnyHedgeManager as AnyHedgeManagerOld } from '@generalprotocols/anyhedge-old'
 import { parseOracleMessage, getPriceMessages } from "./price.js"
+import { parseContractData } from '../utils.js'
 
 /**
  * 
@@ -13,17 +15,27 @@ export async function parseSettlementTransactions(rawTxs) {
     response.error = 'expected array of raw transactions'
   }
 
+  // const managerOld = new AnyHedgeManagerOld()
   const manager = new AnyHedgeManager()
   const txPromises = rawTxs.map(manager.parseSettlementTransaction)
   response.settlements = await Promise.allSettled(txPromises)
   response.settlements = response.settlements.map(result => result?.value)
   response.success = true
+  // response.settlements = await Promise.allSettled(rawTxs.map(async (rawTx) => {
+  //   try {
+  //     settlement = manager.parseSettlementTransaction(rawTx)
+  //     if (!settlement) throw new Error('No settlement')
+  //   } catch {
+  //     settlement = managerOld.parseSettlementTransaction(rawTx)
+  //   }
+  //   return settlement
+  // }))
   return response
 }
 
 /**
  * 
- * @param {Object} contractData 
+ * @param {import('@generalprotocols/anyhedge').ContractData} contractData 
  * @param {PriceMessageConfig|undefined} oracleInfo
  */
 export async function settleContractMaturity(contractData, oracleInfo) {
@@ -32,8 +44,9 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     settlementData: {},
     error: '',
   }
+  contractData = parseContractData(contractData)
   const maturityTimestamp = contractData?.parameters?.maturityTimestamp
-  const oraclePubKey = contractData?.metadata?.oraclePublicKey
+  const oraclePubKey = contractData?.parameters?.oraclePublicKey
 
   const priceMessageConfig = Object.assign({}, oracleInfo, { oraclePubKey: oraclePubKey })
 
@@ -41,7 +54,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     priceMessageConfig,
 
     // provided 60 second window, which is the rate of new price messages
-    { maxMessageTimestamp: maturityTimestamp + 60, count: 5 }
+    { maxMessageTimestamp: parseInt(maturityTimestamp) + 60, count: 5 }
   )
 
   let prevPrice, settlementPrice

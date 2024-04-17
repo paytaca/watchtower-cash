@@ -1,4 +1,5 @@
 import { AnyHedgeManager} from '@generalprotocols/anyhedge'
+import { castBigIntSafe, parseContractData } from '../utils.js'
 
 export const LIQUIDITY_FEE_NAME = 'Liquidity premium'
 
@@ -17,16 +18,18 @@ export const LIQUIDITY_FEE_NAME = 'Liquidity premium'
 /**
  * 
  * @param {Object} contractData 
- * @param {'hedge' | 'long'} position - taker of hedge contract, who will take the liquidity provider fee
- * @param {Number} liquidityProviderFeeInSatoshis 
+ * @param {'short' | 'long'} position - taker of hedge contract, who will take the liquidity provider fee
+ * @param {Number | BigInt} liquidityProviderFeeInSatoshis 
  * @returns 
  */
 export function calculateFundingAmounts(contractData, position, liquidityProviderFeeInSatoshis=0) {
+  contractData = parseContractData(contractData)
+  liquidityProviderFeeInSatoshis = castBigIntSafe(liquidityProviderFeeInSatoshis)
   const localContractMetadata = contractData.metadata
-  const takerPayoutAddress = position === 'hedge'?
-    localContractMetadata.hedgePayoutAddress : localContractMetadata.longPayoutAddress
+  const takerPayoutAddress = position === 'short'?
+    localContractMetadata.shortPayoutAddress : localContractMetadata.longPayoutAddress
 
-  const makerInputSats = position === 'long' ? localContractMetadata.hedgeInputInSatoshis : localContractMetadata.longInputInSatoshis;
+  const makerInputSats = position === 'long' ? localContractMetadata.shortInputInSatoshis : localContractMetadata.longInputInSatoshis;
 
   const manager = new AnyHedgeManager()
   const totalRequiredFundingSatoshis = manager.calculateTotalRequiredFundingSatoshis(contractData)
@@ -42,21 +45,21 @@ export function calculateFundingAmounts(contractData, position, liquidityProvide
 
       // Return the previous total.
       return total;
-    }, 0);
+    }, 0n);
 
   const takerRequiredFundingSatoshis = totalRequiredFundingSatoshis - makerInputSats - takerTotalFeesAndPremiumsToDeduct + liquidityProviderFeeInSatoshis;
 
   // Calculate the amounts necessary to fund the contract.
   const contractAmount = {
-    hedge: 0,
+    short: 0,
     long: 0,
   }
   
-  if (position == 'hedge') {
-    contractAmount.hedge = takerRequiredFundingSatoshis
+  if (position == 'short') {
+    contractAmount.short = takerRequiredFundingSatoshis
     contractAmount.long = totalRequiredFundingSatoshis - takerRequiredFundingSatoshis
   } else if (position == 'long') {
-    contractAmount.hedge = totalRequiredFundingSatoshis - takerRequiredFundingSatoshis
+    contractAmount.short = totalRequiredFundingSatoshis - takerRequiredFundingSatoshis
     contractAmount.long = takerRequiredFundingSatoshis
   }
 
@@ -71,6 +74,7 @@ export function calculateFundingAmounts(contractData, position, liquidityProvide
  * @param {FundingProposal} fundingProposal2 
  */
 export async function completeFundingProposal(contractData, fundingProposal1, fundingProposal2) {
+  contractData = parseContractData(contractData)
   const response = { success: false, error: '', fundingTxHex: ''}
   const manager = new AnyHedgeManager()
   const signedFundingProposal1 = {
@@ -80,7 +84,7 @@ export async function completeFundingProposal(contractData, fundingProposal1, fu
     utxo: {
       txid: fundingProposal1.txHash,
       vout: fundingProposal1.txIndex,
-      satoshis: fundingProposal1.txValue,
+      satoshis: castBigIntSafe(fundingProposal1.txValue),
     }
   }
 
@@ -91,7 +95,7 @@ export async function completeFundingProposal(contractData, fundingProposal1, fu
     utxo: {
       txid: fundingProposal2.txHash,
       vout: fundingProposal2.txIndex,
-      satoshis: fundingProposal2.txValue,
+      satoshis: castBigIntSafe(fundingProposal2.txValue),
     }
   }
 

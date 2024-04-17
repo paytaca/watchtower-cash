@@ -109,8 +109,8 @@ class FundingProposalSerializer(serializers.Serializer):
         return value
 
     def validate_position(self, value):
-        if value != "hedge" and value != "long":
-            raise serializers.ValidationError("Position must be \"hedge\" or \"long\"")
+        if value != "short" and value != "long":
+            raise serializers.ValidationError("Position must be \"short\" or \"long\"")
         return value
 
     @transaction.atomic()
@@ -122,8 +122,8 @@ class FundingProposalSerializer(serializers.Serializer):
         update_hedge_obj = True
 
         funding_proposal = HedgeFundingProposal()
-        if position == "hedge" and hedge_pos_obj.hedge_funding_proposal:
-            funding_proposal = hedge_pos_obj.hedge_funding_proposal
+        if position == "short" and hedge_pos_obj.short_funding_proposal:
+            funding_proposal = hedge_pos_obj.short_funding_proposal
             update_hedge_obj = False
         elif position == "long" and hedge_pos_obj.long_funding_proposal:
             funding_proposal = hedge_pos_obj.long_funding_proposal
@@ -138,8 +138,8 @@ class FundingProposalSerializer(serializers.Serializer):
         funding_proposal.save()
 
         if update_hedge_obj:
-            if position == "hedge":
-                hedge_pos_obj.hedge_funding_proposal = funding_proposal
+            if position == "short":
+                hedge_pos_obj.short_funding_proposal = funding_proposal
             elif position == "long":
                 hedge_pos_obj.long_funding_proposal = funding_proposal
             hedge_pos_obj.save()
@@ -174,7 +174,7 @@ class HedgeSettlementSerializer(serializers.ModelSerializer):
         fields = [
             "spending_transaction",
             "settlement_type",
-            "hedge_satoshis",
+            "short_satoshis",
             "long_satoshis",
             "oracle_pubkey",
             "settlement_price",
@@ -191,14 +191,14 @@ class SettlementServiceSerializer(serializers.ModelSerializer):
             "domain",
             "scheme",
             "port",
-            "hedge_signature",
+            "short_signature",
             "long_signature",
             "auth_token",
         ]
 
     def validate(self, data):
-        if not data.get("hedge_signature", None) and not data.get("long_signature", None):
-            raise serializers.ValidationError("hedge_signature or long_signature must be given")
+        if not data.get("short_signature", None) and not data.get("long_signature", None):
+            raise serializers.ValidationError("short_signature or long_signature must be given")
         return data
 
 
@@ -237,7 +237,7 @@ class CancelMutualRedemptionSerializer(serializers.Serializer):
     position = serializers.CharField()
     signature = serializers.CharField(
         help_text="Signature of the declining/cancelling party " \
-            "with message as 'hedge_schnorr_sig'/'long_schnorr_sig'(depends on itiator)"
+            "with message as 'short_schnorr_sig'/'long_schnorr_sig'(depends on itiator)"
     )
 
     def __init__(self, *args, hedge_position=None, **kwargs):
@@ -259,14 +259,14 @@ class CancelMutualRedemptionSerializer(serializers.Serializer):
         signature = data["signature"]
 
         message = ""
-        if mutual_redemption.initiator == "hedge":
-            message = mutual_redemption.hedge_schnorr_sig
+        if mutual_redemption.initiator == "short":
+            message = mutual_redemption.short_schnorr_sig
         elif mutual_redemption.initiator == "long":
             message = mutual_redemption.long_schnorr_sig
 
         verifying_pubkey = ""
-        if position == "hedge":
-            verifying_pubkey = mutual_redemption.hedge_position.hedge_pubkey
+        if position == "short":
+            verifying_pubkey = mutual_redemption.hedge_position.short_pubkey
         elif position == "long":
             verifying_pubkey = mutual_redemption.hedge_position.long_pubkey
 
@@ -305,9 +305,9 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
         fields = [
             "initiator",
             "redemption_type",
-            "hedge_satoshis",
+            "short_satoshis",
             "long_satoshis",
-            "hedge_schnorr_sig",
+            "short_schnorr_sig",
             "long_schnorr_sig",
             "settlement_price",
             "tx_hash",
@@ -331,9 +331,9 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Redemption type is not editable")
         return value
 
-    def validate_hedge_satoshis(self, value):
-        if self.instance and self.instance.hedge_satoshis != value:
-            raise serializers.ValidationError("Hedge satoshis is not editable")
+    def validate_short_satoshis(self, value):
+        if self.instance and self.instance.short_satoshis != value:
+            raise serializers.ValidationError("Short satoshis is not editable")
         return value
 
     def validate_long_satoshis(self, value):
@@ -349,7 +349,7 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
     def validate(self, data):
         redemption_type = data.get("redemption_type", None)
         settlement_price = data.get("settlement_price", None)
-        hedge_satoshis = data.get("hedge_satoshis", None)
+        short_satoshis = data.get("short_satoshis", None)
         long_satoshis = data.get("long_satoshis", None)
 
         if not self.hedge_position.funding_tx_hash:
@@ -365,15 +365,15 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Settlement price required for type '{MutualRedemption.TYPE_EARLY_MATURATION}'")
 
         elif redemption_type == MutualRedemption.TYPE_REFUND:
-            if abs(hedge_satoshis - self.hedge_position.satoshis) > 1:
-                raise serializers.ValidationError(f"Hedge payout must be {self.hedge_position.satoshis} for type '{MutualRedemption.TYPE_REFUND}'")
+            if abs(short_satoshis - self.hedge_position.satoshis) > 1:
+                raise serializers.ValidationError(f"Short payout must be {self.hedge_position.satoshis} for type '{MutualRedemption.TYPE_REFUND}'")
             elif abs(long_satoshis - self.hedge_position.long_input_sats) > 1:
                 raise serializers.ValidationError(f"Long payout must be {self.hedge_position.long_input_sats} for type '{MutualRedemption.TYPE_REFUND}'")
 
-        # calculations from anyhedge library leaves 1175 for tx fee
-        tx_fee = 1175
+        # calculations from anyhedge library leaves 1175 or 1967 for tx fee
+        tx_fee = 1175 if "v0.11" in self.hedge_position.anyhedge_contract_version else 1967
         expected_total_output = self.hedge_position.funding.funding_satoshis - tx_fee
-        total_output = hedge_satoshis + long_satoshis
+        total_output = short_satoshis + long_satoshis
         if expected_total_output != total_output:
             raise serializers.ValidationError(f"Payout satoshis is not equal to {expected_total_output}")
 
@@ -388,29 +388,29 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
             instance = MutualRedemption(hedge_position=self.hedge_position, **validated_data)
 
         if instance.long_satoshis != validated_data["long_satoshis"] or \
-            instance.hedge_satoshis != validated_data["hedge_satoshis"] or \
+            instance.short_satoshis != validated_data["short_satoshis"] or \
             instance.redemption_type != validated_data["redemption_type"]:
 
-            instance.hedge_schnorr_sig = None
+            instance.short_schnorr_sig = None
             instance.long_schnorr_sig = None
             new_proposal = True
 
         instance.long_satoshis = validated_data["long_satoshis"]
-        instance.hedge_satoshis = validated_data["hedge_satoshis"]
+        instance.short_satoshis = validated_data["short_satoshis"]
         instance.redemption_type = validated_data["redemption_type"]
         instance.settlement_price = validated_data.get("settlement_price", None)
 
-        if validated_data.get("hedge_schnorr_sig", None):
-            instance.hedge_schnorr_sig = validated_data["hedge_schnorr_sig"]
+        if validated_data.get("short_schnorr_sig", None):
+            instance.short_schnorr_sig = validated_data["short_schnorr_sig"]
 
         if validated_data.get("long_schnorr_sig", None):
             instance.long_schnorr_sig = validated_data["long_schnorr_sig"]
 
-        if instance.hedge_schnorr_sig and not instance.long_schnorr_sig:
-            instance.initiator = MutualRedemption.POSITION_HEDGE
-        elif instance.long_schnorr_sig and not instance.hedge_schnorr_sig:
+        if instance.short_schnorr_sig and not instance.long_schnorr_sig:
+            instance.initiator = MutualRedemption.POSITION_SHORT
+        elif instance.long_schnorr_sig and not instance.short_schnorr_sig:
             instance.initiator = MutualRedemption.POSITION_LONG
-        elif not instance.long_schnorr_sig and not instance.hedge_schnorr_sig:
+        elif not instance.long_schnorr_sig and not instance.short_schnorr_sig:
             serializers.ValidationError("Unable to resolve initiator")
 
         instance.save()
@@ -434,7 +434,7 @@ class HedgePositionMetadataSerializer(serializers.ModelSerializer):
             "position_taker",
             "liquidity_fee",
             "network_fee",
-            "total_hedge_funding_sats",
+            "total_short_funding_sats",
             "total_long_funding_sats",
         ]
 
@@ -451,8 +451,8 @@ class CancelHedgePositionSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
 
     def validate_position(self, value):
-        if value != "hedge" and value != "long":
-            raise serializers.ValidationError("Position must be \"hedge\" or \"long\"")
+        if value != "short" and value != "long":
+            raise serializers.ValidationError("Position must be \"short\" or \"long\"")
         return value
 
     def validate_timestamp(self, value):
@@ -476,8 +476,8 @@ class CancelHedgePositionSerializer(serializers.Serializer):
             raise serializers.ValidationError("contract is already cancelled")
 
         verifying_pubkey = None
-        if position == "hedge":
-            verifying_pubkey = self.hedge_position.hedge_pubkey
+        if position == "short":
+            verifying_pubkey = self.hedge_position.short_pubkey
         elif position == "long":
             verifying_pubkey = self.hedge_position.long_pubkey
 
@@ -504,7 +504,7 @@ class CancelHedgePositionSerializer(serializers.Serializer):
 
 
 class HedgePositionSerializer(serializers.ModelSerializer):
-    hedge_funding_proposal = HedgeFundingProposalSerializer(required=False)
+    short_funding_proposal = HedgeFundingProposalSerializer(required=False)
     long_funding_proposal = HedgeFundingProposalSerializer(required=False)
     start_timestamp = TimestampField()
     maturity_timestamp = TimestampField()
@@ -530,10 +530,10 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "satoshis",
             "start_timestamp",
             "maturity_timestamp",
-            "hedge_wallet_hash",
-            "hedge_address",
-            "hedge_pubkey",
-            "hedge_address_path",
+            "short_wallet_hash",
+            "short_address",
+            "short_pubkey",
+            "short_address_path",
             "long_wallet_hash",
             "long_address",
             "long_pubkey",
@@ -548,7 +548,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
 
             "funding_tx_hash",
             "funding_tx_hash_validated",
-            "hedge_funding_proposal",
+            "short_funding_proposal",
             "long_funding_proposal",
             "cancelled_at",
             "cancelled_by",
@@ -566,13 +566,13 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "address": {
                 "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
             },
-            "hedge_address": {
+            "short_address": {
                 "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
             },
             "long_address": {
                 "validators": [ValidAddress(addr_type=ValidAddress.TYPE_CASHADDR)]
             },
-            "hedge_wallet_hash": {
+            "short_wallet_hash": {
                 "allow_blank": True
             },
             "long_wallet_hash": {
@@ -607,11 +607,11 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         oracle_pubkey = data.get("oracle_pubkey", None)
         settlement_service = data.get("settlement_service", None)
         check_settlement_service = data.get("check_settlement_service", None)
-        hedge_pubkey = data.get("hedge_pubkey", None)
+        short_pubkey = data.get("short_pubkey", None)
         long_pubkey = data.get("long_pubkey")
 
-        if not match_pubkey_to_cash_address(data["hedge_pubkey"], data["hedge_address"]):
-            raise serializers.ValidationError("hedge public key & address does not match")
+        if not match_pubkey_to_cash_address(data["short_pubkey"], data["short_address"]):
+            raise serializers.ValidationError("short public key & address does not match")
 
         if not match_pubkey_to_cash_address(data["long_pubkey"], data["long_address"]):
             raise serializers.ValidationError("long public key & address does not match")
@@ -619,9 +619,9 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         if settlement_service and check_settlement_service:
             access_pubkey = ""
             access_signature = ""
-            if settlement_service.get("hedge_signature", None):
-                access_signature = settlement_service["hedge_signature"]
-                access_pubkey = hedge_pubkey
+            if settlement_service.get("short_signature", None):
+                access_signature = settlement_service["short_signature"]
+                access_pubkey = short_pubkey
             elif settlement_service.get("long_signature", None):
                 access_signature = settlement_service["long_signature"]
                 access_pubkey = long_pubkey
@@ -647,7 +647,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
         validated_data.pop("check_settlement_service", None)
         settlement_service_data = validated_data.pop("settlement_service", None)
         fees_data = validated_data.pop("fees", [])
-        hedge_funding_proposal_data = validated_data.pop("hedge_funding_proposal", None)
+        short_funding_proposal_data = validated_data.pop("short_funding_proposal", None)
         long_funding_proposal_data = validated_data.pop("long_funding_proposal", None)
         metadata_data = validated_data.pop("metadata", None)
 
@@ -663,9 +663,9 @@ class HedgePositionSerializer(serializers.ModelSerializer):
                 fee_data["hedge_position"] = instance
                 HedgePositionFee.objects.create(**fee_data)
 
-        if hedge_funding_proposal_data is not None:
-            hedge_funding_proposal = HedgeFundingProposal.objects.create(**hedge_funding_proposal_data)
-            instance.hedge_funding_proposal = hedge_funding_proposal
+        if short_funding_proposal_data is not None:
+            short_funding_proposal = HedgeFundingProposal.objects.create(**short_funding_proposal_data)
+            instance.short_funding_proposal = short_funding_proposal
             save_instance = True
 
         if long_funding_proposal_data is not None:
@@ -684,7 +684,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
 
 
 class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
-    calculated_hedge_sats = serializers.SerializerMethodField()
+    calculated_short_sats = serializers.SerializerMethodField()
     price_oracle_message = serializers.SerializerMethodField(
         help_text="Provided only when 'starting_oracle_message' or 'starting_oracle_signature' is empty",
     )
@@ -706,7 +706,7 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
             "oracle_message_sequence",
             "settlement_service_fee",
             "settlement_service_fee_address",
-            "calculated_hedge_sats",
+            "calculated_short_sats",
             "price_oracle_message",
         ]
 
@@ -747,7 +747,7 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
         self.hedge_position_offer = hedge_position_offer
         super().__init__(*args, **kwargs)
 
-    def get_calculated_hedge_sats(self, obj):
+    def get_calculated_short_sats(self, obj):
         if obj.hedge_position_offer.position == HedgePositionOffer.POSITION_LONG:
             return calculate_hedge_sats(
                 long_sats=obj.hedge_position_offer.satoshis,
@@ -797,19 +797,19 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
 
         # construct contract from js scripts to get address & anyhedge_contract_version
         contract_creation_params = {
-            "taker_side": "long" if self.hedge_position_offer.position == "hedge" else "hedge",
+            "taker_side": "long" if self.hedge_position_offer.position == "short" else "short",
             "low_price_multiplier": self.hedge_position_offer.low_liquidation_multiplier,
             "high_price_multiplier": self.hedge_position_offer.high_liquidation_multiplier,
             "duration_seconds": self.hedge_position_offer.duration_seconds,
             "oracle_pubkey": self.hedge_position_offer.oracle_pubkey,
             "price_oracle_message_sequence": price_oracle_message.message_sequence,
         }
-        if self.hedge_position_offer.position == HedgePositionOffer.POSITION_HEDGE:
+        if self.hedge_position_offer.position == HedgePositionOffer.POSITION_SHORT:
             contract_creation_params["satoshis"] = self.hedge_position_offer.satoshis
-            contract_creation_params["hedge_address"] = self.hedge_position_offer.address
-            contract_creation_params["hedge_pubkey"] = self.hedge_position_offer.pubkey
-            contract_creation_params["short_address"] = validated_data["address"]
-            contract_creation_params["short_pubkey"] = validated_data["pubkey"]
+            contract_creation_params["short_address"] = self.hedge_position_offer.address
+            contract_creation_params["short_pubkey"] = self.hedge_position_offer.pubkey
+            contract_creation_params["long_address"] = validated_data["address"]
+            contract_creation_params["long_pubkey"] = validated_data["pubkey"]
         else:
             calculated_hedge_sats = calculate_hedge_sats(
                 long_sats=self.hedge_position_offer.satoshis,
@@ -817,10 +817,10 @@ class HedgePositionOfferCounterPartySerializer(serializers.ModelSerializer):
                 price_value=price_oracle_message.price_value,
             )
             contract_creation_params["satoshis"] = calculated_hedge_sats
-            contract_creation_params["hedge_address"] = validated_data["address"]
-            contract_creation_params["hedge_pubkey"] = validated_data["pubkey"]
-            contract_creation_params["short_address"] = self.hedge_position_offer.address
-            contract_creation_params["short_pubkey"] = self.hedge_position_offer.pubkey
+            contract_creation_params["short_address"] = validated_data["address"]
+            contract_creation_params["short_pubkey"] = validated_data["pubkey"]
+            contract_creation_params["long_address"] = self.hedge_position_offer.address
+            contract_creation_params["long_pubkey"] = self.hedge_position_offer.pubkey
 
         create_contract_response = create_contract(**contract_creation_params)
         if not create_contract_response.get("success", None):
@@ -953,7 +953,7 @@ class MatchHedgePositionSerializer(serializers.Serializer):
     similar_position_offers = HedgePositionOfferSerializer(many=True, read_only=True)
 
     def validate_position(self, value):
-        if value not in [HedgePositionOffer.POSITION_HEDGE, HedgePositionOffer.POSITION_LONG]:
+        if value not in [HedgePositionOffer.POSITION_SHORT, HedgePositionOffer.POSITION_LONG]:
             raise serializers.ValidationError("invalid position type")
         return value
 
@@ -1009,8 +1009,8 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         funding_amounts = calculate_funding_amounts(contract_data, position=self.hedge_position_offer.position)
 
         settlement_service_fee = self.hedge_position_offer.counter_party_info.settlement_service_fee
-        total_funding_amount = funding_amounts["long"] + funding_amounts["hedge"]
-        total_input_sats = contract_data["metadata"]["hedgeInputInSatoshis"] + contract_data["metadata"]["longInputInSatoshis"]
+        total_funding_amount = int(funding_amounts["long"]) + int(funding_amounts["short"])
+        total_input_sats = int(contract_data["metadata"]["shortInputInSatoshis"]) + int(contract_data["metadata"]["longInputInSatoshis"])
         network_fee = total_funding_amount - total_input_sats
         if settlement_service_fee:
             network_fee -= settlement_service_fee
@@ -1019,7 +1019,7 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
 
         counter_party_funding_proposal_data = data["counter_party_funding_proposal"]
         funding_amount = counter_party_funding_proposal_data["tx_value"]
-        expected_amount = funding_amounts["long" if self.hedge_position_offer.position == HedgePositionOffer.POSITION_HEDGE else "hedge"]
+        expected_amount = int(funding_amounts["long" if self.hedge_position_offer.position == HedgePositionOffer.POSITION_SHORT else "short"])
         if funding_amount != expected_amount:
             raise serializers.ValidationError(f"invalid funding amount, expected {expected_amount} satoshis")
 
@@ -1042,35 +1042,35 @@ class SettleHedgePositionOfferSerializer(serializers.Serializer):
         hedge_position = HedgePosition.objects.create(
             address = contract_data["address"],
             anyhedge_contract_version = contract_data["version"],
-            satoshis = contract_metadata["hedgeInputInSatoshis"],
+            satoshis = int(contract_metadata["shortInputInSatoshis"]),
             start_timestamp = start_timestamp,
             maturity_timestamp = maturity_timestamp,
-            hedge_address = contract_metadata["hedgePayoutAddress"],
-            hedge_pubkey = contract_parameters["hedgeMutualRedeemPublicKey"],
+            short_address = contract_metadata["shortPayoutAddress"],
+            short_pubkey = contract_parameters["shortMutualRedeemPublicKey"],
             long_address = contract_metadata["longPayoutAddress"],
             long_pubkey = contract_parameters["longMutualRedeemPublicKey"],
             oracle_pubkey = contract_parameters["oraclePublicKey"],
-            start_price = contract_metadata["startPrice"],
+            start_price = int(contract_metadata["startPrice"]),
             starting_oracle_message = contract_metadata["startingOracleMessage"],
             starting_oracle_signature = contract_metadata["startingOracleSignature"],
             low_liquidation_multiplier = contract_metadata["lowLiquidationPriceMultiplier"],
             high_liquidation_multiplier = contract_metadata["highLiquidationPriceMultiplier"],
         )
-        hedge_position.hedge_wallet_hash = self.hedge_position_offer.wallet_hash
-        hedge_position.hedge_address_path = self.hedge_position_offer.address_path
+        hedge_position.short_wallet_hash = self.hedge_position_offer.wallet_hash
+        hedge_position.short_address_path = self.hedge_position_offer.address_path
         hedge_position.long_wallet_hash = self.hedge_position_offer.counter_party_info.wallet_hash
         hedge_position.long_address_path = self.hedge_position_offer.counter_party_info.address_path
         if self.hedge_position_offer.position == HedgePositionOffer.POSITION_LONG:
-            hedge_position.hedge_wallet_hash, hedge_position.long_wallet_hash = hedge_position.long_wallet_hash, hedge_position.hedge_wallet_hash
-            hedge_position.hedge_address_path, hedge_position.long_address_path = hedge_position.long_address_path, hedge_position.hedge_address_path
+            hedge_position.short_wallet_hash, hedge_position.long_wallet_hash = hedge_position.long_wallet_hash, hedge_position.short_wallet_hash
+            hedge_position.short_address_path, hedge_position.long_address_path = hedge_position.long_address_path, hedge_position.short_address_path
 
         # create funding proposal of counter party
         counter_party_funding_proposal_data = validated_data["counter_party_funding_proposal"]
         counter_party_funding_proposal_obj = HedgeFundingProposal.objects.create(**counter_party_funding_proposal_data)
-        if self.hedge_position_offer.position == HedgePositionOffer.POSITION_HEDGE:
+        if self.hedge_position_offer.position == HedgePositionOffer.POSITION_SHORT:
             hedge_position.long_funding_proposal = counter_party_funding_proposal_obj
         else:
-            hedge_position.hedge_funding_proposal = counter_party_funding_proposal_obj
+            hedge_position.short_funding_proposal = counter_party_funding_proposal_obj
         hedge_position.save()
 
         # create hedge position's fee, if available
@@ -1168,10 +1168,10 @@ class SubmitFundingTransactionSerializer(serializers.Serializer):
 
 class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
     contract_address = serializers.CharField()
-    position = serializers.ChoiceField(choices=["hedge", "long"])
-    hedge_wallet_hash = serializers.CharField(required=False)
-    hedge_pubkey = serializers.CharField(required=False)
-    hedge_address_path = serializers.CharField(required=False)
+    position = serializers.ChoiceField(choices=["short", "long"])
+    short_wallet_hash = serializers.CharField(required=False)
+    short_pubkey = serializers.CharField(required=False)
+    short_address_path = serializers.CharField(required=False)
 
     long_wallet_hash = serializers.CharField(required=False)
     long_pubkey = serializers.CharField(required=False)
@@ -1184,13 +1184,13 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
 
     def validate(self, data):
         position = data["position"]
-        hedge_wallet_hash = data.get("hedge_wallet_hash", None)
-        hedge_pubkey = data.get("hedge_pubkey", None)
+        short_wallet_hash = data.get("short_wallet_hash", None)
+        short_pubkey = data.get("short_pubkey", None)
         long_wallet_hash = data.get("long_wallet_hash", None)
         long_pubkey = data.get("long_pubkey", None)
 
-        if position == "hedge" and (not hedge_wallet_hash or not hedge_pubkey):
-            raise serializers.ValidationError("'hedge_wallet_hash' or 'hedge_pubkey' required when taking 'hedge' position")
+        if position == "short" and (not short_wallet_hash or not short_pubkey):
+            raise serializers.ValidationError("'short_wallet_hash' or 'short_pubkey' required when taking 'short' position")
 
         if position == "long" and (not long_wallet_hash or not long_pubkey):
             raise serializers.ValidationError("'long_wallet_hash' or 'long_pubkey' required when taking 'long' position")
@@ -1202,9 +1202,9 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         validated_data = self.validated_data
         contract_address = validated_data["contract_address"]
         position = validated_data["position"]
-        hedge_wallet_hash = validated_data.get("hedge_wallet_hash", None)
-        hedge_pubkey = validated_data.get("hedge_pubkey", None)
-        hedge_address_path = validated_data.get("hedge_address_path", None)
+        short_wallet_hash = validated_data.get("short_wallet_hash", None)
+        short_pubkey = validated_data.get("short_pubkey", None)
+        short_address_path = validated_data.get("short_address_path", None)
         long_wallet_hash = validated_data.get("long_wallet_hash", None)
         long_pubkey = validated_data.get("long_pubkey", None)
         long_address_path = validated_data.get("long_address_path", None)
@@ -1216,9 +1216,9 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
 
         access_pubkey = ""
         access_signature = ""
-        if settlement_service.get("hedge_signature", None):
-            access_signature = settlement_service["hedge_signature"]
-            access_pubkey = hedge_pubkey
+        if settlement_service.get("short_signature", None):
+            access_signature = settlement_service["short_signature"]
+            access_pubkey = short_pubkey
         elif settlement_service.get("long_signature", None):
             access_signature = settlement_service["long_signature"]
             access_pubkey = long_pubkey
@@ -1238,15 +1238,15 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
 
         contract_metadata = contract_data["metadata"]
         contract_parameters = contract_data["parameters"]
-        start_timestamp = contract_parameters["startTimestamp"]
+        start_timestamp = int(contract_parameters["startTimestamp"])
         # NOTE: handling old & new implementation since settlement service might be using the old one
         #       remove handling old one after stable
-        if "hedgeInputInSatoshis" in contract_metadata:
-            satoshis = contract_metadata["hedgeInputInSatoshis"]
-            maturity_timestamp = contract_parameters["maturityTimestamp"]
+        if "shortInputInSatoshis" in contract_metadata:
+            satoshis = int(contract_metadata["shortInputInSatoshis"])
+            maturity_timestamp = int(contract_parameters["maturityTimestamp"])
 
-            hedge_address = contract_metadata["hedgePayoutAddress"]
-            hedge_pubkey = contract_parameters["hedgeMutualRedeemPublicKey"]
+            short_address = contract_metadata["shortPayoutAddress"]
+            short_pubkey = contract_parameters["shortMutualRedeemPublicKey"]
             long_address = contract_metadata["longPayoutAddress"]
             long_pubkey = contract_parameters["longMutualRedeemPublicKey"]
 
@@ -1262,11 +1262,11 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
                         "satoshis": fee["satoshis"],
                     })
         else:
-            satoshis = contract_metadata["hedgeInputSats"]
+            satoshis = contract_metadata["shortInputSats"]
             maturity_timestamp = start_timestamp + contract_metadata["duration"]
 
-            hedge_address = contract_metadata["hedgeAddress"]
-            hedge_pubkey = contract_metadata["hedgePublicKey"]
+            short_address = contract_metadata["shortAddress"]
+            short_pubkey = contract_metadata["shortPublicKey"]
             long_address = contract_metadata["longAddress"]
             long_pubkey = contract_metadata["longPublicKey"]
 
@@ -1293,10 +1293,10 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             satoshis=satoshis,
             start_timestamp=start_timestamp,
             maturity_timestamp=maturity_timestamp,
-            hedge_wallet_hash=hedge_wallet_hash or "",
-            hedge_address=hedge_address,
-            hedge_address_path=hedge_address_path,
-            hedge_pubkey=hedge_pubkey,
+            short_wallet_hash=short_wallet_hash or "",
+            short_address=short_address,
+            short_address_path=short_address_path,
+            short_pubkey=short_pubkey,
             long_wallet_hash=long_wallet_hash or "",
             long_address=long_address,
             long_address_path=long_address_path,
@@ -1314,9 +1314,9 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
             fees=fees,
         )
 
-        if position == "hedge":
-            hedge_position_data["hedge_funding_proposal"] = funding_proposal
-            hedge_position_data["metadata"]["total_hedge_funding_sats"] = funding_proposal["tx_value"]
+        if position == "short":
+            hedge_position_data["short_funding_proposal"] = funding_proposal
+            hedge_position_data["metadata"]["total_short_funding_sats"] = funding_proposal["tx_value"]
         elif position == "long":
             hedge_position_data["long_funding_proposal"] = funding_proposal
             hedge_position_data["metadata"]["total_long_funding_sats"] = funding_proposal["tx_value"]

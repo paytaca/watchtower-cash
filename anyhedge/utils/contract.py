@@ -32,10 +32,10 @@ def create_contract(
     high_price_multiplier:float=2,
     duration_seconds:int=0,
     taker_side:str="",
-    hedge_address:str="",
-    hedge_pubkey:str="",
     short_address:str="",
     short_pubkey:str="",
+    long_address:str="",
+    long_pubkey:str="",
     oracle_pubkey:str=None,
     price_oracle_message_sequence:int=None,
 ):
@@ -47,10 +47,10 @@ def create_contract(
         "takerSide": taker_side,
     }
     pubkeys = {
-        "hedgeAddress": hedge_address,
-        "hedgePubkey": hedge_pubkey,
         "shortAddress": short_address,
         "shortPubkey": short_pubkey,
+        "longAddress": long_address,
+        "longPubkey": long_pubkey,
     }
 
     priceMessageConfig = None
@@ -93,16 +93,17 @@ def compile_contract(
     maturityTimestamp:int=0,
     highLiquidationPriceMultiplier:float=0.0,
     lowLiquidationPriceMultiplier:float=0.0,
-    hedgePublicKey:str="",
+    shortPublicKey:str="",
     longPublicKey:str="",
-    hedgeAddress:str="",
+    shortAddress:str="",
     longAddress:str="",
     fees:list=[],
     fundings:list=[],
+    contract_version:str="",
 ):
     data = {
         "takerSide": takerSide,
-        "makerSide": "long" if takerSide == "hedge" else "hedge",
+        "makerSide": "long" if takerSide == "short" else "short",
         "nominalUnits": nominal_units,
         "oraclePublicKey": oraclePublicKey,
         "startingOracleMessage": startingOracleMessage,
@@ -110,11 +111,12 @@ def compile_contract(
         "maturityTimestamp": maturityTimestamp,
         "highLiquidationPriceMultiplier": highLiquidationPriceMultiplier,
         "lowLiquidationPriceMultiplier": lowLiquidationPriceMultiplier,
-        "hedgeMutualRedeemPublicKey": hedgePublicKey,
+        "shortMutualRedeemPublicKey": shortPublicKey,
         "longMutualRedeemPublicKey": longPublicKey,
-        "hedgePayoutAddress": hedgeAddress,
+        "shortPayoutAddress": shortAddress,
         "longPayoutAddress": longAddress,
         "enableMutualRedemption": 1,
+        "isSimpleHedge": 1,
     }
 
     parsed_fees = []
@@ -156,7 +158,11 @@ def compile_contract(
                 fundingSatoshis=funding_satoshis,
             ))
 
-    return AnyhedgeFunctions.compileContract(data, parsed_fees, parsed_fundings)
+    opts = None
+    if contract_version:
+        opts = dict(contractVersion=contract_version)
+
+    return AnyhedgeFunctions.compileContract(data, parsed_fees, parsed_fundings, opts)
 
 
 def compile_contract_from_hedge_position(hedge_position_obj):
@@ -205,12 +211,13 @@ def compile_contract_from_hedge_position(hedge_position_obj):
         maturityTimestamp=datetime.timestamp(hedge_position_obj.maturity_timestamp),
         highLiquidationPriceMultiplier=hedge_position_obj.high_liquidation_multiplier,
         lowLiquidationPriceMultiplier=hedge_position_obj.low_liquidation_multiplier,
-        hedgePublicKey=hedge_position_obj.hedge_pubkey,
+        shortPublicKey=hedge_position_obj.short_pubkey,
         longPublicKey=hedge_position_obj.long_pubkey,
-        hedgeAddress=hedge_position_obj.hedge_address,
+        shortAddress=hedge_position_obj.short_address,
         longAddress=hedge_position_obj.long_address,
         fees=fees,
         fundings=fundings,
+        contract_version=hedge_position_obj.anyhedge_contract_version,
     )
 
 def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
@@ -229,15 +236,15 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
         starting_oracle_message = price_oracle_message.message
         starting_oracle_signature = price_oracle_message.signature
 
-    hedge_address = hedge_position_offer_obj.address
-    hedge_pubkey = hedge_position_offer_obj.pubkey
+    short_address = hedge_position_offer_obj.address
+    short_pubkey = hedge_position_offer_obj.pubkey
     long_address = hedge_position_offer_obj.counter_party_info.address
     long_pubkey = hedge_position_offer_obj.counter_party_info.pubkey
     if hedge_position_offer_obj.position == HedgePositionOffer.POSITION_LONG:
-        hedge_address, long_address = long_address, hedge_address
-        hedge_pubkey, long_pubkey = long_pubkey, hedge_pubkey
+        short_address, long_address = long_address, short_address
+        short_pubkey, long_pubkey = long_pubkey, short_pubkey
 
-    if hedge_position_offer_obj.position == HedgePositionOffer.POSITION_HEDGE:
+    if hedge_position_offer_obj.position == HedgePositionOffer.POSITION_SHORT:
         contract_sats = hedge_position_offer_obj.satoshis
     else:
         contract_sats = calculate_hedge_sats(
@@ -248,7 +255,7 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
 
     nominal_units = contract_sats * start_price / 10 ** 8
 
-    fees =[]
+    fees = []
     fee_address = hedge_position_offer_obj.counter_party_info.settlement_service_fee_address
     fee_satoshis = hedge_position_offer_obj.counter_party_info.settlement_service_fee
     
@@ -256,7 +263,7 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
         fees.append({ "address": fee_address, "satoshis": fee_satoshis })
 
     return compile_contract(
-        takerSide="long" if hedge_position_offer_obj.position == "hedge" else "hedge",
+        takerSide="long" if hedge_position_offer_obj.position == "short" else "short",
         nominal_units=nominal_units,
         oraclePublicKey=oracle_pubkey,
         startingOracleMessage=starting_oracle_message,
@@ -264,9 +271,9 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
         maturityTimestamp=maturity_timestamp.timestamp(),
         highLiquidationPriceMultiplier=high_price_mult,
         lowLiquidationPriceMultiplier=low_price_mult,
-        hedgePublicKey=hedge_pubkey,
+        shortPublicKey=short_pubkey,
         longPublicKey=long_pubkey,
-        hedgeAddress=hedge_address,
+        shortAddress=short_address,
         longAddress=long_address,
         fees=fees,
     )

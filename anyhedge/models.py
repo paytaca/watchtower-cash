@@ -53,10 +53,10 @@ class HedgePosition(models.Model):
     start_timestamp = models.DateTimeField()
     maturity_timestamp = models.DateTimeField()
 
-    hedge_wallet_hash = models.CharField(max_length=75, db_index=True)
-    hedge_address = models.CharField(max_length=75)
-    hedge_pubkey = models.CharField(max_length=75)
-    hedge_address_path = models.CharField(max_length=10, null=True, blank=True)
+    short_wallet_hash = models.CharField(max_length=75, db_index=True)
+    short_address = models.CharField(max_length=75)
+    short_pubkey = models.CharField(max_length=75)
+    short_address_path = models.CharField(max_length=10, null=True, blank=True)
     long_wallet_hash = models.CharField(max_length=75, db_index=True)
     long_address = models.CharField(max_length=75)
     long_pubkey = models.CharField(max_length=75)
@@ -77,7 +77,7 @@ class HedgePosition(models.Model):
     funding_tx_hash = models.CharField(max_length=75, null=True, blank=True, db_index=True)
     funding_tx_hash_validated = models.BooleanField(default=False)
 
-    hedge_funding_proposal = models.OneToOneField(
+    short_funding_proposal = models.OneToOneField(
         HedgeFundingProposal,
         related_name="hedge_position",
         on_delete=models.CASCADE,
@@ -153,9 +153,9 @@ class HedgePosition(models.Model):
         
 
 class HedgePositionMetadata(models.Model):
-    POSITION_TAKER_HEDGE = "hedge"
+    POSITION_TAKER_SHORT = "short"
     POSITION_TAKER_LONG = "long"
-    POSITION_TAKERS = [POSITION_TAKER_HEDGE, POSITION_TAKER_LONG]
+    POSITION_TAKERS = [POSITION_TAKER_SHORT, POSITION_TAKER_LONG]
     POSITION_TAKERS = [(pos, pos) for pos in POSITION_TAKERS]
 
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="metadata")
@@ -163,7 +163,7 @@ class HedgePositionMetadata(models.Model):
     position_taker = models.CharField(choices=POSITION_TAKERS, null=True, blank=True, max_length=5) # synonymous to what position the user took
     liquidity_fee = models.IntegerField(null=True, blank=True) # with respect to `position_taker`
     network_fee = models.IntegerField(null=True, blank=True) # total tx fees for funding and settlement
-    total_hedge_funding_sats = models.IntegerField(null=True, blank=True)
+    total_short_funding_sats = models.IntegerField(null=True, blank=True)
     total_long_funding_sats = models.IntegerField(null=True, blank=True)
 
 
@@ -172,7 +172,7 @@ class HedgeSettlement(models.Model):
 
     spending_transaction = models.CharField(max_length=75, db_index=True)
     settlement_type = models.CharField(max_length=20)
-    hedge_satoshis = models.BigIntegerField()
+    short_satoshis = models.BigIntegerField()
     long_satoshis = models.BigIntegerField()
 
     oracle_pubkey = models.CharField(max_length=75)
@@ -195,7 +195,7 @@ class SettlementService(models.Model):
     # e.g. <scheme>://<domain>:<port>/status/?contractAddress=<address>&signature<hedge_signature>&pubkey=<hedge_pubkey>
     # generating signature is done here 
     # https://gitlab.com/GeneralProtocols/anyhedge/library/-/blob/v0.14.2/lib/anyhedge.ts#L399
-    hedge_signature = models.TextField(null=True, blank=True)
+    short_signature = models.TextField(null=True, blank=True)
     long_signature = models.TextField(null=True, blank=True)
 
     auth_token = models.TextField(null=True, blank=True)
@@ -243,17 +243,17 @@ class MutualRedemption(models.Model):
     REDEMPTION_TYPES = [(REDEMPTION_TYPE, REDEMPTION_TYPE.replace('_', ' ').capitalize()) for REDEMPTION_TYPE in REDEMPTION_TYPES]
 
 
-    POSITION_HEDGE = "hedge"
+    POSITION_SHORT = "short"
     POSITION_LONG = "long"
-    POSITIONS = [POSITION_HEDGE, POSITION_LONG]
+    POSITIONS = [POSITION_SHORT, POSITION_LONG]
     POSITIONS = [(pos, pos) for pos in POSITIONS]
 
-    initiator = models.CharField(max_length=5, default=POSITION_HEDGE, choices=POSITIONS)
+    initiator = models.CharField(max_length=5, default=POSITION_SHORT, choices=POSITIONS)
     hedge_position = models.OneToOneField(HedgePosition, on_delete=models.CASCADE, related_name="mutual_redemption")
     redemption_type = models.CharField(max_length=20, choices=REDEMPTION_TYPES)
-    hedge_satoshis = models.BigIntegerField()
+    short_satoshis = models.BigIntegerField()
     long_satoshis = models.BigIntegerField()
-    hedge_schnorr_sig = models.TextField(null=True, blank=True)
+    short_schnorr_sig = models.TextField(null=True, blank=True)
     long_schnorr_sig = models.TextField(null=True, blank=True)
     settlement_price = models.IntegerField(null=True, blank=True)
 
@@ -276,10 +276,10 @@ class HedgePositionOffer(models.Model):
 
     STATUSES = [(STATUS, STATUS.replace('_', ' ').capitalize()) for STATUS in STATUSES]
 
-    POSITION_HEDGE = "hedge"
+    POSITION_SHORT = "short"
     POSITION_LONG = "long"
     POSITIONS = [
-        POSITION_HEDGE,
+        POSITION_SHORT,
         POSITION_LONG,
     ]
     POSITIONS = [(POSITION, POSITION.replace('_', ' ').capitalize()) for POSITION in POSITIONS]
