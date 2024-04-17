@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 @shared_task(queue='rampp2p__cancel_expired_orders')
 def cancel_expired_orders():
-    logger.warn(f'cancel_expired_orders')
     # find expired orders with status SUBMITTED and expires_at 
     last_status = Status.objects.filter(
         order=OuterRef('pk'),

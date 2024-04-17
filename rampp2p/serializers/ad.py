@@ -3,13 +3,14 @@ from rampp2p.utils.utils import get_trading_fees
 from django.db.models import Q, Subquery, OuterRef, F
 import rampp2p.models as models
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
-from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer
+from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
 
 class AdSnapshotSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     payment_types = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all(), many=True)
+    payment_methods = serializers.SerializerMethodField()
 
     class Meta:
         model = models.AdSnapshot
@@ -28,6 +29,7 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             'trade_ceiling',
             'trade_amount',
             'payment_types',
+            'payment_methods'
             'appeal_cooldown_choice',
             'created_at'
         ]
@@ -36,6 +38,11 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
         if instance.price_type == models.PriceType.FIXED:
             return instance.fixed_price
         return instance.market_price * (instance.floating_price/100)
+    
+    def get_payment_methods(self, obj: models.AdSnapshot):
+        payment_type_ids = obj.payment_types.values_list('id')
+        payment_types = obj.ad.payment_methods.filter(payment_type__in=payment_type_ids)
+        return SubsetPaymentMethodSerializer(payment_types, many=True).data
 
 class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     id = serializers.SerializerMethodField()
@@ -43,11 +50,13 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     crypto_currency = CryptoCurrencySerializer()
     payment_types = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all(), many=True)
     appeal_cooldown = serializers.SerializerMethodField()
+    payment_methods = serializers.SerializerMethodField()
 
     class Meta(AdSnapshotSerializer.Meta):
         fields = [
             'id',
             'payment_types',
+            'payment_methods',
             'trade_type',
             'price_type',
             'fiat_currency',
@@ -58,6 +67,11 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     
     def get_id(self, obj):
         return obj.ad.id
+    
+    def get_payment_methods(self, obj: models.AdSnapshot):
+        payment_type_ids = obj.payment_types.values_list('id')
+        payment_types = obj.ad.payment_methods.filter(payment_type__in=payment_type_ids)
+        return SubsetPaymentMethodSerializer(payment_types, many=True).data
     
     def get_appeal_cooldown(self, obj):
         return obj.appeal_cooldown
