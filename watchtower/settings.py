@@ -266,6 +266,7 @@ CELERY_IMPORTS = (
     'rampp2p.tasks.contract_tasks',
     'rampp2p.tasks.market_rate_tasks',
     'rampp2p.tasks.transaction_tasks',
+    'rampp2p.tasks.order_tasks',
     'vouchers.tasks',
 )
 
@@ -412,6 +413,10 @@ CELERY_BEAT_SCHEDULE = {
     'bulk_rebroadcast': {
         'task': 'main.tasks.bulk_rebroadcast',
         'schedule': 30
+    },
+    'cancel_expired_orders': {
+        'task': 'rampp2p.tasks.order_tasks.cancel_expired_orders',
+        'schedule': 60 # run every 1 minute
     }
 }
 
