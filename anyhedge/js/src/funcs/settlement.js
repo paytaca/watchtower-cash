@@ -1,6 +1,7 @@
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
 // import { AnyHedgeManager as AnyHedgeManagerOld } from '@generalprotocols/anyhedge-old'
 import { parseOracleMessage, getPriceMessages } from "./price.js"
+import { parseContractData } from '../utils.js'
 
 /**
  * 
@@ -34,7 +35,7 @@ export async function parseSettlementTransactions(rawTxs) {
 
 /**
  * 
- * @param {Object} contractData 
+ * @param {import('@generalprotocols/anyhedge').ContractData} contractData 
  * @param {PriceMessageConfig|undefined} oracleInfo
  */
 export async function settleContractMaturity(contractData, oracleInfo) {
@@ -43,8 +44,9 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     settlementData: {},
     error: '',
   }
+  contractData = parseContractData(contractData)
   const maturityTimestamp = contractData?.parameters?.maturityTimestamp
-  const oraclePubKey = contractData?.metadata?.oraclePublicKey
+  const oraclePubKey = contractData?.parameters?.oraclePublicKey
 
   const priceMessageConfig = Object.assign({}, oracleInfo, { oraclePubKey: oraclePubKey })
 
@@ -52,7 +54,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
     priceMessageConfig,
 
     // provided 60 second window, which is the rate of new price messages
-    { maxMessageTimestamp: maturityTimestamp + 60, count: 5 }
+    { maxMessageTimestamp: parseInt(maturityTimestamp) + 60, count: 5 }
   )
 
   let prevPrice, settlementPrice

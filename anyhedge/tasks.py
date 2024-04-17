@@ -469,12 +469,10 @@ def complete_contract_funding(contract_address):
             return response
 
         tx_hex = complete_funding_proposal_response["fundingTxHex"]
-        success, result = broadcast_transaction(tx_hex)
-        if 'already have transaction' in result:
-            success = True
+        broadcast_response = broadcast_transaction(tx_hex)
 
-        if success:
-            tx_hash = result.split(' ')[-1]
+        if broadcast_response["success"]:
+            tx_hash = broadcast_response["txid"]
             hedge_position_obj.funding_tx_hash = tx_hash
             hedge_position_obj.save()
             response["success"] = True
@@ -499,7 +497,7 @@ def complete_contract_funding(contract_address):
             return response
         else:
             response["success"] = False
-            response["error"] = result
+            response["error"] = broadcast_response["error"]
             return response
 
     except Exception as exception:
@@ -578,7 +576,7 @@ def redeem_contract(contract_address):
         response["error"] = "Mutual redemption is already completed"
         return response
 
-    if not mutual_redemption_obj.hedge_schnorr_sig or not mutual_redemption_obj.long_schnorr_sig:
+    if not mutual_redemption_obj.short_schnorr_sig or not mutual_redemption_obj.long_schnorr_sig:
         response["success"] = False
         response["error"] = "Incomplete signatures"
         return response

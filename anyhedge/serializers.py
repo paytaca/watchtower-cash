@@ -370,8 +370,8 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
             elif abs(long_satoshis - self.hedge_position.long_input_sats) > 1:
                 raise serializers.ValidationError(f"Long payout must be {self.hedge_position.long_input_sats} for type '{MutualRedemption.TYPE_REFUND}'")
 
-        # calculations from anyhedge library leaves 1175 for tx fee
-        tx_fee = 1175
+        # calculations from anyhedge library leaves 1175 or 1967 for tx fee
+        tx_fee = 1175 if "v0.11" in self.hedge_position.anyhedge_contract_version else 1967
         expected_total_output = self.hedge_position.funding.funding_satoshis - tx_fee
         total_output = short_satoshis + long_satoshis
         if expected_total_output != total_output:
@@ -391,7 +391,7 @@ class MutualRedemptionSerializer(serializers.ModelSerializer):
             instance.short_satoshis != validated_data["short_satoshis"] or \
             instance.redemption_type != validated_data["redemption_type"]:
 
-            instance.hedge_schnorr_sig = None
+            instance.short_schnorr_sig = None
             instance.long_schnorr_sig = None
             new_proposal = True
 

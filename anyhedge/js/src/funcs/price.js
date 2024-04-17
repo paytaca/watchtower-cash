@@ -2,7 +2,7 @@ import axios from 'axios'
 import { OracleNetwork, OracleData } from '@generalprotocols/price-oracle'
 import { hexToBin } from '@bitauth/libauth'
 
-const ORACLE_PUBLIC_KEY = process.env.ANYHEDGE_DEFAULT_ORACLE_PUBKEY || '02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818'
+// const ORACLE_PUBLIC_KEY = process.env.ANYHEDGE_DEFAULT_ORACLE_PUBKEY || '02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818'
 const ORACLE_RELAY = process.env.ANYHEDGE_DEFAULT_ORACLE_RELAY || 'oracles.generalprotocols.com'
 const ORACLE_RELAY_PORT = Number(process.env.ANYHEDGE_DEFAULT_ORACLE_PORT) || 7083
 
@@ -71,7 +71,7 @@ export async function getPriceMessages(config, requestParams) {
 	const response = { success: false, results: [], error: '', source: [].map(String)[0] }
 
 	const _conf = {
-		publicKey: config?.oraclePubKey || ORACLE_PUBLIC_KEY,
+		publicKey: config?.oraclePubKey,
 		relay: config?.oracleRelay || ORACLE_RELAY,
 		port: config?.oracleRelayPort || ORACLE_RELAY_PORT,
 	}
