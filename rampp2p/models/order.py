@@ -14,6 +14,7 @@ class Order(models.Model):
     payment_methods = models.ManyToManyField(PaymentMethod)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     appealable_at = models.DateTimeField(null=True)
+    expires_at = models.DateTimeField(null=True)
 
     def __str__(self):
         return f'{self.id}'
