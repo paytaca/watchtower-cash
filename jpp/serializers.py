@@ -26,7 +26,9 @@ from .utils.verify import (
     tx_exists,
 )
 
-from main.models import Wallet
+from main.models import (
+    Wallet, Address,
+)
 from notifications.utils.send import (
     send_push_notification_to_wallet_hashes,
     NotificationTypes,
@@ -208,6 +210,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
         wallet_hashes = Wallet.objects.filter(addresses__address=address) \
             .values_list("wallet_hash", flat=True) \
             .distinct()
+        address_path = Address.objects.filter(address=address) \
+            .values_list("address_path", flat=True) \
+            .first()
 
         wallet_hashes = [*wallet_hashes]
         if not wallet_hashes:
@@ -220,6 +225,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "type": NotificationTypes.PAYMENT_REQUEST,
             "payment_url": f"bitcoincash:?{payment_url_params}",
         }
+
+        if address_path:
+            extra["use_address_path"] = address_path
+
         title = "Payment Request"
         message = f"You have a payment request of {instance.total_bch} BCH"
         return send_push_notification_to_wallet_hashes(
