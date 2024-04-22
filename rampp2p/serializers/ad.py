@@ -29,7 +29,7 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             'trade_ceiling',
             'trade_amount',
             'payment_types',
-            'payment_methods'
+            'payment_methods',
             'appeal_cooldown_choice',
             'created_at'
         ]

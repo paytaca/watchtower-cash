@@ -4,6 +4,7 @@ from rampp2p.models import Status, Order, StatusType
 from rampp2p.serializers import StatusSerializer
 from django.db.models import OuterRef, Subquery
 from django.utils import timezone
+from rampp2p.validators import validate_status_inst_count, validate_status_progression
 
 import logging
 logger = logging.getLogger(__name__)
@@ -20,9 +21,17 @@ def cancel_expired_orders():
     # cancel expired orders
     for order in submitted_orders:
         if order.expires_at < timezone.now():
-            serialized_status = StatusSerializer(data={
+            status = StatusSerializer(data={
                 'status': StatusType.CANCELED,
                 'order': order.id
             })
-            if serialized_status.is_valid():
-                serialized_status.save()
+            try:
+                validate_status_inst_count(status, order.id)
+                validate_status_progression(status, order.id)
+                if status.is_valid():
+                    status.save()
+            except Exception as err:
+                logger.warn(f'error: {err}')
+            
+            order.expires_at = None
+            order.save()
