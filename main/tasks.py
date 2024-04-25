@@ -561,7 +561,6 @@ def process_nft_txn(txid):
             lock_nft_txn = lock_nft_txn.first()
 
             if lock_nft_txn.cashtoken_nft.current_index == 1:
-                lock_nft_txn = lock_nft_txn.first()
                 value = lock_nft_txn.value / 1e8
                 nft = lock_nft_txn.cashtoken_nft
 
