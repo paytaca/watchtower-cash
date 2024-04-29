@@ -227,7 +227,7 @@ class AppealRequest(APIView):
                 if wallet_hash == party_b:
                     recipients.append(party_a)
                 message = f'Order #{pk} {appeal_type} appealed'
-                send_push_notification(recipients, message, extra={ 'order_id': pk })
+                send_push_notification(recipients, message, extra={ 'order_id': pk, 'appeal_id':  serialized_appeal.id})
 
                 return Response(response_data, status=status.HTTP_200_OK)
             else:
@@ -240,10 +240,6 @@ class AppealPendingRelease(APIView):
 
     '''
     Marks an appealed order for release of escrowed funds, updating the order status to RELEASE_PENDING.
-    TODO: The order status should automatically be updated to RELEASED when the contract address receives
-    an outgoing transaction that matches the requirements of the contract.
-    Note: This endpoint must be invoked before the actual transfer of funds.
-
     Requirements:
         (1) Caller must be the order's arbiter
         (2) Order must have an existing appeal
@@ -308,10 +304,6 @@ class AppealPendingRefund(APIView):
 
     '''
     Marks an appealed order for refund, updating the order status to REFUND_PENDING.
-    TODO: The order status should automatically be updated to REFUNDED when the contract 
-    address receives an outgoing transaction that matches the requisites of the contract.
-    Note: This endpoint must be invoked before the actual transfer of funds.
-
     Requirements:
         (1) Caller must be the order's arbiter
         (2) Order must have an existing appeal
@@ -376,13 +368,11 @@ class VerifyRelease(APIView):
     authentication_classes = [TokenAuthentication]
 
     '''
-    Manually marks the order as (status) RELEASED by validating if a given transaction id (txid) 
+    Manually marks the order as RELEASED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
-
     Requirements:
         (1) Caller must be the order's arbiter or seller
         (2) The order's current status must be RELEASE_PENDING
-        (3) TODO: An amount of time must already have passed since status RELEASE_PENDING was created
     '''
     def post(self, request, pk):
         try:
@@ -444,14 +434,11 @@ class VerifyRefund(APIView):
     authentication_classes = [TokenAuthentication]
         
     '''
-    Manually marks the order as (status) REFUNDED by validating if a given transaction id (txid) 
+    Manually marks the order as REFUNDED by validating if a given transaction id (txid) 
     satisfies the prerequisites of its contract.
-    Note: This endpoint should only be used as fallback for the RefundCrypto endpoint.
-
     Requirements:
         (1) Caller must be the order's arbiter
         (2) The order's current status must be REFUND_PENDING
-        (3) TODO: An amount of time must already have passed since status REFUND_PENDING was created
     '''
     def post(self, request, pk):
 
