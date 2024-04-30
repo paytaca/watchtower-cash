@@ -62,6 +62,7 @@ class RampShiftView(APIView):
         data = request.data
 
         info = {
+            "affiliateId": settings.SIDESHIFT_AFFILIATE_ID,
             'depositCoin': data['deposit']['coin'],
             'depositNetwork': data['deposit']['network'],
             'settleCoin': data['settle']['coin'],
@@ -71,7 +72,7 @@ class RampShiftView(APIView):
         params = json.dumps(info)
         headers = {
             'Content-Type': 'application/json',
-            'x-sideshift-secret': settings.SIDESHIFT_SECRET_KEY,
+            'x-sideshift-secret': settings.SIDESHIFT_SECRET_KEY,            
             'x-user-ip': data['ramp_settings']['user_ip']
         }
         # Get Quote    
@@ -86,6 +87,7 @@ class RampShiftView(APIView):
             # Fixed Shift
             shift_url = "https://sideshift.ai/api/v2/shifts/fixed"
             info = {
+                "affiliateId": settings.SIDESHIFT_AFFILIATE_ID,
                 'settleAddress': data['settle_address'],
                 'quoteId': quote.json()['id'],
                 'refundAddress': data['refund_address']
