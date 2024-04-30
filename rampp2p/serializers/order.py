@@ -32,6 +32,7 @@ class OrderSerializer(serializers.ModelSerializer):
     last_modified_at = serializers.SerializerMethodField() # lastest order status created_at
     is_ad_owner = serializers.SerializerMethodField()
     feedback = serializers.SerializerMethodField()
+    read_at = serializers.SerializerMethodField()
     
     class Meta:
         model = models.Order
@@ -53,7 +54,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'is_ad_owner',
             'feedback',
             'chat_session_ref',
-            'expires_at'
+            'expires_at',
+            'read_at'
         ]
 
     def get_ad(self, obj):
@@ -144,6 +146,13 @@ class OrderSerializer(serializers.ModelSerializer):
             return True
         return False
     
+    def get_read_at(self, obj):
+        wallet_hash = self.context['wallet_hash']
+        order_member = models.OrderMember.objects.filter(Q(order__id=obj.id) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
+        if order_member.exists():
+            return order_member.first().read_at
+        return None
+    
     def get_feedback(self, obj):
         wallet_hash = self.context['wallet_hash']
         status = self.get_status(obj)
@@ -174,6 +183,5 @@ class UpdateOrderSerializer(serializers.ModelSerializer):
             'locked_price',
             'crypto_amount',
             'payment_methods',
-            'chat_session_ref'
+            'chat_session_ref',
         ]
-

@@ -10,16 +10,7 @@ from authentication.token import TokenAuthentication
 import rampp2p.utils as utils
 from rampp2p.utils.contract import create_contract
 from rampp2p.validators import *
-from rampp2p.models import (
-    StatusType,
-    Order,
-    ContractMember,
-    Contract,
-    Transaction,
-    Recipient,
-    Arbiter,
-    TradeType
-)
+import rampp2p.models as models
 import rampp2p.serializers as serializers
 
 import logging
@@ -31,8 +22,8 @@ class ContractDetailsView(APIView):
     def get_object(self, order_id, contract_id):
         try:
             if not order_id and not contract_id:
-                raise Contract.DoesNotExist
-            query = Contract.objects.all()
+                raise models.Contract.DoesNotExist
+            query = models.Contract.objects.all()
             if contract_id:
                 query = query.filter(pk=contract_id)
             if order_id:
@@ -40,8 +31,8 @@ class ContractDetailsView(APIView):
             if query.exists():
                 return query.first()
             else:
-                raise Contract.DoesNotExist
-        except Contract.DoesNotExist:
+                raise models.Contract.DoesNotExist
+        except models.Contract.DoesNotExist:
             raise Http404
 
     def get(self, request):
@@ -62,18 +53,18 @@ class ContractCreateView(APIView):
                 return Response({'error': 'order_id or arbiter_id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
             validate_status(order_pk, StatusType.CONFIRMED)
-            order = Order.objects.get(pk=order_pk)
+            order = models.Order.objects.get(pk=order_pk)
             if not self.has_permissions(order, request.user.wallet_hash):
                 return Response(status=status.HTTP_401_UNAUTHORIZED)
 
-            arbiter = Arbiter.objects.get(pk=arbiter_pk)
+            arbiter = models.Arbiter.objects.get(pk=arbiter_pk)
             contract_params = self.get_contract_params(arbiter, order)
 
-        except (Order.DoesNotExist, Arbiter.DoesNotExist, ValidationError) as err:
+        except (models.Order.DoesNotExist, models.Arbiter.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         address = None
-        contract, created = Contract.objects.get_or_create(order=order)
+        contract, created = models.Contract.objects.get_or_create(order=order)
         timestamp = contract.created_at.timestamp()
         force = request.data.get('force', False)
         if (force or created or
@@ -96,9 +87,9 @@ class ContractCreateView(APIView):
             address = contract.address
         
         # save contract member pubkeys and addresses
-        arbiter_member, _ = ContractMember.objects.update_or_create(
+        arbiter_member, _ = models.ContractMember.objects.update_or_create(
             contract = contract,
-            member_type = ContractMember.MemberType.ARBITER,
+            member_type = models.ContractMember.MemberType.ARBITER,
             defaults={
                 'member_ref_id': contract_params['arbiter']['id'],
                 'pubkey': contract_params['arbiter']['pubkey'],
@@ -106,9 +97,9 @@ class ContractCreateView(APIView):
                 'address_path': contract_params['arbiter']['address_path']
             }
         )
-        seller_member, _ = ContractMember.objects.update_or_create(
+        seller_member, _ = models.ContractMember.objects.update_or_create(
             contract = contract,
-            member_type = ContractMember.MemberType.SELLER,
+            member_type = models.ContractMember.MemberType.SELLER,
             defaults={
                 'member_ref_id': contract_params['seller']['id'],
                 'pubkey': contract_params['seller']['pubkey'],
@@ -116,9 +107,9 @@ class ContractCreateView(APIView):
                 'address_path': contract_params['seller']['address_path']
             }
         )
-        buyer_member, _ = ContractMember.objects.update_or_create(
+        buyer_member, _ = models.ContractMember.objects.update_or_create(
             contract = contract,
-            member_type = ContractMember.MemberType.BUYER,
+            member_type = models.ContractMember.MemberType.BUYER,
             defaults={
                 'member_ref_id': contract_params['buyer']['id'],
                 'pubkey': contract_params['buyer']['pubkey'],
@@ -132,7 +123,12 @@ class ContractCreateView(APIView):
         # update order arbiter
         order.arbiter = arbiter
         order.save()
-        
+
+        # add arbiter as order member
+        member, created = models.OrderMember.objects.get_or_create(order=order, type=models.OrderMember.MemberType.ARBITER)
+        member.arbiter = arbiter
+        member.save()
+    
         response = {
             'order': order.id,
             'contract': contract.id,
@@ -143,7 +139,7 @@ class ContractCreateView(APIView):
         
         return Response(response, status=status.HTTP_200_OK)
 
-    def get_contract_params(self, arbiter, order: Order):
+    def get_contract_params(self, arbiter, order: models.Order):
 
         seller_id = None
         seller_pubkey = None
@@ -155,7 +151,7 @@ class ContractCreateView(APIView):
         buyer_address = None
         buyer_address_path = None
 
-        if order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == models.TradeType.SELL:
             seller_id = order.ad_snapshot.ad.owner.id
             seller_pubkey = order.ad_snapshot.ad.owner.public_key
             seller_address = order.ad_snapshot.ad.owner.address
@@ -197,7 +193,7 @@ class ContractCreateView(APIView):
             }
         }
     
-    def has_permissions(self, order: Order, wallet_hash: str):
+    def has_permissions(self, order: models.Order, wallet_hash: str):
         return utils.is_seller(order, wallet_hash)
         
 class ContractTransactionsView(APIView):
@@ -206,8 +202,8 @@ class ContractTransactionsView(APIView):
     def get_object(self, order_id, contract_id):
         try:
             if not order_id and not contract_id:
-                raise Contract.DoesNotExist
-            query = Contract.objects.all()
+                raise models.Contract.DoesNotExist
+            query = models.Contract.objects.all()
             if contract_id:
                 query = query.filter(pk=contract_id)
             if order_id:
@@ -215,19 +211,19 @@ class ContractTransactionsView(APIView):
             if query.exists():
                 return query.first()
             else:
-                raise Contract.DoesNotExist
-        except Contract.DoesNotExist:
+                raise models.Contract.DoesNotExist
+        except models.Contract.DoesNotExist:
             raise Http404
 
     def get(self, request):
         order_id = request.query_params.get('order_id')
         contract_id = request.query_params.get('contract_id')
         contract = self.get_object(order_id, contract_id)
-        transactions = Transaction.objects.filter(contract__id=contract.id)
+        transactions = models.Transaction.objects.filter(contract__id=contract.id)
 
         tx_data = []
         for _, tx in enumerate(transactions):
-            tx_outputs = Recipient.objects.filter(transaction__id=tx.id)
+            tx_outputs = models.Recipient.objects.filter(transaction__id=tx.id)
             data = {}
             data["txn"] = serializers.TransactionSerializer(tx).data
             data["txn"]["outputs"] = serializers.RecipientSerializer(tx_outputs, many=True).data

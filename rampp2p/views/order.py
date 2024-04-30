@@ -1,6 +1,9 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.decorators import authentication_classes, permission_classes, api_view
+from rest_framework.permissions import IsAuthenticated
+from django.http import JsonResponse, HttpResponse
 
 from django.http import Http404
 from django.db import IntegrityError
@@ -28,21 +31,6 @@ from rampp2p.serializers import (
     StatusReadSerializer,
     TransactionSerializer,
     AppealSerializer
-)
-from rampp2p.models import (
-    Ad,
-    AdSnapshot,
-    StatusType,
-    Status,
-    Order,
-    Peer,
-    PaymentMethod,
-    Contract,
-    Transaction,
-    PriceType,
-    MarketRate,
-    Appeal,
-    TradeType
 )
 import rampp2p.models as models
 
@@ -112,7 +100,7 @@ class OrderListCreate(APIView):
         except (ValueError, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        queryset = Order.objects.all()
+        queryset = models.Order.objects.all()
 
         # fetches orders created by user
         owned_orders = Q(owner__wallet_hash=wallet_hash)
@@ -120,7 +108,7 @@ class OrderListCreate(APIView):
         # fetches the orders that have ad ids owned by user
         ad_orders = Q(ad_snapshot__ad__pk__in=list(
                         # fetches the flat ids of ads owned by user
-                        Ad.objects.filter(
+                        models.Ad.objects.filter(
                             owner__wallet_hash=wallet_hash
                         ).values_list('id', flat=True)
                     ))
@@ -154,7 +142,7 @@ class OrderListCreate(APIView):
         
         if len(params['statuses']) > 0:
             # get the order's last status
-            last_status_subq = Status.objects.filter(order=OuterRef('id')).order_by('-created_at').values('status')[:1]
+            last_status_subq = models.Status.objects.filter(order=OuterRef('id')).order_by('-created_at').values('status')[:1]
             # check if the last status is a subset of filtered statuses
             temp = queryset.annotate(
                 last_status=Subquery(last_status_subq)
@@ -193,7 +181,7 @@ class OrderListCreate(APIView):
             sort_field = 'last_modified_at'
             if params['sort_type'] == 'descending':
                 sort_field = f'-{sort_field}'
-            last_status_created_at = Status.objects.filter(
+            last_status_created_at = models.Status.objects.filter(
                 order=OuterRef('pk')).order_by('-created_at').values('created_at')[:1]
             queryset = queryset.annotate(
                 last_modified_at=Subquery(last_status_created_at)
@@ -223,10 +211,12 @@ class OrderListCreate(APIView):
 
         context = { 'wallet_hash': wallet_hash }
         serializer = OrderSerializer(page_results, many=True, context=context)
+        unread_count = models.OrderMember.objects.filter(Q(peer__wallet_hash=wallet_hash) & Q(read_at__isnull=True)).count()
         data = {
             'orders': serializer.data,
             'count': count,
-            'total_pages': total_pages
+            'total_pages': total_pages,
+            'unread_count': unread_count
         }
         return Response(data, status.HTTP_200_OK)
 
@@ -241,15 +231,15 @@ class OrderListCreate(APIView):
             if crypto_amount is None:
                 raise ValidationError('crypto_amount field is required')
 
-            ad = Ad.objects.get(pk=ad_id)
-            owner = Peer.objects.get(wallet_hash=wallet_hash)
+            ad = models.Ad.objects.get(pk=ad_id)
+            owner = models.Peer.objects.get(wallet_hash=wallet_hash)
             payment_method_ids = request.data.get('payment_methods', [])
 
             crypto_amount = Decimal(crypto_amount)
             if crypto_amount < ad.trade_floor or crypto_amount > ad.trade_amount or crypto_amount > ad.trade_ceiling:
                 raise ValidationError('crypto_amount exceeds trade limits')
 
-            if ad.trade_type == TradeType.BUY:
+            if ad.trade_type == models.TradeType.BUY:
                 if len(payment_method_ids) == 0:
                     raise ValidationError('payment_methods field is required')            
                 self.validate_payment_methods_ownership(wallet_hash, payment_method_ids)
@@ -257,16 +247,16 @@ class OrderListCreate(APIView):
             # validate permissions
             self.validate_permissions(wallet_hash, ad_id)
 
-            market_price = MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
+            market_price = models.MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
             if not market_price.exists():
                 raise ValidationError(f'market price for currency {ad.fiat_currency.symbol} does not exist.')
             market_price = market_price.first()
 
-        except (Ad.DoesNotExist, Peer.DoesNotExist, ValidationError) as err:
+        except (models.Ad.DoesNotExist, models.Peer.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # Create snapshot of ad
-        ad_snapshot = AdSnapshot(
+        ad_snapshot = models.AdSnapshot(
             ad = ad,
             trade_type = ad.trade_type,
             price_type = ad.price_type,
@@ -294,7 +284,7 @@ class OrderListCreate(APIView):
         }
 
         price = None
-        if ad_snapshot.price_type == PriceType.FLOATING:
+        if ad_snapshot.price_type == models.PriceType.FLOATING:
             market_price = market_price.price
             price = market_price * (ad_snapshot.floating_price/100)
         else:
@@ -331,7 +321,27 @@ class OrderListCreate(APIView):
             serialized_status = StatusSerializer(order_status).data
         else:
             return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # create order members
+        seller, buyer = None, None
+        if ad_snapshot.trade_type == models.TradeType.SELL:
+            seller = ad_snapshot.ad.owner
+            buyer = order.owner
+        else:
+            seller = order.owner
+            buyer = ad_snapshot.ad.owner
+        
+        seller_member = models.OrderMember.objects.create(order=order, peer=seller, type=models.OrderMember.MemberType.SELLER)
+        buyer_member = models.OrderMember.objects.create(order=order, peer=buyer, type=models.OrderMember.MemberType.BUYER)
 
+        if seller_member.peer.wallet_hash == order.owner.wallet_hash:
+            seller_member.read_at = timezone.now()
+            seller_member.save()
+        if buyer_member.peer.wallet_hash == order.owner.wallet_hash:
+            buyer_member.read_at = timezone.now()
+            buyer_member.save()
+
+        # serialize data
         context = { 'wallet_hash': wallet_hash }
         serialized_order = OrderSerializer(order, context=context).data    
         response = {
@@ -346,7 +356,7 @@ class OrderListCreate(APIView):
     
         return Response(response, status=status.HTTP_201_CREATED)
     
-    def get_contract_params(self, order: Order):
+    def get_contract_params(self, order: models.Order):
 
         arbiter_pubkey = order.arbiter.public_key
         seller_pubkey = None
@@ -354,7 +364,7 @@ class OrderListCreate(APIView):
         seller_address = None
         buyer_address = None
 
-        if order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == models.TradeType.SELL:
             seller_pubkey = order.ad_snapshot.ad.owner.public_key
             buyer_pubkey = order.owner.public_key
             seller_address = order.ad_snapshot.ad.owner.address
@@ -388,9 +398,9 @@ class OrderListCreate(APIView):
         Arbiters cannot create orders
         '''
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-            ad = Ad.objects.get(pk=pk)
-        except Peer.DoesNotExist or Ad.DoesNotExist:
+            caller = models.Peer.objects.get(wallet_hash=wallet_hash)
+            ad = models.Ad.objects.get(pk=pk)
+        except models.Peer.DoesNotExist or models.Ad.DoesNotExist:
             raise ValidationError('peer or ad DoesNotExist')
         
         if ad.owner.wallet_hash == caller.wallet_hash:
@@ -402,20 +412,20 @@ class OrderListCreate(APIView):
         '''
 
         try:
-            caller = Peer.objects.get(wallet_hash=wallet_hash)
-        except Peer.DoesNotExist:
+            caller = models.Peer.objects.get(wallet_hash=wallet_hash)
+        except models.Peer.DoesNotExist:
             raise ValidationError('peer DoesNotExist')
 
-        payment_methods = PaymentMethod.objects.filter(Q(id__in=payment_method_ids))
+        payment_methods = models.PaymentMethod.objects.filter(Q(id__in=payment_method_ids))
         for payment_method in payment_methods:
             if payment_method.owner.wallet_hash != caller.wallet_hash:
                 raise ValidationError('invalid payment method, not caller owned')
 
-class OrderMembers(APIView):
+class OrderMemberView(APIView):
     authentication_classes = [TokenAuthentication]
     def get(self, _, pk):
         try:
-            order = Order.objects.get(pk=pk)
+            order = models.Order.objects.get(pk=pk)
             members = [order.owner, order.ad_snapshot.ad.owner]
             if order.arbiter:
                 members.append(order.arbiter)
@@ -432,11 +442,22 @@ class OrderMembers(APIView):
                 })
             
             members = serializers.OrderMemberSerializer(member_info, many=True)
-        except Order.DoesNotExist:
+        except models.Order.DoesNotExist:
             raise Http404
         except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         return Response(members.data, status=status.HTTP_200_OK)
+    
+    def patch(self, request, pk):
+        logger.warn(f'set_order_member_read_at: {request} | {pk}')
+        wallet_hash = request.user.wallet_hash
+        member = models.OrderMember.objects.filter(Q(order__id=pk) & Q(peer__wallet_hash=wallet_hash))
+        if member.exists():
+            member = member.first()
+            member.read_at = timezone.now()
+            member.save()
+            return Response({'success': True}, status=status.HTTP_200_OK)
+        return Response({'success': False, 'error': 'no such member'}, status=status.HTTP_400_BAD_REQUEST)
 
 class OrderListStatus(APIView):
     authentication_classes = [TokenAuthentication]
@@ -450,8 +471,8 @@ class OrderDetail(APIView):
 
     def get_object(self, pk):
         try:
-            return Order.objects.get(pk=pk)
-        except Order.DoesNotExist:
+            return models.Order.objects.get(pk=pk)
+        except models.Order.DoesNotExist:
             raise Http404
 
     def get(self, request, pk):
@@ -464,7 +485,7 @@ class OrderDetail(APIView):
         serialized_order = OrderSerializer(order, context=context).data
         
         if serialized_order['status']['value'] == StatusType.APPEALED:
-            appeal = Appeal.objects.filter(order_id=order.id)
+            appeal = models.Appeal.objects.filter(order_id=order.id)
             if appeal.exists():
                 serialized_appeal = AppealSerializer(appeal.first()).data
                 serialized_order['appeal'] = serialized_appeal
@@ -489,7 +510,7 @@ class ConfirmOrder(APIView):
             validate_status_inst_count(StatusType.CONFIRMED, pk)
             validate_status_progression(StatusType.CONFIRMED, pk)
 
-            order = Order.objects.get(pk=pk)
+            order = models.Order.objects.get(pk=pk)
 
             if order.expires_at and order.expires_at < timezone.now():
                 raise ValidationError('cannot confirm expired order')
@@ -502,11 +523,11 @@ class ConfirmOrder(APIView):
                 raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
         
             # Update Ad trade_amount
-            ad = Ad.objects.get(pk=order.ad_snapshot.ad.id)
+            ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
             ad.trade_amount = trade_amount
             ad.save()
 
-        except (ValidationError, IntegrityError, Order.DoesNotExist, Ad.DoesNotExist) as err:
+        except (ValidationError, IntegrityError, models.Order.DoesNotExist, models.Ad.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
                 
         serialized_status = StatusSerializer(data={
@@ -535,8 +556,8 @@ class ConfirmOrder(APIView):
         Only ad owners can set order status to CONFIRMED
         '''
         try:
-            order = Order.objects.get(pk=pk)
-        except Order.DoesNotExist as err:
+            order = models.Order.objects.get(pk=pk)
+        except models.Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
 
         if order.ad_snapshot.ad.owner.wallet_hash != wallet_hash:
@@ -562,7 +583,7 @@ class PendingEscrowOrder(APIView):
             validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
             validate_status_progression(StatusType.ESCROW_PENDING, pk)
 
-            contract = Contract.objects.get(order__id=pk)
+            contract = models.Contract.objects.get(order__id=pk)
             
             # create ESCROW_PENDING status for order
             status_serializer = StatusSerializer(data={
@@ -581,15 +602,15 @@ class PendingEscrowOrder(APIView):
                 'status': status_serializer.data
             }
 
-            transaction, _ = Transaction.objects.get_or_create(
+            transaction, _ = models.Transaction.objects.get_or_create(
                 contract=contract,
-                action=Transaction.ActionType.ESCROW,
+                action=models.Transaction.ActionType.ESCROW,
             )
             websocket_msg['transaction'] = TransactionSerializer(transaction).data
             websocket.send_order_update(websocket_msg, pk)
             response = websocket_msg
             
-        except (ValidationError, IntegrityError, Contract.DoesNotExist) as err:
+        except (ValidationError, IntegrityError, models.Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         return Response(response, status=status.HTTP_200_OK)  
 
@@ -598,12 +619,12 @@ class PendingEscrowOrder(APIView):
         Only order sellers can set order status to ESCROW_PENDING
         '''
         try:
-            order = Order.objects.get(pk=pk)
-        except Order.DoesNotExist as err:
+            order = models.Order.objects.get(pk=pk)
+        except models.Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
         
         seller = None
-        if order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == models.TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
         else:
             seller = order.owner
@@ -634,12 +655,12 @@ class VerifyEscrow(APIView):
             if txid is None:
                 raise ValidationError('txid is required')
                 
-            contract = Contract.objects.get(order_id=pk)
+            contract = models.Contract.objects.get(order_id=pk)
 
             # Validate the transaction
-            validate_transaction(txid, Transaction.ActionType.ESCROW, contract.id)
+            validate_transaction(txid, models.Transaction.ActionType.ESCROW, contract.id)
 
-        except (ValidationError, Contract.DoesNotExist) as err:
+        except (ValidationError, models.Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as err:
             return Response({'error': 'duplicate txid'}, status=status.HTTP_400_BAD_REQUEST)
@@ -652,11 +673,11 @@ class VerifyEscrow(APIView):
         '''
 
         try:
-            order = Order.objects.get(pk=pk)
-        except Order.DoesNotExist as err:
+            order = models.Order.objects.get(pk=pk)
+        except models.Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
 
-        if order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == models.TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
         else:
             seller = order.owner
@@ -671,11 +692,11 @@ class CryptoBuyerConfirmPayment(APIView):
     def post(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            order = Order.objects.get(pk=pk)
+            order = models.Order.objects.get(pk=pk)
             self.validate_permissions(wallet_hash, order)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        except Order.DoesNotExist as err:
+        except models.Order.DoesNotExist as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
@@ -689,7 +710,7 @@ class CryptoBuyerConfirmPayment(APIView):
         if payment_method_ids is None or len(payment_method_ids) == 0:
             return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        payment_methods = PaymentMethod.objects.filter(id__in=payment_method_ids)
+        payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
         order.payment_methods.add(*payment_methods)
         order.save()    
 
@@ -720,7 +741,7 @@ class CryptoBuyerConfirmPayment(APIView):
         Only buyers can set order status to PAID_PENDING
         '''        
         buyer = None
-        if order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == models.TradeType.SELL:
             buyer = order.owner
         else:
             buyer = order.ad_snapshot.ad.owner
@@ -754,10 +775,10 @@ class CryptoSellerConfirmPayment(APIView):
         if serialized_status.is_valid():
             serialized_status = StatusReadSerializer(serialized_status.save())
 
-            contract = Contract.objects.get(order__id=pk)
-            _, _ = Transaction.objects.get_or_create(
+            contract = models.Contract.objects.get(order__id=pk)
+            _, _ = models.Transaction.objects.get_or_create(
                 contract=contract,
-                action=Transaction.ActionType.RELEASE,
+                action=models.Transaction.ActionType.RELEASE,
             )
 
             websocket.send_order_update({
@@ -772,12 +793,12 @@ class CryptoSellerConfirmPayment(APIView):
         Only the seller can set the order status to PAID
         '''
         try:
-            order = Order.objects.get(pk=pk)
-        except Order.DoesNotExist as err:
+            order = models.Order.objects.get(pk=pk)
+        except models.Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
         
         seller = None
-        if order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == models.TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
         else:
             seller = order.owner
@@ -803,13 +824,13 @@ class CancelOrder(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # Update Ad trade_amount if order was CONFIRMED
-        order = Order.objects.get(pk=pk)
+        order = models.Order.objects.get(pk=pk)
         latest_status = get_latest_status(order.id)
 
         # Update Ad trade_amount
         if latest_status.status == StatusType.CONFIRMED:
             trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
-            ad = Ad.objects.get(pk=order.ad_snapshot.ad.id)
+            ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
             ad.trade_amount = trade_amount
             ad.save()
             
@@ -834,8 +855,8 @@ class CancelOrder(APIView):
         CancelOrder is callable by the order/ad owner.
         '''
         try:
-            order = Order.objects.get(pk=pk)
-        except Order.DoesNotExist as err:
+            order = models.Order.objects.get(pk=pk)
+        except models.Order.DoesNotExist as err:
             raise ValidationError(err.args[0])
         
         order_owner = order.owner.wallet_hash
