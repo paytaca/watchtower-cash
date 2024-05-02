@@ -818,3 +818,8 @@ class WalletShard(PostgresModel):
     shard = models.CharField(max_length=350, db_index=True)
     first_identifier = models.CharField(max_length=64)
     second_identifier = models.CharField(max_length=64)
+
+    def get_shard(self):
+        return {
+            'shard': self.shard
+        }
