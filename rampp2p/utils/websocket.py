@@ -12,6 +12,11 @@ def send_market_price(data, currency):
     room_name = f'ramp-p2p-subscribe-market-price-{currency.get("symbol")}'
     send_message(data, room_name)
 
+def send_general_update(data, wallet_hashes: list):
+    for wallet_hash in wallet_hashes:
+        room_name = f'ramp-p2p-subscribe-general-{wallet_hash}'
+        send_message(data, room_name)
+
 def send_message(data, room_name):
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(

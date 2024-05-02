@@ -20,6 +20,10 @@ class OrderArbiterSerializer(serializers.ModelSerializer):
         model = models.Arbiter
         fields = ['id', 'name']
 
+class TimeField(serializers.Field):
+    def to_representation(self, value):
+        return str(value)
+
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
@@ -33,6 +37,9 @@ class OrderSerializer(serializers.ModelSerializer):
     is_ad_owner = serializers.SerializerMethodField()
     feedback = serializers.SerializerMethodField()
     read_at = serializers.SerializerMethodField()
+    created_at = TimeField()
+    appealable_at = TimeField()
+    expires_at = TimeField()
     
     class Meta:
         model = models.Order
@@ -137,7 +144,7 @@ class OrderSerializer(serializers.ModelSerializer):
         last_modified_at = None
         latest_status = models.Status.objects.values('created_at').filter(order__id=obj.id).order_by('-created_at').first()
         if latest_status is not None:
-            last_modified_at = latest_status['created_at']
+            last_modified_at = str(latest_status['created_at'])
         return last_modified_at
     
     def get_is_ad_owner(self, obj):
@@ -150,7 +157,8 @@ class OrderSerializer(serializers.ModelSerializer):
         wallet_hash = self.context['wallet_hash']
         order_member = models.OrderMember.objects.filter(Q(order__id=obj.id) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
         if order_member.exists():
-            return order_member.first().read_at
+            read_at = order_member.first().read_at
+            return str(read_at) if read_at != None else read_at
         return None
     
     def get_feedback(self, obj):

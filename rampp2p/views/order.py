@@ -15,9 +15,8 @@ from datetime import timedelta
 import math
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
-
 from authentication.token import TokenAuthentication
-
+from rampp2p.viewcodes import WSGeneralMessageType
 import rampp2p.utils.websocket as websocket
 from rampp2p.utils.utils import get_latest_status, generate_chat_session_ref
 from rampp2p.utils.transaction import validate_transaction
@@ -353,6 +352,15 @@ class OrderListCreate(APIView):
         # send push notification
         extra = {'order_id': serialized_order['id']}
         send_push_notification([ad.owner.wallet_hash], "Received a new order", extra=extra)
+
+        unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=ad.owner.wallet_hash)).count()
+        websocket.send_general_update({
+            'type': WSGeneralMessageType.NEW_ORDER.value,
+            'extra': {
+                'order': serialized_order,
+                'unread_count': unread_count
+            }
+        }, [ad.owner.wallet_hash])
     
         return Response(response, status=status.HTTP_201_CREATED)
     
@@ -456,6 +464,12 @@ class OrderMemberView(APIView):
             member = member.first()
             member.read_at = timezone.now()
             member.save()
+        
+            unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=wallet_hash)).count()
+            websocket.send_general_update({
+                'type': WSGeneralMessageType.READ_ORDER.value,
+                'extra': { 'unread_count': unread_count }
+            }, [wallet_hash])
             return Response({'success': True}, status=status.HTTP_200_OK)
         return Response({'success': False, 'error': 'no such member'}, status=status.HTTP_400_BAD_REQUEST)
 
