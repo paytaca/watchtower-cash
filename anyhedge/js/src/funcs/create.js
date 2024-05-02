@@ -1,5 +1,9 @@
+import { castBigIntSafe, parseContractCreationParamsV2, transformContractCreationParamsV2toV1 } from '../utils.js'
 import { getPriceMessages, parseOracleMessage } from './price.js'
-import { AnyHedgeManager } from '@generalprotocols/anyhedge'
+import { AnyHedgeManager, castContractDataV1toContractDataV2 } from '@generalprotocols/anyhedge'
+import { AnyHedgeArtifacts } from '@generalprotocols/anyhedge-contracts';
+import { AnyHedgeManager as AnyHedgeManagerOld } from '@generalprotocols/anyhedge-old';
+
 
 /**
  * 
@@ -8,10 +12,10 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
  * @param {Number} intent.lowPriceMult - The USD/BCH price drop percentage to trigger liquidation
  * @param {Number} intent.highPriceMult - The USD/BCH price increase percentage to trigger liquidation
  * @param {Number} intent.duration - The number of seconds from the starting time of the hedge position
- * @param {'hedge' | 'long'} intent.takerSide - Taker of contract
+ * @param {'short' | 'long'} intent.takerSide - Taker of contract
  * @param {Object} pubkeys - Necessary credentials for hedge and short
- * @param {String} pubkeys.hedgeAddress - Destination address of hedger's funds on maturity/liquidation
- * @param {String} pubkeys.hedgePubkey - Public key of hedger
+ * @param {String} pubkeys.longAddress - Destination address of hedger's funds on maturity/liquidation
+ * @param {String} pubkeys.longPubkey - Public key of hedger
  * @param {String} pubkeys.shortAddress - Destination address of counterparty's funds on maturity/liquidation
  * @param {String} pubkeys.shortPubkey - Public key of counterparty
  * @param {OraclePriceMessage} [startingOracleMessage]
@@ -55,19 +59,20 @@ export async function create(intent, pubkeys, startingOracleMessage, priceMessag
 
     const contractCreationParameters = {
       takerSide: intent.takerSide,
-      makerSide: intent.takerSide === 'hedge' ? 'long' : 'hedge',
+      makerSide: intent.takerSide === 'short' ? 'long' : 'short',
       nominalUnits: nominalUnits,
       oraclePublicKey: priceMessage.publicKey,
       startingOracleMessage: priceMessage.message,
       startingOracleSignature: priceMessage.signature,
-      maturityTimestamp: priceData.messageTimestamp + intent.duration,
+      maturityTimestamp: castBigIntSafe(priceData.messageTimestamp + intent.duration),
       lowLiquidationPriceMultiplier: intent.lowPriceMult,
       highLiquidationPriceMultiplier: intent.highPriceMult,
-      hedgePayoutAddress: pubkeys.hedgeAddress,
-      longPayoutAddress: pubkeys.shortAddress,
-      hedgeMutualRedeemPublicKey: pubkeys.hedgePubkey,
-      longMutualRedeemPublicKey: pubkeys.shortPubkey,
-      enableMutualRedemption: 1,
+      shortPayoutAddress: pubkeys.shortAddress,
+      longPayoutAddress: pubkeys.longAddress,
+      shortMutualRedeemPublicKey: pubkeys.shortPubkey,
+      longMutualRedeemPublicKey: pubkeys.longPubkey,
+      enableMutualRedemption: 1n,
+      isSimpleHedge: 1n,
     }
 
     const resp = await compileContract(contractCreationParameters)
@@ -81,8 +86,8 @@ export async function create(intent, pubkeys, startingOracleMessage, priceMessag
 /**
  * 
  * @param {Object} contractCreationParameters 
- * @param {'hedge' | 'long'} contractCreationParameters.takerSide
- * @param {'hedge' | 'long'} contractCreationParameters.makerSide
+ * @param {'short' | 'long'} contractCreationParameters.takerSide
+ * @param {'short' | 'long'} contractCreationParameters.makerSide
  * @param {Number} contractCreationParameters.nominalUnits - US cents
  * @param {String} contractCreationParameters.oraclePublicKey
  * @param {String} contractCreationParameters.startingOracleMessage
@@ -90,25 +95,40 @@ export async function create(intent, pubkeys, startingOracleMessage, priceMessag
  * @param {Number} contractCreationParameters.maturityTimestamp
  * @param {Number} contractCreationParameters.highLiquidationPriceMultiplier
  * @param {Number} contractCreationParameters.lowLiquidationPriceMultiplier
- * @param {String} contractCreationParameters.hedgeMutualRedeemPublicKey
+ * @param {String} contractCreationParameters.shortMutualRedeemPublicKey
  * @param {String} contractCreationParameters.longMutualRedeemPublicKey
- * @param {String} contractCreationParameters.hedgePayoutAddress
+ * @param {String} contractCreationParameters.shortPayoutAddress
  * @param {String} contractCreationParameters.longPayoutAddress
  * @param {0 | 1} contractCreationParameters.enableMutualRedemption
+ * @param {0 | 1} contractCreationParameters.isSimpleHedge
  * @param {{address: String, satoshis: Number}[]} fees
  * @param {{txHash:String,fundingOutput:Number,fundingSatoshis:Number}[]} fundings
+ * @param {Object} opts
+ * @param {String} [opts.contractVersion]
  * @returns 
  */
-export async function compileContract(contractCreationParameters, fees, fundings) {
-  const manager = new AnyHedgeManager();
-  const contractData = await manager.createContract(contractCreationParameters);
+export async function compileContract(contractCreationParameters, fees, fundings, opts) {
+  let contractData
+  const contractVersion = opts?.contractVersion
+  if (contractVersion && !AnyHedgeArtifacts[contractVersion]) {
+    const contractCreationParametersV1 = transformContractCreationParamsV2toV1(contractCreationParameters)
+    const managerOld = new AnyHedgeManagerOld({ contractVersion })
+    contractData = await managerOld.createContract(contractCreationParametersV1)
+    contractData = castContractDataV1toContractDataV2(contractData)
+  } else {
+    
+    const contractCreationParametersV2 = parseContractCreationParamsV2(contractCreationParameters);
+    const manager = new AnyHedgeManager({ contractVersion });
+    contractData = await manager.createContract(contractCreationParametersV2);
+  }
+
   if (Array.isArray(fees)) {
     contractData.fees = fees
       .map(fee => Object({
         name: fee?.name || '',
         description: fee?.description || '',
         address: fee?.address,
-        satoshis: fee?.satoshis,
+        satoshis: castBigIntSafe(fee?.satoshis),
       }))
       .filter(fee => fee?.address && fee?.satoshis)
   }
@@ -118,8 +138,8 @@ export async function compileContract(contractCreationParameters, fees, fundings
       .filter(funding => funding?.txHash && funding?.fundingSatoshis)
       .map(funding => Object({
         fundingTransactionHash: funding.txHash,
-        fundingOutputIndex: funding.fundingOutput,
-        fundingSatoshis: funding.fundingSatoshis,
+        fundingOutputIndex: castBigIntSafe(funding.fundingOutput),
+        fundingSatoshis: castBigIntSafe(funding.fundingSatoshis),
       }))
   }
   return contractData

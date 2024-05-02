@@ -52,7 +52,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'last_modified_at',
             'is_ad_owner',
             'feedback',
-            'chat_session_ref'
+            'chat_session_ref',
+            'expires_at'
         ]
 
     def get_ad(self, obj):

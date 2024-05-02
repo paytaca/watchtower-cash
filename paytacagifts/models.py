@@ -8,6 +8,11 @@ class Wallet(models.Model):
 
     def __str__(self):
         return str(self.wallet_hash)
+    
+    class Meta:
+        ordering = [
+            '-date_created'
+        ]
 
 class Campaign(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
@@ -18,6 +23,11 @@ class Campaign(models.Model):
 
     def __str__(self):
         return str(self.id)
+    
+    class Meta:
+        ordering = [
+            '-date_created'
+        ]
 
 class Gift(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
@@ -28,6 +38,7 @@ class Gift(models.Model):
     share = models.CharField(max_length=255)
     date_funded = models.DateTimeField(blank=True, null=True) 
     date_claimed = models.DateTimeField(blank=True, null=True)
+    claim_txid = models.CharField(max_length=70, blank=True, db_index=True)
     wallet = models.ForeignKey(Wallet, related_name="gifts", on_delete=models.CASCADE)
     campaign = models.ForeignKey(Campaign, related_name="gifts", on_delete=models.CASCADE, blank=True, null=True)
 
@@ -53,8 +64,12 @@ class Claim(models.Model):
     wallet = models.ForeignKey(Wallet, related_name="claims", on_delete=models.CASCADE)
     gift = models.ForeignKey(Gift, related_name="claims", on_delete=models.CASCADE)
     campaign = models.ForeignKey(Campaign, related_name="claims", on_delete=models.CASCADE, null=True)
+    succeeded = models.BooleanField(default=False)
 
     class Meta:
+        ordering = [
+            '-date_created'
+        ]
         unique_together = ('wallet', 'gift')
 
     def __str__(self):

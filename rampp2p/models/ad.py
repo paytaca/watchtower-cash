@@ -3,7 +3,7 @@ from django.utils import timezone
 from datetime import timedelta
 from .peer import Peer
 from .currency import FiatCurrency, CryptoCurrency
-from .payment import PaymentMethod
+from .payment import PaymentMethod, PaymentType
 
 class CooldownChoices(models.IntegerChoices):
     FIFTEEN     =   15, '15 minutes'
@@ -65,7 +65,7 @@ class AdSnapshot(models.Model):
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices)
-    payment_methods = models.ManyToManyField(PaymentMethod, related_name='ad_snapshots')
+    payment_types = models.ManyToManyField(PaymentType, related_name='ad_snapshots')
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

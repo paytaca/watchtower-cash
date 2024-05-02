@@ -32,9 +32,9 @@ def send_offer_settlement_update(hedge_position_offer_obj):
         "action": "settlement",
         "meta": { "address": hedge_position_obj.address }
     }
-    if hedge_position_obj.hedge_wallet_hash:
-        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
-        data["meta"]["position"] = "hedge"
+    if hedge_position_obj.short_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.short_wallet_hash}"
+        data["meta"]["position"] = "short"
         async_to_sync(channel_layer.group_send)(
             room_name, 
             { "type": "send_update", "data": data }
@@ -91,9 +91,9 @@ def send_contract_cancelled_update(hedge_position_obj):
         }
     }
 
-    if hedge_position_obj.hedge_wallet_hash:
-        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
-        data["meta"]["position"] = "hedge"
+    if hedge_position_obj.short_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.short_wallet_hash}"
+        data["meta"]["position"] = "short"
         async_to_sync(channel_layer.group_send)(
             room_name, 
             { "type": "send_update", "data": data }
@@ -123,9 +123,9 @@ def send_funding_tx_update(hedge_position_obj, position:str="", tx_hash:str=""):
     if tx_hash:
         data["meta"]["new_tx_hash"] = tx_hash
 
-    if hedge_position_obj.hedge_wallet_hash:
-        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
-        data["meta"]["position"] = "hedge"
+    if hedge_position_obj.short_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.short_wallet_hash}"
+        data["meta"]["position"] = "short"
         async_to_sync(channel_layer.group_send)(
             room_name, 
             { "type": "send_update", "data": data }
@@ -147,9 +147,9 @@ def send_settlement_update(hedge_position_obj):
         "meta": { "address": hedge_position_obj.address }
     }
 
-    if hedge_position_obj.hedge_wallet_hash:
-        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
-        data["meta"]["position"] = "hedge"
+    if hedge_position_obj.short_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.short_wallet_hash}"
+        data["meta"]["position"] = "short"
         async_to_sync(channel_layer.group_send)(
             room_name, 
             { "type": "send_update", "data": data }
@@ -176,9 +176,9 @@ def send_mutual_redemption_update(mutual_redemption_obj, action=""):
         }
     }
 
-    if hedge_position_obj.hedge_wallet_hash:
-        room_name = f"updates_{hedge_position_obj.hedge_wallet_hash}"
-        data["meta"]["position"] = "hedge"
+    if hedge_position_obj.short_wallet_hash:
+        room_name = f"updates_{hedge_position_obj.short_wallet_hash}"
+        data["meta"]["position"] = "short"
         async_to_sync(channel_layer.group_send)(
             room_name, 
             { "type": "send_update", "data": data }

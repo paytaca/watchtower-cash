@@ -1,7 +1,8 @@
+import axios from 'axios'
 import { OracleNetwork, OracleData } from '@generalprotocols/price-oracle'
 import { hexToBin } from '@bitauth/libauth'
 
-const ORACLE_PUBLIC_KEY = process.env.ANYHEDGE_DEFAULT_ORACLE_PUBKEY || '02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818'
+// const ORACLE_PUBLIC_KEY = process.env.ANYHEDGE_DEFAULT_ORACLE_PUBKEY || '02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818'
 const ORACLE_RELAY = process.env.ANYHEDGE_DEFAULT_ORACLE_RELAY || 'oracles.generalprotocols.com'
 const ORACLE_RELAY_PORT = Number(process.env.ANYHEDGE_DEFAULT_ORACLE_PORT) || 7083
 
@@ -67,17 +68,28 @@ export async function parseOracleMessage(message, publicKey, signature) {
  * @returns {{success:Boolean, error:String, results: { priceMessage: OraclePriceMessage, priceData: PriceMessageData }[]}}
  */
 export async function getPriceMessages(config, requestParams) {
-	const response = { success: false, results: [], error: '' }
+	const response = { success: false, results: [], error: '', source: [].map(String)[0] }
 
 	const _conf = {
-		publicKey: config?.oraclePubKey || ORACLE_PUBLIC_KEY,
+		publicKey: config?.oraclePubKey,
 		relay: config?.oracleRelay || ORACLE_RELAY,
 		port: config?.oracleRelayPort || ORACLE_RELAY_PORT,
 	}
 
 	const defaultSearchRequest = { publicKey: _conf.publicKey, count: 1, minDataSequence: 1 }
 	const searchRequest = Object.assign({}, defaultSearchRequest, requestParams)
-	const requestedMessages = await OracleNetwork.request(searchRequest, _conf.relay, _conf.port);
+	let requestedMessages = [].map(() => Object({ message: '', publicKey: '', signature: '' }))
+	let source
+	try {
+		requestedMessages = await OracleNetwork.request(searchRequest, _conf.relay, _conf.port);
+		source = 'tcp'
+	} catch (error) {
+		const params = Object.assign({}, searchRequest, { publicKey: _conf.publicKey })
+		const resp = await axios.get(`https://${_conf.relay}/api/v1/oracleMessages`, { params })
+			.catch(error2 => Promise.reject([error, error2]))
+		requestedMessages = resp.data?.oracleMessages
+		source = 'api'
+	}
 
 	if (!Array.isArray(requestedMessages)) {
 		response.success = false
@@ -95,6 +107,7 @@ export async function getPriceMessages(config, requestParams) {
 		})
 	)
 
+	response.source = source
 	response.results = parsedMessages
 	response.success = true
 	return response

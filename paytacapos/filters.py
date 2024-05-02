@@ -27,6 +27,7 @@ class MerchantFilter(filters.FilterSet):
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
     vault_token_address = filters.CharFilter(field_name="vault__token_address", lookup_expr="exact")
+    no_vault = filters.BooleanFilter(field_name="vault", lookup_expr="isnull")
 
     class Meta:
         model = Merchant
@@ -36,4 +37,5 @@ class MerchantFilter(filters.FilterSet):
             "street",
             "category",
             "vault_token_address",
+            "no_vault",
         ]

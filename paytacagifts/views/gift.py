@@ -161,7 +161,7 @@ class GiftViewSet(viewsets.GenericViewSet):
             })
 
         if gift.campaign:
-            claims = gift.campaign.claims.filter(wallet__wallet_hash=wallet_hash)
+            claims = gift.campaign.claims.filter(wallet__wallet_hash=wallet_hash, succeeded=True)
             claims_sum = claims.aggregate(Sum('amount'))['amount__sum'] or 0
             if claims_sum < gift.campaign.limit_per_wallet:
                 claim = Claim.objects.create(

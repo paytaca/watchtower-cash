@@ -266,6 +266,7 @@ CELERY_IMPORTS = (
     'rampp2p.tasks.contract_tasks',
     'rampp2p.tasks.market_rate_tasks',
     'rampp2p.tasks.transaction_tasks',
+    'rampp2p.tasks.order_tasks',
     'vouchers.tasks',
 )
 
@@ -395,7 +396,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'update_market_rates': {
         'task': 'rampp2p.tasks.market_rate_tasks.update_market_rates',
-        'schedule': 60 * 10 # run every 10 minutes
+        'schedule': 15 # run every 15 seconds
     },
     'check_unfunded_gifts': {
         'task': 'paytacagifts.tasks.check_unfunded_gifts',
@@ -412,6 +413,10 @@ CELERY_BEAT_SCHEDULE = {
     'bulk_rebroadcast': {
         'task': 'main.tasks.bulk_rebroadcast',
         'schedule': 30
+    },
+    'cancel_expired_orders': {
+        'task': 'rampp2p.tasks.order_tasks.cancel_expired_orders',
+        'schedule': 60 # run every 1 minute
     }
 }
 
@@ -578,7 +583,7 @@ PAYTACAPOS = {
 }
 
 ANYHEDGE = {
-    "ANYHEDGE_LP_BASE_URL": config("ANYHEDGE_LP_BASE_URL", "https://staging-liquidity.anyhedge.com"),
+    "ANYHEDGE_LP_BASE_URL": config("ANYHEDGE_LP_BASE_URL", "https://liquidity.anyhedge.com"),
     "ANYHEDGE_DEFAULT_ORACLE_RELAY": config("ANYHEDGE_DEFAULT_ORACLE_RELAY", ""),
     "ANYHEDGE_DEFAULT_ORACLE_PORT": config("ANYHEDGE_DEFAULT_ORACLE_PORT", 0),
     "ANYHEDGE_DEFAULT_ORACLE_PUBKEY": config("ANYHEDGE_DEFAULT_ORACLE_PUBKEY", ""),
@@ -656,3 +661,32 @@ MQTT_PORT = config('MQTT_PORT', '', cast=int)
 # CoinGecko
 
 COINGECKO_API_KEY = config('COINGECKO_API_KEY', '')
+
+
+# cashaddress library
+# Altering third party library cashaddress to support p2sh32
+# might not be the best fix due to alteration of Address.__init__ 
+from cashaddress.convert import Address
+
+Address.VERSION_MAP["legacy"] += [
+    ('P2SH32', 5, False),
+    ('P2SH32-TESTNET', 196, True),
+]
+
+Address.VERSION_MAP["cash"] += [
+    ('P2SH32', 11, False),
+    ('P2SH32-TESTNET', 11, True),
+]
+
+# hack-ish way to for updating Addre
+Address__init__ = Address.__init__
+def new_init(self, *args, **kwargs):
+    response = Address__init__(self, *args, **kwargs)
+    if len(self.payload) == 32 and \
+        "P2SH" in self.version and \
+        "P2SH32" not in self.version:
+
+        self.version = self.version.replace("P2SH", "P2SH32")
+
+    return response
+Address.__init__ = new_init

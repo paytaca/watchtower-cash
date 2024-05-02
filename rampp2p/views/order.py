@@ -6,6 +6,8 @@ from django.http import Http404
 from django.db import IntegrityError
 from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+from datetime import timedelta
 
 import math
 from typing import List
@@ -168,7 +170,7 @@ class OrderListCreate(APIView):
         # filters by ad payment types
         if len(params['payment_types']) > 0:
             payment_types = list(map(int, params['payment_types']))
-            queryset = queryset.filter(ad_snapshot__payment_methods__payment_type__id__in=payment_types).distinct()
+            queryset = queryset.filter(Q(ad_snapshot__payment_types__id__in=payment_types) | Q(ad_snapshot__payment_types=None)).distinct()
 
         # filters by ad time limits
         if len(params['time_limits']) > 0:
@@ -279,7 +281,9 @@ class OrderListCreate(APIView):
             appeal_cooldown_choice = ad.appeal_cooldown_choice,
         )
         ad_snapshot.save()
-        ad_snapshot.payment_methods.set(ad.payment_methods.all())
+        ad_payment_methods = ad.payment_methods.all()
+        ad_payment_types = [pm.payment_type for pm in ad_payment_methods]
+        ad_snapshot.payment_types.set(ad_payment_types)
 
         # Create the order
         data = {
@@ -310,6 +314,9 @@ class OrderListCreate(APIView):
         formatted_timestamp = order.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
         chat_session_ref = generate_chat_session_ref(f'{order.id}{formatted_timestamp}')
         order.chat_session_ref = chat_session_ref
+
+        # set order expires at
+        order.expires_at = order.created_at + timedelta(hours=24)
         order.save()
 
         serialized_status = StatusSerializer(
@@ -483,6 +490,13 @@ class ConfirmOrder(APIView):
             validate_status_progression(StatusType.CONFIRMED, pk)
 
             order = Order.objects.get(pk=pk)
+
+            if order.expires_at and order.expires_at < timezone.now():
+                raise ValidationError('cannot confirm expired order')
+            
+            order.expires_at = None
+            order.save()
+
             trade_amount = order.ad_snapshot.ad.trade_amount - order.crypto_amount
             if trade_amount < 0:
                 raise ValidationError('crypto_amount exceeds ad remaining trade_amount')

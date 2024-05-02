@@ -548,8 +548,8 @@ def process_nft_txn(txid):
     txns = txns.filter(cashtoken_nft__isnull=False)
 
     # transaction count here should be exactly 3, from PurelyPeer voucher structure:
-    # 0 = key NFT (voucher)
-    # 1 = lock NFT
+    # 0 = key NFT
+    # 1 = lock NFT (voucher)
     # 2 = quest NFT
     if txns.exists() and txns.count() == 3:
         txn_addresses = txns.values('address__address')
@@ -561,21 +561,17 @@ def process_nft_txn(txid):
             lock_nft_txn = lock_nft_txn.first()
 
             if lock_nft_txn.cashtoken_nft.current_index == 1:
-                voucher_txn = txns.filter(cashtoken_nft__current_index=0)
+                value = lock_nft_txn.value / 1e8
+                nft = lock_nft_txn.cashtoken_nft
 
-                if voucher_txn.exists():
-                    voucher_txn = voucher_txn.first()
-                    value = voucher_txn.value / 1e8
-                    nft = voucher_txn.cashtoken_nft
-
-                    Voucher(
-                        nft=nft,
-                        vault=vault,
-                        value=value,
-                        minting_txid=voucher_txn.txid,
-                        category=nft.category,
-                        commitment=nft.commitment
-                    ).save()
+                Voucher(
+                    nft=nft,
+                    vault=vault,
+                    value=value,
+                    minting_txid=lock_nft_txn.txid,
+                    category=nft.category,
+                    commitment=nft.commitment
+                ).save()
 
 
 def process_cashtoken_tx(
