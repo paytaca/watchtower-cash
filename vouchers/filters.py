@@ -33,10 +33,7 @@ class VoucherFilter(filters.FilterSet):
         return queryset
 
     def filter_wallet_hash(self, queryset, name, value):
-        nfts = CashNonFungibleToken.objects.filter(
-            transaction__wallet__wallet_hash=value,
-            transaction__spent=False
-        )
+        nfts = CashNonFungibleToken.objects.filter(transaction__wallet__wallet_hash=value)
         nfts = nfts.distinct()
         
         nft_categories = list(
