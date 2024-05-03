@@ -154,7 +154,7 @@ class OrderSerializer(serializers.ModelSerializer):
         return False
     
     def get_read_at(self, obj):
-        wallet_hash = self.context['wallet_hash']
+        wallet_hash = self.context.get('wallet_hash')
         order_member = models.OrderMember.objects.filter(Q(order__id=obj.id) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
         if order_member.exists():
             read_at = order_member.first().read_at

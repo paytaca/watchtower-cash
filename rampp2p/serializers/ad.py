@@ -74,7 +74,7 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
         return SubsetPaymentMethodSerializer(payment_types, many=True).data
     
     def get_appeal_cooldown(self, obj):
-        return str(obj.appeal_cooldown)
+        return str(obj.appeal_cooldown_choice)
 
 class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()

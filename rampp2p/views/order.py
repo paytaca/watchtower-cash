@@ -354,14 +354,15 @@ class OrderListCreate(APIView):
         send_push_notification([ad.owner.wallet_hash], "Received a new order", extra=extra)
 
         unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=ad.owner.wallet_hash)).count()
+        serialized_order = OrderSerializer(order, context={'wallet_hash': ad.owner.wallet_hash})
         websocket.send_general_update({
             'type': WSGeneralMessageType.NEW_ORDER.value,
             'extra': {
-                'order': serialized_order,
+                'order': serialized_order.data,
                 'unread_count': unread_count
             }
-        }, [ad.owner.wallet_hash])
-    
+        }, ad.owner.wallet_hash)
+
         return Response(response, status=status.HTTP_201_CREATED)
     
     def get_contract_params(self, order: models.Order):
@@ -469,7 +470,7 @@ class OrderMemberView(APIView):
             websocket.send_general_update({
                 'type': WSGeneralMessageType.READ_ORDER.value,
                 'extra': { 'unread_count': unread_count }
-            }, [wallet_hash])
+            }, wallet_hash)
             return Response({'success': True}, status=status.HTTP_200_OK)
         return Response({'success': False, 'error': 'no such member'}, status=status.HTTP_400_BAD_REQUEST)
 
