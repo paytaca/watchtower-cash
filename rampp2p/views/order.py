@@ -458,7 +458,6 @@ class OrderMemberView(APIView):
         return Response(members.data, status=status.HTTP_200_OK)
     
     def patch(self, request, pk):
-        logger.warn(f'set_order_member_read_at: {request} | {pk}')
         wallet_hash = request.user.wallet_hash
         member = models.OrderMember.objects.filter(Q(order__id=pk) & Q(peer__wallet_hash=wallet_hash))
         if member.exists():
