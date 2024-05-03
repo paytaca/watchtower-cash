@@ -26,8 +26,17 @@ def update_shift_status(self):
 
         if fetched_shift.status_code == 200 or fetched_shift.status_code == 200:
             data = fetched_shift.json()
-
+            
             shift.shift_status = data['status']
+
+            if data['status'] == 'settled':
+                shift.date_shift_completed = datetime.now()                
+                shift.shift_info['txn_details'] = { 
+                    'txid': data['settleHash']
+                }
+
+                logger.info(shift.shift_info)
+
             shift.save()
 
 
