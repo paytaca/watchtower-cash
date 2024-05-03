@@ -14,7 +14,8 @@ class PaymentTypeSerializer(serializers.ModelSerializer):
             'name',
             'formats',
             'notes',
-            'is_disabled'
+            'is_disabled',
+            'acc_name_req'
         ]
 
 class SubsetPaymentMethodSerializer(serializers.ModelSerializer):
