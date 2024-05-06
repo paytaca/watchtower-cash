@@ -18,3 +18,37 @@ class Order(models.Model):
 
     def __str__(self):
         return f'{self.id}'
+    
+class OrderMember(models.Model):
+    class MemberType(models.TextChoices):
+        SELLER = 'SELLER'
+        BUYER = 'BUYER'
+        ARBITER = 'ARBITER'
+
+    type = models.CharField(max_length=10, choices=MemberType.choices, null=True)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='members')
+    peer = models.ForeignKey(Peer, on_delete=models.CASCADE, related_name='order_members', null=True)
+    arbiter = models.ForeignKey(Arbiter, on_delete=models.CASCADE, related_name='order_members', null=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        member_name = ''
+        if self.peer:
+            member_name = self.peer.name
+        elif self.arbiter:
+            member_name = self.arbiter.name
+        return f'{self.id} | Order #{self.order.id} | {self.type} | {member_name}'
+
+    class Meta:
+         constraints = [
+            models.UniqueConstraint(
+                fields=['type', 'peer', 'order'],
+                condition=models.Q(peer__isnull=False),
+                name='unique_peer_order'
+            ),
+            models.UniqueConstraint(
+                fields=['type', 'arbiter', 'order'],
+                condition=models.Q(arbiter__isnull=False),
+                name='unique_arbiter_order'
+            ),
+        ]

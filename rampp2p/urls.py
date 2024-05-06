@@ -25,7 +25,7 @@ urlpatterns = [
 
     path('order/', OrderListCreate.as_view(), name='order-list-create'),
     path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
-    path('order/<int:pk>/members', OrderMembers.as_view(), name='order-members'),
+    path('order/<int:pk>/members', OrderMemberView.as_view(), name='order-members'),
     path('order/<int:pk>/status', OrderListStatus.as_view(), name='order-list-status'),
     path('order/<int:pk>/cancel', CancelOrder.as_view(), name='order-cancel'),
     path('order/<int:pk>/confirm', ConfirmOrder.as_view(), name='confirm-order'),

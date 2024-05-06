@@ -14,6 +14,7 @@ class PaymentType(models.Model):
   formats = models.ManyToManyField(IdentifierFormat)
   notes = models.CharField(max_length=200, null=True, blank=True)
   is_disabled = models.BooleanField(default=False)
+  acc_name_req = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True)
   modified_at = models.DateTimeField(auto_now=True)
 
