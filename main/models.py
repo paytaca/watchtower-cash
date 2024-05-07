@@ -815,11 +815,6 @@ class TransactionBroadcast(PostgresModel):
 
 class WalletShard(PostgresModel):
     # stored as-is from client-side; revisit if needs more secure approach for storing
-    shard = models.CharField(max_length=350, db_index=True)
+    shard = models.CharField(max_length=350, primary_key=True)
     first_identifier = models.CharField(max_length=64)
     second_identifier = models.CharField(max_length=64)
-
-    def get_shard(self):
-        return {
-            'shard': self.shard
-        }
