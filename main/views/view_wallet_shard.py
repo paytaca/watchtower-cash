@@ -11,20 +11,24 @@ from main.serializers import WalletShardSerializer
 class WalletShardViewSet(
     viewsets.GenericViewSet,
     mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.UpdateModelMixin
+    mixins.CreateModelMixin
 ):
     serializer_class = WalletShardSerializer
-    http_method_names = ['get', 'patch', 'head']
+    lookup_field = 'shard'
+    http_method_names = ['post', 'get', 'head']
 
     def get_model(self):
         return self.serializer_class.Meta.model
     
-    # def get_queryset(self):
-    #     return self.get_model().objects.filter(shard=self.request.shard)
+    def get_object(self):
+        shard = self.kwargs.get('shard', '')
+        return self.get_model().objects.filter(shard=shard)
 
-    # def create(self, request):
-    #   pass
+    def create(self, request, *args, **kwargs):
+        shard_check = self.get_object()
+
+        if not shard_check.exists():
+            return super().create(request, *args, **kwargs)
 
     def retrieve(self, request, *args, **kwargs):
         # first_identifier = kwargs.get('first_identifier', None)
@@ -40,8 +44,7 @@ class WalletShardViewSet(
         #     data = shard_check.first().get_shard()
 
         # adjust to use first and second identifiers
-        shard = kwargs.get('pk', '')
-        shard_check = self.get_model().objects.filter(shard=shard)
+        shard_check = self.get_object()
 
         data = None
         if shard_check.exists():
@@ -51,12 +54,3 @@ class WalletShardViewSet(
 
         serializer = self.serializer_class(data)
         return Response(data=serializer.data)
-
-    def update(self, request, *args, **kwargs):
-        # try:
-        #     self.get_object()
-        # except Http404:
-        #    shard = self.kwargs['shard']
-        #    self.get_model().objects.update_or_create(shard=shard)
-
-        return super().update(request, *args, **kwargs)
