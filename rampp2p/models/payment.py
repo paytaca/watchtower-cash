@@ -10,16 +10,18 @@ class IdentifierFormat(models.Model):
     return self.format
 
 class PaymentType(models.Model):
-  name = models.CharField(max_length=100, db_index=True)
+  full_name = models.CharField(max_length=100, db_index=True)
+  short_name = models.CharField(max_length=50, default='')
   formats = models.ManyToManyField(IdentifierFormat)
   notes = models.CharField(max_length=200, null=True, blank=True)
   is_disabled = models.BooleanField(default=False)
-  acc_name_req = models.BooleanField(default=False)
+  has_qr_code = models.BooleanField(default=False)
+  acc_name_required = models.BooleanField(default=False)
   created_at = models.DateTimeField(auto_now_add=True)
   modified_at = models.DateTimeField(auto_now=True)
 
   def __str__(self):
-    return self.name
+    return f'{self.full_name} ({self.short_name})'
 
 class PaymentMethod(models.Model):
   payment_type = models.ForeignKey(PaymentType, on_delete=models.PROTECT)
