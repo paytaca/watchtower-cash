@@ -11,14 +11,16 @@ class PaymentTypeSerializer(serializers.ModelSerializer):
         model = models.PaymentType
         fields = [
             'id',
-            'name',
+            'full_name',
+            'short_name',
             'formats',
             'notes',
-            'is_disabled'
+            'is_disabled',
+            'acc_name_required'
         ]
 
 class SubsetPaymentMethodSerializer(serializers.ModelSerializer):
-    payment_type = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all())
+    payment_type = serializers.SlugRelatedField(slug_field="short_name", queryset=models.PaymentType.objects.all())
     identifier_format = serializers.SlugRelatedField(slug_field="format", queryset=models.IdentifierFormat.objects.all())
     class Meta:
         model = models.PaymentMethod
@@ -31,10 +33,19 @@ class SubsetPaymentMethodSerializer(serializers.ModelSerializer):
         ]
 
 class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
-    payment_type = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all())
+    payment_type = serializers.SerializerMethodField()
     class Meta:
         model = models.PaymentMethod
         fields = ['id', 'payment_type']
+
+    def get_payment_type(self, obj):
+        name = obj.payment_type.short_name
+        if name == '':
+            name = obj.payment_type.full_name
+        return {
+            'id': obj.payment_type.id,
+            'name': name
+        }
 
 class PaymentMethodCreateSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())

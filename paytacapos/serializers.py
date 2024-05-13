@@ -531,15 +531,13 @@ class MerchantListSerializer(serializers.ModelSerializer):
         if 'wallet_hash' in query_params.keys():
             wallet_hash = query_params.get('wallet_hash', '')
             if wallet_hash:
-                voucher_nfts = voucher_nfts.filter(
-                    transaction__wallet__wallet_hash=wallet_hash,
-                    transaction__spent=False
-                )
+                voucher_nfts = voucher_nfts.filter(transaction__wallet__wallet_hash=wallet_hash)
                 voucher_nfts = voucher_nfts.distinct()
 
         merchant_vouchers = Voucher.objects.filter(
             vault__merchant=obj,
-            category__in=voucher_nfts.values('category')
+            category__in=voucher_nfts.values('category'),
+            commitment__in=voucher_nfts.values('commitment')
         )
         claimed_vouchers = merchant_vouchers.filter(claimed=True)
         unclaimed_vouchers = merchant_vouchers.filter(claimed=False, expired=False)

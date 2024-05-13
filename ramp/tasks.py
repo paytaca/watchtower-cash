@@ -1,4 +1,6 @@
 import logging
+import requests
+import json
 from datetime import datetime
 
 from celery import shared_task
@@ -17,15 +19,26 @@ def update_shift_status(self):
     qs = Shift.objects.filter(shift_status='waiting')
 
     for shift in qs:
-        date = shift.shift_info['shift_expiration']
+        shift_id = shift.shift_id
+        url = 'https://sideshift.ai/api/v2/shifts/' + shift_id        
 
-        expiry_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%fZ")
-        date_now = datetime.now()
+        fetched_shift = requests.get(url)        
 
-        if expiry_date < date_now:
+        if fetched_shift.status_code == 200 or fetched_shift.status_code == 200:
+            data = fetched_shift.json()
+            
+            shift.shift_status = data['status']
 
-            shift.shift_status = 'expired'
+            if data['status'] == 'settled':
+                shift.date_shift_completed = datetime.now()                
+                shift.shift_info['txn_details'] = { 
+                    'txid': data['settleHash']
+                }
+
+                logger.info(shift.shift_info)
+
             shift.save()
+
 
 
         

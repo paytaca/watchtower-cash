@@ -1063,7 +1063,8 @@
         "model": "rampp2p.paymenttype",
         "pk": 2,
         "fields": {
-            "name": "Paypal",
+            "full_name": "Paypal",
+            "short_name": "Paypal",
             "is_disabled": false,
             "created_at": "2023-09-11T04:19:13.152Z",
             "modified_at": "2024-03-18T04:52:02.257Z",
@@ -1076,7 +1077,8 @@
         "model": "rampp2p.paymenttype",
         "pk": 3,
         "fields": {
-            "name": "Gcash",
+            "full_name": "Gcash",
+            "short_name": "Gcash",
             "is_disabled": false,
             "created_at": "2023-09-11T04:19:17.964Z",
             "modified_at": "2024-03-18T04:51:59.343Z",
@@ -1089,7 +1091,8 @@
         "model": "rampp2p.paymenttype",
         "pk": 6,
         "fields": {
-            "name": "Maya",
+            "full_name": "Maya",
+            "short_name": "Maya",
             "is_disabled": false,
             "created_at": "2024-02-16T07:15:22.003Z",
             "modified_at": "2024-03-18T04:51:53.273Z",
@@ -1102,7 +1105,8 @@
         "model": "rampp2p.paymenttype",
         "pk": 7,
         "fields": {
-            "name": "PayID",
+            "full_name": "PayID",
+            "short_name": "PayID",
             "is_disabled": false,
             "created_at": "2024-03-18T04:34:35.221Z",
             "modified_at": "2024-03-18T04:51:41.197Z",
@@ -1116,7 +1120,8 @@
         "model": "rampp2p.paymenttype",
         "pk": 8,
         "fields": {
-            "name": "Interact e-Transfer",
+            "full_name": "Interact e-Transfer",
+            "short_name": "Interact e-Transfer",
             "is_disabled": false,
             "created_at": "2024-03-18T04:52:26.531Z",
             "modified_at": "2024-03-18T04:52:26.531Z",

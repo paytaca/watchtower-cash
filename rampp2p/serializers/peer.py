@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from django.db.models import Q, Subquery, OuterRef, F
-from rampp2p.models import Peer, Order, Status, StatusType, ReservedName
+from rampp2p.models import Peer, Order, Status, StatusType, ReservedName, OrderMember
 
 class PeerProfileSerializer(serializers.ModelSerializer):
+    unread_orders_count = serializers.SerializerMethodField()
     class Meta:
         model = Peer
         fields = [
@@ -12,8 +13,13 @@ class PeerProfileSerializer(serializers.ModelSerializer):
             'public_key',
             'address',
             'address_path',
-            'is_disabled'
+            'is_disabled',
+            'unread_orders_count'
         ]
+    
+    def get_unread_orders_count(self, obj: Peer):
+        unread_count = OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=obj.wallet_hash)).count()
+        return unread_count
 
 class PeerSerializer(serializers.ModelSerializer):
     trade_count = serializers.SerializerMethodField()

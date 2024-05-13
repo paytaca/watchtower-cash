@@ -9,7 +9,7 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    payment_types = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all(), many=True)
+    payment_types = serializers.SlugRelatedField(slug_field="short_name", queryset=models.PaymentType.objects.all(), many=True)
     payment_methods = serializers.SerializerMethodField()
 
     class Meta:
@@ -48,7 +48,7 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     id = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    payment_types = serializers.SlugRelatedField(slug_field="name", queryset=models.PaymentType.objects.all(), many=True)
+    payment_types = serializers.SlugRelatedField(slug_field="short_name", queryset=models.PaymentType.objects.all(), many=True)
     appeal_cooldown = serializers.SerializerMethodField()
     payment_methods = serializers.SerializerMethodField()
 
@@ -74,7 +74,7 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
         return SubsetPaymentMethodSerializer(payment_types, many=True).data
     
     def get_appeal_cooldown(self, obj):
-        return obj.appeal_cooldown
+        return str(obj.appeal_cooldown_choice)
 
 class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
