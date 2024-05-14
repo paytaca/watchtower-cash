@@ -16,7 +16,7 @@ def update_shift_status(self):
 
     logger.info('CHECKING FOR EXPIRED SHIFTS')
     # get waiting
-    qs = Shift.objects.filter(shift_status='waiting')
+    qs = Shift.objects.filter(shift_status__in=['waiting', 'settling'])
 
     for shift in qs:
         shift_id = shift.shift_id
