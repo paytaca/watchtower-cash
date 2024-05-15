@@ -2313,12 +2313,8 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             "outpoint_index": index,
                         })
 
-        if settings.BCH_NETWORK == 'mainnet':
-            mqtt_client = mqtt.Client(transport='websockets')
-            mqtt_client.tls_set()
-        else:
-            mqtt_client = mqtt.Client()
-        mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
+        from main.mqtt import connect_to_mqtt
+        mqtt_client = connect_to_mqtt()
         mqtt_client.loop_start()
 
         for output in outputs:
