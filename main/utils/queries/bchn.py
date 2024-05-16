@@ -90,13 +90,13 @@ class BCHN(object):
         txn['timestamp'] = None
         return txn
 
-    def get_transaction(self, tx_hash):
+    def get_transaction(self, tx_hash, include_hex=False):
         retries = 0
         while retries < self.max_retries:
             try:
                 txn = self._get_raw_transaction(tx_hash)
                 if txn:
-                    return self._parse_transaction(txn)
+                    return self._parse_transaction(txn, include_hex=include_hex)
                 break
             except Exception as exception:
                 retries += 1
@@ -105,7 +105,7 @@ class BCHN(object):
                     raise exception
                 time.sleep(1)
 
-    def _parse_transaction(self, txn):
+    def _parse_transaction(self, txn, include_hex=False):
         tx_hash = txn['hash']
         
         # NOTE: very new transactions doesnt have timestamp
@@ -119,6 +119,9 @@ class BCHN(object):
             'size': txn['size'],
             'valid': True
         }
+        if include_hex:
+            transaction["hex"] = txn["hex"]
+
         transaction['inputs'] = []
 
         for tx_input in txn['vin']:
