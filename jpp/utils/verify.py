@@ -5,7 +5,15 @@ import requests
 import traceback
 import bitcoin
 from cashaddress import convert
+from bitcoinrpc.authproxy import JSONRPCException
 
+from main.utils.queries.bchn import BCHN
+from main.utils.tx_fee import is_hex
+
+bchn = BCHN()
+
+def __is_txid(txid):
+    return is_hex(txid, with_prefix=False) and len(txid) == 64
 
 class VerifyError(Exception):
     pass
@@ -99,47 +107,34 @@ def get_tx_output_values(txids):
     """
 
     txids = list(set(txids))
-    query = {
-        "v": 3,
-        "q": {
-            "find": { "tx.h": { "$in": txids } },
-            "project": { "tx.h": 1, "out.e.i": 1, "out.e.v": 1 },
-        }
-    }
-    query_string = json.dumps(query)
-    query_bytes = query_string.encode('ascii')
-    query_b64 = base64.b64encode(query_bytes)
+    txs_data = []
+    for txid in txids:
+        if not __is_txid(txid): continue
 
-    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
-    data = requests.get(url).json()
-    txs = [*data["c"], *data["u"]]
-    tx_output_map = {} # Map(txid, Map(output_index, value) )
-    for tx in txs:
-        txid = tx["tx"]["h"]
-        output_map = {} # output_index => value
-        for output in tx["out"]:
-            index = output["e"]["i"]
-            value = output["e"]["v"]
-            output_map[index] = value
+        try:
+            txs_data.append(bchn.get_transaction(txid))
+        except Exception as exception:
+            txs_data.append(exception)
 
-        tx_output_map[txid] = output_map
+    txs_map = {}
+    for tx_data in txs_data:
+        if not isinstance(tx_data, dict): continue
 
-    return tx_output_map
+        output_map = {}
+        for output in tx_data["outputs"]:
+            output_map[output["index"]] = output["value"]
+        txs_map[tx_data["txid"]] = output_map
+    return txs_map
+
 
 def tx_exists(txid):
-    query = {
-        "v": 3,
-        "q": {
-            "find": { "tx.h": txid },
-            "project": { "tx.h": 1 },
-        }
-    }
-    query_string = json.dumps(query)
-    query_bytes = query_string.encode('ascii')
-    query_b64 = base64.b64encode(query_bytes)
+    if not __is_txid(txid): return False
+    try:
+        bchn.rpc_connection.getrawtransaction(txid, 0)
+        return True
+    except JSONRPCException as exception:
+        if exception.code in [-5, -8]: # -5 -> doesnt exist, -8 -> invalid txid format(32byte hex)
+            return False
+        raise exception
 
-    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
-    data = requests.get(url).json()
-    txs = [*data["c"], *data["u"]]
-
-    return len(txs) > 0
+        return False

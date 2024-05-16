@@ -1,7 +1,13 @@
 import re
 
-def is_hex(value):
-    return bool(re.match("0x[0-9a-f]*", value, flags=re.IGNORECASE))
+def is_hex(value, with_prefix=True):
+    regex = "[0-9a-f]*"
+    if with_prefix == True:
+        regex += "0x"
+    try:
+        return bool(re.match(regex, value, flags=re.IGNORECASE))
+    except TypeError:
+        return False
 
 def bch_to_satoshi(value):
     return round(value * (10 ** 8))
