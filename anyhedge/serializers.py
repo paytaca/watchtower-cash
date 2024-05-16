@@ -27,13 +27,13 @@ from .utils.contract import (
     create_contract,
     get_contract_status,
     compile_contract_from_hedge_position_offer,
+    calculate_hedge_sats,
 )
 from .utils.funding import (
     get_p2p_settlement_service_fee,
     get_tx_hash,
     calculate_funding_amounts,
     validate_funding_transaction,
-    calculate_hedge_sats,
 )
 from .utils.liquidity import (
     find_matching_position_offer,
