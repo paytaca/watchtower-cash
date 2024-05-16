@@ -10,10 +10,14 @@ from .api import (
 )
 from .contract import (
     compile_contract_from_hedge_position,
-    calculate_hedge_sats,
 )
 from ..js.runner import AnyhedgeFunctions
 
+from main.utils.queries.bchn import BCHN
+from main.utils.tx_fee import is_hex
+from main.utils.address_scan import get_bch_transactions
+
+bchn = BCHN()
 
 def get_tx_hash(tx_hex):
     tx_hex_bytes = bytes.fromhex(tx_hex)
@@ -99,54 +103,26 @@ def complete_funding_proposal(hedge_position_obj):
 
 def search_funding_tx(contract_address, sats:int=None):
     cash_address = convert.to_cash_address(contract_address)
-    address = cash_address.replace("bitcoincash:", "")
-    query = {
-        "v": 3,
-        "q": {
-            "find": {
-            "out.e.a": address
-            },
-            "limit": 10,
-            "project": { "tx.h": 1, "out.e": 1 },
-        },
-        # "r": {
-        #     "f": "[.[] | { hash: .tx.h?, out: .out[].e? }  ]"
-        # }
-    }
-    query_string = json.dumps(query)
-    query_bytes = query_string.encode('ascii')
-    query_b64 = base64.b64encode(query_bytes)
-    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
-    
-    data = requests.get(url).json()
-    # example data structure:
-    # {
-    #     "u": [],
-    #     "c": [
-    #         {
-    #             "_id": "63241ec4b8ba1c709088ada9",
-    #             "tx": { "h": "1499ac29cf09f6752cdc54b4df8ffa9dbb8f7393b99e8380b2d6ce9363341ef4" },
-    #             "out": [
-    #                 {
-    #                     "e": { "v": 1251123, "i": 0, "a": "pzjjvtqc686qr75ghnlaqs2y9dsdalqczcwshgpaaj" }
-    #                 },
-    #                 {
-    #                     "e": { "v": 546, "i": 1, "a": "qp03erh5c9nmk0s830vpn39faxw3fq0vxsp870x46u" }
-    #                 }
-    #             ]
-    #         }
-    #     ]
-    # }
 
-    txs = [*data["c"], *data["u"]]
-    for tx in txs:
-        tx_hash = tx["tx"]["h"]
-        if sats is not None:
-            for output in tx["out"]:
-                if output["e"]["v"] == sats:
-                    return tx_hash
-        else:
-            return tx_hash
+    history = get_bch_transactions(cash_address)
+    txids = [tx["tx_hash"] for tx in history]
+
+    for txid in txids:
+        tx_data = bchn._get_raw_transaction(txid)
+        for tx_output in tx_data["vout"]:
+            if 'value' not in tx_output.keys() or 'addresses' not in tx_output['scriptPubKey'].keys():
+                continue
+
+            sats_value = round(tx_output['value'] * (10 ** 8))
+            address = tx_output['scriptPubKey']['addresses'][0]
+
+            if address != cash_address:
+                continue
+
+            if sats is not None and sats == sats_value:
+                return txid
+            else:
+                return txid
 
     return ""
 
@@ -158,42 +134,19 @@ def validate_funding_transaction(tx_hash, contract_address):
         "funding_satoshis": 0,
     }
     cash_address = convert.to_cash_address(contract_address)
-    address = cash_address.replace("bitcoincash:", "")
-    address_payload_hex = bytes(convert.Address.from_string(cash_address).payload).hex()
-    find_kwargs = { "tx.h": tx_hash }
-    if len(cash_address) <= 54:
-        find_kwargs["out.e.a"] = address
-    else:
-        find_kwargs["out.h1"] = address_payload_hex
 
-    query = {
-        "v": 3,
-        "q": {
-            "find": find_kwargs,
-            "limit": 10,
-            "project": { "tx.h": 1, "out.e": 1, "out.str": 1 }, # used out.str instead of out.h1 because it doesnt work
-        },
-        # "r": {
-        #     "f": "[.[] | { hash: .tx.h?, out: .out[].e? }  ]"
-        # }
-    }
-    query_string = json.dumps(query)
-    query_bytes = query_string.encode('ascii')
-    query_b64 = base64.b64encode(query_bytes)
-    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
-    data = requests.get(url).json()
+    if not is_hex(tx_hash, with_prefix=False) or not len(tx_hash) == 64:
+        return response
 
-    txs = [*data["c"], *data["u"]]
-    for tx in txs:
-        if tx["tx"]["h"] != tx_hash:
-            continue
+    tx_data = bchn.get_transaction(tx_hash)
+    if not tx_data: return response
 
-        for output in tx["out"]:
-            if "out.e.a" in find_kwargs and output["e"]["a"] == address or \
-               "out.h1" in find_kwargs and address_payload_hex in output["str"]:
-                response["funding_satoshis"] = output["e"]["v"]
-                response["funding_output"] = output["e"]["i"]
-                response["valid"] = True
+    for output in tx_data["outputs"]:
+        if output["address"] == cash_address:
+            response["funding_satoshis"] = output["value"]
+            response["funding_output"] = output["index"]
+            response["valid"] = True
+            break
 
     return response
 
