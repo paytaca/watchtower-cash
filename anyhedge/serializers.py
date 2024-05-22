@@ -221,7 +221,7 @@ class HedgePositionFeeSerializer(serializers.ModelSerializer):
         }
 
 class HedgePositionFundingSerializer(serializers.ModelSerializer):
-    settlement_txid = serializers.CharField(read_only=True, source="settlement__spending_transaction")
+    settlement_txid = serializers.CharField(read_only=True, source="settlement.spending_transaction")
 
     class Meta:
         model = HedgePositionFunding
