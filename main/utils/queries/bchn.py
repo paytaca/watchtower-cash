@@ -117,8 +117,10 @@ class BCHN(object):
             'txid': tx_hash,
             'timestamp': time,
             'size': txn['size'],
+            'confirmations': txn.get('confirmations'),
             'valid': True
         }
+
         if include_hex:
             transaction["hex"] = txn["hex"]
 
