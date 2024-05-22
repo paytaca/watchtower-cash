@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import F, ExpressionWrapper, DecimalField, Case, When
+from django.db.models import F, ExpressionWrapper, DecimalField, Case, When, OuterRef, Subquery
 
 import math
 from authentication.token import TokenAuthentication
@@ -89,19 +89,24 @@ class AdListCreate(APIView):
             time_limits = list(map(int, time_limits))
             queryset = queryset.filter(appeal_cooldown_choice__in=time_limits).distinct()
 
-        market_rate = MarketRate.objects.filter(currency=currency)
+        market_rate_subq = MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+        queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
 
         # Annotate to compute ad price based on price type (FIXED vs FLOATING)
         queryset = queryset.annotate(
             price=ExpressionWrapper(
                 Case(
-                    When(price_type=PriceType.FLOATING, then=(F('floating_price')/100 * market_rate.values('price'))),
+                    When(price_type=PriceType.FLOATING, then=(F('floating_price')/100 * F('market_rate'))),
                     default=F('fixed_price'),
                     output_field=DecimalField()
                 ),
                 output_field=DecimalField()
             )
         )
+
+        # search for ads with specific owner name
+        if query_name:
+            queryset = queryset.filter(owner__name__icontains=query_name)
 
         # Order ads by price (if store listings) or created_at (if owned ads)
         # Default order: ascending, descending if trade type is BUY, 
@@ -115,10 +120,6 @@ class AdListCreate(APIView):
             queryset = queryset.order_by(order_field, 'created_at')
         else:
             queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
-
-        # search for ads with specific owner name
-        if query_name:
-            queryset = queryset.filter(owner__name__icontains=query_name)
 
         count = queryset.count()
         total_pages = page
