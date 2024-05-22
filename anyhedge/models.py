@@ -96,6 +96,8 @@ class HedgePosition(models.Model):
     class Meta:
         ordering = ['-start_timestamp']
 
+    def __str__(self):
+        return f"<HedgePosition#{self.id}: {self.address}>"
 
     @property
     def low_liquidation_price(self):

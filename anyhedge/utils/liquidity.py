@@ -14,7 +14,7 @@ from ..models import (
     HedgePositionOffer,
     HedgePositionOfferCounterParty,
 )
-from .api import get_bchd_instance
+from .api import get_bchn_instance
 from .websocket import send_long_account_update
 
 LOGGER = logging.getLogger("main")
@@ -218,12 +218,12 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         hard_update: bool
             If set to true, will update all metadata values even if resolves to "None"
     """
-    bchd = get_bchd_instance()
+    bchn = get_bchn_instance()
     if not hedge_pos_obj.funding_tx_hash:
         return
 
     # funding tx data
-    tx_data = bchd.get_transaction(hedge_pos_obj.funding_tx_hash, parse_slp=False)
+    tx_data = bchn.get_transaction(hedge_pos_obj.funding_tx_hash)
     total_input =  sum([inp["value"] for inp in tx_data["inputs"]])
     total_output =  sum([out["value"] for out in tx_data["outputs"]])
     funding_satoshis = None
@@ -284,7 +284,10 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
     elif position_taker == "long":
         maker_sats, taker_input_sats = short_sats, long_funding_sats
 
-    liquidity_fee = taker_input_sats - total_input + maker_sats
+    if maker_sats and taker_input_sats:
+        liquidity_fee = taker_input_sats - total_input + maker_sats
+    else:
+        liquidity_fee = None
 
     metadata_values = {
         "position_taker": position_taker,

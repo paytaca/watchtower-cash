@@ -8,8 +8,8 @@ from notifications.utils.send import send_push_notification_to_wallet_hashes, No
 from main.models import TransactionMetaAttribute
 from main.tasks import parse_tx_wallet_histories
 
-def get_bchd_instance():
-    return BCHDQuery()
+def get_bchn_instance():
+    return BCHN()
 
 
 def broadcast_transaction(tx_hex):
