@@ -362,6 +362,11 @@ def settle_contract_maturity(contract_address):
 
     settle_hedge_position_maturity_response = settle_hedge_position_maturity(hedge_position_obj)
     settlement_data = settle_hedge_position_maturity_response.get("settlementData", None)
+    try:
+        funding_tx_hash = settle_hedge_position_maturity_response["funding"]["fundingTransactionHash"]
+    except (TypeError, KeyError):
+        funding_tx_hash = None
+
     if not settle_hedge_position_maturity_response["success"] or not settlement_data:
         response["success"] = False
         if "error" in settle_hedge_position_maturity_response:
@@ -371,7 +376,11 @@ def settle_contract_maturity(contract_address):
 
         return response
     
-    hedge_settlement = __save_settlement(settlement_data, hedge_position_obj)
+    hedge_settlement = __save_settlement(
+        settlement_data,
+        hedge_position_obj,
+        funding_txid=funding_tx_hash,
+    )
 
     send_settlement_update(hedge_position_obj)
 
@@ -417,6 +426,11 @@ def liquidate_contract(contract_address, message_sequence):
 
     liquidation_response = liquidate_hedge_position(hedge_position_obj, message_sequence)
     settlement_data = liquidation_response.get("settlementData", None)
+    try:
+        funding_tx_hash = liquidation_response["funding"]["fundingTransactionHash"]
+    except (TypeError, KeyError):
+        funding_tx_hash = None
+
     if not liquidation_response["success"] or not settlement_data:
         response["success"] = False
         if "error" in liquidation_response:
@@ -426,7 +440,11 @@ def liquidate_contract(contract_address, message_sequence):
 
         return response
     
-    hedge_settlement = __save_settlement(settlement_data, hedge_position_obj)
+    hedge_settlement = __save_settlement(
+        settlement_data,
+        hedge_position_obj,
+        funding_txid=funding_tx_hash,
+    )
 
     send_settlement_update(hedge_position_obj)
 

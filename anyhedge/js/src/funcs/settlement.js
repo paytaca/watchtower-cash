@@ -42,6 +42,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
   const response = {
     success: false,
     settlementData: {},
+    funding: {},
     error: '',
   }
   contractData = parseContractData(contractData)
@@ -91,6 +92,7 @@ export async function settleContractMaturity(contractData, oracleInfo) {
   const manager = new AnyHedgeManager()
   try {
     const settlementData = await manager.matureContractFunding(contractSettlementParameters)
+    response.funding = contractSettlementParameters.contractFunding
     response.settlementData = settlementData
     response.success = true
   } catch(error) {
@@ -111,6 +113,7 @@ export async function liquidateContract(contractData, prevPriceMessage, settleme
   const response = {
     success: false,
     settlementData: {},
+    funding: {},
     error: '',
   }
 
@@ -142,6 +145,7 @@ export async function liquidateContract(contractData, prevPriceMessage, settleme
   const manager = new AnyHedgeManager()
   try {
     const settlementData = await manager.liquidateContractFunding(contractSettlementParameters)
+    response.funding = contractSettlementParameters.contractFunding
     response.settlementData = settlementData
     response.success = true
   } catch(error) {
