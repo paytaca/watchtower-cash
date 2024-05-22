@@ -44,6 +44,15 @@ class OrderAdmin(admin.ModelAdmin):
         'created_at'
     ]
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("ad_snapshot")
+
+    def ad_snapshot__trade_type(self, obj):
+        if obj.ad_snapshot:
+            return obj.ad_snapshot.trade_type
+        return None
+
+
 admin.site.register(Order, OrderAdmin)
 
 
