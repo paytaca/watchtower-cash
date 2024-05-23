@@ -19,9 +19,18 @@ class ArbiterListCreate(APIView):
 
     def get(self, request):
         queryset = Arbiter.objects.filter(is_disabled=False)
+
+        # Filter by currency
+        currency = request.query_params.get('currency')
+        if not currency:
+            return Response({'error': 'currency is required'}, status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(fiat_currencies__symbol=currency)
+
+        # Filter by arbiter id
         id = request.query_params.get('id')
-        if id is not None:
+        if id:
             queryset = queryset.filter(id=id)
+
         serializer = ArbiterSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
     
@@ -94,7 +103,6 @@ class ArbiterConfig(APIView):
             
             message = ViewCode.ARBITER_CONFIG.value + '::' + timestamp
             verify_signature(wallet_hash, signature, message, public_key=settings.SERVICER_PK)
-            
 
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)

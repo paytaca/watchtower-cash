@@ -51,13 +51,19 @@ class ContractCreateView(APIView):
             arbiter_pk = request.data.get('arbiter_id')
             if order_pk is None or arbiter_pk is None:
                 return Response({'error': 'order_id or arbiter_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             validate_status(order_pk, StatusType.CONFIRMED)
             order = models.Order.objects.get(pk=order_pk)
             if not self.has_permissions(order, request.user.wallet_hash):
                 return Response(status=status.HTTP_401_UNAUTHORIZED)
 
             arbiter = models.Arbiter.objects.get(pk=arbiter_pk)
+            
+            # Require that arbiter is allowed for the order's currency
+            currency = order.ad_snapshot.fiat_currency.symbol
+            if not arbiter.fiat_currencies.filter(symbol=currency).exists():
+                raise ValidationError(f'Arbiter not allowed for currency {currency}')
+            
             contract_params = self.get_contract_params(arbiter, order)
 
         except (models.Order.DoesNotExist, models.Arbiter.DoesNotExist, ValidationError) as err:
