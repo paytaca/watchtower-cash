@@ -10,6 +10,7 @@ from celery_heimdall import HeimdallTask, RateLimit
 from watchtower.celery import app as celery_app
 from main.models import *
 from main.utils.address_validator import *
+from paytacapos.models import Merchant
 from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
@@ -1570,6 +1571,13 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     send_wallet_history_push_notification(history)
             except Exception as exception:
                 LOGGER.exception(exception)
+
+        # merchant wallet check
+        merchant_check = Merchant.objects.filter(wallet_hash=wallet.wallet_hash)
+        if merchant_check.exists():
+            merchant = merchant_check.last()
+            merchant.last_update = timezone.now()
+            merchant.save()
 
         # for older token records
         if (

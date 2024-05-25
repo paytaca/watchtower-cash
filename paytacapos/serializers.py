@@ -495,6 +495,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "vault",
             "vouchers",
             "logos",
+            "last_update"
         ]
 
     def get_receiving_address(self, obj):
