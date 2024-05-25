@@ -1,5 +1,6 @@
 from django.db import models
 from django.apps import apps
+from .currency import FiatCurrency
 
 class Arbiter(models.Model):
     chat_identity_id = models.IntegerField(null=True, blank=True)
@@ -8,6 +9,7 @@ class Arbiter(models.Model):
     public_key = models.CharField(max_length=75)
     address = models.CharField(max_length=75)
     address_path = models.CharField(max_length=10, null=True)
+    fiat_currencies = models.ManyToManyField(FiatCurrency)
     is_disabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)

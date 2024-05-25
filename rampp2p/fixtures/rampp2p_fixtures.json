@@ -5,10 +5,7 @@
         "fields": {
             "name": "United States Dollar",
             "symbol": "USD",
-            "created_at": "2023-09-11T04:18:56.405Z",
-            "payment_types": [
-                2
-            ]
+            "created_at": "2023-09-11T04:18:56.405Z"
         }
     },
     {
@@ -17,12 +14,7 @@
         "fields": {
             "name": "Philippine Peso",
             "symbol": "PHP",
-            "created_at": "2023-09-11T04:19:00.166Z",
-            "payment_types": [
-                2,
-                3,
-                6
-            ]
+            "created_at": "2023-09-11T04:19:00.166Z"
         }
     },
     {
