@@ -1,8 +1,9 @@
 import { AnyHedgeManager } from '@generalprotocols/anyhedge'
+import { castBigIntSafe, parseContractData } from '../utils.js'
 
 /**
  * @typedef {Object} RedemptionData
- * @property {String} [hedge_key.schnorr_signature.all_outputs]
+ * @property {String} [short_key.schnorr_signature.all_outputs]
  * @property {String} [long_key.schnorr_signature.all_outputs]
  * 
  * @typedef {Object} SignedTransactionProposal
@@ -12,9 +13,9 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
  * 
  * @typedef {Object} MutualRedemptionData
  * @property {'refund' | 'early_maturation' | 'arbitrary'} redemptionType
- * @property {Number} hedgeSatoshis
+ * @property {Number} shortSatoshis
  * @property {Number} longSatoshis
- * @property {String} hedgeSchnorrSig
+ * @property {String} shortSchnorrSig
  * @property {String} longSchnorrSig
  * @property {Number} [settlementPrice]
  */
@@ -26,9 +27,9 @@ import { AnyHedgeManager } from '@generalprotocols/anyhedge'
 export async function validateMutualRefund(contractData, mutualRedemptionData) {
   const response = { valid: false, error: undefined }
 
-  if (contractData?.metadata?.hedgeInputInSatoshis !== mutualRedemptionData.hedgeSatoshis) {
+  if (contractData?.metadata?.shortInputInSatoshis !== mutualRedemptionData.shortSatoshis) {
     response.valid = false
-    response.error = `hedge payout satoshis must be ${contractData?.metadata?.hedgeInputInSatoshis}`
+    response.error = `short payout satoshis must be ${contractData?.metadata?.shortInputInSatoshis}`
     return response
   }
 
@@ -67,12 +68,12 @@ export async function validateEarlyMaturation(contractData, mutualRedemptionData
   const outcome = await manager.calculateSettlementOutcome(
     contractData.parameters, contractData?.fundings?.[0]?.fundingSatoshis, settlementPrice);
 
-  const expectedHedgePayoutSats =  outcome.hedgePayoutSatsSafe
+  const expectedShortPayoutSats =  outcome.shortPayoutSatsSafe
   const expectedLongPayoutSats = outcome.longPayoutSatsSafe
 
-  if (expectedHedgePayoutSats !== mutualRedemptionData.hedgeSatoshis) {
+  if (expectedShortPayoutSats !== mutualRedemptionData.shortSatoshis) {
     response.valid = false
-    response.error = `hedge payout satoshis must be ${expectedHedgePayoutSats}`
+    response.error = `short payout satoshis must be ${expectedShortPayoutSats}`
     return response
   }
 
@@ -96,11 +97,11 @@ export async function validateArbitraryRedemption(contractData, mutualRedemption
   const response = { valid: false, error: undefined, extraSats: 0 }
 
   // calculations from mutual refund & early maturation leave 1175 sats
-  const txFee = 1175
+  const txFee = contractData?.version?.includes?.('v0.11') ? 1175n : 1967n
   const fundingSats = contractData?.fundings?.[0]?.fundingSatoshis
 
-  const valid = fundingSats >= mutualRedemptionData.hedgeSatoshis + mutualRedemptionData.longSatoshis + txFee
-  response.extraSats = fundingSats - mutualRedemptionData.hedgeSatoshis + mutualRedemptionData.longSatoshis + txFee
+  const valid = fundingSats >= mutualRedemptionData.shortSatoshis + mutualRedemptionData.longSatoshis + txFee
+  response.extraSats = fundingSats - mutualRedemptionData.shortSatoshis + mutualRedemptionData.longSatoshis + txFee
   if (!valid) {
     response.valid = false
     response.error = `total payout satoshis exceeded ${fundingSats}, ${contractData?.fundings}`
@@ -113,10 +114,15 @@ export async function validateArbitraryRedemption(contractData, mutualRedemption
 
 
 /**
- * @param {ContractData} contractData 
+ * @param {import('@generalprotocols/anyhedge').ContractData} contractData 
  * @param {MutualRedemptionData} mutualRedemptionData
  */
 export async function completeMutualRedemption(contractData, mutualRedemptionData) {
+  contractData = parseContractData(contractData)
+  mutualRedemptionData.shortSatoshis = castBigIntSafe(mutualRedemptionData.shortSatoshis)
+  mutualRedemptionData.longSatoshis = castBigIntSafe(mutualRedemptionData.longSatoshis)
+  mutualRedemptionData.settlementPrice = castBigIntSafe(mutualRedemptionData.settlementPrice)
+
   const response = { success: false, settlementTxid: '', error: undefined }
 
   if (mutualRedemptionData.redemptionType === 'refund') {
@@ -147,17 +153,17 @@ export async function completeMutualRedemption(contractData, mutualRedemptionDat
     vout: contractData?.fundings?.[0]?.fundingOutput,
     satoshis: contractData?.fundings?.[0]?.fundingSatoshis,
   }
-  const hedgeOutput = { to: contractData?.metadata?.hedgePayoutAddress, amount: mutualRedemptionData.hedgeSatoshis }
+  const shortOutput = { to: contractData?.metadata?.shortPayoutAddress, amount: mutualRedemptionData.shortSatoshis }
   const longOutput = { to: contractData?.metadata?.longPayoutAddress, amount: mutualRedemptionData.longSatoshis }
 
   const hedgeProposal = {
     inputs: [Object.assign({}, input)],
-    outputs: [Object.assign({}, hedgeOutput), Object.assign({}, longOutput)],
-    redemptionDataList: [{ 'hedge_key.schnorr_signature.all_outputs': mutualRedemptionData.hedgeSchnorrSig }]
+    outputs: [Object.assign({}, shortOutput), Object.assign({}, longOutput)],
+    redemptionDataList: [{ 'short_key.schnorr_signature.all_outputs': mutualRedemptionData.shortSchnorrSig }]
   }
   const longProposal = {
     inputs: [Object.assign({}, input)],
-    outputs: [Object.assign({}, hedgeOutput), Object.assign({}, longOutput)],
+    outputs: [Object.assign({}, shortOutput), Object.assign({}, longOutput)],
     redemptionDataList: [{ 'long_key.schnorr_signature.all_outputs': mutualRedemptionData.longSchnorrSig }]
   }
 

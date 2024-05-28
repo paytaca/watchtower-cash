@@ -16,6 +16,7 @@ router.register(r"cashtokens/nft", views.CashNftsViewSet, basename="cashtokens-n
 router.register(r"wallet/address-scan", views.WalletAddressScanViewSet, basename="address-scan")
 router.register(r"wallet/preferences", views.WalletPreferencesViewSet, basename="wallet-preferences")
 router.register(r"payment-requests", views.PaymentRequestViewSet, basename="payment-requests")
+router.register(r"wallet/shard", views.WalletShardViewSet, basename="wallet-shard")
 
 
 main_urls = router.urls
@@ -69,7 +70,9 @@ main_urls += [
 
     # re_path(r"^tokens/(?P<tokenid>[\w+:]+)/$", views.TokensView.as_view(),name='tokens'),
     path('transaction/spender/', views.SpenderTransactionView.as_view(), name='find-transaction-spender'),
-    path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction")
+    path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction"),
+
+    path('wallet/shard/get/', views.WalletShardViewSet.as_view({'get': 'get_first_shard'}), name='wallet-shard-get-shard')
 ]
 
 test_urls = [

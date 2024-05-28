@@ -1,3 +1,4 @@
+import logging
 from django.db import models
 from django_filters import rest_framework as filters
 from rest_framework import (
@@ -60,6 +61,9 @@ from .tasks import (
 )
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 # Create your views here.
 class HedgePositionViewSet(
     viewsets.GenericViewSet,
@@ -76,7 +80,7 @@ class HedgePositionViewSet(
 
     def get_queryset(self):
         queryset = HedgePositionSerializer.Meta.model.objects.select_related(
-            "hedge_funding_proposal",
+            "short_funding_proposal",
             "long_funding_proposal",
         ).prefetch_related(
             "metadata",
@@ -121,7 +125,7 @@ class HedgePositionViewSet(
             hedge_obj = serializer.instance.long_position
 
         contract_funding_status = "incomplete"
-        if hedge_obj.hedge_funding_proposal and hedge_obj.long_funding_proposal:
+        if hedge_obj.short_funding_proposal and hedge_obj.long_funding_proposal:
             funding_task_response = complete_contract_funding(hedge_obj.address)
 
             contract_funding_status = f"{funding_task_response}"
@@ -195,7 +199,7 @@ class HedgePositionViewSet(
         mutual_redemption_obj = serializer.save()
         instance = mutual_redemption_obj.hedge_position
 
-        if mutual_redemption_obj.hedge_schnorr_sig and mutual_redemption_obj.long_schnorr_sig:    
+        if mutual_redemption_obj.short_schnorr_sig and mutual_redemption_obj.long_schnorr_sig:    
             redeem_contract_response = redeem_contract(instance.address)
             if not redeem_contract_response["success"]:
                 error = "Encountered error in redeeming contract"
@@ -235,7 +239,7 @@ class HedgePositionViewSet(
         except HedgePositionSerializer.Meta.model.mutual_redemption.RelatedObjectDoesNotExist:
             return Response(["no mutual redemption found"], status=status.HTTP_400_BAD_REQUEST)
 
-        if not instance.mutual_redemption.hedge_schnorr_sig or not instance.mutual_redemption.long_schnorr_sig:
+        if not instance.mutual_redemption.short_schnorr_sig or not instance.mutual_redemption.long_schnorr_sig:
             return Response(["incomplete signatures"], status=status.HTTP_400_BAD_REQUEST)
 
         redeem_contract_response = redeem_contract(instance.address)
@@ -256,7 +260,10 @@ class HedgePositionViewSet(
         serializer = FundGeneralProcotolLPContractSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         hedge_obj = serializer.save()
-        attach_funding_tx_to_wallet_history_meta(hedge_obj, force=True)
+        try:
+            attach_funding_tx_to_wallet_history_meta(hedge_obj, force=True)
+        except Exception as exception:
+            LOGGER.exception(exception)
         return Response(self.serializer_class(hedge_obj).data)
 
     @swagger_auto_schema(method="get", responses={201: HedgePositionFeeSerializer})
@@ -297,7 +304,7 @@ class HedgePositionOfferViewSet(
             "-created_at"
         ).select_related(
             "hedge_position",
-            "hedge_position__hedge_funding_proposal",
+            "hedge_position__short_funding_proposal",
             "hedge_position__long_funding_proposal",
         ).prefetch_related(
             "counter_party_info",

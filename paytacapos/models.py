@@ -123,8 +123,10 @@ class Merchant(models.Model):
     
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
 
+    last_update = models.DateTimeField(null=True)
+
     class Meta:
-        ordering = ('name', )
+        ordering = ('-id', )
 
     def __str__(self):
         return f"Merchant ({self.name})"

@@ -14,8 +14,9 @@ class ShiftAdmin(admin.ModelAdmin):
     ]
 
     list_display = [
-        "wallet_hash",
+        "shift_id",
         "bch_address",
         "ramp_type",
+        "date_shift_created",
         "shift_status"
     ]

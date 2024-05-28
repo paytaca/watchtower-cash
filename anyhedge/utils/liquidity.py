@@ -14,7 +14,7 @@ from ..models import (
     HedgePositionOffer,
     HedgePositionOfferCounterParty,
 )
-from .api import get_bchd_instance
+from .api import get_bchn_instance
 from .websocket import send_long_account_update
 
 LOGGER = logging.getLogger("main")
@@ -44,11 +44,11 @@ def find_matching_position_offer(
 ):
     update_hedge_position_offer_deadline()
     now = timezone.now()
-    _position = HedgePositionOffer.POSITION_HEDGE
-    if position == HedgePositionOffer.POSITION_HEDGE:
+    _position = HedgePositionOffer.POSITION_SHORT
+    if position == HedgePositionOffer.POSITION_SHORT:
         _position = HedgePositionOffer.POSITION_LONG
 
-    if position == HedgePositionOffer.POSITION_HEDGE:
+    if position == HedgePositionOffer.POSITION_SHORT:
         counter_party_sats = amount * (1/low_liquidation_multiplier - 1) # calculating long sats
     else:
         counter_party_sats = amount / (1/low_liquidation_multiplier - 1) # calculating hedge sats
@@ -90,8 +90,8 @@ def find_close_matching_offer_suggestion(
 ):
     update_hedge_position_offer_deadline()
     now = timezone.now()
-    _position = HedgePositionOffer.POSITION_HEDGE
-    if position == HedgePositionOffer.POSITION_HEDGE:
+    _position = HedgePositionOffer.POSITION_SHORT
+    if position == HedgePositionOffer.POSITION_SHORT:
         _position = HedgePositionOffer.POSITION_LONG
 
     # ranges are 2 length arrays representing min & max, respectively
@@ -99,7 +99,7 @@ def find_close_matching_offer_suggestion(
     high_liquidation_multiplier_range = [high_liquidation_multiplier*(similarity), high_liquidation_multiplier*(2 - similarity)]
     duration_seconds_range = [duration_seconds*(similarity), duration_seconds*(2-similarity)]
 
-    if position == HedgePositionOffer.POSITION_HEDGE:
+    if position == HedgePositionOffer.POSITION_SHORT:
         counter_party_sats = amount * (1/low_liquidation_multiplier - 1) # calculating long sats
         counter_party_sats_range = [counter_party_sats*(similarity), counter_party_sats*(2-similarity)]
     else:
@@ -151,14 +151,15 @@ def find_close_matching_offer_suggestion(
     return queryset
 
 
-def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence, position="hedge"):
+def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence, position="short"):
+    LOGGER.info(f"fund_hedge_position | {contract_data} | {funding_proposal} | {oracle_message_sequence} | {position}")
     response = { "success": False, "fundingTransactionHash": "", "error": "" }
 
     data = {
         "contractAddress": contract_data["address"],
         "outpointTransactionHash": funding_proposal["txHash"],
         "outpointIndex": funding_proposal["txIndex"],
-        "satoshis": funding_proposal["txValue"],
+        "satoshis": f'<bigint: {funding_proposal["txValue"]}n>',
         "signature": funding_proposal["scriptSig"],
         "publicKey": funding_proposal["publicKey"],
         "takerSide": position,
@@ -167,11 +168,15 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
     }
     try:
         resp = requests.post(
-            urljoin(app_settings.ANYHEDGE_LP_BASE_URL, "/api/v1/fundContract"),
+            urljoin(app_settings.ANYHEDGE_LP_BASE_URL, "/api/v2/fundContract"),
             data = json.dumps(data),
             headers = {'Content-type': 'application/json', 'Accept': 'text/plain'},
         )
-        response_data = resp.json()
+        try:
+            response_data = resp.json()
+        except json.JSONDecodeError as exception:
+            LOGGER.error(f"FUNDING_RESP | {resp.status_code} | {resp.headers} | {resp.content}")
+            raise exception
         if resp.ok:
             response["success"] = True
             response["fundingTransactionHash"] = response_data["fundingTransactionHash"]
@@ -213,12 +218,12 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         hard_update: bool
             If set to true, will update all metadata values even if resolves to "None"
     """
-    bchd = get_bchd_instance()
+    bchn = get_bchn_instance()
     if not hedge_pos_obj.funding_tx_hash:
         return
 
     # funding tx data
-    tx_data = bchd.get_transaction(hedge_pos_obj.funding_tx_hash, parse_slp=False)
+    tx_data = bchn.get_transaction(hedge_pos_obj.funding_tx_hash)
     total_input =  sum([inp["value"] for inp in tx_data["inputs"]])
     total_output =  sum([out["value"] for out in tx_data["outputs"]])
     funding_satoshis = None
@@ -245,47 +250,50 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         hedge_pos_obj.funding_tx_hash_validated = True
         hedge_pos_obj.save()
 
-    hedge_sats = hedge_pos_obj.satoshis
+    short_sats = hedge_pos_obj.satoshis
     long_sats = hedge_pos_obj.long_input_sats
-    total_payout_sats = hedge_sats + long_sats
+    total_payout_sats = short_sats + long_sats
     network_fee = total_input - total_output
     if funding_satoshis is not None:
         network_fee += funding_satoshis - total_payout_sats
 
     position_taker = None
-    if hedge_pos_obj.hedge_wallet_hash and not hedge_pos_obj.long_wallet_hash:
-        position_taker = "hedge"
-    elif not hedge_pos_obj.hedge_wallet_hash and hedge_pos_obj.long_wallet_hash:
+    if hedge_pos_obj.short_wallet_hash and not hedge_pos_obj.long_wallet_hash:
+        position_taker = "short"
+    elif not hedge_pos_obj.short_wallet_hash and hedge_pos_obj.long_wallet_hash:
         position_taker = "long"
 
-    hedge_funding_sats = None
+    short_funding_sats = None
     long_funding_sats = None
     if len(tx_data["inputs"]) == 2:
-        # guessing which of 2 inputs is from the hedge/long
+        # guessing which of 2 inputs is from the short/long
         input_0_val = tx_data["inputs"][0]["value"]
         input_1_val = tx_data["inputs"][1]["value"]
-        hedge_diff = abs(input_0_val-hedge_sats)
+        short_diff = abs(input_0_val-short_sats)
         long_diff = abs(input_0_val-long_sats)
-        if long_diff > hedge_diff:
-            hedge_funding_sats = input_0_val
+        if long_diff > short_diff:
+            short_funding_sats = input_0_val
             long_funding_sats = input_1_val
         else:
-            hedge_funding_sats = input_1_val
+            short_funding_sats = input_1_val
             long_funding_sats = input_0_val
 
     maker_sats, taker_input_sats = None, None
-    if position_taker == "hedge":
-        maker_sats, taker_input_sats = long_sats, hedge_funding_sats
+    if position_taker == "short":
+        maker_sats, taker_input_sats = long_sats, short_funding_sats
     elif position_taker == "long":
-        maker_sats, taker_input_sats = hedge_sats, long_funding_sats
+        maker_sats, taker_input_sats = short_sats, long_funding_sats
 
-    liquidity_fee = taker_input_sats - total_input + maker_sats
+    if maker_sats and taker_input_sats:
+        liquidity_fee = taker_input_sats - total_input + maker_sats
+    else:
+        liquidity_fee = None
 
     metadata_values = {
         "position_taker": position_taker,
         "liquidity_fee": liquidity_fee,
         "network_fee": network_fee,
-        "total_hedge_funding_sats": hedge_funding_sats,
+        "total_short_funding_sats": short_funding_sats,
         "total_long_funding_sats": long_funding_sats,
     }
 
@@ -302,8 +310,8 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
             metadata_values["liquidity_fee"] = existing_metadata_obj.liquidity_fee
         if existing_metadata_obj.network_fee:
             metadata_values["network_fee"] = existing_metadata_obj.network_fee
-        if existing_metadata_obj.total_hedge_funding_sats:
-            metadata_values["total_hedge_funding_sats"] = existing_metadata_obj.total_hedge_funding_sats
+        if existing_metadata_obj.total_short_funding_sats:
+            metadata_values["total_short_funding_sats"] = existing_metadata_obj.total_short_funding_sats
         if existing_metadata_obj.total_long_funding_sats:
             metadata_values["total_long_funding_sats"] = existing_metadata_obj.total_long_funding_sats
 

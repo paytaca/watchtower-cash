@@ -10,10 +10,14 @@ from .api import (
 )
 from .contract import (
     compile_contract_from_hedge_position,
-    calculate_hedge_sats,
 )
 from ..js.runner import AnyhedgeFunctions
 
+from main.utils.queries.bchn import BCHN
+from main.utils.tx_fee import is_hex
+from main.utils.address_scan import get_bch_transactions
+
+bchn = BCHN()
 
 def get_tx_hash(tx_hex):
     tx_hex_bytes = bytes.fromhex(tx_hex)
@@ -57,31 +61,31 @@ def get_gp_lp_service_fee():
     }
 
 
-def calculate_funding_amounts(contract_data, position="hedge", premium=0):
+def calculate_funding_amounts(contract_data, position="short", premium=0):
     return AnyhedgeFunctions.calculateFundingAmounts(contract_data, position, premium)
 
 
 def complete_funding_proposal(hedge_position_obj):
     contract_data = compile_contract_from_hedge_position(hedge_position_obj)
-    hedge_funding_proposal = hedge_position_obj.hedge_funding_proposal
+    short_funding_proposal = hedge_position_obj.short_funding_proposal
     long_funding_proposal = hedge_position_obj.long_funding_proposal
 
     if contract_data["address"] != hedge_position_obj.address:
         raise Exception(f"Contract data compilation mismatch, got '{contract_data['address']}' instead of '{hedge_position_obj.address}'")
     
-    if hedge_funding_proposal is None:
+    if short_funding_proposal is None:
         raise Exception(f"{hedge_position_obj} requires hedge funding proposal")
     
     if long_funding_proposal is None:
         raise Exception(f"{hedge_position_obj} requires long funding proposal")
 
-    hedge_funding_proposal_data = {
-        "txHash": hedge_funding_proposal.tx_hash,
-        "txIndex": hedge_funding_proposal.tx_index,
-        "txValue": hedge_funding_proposal.tx_value,
-        "scriptSig": hedge_funding_proposal.script_sig,
-        "publicKey": hedge_funding_proposal.pubkey,
-        "inputTxHashes": hedge_funding_proposal.input_tx_hashes,
+    short_funding_proposal_data = {
+        "txHash": short_funding_proposal.tx_hash,
+        "txIndex": short_funding_proposal.tx_index,
+        "txValue": short_funding_proposal.tx_value,
+        "scriptSig": short_funding_proposal.script_sig,
+        "publicKey": short_funding_proposal.pubkey,
+        "inputTxHashes": short_funding_proposal.input_tx_hashes,
     }
 
     long_funding_proposal_data = {
@@ -94,59 +98,31 @@ def complete_funding_proposal(hedge_position_obj):
     }
 
     return AnyhedgeFunctions.completeFundingProposal(
-        contract_data, hedge_funding_proposal_data, long_funding_proposal_data)
+        contract_data, short_funding_proposal_data, long_funding_proposal_data)
 
 
 def search_funding_tx(contract_address, sats:int=None):
     cash_address = convert.to_cash_address(contract_address)
-    address = cash_address.replace("bitcoincash:", "")
-    query = {
-        "v": 3,
-        "q": {
-            "find": {
-            "out.e.a": address
-            },
-            "limit": 10,
-            "project": { "tx.h": 1, "out.e": 1 },
-        },
-        # "r": {
-        #     "f": "[.[] | { hash: .tx.h?, out: .out[].e? }  ]"
-        # }
-    }
-    query_string = json.dumps(query)
-    query_bytes = query_string.encode('ascii')
-    query_b64 = base64.b64encode(query_bytes)
-    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
-    
-    data = requests.get(url).json()
-    # example data structure:
-    # {
-    #     "u": [],
-    #     "c": [
-    #         {
-    #             "_id": "63241ec4b8ba1c709088ada9",
-    #             "tx": { "h": "1499ac29cf09f6752cdc54b4df8ffa9dbb8f7393b99e8380b2d6ce9363341ef4" },
-    #             "out": [
-    #                 {
-    #                     "e": { "v": 1251123, "i": 0, "a": "pzjjvtqc686qr75ghnlaqs2y9dsdalqczcwshgpaaj" }
-    #                 },
-    #                 {
-    #                     "e": { "v": 546, "i": 1, "a": "qp03erh5c9nmk0s830vpn39faxw3fq0vxsp870x46u" }
-    #                 }
-    #             ]
-    #         }
-    #     ]
-    # }
 
-    txs = [*data["c"], *data["u"]]
-    for tx in txs:
-        tx_hash = tx["tx"]["h"]
-        if sats is not None:
-            for output in tx["out"]:
-                if output["e"]["v"] == sats:
-                    return tx_hash
-        else:
-            return tx_hash
+    history = get_bch_transactions(cash_address)
+    txids = [tx["tx_hash"] for tx in history]
+
+    for txid in txids:
+        tx_data = bchn._get_raw_transaction(txid)
+        for tx_output in tx_data["vout"]:
+            if 'value' not in tx_output.keys() or 'addresses' not in tx_output['scriptPubKey'].keys():
+                continue
+
+            sats_value = round(tx_output['value'] * (10 ** 8))
+            address = tx_output['scriptPubKey']['addresses'][0]
+
+            if address != cash_address:
+                continue
+
+            if sats is not None and sats == sats_value:
+                return txid
+            else:
+                return txid
 
     return ""
 
@@ -158,38 +134,19 @@ def validate_funding_transaction(tx_hash, contract_address):
         "funding_satoshis": 0,
     }
     cash_address = convert.to_cash_address(contract_address)
-    address = cash_address.replace("bitcoincash:", "")
 
-    query = {
-        "v": 3,
-        "q": {
-            "find": {
-                "tx.h": tx_hash,
-                "out.e.a": address,
-            },
-            "limit": 10,
-            "project": { "tx.h": 1, "out.e": 1 },
-        },
-        # "r": {
-        #     "f": "[.[] | { hash: .tx.h?, out: .out[].e? }  ]"
-        # }
-    }
-    query_string = json.dumps(query)
-    query_bytes = query_string.encode('ascii')
-    query_b64 = base64.b64encode(query_bytes)
-    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
-    data = requests.get(url).json()
+    if not is_hex(tx_hash, with_prefix=False) or not len(tx_hash) == 64:
+        return response
 
-    txs = [*data["c"], *data["u"]]
-    for tx in txs:
-        if tx["tx"]["h"] != tx_hash:
-            continue
+    tx_data = bchn.get_transaction(tx_hash)
+    if not tx_data: return response
 
-        for output in tx["out"]:
-            if output["e"]["a"] == address:
-                response["funding_satoshis"] = output["e"]["v"]
-                response["funding_output"] = output["e"]["i"]
-                response["valid"] = True
+    for output in tx_data["outputs"]:
+        if output["address"] == cash_address:
+            response["funding_satoshis"] = output["value"]
+            response["funding_output"] = output["index"]
+            response["valid"] = True
+            break
 
     return response
 
@@ -211,14 +168,14 @@ def attach_funding_tx_to_wallet_history_meta(hedge_position_obj, force=False):
     funding_tx_attr_obj, _ = TransactionMetaAttribute.objects.update_or_create(defaults=defaults, **filter_kwargs)
 
     hedge_meta, long_meta = None, None
-    if hedge_position_obj.hedge_wallet_hash and hedge_position_obj.hedge_funding_proposal:
+    if hedge_position_obj.short_wallet_hash and hedge_position_obj.short_funding_proposal:
         parse_tx_wallet_histories(
-            hedge_position_obj.hedge_funding_proposal.tx_hash,
+            hedge_position_obj.short_funding_proposal.tx_hash,
             proceed_with_zero_amount=True,
             immediate=True
         )
-        filter_kwargs["txid"] = hedge_position_obj.hedge_funding_proposal.tx_hash
-        filter_kwargs["wallet_hash"] = hedge_position_obj.hedge_wallet_hash
+        filter_kwargs["txid"] = hedge_position_obj.short_funding_proposal.tx_hash
+        filter_kwargs["wallet_hash"] = hedge_position_obj.short_wallet_hash
         filter_kwargs["key"] = "anyhedge_hedge_funding_utxo"
         hedge_meta, _ = TransactionMetaAttribute.objects.update_or_create(defaults=defaults, **filter_kwargs)
 

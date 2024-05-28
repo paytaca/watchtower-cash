@@ -18,6 +18,10 @@ from ..models import (
     PriceOracleMessage,
 )
 
+from main.utils.queries.bchn import BCHN
+from main.utils.address_scan import get_bch_transactions
+
+
 def get_contracts_for_liquidation():
     liquidation_price_msg_subquery = PriceOracleMessage.objects.filter(
         models.Q(price_value__lte=models.OuterRef('_low_lq_price')) | models.Q(price_value__gte=models.OuterRef('_high_lq_price')),
@@ -47,46 +51,22 @@ def get_contracts_for_liquidation():
 
 
 def search_settlement_tx(contract_address):
+    bchn = BCHN()
     cash_address = convert.to_cash_address(contract_address)
-    address = cash_address.replace("bitcoincash:", "")
-    query = {
-        "v": 3,
-        "q": {
-            "find": { "in.e.a": address },
-            "limit": 10,
-            "project": { "tx.h": 1, "in.e": 1 },
-        }
-    }
 
-    # get used utxos of contract address
-    query_string = json.dumps(query)
-    query_bytes = query_string.encode('ascii')
-    query_b64 = base64.b64encode(query_bytes)
-    url = f"https://bitdb.bch.sx/q/{query_b64.decode()}"
+    history = get_bch_transactions(cash_address)
+    txids = [tx["tx_hash"] for tx in history]
 
-    data = requests.get(url).json()
-    tx_hashes = []
-
-    txs = [*data["c"], *data["u"]]
+    raw_transactions = []
     funding_tx_map = {}
-    for tx in txs:
-        tx_hashes.append(tx["tx"]["h"])
-        for inp in tx["in"]:
-            if inp["e"]["a"] == address:
-                funding_tx_map[tx["tx"]["h"]] = inp["e"]["h"]
+    for txid in txids:
+        tx_data = bchn.get_transaction(txid, include_hex=True)
+        for input_data in tx_data["inputs"]:
+            if input_data["address"] == cash_address:
+                raw_transactions.append(tx_data["hex"])
+                funding_tx_map[txid] = input_data["txid"]
 
-
-    if len(tx_hashes) == 0:
-        return []
-
-    # get raw transactions of used utxos
-    response = requests.post(
-        "https://rest1.biggestfan.net/v2/rawtransactions/getRawTransaction",
-        data = json.dumps({ "txids": tx_hashes, "verbose": False }),
-        headers = {'Content-type': 'application/json', 'Accept': 'text/plain'},
-    )
-    raw_transactions = response.json()
-    if not isinstance(raw_transactions, list):
+    if len(raw_transactions) == 0:
         return []
 
     # parse raw transactions to settlements
@@ -158,9 +138,9 @@ def complete_mutual_redemption(mutual_redemption_obj):
 
     mutual_redemption_data = {
         "redemptionType": mutual_redemption_obj.redemption_type,
-        "hedgeSatoshis": mutual_redemption_obj.hedge_satoshis,
+        "shortSatoshis": mutual_redemption_obj.short_satoshis,
         "longSatoshis": mutual_redemption_obj.long_satoshis,
-        "hedgeSchnorrSig": mutual_redemption_obj.hedge_schnorr_sig,
+        "shortSchnorrSig": mutual_redemption_obj.short_schnorr_sig,
         "longSchnorrSig": mutual_redemption_obj.long_schnorr_sig,
         "settlementPrice": mutual_redemption_obj.settlement_price,
     }
@@ -184,7 +164,7 @@ def save_settlement_data_from_mutual_redemption(hedge_position_obj):
 
     settlement_obj.spending_transaction = mutual_redemption_obj.tx_hash
     settlement_obj.settlement_type = "mutual"
-    settlement_obj.hedge_satoshis = mutual_redemption_obj.hedge_satoshis
+    settlement_obj.short_satoshis = mutual_redemption_obj.short_satoshis
     settlement_obj.long_satoshis = mutual_redemption_obj.long_satoshis
     settlement_obj.oracle_pubkey = hedge_position_obj.oracle_pubkey
     if mutual_redemption_obj.settlement_price:

@@ -812,3 +812,9 @@ class TransactionBroadcast(PostgresModel):
 
     def __str__(self):
         return self.txid
+
+class WalletShard(PostgresModel):
+    # stored as-is from client-side; revisit if needs more secure approach for storing
+    shard = models.CharField(max_length=400, primary_key=True)
+    first_identifier = models.CharField(max_length=64)
+    second_identifier = models.CharField(max_length=64)

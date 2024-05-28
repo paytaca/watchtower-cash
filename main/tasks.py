@@ -10,6 +10,7 @@ from celery_heimdall import HeimdallTask, RateLimit
 from watchtower.celery import app as celery_app
 from main.models import *
 from main.utils.address_validator import *
+from paytacapos.models import Merchant
 from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
@@ -548,8 +549,8 @@ def process_nft_txn(txid):
     txns = txns.filter(cashtoken_nft__isnull=False)
 
     # transaction count here should be exactly 3, from PurelyPeer voucher structure:
-    # 0 = key NFT (voucher)
-    # 1 = lock NFT
+    # 0 = key NFT
+    # 1 = lock NFT (voucher)
     # 2 = quest NFT
     if txns.exists() and txns.count() == 3:
         txn_addresses = txns.values('address__address')
@@ -561,21 +562,17 @@ def process_nft_txn(txid):
             lock_nft_txn = lock_nft_txn.first()
 
             if lock_nft_txn.cashtoken_nft.current_index == 1:
-                voucher_txn = txns.filter(cashtoken_nft__current_index=0)
+                value = lock_nft_txn.value / 1e8
+                nft = lock_nft_txn.cashtoken_nft
 
-                if voucher_txn.exists():
-                    voucher_txn = voucher_txn.first()
-                    value = voucher_txn.value / 1e8
-                    nft = voucher_txn.cashtoken_nft
-
-                    Voucher(
-                        nft=nft,
-                        vault=vault,
-                        value=value,
-                        minting_txid=voucher_txn.txid,
-                        category=nft.category,
-                        commitment=nft.commitment
-                    ).save()
+                Voucher(
+                    nft=nft,
+                    vault=vault,
+                    value=value,
+                    minting_txid=lock_nft_txn.txid,
+                    category=nft.category,
+                    commitment=nft.commitment
+                ).save()
 
 
 def process_cashtoken_tx(
@@ -1575,6 +1572,13 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             except Exception as exception:
                 LOGGER.exception(exception)
 
+        # merchant wallet check
+        merchant_check = Merchant.objects.filter(wallet_hash=wallet.wallet_hash)
+        if merchant_check.exists():
+            merchant = merchant_check.last()
+            merchant.last_update = timezone.now()
+            merchant.save()
+
         # for older token records
         if (
             txn.token and
@@ -2317,12 +2321,8 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             "outpoint_index": index,
                         })
 
-        if settings.BCH_NETWORK == 'mainnet':
-            mqtt_client = mqtt.Client(transport='websockets')
-            mqtt_client.tls_set()
-        else:
-            mqtt_client = mqtt.Client()
-        mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
+        from main.mqtt import connect_to_mqtt
+        mqtt_client = connect_to_mqtt()
         mqtt_client.loop_start()
 
         for output in outputs:
@@ -2407,16 +2407,16 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             if 'nft' in output['tokenData'].keys():
                                 data['nft'] = output['tokenData']['nft']
 
+                            LOGGER.info('Sending MQTT message: ' + str(data))
+                            msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                            LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+
                         LOGGER.info(data)
                         
                         try:
                             client_acknowledgement(obj_id)
                         except:
                             LOGGER.error('Failed to send client acknowledgement for txid:' + str(tx_hash))
-                        
-                        LOGGER.info('Sending MQTT message: ' + str(data))
-                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
-                        LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
         
         mqtt_client.loop_stop()
 
