@@ -20,8 +20,8 @@ class ArbiterListCreate(APIView):
     def get(self, request):
         queryset = Arbiter.objects.filter(is_disabled=False)
 
-        # Filter by currency
-        currency = request.query_params.get('currency')
+        # Filter by currency. Default to arbiter for PHP if not set
+        currency = request.query_params.get('currency') or 'PHP'
         if not currency:
             return Response({'error': 'currency is required'}, status.HTTP_400_BAD_REQUEST)
         queryset = queryset.filter(fiat_currencies__symbol=currency)
