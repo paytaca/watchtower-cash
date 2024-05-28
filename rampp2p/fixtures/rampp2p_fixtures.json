@@ -23,8 +23,7 @@
         "fields": {
             "name": "United Arab Emirates Dirham",
             "symbol": "AED",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -33,8 +32,7 @@
         "fields": {
             "name": "Albanian Lek",
             "symbol": "ALL",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -43,8 +41,7 @@
         "fields": {
             "name": "Netherlands Antillean Guilder",
             "symbol": "ANG",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -53,8 +50,7 @@
         "fields": {
             "name": "Angolan Kwanza",
             "symbol": "AOA",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -63,8 +59,7 @@
         "fields": {
             "name": "Argentine Peso",
             "symbol": "ARS",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -73,10 +68,7 @@
         "fields": {
             "name": "Australian Dollar",
             "symbol": "AUD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": [
-                7
-            ]
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -85,8 +77,7 @@
         "fields": {
             "name": "Azerbaijani Manat",
             "symbol": "AZN",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"   
         }
     },
     {
@@ -95,8 +86,7 @@
         "fields": {
             "name": "Bangladeshi Taka",
             "symbol": "BDT",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -105,8 +95,7 @@
         "fields": {
             "name": "Bulgarian Lev",
             "symbol": "BGN",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -115,8 +104,7 @@
         "fields": {
             "name": "Bahraini Dinar",
             "symbol": "BHD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -125,8 +113,7 @@
         "fields": {
             "name": "Burundian Franc",
             "symbol": "BIF",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -135,8 +122,7 @@
         "fields": {
             "name": "Bermudan Dollar",
             "symbol": "BMD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -145,8 +131,7 @@
         "fields": {
             "name": "Bolivian Boliviano",
             "symbol": "BOB",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -155,8 +140,7 @@
         "fields": {
             "name": "Brazilian Real",
             "symbol": "BRL",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -165,8 +149,7 @@
         "fields": {
             "name": "Bitcoin",
             "symbol": "BTC",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -175,8 +158,7 @@
         "fields": {
             "name": "Botswanan Pula",
             "symbol": "BWP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -185,8 +167,7 @@
         "fields": {
             "name": "Belarusian Ruble",
             "symbol": "BYN",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -195,8 +176,7 @@
         "fields": {
             "name": "Belize Dollar",
             "symbol": "BZD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -205,10 +185,7 @@
         "fields": {
             "name": "Canadian Dollar",
             "symbol": "CAD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": [
-                8
-            ]
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -217,8 +194,7 @@
         "fields": {
             "name": "Congolese Franc",
             "symbol": "CDF",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -227,8 +203,7 @@
         "fields": {
             "name": "Swiss Franc",
             "symbol": "CHF",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -237,8 +212,7 @@
         "fields": {
             "name": "Chilean Peso",
             "symbol": "CLP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -247,8 +221,7 @@
         "fields": {
             "name": "Chinese Yuan",
             "symbol": "CNY",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -257,8 +230,7 @@
         "fields": {
             "name": "Colombian Peso",
             "symbol": "COP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -267,8 +239,7 @@
         "fields": {
             "name": "Costa Rican Col\u00f3n",
             "symbol": "CRC",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -277,8 +248,7 @@
         "fields": {
             "name": "Cuban Peso",
             "symbol": "CUP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -287,8 +257,7 @@
         "fields": {
             "name": "Czech Republic Koruna",
             "symbol": "CZK",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -297,8 +266,7 @@
         "fields": {
             "name": "Djiboutian Franc",
             "symbol": "DJF",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -307,8 +275,7 @@
         "fields": {
             "name": "Danish Krone",
             "symbol": "DKK",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -317,8 +284,7 @@
         "fields": {
             "name": "Dominican Peso",
             "symbol": "DOP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -327,8 +293,7 @@
         "fields": {
             "name": "Algerian Dinar",
             "symbol": "DZD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -337,8 +302,7 @@
         "fields": {
             "name": "Egyptian Pound",
             "symbol": "EGP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -347,8 +311,7 @@
         "fields": {
             "name": "Ethiopian Birr",
             "symbol": "ETB",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -357,8 +320,7 @@
         "fields": {
             "name": "Euro",
             "symbol": "EUR",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -367,8 +329,7 @@
         "fields": {
             "name": "British Pound Sterling",
             "symbol": "GBP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -377,8 +338,7 @@
         "fields": {
             "name": "Georgian Lari",
             "symbol": "GEL",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -387,8 +347,7 @@
         "fields": {
             "name": "Ghanaian Cedi",
             "symbol": "GHS",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -397,8 +356,7 @@
         "fields": {
             "name": "Guinean Franc",
             "symbol": "GNF",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -407,8 +365,7 @@
         "fields": {
             "name": "Guatemalan Quetzal",
             "symbol": "GTQ",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -417,8 +374,7 @@
         "fields": {
             "name": "Hong Kong Dollar",
             "symbol": "HKD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -427,8 +383,7 @@
         "fields": {
             "name": "Honduran Lempira",
             "symbol": "HNL",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -437,8 +392,7 @@
         "fields": {
             "name": "Hungarian Forint",
             "symbol": "HUF",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -447,8 +401,7 @@
         "fields": {
             "name": "Indonesian Rupiah",
             "symbol": "IDR",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -457,8 +410,7 @@
         "fields": {
             "name": "Israeli New Sheqel",
             "symbol": "ILS",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -467,8 +419,7 @@
         "fields": {
             "name": "Indian Rupee",
             "symbol": "INR",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -477,8 +428,7 @@
         "fields": {
             "name": "Iranian Rial",
             "symbol": "IRR",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -487,8 +437,7 @@
         "fields": {
             "name": "Iranian Toman",
             "symbol": "IRT",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -497,8 +446,7 @@
         "fields": {
             "name": "Icelandic Kr\u00f3na",
             "symbol": "ISK",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -507,8 +455,7 @@
         "fields": {
             "name": "Jamaican Dollar",
             "symbol": "JMD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -517,8 +464,7 @@
         "fields": {
             "name": "Jordanian Dinar",
             "symbol": "JOD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -527,8 +473,7 @@
         "fields": {
             "name": "Japanese Yen",
             "symbol": "JPY",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -537,8 +482,7 @@
         "fields": {
             "name": "Kenyan Shilling",
             "symbol": "KES",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -547,8 +491,7 @@
         "fields": {
             "name": "Kyrgystani Som",
             "symbol": "KGS",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -557,8 +500,7 @@
         "fields": {
             "name": "South Korean Won",
             "symbol": "KRW",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -567,8 +509,7 @@
         "fields": {
             "name": "Kazakhstani Tenge",
             "symbol": "KZT",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -577,8 +518,7 @@
         "fields": {
             "name": "Lebanese Pound",
             "symbol": "LBP",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -587,8 +527,7 @@
         "fields": {
             "name": "Sri Lankan Rupee",
             "symbol": "LKR",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -597,8 +536,7 @@
         "fields": {
             "name": "Moroccan Dirham",
             "symbol": "MAD",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -607,8 +545,7 @@
         "fields": {
             "name": "Malagasy Ariary",
             "symbol": "MGA",
-            "created_at": "2024-03-14T09:36:58.045Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.045Z"
         }
     },
     {
@@ -617,8 +554,7 @@
         "fields": {
             "name": "Cuban MLC",
             "symbol": "MLC",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -627,8 +563,7 @@
         "fields": {
             "name": "Mauritanian Ouguiya",
             "symbol": "MRU",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -637,8 +572,7 @@
         "fields": {
             "name": "Mexican Peso",
             "symbol": "MXN",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -647,8 +581,7 @@
         "fields": {
             "name": "Malaysian Ringgit",
             "symbol": "MYR",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -657,8 +590,7 @@
         "fields": {
             "name": "Namibian Dollar",
             "symbol": "NAD",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -667,8 +599,7 @@
         "fields": {
             "name": "Nigerian Naira",
             "symbol": "NGN",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -677,8 +608,7 @@
         "fields": {
             "name": "Nicaraguan C\u00f3rdoba",
             "symbol": "NIO",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -687,8 +617,7 @@
         "fields": {
             "name": "Norwegian Krone",
             "symbol": "NOK",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -697,8 +626,7 @@
         "fields": {
             "name": "Nepalese Rupee",
             "symbol": "NPR",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -707,8 +635,7 @@
         "fields": {
             "name": "New Zealand Dollar",
             "symbol": "NZD",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -717,8 +644,7 @@
         "fields": {
             "name": "Panamanian Balboa",
             "symbol": "PAB",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -727,8 +653,7 @@
         "fields": {
             "name": "Peruvian Nuevo Sol",
             "symbol": "PEN",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -737,8 +662,7 @@
         "fields": {
             "name": "Pakistani Rupee",
             "symbol": "PKR",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -747,8 +671,7 @@
         "fields": {
             "name": "Polish Zloty",
             "symbol": "PLN",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -757,8 +680,7 @@
         "fields": {
             "name": "Paraguayan Guarani",
             "symbol": "PYG",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -767,8 +689,7 @@
         "fields": {
             "name": "Qatari Rial",
             "symbol": "QAR",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -777,8 +698,7 @@
         "fields": {
             "name": "Romanian Leu",
             "symbol": "RON",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -787,8 +707,7 @@
         "fields": {
             "name": "Serbian Dinar",
             "symbol": "RSD",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -797,8 +716,7 @@
         "fields": {
             "name": "Russian Ruble",
             "symbol": "RUB",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -807,8 +725,7 @@
         "fields": {
             "name": "Rwandan Franc",
             "symbol": "RWF",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -817,8 +734,7 @@
         "fields": {
             "name": "Saudi Riyal",
             "symbol": "SAR",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -827,8 +743,7 @@
         "fields": {
             "name": "Swedish Krona",
             "symbol": "SEK",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -837,8 +752,7 @@
         "fields": {
             "name": "Singapore Dollar",
             "symbol": "SGD",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -847,8 +761,7 @@
         "fields": {
             "name": "Thai Baht",
             "symbol": "THB",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -857,8 +770,7 @@
         "fields": {
             "name": "Tunisian Dinar",
             "symbol": "TND",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -867,8 +779,7 @@
         "fields": {
             "name": "Turkish Lira",
             "symbol": "TRY",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -877,8 +788,7 @@
         "fields": {
             "name": "Trinidad and Tobago Dollar",
             "symbol": "TTD",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -887,8 +797,7 @@
         "fields": {
             "name": "New Taiwan Dollar",
             "symbol": "TWD",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -897,8 +806,7 @@
         "fields": {
             "name": "Tanzanian Shilling",
             "symbol": "TZS",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -907,8 +815,7 @@
         "fields": {
             "name": "Ukrainian Hryvnia",
             "symbol": "UAH",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -917,8 +824,7 @@
         "fields": {
             "name": "Ugandan Shilling",
             "symbol": "UGX",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -927,8 +833,7 @@
         "fields": {
             "name": "Uruguayan Peso",
             "symbol": "UYU",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -937,8 +842,7 @@
         "fields": {
             "name": "Uzbekistan Som",
             "symbol": "UZS",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -947,8 +851,7 @@
         "fields": {
             "name": "Venezuelan Bol\u00edvar Soberano",
             "symbol": "VES",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -957,8 +860,7 @@
         "fields": {
             "name": "Vietnamese Dong",
             "symbol": "VND",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -967,8 +869,7 @@
         "fields": {
             "name": "CFA Franc BEAC",
             "symbol": "XAF",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -977,8 +878,7 @@
         "fields": {
             "name": "Silver Ounce",
             "symbol": "XAG",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -987,8 +887,7 @@
         "fields": {
             "name": "Gold Ounce",
             "symbol": "XAU",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -997,8 +896,7 @@
         "fields": {
             "name": "CFA Franc BCEAO",
             "symbol": "XOF",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -1007,8 +905,7 @@
         "fields": {
             "name": "Platinum Ounce",
             "symbol": "XPT",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {
@@ -1017,8 +914,7 @@
         "fields": {
             "name": "South African Rand",
             "symbol": "ZAR",
-            "created_at": "2024-03-14T09:36:58.046Z",
-            "payment_types": []
+            "created_at": "2024-03-14T09:36:58.046Z"
         }
     },
     {

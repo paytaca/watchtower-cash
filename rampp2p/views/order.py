@@ -219,10 +219,6 @@ class OrderListCreate(APIView):
     def post(self, request):
         wallet_hash = request.user.wallet_hash
         try:
-            # ad_id = request.data.get('ad', None)
-            # if ad_id is None:
-            #     raise ValidationError('ad_id field is required')
-            
             crypto_amount = request.data.get('crypto_amount')
             if crypto_amount is None or crypto_amount == 0:
                 raise ValidationError('crypto_amount field is required')
@@ -295,22 +291,22 @@ class OrderListCreate(APIView):
                 # Raise error if order isn't valid
                 serialized_order.is_valid(raise_exception=True)
                 
-                # Check if crypto amount is within ad trade limits range
-                # If trade amount is in fiat, convert order_amount to fiat before checking
-                order_amount = crypto_amount
-                if ad.trade_amount_in_fiat:
-                    # Convert order_amount to fiat
-                    order_amount = order_amount * price
-                if order_amount > ad.trade_amount:
-                    raise ValidationError('order amount exceeds ad trade amount')
+                # # Check if crypto amount is within ad trade limits range
+                # # If trade amount is in fiat, convert order_amount to fiat before checking
+                # order_amount = crypto_amount
+                # if ad.trade_amount_in_fiat:
+                #     # Convert order_amount to fiat
+                #     order_amount = order_amount * price
+                # if order_amount > ad.trade_amount:
+                #     raise ValidationError('order amount exceeds ad trade amount')
                 
-                # If trade limits are in fiat, convert order_amount to fiat before checking
-                order_amount = crypto_amount
-                if ad.trade_limits_in_fiat:
-                    # Convert order_amount to fiat
-                    order_amount = order_amount * price
-                if order_amount < ad.trade_floor or order_amount > ad.trade_ceiling:
-                    raise ValidationError('order amount exceeds trade limits')
+                # # If trade limits are in fiat, convert order_amount to fiat before checking
+                # order_amount = crypto_amount
+                # if ad.trade_limits_in_fiat:
+                #     # Convert order_amount to fiat
+                #     order_amount = order_amount * price
+                # if order_amount < ad.trade_floor or order_amount > ad.trade_ceiling:
+                #     raise ValidationError('order amount exceeds trade limits')
                 
                 order = serialized_order.save()
 
