@@ -13,6 +13,7 @@ class DeviceWallet(models.Model):
     gcm_device = models.ForeignKey(push_notifications.GCMDevice, null=True)
     apns_device = models.ForeignKey(push_notifications.APNSDevice, null=True)
     wallet_hash = models.CharField(...)
+    multi_wallet_index = models.IntegerField(null=True, blank=True)
     last_active = models.DateTimeField()
 ```
 
@@ -27,6 +28,7 @@ The API expects the following payload:
         "registration_id": string,
         "device_id": uuid | integer, // ios | android
         "name": string,
+        "multi_wallet_index": null | integer, // paytaca supports multi wallet
         "application_id": string,
     },
     "wallet_hashes": string[],
@@ -52,7 +54,7 @@ There are a set of util functions that can be used to send push notifications to
 
 Using utils functions:
 ```
-from notifications.utils.send import send_get_wallet_hashes_devices
+from notifications.utils.send import send_push_notification_to_wallet_hashes
 
 wallet_hash = "wallet-hash-here"
 
