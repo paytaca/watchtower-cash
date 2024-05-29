@@ -1,4 +1,6 @@
+from django.db.models import OuterRef, Exists
 from push_notifications.models import GCMDevice, APNSDevice
+from notifications.models import DeviceWallet
 
 APNS_KWARGS = [
     # part of push_notifications.apns._apns_send() func
@@ -23,11 +25,31 @@ def get_wallet_hashes_devices(wallet_hash_list):
     """
     gcm_devices = GCMDevice.objects.filter(
         device_wallets__wallet_hash__in=wallet_hash_list,
-    )
+        active=True,
+    ).distinct()
     apns_devices = APNSDevice.objects.filter(
         device_wallets__wallet_hash__in=wallet_hash_list,
-    )
+        active=True,
+    ).distinct()
     return (gcm_devices, apns_devices)
+
+
+def filter_device_queryset_by_wallet_index(queryset, index):
+    foreign_key_field = None
+    if queryset.model == GCMDevice:
+        foreign_key_field = "gcm_device_id"
+    elif queryset.model = APNSDevice:
+        foreign_key_field = "apns_device_id"
+
+    subq = Exists(
+        DeviceWallet.objects.filter(
+            multi_wallet_index=multi_wallet_index,
+            wallet_hash__in=wallet_hash_list,
+            **{foreign_key_field: OuterRef("id")},
+        )
+    )
+    return queryset.filter(subq).distinct()
+
 
 def parse_send_message_for_gcm(message, **kwargs):
     # gcm send_message functions filter out kwargs already
@@ -90,11 +112,12 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
             if "extra" not in gcm_kwargs: gcm_kwargs["extra"] = {}
             gcm_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
 
-            filtered_gcm_devices = gcm_devices \
-                .filter(device_wallets__multi_wallet_index=multi_wallet_index) \
-                .distinct()
+            filtered_gcm_devices = filter_device_queryset_by_wallet_index(
+                gcm_devices, multi_wallet_index
+            )
 
             print(f"GCM({multi_wallet_index}) | {filtered_gcm_devices}")
+            if not filtered_gcm_devices: continue
             _gcm_send_response = filtered_gcm_devices.send_message(gcm_message, **gcm_kwargs)
 
             if not isinstance(gcm_send_response, list): gcm_send_response = []
@@ -110,10 +133,12 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
             if "extra" not in apns_kwargs: apns_kwargs["extra"] = {}
             apns_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
 
-            filtered_apns_devices = apns_devices \
-                .filter(device_wallets__multi_wallet_index=multi_wallet_index) \
-                .distinct()
+            filtered_apns_devices = filter_device_queryset_by_wallet_index(
+                apns_devices, multi_wallet_index,
+            )
 
+            print(f"APNS({multi_wallet_index}) | {filtered_apns_devices}")
+            if not filtered_apns_devices: continue
             _apns_send_response = filtered_apns_devices.send_message(apns_message, **apns_kwargs)
 
             if not isinstance(apns_send_response, list): apns_send_response = []
