@@ -34,16 +34,16 @@ def get_wallet_hashes_devices(wallet_hash_list):
     return (gcm_devices, apns_devices)
 
 
-def filter_device_queryset_by_wallet_index(queryset, index):
+def filter_device_queryset_by_wallet_index(queryset, wallet_hash_list, index):
     foreign_key_field = None
     if queryset.model == GCMDevice:
         foreign_key_field = "gcm_device_id"
-    elif queryset.model = APNSDevice:
+    elif queryset.model == APNSDevice:
         foreign_key_field = "apns_device_id"
 
     subq = Exists(
         DeviceWallet.objects.filter(
-            multi_wallet_index=multi_wallet_index,
+            multi_wallet_index=index,
             wallet_hash__in=wallet_hash_list,
             **{foreign_key_field: OuterRef("id")},
         )
@@ -113,7 +113,7 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
             gcm_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
 
             filtered_gcm_devices = filter_device_queryset_by_wallet_index(
-                gcm_devices, multi_wallet_index
+                gcm_devices, wallet_hash_list, multi_wallet_index, 
             )
 
             print(f"GCM({multi_wallet_index}) | {filtered_gcm_devices}")
@@ -134,7 +134,7 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
             apns_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
 
             filtered_apns_devices = filter_device_queryset_by_wallet_index(
-                apns_devices, multi_wallet_index,
+                apns_devices, wallet_hash_list, multi_wallet_index, 
             )
 
             print(f"APNS({multi_wallet_index}) | {filtered_apns_devices}")
