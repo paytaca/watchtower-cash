@@ -98,26 +98,26 @@ class AppealRequest(APIView):
     def get(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            # validate permissions
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         serialized_appeal = None
         appeal = Appeal.objects.filter(order=pk)
-        if appeal.exists():
-            appeal = appeal.first()
-            serialized_appeal = serializers.AppealSerializer(appeal)
+        if not appeal.exists():
+            return Response({'error': 'no appeal exists for order'}, status=status.HTTP_400_BAD_REQUEST)
         
-            context = { 'wallet_hash': wallet_hash }
-            serialized_order = serializers.OrderSerializer(appeal.order, context=context)
-            statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
-            serialized_statuses = serializers.StatusSerializer(statuses, many=True)
-            contract = Contract.objects.filter(order=appeal.order.id).first()
-            serialized_contract = serializers.ContractDetailSerializer(contract)
-            transactions = Transaction.objects.filter(contract=contract.id)
-            serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
-            serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
+        appeal = appeal.first()
+        serialized_appeal = serializers.AppealSerializer(appeal)
+        context = { 'wallet_hash': wallet_hash }
+        serialized_order = serializers.OrderSerializer(appeal.order, context=context)
+        statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
+        serialized_statuses = serializers.StatusSerializer(statuses, many=True)
+        contract = Contract.objects.filter(order=appeal.order.id).first()
+        serialized_contract = serializers.ContractDetailSerializer(contract)
+        transactions = Transaction.objects.filter(contract=contract.id)
+        serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
+        serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
 
         total_fee, fees = get_trading_fees()
         response = {
