@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rampp2p.models import Arbiter
+from datetime import datetime
 
 class ArbiterSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
@@ -9,6 +10,7 @@ class ArbiterSerializer(serializers.ModelSerializer):
     public_key = serializers.CharField(required=False)
     address = serializers.CharField(required=False)
     address_path = serializers.CharField(required=False)
+    unavailable_until = serializers.DateTimeField(required=False)
     is_disabled = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -21,5 +23,6 @@ class ArbiterSerializer(serializers.ModelSerializer):
             'public_key',
             'address',
             'address_path',
+            'unavailable_until',
             'is_disabled'
         ]

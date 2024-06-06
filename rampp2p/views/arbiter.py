@@ -5,20 +5,19 @@ from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from django.conf import settings
-
+from django.db.models import Q
 from authentication.token import TokenAuthentication
-
 from rampp2p.viewcodes import ViewCode
 from rampp2p.models import Arbiter, Peer
-# from rampp2p.serializers import ArbiterWriteSerializer, ArbiterReadSerializer
 from rampp2p.serializers import ArbiterSerializer
 from rampp2p.utils.signature import verify_signature, get_verification_headers
+from datetime import datetime, timedelta
 
 class ArbiterListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        queryset = Arbiter.objects.filter(is_disabled=False)
+        queryset = Arbiter.objects.filter(Q(is_disabled=False) & (Q(unavailable_until__isnull=True) | Q(unavailable_until__lte=datetime.now())))
 
         # Filter by currency
         currency = request.query_params.get('currency')
@@ -63,29 +62,30 @@ class ArbiterListCreate(APIView):
 
 class ArbiterDetail(APIView):
     authentication_classes = [TokenAuthentication]
-
+    
     def get(self, request):
-        queryset = Arbiter.objects.all()
-        
-        id = request.query_params.get('id')
-        if id is not None:
-            queryset = queryset.filter(id=id)
-        else:
-            wallet_hash = request.headers.get('wallet_hash')
-            if wallet_hash is not None:
-                queryset = queryset.filter(wallet_hash=wallet_hash)
-
-        queryset = queryset.first()
-        serializer = ArbiterSerializer(queryset)
-        return Response(serializer.data, status.HTTP_200_OK)
-
-    def put(self, request):
-        serializer = ArbiterSerializer(request.user, data=request.data)
+        arbiter_id = request.data.get('arbiter_id')
+        wallet_hash = request.user.wallet_hash
+        try:
+            arbiter = None
+            if arbiter_id:
+                arbiter = Arbiter.objects.get(pk=arbiter_id)
+            else:
+                arbiter = Arbiter.objects.get(wallet_hash=wallet_hash)
+        except Arbiter.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=400)
+        return Response(ArbiterSerializer(arbiter).data, status=200)
+    
+    def patch(self, request):
+        data = request.data.copy()
+        unavailable_hours = request.data.get('unavailable_hours')
+        if unavailable_hours:
+            data['unavailable_until'] = datetime.now() + timedelta(hours=unavailable_hours)
+        serializer = ArbiterSerializer(request.user, data=data)
         if serializer.is_valid():
             serializer = ArbiterSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    
 class ArbiterConfig(APIView):
     authentication_classes = [TokenAuthentication]
     
