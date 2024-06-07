@@ -17,7 +17,7 @@ class ArbiterListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        queryset = Arbiter.objects.filter(Q(is_disabled=False) & (Q(unavailable_until__isnull=True) | Q(unavailable_until__lte=datetime.now())))
+        queryset = Arbiter.objects.filter(Q(is_disabled=False) & (Q(inactive_until__isnull=True) | Q(inactive_until__lte=datetime.now())))
 
         # Filter by currency
         currency = request.query_params.get('currency')
@@ -78,13 +78,14 @@ class ArbiterDetail(APIView):
     
     def patch(self, request):
         data = request.data.copy()
-        unavailable_hours = request.data.get('unavailable_hours')
-        if unavailable_hours:
-            data['unavailable_until'] = datetime.now() + timedelta(hours=unavailable_hours)
+        inactive_hours = request.data.get('inactive_hours')
+        if inactive_hours:
+            data['inactive_until'] = datetime.now() + timedelta(hours=inactive_hours)
         serializer = ArbiterSerializer(request.user, data=data)
-        if serializer.is_valid():
-            serializer = ArbiterSerializer(serializer.save())
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ArbiterSerializer(serializer.save())
+        return Response(serializer.data, status=status.HTTP_200_OK)        
     
 class ArbiterConfig(APIView):
     authentication_classes = [TokenAuthentication]

@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from rampp2p.models import Arbiter
-from datetime import datetime
+import rampp2p.models as models
 
 class ArbiterSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
@@ -10,11 +9,13 @@ class ArbiterSerializer(serializers.ModelSerializer):
     public_key = serializers.CharField(required=False)
     address = serializers.CharField(required=False)
     address_path = serializers.CharField(required=False)
-    unavailable_until = serializers.DateTimeField(required=False)
+    inactive_until = serializers.DateTimeField(required=False)
     is_disabled = serializers.BooleanField(read_only=True)
+    fiat_currencies = serializers.SlugRelatedField(required=False, slug_field="symbol", queryset=models.FiatCurrency.objects.all(), many=True)
+    rating = serializers.SerializerMethodField()
 
     class Meta:
-        model = Arbiter
+        model = models.Arbiter
         fields = [
             'id',
             'wallet_hash',
@@ -23,6 +24,11 @@ class ArbiterSerializer(serializers.ModelSerializer):
             'public_key',
             'address',
             'address_path',
-            'unavailable_until',
-            'is_disabled'
+            'inactive_until',
+            'is_disabled',
+            'fiat_currencies',
+            'rating'
         ]
+
+    def get_rating(self, obj):
+        return obj.average_rating()

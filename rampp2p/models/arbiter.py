@@ -11,7 +11,7 @@ class Arbiter(models.Model):
     address_path = models.CharField(max_length=10, null=True)
     fiat_currencies = models.ManyToManyField(FiatCurrency)
     is_disabled = models.BooleanField(default=True)
-    unavailable_until = models.DateTimeField(null=True)
+    inactive_until = models.DateTimeField(null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
