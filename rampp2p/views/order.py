@@ -29,7 +29,7 @@ from rampp2p.serializers import (
     AppealSerializer
 )
 import rampp2p.models as models
-
+import rampp2p.utils as utils
 import logging
 logger = logging.getLogger(__name__)
 
@@ -737,7 +737,20 @@ class CryptoBuyerConfirmPayment(APIView):
         
         payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
         order.payment_methods.add(*payment_methods)
-        order.save()    
+        order.save() 
+
+        # payment_methods = request.data.get('payment_methods')
+        order_payment_methods = []
+        for payment_method in payment_methods:
+            data = {
+                "order": order.id,
+                "payment_method": payment_method.id,
+                "payment_type": payment_method.payment_type.id
+            }
+            order_method = serializers.OrderPaymentMethodSerializer(data=data)
+            if order_method.is_valid():
+                order_payment_methods.append(order_method.save())
+        order_payment_methods = serializers.OrderPaymentMethodSerializer(order_payment_methods, many=True)
 
         context = { 'wallet_hash': wallet_hash }
         serialized_order = OrderSerializer(order, context=context)
@@ -756,6 +769,7 @@ class CryptoBuyerConfirmPayment(APIView):
             }, pk)
             response = {
                 "order": serialized_order.data,
+                "order_payment_methods": order_payment_methods.data,
                 "status": serialized_status.data
             }
             return Response(response, status=status.HTTP_200_OK)

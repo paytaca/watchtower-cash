@@ -24,6 +24,19 @@ class TimeField(serializers.Field):
     def to_representation(self, value):
         return str(value)
 
+class OrderPaymentMethodSerializer(serializers.ModelSerializer):
+    order = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Order.objects.all())
+    payment_method = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentMethod.objects.all())
+    payment_type = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentType.objects.all())
+    class Meta:
+        model = models.OrderPaymentMethod
+        fields = [
+            'id',
+            'order',
+            'payment_method',
+            'payment_type'
+        ]
+
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
@@ -32,7 +45,8 @@ class OrderSerializer(serializers.ModelSerializer):
     arbiter = OrderArbiterSerializer()
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
-    payment_methods = serializers.SerializerMethodField()
+    payment_method_opts = serializers.SerializerMethodField()
+    payment_methods_selected = serializers.SerializerMethodField()
     last_modified_at = serializers.SerializerMethodField() # lastest order status created_at
     is_ad_owner = serializers.SerializerMethodField()
     feedback = serializers.SerializerMethodField()
@@ -50,7 +64,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'owner',
             'contract',
             'arbiter',
-            'payment_methods',
+            'payment_method_opts',
+            'payment_methods_selected',
             'crypto_amount',
             'locked_price',
             'trade_type',
@@ -110,7 +125,7 @@ class OrderSerializer(serializers.ModelSerializer):
             return None
         return contract.id
 
-    def get_payment_methods(self, obj):
+    def get_payment_method_opts(self, obj):
         escrowed_status = models.Status.objects.filter(Q(order=obj) & Q(status=models.StatusType.ESCROWED))
         if escrowed_status.exists():            
             serialized_payment_methods = SubsetPaymentMethodSerializer(
@@ -119,6 +134,13 @@ class OrderSerializer(serializers.ModelSerializer):
             )
             payment_methods = serialized_payment_methods.data
             return payment_methods
+    
+    def get_payment_methods_selected(self, obj):
+        order_payment_methods = models.OrderPaymentMethod.objects.select_related('payment_method').filter(order_id=obj.id)
+        payment_methods = []
+        for method in order_payment_methods:
+            payment_methods.append(SubsetPaymentMethodSerializer(method.payment_method).data)
+        return payment_methods
 
     def get_latest_order_status(self, obj):
         latest_status = models.Status.objects.filter(Q(order=obj)).last()

@@ -2,7 +2,7 @@ from django.db import models
 from .ad import AdSnapshot
 from .peer import Peer
 from .arbiter import Arbiter
-from .payment import PaymentMethod
+from .payment import PaymentMethod, PaymentType
 
 class Order(models.Model):
     ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
@@ -18,6 +18,11 @@ class Order(models.Model):
 
     def __str__(self):
         return f'{self.id}'
+
+class OrderPaymentMethod(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
+    payment_type = models.ForeignKey(PaymentType, on_delete=models.PROTECT)
     
 class OrderMember(models.Model):
     class MemberType(models.TextChoices):
