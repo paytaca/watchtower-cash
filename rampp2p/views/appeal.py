@@ -75,7 +75,8 @@ class AppealList(APIView):
         offset = (page - 1) * limit
         page_results = queryset[offset:offset + limit]
 
-        serializer = serializers.AppealSerializer(page_results, many=True)
+        context = { 'wallet_hash': wallet_hash }
+        serializer = serializers.AppealSerializer(page_results, context=context, many=True)
         data = {
             'appeals': serializer.data,
             'count': count,

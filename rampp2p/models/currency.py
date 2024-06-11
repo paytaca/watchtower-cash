@@ -9,6 +9,9 @@ class FiatCurrency(models.Model):
 
     def __str__(self):
        return self.symbol
+    
+    class Meta:
+        ordering = ['name', 'symbol']
 
 class CryptoCurrency(models.Model):
     name = models.CharField(max_length=100)
