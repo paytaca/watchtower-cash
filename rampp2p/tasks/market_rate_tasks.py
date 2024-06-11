@@ -45,7 +45,7 @@ def execute_subprocess(command):
 
 @shared_task(queue='rampp2p__market_rates')
 def market_rates_beat_handler(result):
-    if type(result.get('results')) == str:
+    if type(result.get('result')) == str:
         logger.warn(f'rampp2p__market_rates: could not handle non dict result: {result}')
         return
     
