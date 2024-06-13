@@ -109,8 +109,8 @@ class AppealRequest(APIView):
             return Response({'error': 'no appeal exists for order'}, status=status.HTTP_400_BAD_REQUEST)
         
         appeal = appeal.first()
-        serialized_appeal = serializers.AppealSerializer(appeal)
         context = { 'wallet_hash': wallet_hash }
+        serialized_appeal = serializers.AppealSerializer(appeal, context=context)
         serialized_order = serializers.OrderSerializer(appeal.order, context=context)
         statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
         serialized_statuses = serializers.StatusSerializer(statuses, many=True)

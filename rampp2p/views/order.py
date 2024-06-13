@@ -464,7 +464,7 @@ class OrderMemberView(APIView):
     
     def patch(self, request, pk):
         wallet_hash = request.user.wallet_hash
-        member = models.OrderMember.objects.filter(Q(order__id=pk) & Q(peer__wallet_hash=wallet_hash))
+        member = models.OrderMember.objects.filter(Q(order__id=pk) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
         if member.exists():
             member = member.first()
             member.read_at = timezone.now()
