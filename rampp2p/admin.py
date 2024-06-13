@@ -55,6 +55,14 @@ class OrderAdmin(admin.ModelAdmin):
 
 admin.site.register(Order, OrderAdmin)
 
+class MarketRateAdmin(admin.ModelAdmin):
+    list_display = [
+        'currency',
+        'price',
+        'modified_at'
+    ]
+
+admin.site.register(MarketRate, MarketRateAdmin)
 
 admin.site.register(AdSnapshot)
 admin.site.register(CryptoCurrency)
@@ -63,7 +71,6 @@ admin.site.register(Status)
 admin.site.register(PaymentType)
 admin.site.register(PaymentMethod)
 admin.site.register(Peer)
-admin.site.register(MarketRate)
 admin.site.register(Arbiter)
 admin.site.register(Contract)
 admin.site.register(Appeal)

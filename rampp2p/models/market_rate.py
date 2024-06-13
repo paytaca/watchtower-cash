@@ -8,3 +8,6 @@ class MarketRate(models.Model):
 
     def __str__(self):
         return self.currency
+    
+    class Meta:
+        ordering = ['currency']

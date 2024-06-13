@@ -1,63 +1,51 @@
 from celery import shared_task
-import subprocess
-import json
-import re
+import requests
+from decimal import Decimal
 
 from rampp2p.utils.websocket import send_market_price
-from rampp2p.models import MarketRate, FiatCurrency
+import rampp2p.models as models
 
 import logging
 logger = logging.getLogger(__name__)
 
 @shared_task(queue='rampp2p__market_rates')
 def update_market_rates():
-    '''
-    Updates the market price records.
-    '''
-    path = './rampp2p/js/src/'
-    command = 'node {}rates.js'.format(path)
-    return execute_subprocess.apply_async(
-                (command,), 
-                link=market_rates_beat_handler.s()
-            )
+    # get subscribed fiat currencies
+    currencies = models.FiatCurrency.objects.all().values_list('symbol', flat=True)
 
-@shared_task(queue='rampp2p__market_rates')
-def execute_subprocess(command):
-    # execute subprocess
-    process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate() 
+    # get market prices from coingecko
+    market_prices = get_latest_bch_prices_coingecko(currencies)
+    result_keys = [e.upper() for e in list(market_prices.keys())]
 
-    stderr = stderr.decode("utf-8")
-    stdout = stdout.decode('utf-8')
+    # get missing market prices from fullstack.cash
+    if len(result_keys) < len(currencies):
+        mcurrencies = list(set(currencies) - set(result_keys))
+        market_prices_fullstackcash = get_latest_bch_prices_fullstackcash(mcurrencies)
+        market_prices.update(market_prices_fullstackcash)
 
-    if stdout is not '':
-        # Define the pattern for matching control characters
-        control_char_pattern = re.compile('[\x00-\x1f\x7f-\x9f]')
-        
-        # Remove all control characters from the JSON string
-        clean_stdout = control_char_pattern.sub('', stdout)
-
-        stdout = json.loads(clean_stdout)
-    
-    response = {'result': stdout, 'error': stderr} 
-
-    return response
-
-@shared_task(queue='rampp2p__market_rates')
-def market_rates_beat_handler(result):
-    if type(result.get('result')) == str:
-        logger.warn(f'rampp2p__market_rates: could not handle non dict result: {result}')
-        return
-    
-    rates = result.get('result').get('rates')
-    subbed_currencies = FiatCurrency.objects.values('symbol').all()
-
-    for currency in subbed_currencies:
-        symbol = currency.get('symbol')
-        rate = rates.get(symbol)
-        obj, _ = MarketRate.objects.get_or_create(currency=symbol)
-        if rate:
-            obj.price = rate
-            obj.save()
-        data =  { 'currency': obj.currency, 'price' : obj.price }
+    for currency in market_prices:
+        price = market_prices.get(currency)
+        if price:
+            rate, _ = models.MarketRate.objects.get_or_create(currency=currency.upper())
+            rate.price = price
+            rate.save()
+        data =  { 'currency': currency, 'price' : price }
         send_market_price(data, currency)
+
+def get_latest_bch_prices_coingecko(currencies):
+    coin_id = "bitcoin-cash"
+    query = { "ids": coin_id, "vs_currencies": ','.join(currencies) }
+    response = requests.get("https://api.coingecko.com/api/v3/simple/price/", params=query)
+    data = response.json()
+    return data.get(coin_id)
+
+def get_latest_bch_prices_fullstackcash(currencies):
+    response = requests.get("https://api.fullstack.cash/v5/price/rates")
+    data = response.json()
+
+    rates = {}
+    for currency in currencies:
+        price = data.get(currency)
+        if price:
+            rates[currency] = Decimal(price)
+    return rates
