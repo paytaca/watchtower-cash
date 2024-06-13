@@ -8,7 +8,7 @@ class Contract(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
-        return f'{self.id} | {self.address}'
+        return f'{self.address}'
 
 class ContractMember(models.Model):
     class MemberType(models.TextChoices):
@@ -28,4 +28,4 @@ class ContractMember(models.Model):
         unique_together = ('contract', 'member_type')
 
     def __str__(self):
-        return f'{self.id} | {self.member_type} | {self.address}'
+        return f'{self.address}'
