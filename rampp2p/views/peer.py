@@ -86,7 +86,7 @@ class PeerDetailView(APIView):
         serializer = PeerSerializer(peer)
         return Response(serializer.data, status.HTTP_200_OK)
 
-    def put(self, request):        
+    def patch(self, request):        
         serializer = PeerUpdateSerializer(request.user, data=request.data)
         if serializer.is_valid():
             peer = serializer.save()
