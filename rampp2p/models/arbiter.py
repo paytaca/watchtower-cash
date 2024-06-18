@@ -9,9 +9,9 @@ class Arbiter(models.Model):
     public_key = models.CharField(max_length=75)
     address = models.CharField(max_length=75)
     address_path = models.CharField(max_length=10, null=True)
-    fiat_currencies = models.ManyToManyField(FiatCurrency)
+    fiat_currencies = models.ManyToManyField(FiatCurrency, blank=True)
     is_disabled = models.BooleanField(default=True)
-    inactive_until = models.DateTimeField(null=True)
+    inactive_until = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
 
