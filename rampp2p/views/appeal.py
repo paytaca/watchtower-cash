@@ -9,19 +9,8 @@ import math
 import json
 
 from authentication.token import TokenAuthentication
-
-from rampp2p.models import (
-    TradeType,
-    StatusType,
-    Peer,
-    Order,
-    Contract,
-    Transaction,
-    Appeal,
-    AppealType,
-    Arbiter,
-    Status
-)
+import rampp2p.models as models
+from rampp2p.viewcodes import WSGeneralMessageType
 import rampp2p.serializers as serializers
 from rampp2p.validators import *
 from rampp2p.utils.transaction import validate_transaction
@@ -57,8 +46,8 @@ class AppealList(APIView):
         if page < 1:
             return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
         
-        arbiter_order_ids = list(Order.objects.filter(arbiter__wallet_hash=wallet_hash).values_list('id', flat=True))
-        queryset = Appeal.objects.filter(order__pk__in=arbiter_order_ids).order_by('created_at')
+        arbiter_order_ids = list(models.Order.objects.filter(arbiter__wallet_hash=wallet_hash).values_list('id', flat=True))
+        queryset = models.Appeal.objects.filter(order__pk__in=arbiter_order_ids).order_by('created_at')
 
         if appeal_state == 'PENDING':
             queryset = queryset.exclude(resolved_at__isnull=False)
@@ -77,10 +66,19 @@ class AppealList(APIView):
 
         context = { 'wallet_hash': wallet_hash }
         serializer = serializers.AppealSerializer(page_results, context=context, many=True)
+        
+        # get this user's unread orders
+        member_orders = models.OrderMember.objects.filter(
+            Q(read_at__isnull=True) & 
+            (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash))).values_list('order', flat=True)
+        # count which appeals have orders that are subset of this user's unread orders
+        unread_count = models.Appeal.objects.filter(order__in=member_orders).count()
+        
         data = {
             'appeals': serializer.data,
             'count': count,
-            'total_pages': total_pages
+            'total_pages': total_pages,
+            'unread_count': unread_count
         }
         return Response(data, status.HTTP_200_OK)
 
@@ -89,8 +87,8 @@ class AppealList(APIView):
         Caller must be an arbiter
         '''
         try:
-            Arbiter.objects.get(wallet_hash=wallet_hash)
-        except Arbiter.DoesNotExist as err:
+            models.Arbiter.objects.get(wallet_hash=wallet_hash)
+        except models.Arbiter.DoesNotExist as err:
             raise ValidationError(err.args[0])        
 
 class AppealRequest(APIView):
@@ -104,7 +102,7 @@ class AppealRequest(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         serialized_appeal = None
-        appeal = Appeal.objects.filter(order=pk)
+        appeal = models.Appeal.objects.filter(order=pk)
         if not appeal.exists():
             return Response({'error': 'no appeal exists for order'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -114,9 +112,9 @@ class AppealRequest(APIView):
         serialized_order = serializers.OrderSerializer(appeal.order, context=context)
         statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
         serialized_statuses = serializers.StatusSerializer(statuses, many=True)
-        contract = Contract.objects.filter(order=appeal.order.id).first()
+        contract = models.Contract.objects.filter(order=appeal.order.id).first()
         serialized_contract = serializers.ContractDetailSerializer(contract)
-        transactions = Transaction.objects.filter(contract=contract.id)
+        transactions = models.Transaction.objects.filter(contract=contract.id)
         serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
         serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
 
@@ -142,14 +140,14 @@ class AppealRequest(APIView):
         '''
 
         try:
-            order = Order.objects.get(pk=pk)
-            caller = Arbiter.objects.filter(wallet_hash=wallet_hash)
+            order = models.Order.objects.get(pk=pk)
+            caller = models.Arbiter.objects.filter(wallet_hash=wallet_hash)
             if not caller.exists():
-                caller = Peer.objects.filter(wallet_hash=wallet_hash)
+                caller = models.Peer.objects.filter(wallet_hash=wallet_hash)
                 if not caller.exists():
                     raise ValidationError('Peer or Arbiter matching query does not exist')
             caller = caller.first()
-        except (Order.DoesNotExist, ValidationError) as err:
+        except (models.Order.DoesNotExist, ValidationError) as err:
             raise ValidationError(err.args[0])
         
         if (caller.wallet_hash != order.owner.wallet_hash and
@@ -185,11 +183,11 @@ class AppealRequest(APIView):
             validate_status_inst_count(StatusType.APPEALED, pk)
             validate_status_progression(StatusType.APPEALED, pk)
             appeal_type = request.data.get('type')
-            AppealType(appeal_type)
+            models.AppealType(appeal_type)
 
-            peer = Peer.objects.get(wallet_hash=wallet_hash)
+            peer = models.Peer.objects.get(wallet_hash=wallet_hash)
 
-        except (ValidationError, ValueError, Peer.DoesNotExist) as err:
+        except (ValidationError, ValueError, models.Peer.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         data = {
@@ -212,13 +210,26 @@ class AppealRequest(APIView):
                     'appeal': serialized_appeal.data,
                     'status': serialized_status.data
                 }
-                websocket_msg = {
+                
+                # Send WebSocket updates
+                websocket.send_order_update({
                     'success' : True,
                     'status': serialized_status.data
-                }
-                websocket.send_order_update(websocket_msg, pk)
+                }, pk)
 
-                # send push notifications
+                rbtr_wallet_hash = appeal.order.arbiter.wallet_hash
+                rbtr_appeal = serializers.AppealSerializer(appeal, context={'wallet_hash': rbtr_wallet_hash})
+                rbtr_unread_orders = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(arbiter__wallet_hash=appeal.order.arbiter.wallet_hash)).values_list('order', flat=True)
+                rbtr_unread_apls_count = models.Appeal.objects.filter(order__in=rbtr_unread_orders).count()
+                websocket.send_general_update({
+                    'type': WSGeneralMessageType.NEW_APPEAL.value,
+                    'extra': {
+                        'appeal': rbtr_appeal.data,
+                        'unread_count': rbtr_unread_apls_count
+                    }
+                }, rbtr_wallet_hash)
+
+                # Send push notifications
                 party_a = appeal.order.ad_snapshot.ad.owner.wallet_hash
                 party_b = appeal.order.owner.wallet_hash
                 arbiter = appeal.order.arbiter.wallet_hash
@@ -260,13 +271,13 @@ class AppealPendingRelease(APIView):
             # Update status to RELEASE_PENDING
             serialized_status = update_order_status(pk, status_type)
 
-            contract = Contract.objects.get(order__id=pk)
-            _, _ = Transaction.objects.get_or_create(
+            contract = models.Contract.objects.get(order__id=pk)
+            _, _ = models.Transaction.objects.get_or_create(
                 contract=contract,
-                action=Transaction.ActionType.RELEASE,
+                action=models.Transaction.ActionType.RELEASE,
             )
             
-        except (ValidationError, Contract.DoesNotExist) as err:
+        except (ValidationError, models.Contract.DoesNotExist) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # notify order update subscribers
@@ -287,9 +298,9 @@ class AppealPendingRelease(APIView):
         prefix = "ValidationError:"
 
         try:
-            order = Order.objects.get(pk=pk)
+            order = models.Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except Order.DoesNotExist as err:
+        except models.Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
         # Raise error if caller is not order's arbiter
@@ -325,13 +336,13 @@ class AppealPendingRefund(APIView):
             # Update status to REFUND_PENDING
             serialized_status = update_order_status(pk, status_type)
 
-            contract = Contract.objects.get(order__id=pk)
-            _, _ = Transaction.objects.get_or_create(
+            contract = models.Contract.objects.get(order__id=pk)
+            _, _ = models.Transaction.objects.get_or_create(
                 contract=contract,
-                action=Transaction.ActionType.REFUND,
+                action=models.Transaction.ActionType.REFUND,
             )
             
-        except (ValidationError, Contract.DoesNotExist) as err:
+        except (ValidationError, models.Contract.DoesNotExist) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # notify order update subscribers
@@ -352,9 +363,9 @@ class AppealPendingRefund(APIView):
         prefix = "ValidationError:"
 
         try:
-            order = Order.objects.get(pk=pk)
+            order = models.Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except Order.DoesNotExist as err:
+        except models.Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
         # Raise error if caller is not order's arbiter
@@ -390,12 +401,12 @@ class VerifyRelease(APIView):
             if txid is None:
                 raise ValidationError('txid field is required')
 
-            contract = Contract.objects.get(order__id=pk)
+            contract = models.Contract.objects.get(order__id=pk)
             
             # Validate the transaction
-            validate_transaction(txid, Transaction.ActionType.RELEASE, contract.id)
+            validate_transaction(txid, models.Transaction.ActionType.RELEASE, contract.id)
             
-        except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
+        except (ValidationError, models.Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
         return Response(status=status.HTTP_200_OK)
@@ -409,16 +420,16 @@ class VerifyRelease(APIView):
         prefix = "ValidationError:"
 
         try:
-            order = Order.objects.get(pk=pk)
+            order = models.Order.objects.get(pk=pk)
             curr_status = Status.objects.filter(order=order).latest('created_at')
-        except Order.DoesNotExist as err:
+        except models.Order.DoesNotExist as err:
             raise ValidationError(f'{prefix} {err.args[0]}')
         
         is_arbiter = False
         is_seller = False
         if wallet_hash == order.arbiter.wallet_hash:
             is_arbiter = True
-        if order.ad_snapshot.trade_type == TradeType.SELL:
+        if order.ad_snapshot.trade_type == models.TradeType.SELL:
             seller = order.ad_snapshot.ad.owner
         else:
             seller = order.owner
@@ -460,17 +471,17 @@ class VerifyRefund(APIView):
             if txid is None:
                 raise ValidationError('txid field is required')
 
-            contract = Contract.objects.get(order__id=pk)
-            transaction, _ = Transaction.objects.get_or_create(
+            contract = models.Contract.objects.get(order__id=pk)
+            transaction, _ = models.Transaction.objects.get_or_create(
                 contract=contract,
-                action=Transaction.ActionType.REFUND,
+                action=models.Transaction.ActionType.REFUND,
                 txid=txid
             )
 
             # Validate the transaction
-            validate_transaction(transaction.txid, Transaction.ActionType.REFUND, contract.id)
+            validate_transaction(transaction.txid, models.Transaction.ActionType.REFUND, contract.id)
             
-        except (ValidationError, Contract.DoesNotExist, IntegrityError) as err:
+        except (ValidationError, models.Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
   
         return Response(status=status.HTTP_200_OK)
@@ -478,7 +489,7 @@ class VerifyRefund(APIView):
     def validate_permissions(self, wallet_hash, pk):
         prefix = "ValidationError:"
         try:
-            order = Order.objects.get(pk=pk)            
+            order = models.Order.objects.get(pk=pk)            
             if wallet_hash != order.arbiter.wallet_hash:
                 raise ValidationError(f'{prefix} Caller must be order arbiter.')
         except Exception as err:

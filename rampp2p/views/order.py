@@ -470,7 +470,11 @@ class OrderMemberView(APIView):
             member.read_at = timezone.now()
             member.save()
         
-            unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=wallet_hash)).count()
+            if isinstance(request.user, models.Arbiter):
+                member_orders = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(arbiter__wallet_hash=wallet_hash)).values_list('order', flat=True)
+                unread_count = models.Appeal.objects.filter(order__in=member_orders).count()
+            else:
+                unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=wallet_hash)).count()
             websocket.send_general_update({
                 'type': WSGeneralMessageType.READ_ORDER.value,
                 'extra': { 'unread_count': unread_count }

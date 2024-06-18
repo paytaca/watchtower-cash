@@ -12,7 +12,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 async def unread_orders_count(wallet_hash):
-    count = await sync_to_async(models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=wallet_hash)).count)()
+    count = 0
+    is_arbiter = await sync_to_async(models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists)()
+
+    if is_arbiter:
+        # get arbiter orders
+        member_orders_sync =  sync_to_async(models.OrderMember.objects.filter(Q(read_at__isnull=True) 
+            & Q(arbiter__wallet_hash=wallet_hash)).values_list, thread_sensitive=True)
+        member_orders = await member_orders_sync('order', flat=True)
+        # count only the orders with appeals
+        count_sync = sync_to_async(models.Appeal.objects.filter(order__in=member_orders).count, thread_sensitive=True)
+        count = await count_sync()
+    else:
+        count_sync = sync_to_async(models.OrderMember.objects.filter(Q(read_at__isnull=True) 
+            & Q(peer__wallet_hash=wallet_hash)).count, thread_sensitive=True)
+        count = await count_sync()
     return count
 
 def generate_chat_session_ref(input_string):
