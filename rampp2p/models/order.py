@@ -32,8 +32,8 @@ class OrderMember(models.Model):
 
     type = models.CharField(max_length=10, choices=MemberType.choices, null=True)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='members')
-    peer = models.ForeignKey(Peer, on_delete=models.CASCADE, related_name='order_members', null=True)
-    arbiter = models.ForeignKey(Arbiter, on_delete=models.CASCADE, related_name='order_members', null=True)
+    peer = models.ForeignKey(Peer, on_delete=models.CASCADE, related_name='order_members', null=True, blank=True)
+    arbiter = models.ForeignKey(Arbiter, on_delete=models.CASCADE, related_name='order_members', null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:

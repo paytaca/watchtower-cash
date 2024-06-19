@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rampp2p.serializers import FiatCurrencySerializer
 import rampp2p.models as models
 
 class ArbiterSerializer(serializers.ModelSerializer):
@@ -11,7 +12,7 @@ class ArbiterSerializer(serializers.ModelSerializer):
     address_path = serializers.CharField(required=False)
     inactive_until = serializers.DateTimeField(required=False)
     is_disabled = serializers.BooleanField(read_only=True)
-    fiat_currencies = serializers.SlugRelatedField(required=False, slug_field="symbol", queryset=models.FiatCurrency.objects.all(), many=True)
+    fiat_currencies = FiatCurrencySerializer(many=True, read_only=True)
     rating = serializers.SerializerMethodField()
 
     class Meta:

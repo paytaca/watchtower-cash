@@ -21,7 +21,9 @@ class PaymentType(models.Model):
   modified_at = models.DateTimeField(auto_now=True)
 
   def __str__(self):
-    return f'{self.full_name} ({self.short_name})'
+    if self.short_name:
+      return self.short_name
+    return self.full_name
 
 class PaymentMethod(models.Model):
   payment_type = models.ForeignKey(PaymentType, on_delete=models.PROTECT)
@@ -33,7 +35,7 @@ class PaymentMethod(models.Model):
   modified_at = models.DateTimeField(auto_now=True)
 
   def __str__(self):
-    return f"{self.id} | {self.payment_type} | {self.owner.name}"
+    return f"{self.id}"
   
   def delete(self, *args, **kwargs):
     # disable deleting of payment method if it is used by any Ad
