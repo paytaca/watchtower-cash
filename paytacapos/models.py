@@ -102,6 +102,7 @@ class Category(models.Model):
 class Merchant(models.Model):
     wallet_hash = models.CharField(max_length=75, unique=True, db_index=True)
     name = models.CharField(max_length=75)
+    slug = models.CharField(max_length=255, null=True, blank=True)
     primary_contact_number = models.CharField(max_length=20, null=True, blank=True)
     location = models.OneToOneField(
         Location, on_delete=models.SET_NULL,

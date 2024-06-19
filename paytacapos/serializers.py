@@ -483,6 +483,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
         model = Merchant
         fields = [
             "id",
+            "slug",
             "name",
             "location",
             "website_url",

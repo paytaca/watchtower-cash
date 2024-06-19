@@ -98,4 +98,5 @@ cashaddress==1.0.6
 paho-mqtt==1.6.1
 cryptography==40.0.2
 ecdsa==0.18.0
+python-slugify==8.0.1
 git+https://github.com/paytaca/python-bitcoinrpc
