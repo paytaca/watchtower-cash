@@ -12,7 +12,7 @@ def post_create_merchant(sender, instance=None, created=False, **kwargs):
     proceed = False
     if created:
         slug = slugify(instance.name)
-        instance.slug = f'{slug}-{instance.vault.id}'
+        instance.slug = f'{slug}-{instance.id}'
         instance.save()
 
     if instance.receiving_pubkey:
