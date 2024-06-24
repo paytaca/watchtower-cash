@@ -23,7 +23,7 @@ class MarketRateConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_message(self, event):
-        data = event['data']
+        data = event.get('data')
         logger.warning(f'send_message data: {data}')
         await self.send(text_data=json.dumps(data))
 
@@ -47,7 +47,7 @@ class OrderUpdatesConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_message(self, event):
-        data = event['data']
+        data = event.get('data')
         await self.send(text_data=json.dumps(data))
 
 class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
@@ -76,5 +76,5 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_message(self, event):
-        data = event['data']
+        data = event.get('data')
         await self.send(text_data=json.dumps(data))
