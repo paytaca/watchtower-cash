@@ -83,7 +83,8 @@ class AdListSerializer(serializers.ModelSerializer):
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     price = serializers.SerializerMethodField()
-    payment_methods = RelatedPaymentMethodSerializer(many=True)
+    # payment_methods = RelatedPaymentMethodSerializer(many=True)
+    payment_methods = serializers.SerializerMethodField()
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
     is_owned = serializers.SerializerMethodField()
@@ -113,6 +114,9 @@ class AdListSerializer(serializers.ModelSerializer):
             'created_at',
             'modified_at'
         ]
+
+    def get_payment_methods(self, obj: models.Ad):
+        return obj.payment_methods.values_list('payment_type__short_name', flat=True)
     
     def get_appeal_cooldown(self, instance: models.Ad):
         return models.CooldownChoices(instance.appeal_cooldown_choice).value
