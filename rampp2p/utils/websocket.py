@@ -21,7 +21,7 @@ def send_message(data, room_name):
     async_to_sync(channel_layer.group_send)(
         room_name,
         {
-            "type": "send.message",
+            "type": "send_message",
             "message": serialized_data,
         }
     )
