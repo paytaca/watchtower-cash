@@ -1,6 +1,7 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from rampp2p.utils import unread_orders_count
 import json
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,7 @@ class MarketRateConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_message(self, event):
-        data = event['data']
-        logger.warning(f'send_message data: {data}')
+        data = event.get('message')
         await self.send(text_data=json.dumps(data))
 
 
@@ -47,7 +47,7 @@ class OrderUpdatesConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_message(self, event):
-        data = event['data']
+        data = event.get('message')
         await self.send(text_data=json.dumps(data))
 
 class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
@@ -76,5 +76,5 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         )
 
     async def send_message(self, event):
-        data = event['data']
+        data = event.get('message')
         await self.send(text_data=json.dumps(data))
