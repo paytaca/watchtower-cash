@@ -60,7 +60,7 @@ def is_appealable(id: int):
     return time_now >= appealable_at, appealable_at
 
 def get_order_members_addresses(contract_id: int):
-    arbiter, seller, buyer = get_order_members(contract_id)
+    arbiter, seller, buyer = get_contract_members(contract_id)
     return {
         'arbiter': arbiter.address,
         'buyer': buyer.address,
@@ -68,7 +68,7 @@ def get_order_members_addresses(contract_id: int):
         'servicer': settings.SERVICER_ADDR
     }
 
-def get_order_members(contract_id: int):
+def get_contract_members(contract_id: int):
     members = models.ContractMember.objects.filter(contract__id=contract_id)
     arbiter, seller, buyer = None, None, None
     for member in members:
@@ -81,6 +81,24 @@ def get_order_members(contract_id: int):
             buyer = member
 
     return arbiter, seller, buyer
+
+def get_order_members(order_id: int):
+    members = models.OrderMember.objects.filter(order__id=order_id)
+    arbiter, seller, buyer = None, None, None
+    for member in members:
+        type = member.type
+        if (type == models.OrderMember.MemberType.ARBITER):
+            arbiter = member
+        if (type == models.OrderMember.MemberType.SELLER):
+            seller = member
+        if (type == models.OrderMember.MemberType.BUYER):
+            buyer = member
+
+    return {
+        'arbiter': arbiter,
+        'seller': seller,
+        'buyer': buyer
+    }
 
 def get_trading_fees():
     # Retrieve fee values. Format must be in satoshi
