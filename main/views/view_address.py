@@ -29,6 +29,7 @@ class AddressInfoView(APIView):
 
         serializer = self.serializer_class(dict(
             address=bchaddress,
+            token_address=address_obj.token_address,
             wallet_hash=wallet_hash,
             project_id=project_id,
             has_subscribed_push_notifications=has_subscribed_push_notifications,
