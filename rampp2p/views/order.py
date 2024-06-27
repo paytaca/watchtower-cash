@@ -309,15 +309,9 @@ class OrderListCreate(APIView):
                 #     raise ValidationError('order amount exceeds trade limits')
                 
                 order = serialized_order.save()
-
-                # Generate chat session ref using order id
-                formatted_timestamp = order.created_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-                chat_session_ref = generate_chat_session_ref(f'{order.id}{formatted_timestamp}')
-                order.chat_session_ref = chat_session_ref
                 
                 # Set order expiration date
                 order.expires_at = order.created_at + timedelta(hours=24)
-                order.save()
 
                 # Create SUBMITTED status for order
                 submitted_status = StatusSerializer(data={'status': StatusType.SUBMITTED, 'order': order.id})
@@ -342,6 +336,13 @@ class OrderListCreate(APIView):
                 if buyer_member.peer.wallet_hash == order.owner.wallet_hash:
                     buyer_member.read_at = timezone.now()
                     buyer_member.save()
+
+                # Generate chat session ref using order id
+                members = utils.get_order_members(order.id)
+                memberstr = ''.join([members['buyer'].peer.public_key, members['seller'].peer.public_key])
+                chat_session_ref = generate_chat_session_ref(f'{order.id}{order.created_at}{memberstr}')
+                order.chat_session_ref = chat_session_ref
+                order.save()
 
                 # Serialize response data
                 serialized_order = OrderSerializer(order, context={'wallet_hash': wallet_hash}).data    
