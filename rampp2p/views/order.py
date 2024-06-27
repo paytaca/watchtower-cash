@@ -340,9 +340,7 @@ class OrderListCreate(APIView):
                 # Generate chat session ref using order id
                 members = utils.get_order_members(order.id)
                 memberstr = ''.join([members['buyer'].peer.public_key, members['seller'].peer.public_key])
-                logger.warn(f'memberstr: {memberstr}')
                 chat_session_ref = generate_chat_session_ref(f'{order.id}{order.created_at}{memberstr}')
-                logger.warn(f'chat_session_ref:{chat_session_ref}')
                 order.chat_session_ref = chat_session_ref
                 order.save()
 
