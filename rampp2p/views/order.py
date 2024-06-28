@@ -337,11 +337,11 @@ class OrderListCreate(APIView):
                     buyer_member.read_at = timezone.now()
                     buyer_member.save()
 
-                # Generate chat session ref using order id
-                members = utils.get_order_members(order.id)
-                memberstr = ''.join([members['buyer'].peer.public_key, members['seller'].peer.public_key])
-                chat_session_ref = generate_chat_session_ref(f'{order.id}{order.created_at}{memberstr}')
-                order.chat_session_ref = chat_session_ref
+                # # Generate chat session ref using order id
+                # members = utils.get_order_members(order.id)
+                # memberstr = ''.join([members['buyer'].peer.public_key, members['seller'].peer.public_key])
+                # chat_session_ref = generate_chat_session_ref(f'{order.id}{order.created_at}{memberstr}')
+                # order.chat_session_ref = chat_session_ref
                 order.save()
 
                 # Serialize response data
@@ -513,6 +513,17 @@ class OrderDetail(APIView):
             if appeal.exists():
                 serialized_appeal = AppealSerializer(appeal.first()).data
                 serialized_order['appeal'] = serialized_appeal
+        return Response(serialized_order, status=status.HTTP_200_OK)
+    
+    def patch(self, request, pk):
+        order = self.get_object(pk)
+        wallet_hash = request.user.wallet_hash
+        chat_session_ref = request.data.get('chat_session_ref')
+        serialized_order = None
+        if chat_session_ref:
+            order.chat_session_ref = chat_session_ref
+            order.save()
+            serialized_order = OrderSerializer(order, context={ 'wallet_hash': wallet_hash }).data
         return Response(serialized_order, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
