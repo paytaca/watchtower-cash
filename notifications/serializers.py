@@ -8,6 +8,9 @@ from .models import DeviceWallet
 
 
 class DeviceWalletSerializer(serializers.ModelSerializer):
+    gcm_registration_id = serializers.CharField(source="gcm_device.registration_id", read_only=True)
+    apns_registration_id = serializers.CharField(source="apns_device.registration_id", read_only=True)
+
     class Meta:
         model = DeviceWallet
         fields = [
@@ -15,6 +18,9 @@ class DeviceWalletSerializer(serializers.ModelSerializer):
             "wallet_hash",
             "multi_wallet_index",
             "last_active",
+
+            "gcm_registration_id",
+            "apns_registration_id",
         ]
 
 
@@ -163,3 +169,60 @@ class DeviceSubscriptionSerializer(serializers.Serializer):
             device.device_wallets.filter(multi_wallet_index=None).delete()
 
         return device_wallets
+
+
+class DeviceUnsubscribeSerializer(serializers.Serializer):
+    gcm_device_id = serializers.IntegerField(required=False, write_only=True)
+    apns_device_id = serializers.CharField(required=False, write_only=True)
+    application_id = serializers.CharField(required=False, write_only=True)
+    wallet_hashes = serializers.ListSerializer(
+        child=serializers.CharField(),
+        required=True, write_only=True,
+    )
+
+    @transaction.atomic
+    def unsubscribe_devices(self, device_obj_qs, wallet_hashes):
+        filter_kwargs = { "wallet_hash__in": wallet_hashes }
+
+        device_ids = device_obj_qs.values_list("id", flat=True).distinct()
+        if device_obj_qs.model == GCMDevice:
+            filter_kwargs["gcm_device_id__in"] = device_ids
+        elif device_obj_qs.model == APNSDevice:
+            filter_kwargs["apns_device_id__in"] = device_ids
+        else:
+            raise serializers.ValidationError("No GCM or APNS device object specified")
+
+        device_wallets = DeviceWallet.objects.filter(**filter_kwargs)
+        device_wallets_data = [*device_wallets.values()]        
+        device_wallets.delete()
+
+        devices_to_delete = device_obj_qs.filter(device_wallets__isnull=True)
+        if devices_to_delete.count():
+            # deleted_devices_data = devices_to_delete.distinct().values("registration_id", "device_id")
+            devices_to_delete.delete()
+
+        return device_wallets_data
+
+    def save(self):
+        validated_data = self.validated_data
+
+        app_id = validated_data.get("application_id")
+
+        device_wallets_data = []
+        if "gcm_device_id" in validated_data:
+            gcm_device_qs = GCMDevice.objects.filter(device_id=validated_data["gcm_device_id"])
+            if app_id: gcm_device_qs = gcm_device_qs.filter(application_id=app_id)
+
+            device_wallets_data += self.unsubscribe_devices(
+                gcm_device_qs, validated_data["wallet_hashes"],
+            )
+
+        if "apns_device_id" in validated_data:
+            apns_device_qs = APNSDevice.objects.filter(device_id=validated_data["apns_device_id"])
+            if app_id: apns_device_qs = apns_device_qs.filter(application_id=app_id)
+
+            device_wallets_data += self.unsubscribe_devices(
+                apns_device_qs, validated_data["wallet_hashes"],
+            )
+
+        return device_wallets_data
