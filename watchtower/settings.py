@@ -537,6 +537,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False    
+        },
+        'notifications': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False    
         }
     },
 }
