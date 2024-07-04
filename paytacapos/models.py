@@ -55,6 +55,11 @@ class PosDevice(models.Model):
         related_name="pos_device",
     )
 
+    merchant = models.ForeignKey(
+        "Merchant",
+        on_delete=models.PROTECT, related_name="devices",
+        null=True, blank=True,
+    )
     branch = models.ForeignKey(
         "Branch",
         on_delete=models.PROTECT, related_name="devices",
@@ -103,7 +108,7 @@ class Category(models.Model):
 
 
 class Merchant(models.Model):
-    wallet_hash = models.CharField(max_length=75, unique=True, db_index=True)
+    wallet_hash = models.CharField(max_length=75, db_index=True)
     name = models.CharField(max_length=75)
     slug = models.CharField(max_length=255, null=True, blank=True)
     primary_contact_number = models.CharField(max_length=20, null=True, blank=True)

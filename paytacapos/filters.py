@@ -7,6 +7,8 @@ class PosDevicetFilter(filters.FilterSet):
     class Meta:
         model = PosDevice
         fields= [
+            "merchant_id",
+            "branch_id",
             "wallet_hash",
         ]
 
@@ -17,17 +19,29 @@ class BranchFilter(filters.FilterSet):
     class Meta:
         model = Branch
         fields = [
+            "merchant_id",
             "wallet_hash",
         ]
 
 
 class MerchantFilter(filters.FilterSet):
+    wallet_hashes = filters.CharFilter(method="wallet_hashes_filter")
     country = filters.CharFilter(field_name="location__country", lookup_expr="icontains")
     city = filters.CharFilter(field_name="location__city", lookup_expr="icontains")
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
     vault_token_address = filters.CharFilter(field_name="vault__token_address", lookup_expr="exact")
     no_vault = filters.BooleanFilter(field_name="vault", lookup_expr="isnull")
+    ordering = filters.OrderingFilter(
+        fields=(
+            ('id', 'id'),
+            ('slug', 'slug'),
+            ('name', 'name'),
+            ('category__name', 'category'),
+            ('active', 'active'),
+            ('last_update', 'last_update'),
+        ),
+    )
 
     class Meta:
         model = Merchant
@@ -39,3 +53,10 @@ class MerchantFilter(filters.FilterSet):
             "vault_token_address",
             "no_vault",
         ]
+
+    def wallet_hashes_filter(self, queryset, name, value):
+        if not isinstance(value, str):
+            return queryset
+
+        wallet_hashes = [wallet_hash.strip() for wallet_hash in value.split(",") if wallet_hash.strip()]
+        return queryset.filter(wallet_hash__in=wallet_hashes)

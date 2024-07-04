@@ -199,14 +199,10 @@ class PosDeviceViewSet(
         return Response(serializer.data)
 
 
-class MerchantViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.DestroyModelMixin,
-    viewsets.GenericViewSet,
-):
-    lookup_field="wallet_hash"
+class MerchantViewSet(viewsets.ModelViewSet):
+    http_method_names = ["get", "post", "head", "patch", "delete"]
+
+    # lookup_field="wallet_hash"
     pagination_class = CustomLimitOffsetPagination
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = MerchantFilter

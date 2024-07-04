@@ -49,12 +49,15 @@ class PosDeviceAdmin(admin.ModelAdmin):
     search_fields = [
         "wallet_hash",
         "name",
+        "merchant__name",
     ]
 
     list_display = [
         "wallet_hash",
         "posid",
         "name",
+        "merchant",
+        "branch",
     ]
 
 @admin.register(Category)
