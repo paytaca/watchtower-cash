@@ -103,6 +103,9 @@ class MerchantAdmin(admin.ModelAdmin):
         if obj.location:
             if obj.location.city:
                 _location = obj.location.city
+            else:
+                if obj.location.town:
+                    _location = f'{obj.location.town}, {obj.location.province}'
             if obj.location.country:
                 if _location:
                     _location += f', {obj.location.country}'
