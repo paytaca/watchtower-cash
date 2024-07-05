@@ -11,15 +11,18 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import viewsets, mixins, decorators, exceptions
+from rest_framework import viewsets, mixins, decorators, exceptions, permissions
 from rest_framework import status
 from .serializers import *
 from .filters import *
+from .permissions import HasMerchantObjectPermission
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 
 from .models import Location, Category
+
+from authentication.token import WalletAuthentication
 
 import logging
 
@@ -53,6 +56,14 @@ class PosDeviceViewSet(
 
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = PosDevicetFilter
+
+    permission_classes = [
+        HasMerchantObjectPermission,
+    ]
+
+    authentication_classes = [
+        WalletAuthentication,
+    ]
 
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.annotate(
@@ -207,6 +218,13 @@ class MerchantViewSet(viewsets.ModelViewSet):
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = MerchantFilter
 
+    permission_classes = [
+        HasMerchantObjectPermission,
+    ]
+    authentication_classes = [
+        WalletAuthentication,
+    ]
+
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter(name="active", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
@@ -227,6 +245,11 @@ class MerchantViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        if instance.devices.count():
+            raise exceptions.ValidationError("Unable to remove merchant linked to a device")
+        return super().destroy(request, *args, **kwargs)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
@@ -360,6 +383,14 @@ class BranchViewSet(viewsets.ModelViewSet):
 
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = BranchFilter
+
+    permission_classes = [
+        HasMerchantObjectPermission,
+    ]
+
+    authentication_classes = [
+        WalletAuthentication,
+    ]
 
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.all()

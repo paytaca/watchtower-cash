@@ -7,13 +7,13 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
-from rest_framework import serializers
+from rest_framework import serializers, exceptions
 from bitcash.keygen import public_key_to_address
 
 from vouchers.serializers import VaultSerializer
 from vouchers.models import Voucher
 
-from main.models import CashNonFungibleToken
+from main.models import CashNonFungibleToken, Wallet
 
 from .models import *
 from .utils.broadcast import broadcast_transaction
@@ -29,6 +29,16 @@ def get_address_or_err(address):
     if address.exists():
         return address.first()
     raise serializers.ValidationError('receiving_address does not exist')
+
+
+class PermissionSerializerMixin:
+    def is_valid(self, *args, **kwargs):
+        response = super().is_valid(*args, **kwargs)
+        self.check_permissions()
+        return response
+
+    def check_permissions(self):
+        raise Exception("Not implemented")
 
 
 class TimestampField(serializers.IntegerField):
@@ -90,7 +100,7 @@ class PosDeviceLinkSerializer(serializers.Serializer):
     expires = serializers.CharField(read_only=True)
 
 
-class PosDeviceLinkRequestSerializer(serializers.Serializer):
+class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Serializer):
     wallet_hash = serializers.CharField()
     posid = serializers.IntegerField()
     encrypted_xpubkey = serializers.CharField()
@@ -106,7 +116,25 @@ class PosDeviceLinkRequestSerializer(serializers.Serializer):
         if pos_device.linked_device:
             raise serializers.ValidationError("pos device is already linked")
 
+        self.pos_device = pos_device
         return data
+
+    def check_permissions(self):
+        if not self.context or "request" not in self.context:
+            return
+
+        request = self.context["request"]
+        wallet = request.user
+
+        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
+            raise exceptions.PermissionDenied()
+
+        merchant = None
+        if self.pos_device:
+            merchant = self.pos_device.merchant
+
+        if not merchant or merchant.wallet_hash != wallet.wallet_hash:
+            raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
 
     @classmethod
     def generate_redis_key(cls, code):
@@ -281,7 +309,7 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
         return instance
 
 
-class PosDeviceSerializer(serializers.ModelSerializer):
+class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
     name = serializers.CharField(required=False)
@@ -357,6 +385,25 @@ class PosDeviceSerializer(serializers.ModelSerializer):
             data["branch_id"] = main_branch.id
 
         return data
+
+    def check_permissions(self):
+        if not self.context or "request" not in self.context:
+            return
+
+        request = self.context["request"]
+        wallet = request.user
+
+        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
+            raise exceptions.PermissionDenied()
+
+        merchant = None
+        if self.instance:
+            merchant = self.instance.merchant
+        else:
+            merchant = self.validated_data["merchant"]
+
+        if not merchant or merchant.wallet_hash != wallet.wallet_hash:
+            raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
 
     def create(self, validated_data, *args, **kwargs):
         wallet_hash = validated_data["wallet_hash"]
@@ -580,7 +627,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
         }
 
 
-class MerchantSerializer(serializers.ModelSerializer):
+class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     # temporary field: to prevent making multiple duplicate merchants
     # - wallet_hash was unique before, making a `get_or_create` behavior on this serializer
     # - can be removed once multiple merchant is implemented in paytaca-app
@@ -626,6 +673,25 @@ class MerchantSerializer(serializers.ModelSerializer):
 
         return data
 
+    def check_permissions(self):
+        if not self.context or "request" not in self.context:
+            return
+        
+        request = self.context["request"]
+        wallet = request.user
+
+        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
+            raise exceptions.PermissionDenied()
+
+        wallet_hash = None
+        if self.isntance:
+            wallet_hash = self.instance.wallet_hash
+        else:
+            wallet_hash = self.validated_data["wallet_hash"]
+
+        if not wallet_hash or wallet_hash != wallet.wallet_hash:
+            raise exceptions.PermissionDenied("Wallet hash does not match with authenticated wallet")
+
     @transaction.atomic()
     def create(self, validated_data):
         # wallet_hash = validated_data["wallet_hash"]
@@ -667,7 +733,7 @@ class BranchMerchantSerializer(serializers.ModelSerializer):
         ]
 
 
-class BranchSerializer(serializers.ModelSerializer):
+class BranchSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     merchant_id = serializers.PrimaryKeyRelatedField(
         queryset=Merchant.objects, write_only=True,
         source="merchant",
@@ -690,6 +756,25 @@ class BranchSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.merchant_id != value.id:
             raise serializers.ValidationError("merchant is not editable")
         return value
+
+    def check_permissions(self):
+        if not self.context or "request" not in self.context:
+            return
+        
+        request = self.context["request"]
+        wallet = request.user
+
+        if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
+            raise exceptions.PermissionDenied()
+
+        merchant = None
+        if self.instance:
+            merchant = self.instance.merchant
+        else:
+            merchant = self.validated_data["merchant"]
+
+        if not merchant or merchant.wallet_hash != wallet.wallet_hash:
+            raise exceptions.PermissionDenied("Instance does not belong to authenticated wallet")
 
     @transaction.atomic()
     def create(self, validated_data):
