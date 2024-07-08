@@ -227,9 +227,6 @@ class MerchantViewSet(viewsets.ModelViewSet):
 
     @swagger_auto_schema(
         manual_parameters=[
-            openapi.Parameter(name="active", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
-            openapi.Parameter(name="verified", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
-            openapi.Parameter(name="name", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="has_pagination", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
         ]
     )
@@ -247,6 +244,7 @@ class MerchantViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
@@ -360,22 +358,7 @@ class MerchantViewSet(viewsets.ModelViewSet):
             .annotate_pos_device_count()\
             .prefetch_related('location')\
             .all()
-            
-        if self.action == 'list':
-            __active = self.request.query_params.get('active', '')
-            __verified = self.request.query_params.get('verified', '')
-            __name = self.request.query_params.get('name', '')
 
-            active = __active.lower() == 'true' or False
-            verified = __verified.lower() == 'true' or False
-            name = __name.lower()
-
-            queryset = queryset.filter(
-                active=active,
-                verified=verified
-            )
-            if name:
-                queryset = queryset.filter(name__icontains=name)
         return queryset
 
 

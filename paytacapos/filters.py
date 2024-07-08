@@ -32,6 +32,11 @@ class MerchantFilter(filters.FilterSet):
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
     vault_token_address = filters.CharFilter(field_name="vault__token_address", lookup_expr="exact")
     no_vault = filters.BooleanFilter(field_name="vault", lookup_expr="isnull")
+
+    active = filters.BooleanFilter()
+    verified = filters.BooleanFilter()
+    name = filters.CharFilter(lookup_expr="icontains")
+
     ordering = filters.OrderingFilter(
         fields=(
             ('id', 'id'),
