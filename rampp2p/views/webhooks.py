@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rampp2p.models import Order, Peer
+from rampp2p.models import Order, Peer, Appeal
 from django.http import Http404
 from rampp2p.utils.notifications import send_push_notification
 
@@ -32,15 +32,20 @@ class ChatWebhookView(APIView):
         else:
             counterparty = order.ad_snapshot.ad.owner.wallet_hash
         recipients = [counterparty]
-        arbiter = None
-        if order.arbiter:
-            arbiter = order.arbiter.wallet_hash
-            recipients.append(arbiter)            
-        message = f'New message from Order No. {order.id}'
+
         extra_data = {
             'type': 'new_message',
             'order_id': order.id
         }
+
+        appeal = Appeal.objects.filter(order=order)
+        if appeal.exists() and order.arbiter:
+            appeal = appeal.first()
+            extra_data['appeal_id'] = appeal.id
+            message = f'New message from Appeal No. {appeal.id}'
+            send_push_notification([order.arbiter.wallet_hash], message, extra=extra_data)
+        
+        message = f'New message from Order No. {order.id}'
         send_push_notification(recipients, message, extra=extra_data)
         return Response(status=status.HTTP_200_OK)
     
