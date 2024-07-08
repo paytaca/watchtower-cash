@@ -6,18 +6,11 @@ from vouchers.js.runner import ScriptFunctions
 from vouchers.models import Vault, Voucher
 
 from main.utils.subscription import new_subscription
-from main.models import Address
 
 
 def generate_merchant_vault(merchant_id):
     merchant = Merchant.objects.get(id=merchant_id)
-    merchant_receiving_address = Address.objects.filter(
-        wallet__wallet_hash=merchant.wallet_hash,
-        wallet__wallet_type='bch',
-        address_path='0/0'
-    )
-
-    if not merchant_receiving_address.exists():
+    if not merchant.receiving_pubkey:
         return
 
     receiving_pubkey = merchant.receiving_pubkey
