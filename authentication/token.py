@@ -97,10 +97,11 @@ class WalletAuthentication(BaseAuthentication):
 
     def authenticate(self, request):
         wallet_hash, token_key = self.get_auth_headers(request)
-        wallet = self.get_wallet(wallet_hash)
 
-        if not wallet:
+        if not wallet_hash:
             return (None, None)
+
+        wallet = self.get_wallet(wallet_hash)
 
         wallet.is_authenticated = False
         if token_key:
