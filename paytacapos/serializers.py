@@ -538,6 +538,8 @@ class MerchantListSerializer(serializers.ModelSerializer):
     logos = serializers.SerializerMethodField()
     receiving_address = serializers.SerializerMethodField()
     vouchers = serializers.SerializerMethodField()
+    branch_count = serializers.IntegerField(read_only=True)
+    pos_device_count = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = Merchant
@@ -557,7 +559,9 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "vault",
             "vouchers",
             "logos",
-            "last_update"
+            "last_update",
+            "branch_count",
+            "pos_device_count",
         ]
 
     def get_receiving_address(self, obj):
@@ -636,6 +640,9 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
     location = LocationSerializer(required=False)
     vault = VaultSerializer(required=False)
 
+    branch_count = serializers.IntegerField(read_only=True)
+    pos_device_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Merchant
         fields = [
@@ -651,6 +658,8 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "vault",
 
             "allow_duplicates", # temporary field
+            "branch_count",
+            "pos_device_count",
         ]
 
         read_only_fields = ('vault', )
@@ -684,7 +693,7 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             raise exceptions.PermissionDenied()
 
         wallet_hash = None
-        if self.isntance:
+        if self.instance:
             wallet_hash = self.instance.wallet_hash
         else:
             wallet_hash = self.validated_data["wallet_hash"]

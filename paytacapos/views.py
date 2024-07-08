@@ -356,6 +356,8 @@ class MerchantViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         serializer = self.get_serializer_class()
         queryset = serializer.Meta.model.objects\
+            .annotate_branch_count()\
+            .annotate_pos_device_count()\
             .prefetch_related('location')\
             .all()
             

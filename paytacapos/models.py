@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db import models
 from django.utils import timezone
 from django.contrib.postgres.fields import ArrayField
+from psqlextra.query import PostgresQuerySet
 from main.models import WalletHistory
 
 from PIL import Image
@@ -107,7 +108,20 @@ class Category(models.Model):
         verbose_name_plural = 'Categories'
 
 
+class MerchantQuerySet(PostgresQuerySet):
+    def annotate_branch_count(self):
+        return self.annotate(
+            branch_count=models.Count("branches", distinct=True),
+        )
+
+    def annotate_pos_device_count(self):
+        return self.annotate(
+            pos_device_count=models.Count("devices", distinct=True),
+        )
+
 class Merchant(models.Model):
+    objects = MerchantQuerySet.as_manager()
+
     wallet_hash = models.CharField(max_length=75, db_index=True)
     name = models.CharField(max_length=75)
     slug = models.CharField(max_length=255, null=True, blank=True)
