@@ -1,5 +1,5 @@
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import status
+from rest_framework import status, exceptions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -166,6 +166,9 @@ class WalletView(APIView):
     def get(self, request):
         if not isinstance(request.user, MainWallet):
             return Response({'error': 'authenticated identity is not a wallet'}, status=400)
+
+        if not request.user.is_authenticated:
+            raise exceptions.NotAuthenticated()
 
         return Response(
             serializers.WalletInfoSerializer(request.user).data
