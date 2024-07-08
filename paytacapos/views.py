@@ -3,6 +3,7 @@ from django.db.models import (
     Func,
     ExpressionWrapper,
     CharField,
+    Max,
 )
 from django.db import transaction
 from django.utils import timezone
@@ -20,7 +21,7 @@ from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 
-from .models import Location, Category
+from .models import Location, Category, Merchant
 
 from authentication.token import WalletAuthentication
 
@@ -248,6 +249,16 @@ class MerchantViewSet(viewsets.ModelViewSet):
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
+
+    @decorators.action(methods=['post'], detail=False)
+    def latest_index(self, request, *args, **kwargs):
+        latest_index = Merchant.objects.filter(
+            wallet_hash=request.data['wallet_hash']
+        ).aggregate(
+            Max('receiving_index', default=0)
+        )
+        response = { 'index': latest_index['receiving_index__max'] }
+        return Response(response)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):

@@ -556,6 +556,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "last_transaction_date",
             "receiving_pubkey",
             "receiving_address",
+            "receiving_index",
             "vault",
             "vouchers",
             "logos",
@@ -655,6 +656,7 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "primary_contact_number",
             "location",
             "receiving_pubkey",
+            "receiving_index",
             "vault",
 
             "allow_duplicates", # temporary field

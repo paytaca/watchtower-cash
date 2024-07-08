@@ -145,6 +145,7 @@ class Merchant(models.Model):
     logo_120 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
+    receiving_index = models.PositiveIntegerField(default=0)
 
     last_update = models.DateTimeField(null=True)
 
