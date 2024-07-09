@@ -15,7 +15,7 @@ class Transaction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
-        return self.txid
+        return f'{self.id}'
 
 class Recipient(models.Model):
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="recipients", editable=False)
@@ -24,4 +24,4 @@ class Recipient(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
-        return str(self.id)
+        return f'{self.id}'
