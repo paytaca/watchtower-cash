@@ -1,4 +1,5 @@
-from rest_framework import status
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import status, exceptions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -15,7 +16,7 @@ import rampp2p.models as rampmodels
 from django.conf import settings
 from cryptography.fernet import Fernet, InvalidToken
 
-from authentication.token import TokenAuthentication
+from authentication.token import TokenAuthentication, WalletAuthentication
 
 import logging
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ class LoginView(APIView):
         
         if wallet is not None and token is not None:
             # Check if user is disabled
-            if wallet.is_disabled:
+            if not isinstance(wallet, MainWallet) and wallet.is_disabled:
                 return Response({'error': 'Wallet is disabled'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Checking if token is valid:
@@ -123,6 +124,7 @@ class RevokeTokenView(APIView):
         return Response(status=200)
     
 class UserView(APIView):
+    @swagger_auto_schema(responses={200: serializers.UserSerializer})
     def get(self, request):
         wallet_hash = request.headers.get('wallet_hash')
         if wallet_hash is None:
@@ -153,3 +155,21 @@ class UserView(APIView):
             'is_authenticated': is_authenticated
         }
         return Response(serializers.UserSerializer(user_info).data, status=200)
+
+
+class WalletView(APIView):
+    authentication_classes = [
+        WalletAuthentication,
+    ]
+
+    @swagger_auto_schema(responses={200: serializers.WalletInfoSerializer})
+    def get(self, request):
+        if not isinstance(request.user, MainWallet):
+            return Response({'error': 'authenticated identity is not a wallet'}, status=400)
+
+        if not request.user.is_authenticated:
+            raise exceptions.NotAuthenticated()
+
+        return Response(
+            serializers.WalletInfoSerializer(request.user).data
+        )

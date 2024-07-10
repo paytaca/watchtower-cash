@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db import models
 from django.utils import timezone
 from django.contrib.postgres.fields import ArrayField
+from psqlextra.query import PostgresQuerySet
 from main.models import WalletHistory
 
 from PIL import Image
@@ -55,6 +56,11 @@ class PosDevice(models.Model):
         related_name="pos_device",
     )
 
+    merchant = models.ForeignKey(
+        "Merchant",
+        on_delete=models.PROTECT, related_name="devices",
+        null=True, blank=True,
+    )
     branch = models.ForeignKey(
         "Branch",
         on_delete=models.PROTECT, related_name="devices",
@@ -102,8 +108,21 @@ class Category(models.Model):
         verbose_name_plural = 'Categories'
 
 
+class MerchantQuerySet(PostgresQuerySet):
+    def annotate_branch_count(self):
+        return self.annotate(
+            branch_count=models.Count("branches", distinct=True),
+        )
+
+    def annotate_pos_device_count(self):
+        return self.annotate(
+            pos_device_count=models.Count("devices", distinct=True),
+        )
+
 class Merchant(models.Model):
-    wallet_hash = models.CharField(max_length=75, unique=True, db_index=True)
+    objects = MerchantQuerySet.as_manager()
+
+    wallet_hash = models.CharField(max_length=75, db_index=True)
     name = models.CharField(max_length=75)
     slug = models.CharField(max_length=255, null=True, blank=True)
     primary_contact_number = models.CharField(max_length=20, null=True, blank=True)
@@ -126,6 +145,7 @@ class Merchant(models.Model):
     logo_120 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     
     receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
+    receiving_index = models.PositiveIntegerField(default=0)
 
     last_update = models.DateTimeField(null=True)
 

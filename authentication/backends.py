@@ -4,6 +4,8 @@ from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
 from .models import AuthToken
 
+from main.utils.address_converter import pubkey_to_bch_address
+
 import hashlib
 import ecdsa
 
@@ -22,8 +24,9 @@ class SignatureBackend(ModelBackend):
         try:
             if app == 'main':
                 wallet = MainWallet.objects.get(wallet_hash=wallet_hash)
-                # TODO: convert public_key to address and check if a matching 
-                # address associated to wallet exists. Return if None.
+                cash_address = pubkey_to_bch_address(public_key)
+                if not wallet.addresses.filter(address=cash_address).exists():
+                    raise InvalidSignature(f"Public key invalid | {cash_address} | {wallet.addresses.values_list('address', flat=True)}")
             if app == 'ramp-peer':
                 wallet = PeerWallet.objects.get(wallet_hash=wallet_hash)
             if app == 'ramp-arbiter':

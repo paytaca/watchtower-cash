@@ -3,6 +3,7 @@ from django.db.models import (
     Func,
     ExpressionWrapper,
     CharField,
+    Max,
 )
 from django.db import transaction
 from django.utils import timezone
@@ -11,15 +12,18 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import viewsets, mixins, decorators, exceptions
+from rest_framework import viewsets, mixins, decorators, exceptions, permissions
 from rest_framework import status
 from .serializers import *
 from .filters import *
+from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 
-from .models import Location, Category
+from .models import Location, Category, Merchant
+
+from authentication.token import WalletAuthentication
 
 import logging
 
@@ -53,6 +57,14 @@ class PosDeviceViewSet(
 
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = PosDevicetFilter
+
+    permission_classes = [
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+    ]
+
+    authentication_classes = [
+        WalletAuthentication,
+    ]
 
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.annotate(
@@ -199,23 +211,38 @@ class PosDeviceViewSet(
         return Response(serializer.data)
 
 
-class MerchantViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.DestroyModelMixin,
-    viewsets.GenericViewSet,
-):
-    lookup_field="wallet_hash"
+class MerchantViewSet(viewsets.ModelViewSet):
+    http_method_names = ["get", "post", "head", "patch", "delete"]
+
+    # lookup_field="wallet_hash"
     pagination_class = CustomLimitOffsetPagination
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = MerchantFilter
 
+    permission_classes = [
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+    ]
+    authentication_classes = [
+        WalletAuthentication,
+    ]
+
+    def get_object(self, *args, **kwargs):
+        lookup_value = self.kwargs.get(self.lookup_field)
+        try:
+            int(lookup_value)
+            return super().get_object(*args, **kwargs)
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            return Merchant.objects.get(wallet_hash=lookup_value)
+        except Merchant.DoesNotExist:
+            raise Http404
+        except Merchant.MultipleObjectsReturned:
+            raise exceptions.APIException("Found multiple merchant with provided wallet_hash")
+
     @swagger_auto_schema(
         manual_parameters=[
-            openapi.Parameter(name="active", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
-            openapi.Parameter(name="verified", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False),
-            openapi.Parameter(name="name", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="has_pagination", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, required=False),
         ]
     )
@@ -231,6 +258,22 @@ class MerchantViewSet(
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.devices.count():
+            raise exceptions.ValidationError("Unable to remove merchant linked to a device")
+        return super().destroy(request, *args, **kwargs)
+
+    @decorators.action(methods=['post'], detail=False)
+    def latest_index(self, request, *args, **kwargs):
+        latest_index = Merchant.objects.filter(
+            wallet_hash=request.data['wallet_hash']
+        ).aggregate(
+            Max('receiving_index', default=0)
+        )
+        response = { 'index': latest_index['receiving_index__max'] }
+        return Response(response)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
@@ -337,24 +380,11 @@ class MerchantViewSet(
     def get_queryset(self):
         serializer = self.get_serializer_class()
         queryset = serializer.Meta.model.objects\
+            .annotate_branch_count()\
+            .annotate_pos_device_count()\
             .prefetch_related('location')\
             .all()
-            
-        if self.action == 'list':
-            __active = self.request.query_params.get('active', '')
-            __verified = self.request.query_params.get('verified', '')
-            __name = self.request.query_params.get('name', '')
 
-            active = __active.lower() == 'true' or False
-            verified = __verified.lower() == 'true' or False
-            name = __name.lower()
-
-            queryset = queryset.filter(
-                active=active,
-                verified=verified
-            )
-            if name:
-                queryset = queryset.filter(name__icontains=name)
         return queryset
 
 
@@ -364,6 +394,14 @@ class BranchViewSet(viewsets.ModelViewSet):
 
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = BranchFilter
+
+    permission_classes = [
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+    ]
+
+    authentication_classes = [
+        WalletAuthentication,
+    ]
 
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.all()

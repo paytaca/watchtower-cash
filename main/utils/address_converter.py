@@ -1,6 +1,9 @@
 # from subprocess import Popen, PIPE
 import requests
+import bitcoin
 from django.conf import settings
+
+from cashaddress import convert
 
 
 def bch_address_converter(bch_addr, to_token_addr=True):
@@ -14,3 +17,10 @@ def bch_address_converter(bch_addr, to_token_addr=True):
     if resp.status_code == 200:
         converted_address = resp.text
     return converted_address
+
+def pubkey_to_bch_address(pubkey, to_token_addr=False):
+    legacy_address = bitcoin.pubkey_to_address(pubkey)
+    cash_address = convert.to_cash_address(legacy_address)
+    if not to_token_addr:
+        return cash_address
+    return bch_address_converter(cash_address, to_token_addr=to_token_addr)

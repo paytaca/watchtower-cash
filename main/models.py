@@ -302,11 +302,16 @@ class CashFungibleToken(models.Model):
                 if not uris:
                     uris = data.get('uris') or {'icon': None}
 
+                try:
+                    decimals = int(data.get('token').get('decimals'))
+                except (TypeError, ValueError):
+                    decimals = 0
+
                 info, _ = CashTokenInfo.objects.get_or_create(
                     name=data.get('name', f'CT-{self.category[0:4]}'),
                     description=data.get('description', ''),
                     symbol=data.get('token').get('symbol'),
-                    decimals=data.get('token').get('decimals'),
+                    decimals=decimals,
                     image_url=uris.get('icon')
                 )
                 self.info = info
