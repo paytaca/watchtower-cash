@@ -8,7 +8,7 @@ class Contract(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
-        return f'{self.address}'
+        return f'{self.id}'
 
 class ContractMember(models.Model):
     class MemberType(models.TextChoices):

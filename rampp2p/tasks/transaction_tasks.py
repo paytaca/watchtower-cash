@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-
+from django.db.models import Q
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.utils.utils import get_order_members_addresses, get_trading_fees
@@ -107,7 +107,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
     if valid:
 
         # Update transaction details 
-        transaction = Transaction.objects.filter(contract__id=contract.id, action=action)
+        transaction = Transaction.objects.filter(Q(contract__id=contract.id) & Q(action=action))
         if transaction.exists():
             transaction = transaction.last()
             transaction.valid = True

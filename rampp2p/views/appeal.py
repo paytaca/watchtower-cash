@@ -472,14 +472,9 @@ class VerifyRefund(APIView):
                 raise ValidationError('txid field is required')
 
             contract = models.Contract.objects.get(order__id=pk)
-            transaction, _ = models.Transaction.objects.get_or_create(
-                contract=contract,
-                action=models.Transaction.ActionType.REFUND,
-                txid=txid
-            )
 
             # Validate the transaction
-            validate_transaction(transaction.txid, models.Transaction.ActionType.REFUND, contract.id)
+            validate_transaction(txid, models.Transaction.ActionType.REFUND, contract.id)
             
         except (ValidationError, models.Contract.DoesNotExist, IntegrityError) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

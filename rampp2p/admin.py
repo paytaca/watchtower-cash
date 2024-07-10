@@ -190,6 +190,19 @@ class AdSnapshotAdmin(admin.ModelAdmin):
 
 admin.site.register(AdSnapshot, AdSnapshotAdmin)
 
+class TransactionAdmin(admin.ModelAdmin):
+    list_display = [
+        'contract',
+        'txid',
+        'action',
+        'valid',
+        'created_at'
+    ]
+    search_fields = [
+        'txid'
+    ]
+admin.site.register(Transaction, TransactionAdmin)
+
 admin.site.register(CryptoCurrency)
 admin.site.register(ReservedName)
 admin.site.register(IdentifierFormat)
