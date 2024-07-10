@@ -16,6 +16,7 @@ from vouchers.models import Voucher
 from main.models import CashNonFungibleToken, Wallet
 
 from .models import *
+from .permissions import HasMinPaytacaVersionHeader
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 from .utils.websocket import send_device_update
@@ -124,6 +125,11 @@ class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Seri
             return
 
         request = self.context["request"]
+
+        # older versions didnt need authentication
+        if HasMinPaytacaVersionHeader.on_request(request):
+            return
+
         wallet = request.user
 
         if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
@@ -314,7 +320,7 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
     wallet_hash = serializers.CharField()
     name = serializers.CharField(required=False)
     merchant_id = serializers.PrimaryKeyRelatedField(
-        queryset=Merchant.objects, source="merchant", required=True,
+        queryset=Merchant.objects, source="merchant", required=False,
     )
     branch_id = serializers.IntegerField(required=False, allow_null=True)
     linked_device = LinkedDeviceInfoSerializer(read_only=True)
@@ -363,13 +369,26 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
             raise serializers.ValidationError("branch not found")
         return value
 
+    def resolve_merchant(self, data):
+        merchant = data.get("merchant")
+        
+        if not merchant and self.instance and self.instance.merchant:
+            merchant = self.instance.merchant
+
+        if not merchant:
+            wallet_hash = data["wallet_hash"]
+            merchants = Merchant.objects.filter(wallet_hash=wallet_hash)
+            if merchants.count() > 1:
+                raise serializers.ValidationError("Unable to resolve merchant for device")
+            merchant = merchants.first()
+
+        return merchant
+
     def validate(self, data):
         wallet_hash = data["wallet_hash"]
 
-        if self.instance:
-            merchant = data.get("merchant", self.instance.merchant)
-        else:
-            merchant = data["merchant"]
+        merchant = self.resolve_merchant(data)
+        data["merchant"] = merchant
 
         if merchant.wallet_hash != wallet_hash:
             raise serializers.ValidationError("Wallet hash does not match with merchant")
@@ -391,6 +410,11 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
             return
 
         request = self.context["request"]
+
+        # older versions didnt need authentication
+        if HasMinPaytacaVersionHeader.on_request(request):
+            return
+
         wallet = request.user
 
         if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
@@ -674,13 +698,15 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
     def validate(self, data):
         # remove after changes stable
         allow_duplicates = data.pop("allow_duplicates", False)
-        if not allow_duplicates:
+        if not allow_duplicates and not self.instance:
             wallet_hash = data["wallet_hash"]
-            existing_merchant = Merchant.objects.filter(wallet_hash=wallet_hash).first()
-            if existing_merchant and (not self.instance or self.instance.id != existing_merchant.id):
+            existing_merchants = Merchant.objects.filter(wallet_hash=wallet_hash)
+            if existing_merchants.count() > 1:
                 raise serializers.ValidationError(
-                    "Add flag to allow duplicates to create new merchant"
+                    "Multiple merchants found, unable unable to select which merchant to update"
                 )
+            else:
+                self.instance = existing_merchants.first()
 
         return data
 
@@ -689,10 +715,15 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             return
         
         request = self.context["request"]
+
+        # older versions didnt need authentication
+        if HasMinPaytacaVersionHeader.on_request(request):
+            return
+
         wallet = request.user
 
         if not isinstance(wallet, Wallet) or not wallet.is_authenticated:
-            raise exceptions.PermissionDenied()
+            raise exceptions.PermissionDenied("Not a wallet")
 
         wallet_hash = None
         if self.instance:
@@ -745,9 +776,10 @@ class BranchMerchantSerializer(serializers.ModelSerializer):
 
 
 class BranchSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
+    merchant_wallet_hash = serializers.CharField(required=False)
     merchant_id = serializers.PrimaryKeyRelatedField(
         queryset=Merchant.objects, write_only=True,
-        source="merchant",
+        source="merchant", required=False,
     )
     merchant = BranchMerchantSerializer(read_only=True)
     location = LocationSerializer(required=False)
@@ -756,6 +788,7 @@ class BranchSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
         model = Branch
         fields = [
             "id",
+            "merchant_wallet_hash",
             "merchant_id",
             "merchant",
             "is_main",
@@ -768,11 +801,32 @@ class BranchSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
             raise serializers.ValidationError("merchant is not editable")
         return value
 
+    def resolve_merchant(self, data):
+        if "merchant" in data:
+            return data["merchant"]
+        if "merchant_wallet_hash" in data:
+            merchants = Merchant.objects.filter(wallet_hash=data["merchant_wallet_hash"])
+            if merchants.count() > 1:
+                raise serializers.ValidationError("Found multiple merchants with the provide wallet hash, provide merchant ID instead")
+            return merchants.first()
+        raise serializers.ValidationError("Provide merchant ID or merchant wallet hash")
+
+    def validate(self, data):
+        merchant = self.resolve_merchant(data)
+        data["merchant"] = merchant
+        data.pop("merchant_wallet_hash", None)
+        return data
+
     def check_permissions(self):
         if not self.context or "request" not in self.context:
             return
         
         request = self.context["request"]
+
+        # older versions didnt need authentication
+        if HasMinPaytacaVersionHeader.on_request(request):
+            return
+
         wallet = request.user
 
         if not isinstance(wallet, Wallet) or not wallet.is_authenticated:

@@ -16,7 +16,7 @@ from rest_framework import viewsets, mixins, decorators, exceptions, permissions
 from rest_framework import status
 from .serializers import *
 from .filters import *
-from .permissions import HasMerchantObjectPermission
+from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
@@ -59,7 +59,7 @@ class PosDeviceViewSet(
     filterset_class = PosDevicetFilter
 
     permission_classes = [
-        HasMerchantObjectPermission,
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
     ]
 
     authentication_classes = [
@@ -220,11 +220,26 @@ class MerchantViewSet(viewsets.ModelViewSet):
     filterset_class = MerchantFilter
 
     permission_classes = [
-        HasMerchantObjectPermission,
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
     ]
     authentication_classes = [
         WalletAuthentication,
     ]
+
+    def get_object(self, *args, **kwargs):
+        lookup_value = self.kwargs.get(self.lookup_field)
+        try:
+            int(lookup_value)
+            return super().get_object(*args, **kwargs)
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            return Merchant.objects.get(wallet_hash=lookup_value)
+        except Merchant.DoesNotExist:
+            raise Http404
+        except Merchant.MultipleObjectsReturned:
+            raise exceptions.APIException("Found multiple merchant with provided wallet_hash")
 
     @swagger_auto_schema(
         manual_parameters=[
@@ -381,7 +396,7 @@ class BranchViewSet(viewsets.ModelViewSet):
     filterset_class = BranchFilter
 
     permission_classes = [
-        HasMerchantObjectPermission,
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
     ]
 
     authentication_classes = [
