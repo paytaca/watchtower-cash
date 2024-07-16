@@ -6,14 +6,14 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
 
-class QrScanNotificationView(APIView):
+class LiveUpdatesPaymentView(APIView):
 
     def post(self, request, *args, **kwargs):
         address = kwargs.get('bchaddress', '')
         response = {}
 
         if address:
-            data = { 'message': 'Someone has scanned the QR, payment initiated.' }
+            data = { 'update_type': 'qr_scanned' }
             room_name = address.replace(':', '_')
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
