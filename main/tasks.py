@@ -216,6 +216,9 @@ def client_acknowledgement(self, txid):
                             elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
                                 Recipient.objects.filter(id=recipient.id).update(valid=False)
                                 LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
+                            elif resp.status_code == 400:
+                                Recipient.objects.filter(id=recipient.id).update(valid=False)
+                                LOGGER.info(f"!!! ATTENTION !!! ENCOUNTERED AN ERROR SENDING REQUEST TO: {recipient.web_url}")
                             else:
                                 LOGGER.error(resp)
                                 self.retry(countdown=3)
@@ -919,16 +922,16 @@ def get_bch_utxos(self, address):
             parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
-        txn_check = Transaction.objects.filter(
-            address__address=address,
-            spent=False
-        ).exclude(
-            id__in=saved_utxo_ids
-        ).update(
-            spent=True
-        )
-
-
+        # NOTE: Commeneted out. This was a bad idea because transactions can get marked as spent even if no spending_txid is recorded.
+        # TODO: There needs to be an exhaustive checking of transactions marked as spent directly from the node to verify if those already marked as spent are marked correctly.
+        # txn_check = Transaction.objects.filter(
+        #     address__address=address,
+        #     spent=False
+        # ).exclude(
+        #     id__in=saved_utxo_ids
+        # ).update(
+        #     spent=True
+        # )
 
     except Exception as exc:
         try:
@@ -1001,14 +1004,16 @@ def get_slp_utxos(self, address):
                         saved_utxo_ids.append(obj.id)
         
         # Mark other transactions of the same address as spent
-        txn_check = Transaction.objects.filter(
-            address__address=address,
-            spent=False
-        ).exclude(
-            id__in=saved_utxo_ids
-        ).update(
-            spent=True
-        )
+        # NOTE: Commeneted out. This was a bad idea because transactions can get marked as spent even if no spending_txid is recorded.
+        # TODO: There needs to be an exhaustive checking of transactions marked as spent directly from the node to verify if those already marked as spent are marked correctly.
+        # txn_check = Transaction.objects.filter(
+        #     address__address=address,
+        #     spent=False
+        # ).exclude(
+        #     id__in=saved_utxo_ids
+        # ).update(
+        #     spent=True
+        # )
 
     except Exception as exc:
         try:
