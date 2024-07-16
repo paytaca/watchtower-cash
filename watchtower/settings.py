@@ -586,6 +586,7 @@ SMARTBCH = {
 
 
 PAYTACAPOS = {
+    "POS_ID_MAX_DIGITS": 4,
     "TOTP_SECRET_KEY": decipher(config('TOTP_SECRET_KEY')),
 }
 

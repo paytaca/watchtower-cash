@@ -1,4 +1,6 @@
+import re
 from main.models import Token, Subscription, Recipient
+from django.apps import apps
 from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q
@@ -12,6 +14,7 @@ from main.models import (
     Project,
     Wallet
 )
+from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos
 from chat.models import ChatIdentity
 
@@ -54,6 +57,7 @@ def new_subscription(**kwargs):
     telegram_id = kwargs.get('telegram_id', None)
     chat_identity = kwargs.get('chat_identity', None)
 
+    new_addresses = set()
     if address or addresses:
         address_list = []
         if isinstance(address, str):
@@ -101,11 +105,12 @@ def new_subscription(**kwargs):
                         token_address = bch_address_converter(address)
 
                     try:
-                            
                         address_obj, _ = Address.objects.get_or_create(
                             address=address,
                             token_address=token_address
                         )
+                        new_addresses.add(address_obj.address)
+
                         if project:
                             address_obj.project = project
                             address_obj.save()
@@ -180,5 +185,83 @@ def new_subscription(**kwargs):
                     )
                     chat_identity.save()
 
+        if response['success'] and new_addresses:
+            publish_subscribed_addresses_to_mqtt(new_addresses)
+
     LOGGER.info(response)
+    return response
+
+
+def publish_subscribed_addresses_to_mqtt(addresses:list):
+    address_objs = Address.objects.filter(address__in=addresses) \
+        .select_related("wallet")
+
+    data = []
+    for address_obj in address_objs:
+        address=address_obj.address
+        token_address=address_obj.token_address
+        address_path=address_obj.address_path
+        wallet_hash = None
+        if address_obj.wallet:
+            wallet_hash = address_obj.wallet.wallet_hash
+
+        address_data = dict(
+            address=address,
+            token_address=token_address,
+            address_path=address_path,
+            wallet_hash=wallet_hash,
+        )
+
+        pos_data = resolve_pos_data(wallet_hash, address_path)
+        if pos_data:
+            address_data["pos"] = pos_data
+        data.append(address_data)
+
+    return mqtt.publish_message("address", data, qos=0)
+    
+
+def resolve_pos_data(wallet_hash, address_path):
+    POS_ID_MAX_DIGITS = settings.PAYTACAPOS["POS_ID_MAX_DIGITS"]
+
+    if not wallet_hash or not isinstance(address_path, str):
+        return
+
+    match_result = re.match("0/(\d+)", address_path)
+    if not match_result:
+        return
+
+    receiving_address_index = int(match_result.group(1))
+
+    # range of pos address indices: [10 ** POS_ID_MAX_DIGITS, 2*32)
+    if receiving_address_index < 10 ** POS_ID_MAX_DIGITS or receiving_address_index > (2 * 32) - 1:
+        return
+
+    posid = receiving_address_index % (10 ** POS_ID_MAX_DIGITS)
+
+    PosDevice = apps.get_model("paytacapos", "PosDevice")
+    pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
+    if not pos_device:
+        return
+    
+    response = dict(
+        posid=pos_device.posid,
+        name=pos_device.name,
+    )
+
+    if pos_device.merchant:
+        merchant = pos_device.merchant
+        response["merchant"] = dict(
+            id=merchant.id,
+            name=merchant.name,
+            category=merchant.category,
+            # description=merchant.description,
+        )
+
+    if pos_device.branch:
+        branch = pos_device.branch
+        response["branch"] = dict(
+            id=branch.id,
+            name=branch.name,
+        )
+
     return response
