@@ -44,14 +44,14 @@ class BroadcastViewSet(generics.GenericAPIView):
                             # get sender address(es) from wallet history
                             sender_check = WalletHistory.objects.filter(txid=tx['txid'], record_type="Outgoing")
                             if sender_check.exists():
-                                senders = sender_check.first().senders
+                                sender = sender_check.first().senders[0]
 
                                 # Send mqtt notif
                                 data = {
                                     'token': 'bch',
                                     'txid': tx['txid'],
                                     'recipient': address,
-                                    'senders': senders,
+                                    'sender': sender,
                                     'decimals': 8,
                                     'value': round(tx_out['value'] * (10 ** 8))
                                 }
