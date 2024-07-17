@@ -922,15 +922,14 @@ def get_bch_utxos(self, address):
             parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
-        if len(outputs):
-            Transaction.objects.filter(
-                address__address=address,
-                spent=False
-            ).exclude(
-                id__in=saved_utxo_ids
-            ).update(
-                spent=True
-            )
+        Transaction.objects.filter(
+            address__address=address,
+            spent=False
+        ).exclude(
+            id__in=saved_utxo_ids
+        ).update(
+            spent=True
+        )
 
     except Exception as exc:
         try:
@@ -1003,15 +1002,14 @@ def get_slp_utxos(self, address):
                         saved_utxo_ids.append(obj.id)
         
         # Mark other transactions of the same address as spent
-        if len(outputs):
-            Transaction.objects.filter(
-                address__address=address,
-                spent=False
-            ).exclude(
-                id__in=saved_utxo_ids
-            ).update(
-                spent=True
-            )
+        Transaction.objects.filter(
+            address__address=address,
+            spent=False
+        ).exclude(
+            id__in=saved_utxo_ids
+        ).update(
+            spent=True
+        )
 
     except Exception as exc:
         try:
