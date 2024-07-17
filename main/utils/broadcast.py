@@ -29,27 +29,31 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
         if _addrs:
             address = _addrs[0]
 
-            # Send mqtt notif
-            data = {
-                'token': 'bch',
-                'txid': tx['txid'],
-                'recipient': address,
-                'decimals': 8,
-                'value': round(tx_out['value'] * (10 ** 8)),
-                **extra_data,
-            }
-            mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1)
+            _sender_address = tx['vin'][0].get('scriptPubKey').get('addresses')
+            if _sender_address:
+                sender = _sender_address[0]
 
-            # Send websocket notif
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                "bch", 
-                {
-                    "type": "send_update",
-                    "data": data
+                # Send mqtt notif
+                data = {
+                    'token': 'bch',
+                    'txid': tx['txid'],
+                    'recipient': address,
+                    'sender': sender,
+                    'decimals': 8,
+                    'value': round(tx_out['value'] * (10 ** 8))
                 }
-            )
+                mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1)
 
-            results.append(data)
+                # Send websocket notif
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    "bch", 
+                    {
+                        "type": "send_update",
+                        "data": data
+                    }
+                )
+
+                results.append(data)
     mqtt_client.loop_stop()
     return results
