@@ -218,10 +218,12 @@ def publish_subscribed_addresses_to_mqtt(addresses:list):
         data.append(address_data)
 
     return mqtt.publish_message("address", data, qos=0)
-    
+
 
 def resolve_pos_data(wallet_hash, address_path):
     POS_ID_MAX_DIGITS = settings.PAYTACAPOS["POS_ID_MAX_DIGITS"]
+    MIN_POS_ADDRESS_INDEX = 10 ** POS_ID_MAX_DIGITS
+    MAX_POS_ADDRESS_INDEX = (2 ** 32) - 1
 
     if not wallet_hash or not isinstance(address_path, str):
         return
@@ -233,10 +235,10 @@ def resolve_pos_data(wallet_hash, address_path):
     receiving_address_index = int(match_result.group(1))
 
     # range of pos address indices: [10 ** POS_ID_MAX_DIGITS, 2*32)
-    if receiving_address_index < 10 ** POS_ID_MAX_DIGITS or receiving_address_index > (2 * 32) - 1:
+    if receiving_address_index < MIN_POS_ADDRESS_INDEX or receiving_address_index > MAX_POS_ADDRESS_INDEX:
         return
 
-    posid = receiving_address_index % (10 ** POS_ID_MAX_DIGITS)
+    posid = receiving_address_index % MIN_POS_ADDRESS_INDEX
 
     PosDevice = apps.get_model("paytacapos", "PosDevice")
     pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
