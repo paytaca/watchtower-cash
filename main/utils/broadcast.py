@@ -9,10 +9,19 @@ from main.utils.queries.node import Node
 
 NODE = Node()
 
-def send_post_broadcast_notifications(transaction):
+def send_post_broadcast_notifications(transaction, extra_data:dict=None):
     results = []
     mqtt_client = connect_to_mqtt()
     mqtt_client.loop_start()
+
+    if extra_data:
+        try:
+            json.dumps(extra_data)
+        except:
+            extra_data = None
+
+    if not isinstance(extra_data, dict):
+        extra_data = {}
 
     tx = NODE.BCH._decode_raw_transaction(transaction)
     for tx_out in tx['vout']:
@@ -26,7 +35,8 @@ def send_post_broadcast_notifications(transaction):
                 'txid': tx['txid'],
                 'recipient': address,
                 'decimals': 8,
-                'value': round(tx_out['value'] * (10 ** 8))
+                'value': round(tx_out['value'] * (10 ** 8)),
+                **extra_data,
             }
             mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1)
 
