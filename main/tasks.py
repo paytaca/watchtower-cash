@@ -922,16 +922,15 @@ def get_bch_utxos(self, address):
             parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
-        # NOTE: Commeneted out. This was a bad idea because transactions can get marked as spent even if no spending_txid is recorded.
-        # TODO: There needs to be an exhaustive checking of transactions marked as spent directly from the node to verify if those already marked as spent are marked correctly.
-        # txn_check = Transaction.objects.filter(
-        #     address__address=address,
-        #     spent=False
-        # ).exclude(
-        #     id__in=saved_utxo_ids
-        # ).update(
-        #     spent=True
-        # )
+        if len(outputs):
+            Transaction.objects.filter(
+                address__address=address,
+                spent=False
+            ).exclude(
+                id__in=saved_utxo_ids
+            ).update(
+                spent=True
+            )
 
     except Exception as exc:
         try:
@@ -1004,16 +1003,15 @@ def get_slp_utxos(self, address):
                         saved_utxo_ids.append(obj.id)
         
         # Mark other transactions of the same address as spent
-        # NOTE: Commeneted out. This was a bad idea because transactions can get marked as spent even if no spending_txid is recorded.
-        # TODO: There needs to be an exhaustive checking of transactions marked as spent directly from the node to verify if those already marked as spent are marked correctly.
-        # txn_check = Transaction.objects.filter(
-        #     address__address=address,
-        #     spent=False
-        # ).exclude(
-        #     id__in=saved_utxo_ids
-        # ).update(
-        #     spent=True
-        # )
+        if len(outputs):
+            Transaction.objects.filter(
+                address__address=address,
+                spent=False
+            ).exclude(
+                id__in=saved_utxo_ids
+            ).update(
+                spent=True
+            )
 
     except Exception as exc:
         try:
