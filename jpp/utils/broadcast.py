@@ -1,6 +1,7 @@
 import bitcoin
 from main.tasks import NODE
 from main.models import Transaction
+from main.utils.broadcast import send_post_broadcast_notifications
 
 def broadcast_transaction(tx_hex):
     response = { "success": False }
@@ -15,6 +16,7 @@ def broadcast_transaction(tx_hex):
     if "already have transaction" in result:
         success = True
     if success:
+        send_post_broadcast_notifications(tx_hex)
         response["txid"] = txid
         response["success"] = True
         return response
