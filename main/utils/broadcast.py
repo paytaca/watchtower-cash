@@ -5,7 +5,6 @@ from asgiref.sync import async_to_sync
 
 from main.mqtt import connect_to_mqtt
 from main.utils.queries.node import Node
-from main.models import WalletHistory
 
 
 NODE = Node()
