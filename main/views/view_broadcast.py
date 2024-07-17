@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import generics
 from rest_framework import status
 from main import serializers
-from main.models import TransactionBroadcast
+from main.models import TransactionBroadcast, WalletHistory
 from main.utils.queries.node import Node
 from main.tasks import broadcast_transaction
 from main.mqtt import connect_to_mqtt
@@ -41,25 +41,31 @@ class BroadcastViewSet(generics.GenericAPIView):
                         if _addrs:
                             address = _addrs[0]
 
-                            # Send mqtt notif
-                            data = {
-                                'token': 'bch',
-                                'txid': tx['txid'],
-                                'recipient': address,
-                                'decimals': 8,
-                                'value': round(tx_out['value'] * (10 ** 8))
-                            }
-                            mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1)
+                            # get sender address(es) from wallet history
+                            sender_check = WalletHistory.objects.filter(txid=tx['txid'], record_type="Outgoing")
+                            if sender_check.exists():
+                                senders = sender_check.first().senders
 
-                            # Send websocket notif
-                            channel_layer = get_channel_layer()
-                            async_to_sync(channel_layer.group_send)(
-                                "bch", 
-                                {
-                                    "type": "send_update",
-                                    "data": data
+                                # Send mqtt notif
+                                data = {
+                                    'token': 'bch',
+                                    'txid': tx['txid'],
+                                    'recipient': address,
+                                    'senders': senders,
+                                    'decimals': 8,
+                                    'value': round(tx_out['value'] * (10 ** 8))
                                 }
-                            )
+                                mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1)
+
+                                # Send websocket notif
+                                channel_layer = get_channel_layer()
+                                async_to_sync(channel_layer.group_send)(
+                                    "bch", 
+                                    {
+                                        "type": "send_update",
+                                        "data": data
+                                    }
+                                )
                     mqtt_client.loop_stop()
 
                     response['txid'] = txid
