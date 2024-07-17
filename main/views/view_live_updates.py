@@ -1,15 +1,27 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.decorators import action
 
+from drf_yasg.utils import swagger_auto_schema
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
+from main.serializers import (
+    LiveUpdatesPaymentSerializer,
+    LiveUpdatesPaymentResponseSerializer,
+)
 
 
 class LiveUpdatesPaymentView(APIView):
 
+    @action(methods=['POST'], detail=False)
+    @swagger_auto_schema(request_body=LiveUpdatesPaymentSerializer, responses={ 200: LiveUpdatesPaymentResponseSerializer })
     def post(self, request, *args, **kwargs):
-        address = kwargs.get('bchaddress', '')
+        serializer = LiveUpdatesPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        address = serializer.validated_data['address']
         response = {}
 
         if address:
