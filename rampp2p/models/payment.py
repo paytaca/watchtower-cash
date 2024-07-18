@@ -36,3 +36,36 @@ class PaymentMethod(models.Model):
 
   def __str__(self):
     return f"{self.id}"
+
+####### V2 Payments #######
+# class PaymentTypeV2(models.Model):
+#   full_name = models.CharField(max_length=100, db_index=True)
+#   short_name = models.CharField(max_length=50, default='')
+#   notes = models.CharField(max_length=200, null=True, blank=True)
+#   is_disabled = models.BooleanField(default=False)
+#   created_at = models.DateTimeField(auto_now_add=True)
+
+class PaymentTypeField(models.Model):
+  fieldname = models.CharField(max_length=100)
+  format = models.CharField(max_length=100, blank=True, null=True)
+  description = models.CharField(max_length=100, blank=True, null=True)
+  payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name='fields')
+  required = models.BooleanField(default=True)
+
+  def __str__(self):
+    return f"{self.id}"
+
+# class PaymentMethodV2(models.Model):
+#   owner = models.ForeignKey(Peer, on_delete=models.CASCADE)
+#   payment_type = models.ForeignKey(PaymentType, on_delete=models.PROTECT)
+#   created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+class PaymentMethodField(models.Model):
+  payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE, related_name='values')
+  field_reference = models.ForeignKey(PaymentTypeField, on_delete=models.PROTECT, related_name='values')
+  value = models.CharField(max_length=100)
+  created_at = models.DateTimeField(auto_now_add=True, editable=False)
+  modified_at = models.DateTimeField(auto_now=True)
+
+  def __str__(self):
+    return f"{self.id}"
