@@ -5,15 +5,9 @@ from rest_framework import status
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from authentication.token import TokenAuthentication
-from django.db.models import OuterRef, Subquery
-# from rampp2p.models import PaymentType, PaymentMethod, Peer, IdentifierFormat, FiatCurrency
+from django.db.models import OuterRef, Subquery, Q
 import rampp2p.models as models
-from rampp2p.serializers import (
-    PaymentTypeSerializer, 
-    PaymentMethodSerializer,
-    PaymentMethodCreateSerializer,
-    PaymentMethodUpdateSerializer
-)
+import rampp2p.serializers as serializers
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,7 +24,7 @@ class PaymentTypeList(APIView):
                 return Response({'error': f'no such fiat currency with symbol {currency}'}, status.HTTP_400_BAD_REQUEST)
             fiat_currency = fiat_currency.first()
             queryset = fiat_currency.payment_types
-        serializer = PaymentTypeSerializer(queryset, many=True)
+        serializer = serializers.PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
 class PaymentMethodListCreate(APIView):  
@@ -46,24 +40,35 @@ class PaymentMethodListCreate(APIView):
             fiat_currency = fiat_currency.first()
             currency_paymenttype_ids = fiat_currency.payment_types.values_list('id', flat=True)
             queryset = queryset.filter(payment_type__id__in=currency_paymenttype_ids)
-        serializer = PaymentMethodSerializer(queryset, many=True)
+        serializer = serializers.PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
         data = request.data.copy()
-        data['owner'] = request.user.id
+        owner = request.user
+        logger.warn(f'request data: {data}')
+        try:
+            payment_type = models.PaymentType.objects.get(id=data.get('payment_type'))
+            logger.warn(f'payment_type: {payment_type}')
+            # Return an error if a payment_method with same payment type already exists for this user
+            if models.PaymentMethod.objects.filter(Q(owner__wallet_hash=owner.wallet_hash) & Q(payment_type__id=payment_type.id)).exists():
+                return Response({'error': 'Duplicate payment method with payment type'}, status=status.HTTP_400_BAD_REQUEST)
 
-        format = models.IdentifierFormat.objects.filter(format=data.get('identifier_format'))
-        if not format.exists():
-            return Response({'error': 'identifier_format is required'}, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'payment_type': payment_type.id,
+                'owner': owner.id
+            }
+        except models.PaymentType.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        data['identifier_format'] = format.first().id
-        serializer = PaymentMethodCreateSerializer(data=data)
-        if serializer.is_valid():
-            payment_method = serializer.save()
-            serializer = PaymentMethodSerializer(payment_method)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.warn(f'data: {data}')
+        serializer = serializers.PaymentMethodSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        payment_method = serializer.save()
+        serializer = serializers.PaymentMethodSerializer(payment_method)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
   
 class PaymentMethodDetail(APIView):
     authentication_classes = [TokenAuthentication]
@@ -82,7 +87,7 @@ class PaymentMethodDetail(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
         payment_method = self.get_object(pk)
-        serializer = PaymentMethodSerializer(payment_method)
+        serializer = serializers.PaymentMethodSerializer(payment_method)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
@@ -98,7 +103,7 @@ class PaymentMethodDetail(APIView):
         
         data['identifier_format'] = format.first().id
         payment_method = self.get_object(pk=pk)
-        serializer = PaymentMethodUpdateSerializer(payment_method, data=data)
+        serializer = serializers.PaymentMethodUpdateSerializer(payment_method, data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
