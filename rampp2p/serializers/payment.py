@@ -85,7 +85,7 @@ class PaymentMethodCreateSerializer(serializers.ModelSerializer):
         return instance
     
 class PaymentMethodFieldSerializer(serializers.ModelSerializer):
-    field_reference = PaymentTypeFieldSerializer()
+    field_reference = PaymentTypeFieldSerializer(read_only=True)
     class Meta:
         model = models.PaymentMethodField
         fields = [

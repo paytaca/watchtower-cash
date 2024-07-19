@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+from django.db import transaction
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from authentication.token import TokenAuthentication
@@ -46,27 +47,38 @@ class PaymentMethodListCreate(APIView):
     def post(self, request):
         data = request.data.copy()
         owner = request.user
-        logger.warn(f'request data: {data}')
+        
         try:
+            fields = data.get('fields')
+            if fields is None or len(fields) == 0:
+                raise ValidationError('Empty payment method fields')
+            
             payment_type = models.PaymentType.objects.get(id=data.get('payment_type'))
-            logger.warn(f'payment_type: {payment_type}')
-            # Return an error if a payment_method with same payment type already exists for this user
+            # Return error if a payment_method with same payment type already exists for this user
             if models.PaymentMethod.objects.filter(Q(owner__wallet_hash=owner.wallet_hash) & Q(payment_type__id=payment_type.id)).exists():
-                return Response({'error': 'Duplicate payment method with payment type'}, status=status.HTTP_400_BAD_REQUEST)
+                raise ValidationError('Duplicate payment method with payment type')
 
             data = {
-                'payment_type': payment_type.id,
-                'owner': owner.id
-            }
-        except models.PaymentType.DoesNotExist as err:
+                'payment_type': payment_type,
+                'owner': owner
+            }        
+
+            with transaction.atomic():
+                # create payment method
+                payment_method = models.PaymentMethod.objects.create(**data)
+                # create payment method fields
+                for field in fields:
+                    field_ref = models.PaymentTypeField.objects.get(id=field['field_reference'])
+                    data = {
+                        'payment_method': payment_method,
+                        'field_reference': field_ref,
+                        'value': field['value']
+                    }
+                    models.PaymentMethodField.objects.create(**data)
+
+        except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        logger.warn(f'data: {data}')
-        serializer = serializers.PaymentMethodSerializer(data=data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        payment_method = serializer.save()
         serializer = serializers.PaymentMethodSerializer(payment_method)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
   
