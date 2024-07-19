@@ -104,12 +104,8 @@ class PaymentTypeAdmin(admin.ModelAdmin):
     list_display = [
         'full_name',
         'short_name',
-        'format__type',
         'is_disabled'
     ]
-
-    def format__type(self, obj):
-        return ", ".join([related_field.format for related_field in obj.formats.all()])
 
 admin.site.register(PaymentType, PaymentTypeAdmin)
 
