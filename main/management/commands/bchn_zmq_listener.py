@@ -17,11 +17,12 @@ import json
 import paho.mqtt.client as mqtt
 
 
+client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-publisher"
 if settings.BCH_NETWORK == 'mainnet':
-    mqtt_client = mqtt.Client(transport='websockets')
+    mqtt_client = mqtt.Client(transport='websockets', client_id=client_id, clean_session=True)
     mqtt_client.tls_set()
 else:
-    mqtt_client = mqtt.Client()
+    mqtt_client = mqtt.Client(client_id=client_id)
 
 mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
 mqtt_client.loop_start()

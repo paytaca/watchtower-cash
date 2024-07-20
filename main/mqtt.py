@@ -5,14 +5,15 @@ import paho.mqtt.publish as mqtt_publish
 from django.conf import settings
 
 
-def connect_to_mqtt():
+def connect_to_mqtt(client_id=None):
+    if not client_id:
+        client_id = f"watchtower-{settings.BCH_NETWORK}-transactions-publisher"
     if settings.BCH_NETWORK == 'mainnet':
-        mqtt_client = mqtt.Client(transport='websockets')
+        mqtt_client = mqtt.Client(client_id=client_id, transport='websockets')
         mqtt_client.tls_set()
     else:
-        mqtt_client = mqtt.Client()
+        mqtt_client = mqtt.Client(client_id=client_id, clean_session=True)
     mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
-    # mqtt_client.loop_start()
     return mqtt_client
 
 

@@ -16,9 +16,9 @@ from main.utils.queries.bchn import BCHN
 
 LOGGER = logging.getLogger(__name__)
 
-mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-mempool"
+mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-listener"
 if settings.BCH_NETWORK == 'mainnet':
-    mqtt_client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=False)
+    mqtt_client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=True)
     mqtt_client.tls_set()
 else:
     mqtt_client = mqtt.Client(client_id=mqtt_client_id, clean_session=False)
