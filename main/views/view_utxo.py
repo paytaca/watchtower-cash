@@ -235,7 +235,7 @@ class UTXO(APIView):
         confirmed = parse_boolean_query_param(request.query_params.get('confirmed', ''))
 
         if wallet_hash and confirmed:
-            rescan_utxos(wallet_hash, full=True, bch_only=True)
+            rescan_utxos(wallet_hash, full=True)
 
         data = { 'valid': False }
         qs = None

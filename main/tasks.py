@@ -1823,18 +1823,25 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
 
 @shared_task(queue='rescan_utxos')
-def rescan_utxos(wallet_hash, full=False, bch_only=False):
+def rescan_utxos(wallet_hash, full=False):
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
     if full:
         addresses = wallet.addresses.all()
     else:
         addresses = wallet.addresses.filter(transactions__spent=False)
 
-    for address in addresses:
-        if wallet.wallet_type == 'bch':
-            get_bch_utxos(address.address)
-        elif wallet.wallet_type == 'slp':
-            get_slp_utxos(address.address)
+    try:
+        for address in addresses:
+            if wallet.wallet_type == 'bch':
+                get_bch_utxos(address.address)
+            elif wallet.wallet_type == 'slp':
+                get_slp_utxos(address.address)
+        wallet.last_utxo_scan_succeeded = True
+        wallet.save()
+    except Exception as exc:
+        wallet.last_utxo_scan_succeeded = False
+        wallet.save()
+        raise exc
 
 
 def rebuild_address_wallet_history(address, tx_count_limit=30, ignore_txids=[]):

@@ -203,7 +203,9 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet_hash',
         'wallet_type',
         'version',
-        'project'
+        'project',
+        'last_balance_check',
+        'last_utxo_scan_succeeded'
     ]
     actions = [ 'rescan_utxos' ]
 
