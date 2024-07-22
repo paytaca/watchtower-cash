@@ -177,6 +177,34 @@ class AdListSerializer(serializers.ModelSerializer):
         release_orders_count = user_orders.filter(status__status=models.StatusType.RELEASED).count()
         return release_orders_count, completed_orders_count
 
+class CashinAdSerializer(AdListSerializer):
+    is_online = serializers.SerializerMethodField()
+    last_online_at = serializers.SerializerMethodField()
+
+    class Meta(AdListSerializer.Meta):
+        fields = [
+            'id',
+            'owner',
+            'price_type',
+            'price',
+            'trade_floor',
+            'trade_ceiling',
+            'trade_amount',
+            'trade_limits_in_fiat',
+            'trade_amount_in_fiat',
+            'payment_methods',
+            'trade_count',
+            'completion_rate',
+            'is_online',
+            'last_online_at'
+        ]
+    
+    def get_is_online(self, obj):
+        return obj.owner.is_online
+
+    def get_last_online_at(self, obj):
+        return obj.owner.last_online_at
+
 class AdDetailSerializer(AdListSerializer):
     fees = serializers.SerializerMethodField()
 

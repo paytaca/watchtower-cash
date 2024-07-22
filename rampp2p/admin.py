@@ -102,6 +102,7 @@ admin.site.register(Contract, ContractAdmin)
 
 class PaymentTypeAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'full_name',
         'short_name',
         'is_disabled'

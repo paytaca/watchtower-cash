@@ -1,11 +1,21 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-
+from datetime import datetime
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import F, ExpressionWrapper, DecimalField, Case, When, OuterRef, Subquery
+from django.db.models import (
+    F, 
+    ExpressionWrapper, 
+    DecimalField, 
+    DateTimeField,
+    Case, 
+    When, 
+    OuterRef, 
+    Subquery, 
+    Avg
+)
 
 import math
 from authentication.token import TokenAuthentication
@@ -16,7 +26,8 @@ from rampp2p.serializers import (
     AdCreateSerializer, 
     AdUpdateSerializer,
     AdOwnerSerializer,
-    AdSnapshotSerializer
+    AdSnapshotSerializer,
+    CashinAdSerializer
 )
 from rampp2p.models import (
     Ad, 
@@ -28,12 +39,83 @@ from rampp2p.models import (
     TradeType,
     PriceType,
     MarketRate,
-    Order
+    Order,
+    Feedback
 )
 
 import logging
 logger = logging.getLogger(__name__)
 
+class InstaCashInSellAdsList(APIView):
+    authentication_classes = [TokenAuthentication]
+    '''
+        Filters the best Sell Ad for given payment type and amount.
+        The best SELL ad is determined by:
+            - Ad fiat currency
+            - If SELL ad accepts the payment type selected by buyer
+            - If buy amount is within range of the SELL ad
+            - Sorted by price lowest first
+            - Sorted by ad owner last online elapsed time
+            - Sorted by ad owner rating
+            - Sorted by ad rating
+    '''
+    def get(self, request):
+        wallet_hash = request.user.wallet_hash
+        currency = request.query_params.get('currency')
+        payment_type = request.query_params.get('payment_type')
+        crypto_amount = request.query_params.get('crypto_amount')
+        fiat_amount = request.query_params.get('fiat_amount')
+        trade_type = TradeType.SELL
+        
+        queryset = Ad.objects.filter(
+            Q(deleted_at__isnull=True) & 
+            Q(trade_type=trade_type) & 
+            Q(is_public=True) & 
+            Q(trade_amount__gt=0) &
+            Q(fiat_currency__symbol=currency))
+        
+        queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
+
+        # Filters which ads accept the selected payment method
+        queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
+
+        # Filters which ads with limits in range with amount
+        queryset = queryset.filter(
+            (Q(trade_floor__lt=crypto_amount) & Q(trade_ceiling__gt=crypto_amount)) |
+            Q(trade_floor__lt=fiat_amount) & Q(trade_ceiling__gt=fiat_amount)
+        )
+
+        market_rate_subq = MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+        queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
+
+        # Annotate ad price for sorting
+        queryset = queryset.annotate(
+            price=ExpressionWrapper(
+                Case(
+                    When(price_type=PriceType.FLOATING, then=(F('floating_price')/100 * F('market_rate'))),
+                    default=F('fixed_price'),
+                    output_field=DecimalField()
+                ),
+                output_field=DecimalField()
+            )
+        )
+        
+        # TODO: Sort by ad owner last online elapsed time
+        # queryset = queryset.annotate(
+        #     last_online_at=ExpressionWrapper(
+        #         Case(
+        #             When(F('owner__is_online'), then=(datetime.now())),
+        #             output_field=DateTimeField()
+        #         ),
+        #         output_field=DateTimeField()
+        #     )
+        # )
+
+        queryset = queryset.order_by('price')
+        queryset = queryset[:5]
+        best_ads = CashinAdSerializer(queryset, many=True, context = { 'wallet_hash': wallet_hash })
+        return Response(best_ads.data, status=status.HTTP_200_OK)
+    
 class AdListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 

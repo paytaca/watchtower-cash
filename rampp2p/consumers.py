@@ -1,5 +1,5 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
-from rampp2p.utils import unread_orders_count
+from rampp2p.utils import unread_orders_count, update_user_active_status
 import json
 
 import logging
@@ -59,6 +59,8 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         await self.accept()
+        is_online = True
+        await update_user_active_status(self.wallet_hash, is_online)
         unread_count = await unread_orders_count(self.wallet_hash)
         data = { 
             'type': 'ConnectionMessage',
@@ -70,6 +72,9 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
+        is_online = False
+        await update_user_active_status(self.wallet_hash, is_online)
+
         await self.channel_layer.group_discard(
             self.channel_name,
             self.channel_name
