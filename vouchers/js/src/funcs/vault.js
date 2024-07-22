@@ -61,7 +61,6 @@ export async function emergencyRefund (opts) {
   
   for (const utxo of utxos) {
     try {
-
       const fee = 1000n
       const dust = 546n
       const finalAmount = utxo?.satoshis - fee
@@ -75,14 +74,15 @@ export async function emergencyRefund (opts) {
         .withoutChange()
         .send()
 
-      break
+      transaction.success = true
+      return transaction
     } catch (err) {
       // added catch here to see which utxo matches the sender
       console.log(err)
     }
   }
 
-  return transaction
+  return { success: false }
 }
 
 
