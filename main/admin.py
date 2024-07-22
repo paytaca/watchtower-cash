@@ -202,7 +202,6 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
         'wallet_hash',
         'wallet_type',
-        'version',
         'project',
         'last_balance_check',
         'last_utxo_scan_succeeded'
