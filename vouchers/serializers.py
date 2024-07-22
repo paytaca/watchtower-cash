@@ -66,8 +66,3 @@ class VoucherClaimCheckResponseSerializer(serializers.Serializer):
 
 class VoucherClaimedResponseSerializer(serializers.Serializer):
     success = serializers.BooleanField(default=False)
-
-
-class VoucherClaimedSerializer(serializers.Serializer):
-    category = serializers.CharField(max_length=100, required=True)
-    txid = serializers.CharField(max_length=100, required=True)

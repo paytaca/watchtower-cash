@@ -8,13 +8,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.models import F, Q, ExpressionWrapper, DateTimeField
 from django.utils import timezone
 
-from vouchers.serializers import (
-    VoucherSerializer,
-    VoucherClaimCheckSerializer,
-    VoucherClaimCheckResponseSerializer,
-    VoucherClaimedSerializer,
-    VoucherClaimedResponseSerializer,
-)
+from vouchers.serializers import *
 from vouchers.models import Voucher
 from vouchers.filters import VoucherFilter
 
@@ -51,7 +45,6 @@ class VoucherViewSet(
         'list': VoucherSerializer,
         'merchants': MerchantListSerializer,
         'claim_check': VoucherClaimCheckSerializer,
-        'claimed': VoucherClaimedSerializer,
     }
 
     def list(self, request, *args, **kwargs):
@@ -71,43 +64,6 @@ class VoucherViewSet(
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
-
-
-    @action(methods=['POST'], detail=False)
-    @swagger_auto_schema(responses={200: VoucherClaimedResponseSerializer})
-    def claimed(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        category = serializer.validated_data['category']
-        claim_txid = serializer.validated_data['txid']
-        vouchers = Voucher.objects.filter(category=category)
-        result = { 'success': False }
-        
-        if vouchers.exists():
-            node = Node()
-            txn = node.BCH.get_transaction(claim_txid)
-
-            if txn['valid']:
-                inputs = txn['inputs']
-                first_input = inputs[0]
-                second_input = inputs[1]
-
-                if 'token_data' in first_input.keys() and 'token_data' in second_input.keys():
-                    voucher = vouchers.first()
-                    first_input_category = first_input['token_data']['category']
-                    second_input_category = second_input['token_data']['category']
-
-                    if first_input_category == voucher.category and first_input_category == second_input_category:
-                        vouchers.update(
-                            claimed=True,
-                            claim_txid=claim_txid,
-                            date_claimed=timezone.now()
-                        )
-                        result['success'] = True
-        
-        return Response(result, status=status.HTTP_200_OK)
-
 
     @action(methods=['GET'], detail=False)
     @swagger_auto_schema(responses={200: MerchantListSerializer})

@@ -591,9 +591,6 @@ class MerchantListSerializer(serializers.ModelSerializer):
 
     def get_receiving_address(self, obj):
         if obj.receiving_pubkey:
-            # return ScriptFunctions.pubkeyToCashAddress(
-            #     dict(pubkey=obj.receiving_pubkey)
-            # )
             pk_bytes_str = bytearray.fromhex(obj.receiving_pubkey)
             return public_key_to_address(pk_bytes_str)
         else:

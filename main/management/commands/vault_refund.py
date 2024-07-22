@@ -1,8 +1,10 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
-from vouchers.js.runner import ScriptFunctions
 from paytacapos.models import Merchant
+
+from bitcash.keygen import public_key_to_address
+import requests
 
 
 class Command(BaseCommand):
@@ -20,25 +22,31 @@ class Command(BaseCommand):
         sender_address = options['sender_address']
         sender_pubkey = options['sender_pubkey']
 
-        address = ScriptFunctions.pubkeyToCashAddress(dict(pubkey=sender_pubkey))
+        address = bytearray.fromhex(sender_pubkey)
+        address = public_key_to_address(address)
+        merchant = Merchant.objects.get(id=merchant_id)
+        
         self.stdout.write(self.style.SUCCESS(address))
 
-        merchant = Merchant.objects.get(id=merchant_id)
-        transaction = ScriptFunctions.emergencyRefund(dict(
-            params=dict(
-                merchant={
+        payload = {
+            'params': {
+                'merchant': {
                     'receiverPk': merchant.receiving_pubkey
                 },
-                sender={
+                'sender': {
                     'pubkey': sender_pubkey,
                     'address': sender_address
                 },
-                refundAmount=refund_amount
-            ),
-            options=dict(network=settings.BCH_NETWORK)
-        ))
+                'refundAmount': refund_amount
+            },
+            'options': {
+                'network': settings.BCH_NETWORK
+            }
+        }
+        response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/emergency-refund', json=payload)
+        response = response.json()
 
-        if transaction:
-            txid = transaction['txid']
+        if response['success']:
+            txid = response['txid']
             self.stdout.write(self.style.SUCCESS(f'Refunded {refund_amount} BCH to {sender_address} from vault contract!')) 
             self.stdout.write(self.style.SUCCESS(f'TXID: {txid}')) 

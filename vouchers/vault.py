@@ -1,11 +1,10 @@
 from django.conf import settings
 
 from paytacapos.models import Merchant
-
-from vouchers.js.runner import ScriptFunctions
 from vouchers.models import Vault, Voucher
-
 from main.utils.subscription import new_subscription
+
+import requests
 
 
 def generate_merchant_vault(merchant_id):
@@ -15,14 +14,18 @@ def generate_merchant_vault(merchant_id):
 
     receiving_pubkey = merchant.receiving_pubkey
 
-    contract = ScriptFunctions.compileVaultContract(dict(
-        params=dict(
-            merchant={
+    payload = {
+        'params': {
+            'merchant': {
                 'receiverPk': receiving_pubkey
             }
-        ),
-        options=dict(network=settings.BCH_NETWORK)
-    ))
+        },
+        'options': {
+            'network': settings.BCH_NETWORK
+        }
+    }
+    response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/compile-vault', json=payload)
+    contract = response.json()
 
     # subscribe merchant vault address
     project_id = {

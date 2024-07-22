@@ -406,8 +406,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'paytacagifts.tasks.check_unclaimed_gifts',
         'schedule': 7
     },
-    'claim_expired_unclaimed_vouchers': {
-        'task': 'vouchers.tasks.claim_expired_unclaimed_vouchers',
+    'refund_expired_vouchers': {
+        'task': 'vouchers.tasks.refund_expired_vouchers',
         'schedule': 60 * 60
     },
     'bulk_rebroadcast': {
@@ -483,7 +483,7 @@ MAX_RESTB_RETRIES = 14
 MAX_SLPBITCOIN_SOCKET_DURATION = 10
 MAX_BITSOCKET_DURATION = 10
 BITDB_QUERY_LIMIT_PER_PAGE = 1000
-TRANSACTIONS_PER_CHUNK=100
+TRANSACTIONS_PER_CHUNK = 100
 
 # Sideshift credentials
 SIDESHIFT_SECRET_KEY = config('SIDESHIFT_SECRET_KEY')
@@ -656,6 +656,7 @@ SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
+VOUCHER_EXPRESS_URL = 'http://localhost:3002/vouchers'
 
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')
