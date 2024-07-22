@@ -84,3 +84,42 @@ export async function emergencyRefund (opts) {
 
   return transaction
 }
+
+
+/**
+ * 
+ * @param {String} category
+ * 
+ * @param {Object} merchant
+ * @param {String} merchant.address
+ * @param {String} merchant.pubkey
+ * 
+ * @param {String} network 'mainnet | chipnet'
+ * 
+ * @returns {transaction: Object}
+ * 
+ */
+export async function claimVoucher ({ category, merchant, network }) {
+  const vaultParams = {
+    params: {
+      merchantReceiverPk: merchant?.pubkey,
+    },
+    options: {
+      network
+    }
+  }
+
+  const vault = new Vault(vaultParams)
+  const claimPayload = {
+    voucherClaimerAddress: merchant?.address,
+    category,
+  }
+  
+  try {
+    const transaction = await vault.claim(claimPayload)
+    transaction.success = true
+    return transaction
+  } catch (err) {}
+
+  return { success: false }
+}

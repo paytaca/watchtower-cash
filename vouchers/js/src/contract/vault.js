@@ -18,18 +18,19 @@ export class Vault {
     ]
   }
 
-  getProviderAndArtifact () {
-    const provider = new ElectrumNetworkProvider(this.network)
-    const artifact = compileFile(new URL('vault.cash', import.meta.url))
-    return { provider, artifact }
+  get provider () {
+    return new ElectrumNetworkProvider(this.network)
+  }
+
+  get artifact () {
+    return compileFile(new URL('vault.cash', import.meta.url))
   }
 
   getContract () {
-    const { provider, artifact } = this.getProviderAndArtifact()
     const contract = new Contract(
-      artifact,
+      this.artifact,
       this.contractCreationParams,
-      { provider }
+      { provider: this.provider }
     )
 
     const bytesize = contract.bytesize
@@ -39,6 +40,28 @@ export class Vault {
     if (bytesize > 520) throw new Error(`Bytesize max is 520 bytes. Got ${bytesize}`)
 
     return contract
+  }
+
+  async claim ({ category, voucherClaimerAddress }) {
+    const contract = this.getContract()
+    let voucherUtxos = []
+    
+    while (voucherUtxos.length !== 2) {
+      const utxos = await this.provider.getUtxos(contract.address)
+      voucherUtxos = utxos.filter(utxo => utxo?.token?.category === category)
+    }
+
+    if (voucherUtxos.length === 0) throw new Error(`No category ${category} utxos found`)
+
+    const lockNftUtxo = voucherUtxos.find(utxo => utxo.satoshis !== this.dust)
+    const transaction = await contract.functions.claim(reverseHex(category))
+      .from(voucherUtxos)
+      .to(voucherClaimerAddress, lockNftUtxo.satoshis)
+      .withoutTokenChange()
+      .withoutChange()
+      .send()
+
+    return transaction
   }
   
 }

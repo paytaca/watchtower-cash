@@ -13,7 +13,7 @@ from vouchers.websocket import send_websocket_data
 from vouchers.js.runner import ScriptFunctions
 
 
-@shared_task(queue='claim_expired_unclaimed_vouchers')
+@shared_task(queue='vouchers')
 def claim_expired_unclaimed_vouchers():
     unclaimed_vouchers = Voucher.objects.filter(
         claimed=False,
