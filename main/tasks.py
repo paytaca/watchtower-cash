@@ -100,7 +100,7 @@ def claim_voucher(category, pubkey):
     if response['success']:
         txid = response['txid']
         data = {
-            'update_type': 'sent_voucher',
+            'update_type': 'voucher_claimed',
             'txid': txid,
             'category': category,
         }
