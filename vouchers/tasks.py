@@ -1,4 +1,5 @@
 from celery import shared_task
+from bitcash.keygen import public_key_to_address
 
 from django.utils import timezone
 from django.conf import settings
@@ -8,13 +9,14 @@ from django.db.models import (
     DateTimeField,
 )
 
+from main.utils.queries.node import Node
 from vouchers.models import Voucher
-from vouchers.websocket import send_websocket_data
-from vouchers.js.runner import ScriptFunctions
+
+import requests
 
 
-@shared_task(queue='claim_expired_unclaimed_vouchers')
-def claim_expired_unclaimed_vouchers():
+@shared_task(queue='vouchers')
+def refund_expired_vouchers():
     unclaimed_vouchers = Voucher.objects.filter(
         claimed=False,
         expired=False
@@ -29,16 +31,22 @@ def claim_expired_unclaimed_vouchers():
     
     unclaimed_vouchers.update(expired=True)
 
+    node = Node()
+    block_chain_info = node.BCH.get_block_chain_info()
+    median_time = block_chain_info['mediantime']
+
     for voucher in unclaimed_vouchers:
-        merchant_receiving_address = ScriptFunctions.pubkeyToCashAddress(
-            dict(pubkey=voucher.vault.merchant.receiving_pubkey)
-        )
-        
-        send_websocket_data(
-            merchant_receiving_address,
-            None,
-            {
-                'category': voucher.category
+        pubkey = voucher.vault.merchant.receiving_pubkey
+        address = bytearray.fromhex(pubkey)
+        address = public_key_to_address(address)
+        payload = {
+            'category': category,
+            'merchant': {
+                'address': address,
+                'pubkey': pubkey,
             },
-            room_name=settings.VOUCHER_ROOM
-        )
+            'latestBlockTimestamp': median_time
+            'network': 'mainnet'
+        }
+        response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/refund', json=payload)
+        response = response.json()

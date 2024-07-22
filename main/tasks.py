@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import datetime
 from urllib.parse import urlparse
 from django.db import models
+from bitcash.keygen import public_key_to_address
 from watchtower.settings import MAX_RESTB_RETRIES
 from celery import shared_task
 from celery_heimdall import HeimdallTask, RateLimit
@@ -15,7 +16,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
-from main.utils.vouchers import is_key_nft
+from main.utils.vouchers import is_key_nft, flag_claimed_voucher
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -79,6 +80,41 @@ def send_telegram_message(message, chat_id):
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
     return f"send notification to {chat_id}"
+
+
+@shared_task(queue='vouchers')
+def claim_voucher(category, pubkey):
+    address = bytearray.fromhex(pubkey)
+    address = public_key_to_address(address)
+    payload = {
+        'category': category,
+        'merchant': {
+            'address': address,
+            'pubkey': pubkey,
+        },
+        'network': 'mainnet'
+    }
+    response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/claim', json=payload)
+    response = response.json()
+
+    if response['success']:
+        txid = response['txid']
+        data = {
+            'update_type': 'voucher_claimed',
+            'txid': txid,
+            'category': category,
+        }
+        room_name = address.replace(':','_') + '_'
+        channel_layer = get_channel_layer()
+
+        flag_claimed_voucher(txid, category)
+        async_to_sync(channel_layer.group_send)(
+            f"{room_name}", 
+            {
+                "type": "send_update",
+                "data": data
+            }
+        )
 
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
@@ -187,6 +223,12 @@ def client_acknowledgement(self, txid):
 
                     if __is_key_nft:
                         data['voucher'] = category
+                        vaults = Vault.objects.filter(address=address.address)
+                        
+                        if vaults.exists():
+                            vault = vaults.first()
+                            pubkey = vault.merchant.receiving_pubkey
+                            claim_voucher.delay(category, pubkey)
                     
                     if jpp_invoice_uuid:
                         data['jpp_invoice_uuid'] = jpp_invoice_uuid
