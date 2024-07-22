@@ -827,7 +827,9 @@ def manage_blocks(self):
             finally:
                 REDIS_STORAGE.set('READY', 1)
 
-    active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
+    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
+    if active_block:
+        active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
     if active_block: return f'CURRENTLY PROCESSING BLOCK {str(active_block)}.'
 
 

@@ -1,6 +1,5 @@
 from celery import shared_task
 from bitcash.keygen import public_key_to_address
-
 from django.utils import timezone
 from django.conf import settings
 from django.db.models import (
@@ -22,7 +21,7 @@ def refund_expired_vouchers():
         expired=False
     ).annotate(
         expiration_date=ExpressionWrapper(
-            F('date_created') + timedelta(days=F('duration_days')),
+            F('date_created') + timezone.timedelta(days=F('duration_days')),
             output_field=DateTimeField()
         )
     ).filter(
@@ -40,12 +39,12 @@ def refund_expired_vouchers():
         address = bytearray.fromhex(pubkey)
         address = public_key_to_address(address)
         payload = {
-            'category': category,
+            'category': voucher.category,
             'merchant': {
                 'address': address,
                 'pubkey': pubkey,
             },
-            'latestBlockTimestamp': median_time
+            'latestBlockTimestamp': median_time,
             'network': 'mainnet'
         }
         response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/refund', json=payload)
