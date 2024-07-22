@@ -94,7 +94,7 @@ def claim_voucher(category, pubkey):
         },
         'network': 'mainnet'
     }
-    response = requests.post('http://localhost:3000/vouchers/claim', json=payload)
+    response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/claim', json=payload)
     response = response.json()
 
     if response['success']:

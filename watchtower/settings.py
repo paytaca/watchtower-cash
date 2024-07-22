@@ -406,8 +406,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'paytacagifts.tasks.check_unclaimed_gifts',
         'schedule': 7
     },
-    'claim_expired_unclaimed_vouchers': {
-        'task': 'vouchers.tasks.claim_expired_unclaimed_vouchers',
+    'refund_expired_vouchers': {
+        'task': 'vouchers.tasks.refund_expired_vouchers',
         'schedule': 60 * 60
     },
     'bulk_rebroadcast': {
@@ -656,6 +656,7 @@ SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
+VOUCHER_EXPRESS_URL = 'http://localhost:3002/vouchers'
 
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')

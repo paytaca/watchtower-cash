@@ -1,4 +1,4 @@
-import { claimVoucher } from './funcs/vault'
+import { claimVoucher, refundVoucher } from './funcs/vault'
 import express from 'express'
 
 const app = express()
@@ -7,6 +7,11 @@ const port = 3002
 
 app.post('/claim', async (req, res) => {
   const result = await claimVoucher(req.body)
+  res.send(result)
+})
+
+app.post('/refund', async (req, res) => {
+  const result = await refundVoucher(req.body)
   res.send(result)
 })
 

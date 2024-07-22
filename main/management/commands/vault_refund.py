@@ -4,6 +4,8 @@ from django.conf import settings
 from vouchers.js.runner import ScriptFunctions
 from paytacapos.models import Merchant
 
+from bitcash.keygen import public_key_to_address
+
 
 class Command(BaseCommand):
     help = "Refund accidentally sent BCH from vault contract to the sender"
@@ -20,7 +22,9 @@ class Command(BaseCommand):
         sender_address = options['sender_address']
         sender_pubkey = options['sender_pubkey']
 
-        address = ScriptFunctions.pubkeyToCashAddress(dict(pubkey=sender_pubkey))
+        address = bytearray.fromhex(sender_pubkey)
+        address = public_key_to_address(address)
+        
         self.stdout.write(self.style.SUCCESS(address))
 
         merchant = Merchant.objects.get(id=merchant_id)

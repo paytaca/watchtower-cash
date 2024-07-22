@@ -61,6 +61,32 @@ export class Vault {
       .withoutChange()
       .send()
 
+    transaction.success = true
+    return transaction
+  }
+
+  async refund ({ category, voucherClaimerAddress, latestBlockTimestamp }) {
+    const contract = this.getContract()
+    const utxos = await this.provider.getUtxos(contract.address)
+    const lockNftUtxo = utxos.find(utxo =>
+      utxo?.token?.category === category &&
+      utxo?.satoshis !== this.dust
+    )
+
+    if (!lockNftUtxo) throw new Error(`No lock NFT of category ${category} utxos found`)
+
+    // get latest MTP (median timestamp) from latest block
+    const refundedAmount = lockNftUtxo.satoshis - this.dust
+    const transaction = await contract.functions
+      .refund()
+      .from(lockNftUtxo)
+      .to(voucherClaimerAddress, refundedAmount)
+      .withoutTokenChange()
+      .withHardcodedFee(this.dust)
+      .withTime(latestBlockTimestamp)
+      .send()
+
+    transaction.success = true
     return transaction
   }
   

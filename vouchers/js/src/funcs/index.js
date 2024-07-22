@@ -1,21 +1,16 @@
 import {
-  toBytes20,
-  pubkeyToCashAddress
-} from './utils.js'
-
-import {
   compileVaultContract,
   emergencyRefund,
   claimVoucher,
+  refundVoucher,
 } from './vault.js'
 
 
 const funcs = {
-  toBytes20,
   compileVaultContract,
-  pubkeyToCashAddress,
   emergencyRefund,
   claimVoucher,
+  refundVoucher,
 }
 
 export default funcs
