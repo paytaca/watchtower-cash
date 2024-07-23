@@ -255,7 +255,7 @@ def resolve_pos_data(wallet_hash, address_path):
         response["merchant"] = dict(
             id=merchant.id,
             name=merchant.name,
-            category=merchant.category,
+            category=merchant.category.name if merchant.category else None,
             # description=merchant.description,
         )
 
