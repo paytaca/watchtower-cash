@@ -1,4 +1,5 @@
 import { compileFile } from "cashc";
+import { reverseHex } from "../funcs/utils.js"
 import {
   Contract,
   ElectrumNetworkProvider,
@@ -61,8 +62,11 @@ export class Vault {
       .withoutChange()
       .send()
 
-    transaction.success = true
-    return transaction
+    const result = {
+      success: true,
+      txid: transaction.txid
+    }
+    return result
   }
 
   async refund ({ category, voucherClaimerAddress, latestBlockTimestamp }) {
@@ -86,8 +90,11 @@ export class Vault {
       .withTime(latestBlockTimestamp)
       .send()
 
-    transaction.success = true
-    return transaction
+    const result = {
+      success: true,
+      txid: transaction.txid
+    }
+    return result
   }
   
 }
