@@ -15,21 +15,20 @@ from decimal import Decimal, ROUND_HALF_UP
 from authentication.token import TokenAuthentication
 from rampp2p.viewcodes import WSGeneralMessageType
 import rampp2p.utils.websocket as websocket
-from rampp2p.utils.utils import get_latest_status, generate_chat_session_ref
+from rampp2p.utils.utils import get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.validators import *
 import rampp2p.serializers as serializers
 from rampp2p.serializers import (
     OrderSerializer, 
-    UpdateOrderSerializer, 
+    WriteOrderSerializer, 
     StatusSerializer, 
     StatusReadSerializer,
     TransactionSerializer,
     AppealSerializer
 )
 import rampp2p.models as models
-import rampp2p.utils as utils
 import logging
 logger = logging.getLogger(__name__)
 
@@ -190,7 +189,7 @@ class OrderListCreate(APIView):
                 queryset = queryset.order_by(sort_field)
             if params['status_type'] == 'COMPLETED':
                 queryset = queryset.order_by(sort_field)
-        
+                
         # search for orders with specific owner name
         if params['query_name']:
             queryset = queryset.filter(owner__name__icontains=params['query_name'])
@@ -219,6 +218,7 @@ class OrderListCreate(APIView):
     def post(self, request):
         wallet_hash = request.user.wallet_hash
         try:
+            is_cash_in = request.data.get('is_cash_in', False)
             crypto_amount = request.data.get('crypto_amount')
             if crypto_amount is None or crypto_amount == 0:
                 raise ValidationError('crypto_amount field is required')
@@ -276,7 +276,8 @@ class OrderListCreate(APIView):
                     'owner': owner.id,
                     'ad_snapshot': ad_snapshot.id,
                     'payment_methods': payment_method_ids,
-                    'crypto_amount': crypto_amount
+                    'crypto_amount': crypto_amount,
+                    'is_cash_in': is_cash_in
                 }
                 # Calculate the locked ad price
                 price = None
@@ -286,7 +287,7 @@ class OrderListCreate(APIView):
                 else:
                     price = ad_snapshot.fixed_price
                 data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                serialized_order = UpdateOrderSerializer(data=data)
+                serialized_order = WriteOrderSerializer(data=data)
 
                 # Raise error if order isn't valid
                 serialized_order.is_valid(raise_exception=True)
@@ -311,7 +312,10 @@ class OrderListCreate(APIView):
                 order = serialized_order.save()
                 
                 # Set order expiration date
-                order.expires_at = order.created_at + timedelta(hours=24)
+                expiration = order.created_at + timedelta(hours=24)
+                if is_cash_in:
+                    expiration = order.created_at + timedelta(minutes=15)
+                order.expires_at = expiration
 
                 # Create SUBMITTED status for order
                 submitted_status = StatusSerializer(data={'status': StatusType.SUBMITTED, 'order': order.id})
@@ -337,11 +341,6 @@ class OrderListCreate(APIView):
                     buyer_member.read_at = timezone.now()
                     buyer_member.save()
 
-                # # Generate chat session ref using order id
-                # members = utils.get_order_members(order.id)
-                # memberstr = ''.join([members['buyer'].peer.public_key, members['seller'].peer.public_key])
-                # chat_session_ref = generate_chat_session_ref(f'{order.id}{order.created_at}{memberstr}')
-                # order.chat_session_ref = chat_session_ref
                 order.save()
 
                 # Serialize response data
