@@ -11,7 +11,7 @@ from asgiref.sync import sync_to_async
 import logging
 logger = logging.getLogger(__name__)
 
-async def update_user_active_status(wallet_hash, is_online):
+def update_user_active_status(wallet_hash, is_online):
     try:
         user = models.Peer.objects.get(wallet_hash=wallet_hash)
     except models.Peer.DoesNotExist:
