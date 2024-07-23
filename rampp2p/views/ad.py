@@ -80,10 +80,11 @@ class InstaCashInSellAdsList(APIView):
         queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
 
         # Filters which ads with limits in range with amount
-        queryset = queryset.filter(
-            (Q(trade_floor__lt=crypto_amount) & Q(trade_ceiling__gt=crypto_amount)) |
-            Q(trade_floor__lt=fiat_amount) & Q(trade_ceiling__gt=fiat_amount)
-        )
+        if crypto_amount and fiat_amount:
+            queryset = queryset.filter(
+                (Q(trade_floor__lt=crypto_amount) & Q(trade_ceiling__gt=crypto_amount)) |
+                Q(trade_floor__lt=fiat_amount) & Q(trade_ceiling__gt=fiat_amount)
+            )
 
         market_rate_subq = MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
         queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
@@ -99,22 +100,19 @@ class InstaCashInSellAdsList(APIView):
                 output_field=DecimalField()
             )
         )
-        
-        # TODO: Sort by ad owner last online elapsed time
-        # queryset = queryset.annotate(
-        #     last_online_at=ExpressionWrapper(
-        #         Case(
-        #             When(F('owner__is_online'), then=(datetime.now())),
-        #             output_field=DateTimeField()
-        #         ),
-        #         output_field=DateTimeField()
-        #     )
-        # )
 
-        queryset = queryset.order_by('price')
-        queryset = queryset[:5]
-        best_ads = CashinAdSerializer(queryset, many=True, context = { 'wallet_hash': wallet_hash })
-        return Response(best_ads.data, status=status.HTTP_200_OK)
+        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
+
+        # prioritize online ads
+        online_ads = queryset.filter(owner__is_online = True)
+        if online_ads.count() > 0:
+            queryset = online_ads
+            
+        queryset = queryset.order_by('-last_online_at', 'price')
+        best_ad = queryset[:5].first()
+        best_ad = CashinAdSerializer(best_ad, context = { 'wallet_hash': wallet_hash })
+
+        return Response(best_ad.data, status=status.HTTP_200_OK)
     
 class AdListCreate(APIView):
     authentication_classes = [TokenAuthentication]
