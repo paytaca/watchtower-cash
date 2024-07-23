@@ -658,6 +658,16 @@ UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
 VOUCHER_EXPRESS_URL = 'http://localhost:3002/vouchers'
 
+# purelypeer
+
+PURELYPEER_AUTH_HEADER = config('PURELYPEER_AUTH_HEADER')
+PURELYPEER_ENV = config('PURELYPEER_ENV')
+PURELYPEER_URL_PREFIX = 'backend-staging'
+if PURELYPEER_ENV == 'production':
+    PURELYPEER_URL_PREFIX = 'backend'
+
+PURELYPEER_API_URL = f'https://{PURELYPEER_URL_PREFIX}.purelypeer.cash/api'
+
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')
 
