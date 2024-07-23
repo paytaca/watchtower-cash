@@ -102,7 +102,9 @@ export async function emergencyRefund (opts) {
 export async function claimVoucher ({ category, merchant, network }) {
   const vaultParams = {
     params: {
-      merchantReceiverPk: merchant?.pubkey,
+      merchant: {
+        receiverPk: merchant?.pubkey,
+      }
     },
     options: {
       network
@@ -141,7 +143,9 @@ export async function claimVoucher ({ category, merchant, network }) {
 export async function refundVoucher ({ category, merchant, network, latestBlockTimestamp }) {
   const vaultParams = {
     params: {
-      merchantReceiverPk: merchant?.pubkey,
+      merchant: {
+        receiverPk: merchant?.pubkey,
+      }
     },
     options: {
       network
