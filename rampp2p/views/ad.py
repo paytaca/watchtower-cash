@@ -74,7 +74,6 @@ class CashInAdsList(APIView):
             Q(trade_amount__gt=0) &
             Q(fiat_currency__symbol=currency))
         
-        logger.warn(f'queryset #1: {queryset}')
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
 
         # Filters which ads accept the selected payment method

@@ -38,8 +38,8 @@ class CashinOrderList(APIView):
     def get(self, request):
         wallet_hash = request.user.wallet_hash
         try:
-            limit = int(request.get('limit'))
-            page = int(request.get('page'))
+            limit = int(request.query_params.get('limit', 10))
+            page = int(request.query_params.get('page', 1))
             if limit < 0:
                 raise ValidationError('limit must be a non-negative number')
             if page < 1:
@@ -48,6 +48,19 @@ class CashinOrderList(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         queryset = models.Order.objects.filter(is_cash_in=True)
+        
+        # exclude completed orders
+        completed_status = [
+            StatusType.CANCELED,
+            StatusType.RELEASED,
+            StatusType.REFUNDED
+        ]
+        last_status_subq = Status.objects.filter(
+            order=OuterRef('pk')
+        ).order_by('-created_at').values('status')[:1]
+
+        queryset = queryset.annotate(last_status=Subquery(last_status_subq))
+        queryset = queryset.exclude(last_status__in=completed_status)
         
         # fetches orders created by user
         owned_orders = Q(owner__wallet_hash=wallet_hash)
@@ -174,15 +187,15 @@ class OrderListCreate(APIView):
             StatusType.RELEASED,
             StatusType.REFUNDED
         ]
-        last_status = Status.objects.filter(
-            order=OuterRef('pk'),
-            status__in=completed_status
-        ).order_by('-created_at').values('order')[:1]
+        last_status_subq = Status.objects.filter(
+            order=OuterRef('pk')
+        ).order_by('-created_at').values('status')[:1]
+        queryset = queryset.annotate(last_status=Subquery(last_status_subq))
 
         if params['status_type'] == 'COMPLETED':            
-            queryset = queryset.filter(Q(pk__in=Subquery(last_status)) & Q(is_cash_in=False))
+            queryset = queryset.filter(last_status__in=completed_status)
         elif params['status_type'] == 'ONGOING':
-            queryset = queryset.exclude(pk__in=Subquery(last_status))
+            queryset = queryset.exclude(Q(last_status__in=completed_status) & Q(is_cash_in=True))
         
         if len(params['statuses']) > 0:
             # get the order's last status

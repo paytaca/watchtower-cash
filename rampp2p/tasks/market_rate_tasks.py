@@ -15,13 +15,19 @@ def update_market_rates():
 
     # get market prices from coingecko
     market_prices = get_latest_bch_prices_coingecko(currencies)
-    result_keys = [e.upper() for e in list(market_prices.keys())]
+    result_keys = []
+    
+    if market_prices:
+        result_keys = [e.upper() for e in list(market_prices.keys())]
 
     # get missing market prices from fullstack.cash
     if len(result_keys) < len(currencies):
         mcurrencies = list(set(currencies) - set(result_keys))
         market_prices_fullstackcash = get_latest_bch_prices_fullstackcash(mcurrencies)
-        market_prices.update(market_prices_fullstackcash)
+        if market_prices:
+            market_prices.update(market_prices_fullstackcash)
+        else:
+            market_prices = market_prices_fullstackcash
 
     for currency in market_prices:
         price = market_prices.get(currency)
