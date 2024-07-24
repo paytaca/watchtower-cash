@@ -13,24 +13,27 @@ def init_paymentmethod_fields(apps, schema_editor):
     payment_methods = PaymentMethod.objects.all()
     for payment_method in payment_methods:
         logger.warn(f'Creating fields for payment method: {payment_method.id}')
-        if payment_method.account_name:
-            # find account name field_reference
-            field_reference = PaymentTypeField.objects.get(Q(payment_type=payment_method.payment_type) & Q(fieldname="Account Name"))
+        try:
+            if payment_method.account_name:
+                # find account name field_reference
+                field_reference = PaymentTypeField.objects.get(Q(payment_type=payment_method.payment_type) & Q(fieldname="Account Name"))
+                fielddata = {
+                    'payment_method': payment_method,
+                    'field_reference': field_reference,
+                    'value': payment_method.account_name
+                }
+                PaymentMethodField.objects.create(**fielddata)
+            
+            # find format name field_reference
+            field_reference = PaymentTypeField.objects.get(Q(payment_type=payment_method.payment_type) & Q(fieldname=payment_method.identifier_format.format))
             fielddata = {
                 'payment_method': payment_method,
                 'field_reference': field_reference,
-                'value': payment_method.account_name
+                'value': payment_method.account_identifier
             }
             PaymentMethodField.objects.create(**fielddata)
-        
-        # find format name field_reference
-        field_reference = PaymentTypeField.objects.get(Q(payment_type=payment_method.payment_type) & Q(fieldname=payment_method.identifier_format.format))
-        fielddata = {
-            'payment_method': payment_method,
-            'field_reference': field_reference,
-            'value': payment_method.account_identifier
-        }
-        PaymentMethodField.objects.create(**fielddata)
+        except PaymentTypeField.DoesNotExist as err:
+            logger.warn(f'Error: {err.args[0]}')
 
 
 class Migration(migrations.Migration):
