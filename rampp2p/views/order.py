@@ -32,6 +32,55 @@ import rampp2p.models as models
 import logging
 logger = logging.getLogger(__name__)
 
+class CashinOrderList(APIView):
+    authentication_classes = [TokenAuthentication]
+
+    def get(self, request):
+        wallet_hash = request.user.wallet_hash
+        try:
+            limit = int(request.get('limit'))
+            page = int(request.get('page'))
+            if limit < 0:
+                raise ValidationError('limit must be a non-negative number')
+            if page < 1:
+                raise ValidationError('invalid page number')
+        except (ValueError, ValidationError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = models.Order.objects.filter(is_cash_in=True)
+        
+        # fetches orders created by user
+        owned_orders = Q(owner__wallet_hash=wallet_hash)
+
+        # fetches the orders that have ad ids owned by user
+        ad_orders = Q(ad_snapshot__ad__pk__in=list(
+                        # fetches the flat ids of ads owned by user
+                        models.Ad.objects.filter(
+                            owner__wallet_hash=wallet_hash
+                        ).values_list('id', flat=True)
+                    ))
+
+        queryset = queryset.filter(owned_orders | ad_orders)
+        
+        # Count total pages
+        count = queryset.count()
+        total_pages = page
+        if limit > 0:
+            total_pages = math.ceil(count / limit)
+
+        # Splice queryset
+        offset = (page - 1) * limit
+        page_results = queryset[offset:offset + limit]
+
+        context = { 'wallet_hash': wallet_hash }
+        serializer = OrderSerializer(page_results, many=True, context=context)
+        data = {
+            'orders': serializer.data,
+            'count': count,
+            'total_pages': total_pages
+        }
+        return Response(data, status.HTTP_200_OK)
+
 class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
@@ -107,7 +156,7 @@ class OrderListCreate(APIView):
                             owner__wallet_hash=wallet_hash
                         ).values_list('id', flat=True)
                     ))
-                    
+
         if params['owned'] == True:
             queryset = queryset.filter(owned_orders)
         elif params['owned'] == False:
@@ -131,7 +180,7 @@ class OrderListCreate(APIView):
         ).order_by('-created_at').values('order')[:1]
 
         if params['status_type'] == 'COMPLETED':            
-            queryset = queryset.filter(pk__in=Subquery(last_status))
+            queryset = queryset.filter(Q(pk__in=Subquery(last_status)) & Q(is_cash_in=False))
         elif params['status_type'] == 'ONGOING':
             queryset = queryset.exclude(pk__in=Subquery(last_status))
         

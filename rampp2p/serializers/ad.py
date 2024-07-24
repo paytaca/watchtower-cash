@@ -83,7 +83,6 @@ class AdListSerializer(serializers.ModelSerializer):
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     price = serializers.SerializerMethodField()
-    # payment_methods = RelatedPaymentMethodSerializer(many=True)
     payment_methods = serializers.SerializerMethodField()
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
@@ -180,7 +179,8 @@ class AdListSerializer(serializers.ModelSerializer):
 class CashinAdSerializer(AdListSerializer):
     is_online = serializers.SerializerMethodField()
     last_online_at = serializers.SerializerMethodField()
-
+    payment_methods = RelatedPaymentMethodSerializer(many=True)
+    
     class Meta(AdListSerializer.Meta):
         fields = [
             'id',

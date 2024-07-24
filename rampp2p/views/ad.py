@@ -46,7 +46,7 @@ from rampp2p.models import (
 import logging
 logger = logging.getLogger(__name__)
 
-class InstaCashInSellAdsList(APIView):
+class CashInAdsList(APIView):
     authentication_classes = [TokenAuthentication]
     '''
         Filters the best Sell Ad for given payment type and amount.
@@ -66,7 +66,7 @@ class InstaCashInSellAdsList(APIView):
         crypto_amount = request.query_params.get('crypto_amount')
         fiat_amount = request.query_params.get('fiat_amount')
         trade_type = TradeType.SELL
-        
+
         queryset = Ad.objects.filter(
             Q(deleted_at__isnull=True) & 
             Q(trade_type=trade_type) & 
@@ -74,10 +74,12 @@ class InstaCashInSellAdsList(APIView):
             Q(trade_amount__gt=0) &
             Q(fiat_currency__symbol=currency))
         
+        logger.warn(f'queryset #1: {queryset}')
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
 
         # Filters which ads accept the selected payment method
-        queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
+        if payment_type:
+            queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
 
         # Filters which ads with limits in range with amount
         if crypto_amount and fiat_amount:
@@ -109,10 +111,10 @@ class InstaCashInSellAdsList(APIView):
             queryset = online_ads
             
         queryset = queryset.order_by('-last_online_at', 'price')
-        best_ad = queryset[:5].first()
-        best_ad = CashinAdSerializer(best_ad, context = { 'wallet_hash': wallet_hash })
-
-        return Response(best_ad.data, status=status.HTTP_200_OK)
+        best_ads = queryset[:5]
+        serialized = CashinAdSerializer(best_ads, many=True, context = { 'wallet_hash': wallet_hash })
+        
+        return Response(serialized.data, status=status.HTTP_200_OK)
     
 class AdListCreate(APIView):
     authentication_classes = [TokenAuthentication]

@@ -3,7 +3,7 @@ from django.urls import path
 from rampp2p.views import *
 
 urlpatterns = [
-    path('cashin/ads/', InstaCashInSellAdsList.as_view(), name='insta-cashin-ads'),
+    path('cashin/ad', CashInAdsList.as_view(), name='cashin-ads'),
     path('ad/', AdListCreate.as_view(), name='ad-list-create'),
     path('ad/<int:pk>', AdDetail.as_view(), name='ad-detail'),
     path('ad-snapshot', AdSnapshotView.as_view(), name='ad-snapshot'),
@@ -24,6 +24,7 @@ urlpatterns = [
     path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list'),
     path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view(), name='crypto-detail'),
 
+    path('cashin/order', CashinOrderList.as_view(), name='cashin-order-list'),
     path('order/', OrderListCreate.as_view(), name='order-list-create'),
     path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
     path('order/<int:pk>/members', OrderMemberView.as_view(), name='order-members'),
