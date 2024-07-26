@@ -405,6 +405,18 @@ class OrderListCreate(APIView):
 
                 order.save()
 
+                if order.is_cash_in:
+                    payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
+                    for payment_method in payment_methods:
+                        data = {
+                            "order": order.id,
+                            "payment_method": payment_method.id,
+                            "payment_type": payment_method.payment_type.id
+                        }
+                        order_method = serializers.OrderPaymentMethodSerializer(data=data)
+                        if order_method.is_valid():
+                            order_method.save()
+
                 # Serialize response data
                 serialized_order = OrderSerializer(order, context={'wallet_hash': wallet_hash}).data    
                 response = {
@@ -808,30 +820,34 @@ class CryptoBuyerConfirmPayment(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        payment_method_ids = request.data.get('payment_methods')
-        if payment_method_ids is None or len(payment_method_ids) == 0:
-            return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
-        order.payment_methods.add(*payment_methods)
-        order.save() 
+        response = {}
+        if not order.is_cash_in:
+            payment_method_ids = request.data.get('payment_methods')
+            if payment_method_ids is None or len(payment_method_ids) == 0:
+                return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
+            order.payment_methods.add(*payment_methods)
+            order.save() 
 
-        # payment_methods = request.data.get('payment_methods')
-        order_payment_methods = []
-        for payment_method in payment_methods:
-            data = {
-                "order": order.id,
-                "payment_method": payment_method.id,
-                "payment_type": payment_method.payment_type.id
-            }
-            order_method = serializers.OrderPaymentMethodSerializer(data=data)
-            if order_method.is_valid():
-                order_payment_methods.append(order_method.save())
-        order_payment_methods = serializers.OrderPaymentMethodSerializer(order_payment_methods, many=True)
+            # payment_methods = request.data.get('payment_methods')
+            order_payment_methods = []
+            for payment_method in payment_methods:
+                data = {
+                    "order": order.id,
+                    "payment_method": payment_method.id,
+                    "payment_type": payment_method.payment_type.id
+                }
+                order_method = serializers.OrderPaymentMethodSerializer(data=data)
+                if order_method.is_valid():
+                    order_payment_methods.append(order_method.save())
+            order_payment_methods = serializers.OrderPaymentMethodSerializer(order_payment_methods, many=True)
+            response["order_payment_methods"] = order_payment_methods.data
 
         context = { 'wallet_hash': wallet_hash }
         serialized_order = OrderSerializer(order, context=context)
-
+        response["order"] = serialized_order.data
+        
         # create PAID_PENDING status for order
         serialized_status = StatusSerializer(data={
             'status': StatusType.PAID_PENDING,
@@ -844,11 +860,7 @@ class CryptoBuyerConfirmPayment(APIView):
                 'success' : True,
                 'status': serialized_status.data
             }, pk)
-            response = {
-                "order": serialized_order.data,
-                "order_payment_methods": order_payment_methods.data,
-                "status": serialized_status.data
-            }
+            response["status"] = serialized_status.data
             return Response(response, status=status.HTTP_200_OK)
         return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
     
