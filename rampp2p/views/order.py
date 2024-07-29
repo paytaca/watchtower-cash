@@ -199,7 +199,8 @@ class OrderListCreate(APIView):
         if params['status_type'] == 'COMPLETED':            
             queryset = queryset.filter(last_status__in=completed_status)
         elif params['status_type'] == 'ONGOING':
-            queryset = queryset.exclude(Q(last_status__in=completed_status) & Q(is_cash_in=True))
+            queryset = queryset.exclude(is_cash_in=True)
+            queryset = queryset.exclude(last_status__in=completed_status)
         
         if len(params['statuses']) > 0:
             # get the order's last status
