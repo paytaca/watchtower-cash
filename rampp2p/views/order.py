@@ -33,10 +33,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CashinOrderList(APIView):
-    authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        wallet_hash = request.user.wallet_hash
+        wallet_hash = request.query_params.get('wallet_hash')
+        status_type = request.query_params.get('status_type')
         try:
             limit = int(request.query_params.get('limit', 10))
             page = int(request.query_params.get('page', 1))
@@ -58,9 +58,12 @@ class CashinOrderList(APIView):
         last_status_subq = Status.objects.filter(
             order=OuterRef('pk')
         ).order_by('-created_at').values('status')[:1]
-
         queryset = queryset.annotate(last_status=Subquery(last_status_subq))
-        queryset = queryset.exclude(last_status__in=completed_status)
+
+        if status_type == 'ONGOING':
+            queryset = queryset.exclude(last_status__in=completed_status)
+        if status_type == 'COMPLETED':
+            queryset = queryset.exclude(last_status__in=completed_status)
         
         # fetches orders created by user
         owned_orders = Q(owner__wallet_hash=wallet_hash)
@@ -74,6 +77,7 @@ class CashinOrderList(APIView):
                     ))
 
         queryset = queryset.filter(owned_orders | ad_orders)
+        queryset = queryset.order_by('-created_at')
         
         # Count total pages
         count = queryset.count()
