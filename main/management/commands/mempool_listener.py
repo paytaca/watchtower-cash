@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 mqtt_client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-listener"
 if settings.BCH_NETWORK == 'mainnet':
-    mqtt_client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=True)
+    mqtt_client = mqtt.Client(transport='websockets', client_id=mqtt_client_id, clean_session=False)
     mqtt_client.tls_set()
 else:
     mqtt_client = mqtt.Client(client_id=mqtt_client_id, clean_session=False)
@@ -99,8 +99,6 @@ def on_disconnect(client, userdata, rc):
     LOGGER.info(f"Reconnect failed after {reconnect_count} attempts. Exiting...")
 
 
-
-# client = mqtt.Client()
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
 mqtt_client.on_disconnect = on_disconnect

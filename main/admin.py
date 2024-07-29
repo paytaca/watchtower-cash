@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User, Group
+from django.contrib.admin import DateFieldListFilter
 from django.contrib import admin
-
 from main.models import *
 from main.tasks import (
     client_acknowledgement,
@@ -14,7 +14,7 @@ from main.tasks import (
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
 from django.conf import settings
-
+import datetime
 import json
 
 
@@ -198,6 +198,20 @@ class AddressAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
 
+class LastBalanceCheckFilter(DateFieldListFilter):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        today = datetime.date.today()
+        yesterday = today - datetime.timedelta(days=1)
+
+        self.links = list(self.links)
+        self.links.insert(2, ('Yesterday', {
+            self.lookup_kwarg_since: str(yesterday),
+            self.lookup_kwarg_until: str(today),
+        }))
+
+
 class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
         'wallet_hash',
@@ -207,6 +221,10 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'last_utxo_scan_succeeded'
     ]
     actions = [ 'rescan_utxos' ]
+    list_filter = [
+        'wallet_type',
+        ('last_balance_check', LastBalanceCheckFilter)
+    ]
 
     dynamic_raw_id_fields = [
         'project'

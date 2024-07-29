@@ -12,17 +12,18 @@ def connect_to_mqtt(client_id=None):
         mqtt_client = mqtt.Client(client_id=client_id, transport='websockets')
         mqtt_client.tls_set()
     else:
-        mqtt_client = mqtt.Client(client_id=client_id, clean_session=True)
+        mqtt_client = mqtt.Client(client_id=client_id, clean_session=False)
     mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
     return mqtt_client
 
 
-def publish_message(topic, message, qos=0):
+def publish_message(topic, message, qos=1):
     kwargs = dict(
         qos=qos,
         hostname=settings.MQTT_HOST,
         port=settings.MQTT_PORT,
         keepalive=10,
+        retain=True
     )
 
     if settings.BCH_NETWORK == 'mainnet':

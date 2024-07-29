@@ -44,7 +44,7 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
                 'value': round(tx_out['value'] * (10 ** 8)),
                 **extra_data
             }
-            mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1)
+            mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1, retain=True)
 
             # Send websocket notif
             channel_layer = get_channel_layer()
