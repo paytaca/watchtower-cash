@@ -48,6 +48,7 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
 
 class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     id = serializers.SerializerMethodField()
+    owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     payment_types = serializers.SlugRelatedField(slug_field="short_name", queryset=models.PaymentType.objects.all(), many=True)
@@ -57,6 +58,7 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     class Meta(AdSnapshotSerializer.Meta):
         fields = [
             'id',
+            'owner',
             'payment_types',
             'payment_methods',
             'trade_type',
@@ -69,6 +71,12 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     
     def get_id(self, obj):
         return obj.ad.id
+
+    def get_owner(self, obj):
+        return {
+            'id': obj.ad.owner.id,
+            'name': obj.ad.owner.name
+        }
     
     def get_payment_methods(self, obj: models.AdSnapshot):
         payment_type_ids = obj.payment_types.values_list('id')
