@@ -251,12 +251,27 @@ class AdCreateSerializer(serializers.ModelSerializer):
             'modified_at',
         ]
     
-class AdUpdateSerializer(serializers.ModelSerializer):
-    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True)
-    appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices)
+class AdSerializer(serializers.ModelSerializer):
+    trade_type = serializers.ChoiceField(choices=models.TradeType.choices, required=False)
+    price_type = serializers.ChoiceField(choices=models.PriceType.choices, required=False)
+    fixed_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    floating_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_floor = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_ceiling = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_amount = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_limits_in_fiat = serializers.BooleanField(required=False)
+    trade_amount_in_fiat = serializers.BooleanField(required=False)
+    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all(), required=False)
+    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True, required=False)
+    appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices, required=False)
+    is_public = serializers.BooleanField(required=False)
+    modified_at = serializers.DateTimeField(read_only=True)
+    
     class Meta:
         model = models.Ad
         fields = [
+            'id',
+            'trade_type',
             'price_type',
             'fixed_price',
             'floating_price',

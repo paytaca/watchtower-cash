@@ -22,7 +22,7 @@ from rampp2p.serializers import (
     AdListSerializer, 
     AdDetailSerializer,
     AdCreateSerializer, 
-    AdUpdateSerializer,
+    AdSerializer,
     AdOwnerSerializer,
     AdSnapshotSerializer,
     CashinAdSerializer,
@@ -45,7 +45,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CashInAdsList(APIView):
-    # authentication_classes = [TokenAuthentication]
     '''
         Filters the best Sell Ad for given payment type and amount.
         The best SELL ad is determined by:
@@ -54,16 +53,16 @@ class CashInAdsList(APIView):
             - If buy amount is within range of the SELL ad
             - Sorted by price lowest first
             - Online ads are prioritized
+        NB
+            - Will not consider ads where trade_limits_in_fiat=True
     '''
     def get(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
         currency = request.query_params.get('currency')
         payment_type = request.query_params.get('payment_type')
         amounts = request.query_params.getlist('amounts')
-        # fiat_amount = request.query_params.get('fiat_amount')
         trade_type = TradeType.SELL
 
-        # Note: trade limits set in fiat excluded (for now)
         queryset = Ad.objects.filter(
             Q(deleted_at__isnull=True) & 
             Q(trade_type=trade_type) & 
@@ -287,12 +286,13 @@ class AdDetail(APIView):
             wallet_hash = request.user.wallet_hash
             payment_methods = request.data.get('payment_methods')
             self.validate_permissions(wallet_hash, pk)
-            validate_payment_methods_ownership(wallet_hash, payment_methods)
+            if payment_methods:
+                validate_payment_methods_ownership(wallet_hash, payment_methods)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         ad = self.get_object(pk)
-        serializer = AdUpdateSerializer(ad, data=request.data)
+        serializer = AdSerializer(ad, data=request.data)
         if serializer.is_valid():
             ad = serializer.save()
             context = { 'wallet_hash': wallet_hash }
@@ -305,7 +305,7 @@ class AdDetail(APIView):
             wallet_hash = request.user.wallet_hash
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # TODO: block deletion when ad has active orders
         
