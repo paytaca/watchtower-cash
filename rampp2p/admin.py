@@ -205,6 +205,7 @@ admin.site.register(ReservedName)
 admin.site.register(IdentifierFormat)
 admin.site.register(OrderMember)
 admin.site.register(OrderPaymentMethod)
+admin.site.register(DynamicPaymentTypeField)
 
 class PaymentTypeFieldAdmin(admin.ModelAdmin):
     list_display = [

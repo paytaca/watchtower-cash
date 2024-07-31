@@ -59,6 +59,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = models.Order
         fields = [
             'id',
+            'tracking_id',
             'ad',
             'members',
             'owner',
@@ -80,7 +81,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'read_at',
             'is_cash_in'
         ]
-
+    
     def get_ad(self, obj):
         serialized_ad_snapshot = SubsetAdSnapshotSerializer(obj.ad_snapshot)
         return serialized_ad_snapshot.data
@@ -131,7 +132,8 @@ class OrderSerializer(serializers.ModelSerializer):
         if escrowed_status.exists():            
             serialized_payment_methods = SubsetPaymentMethodSerializer(
                 obj.payment_methods.all(), 
-                many=True
+                many=True,
+                context={'order_id': obj.id}
             )
             payment_methods = serialized_payment_methods.data
             return payment_methods
@@ -140,7 +142,7 @@ class OrderSerializer(serializers.ModelSerializer):
         order_payment_methods = models.OrderPaymentMethod.objects.select_related('payment_method').filter(order_id=obj.id)
         payment_methods = []
         for method in order_payment_methods:
-            payment_methods.append(SubsetPaymentMethodSerializer(method.payment_method).data)
+            payment_methods.append(SubsetPaymentMethodSerializer(method.payment_method, context={'order_id': obj.id}).data)
         return payment_methods
 
     def get_latest_order_status(self, obj):
@@ -198,6 +200,7 @@ class OrderSerializer(serializers.ModelSerializer):
         return feedback
 
 class WriteOrderSerializer(serializers.ModelSerializer):
+    tracking_id = serializers.CharField(required=False)
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
     arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
@@ -209,6 +212,7 @@ class WriteOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Order
         fields = [
+            'tracking_id',
             'ad_snapshot', 
             'owner',
             'arbiter',

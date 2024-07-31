@@ -33,17 +33,50 @@ class PaymentTypeSerializer(serializers.ModelSerializer):
 class SubsetPaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = serializers.SlugRelatedField(slug_field="short_name", queryset=models.PaymentType.objects.all())
     values = serializers.SerializerMethodField()
+    dynamic_values = serializers.SerializerMethodField()
+
     class Meta:
         model = models.PaymentMethod
         fields = [
             'id',
             'payment_type',
-            'values'
+            'values',
+            'dynamic_values'
         ]
     
     def get_values(self, obj):
         payment_method_fields = models.PaymentMethodField.objects.filter(payment_method=obj.id)
         return PaymentMethodFieldSerializer(payment_method_fields, many=True).data
+
+    def get_dynamic_values(self, obj):
+        '''
+         dynamic_fields = []
+        if self.context and 'order_id' in self.context:
+            order_id = self.context['order_id']
+            logger.warn(f'get_dynamic_values[order_id]: {order_id}')
+            
+            order = models.Order.objects.filter(id=order_id)
+            logger.warn(f'order.exists: {order.exists()}')
+            if not order.exists():
+                return dynamic_fields
+            
+            order = order.first()
+            queryset = obj.payment_type.dynamic_fields.all()
+            for field in queryset:
+                value = None
+                if field.model_ref == models.DynamicPaymentTypeField.ModelRef.ORDER:
+                    if field.field_ref == models.DynamicPaymentTypeField.FieldRef.ID:
+                        value = order.id
+                    if field.field_ref == models.DynamicPaymentTypeField.FieldRef.TRACKING_ID:
+                        value = order.tracking_id
+                dynamic_fields.append({ 'fieldname': field.fieldname, 'value': value })
+
+        return dynamic_fields
+        '''
+        dynamic_fields = obj.payment_type.dynamic_fields.all()
+        serialized_data = DynamicPaymentTypeFieldSerializer(dynamic_fields, many=True)
+        return serialized_data.data
+
 
 class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = serializers.SerializerMethodField()
@@ -59,6 +92,22 @@ class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
             'id': obj.payment_type.id,
             'name': name
         }
+
+class DynamicPaymentTypeFieldSerializer(serializers.ModelSerializer):
+    fieldname = serializers.CharField()
+    model_ref = serializers.CharField()
+    field_ref = serializers.CharField()
+    payment_type = serializers.PrimaryKeyRelatedField(queryset=models.PaymentType.objects.all())
+
+    class Meta:
+        model = models.PaymentMethodField
+        fields = [
+            'id',
+            'fieldname',
+            'model_ref',
+            'field_ref',
+            'payment_type'
+        ]
     
 class PaymentMethodFieldSerializer(serializers.ModelSerializer):
     field_reference = PaymentTypeFieldSerializer(read_only=True)
@@ -76,6 +125,7 @@ class PaymentMethodFieldSerializer(serializers.ModelSerializer):
 class PaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = PaymentTypeSerializer(read_only=True)
     values = PaymentMethodFieldSerializer(many=True, read_only=True)
+
     class Meta:
         model = models.PaymentMethod
         fields = [

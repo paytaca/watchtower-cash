@@ -1,7 +1,5 @@
-from django.core.exceptions import ValidationError
 from django.db import models
 from .peer import Peer
-from django.apps import apps
 
 class IdentifierFormat(models.Model):
   format = models.CharField(max_length=64, unique=True)
@@ -29,6 +27,22 @@ class PaymentMethod(models.Model):
 
   def __str__(self):
     return f"{self.id}"
+  
+class DynamicPaymentTypeField(models.Model):
+  class ModelRef(models.TextChoices):
+    ORDER = 'order'
+  
+  class FieldRef(models.TextChoices):
+    ID = 'id'
+    TRACKING_ID = 'tracking_id'
+  
+  fieldname = models.CharField(max_length=100)
+  model_ref = models.CharField(max_length=5, choices=ModelRef.choices, db_index=True)
+  field_ref = models.CharField(max_length=50, choices=FieldRef.choices, db_index=True)
+  payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name='dynamic_fields')
+
+  def __str__(self):
+    return f'{self.id}'
 
 class PaymentTypeField(models.Model):
   fieldname = models.CharField(max_length=100)

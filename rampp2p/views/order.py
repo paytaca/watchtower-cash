@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import math
 from typing import List
@@ -338,13 +338,17 @@ class OrderListCreate(APIView):
                 ad_payment_types = [pm.payment_type for pm in ad_payment_methods]
                 ad_snapshot.payment_types.set(ad_payment_types)
 
+                # Generate order tracking id
+                tracking_id = self.generate_tracking_id()
+
                 # Create the order data
                 data = {
                     'owner': owner.id,
                     'ad_snapshot': ad_snapshot.id,
                     'payment_methods': payment_method_ids,
                     'crypto_amount': crypto_amount,
-                    'is_cash_in': is_cash_in
+                    'is_cash_in': is_cash_in,
+                    'tracking_id': tracking_id
                 }
                 # Calculate the locked ad price
                 price = None
@@ -358,24 +362,6 @@ class OrderListCreate(APIView):
 
                 # Raise error if order isn't valid
                 serialized_order.is_valid(raise_exception=True)
-                
-                # # Check if crypto amount is within ad trade limits range
-                # # If trade amount is in fiat, convert order_amount to fiat before checking
-                # order_amount = crypto_amount
-                # if ad.trade_amount_in_fiat:
-                #     # Convert order_amount to fiat
-                #     order_amount = order_amount * price
-                # if order_amount > ad.trade_amount:
-                #     raise ValidationError('order amount exceeds ad trade amount')
-                
-                # # If trade limits are in fiat, convert order_amount to fiat before checking
-                # order_amount = crypto_amount
-                # if ad.trade_limits_in_fiat:
-                #     # Convert order_amount to fiat
-                #     order_amount = order_amount * price
-                # if order_amount < ad.trade_floor or order_amount > ad.trade_ceiling:
-                #     raise ValidationError('order amount exceeds trade limits')
-                
                 order = serialized_order.save()
                 
                 # Set order expiration date
@@ -448,6 +434,16 @@ class OrderListCreate(APIView):
         }, ad.owner.wallet_hash)
 
         return Response(response, status=status.HTTP_201_CREATED)
+
+    def generate_tracking_id(self):
+        # PEO[YEAR][MONTH][DAY]-[ORDER_COUNT_TODAY]
+        # e.g. PEO20211201-0001
+        today = datetime.today()
+        today_midnight = datetime.combine(today, time.min)
+        next_day_midnight = datetime.combine(today + timedelta(days=1), time.min)
+        order_count = models.Order.objects.filter(created_at__gte=today_midnight, created_at__lt=next_day_midnight).count()
+        tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
+        return tracking_id
     
     def get_contract_params(self, order: models.Order):
 
