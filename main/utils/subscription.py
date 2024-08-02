@@ -217,7 +217,7 @@ def publish_subscribed_addresses_to_mqtt(addresses:list):
             address_data["pos"] = pos_data
         data.append(address_data)
 
-    return mqtt.publish_message("address", data, qos=0)
+    return mqtt.publish_message("address", data)
 
 
 def resolve_pos_data(wallet_hash, address_path):

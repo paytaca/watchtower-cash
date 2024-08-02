@@ -10,36 +10,48 @@ import time
 import json
 
 
+def retry(max_retries):
+    def decorator_retry(func):
+        def wrapper_retry(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exception:
+                    retries += 1
+                    if retries >= max_retries:
+                        raise exception
+                    time.sleep(1)
+        return wrapper_retry
+    return decorator_retry
+
+
 class BCHN(object):
 
     def __init__(self):
         self.max_retries = 20
-        self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE)
+        self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE, timeout=30)
         self.source = 'bchn'
         self.fulcrum = {
             'host': settings.BCHN_HOST,
             'port': settings.FULCRUM_PORT
         }
 
+    @retry(max_retries=3)
     def get_latest_block(self):
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                return self.rpc_connection.getblockcount()
-            except Exception as exception:
-                retries += 1
-                if retries >= self.max_retries:
-                    raise exception
-                time.sleep(1)
+        return self.rpc_connection.getblockcount()
 
+    @retry(max_retries=3)
     def get_block_chain_info(self):
         return self.rpc_connection.getblockchaininfo()
-        
+
+    @retry(max_retries=3)
     def get_block(self, block, verbosity=None):
         block_hash = self.rpc_connection.getblockhash(block)
         block_data = self.rpc_connection.getblock(block_hash, verbosity)
         return block_data['tx']
 
+    @retry(max_retries=3)
     def get_block_stats(self, block_number_or_hash, stats=None):
         """
             block_number_or_hash: (int | str) 
@@ -66,17 +78,10 @@ class BCHN(object):
                         raise exception
                 time.sleep(1)
 
+    @retry(max_retries=3)
     def _decode_raw_transaction(self, tx_hex):
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                txn = self.rpc_connection.decoderawtransaction(tx_hex)
-                return txn
-            except Exception as exception:
-                retries += 1
-                if retries >= self.max_retries:
-                    raise exception
-                time.sleep(1)
+        txn = self.rpc_connection.decoderawtransaction(tx_hex)
+        return txn
 
     def build_tx_from_hex(self, tx_hex, tx_fee=None):
         txn = self._decode_raw_transaction(tx_hex)
@@ -90,20 +95,11 @@ class BCHN(object):
         txn['timestamp'] = None
         return txn
 
+    @retry(max_retries=3)
     def get_transaction(self, tx_hash, include_hex=False):
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                txn = self._get_raw_transaction(tx_hash)
-                if txn:
-                    return self._parse_transaction(txn, include_hex=include_hex)
-                break
-            except Exception as exception:
-                retries += 1
-                logging.exception(exception)
-                if retries >= self.max_retries:
-                    raise exception
-                time.sleep(1)
+        txn = self._get_raw_transaction(tx_hash)
+        if txn:
+            return self._parse_transaction(txn, include_hex=include_hex)
 
     def _parse_transaction(self, txn, include_hex=False):
         tx_hash = txn['hash']
@@ -182,27 +178,13 @@ class BCHN(object):
             transaction['tx_fee'] = round(txn['fee'] * (10 ** 8))
         return transaction
 
+    @retry(max_retries=3)
     def test_mempool_accept(self, hex_str):
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                return self.rpc_connection.testmempoolaccept([hex_str])[0]
-            except Exception as exception:
-                retries += 1
-                if retries >= self.max_retries:
-                    raise exception
-                time.sleep(1)
-                
+        return self.rpc_connection.testmempoolaccept([hex_str])[0]
+
+    @retry(max_retries=3)  
     def broadcast_transaction(self, hex_str):
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                return self.rpc_connection.sendrawtransaction(hex_str)
-            except Exception as exception:
-                retries += 1
-                if retries >= self.max_retries:
-                    raise exception
-                time.sleep(1)
+        return self.rpc_connection.sendrawtransaction(hex_str)
     
     def get_input_details(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
