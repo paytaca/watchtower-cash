@@ -793,7 +793,7 @@ def manage_blocks(self):
             block = BlockHeight.objects.get(number=active_block)
         except BlockHeight.DoesNotExist:
             discard_block = True   
-    
+
         if active_block in blocks:
             blocks.remove(active_block)
             blocks = list(set(blocks))  # Uniquify the list
@@ -823,14 +823,14 @@ def manage_blocks(self):
                     parsed_tx = NODE.BCH._parse_transaction(tx)
                     save_transaction(parsed_tx, block_id=block.id)
 
-                ready_to_accept.delay(block.number, len(transactions))
+                ready_to_accept(block.number, len(transactions))
             finally:
                 REDIS_STORAGE.set('READY', 1)
 
     active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
     if active_block:
         active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
-    if active_block: return f'CURRENTLY PROCESSING BLOCK {str(active_block)}.'
+        LOGGER.info(f'CURRENTLY PROCESSING BLOCK {str(active_block)}')
 
 
 def save_transaction(tx, block_id=None):
