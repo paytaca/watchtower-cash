@@ -37,6 +37,10 @@ class CashinOrderList(APIView):
     def get(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
         status_type = request.query_params.get('status_type')
+        owned = request.query_params.get('owned')
+        if owned is not None:
+            owned = owned == 'true'
+
         try:
             limit = int(request.query_params.get('limit', 10))
             page = int(request.query_params.get('page', 1))
@@ -68,15 +72,19 @@ class CashinOrderList(APIView):
         # fetches orders created by user
         owned_orders = Q(owner__wallet_hash=wallet_hash)
 
-        # fetches the orders that have ad ids owned by user
-        ad_orders = Q(ad_snapshot__ad__pk__in=list(
-                        # fetches the flat ids of ads owned by user
-                        models.Ad.objects.filter(
-                            owner__wallet_hash=wallet_hash
-                        ).values_list('id', flat=True)
-                    ))
+        if not owned:
+            # fetches the orders that have ad ids owned by user
+            ad_orders = Q(ad_snapshot__ad__pk__in=list(
+                            # fetches the flat ids of ads owned by user
+                            models.Ad.objects.filter(
+                                owner__wallet_hash=wallet_hash
+                            ).values_list('id', flat=True)
+                        ))
 
-        queryset = queryset.filter(owned_orders | ad_orders)
+            queryset = queryset.filter(owned_orders | ad_orders)
+        else:
+            queryset = queryset.filter(owned_orders)
+
         queryset = queryset.order_by('-created_at')
         
         # Count total pages
