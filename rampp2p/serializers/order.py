@@ -59,6 +59,7 @@ class OrderSerializer(serializers.ModelSerializer):
         model = models.Order
         fields = [
             'id',
+            'tracking_id',
             'ad',
             'members',
             'owner',
@@ -77,9 +78,10 @@ class OrderSerializer(serializers.ModelSerializer):
             'feedback',
             'chat_session_ref',
             'expires_at',
-            'read_at'
+            'read_at',
+            'is_cash_in'
         ]
-
+    
     def get_ad(self, obj):
         serialized_ad_snapshot = SubsetAdSnapshotSerializer(obj.ad_snapshot)
         return serialized_ad_snapshot.data
@@ -130,7 +132,8 @@ class OrderSerializer(serializers.ModelSerializer):
         if escrowed_status.exists():            
             serialized_payment_methods = SubsetPaymentMethodSerializer(
                 obj.payment_methods.all(), 
-                many=True
+                many=True,
+                context={'order_id': obj.id}
             )
             payment_methods = serialized_payment_methods.data
             return payment_methods
@@ -139,7 +142,7 @@ class OrderSerializer(serializers.ModelSerializer):
         order_payment_methods = models.OrderPaymentMethod.objects.select_related('payment_method').filter(order_id=obj.id)
         payment_methods = []
         for method in order_payment_methods:
-            payment_methods.append(SubsetPaymentMethodSerializer(method.payment_method).data)
+            payment_methods.append(SubsetPaymentMethodSerializer(method.payment_method, context={'order_id': obj.id}).data)
         return payment_methods
 
     def get_latest_order_status(self, obj):
@@ -196,17 +199,20 @@ class OrderSerializer(serializers.ModelSerializer):
                 }
         return feedback
 
-class UpdateOrderSerializer(serializers.ModelSerializer):
+class WriteOrderSerializer(serializers.ModelSerializer):
+    tracking_id = serializers.CharField(required=False)
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
     arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
     locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), required=False, many=True)
+    is_cash_in = serializers.BooleanField(required=True)
 
     class Meta:
         model = models.Order
         fields = [
+            'tracking_id',
             'ad_snapshot', 
             'owner',
             'arbiter',
@@ -214,4 +220,5 @@ class UpdateOrderSerializer(serializers.ModelSerializer):
             'crypto_amount',
             'payment_methods',
             'chat_session_ref',
+            'is_cash_in'
         ]

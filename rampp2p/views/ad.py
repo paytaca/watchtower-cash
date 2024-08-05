@@ -1,11 +1,19 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-
+from datetime import datetime
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import F, ExpressionWrapper, DecimalField, Case, When, OuterRef, Subquery
+from django.db.models import (
+    F, 
+    ExpressionWrapper, 
+    DecimalField,
+    Case, 
+    When, 
+    OuterRef, 
+    Subquery
+)
 
 import math
 from authentication.token import TokenAuthentication
@@ -14,9 +22,11 @@ from rampp2p.serializers import (
     AdListSerializer, 
     AdDetailSerializer,
     AdCreateSerializer, 
-    AdUpdateSerializer,
+    AdSerializer,
     AdOwnerSerializer,
-    AdSnapshotSerializer
+    AdSnapshotSerializer,
+    CashinAdSerializer,
+    PaymentTypeSerializer
 )
 from rampp2p.models import (
     Ad, 
@@ -34,6 +44,84 @@ from rampp2p.models import (
 import logging
 logger = logging.getLogger(__name__)
 
+class CashInAdsList(APIView):
+    '''
+        Filters the best Sell Ad for given payment type and amount.
+        The best SELL ad is determined by:
+            - Ad fiat currency
+            - If SELL ad accepts the payment type selected by buyer
+            - If buy amount is within range of the SELL ad
+            - Sorted by price lowest first
+            - Online ads are prioritized
+        NB
+            - Will not consider ads where trade_limits_in_fiat=True
+    '''
+    def get(self, request):
+        wallet_hash = request.query_params.get('wallet_hash')
+        currency = request.query_params.get('currency')
+        payment_type = request.query_params.get('payment_type')
+        amounts = request.query_params.getlist('amounts')
+        trade_type = TradeType.SELL
+
+        queryset = Ad.objects.filter(
+            Q(deleted_at__isnull=True) & 
+            Q(trade_type=trade_type) & 
+            Q(is_public=True) & 
+            Q(trade_amount__gt=0) &
+            Q(trade_limits_in_fiat=False) &
+            Q(fiat_currency__symbol=currency))
+        
+        queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
+
+        # Filters which ads accept the selected payment method
+        if payment_type:
+            queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
+
+        market_rate_subq = MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+        queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
+
+        # Annotate ad price for sorting
+        queryset = queryset.annotate(
+            price=ExpressionWrapper(
+                Case(
+                    When(price_type=PriceType.FLOATING, then=(F('floating_price')/100 * F('market_rate'))),
+                    default=F('fixed_price'),
+                    output_field=DecimalField()
+                ),
+                output_field=DecimalField()
+            )
+        )
+
+        # prioritize online ads
+        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
+        online_ads = queryset.filter(owner__is_online = True)
+        if online_ads.count() > 0:
+            queryset = online_ads
+        queryset = queryset.order_by('-last_online_at', 'price')
+        
+        # fetch related payment methods
+        ads_with_payment_methods = queryset.prefetch_related('payment_methods')
+        payment_types_set = set()
+        for ad in ads_with_payment_methods:
+            for payment_method in ad.payment_methods.all():
+                payment_types_set.add(payment_method.payment_type)
+        distinct_payment_types = list(payment_types_set)
+
+        amount_ad_count = {}
+        for amount in amounts:
+            queryset_count = queryset.filter((Q(trade_floor__lt=amount) & Q(trade_ceiling__gt=amount))).count()
+            amount_ad_count[amount] = queryset_count
+
+        cashin_ads = queryset[:10]
+        serialized_ads = CashinAdSerializer(cashin_ads, many=True, context = { 'wallet_hash': wallet_hash })
+        serialized_paymenttypes = PaymentTypeSerializer(distinct_payment_types, many=True)
+        responsedata = {
+            'ads': serialized_ads.data,
+            'payment_types': serialized_paymenttypes.data,
+            'amount_ad_count': amount_ad_count
+        }
+        return Response(responsedata, status=status.HTTP_200_OK)
+    
 class AdListCreate(APIView):
     authentication_classes = [TokenAuthentication]
 
@@ -198,12 +286,13 @@ class AdDetail(APIView):
             wallet_hash = request.user.wallet_hash
             payment_methods = request.data.get('payment_methods')
             self.validate_permissions(wallet_hash, pk)
-            validate_payment_methods_ownership(wallet_hash, payment_methods)
+            if payment_methods:
+                validate_payment_methods_ownership(wallet_hash, payment_methods)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         ad = self.get_object(pk)
-        serializer = AdUpdateSerializer(ad, data=request.data)
+        serializer = AdSerializer(ad, data=request.data)
         if serializer.is_valid():
             ad = serializer.save()
             context = { 'wallet_hash': wallet_hash }
@@ -216,7 +305,7 @@ class AdDetail(APIView):
             wallet_hash = request.user.wallet_hash
             self.validate_permissions(wallet_hash, pk)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # TODO: block deletion when ad has active orders
         

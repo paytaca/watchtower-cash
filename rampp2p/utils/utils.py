@@ -11,6 +11,20 @@ from asgiref.sync import sync_to_async
 import logging
 logger = logging.getLogger(__name__)
 
+def update_user_active_status(wallet_hash, is_online):
+    try:
+        user = models.Peer.objects.get(wallet_hash=wallet_hash)
+    except models.Peer.DoesNotExist:
+        return
+    
+    arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash)
+    if arbiter.exists() and not arbiter.first().is_disabled:
+        user = arbiter.first()
+
+    user.is_online = is_online
+    user.last_online_at = datetime.now()
+    user.save()
+
 async def unread_orders_count(wallet_hash):
     count = 0
     is_arbiter = await sync_to_async(models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists)()

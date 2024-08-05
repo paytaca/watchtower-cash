@@ -27,6 +27,13 @@ def cancel_expired_orders():
             order.save()
         # cancel order if expired
         if order.expires_at < timezone.now():
+            # mark order as read by all parties
+            members = order.members.all()
+            for member in members:
+                member.read_at = timezone.now()
+                member.save()
+            
+            # create canceled status
             status = StatusSerializer(data={
                 'status': StatusType.CANCELED,
                 'order': order.id

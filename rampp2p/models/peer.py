@@ -13,8 +13,10 @@ class Peer(models.Model):
     address = models.CharField(max_length=75)
     address_path = models.CharField(max_length=10, null=True)
     is_disabled = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
+    is_online = models.BooleanField(default=False)
+    last_online_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.name

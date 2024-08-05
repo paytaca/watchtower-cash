@@ -2,18 +2,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+from django.db import transaction
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from authentication.token import TokenAuthentication
-from django.db.models import OuterRef, Subquery
-# from rampp2p.models import PaymentType, PaymentMethod, Peer, IdentifierFormat, FiatCurrency
+from django.db.models import OuterRef, Subquery, Q
 import rampp2p.models as models
-from rampp2p.serializers import (
-    PaymentTypeSerializer, 
-    PaymentMethodSerializer,
-    PaymentMethodCreateSerializer,
-    PaymentMethodUpdateSerializer
-)
+import rampp2p.serializers as serializers
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,7 +25,7 @@ class PaymentTypeList(APIView):
                 return Response({'error': f'no such fiat currency with symbol {currency}'}, status.HTTP_400_BAD_REQUEST)
             fiat_currency = fiat_currency.first()
             queryset = fiat_currency.payment_types
-        serializer = PaymentTypeSerializer(queryset, many=True)
+        serializer = serializers.PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
 class PaymentMethodListCreate(APIView):  
@@ -46,24 +41,46 @@ class PaymentMethodListCreate(APIView):
             fiat_currency = fiat_currency.first()
             currency_paymenttype_ids = fiat_currency.payment_types.values_list('id', flat=True)
             queryset = queryset.filter(payment_type__id__in=currency_paymenttype_ids)
-        serializer = PaymentMethodSerializer(queryset, many=True)
+        serializer = serializers.PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
         data = request.data.copy()
-        data['owner'] = request.user.id
-
-        format = models.IdentifierFormat.objects.filter(format=data.get('identifier_format'))
-        if not format.exists():
-            return Response({'error': 'identifier_format is required'}, status=status.HTTP_400_BAD_REQUEST)
+        owner = request.user
         
-        data['identifier_format'] = format.first().id
-        serializer = PaymentMethodCreateSerializer(data=data)
-        if serializer.is_valid():
-            payment_method = serializer.save()
-            serializer = PaymentMethodSerializer(payment_method)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            fields = data.get('fields')
+            if fields is None or len(fields) == 0:
+                raise ValidationError('Empty payment method fields')
+            
+            payment_type = models.PaymentType.objects.get(id=data.get('payment_type'))
+            # Return error if a payment_method with same payment type already exists for this user
+            if models.PaymentMethod.objects.filter(Q(owner__wallet_hash=owner.wallet_hash) & Q(payment_type__id=payment_type.id)).exists():
+                raise ValidationError('Duplicate payment method with payment type')
+
+            data = {
+                'payment_type': payment_type,
+                'owner': owner
+            }        
+
+            with transaction.atomic():
+                # create payment method
+                payment_method = models.PaymentMethod.objects.create(**data)
+                # create payment method fields
+                for field in fields:
+                    field_ref = models.PaymentTypeField.objects.get(id=field['field_reference'])
+                    data = {
+                        'payment_method': payment_method,
+                        'field_reference': field_ref,
+                        'value': field['value']
+                    }
+                    models.PaymentMethodField.objects.create(**data)
+
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = serializers.PaymentMethodSerializer(payment_method)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
   
 class PaymentMethodDetail(APIView):
     authentication_classes = [TokenAuthentication]
@@ -77,36 +94,50 @@ class PaymentMethodDetail(APIView):
     
     def get(self, request, pk):
         try:
-            self.validate_permissions(request.user.wallet_hash, pk)
+            payment_method = self.get_object(pk)
+            self.validate_permissions(request.user.wallet_hash, payment_method)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
-        payment_method = self.get_object(pk)
-        serializer = PaymentMethodSerializer(payment_method)
+        serializer = serializers.PaymentMethodSerializer(payment_method)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
         try:
-            self.validate_permissions(request.user.wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+            payment_method = self.get_object(pk)
+            self.validate_permissions(request.user.wallet_hash, payment_method)
         
-        data = request.data.copy()
-        format = models.IdentifierFormat.objects.filter(format=data.get('identifier_format'))
-        if not format.exists():
-            return Response({'error': 'identifier_format is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        data['identifier_format'] = format.first().id
-        payment_method = self.get_object(pk=pk)
-        serializer = PaymentMethodUpdateSerializer(payment_method, data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = request.data.copy()
+            logger.warn(f'request data: {data}')
 
+            fields = data.get('fields')
+            if fields is None or len(fields) == 0:
+                raise ValidationError('Empty payment method fields')
+
+            for field in data.get('fields'):
+                field_id = field.get('id')
+                if field_id:
+                    payment_method_field = models.PaymentMethodField.objects.get(id=field_id)
+                    payment_method_field.value = field.get('value')
+                    payment_method_field.save()
+                elif field.get('value') and field.get('field_reference'):
+                    field_ref = models.PaymentTypeField.objects.get(id=field.get('field_reference'))
+                    data = {
+                        'payment_method': payment_method,
+                        'field_reference': field_ref,
+                        'value': field.get('value')
+                    }
+                    models.PaymentMethodField.objects.create(**data)
+
+            serializer = serializers.PaymentMethodSerializer(payment_method)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
     def delete(self, request, pk):
         try:
-            self.validate_permissions(request.user.wallet_hash, pk)
+            payment_method = self.get_object(pk)
+            self.validate_permissions(request.user.wallet_hash, payment_method)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
         
@@ -134,14 +165,13 @@ class PaymentMethodDetail(APIView):
             return Response({'error': err.args[0]},status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_200_OK)
 
-    def validate_permissions(self, wallet_hash, id):
+    def validate_permissions(self, wallet_hash, payment_method):
         '''
         Validates if caller is owner
         '''
         try:
-            payment_method = models.PaymentMethod.objects.get(pk=id)
             caller = models.Peer.objects.get(wallet_hash=wallet_hash)
-        except (models.PaymentMethod.DoesNotExist, models.Peer.DoesNotExist) as err:
+        except models.Peer.DoesNotExist as err:
             raise ValidationError(err.args[0])
         
         if caller.wallet_hash != payment_method.owner.wallet_hash:

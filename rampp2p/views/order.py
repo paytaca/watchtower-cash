@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import math
 from typing import List
@@ -15,23 +15,96 @@ from decimal import Decimal, ROUND_HALF_UP
 from authentication.token import TokenAuthentication
 from rampp2p.viewcodes import WSGeneralMessageType
 import rampp2p.utils.websocket as websocket
-from rampp2p.utils.utils import get_latest_status, generate_chat_session_ref
+from rampp2p.utils.utils import get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.validators import *
 import rampp2p.serializers as serializers
 from rampp2p.serializers import (
     OrderSerializer, 
-    UpdateOrderSerializer, 
+    WriteOrderSerializer, 
     StatusSerializer, 
     StatusReadSerializer,
     TransactionSerializer,
     AppealSerializer
 )
 import rampp2p.models as models
-import rampp2p.utils as utils
 import logging
 logger = logging.getLogger(__name__)
+
+class CashinOrderList(APIView):
+
+    def get(self, request):
+        wallet_hash = request.query_params.get('wallet_hash')
+        status_type = request.query_params.get('status_type')
+        owned = request.query_params.get('owned')
+        if owned is not None:
+            owned = owned == 'true'
+
+        try:
+            limit = int(request.query_params.get('limit', 10))
+            page = int(request.query_params.get('page', 1))
+            if limit < 0:
+                raise ValidationError('limit must be a non-negative number')
+            if page < 1:
+                raise ValidationError('invalid page number')
+        except (ValueError, ValidationError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = models.Order.objects.filter(is_cash_in=True)
+        
+        # exclude completed orders
+        completed_status = [
+            StatusType.CANCELED,
+            StatusType.RELEASED,
+            StatusType.REFUNDED
+        ]
+        last_status_subq = Status.objects.filter(
+            order=OuterRef('pk')
+        ).order_by('-created_at').values('status')[:1]
+        queryset = queryset.annotate(last_status=Subquery(last_status_subq))
+
+        if status_type == 'ONGOING':
+            queryset = queryset.exclude(last_status__in=completed_status)
+        if status_type == 'COMPLETED':
+            queryset = queryset.exclude(last_status__in=completed_status)
+        
+        # fetches orders created by user
+        owned_orders = Q(owner__wallet_hash=wallet_hash)
+
+        if not owned:
+            # fetches the orders that have ad ids owned by user
+            ad_orders = Q(ad_snapshot__ad__pk__in=list(
+                            # fetches the flat ids of ads owned by user
+                            models.Ad.objects.filter(
+                                owner__wallet_hash=wallet_hash
+                            ).values_list('id', flat=True)
+                        ))
+
+            queryset = queryset.filter(owned_orders | ad_orders)
+        else:
+            queryset = queryset.filter(owned_orders)
+
+        queryset = queryset.order_by('-created_at')
+        
+        # Count total pages
+        count = queryset.count()
+        total_pages = page
+        if limit > 0:
+            total_pages = math.ceil(count / limit)
+
+        # Splice queryset
+        offset = (page - 1) * limit
+        page_results = queryset[offset:offset + limit]
+
+        context = { 'wallet_hash': wallet_hash }
+        serializer = OrderSerializer(page_results, many=True, context=context)
+        data = {
+            'orders': serializer.data,
+            'count': count,
+            'total_pages': total_pages
+        }
+        return Response(data, status.HTTP_200_OK)
 
 class OrderListCreate(APIView):
     authentication_classes = [TokenAuthentication]
@@ -108,7 +181,7 @@ class OrderListCreate(APIView):
                             owner__wallet_hash=wallet_hash
                         ).values_list('id', flat=True)
                     ))
-                    
+
         if params['owned'] == True:
             queryset = queryset.filter(owned_orders)
         elif params['owned'] == False:
@@ -126,15 +199,16 @@ class OrderListCreate(APIView):
             StatusType.RELEASED,
             StatusType.REFUNDED
         ]
-        last_status = Status.objects.filter(
-            order=OuterRef('pk'),
-            status__in=completed_status
-        ).order_by('-created_at').values('order')[:1]
+        last_status_subq = Status.objects.filter(
+            order=OuterRef('pk')
+        ).order_by('-created_at').values('status')[:1]
+        queryset = queryset.annotate(last_status=Subquery(last_status_subq))
 
         if params['status_type'] == 'COMPLETED':            
-            queryset = queryset.filter(pk__in=Subquery(last_status))
+            queryset = queryset.filter(last_status__in=completed_status)
         elif params['status_type'] == 'ONGOING':
-            queryset = queryset.exclude(pk__in=Subquery(last_status))
+            queryset = queryset.exclude(is_cash_in=True)
+            queryset = queryset.exclude(last_status__in=completed_status)
         
         if len(params['statuses']) > 0:
             # get the order's last status
@@ -190,7 +264,7 @@ class OrderListCreate(APIView):
                 queryset = queryset.order_by(sort_field)
             if params['status_type'] == 'COMPLETED':
                 queryset = queryset.order_by(sort_field)
-        
+                
         # search for orders with specific owner name
         if params['query_name']:
             queryset = queryset.filter(owner__name__icontains=params['query_name'])
@@ -219,6 +293,7 @@ class OrderListCreate(APIView):
     def post(self, request):
         wallet_hash = request.user.wallet_hash
         try:
+            is_cash_in = request.data.get('is_cash_in', False)
             crypto_amount = request.data.get('crypto_amount')
             if crypto_amount is None or crypto_amount == 0:
                 raise ValidationError('crypto_amount field is required')
@@ -271,12 +346,17 @@ class OrderListCreate(APIView):
                 ad_payment_types = [pm.payment_type for pm in ad_payment_methods]
                 ad_snapshot.payment_types.set(ad_payment_types)
 
+                # Generate order tracking id
+                tracking_id = self.generate_tracking_id()
+
                 # Create the order data
                 data = {
                     'owner': owner.id,
                     'ad_snapshot': ad_snapshot.id,
                     'payment_methods': payment_method_ids,
-                    'crypto_amount': crypto_amount
+                    'crypto_amount': crypto_amount,
+                    'is_cash_in': is_cash_in,
+                    'tracking_id': tracking_id
                 }
                 # Calculate the locked ad price
                 price = None
@@ -286,32 +366,17 @@ class OrderListCreate(APIView):
                 else:
                     price = ad_snapshot.fixed_price
                 data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                serialized_order = UpdateOrderSerializer(data=data)
+                serialized_order = WriteOrderSerializer(data=data)
 
                 # Raise error if order isn't valid
                 serialized_order.is_valid(raise_exception=True)
-                
-                # # Check if crypto amount is within ad trade limits range
-                # # If trade amount is in fiat, convert order_amount to fiat before checking
-                # order_amount = crypto_amount
-                # if ad.trade_amount_in_fiat:
-                #     # Convert order_amount to fiat
-                #     order_amount = order_amount * price
-                # if order_amount > ad.trade_amount:
-                #     raise ValidationError('order amount exceeds ad trade amount')
-                
-                # # If trade limits are in fiat, convert order_amount to fiat before checking
-                # order_amount = crypto_amount
-                # if ad.trade_limits_in_fiat:
-                #     # Convert order_amount to fiat
-                #     order_amount = order_amount * price
-                # if order_amount < ad.trade_floor or order_amount > ad.trade_ceiling:
-                #     raise ValidationError('order amount exceeds trade limits')
-                
                 order = serialized_order.save()
                 
                 # Set order expiration date
-                order.expires_at = order.created_at + timedelta(hours=24)
+                expiration = order.created_at + timedelta(hours=24)
+                if is_cash_in:
+                    expiration = order.created_at + timedelta(minutes=15)
+                order.expires_at = expiration
 
                 # Create SUBMITTED status for order
                 submitted_status = StatusSerializer(data={'status': StatusType.SUBMITTED, 'order': order.id})
@@ -337,12 +402,19 @@ class OrderListCreate(APIView):
                     buyer_member.read_at = timezone.now()
                     buyer_member.save()
 
-                # # Generate chat session ref using order id
-                # members = utils.get_order_members(order.id)
-                # memberstr = ''.join([members['buyer'].peer.public_key, members['seller'].peer.public_key])
-                # chat_session_ref = generate_chat_session_ref(f'{order.id}{order.created_at}{memberstr}')
-                # order.chat_session_ref = chat_session_ref
                 order.save()
+
+                if order.is_cash_in:
+                    payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
+                    for payment_method in payment_methods:
+                        data = {
+                            "order": order.id,
+                            "payment_method": payment_method.id,
+                            "payment_type": payment_method.payment_type.id
+                        }
+                        order_method = serializers.OrderPaymentMethodSerializer(data=data)
+                        if order_method.is_valid():
+                            order_method.save()
 
                 # Serialize response data
                 serialized_order = OrderSerializer(order, context={'wallet_hash': wallet_hash}).data    
@@ -370,6 +442,16 @@ class OrderListCreate(APIView):
         }, ad.owner.wallet_hash)
 
         return Response(response, status=status.HTTP_201_CREATED)
+
+    def generate_tracking_id(self):
+        # PEO[YEAR][MONTH][DAY]-[ORDER_COUNT_TODAY]
+        # e.g. PEO20211201-0001
+        today = datetime.today()
+        today_midnight = datetime.combine(today, time.min)
+        next_day_midnight = datetime.combine(today + timedelta(days=1), time.min)
+        order_count = models.Order.objects.filter(created_at__gte=today_midnight, created_at__lt=next_day_midnight).count()
+        tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
+        return tracking_id
     
     def get_contract_params(self, order: models.Order):
 
@@ -747,30 +829,34 @@ class CryptoBuyerConfirmPayment(APIView):
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-        payment_method_ids = request.data.get('payment_methods')
-        if payment_method_ids is None or len(payment_method_ids) == 0:
-            return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
-        order.payment_methods.add(*payment_methods)
-        order.save() 
+        response = {}
+        if not order.is_cash_in:
+            payment_method_ids = request.data.get('payment_methods')
+            if payment_method_ids is None or len(payment_method_ids) == 0:
+                return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
+            order.payment_methods.add(*payment_methods)
+            order.save() 
 
-        # payment_methods = request.data.get('payment_methods')
-        order_payment_methods = []
-        for payment_method in payment_methods:
-            data = {
-                "order": order.id,
-                "payment_method": payment_method.id,
-                "payment_type": payment_method.payment_type.id
-            }
-            order_method = serializers.OrderPaymentMethodSerializer(data=data)
-            if order_method.is_valid():
-                order_payment_methods.append(order_method.save())
-        order_payment_methods = serializers.OrderPaymentMethodSerializer(order_payment_methods, many=True)
+            # payment_methods = request.data.get('payment_methods')
+            order_payment_methods = []
+            for payment_method in payment_methods:
+                data = {
+                    "order": order.id,
+                    "payment_method": payment_method.id,
+                    "payment_type": payment_method.payment_type.id
+                }
+                order_method = serializers.OrderPaymentMethodSerializer(data=data)
+                if order_method.is_valid():
+                    order_payment_methods.append(order_method.save())
+            order_payment_methods = serializers.OrderPaymentMethodSerializer(order_payment_methods, many=True)
+            response["order_payment_methods"] = order_payment_methods.data
 
         context = { 'wallet_hash': wallet_hash }
         serialized_order = OrderSerializer(order, context=context)
-
+        response["order"] = serialized_order.data
+        
         # create PAID_PENDING status for order
         serialized_status = StatusSerializer(data={
             'status': StatusType.PAID_PENDING,
@@ -783,11 +869,7 @@ class CryptoBuyerConfirmPayment(APIView):
                 'success' : True,
                 'status': serialized_status.data
             }, pk)
-            response = {
-                "order": serialized_order.data,
-                "order_payment_methods": order_payment_methods.data,
-                "status": serialized_status.data
-            }
+            response["status"] = serialized_status.data
             return Response(response, status=status.HTTP_200_OK)
         return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
     

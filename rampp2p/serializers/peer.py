@@ -14,7 +14,9 @@ class PeerProfileSerializer(serializers.ModelSerializer):
             'address',
             'address_path',
             'is_disabled',
-            'unread_orders_count'
+            'unread_orders_count',
+            'is_online',
+            'last_online_at'
         ]
     
     def get_unread_orders_count(self, obj: Peer):
@@ -38,7 +40,9 @@ class PeerSerializer(serializers.ModelSerializer):
             'trade_count',
             'completion_rate',
             'rating',
-            'created_at'
+            'created_at',
+            'is_online',
+            'last_online_at'
         ]
 
     def get_rating(self, instance: Peer):
