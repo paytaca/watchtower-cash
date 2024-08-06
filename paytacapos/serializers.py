@@ -318,6 +318,8 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
 class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
+    vault = VaultSerializer(required=False)
+    vault_pubkey = serializers.CharField(required=False)
     name = serializers.CharField(required=False)
     merchant_id = serializers.PrimaryKeyRelatedField(
         queryset=Merchant.objects, source="merchant", required=False,
@@ -330,11 +332,15 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
         fields = [
             "posid",
             "wallet_hash",
+            "vault_pubkey",
+            "vault",
             "name",
             "merchant_id",
             "branch_id",
             "linked_device",
         ]
+
+    read_only_fields = ('vault', )
 
     def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
         self.supress_merchant_info_validations = supress_merchant_info_validations
@@ -557,10 +563,8 @@ class ReviewSerializer(serializers.ModelSerializer):
 class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
-    vault = VaultSerializer(required=False)
 
     logos = serializers.SerializerMethodField()
-    receiving_address = serializers.SerializerMethodField()
     vouchers = serializers.SerializerMethodField()
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
@@ -578,23 +582,12 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "description",
             "gmap_business_link",
             "last_transaction_date",
-            "receiving_pubkey",
-            "receiving_address",
-            "receiving_index",
-            "vault",
             "vouchers",
             "logos",
             "last_update",
             "branch_count",
             "pos_device_count",
         ]
-
-    def get_receiving_address(self, obj):
-        if obj.receiving_pubkey:
-            pk_bytes_str = bytearray.fromhex(obj.receiving_pubkey)
-            return public_key_to_address(pk_bytes_str)
-        else:
-            return ''
     
     def get_logos(self, obj):
         logos = {
@@ -624,7 +617,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
                 voucher_nfts = voucher_nfts.distinct()
 
         merchant_vouchers = Voucher.objects.filter(
-            vault__merchant=obj,
+            vault__pos_device__merchant=obj,
             category__in=voucher_nfts.values('category'),
             commitment__in=voucher_nfts.values('commitment')
         )
@@ -660,7 +653,6 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
     allow_duplicates = serializers.BooleanField(write_only=True, default=False)
 
     location = LocationSerializer(required=False)
-    vault = VaultSerializer(required=False)
 
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
@@ -676,16 +668,11 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "description",
             "primary_contact_number",
             "location",
-            "receiving_pubkey",
-            "receiving_index",
-            "vault",
 
             "allow_duplicates", # temporary field
             "branch_count",
             "pos_device_count",
         ]
-
-        read_only_fields = ('vault', )
 
     def validate_wallet_hash(self, value):
         if self.instance and self.instance.wallet_hash != value:

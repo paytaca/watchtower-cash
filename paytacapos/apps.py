@@ -2,13 +2,12 @@ from django.db.models.signals import post_migrate
 from django.apps import AppConfig
 
 
-def generate_vault_for_existing_merchants(*args, **kwargs):
-    from vouchers.vault import generate_merchant_vault
-    from paytacapos.models import Merchant
+def generate_vault_for_existing_devices(*args, **kwargs):
+    from vouchers.vault import generate_voucher_vault
+    from paytacapos.models import PosDevice
 
-    for merchant in Merchant.objects.all():
-        if merchant.receiving_pubkey:
-            generate_merchant_vault(merchant.id)
+    for pos_device in PosDevice.objects.all():
+        generate_voucher_vault(pos_device.id)
 
 
 class PaytacaposConfig(AppConfig):
@@ -18,4 +17,4 @@ class PaytacaposConfig(AppConfig):
     def ready(self):
         import paytacapos.signals
 
-        # post_migrate.connect(generate_vault_for_existing_merchants, sender=self)
+        post_migrate.connect(generate_vault_for_existing_devices, sender=self)

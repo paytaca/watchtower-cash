@@ -1,23 +1,23 @@
 from django.conf import settings
 
 from paytacapos.models import Merchant
-from vouchers.models import Vault, Voucher
+from vouchers.models import Vault
 from main.utils.subscription import new_subscription
 
 import requests
 
 
-def generate_merchant_vault(merchant_id):
-    merchant = Merchant.objects.get(id=merchant_id)
-    if not merchant.receiving_pubkey:
-        return
+def generate_voucher_vault(pos_device_id):
+    pos_device = PosDevice.objects.get(id=pos_device_id)
+    vault_pubkey = pos_device.vault_pubkey
 
-    receiving_pubkey = merchant.receiving_pubkey
+    if not vault_pubkey:
+        return
 
     payload = {
         'params': {
             'merchant': {
-                'receiverPk': receiving_pubkey
+                'receiverPk': vault_pubkey
             }
         },
         'options': {
@@ -46,10 +46,10 @@ def generate_merchant_vault(merchant_id):
         pass
 
     # delete existing old vault
-    Vault.objects.filter(merchant=merchant).delete()
+    Vault.objects.filter(pos_device=pos_device).delete()
 
     Vault(
-        merchant=merchant,
+        pos_device=pos_device,
         address=contract['address'],
         token_address=contract['tokenAddress']
     ).save()

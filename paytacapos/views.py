@@ -265,16 +265,6 @@ class MerchantViewSet(viewsets.ModelViewSet):
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
 
-    @decorators.action(methods=['post'], detail=False)
-    def latest_index(self, request, *args, **kwargs):
-        latest_index = Merchant.objects.filter(
-            wallet_hash=request.data['wallet_hash']
-        ).aggregate(
-            Max('receiving_index', default=0)
-        )
-        response = { 'index': latest_index['receiving_index__max'] }
-        return Response(response)
-
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
         locations = Location.objects.filter(

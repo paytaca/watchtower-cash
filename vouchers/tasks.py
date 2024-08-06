@@ -35,7 +35,7 @@ def refund_expired_vouchers():
     median_time = block_chain_info['mediantime']
 
     for voucher in unclaimed_vouchers:
-        pubkey = voucher.vault.merchant.receiving_pubkey
+        pubkey = voucher.vault.pos_device.vault_pubkey
         address = bytearray.fromhex(pubkey)
         address = public_key_to_address(address)
         payload = {

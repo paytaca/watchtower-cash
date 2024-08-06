@@ -47,6 +47,7 @@ class UnlinkDeviceRequest(models.Model):
 class PosDevice(models.Model):
     posid = models.IntegerField()
     wallet_hash = models.CharField(max_length=70)
+    vault_pubkey = models.CharField(max_length=70, null=True, blank=True)
 
     name = models.CharField(max_length=100, null=True, blank=True)
     linked_device = models.OneToOneField(
@@ -143,9 +144,6 @@ class Merchant(models.Model):
     logo_60 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     logo_90 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
     logo_120 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
-    
-    receiving_pubkey = models.CharField(max_length=70, null=True, blank=True)
-    receiving_index = models.PositiveIntegerField(default=0)
 
     last_update = models.DateTimeField(null=True)
 

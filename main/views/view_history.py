@@ -58,11 +58,8 @@ class WalletHistoryView(APIView):
                 posid = int(posid)
             except (TypeError, ValueError):
                 return Response(data=[f"invalid POS ID: {type(posid)}({posid})"], status=status.HTTP_400_BAD_REQUEST)
-            qs = qs.filter_pos(
-                wallet_hash,
-                posid,
-                include_claim_vouchers=True,
-            )
+                
+            qs = qs.filter_pos(wallet_hash, posid)
         else:
             qs = qs.filter(wallet=wallet)
 

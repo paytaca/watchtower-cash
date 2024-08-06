@@ -9,7 +9,7 @@ class VaultAdmin(admin.ModelAdmin):
         'token_address',
     ]
     list_display = [
-        'merchant',
+        'pos_device',
         'address',
         'token_address',
     ]

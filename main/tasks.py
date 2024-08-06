@@ -99,15 +99,11 @@ def claim_voucher(category, pubkey):
 
     if response['success']:
         txid = response['txid']
-        data = {
-            'update_type': 'voucher_claimed',
-            'txid': txid,
-            'category': category,
-        }
+        data = { 'update_type': 'voucher_processed' }
         room_name = address.replace(':','_') + '_'
-        channel_layer = get_channel_layer()
-
         flag_claimed_voucher(txid, category)
+        
+        channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"{room_name}", 
             {
@@ -227,7 +223,7 @@ def client_acknowledgement(self, txid):
                         
                         if vaults.exists():
                             vault = vaults.first()
-                            pubkey = vault.merchant.receiving_pubkey
+                            pubkey = vault.pos_device.vault_pubkey
                             claim_voucher.delay(category, pubkey)
                     
                     if jpp_invoice_uuid:

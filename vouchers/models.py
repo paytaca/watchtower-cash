@@ -6,18 +6,20 @@ from datetime import timedelta
 
 
 class Vault(models.Model):
-    merchant = models.OneToOneField(
-        'paytacapos.Merchant',
+    pos_device = models.OneToOneField(
+        'paytacapos.PosDevice',
         related_name='vault',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
     )
-    
-    # contract addresses for lock NFT storage/releasing
     address = models.CharField(max_length=100, unique=True)
     token_address = models.CharField(max_length=100, unique=True)
 
     class Meta:
-        ordering = ('merchant__name', )
+        ordering = (
+            'pos_device__merchant__name',
+        )
 
 
 class Voucher(models.Model):
