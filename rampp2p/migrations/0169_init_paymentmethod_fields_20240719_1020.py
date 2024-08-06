@@ -32,7 +32,7 @@ def init_paymentmethod_fields(apps, schema_editor):
                 'value': payment_method.account_identifier
             }
             PaymentMethodField.objects.create(**fielddata)
-        except PaymentTypeField.DoesNotExist as err:
+        except (PaymentTypeField.DoesNotExist, AttributeError) as err:
             logger.warn(f'Error: {err.args[0]}')
 
 
