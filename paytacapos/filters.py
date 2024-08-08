@@ -3,10 +3,10 @@ from django_filters import rest_framework as filters
 from .models import *
 
 
-class PosDevicetFilter(filters.FilterSet):
+class PosDeviceFilter(filters.FilterSet):
     class Meta:
         model = PosDevice
-        fields= [
+        fields = [
             "merchant_id",
             "branch_id",
             "wallet_hash",

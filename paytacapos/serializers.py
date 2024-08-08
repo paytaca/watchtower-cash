@@ -482,6 +482,46 @@ class POSDevicePaymentSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Wallet hash does not have merchant information", code="missing_merchant_info")
 
 
+class CreatePosPaymentRequestSerializer(serializers.Serializer):
+    pos_device = POSDevicePaymentSerializer()
+    amount = serializers.FloatField()
+    receiving_address = serializers.CharField()
+
+    @transaction.atomic()
+    def create(self, validated_data):
+        posid = validated_data['posid']
+        wallet_hash = validated_data['wallet_hash']
+
+        # some payment requests might not be deleted on POS, in the case of internet failure on the device
+        # so we delete old requests of the device
+        old_uncancelled_requests = PosPaymentRequest.objects.filter(
+            posid=posid,
+            wallet_hash=wallet_hash
+        )
+        old_uncancelled_requests.delete()
+        
+        pos_device = PosDevice.objects.filter(posid=posid, wallet_hash=wallet_hash)
+        validated_data['pos_device'] = pos_device
+        return super().create(validated_data)
+
+
+class CancelPaymentRequestSerializer(serializers.Serializer):
+    pos_device = POSDevicePaymentSerializer()
+    
+
+class PosPaymentRequestSerializer(serializers.ModelSerializer):
+    pos_device = PosDeviceSerializer()
+
+    class Meta:
+        model = PosPaymentRequest
+        fields = [
+            'pos_device',
+            'amount',
+            'receiving_address',
+            'paid',
+        ]
+
+
 class POSPaymentSerializer(serializers.Serializer):
     transaction = serializers.CharField()
     otp = serializers.CharField(required=False)

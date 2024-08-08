@@ -161,3 +161,12 @@ class LocationAdmin(admin.ModelAdmin):
         "merchant",
         "branch",
     ]
+
+@admin.register(PosPaymentRequest)
+class PosPaymentRequestAdmin(admin.ModelAdmin):
+     list_display = [
+        "pos_device",
+        "amount",
+        "receiving_address",
+        "paid",
+     ]

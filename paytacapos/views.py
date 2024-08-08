@@ -43,6 +43,44 @@ class BroadcastPaymentView(APIView):
         return Response(success_data, status=status.HTTP_200_OK)
 
 
+class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = PosPaymentRequestSerializer
+    queryset = PosPaymentRequest.objects.filter(paid=False)
+    
+    permission_classes = [
+        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
+    ]
+    authentication_classes = [
+        WalletAuthentication,
+    ]
+
+    @swagger_auto_schema(
+        request_body=CreatePosPaymentRequestSerializer,
+        responses={ 201: PosPaymentRequestSerializer }
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = CreatePosPaymentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        headers = self.get_success_headers(serializer.data)
+        serializer = PosPaymentRequestSerializer(instance)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+    @swagger_auto_schema(request_body=CancelPaymentRequestSerializer, responses={ 200: 'OK' })
+    @decorators.action(methods=["post"], detail=False)
+    def cancel(self, request, *args, **kwargs):
+        serializer = CancelPaymentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)      
+        __pos_device = serializer.validated_data['pos_device']
+        pos_device = PosDevice.objects.filter(
+            posid=__pos_device['posid'],
+            wallet_hash=__pos_device['wallet_hash'],
+        )
+        pos_device.delete()
+        return Response('OK', status=status.HTTP_200_OK)
+
+
 class PosDeviceViewSet(
     viewsets.GenericViewSet,
     mixins.ListModelMixin,
@@ -56,7 +94,7 @@ class PosDeviceViewSet(
     pagination_class = CustomLimitOffsetPagination
 
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = PosDevicetFilter
+    filterset_class = PosDeviceFilter
 
     permission_classes = [
         HasMinPaytacaVersionHeader | HasMerchantObjectPermission,

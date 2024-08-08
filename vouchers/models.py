@@ -11,10 +11,11 @@ class Vault(models.Model):
         related_name='vault',
         on_delete=models.CASCADE,
         null=True,
-        blank=True
+        blank=True,
+        db_index=True
     )
-    address = models.CharField(max_length=100, unique=True)
-    token_address = models.CharField(max_length=100, unique=True)
+    address = models.CharField(max_length=100, unique=True, db_index=True)
+    token_address = models.CharField(max_length=100, unique=True, db_index=True)
 
     class Meta:
         ordering = (
@@ -26,7 +27,8 @@ class Voucher(models.Model):
     vault = models.ForeignKey(
         Vault,
         related_name='vouchers',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        db_index=True
     )
     nft = models.OneToOneField(
         'main.CashNonFungibleToken',
@@ -38,10 +40,10 @@ class Voucher(models.Model):
     value = models.FloatField(default=0.0)  # in BCH
     minting_txid = models.CharField(max_length=100, default='')
     claim_txid = models.CharField(max_length=100, null=True, blank=True)
-    category = models.CharField(max_length=100, unique=True)
+    category = models.CharField(max_length=100, unique=True, db_index=True)
     commitment = models.CharField(max_length=255, default='', blank=True)
-    claimed = models.BooleanField(default=False)
-    expired = models.BooleanField(default=False)
+    claimed = models.BooleanField(default=False, db_index=True)
+    expired = models.BooleanField(default=False, db_index=True)
     duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
     date_created = models.DateTimeField(default=timezone.now)
     date_claimed = models.DateTimeField(null=True, blank=True)
