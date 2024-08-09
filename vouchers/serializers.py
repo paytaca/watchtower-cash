@@ -52,7 +52,7 @@ class VoucherSerializer(serializers.ModelSerializer):
 
 
 class VoucherClaimCheckSerializer(serializers.Serializer):
-    address = serializers.CharField(max_length=100, required=True)  # vault token address
+    vault_token_address = serializers.CharField(max_length=100, required=True)
     voucher_ids = serializers.ListField(
         child=serializers.IntegerField(),
         allow_empty=True

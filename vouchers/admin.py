@@ -3,6 +3,7 @@ from django.contrib import admin
 from vouchers.models import *
 
 
+@admin.register(Vault)
 class VaultAdmin(admin.ModelAdmin):
     search_fields = [
         'address',
@@ -15,6 +16,7 @@ class VaultAdmin(admin.ModelAdmin):
     ]
 
 
+@admin.register(Voucher)
 class VoucherAdmin(admin.ModelAdmin):
     search_fields = [
         'category',
@@ -32,7 +34,3 @@ class VoucherAdmin(admin.ModelAdmin):
         'date_created',
         'date_claimed',
     ]
-
-
-admin.site.register(Vault, VaultAdmin)
-admin.site.register(Voucher, VoucherAdmin)
