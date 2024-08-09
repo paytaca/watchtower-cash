@@ -47,7 +47,6 @@ class UnlinkDeviceRequest(models.Model):
 class PosDevice(models.Model):
     posid = models.IntegerField()
     wallet_hash = models.CharField(max_length=70)
-    vault_pubkey = models.CharField(max_length=70, null=True, blank=True)
 
     name = models.CharField(max_length=100, null=True, blank=True)
     linked_device = models.OneToOneField(

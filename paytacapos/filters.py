@@ -30,8 +30,8 @@ class MerchantFilter(filters.FilterSet):
     city = filters.CharFilter(field_name="location__city", lookup_expr="icontains")
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
-    vault_token_address = filters.CharFilter(field_name="vault__token_address", lookup_expr="exact")
-    no_vault = filters.BooleanFilter(field_name="vault", lookup_expr="isnull")
+    device_vault_token_address = filters.CharFilter(method="vault_address_filter")
+    # no_vault = filters.BooleanFilter(field_name="vault", lookup_expr="isnull")
 
     active = filters.BooleanFilter()
     verified = filters.BooleanFilter()
@@ -55,8 +55,8 @@ class MerchantFilter(filters.FilterSet):
             "city",
             "street",
             "category",
-            "vault_token_address",
-            "no_vault",
+            "device_vault_token_address",
+            # "no_vault",
         ]
 
     def wallet_hashes_filter(self, queryset, name, value):
@@ -65,3 +65,7 @@ class MerchantFilter(filters.FilterSet):
 
         wallet_hashes = [wallet_hash.strip() for wallet_hash in value.split(",") if wallet_hash.strip()]
         return queryset.filter(wallet_hash__in=wallet_hashes)
+
+    def vault_address_filter(self, queryset, name, value):
+        pos_devices = PosDevice.objects.filter(vault__token_address=value)
+        return queryset.filter(merchant__in=pos_devices.values('merchant'))

@@ -31,7 +31,7 @@ class Command(BaseCommand):
         payload = {
             'params': {
                 'merchant': {
-                    'receiverPk': pos_device.vault_pubkey
+                    'receiverPk': pos_device.vault.pubkey
                 },
                 'sender': {
                     'pubkey': sender_pubkey,

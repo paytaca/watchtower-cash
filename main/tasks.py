@@ -223,8 +223,7 @@ def client_acknowledgement(self, txid):
                         
                         if vaults.exists():
                             vault = vaults.first()
-                            pubkey = vault.pos_device.vault_pubkey
-                            claim_voucher.delay(category, pubkey)
+                            claim_voucher.delay(category, vault.pubkey)
                     
                     if jpp_invoice_uuid:
                         data['jpp_invoice_uuid'] = jpp_invoice_uuid

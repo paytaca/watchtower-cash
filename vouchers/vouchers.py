@@ -54,4 +54,4 @@ def verify_voucher(vault_token_address, voucher_ids):
         if len(valid_categories) == len(voucher_ids):
             result['proceed'] = True
 
-    return result   
+    return result

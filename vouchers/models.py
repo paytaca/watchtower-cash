@@ -14,6 +14,7 @@ class Vault(models.Model):
         blank=True,
         db_index=True
     )
+    pubkey = models.CharField(max_length=100, default='', db_index=True)
     address = models.CharField(max_length=100, unique=True, db_index=True)
     token_address = models.CharField(max_length=100, unique=True, db_index=True)
 

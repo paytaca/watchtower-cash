@@ -11,7 +11,7 @@ from django.utils import timezone
 from vouchers.serializers import *
 from vouchers.models import Voucher
 from vouchers.filters import VoucherFilter
-from vouchers.utils import verify_voucher
+from vouchers.vouchers import verify_voucher
 
 from paytacapos.serializers import MerchantListSerializer
 from paytacapos.pagination import CustomLimitOffsetPagination

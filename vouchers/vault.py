@@ -7,17 +7,16 @@ from main.utils.subscription import new_subscription
 import requests
 
 
-def generate_voucher_vault(pos_device_id):
+def generate_voucher_vault(pos_device_id, pubkey):
     pos_device = PosDevice.objects.get(id=pos_device_id)
-    vault_pubkey = pos_device.vault_pubkey
 
-    if not vault_pubkey:
+    if not pubkey:
         return
 
     payload = {
         'params': {
             'merchant': {
-                'receiverPk': vault_pubkey
+                'receiverPk': pubkey
             }
         },
         'options': {
@@ -50,6 +49,7 @@ def generate_voucher_vault(pos_device_id):
 
     Vault(
         pos_device=pos_device,
+        pubkey=pubkey,
         address=contract['address'],
         token_address=contract['tokenAddress']
     ).save()

@@ -12,6 +12,7 @@ from bitcash.keygen import public_key_to_address
 
 from vouchers.serializers import VaultSerializer
 from vouchers.models import Voucher
+from vouchers.vault import generate_voucher_vault
 
 from main.models import CashNonFungibleToken, Wallet
 
@@ -318,8 +319,8 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
 class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
-    vault = VaultSerializer(required=False)
-    vault_pubkey = serializers.CharField(required=False)
+    vault = VaultSerializer(read_only=True)
+    pubkey = serializers.CharField(write_only=True, required=False, help_text="Vault pubkey")
     name = serializers.CharField(required=False)
     merchant_id = serializers.PrimaryKeyRelatedField(
         queryset=Merchant.objects, source="merchant", required=False,
@@ -332,15 +333,13 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
         fields = [
             "posid",
             "wallet_hash",
-            "vault_pubkey",
+            "pubkey",
             "vault",
             "name",
             "merchant_id",
             "branch_id",
             "linked_device",
         ]
-
-    read_only_fields = ('vault', )
 
     def __init__(self, *args, supress_merchant_info_validations=False, **kwargs):
         self.supress_merchant_info_validations = supress_merchant_info_validations
@@ -454,6 +453,7 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
             pass
 
         instance = super().create(validated_data, *args, **kwargs)
+        generate_voucher_vault(instance.id, validated_data['pubkey'])
         send_device_update(instance, action="create")
         return instance
 
@@ -510,7 +510,7 @@ class CancelPaymentRequestSerializer(serializers.Serializer):
     
 
 class PosPaymentRequestSerializer(serializers.ModelSerializer):
-    pos_device = PosDeviceSerializer()
+    pos_device = POSDevicePaymentSerializer()
 
     class Meta:
         model = PosPaymentRequest
