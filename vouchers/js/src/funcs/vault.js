@@ -7,12 +7,17 @@ import { Vault } from '../contract/vault.js'
  * 
  * @param {Object} opts.params
  * @param {Object} opts.params.merchant
- * @param {String} opts.params.merchant.receiverPk
+ * @param {String} opts.params.merchant.address
+ * @param {String} opts.params.merchant.pubkey
  * 
  * @param {Object} opts.options
  * @param {String} opts.options.network = 'mainnet | chipnet'
  * 
- * @returns {address: String, tokenAddress: String}
+ * @returns {
+ *    address: String,
+ *    tokenAddress: String,
+ *    balance: Number
+ * }
  * 
  */
 export async function compileVaultContract (opts) {
@@ -34,7 +39,8 @@ export async function compileVaultContract (opts) {
  * 
  * @param {Object} opts.params
  * @param {Object} opts.params.merchant
- * @param {String} opts.params.merchant.receiverPk
+ * @param {String} opts.params.merchant.address
+ * @param {String} opts.params.merchant.pubkey
  * @param {Object} opts.params.sender
  * @param {String} opts.params.sender.pubkey
  * @param {String} opts.params.sender.address
@@ -43,7 +49,10 @@ export async function compileVaultContract (opts) {
  * @param {Object} opts.options
  * @param {String} opts.options.network = 'mainnet | chipnet'
  * 
- * @returns {transaction: Object}
+ * @returns {
+ *    transaction: Object,
+ *    success: Boolean
+ * }
  * 
  */
 export async function emergencyRefund (opts) {
@@ -87,37 +96,54 @@ export async function emergencyRefund (opts) {
 
 
 /**
+ * @param {Object} opts
+ * @param {Object} opts.params
+ * @param {String} opts.params.category
+ * @param {Object} opts.params.merchant
+ * @param {String} opts.params.merchant.address
+ * @param {String} opts.params.merchant.pubkey
+ * @param {Object} opts.options
+ * @param {String} opts.options.network = 'mainnet | chipnet' 
  * 
- * @param {String} category
- * 
- * @param {Object} merchant
- * @param {String} merchant.address
- * @param {String} merchant.pubkey
- * 
- * @param {String} network 'mainnet | chipnet'
- * 
- * @returns {transaction: Object}
+ * @returns {
+ *    success: Boolean,
+ *    txid: String
+ * }
  * 
  */
-export async function claimVoucher ({ category, merchant, network }) {
-  const vaultParams = {
-    params: {
-      merchant: {
-        receiverPk: merchant?.pubkey,
-      }
-    },
-    options: {
-      network
-    }
-  }
-  const claimPayload = {
-    voucherClaimerAddress: merchant?.address,
-    category,
-  }
+export async function claimVoucher (opts) {
+  const category = opts.params?.category
+  delete opts.params?.category
 
   try {
-    const vault = new Vault(vaultParams)
-    const transaction = await vault.claim(claimPayload)
+    const vault = new Vault(opts)
+    const transaction = await vault.claim(category)
+    return transaction
+  } catch (err) {}
+
+  return { success: false }
+}
+
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.params
+ * @param {Object} opts.params.merchant
+ * @param {String} opts.params.merchant.address
+ * @param {String} opts.params.merchant.pubkey
+ * @param {Object} opts.options
+ * @param {String} opts.options.network = 'mainnet | chipnet' 
+ * 
+ * @returns {
+*    success: Boolean,
+*    txid: String
+* }
+* 
+*/
+export async function releaseFunds (opts) {
+  try {
+    const vault = new Vault(opts)
+    const transaction = await vault.release()
     return transaction
   } catch (err) {}
 
@@ -127,39 +153,34 @@ export async function claimVoucher ({ category, merchant, network }) {
 
 /**
  * 
- * @param {String} category
+ * @param {Object} opts
  * 
- * @param {Object} merchant
- * @param {String} merchant.address
- * @param {String} merchant.pubkey
+ * @param {Object} opts.params
+ * @param {String} opts.params.category
+ * @param {Number} opts.params.latestBlockTimestamp
+ * @param {Object} opts.params.merchant
+ * @param {String} opts.params.merchant.address
+ * @param {String} opts.params.merchant.pubkey
  * 
- * @param {String} network 'mainnet | chipnet'
+ * @param {Object} opts.options
+ * @param {String} opts.options.network = 'mainnet | chipnet'
  * 
- * @param {Number} latestBlockTimestamp
- * 
- * @returns {transaction: Object}
+ * @returns {
+ *    success: Boolean,
+ *    txid: String
+ * }
  * 
  */
-export async function refundVoucher ({ category, merchant, network, latestBlockTimestamp }) {
-  const vaultParams = {
-    params: {
-      merchant: {
-        receiverPk: merchant?.pubkey,
-      }
-    },
-    options: {
-      network
-    }
-  }
-  const refundPayload = {
-    voucherClaimerAddress: merchant?.address,
-    latestBlockTimestamp,
-    category,
-  }
+export async function refundVoucher (opts) {
+  const latestBlockTimestamp =  opts.params?.latestBlockTimestamp
+  const category =  opts.params?.category
+
+  delete opts.params?.category
+  delete opts.params?.latestBlockTimestamp
 
   try {
-    const vault = new Vault(vaultParams)
-    const transaction = await vault.refund(refundPayload)
+    const vault = new Vault(opts)
+    const transaction = await vault.refund(category, latestBlockTimestamp)
     return transaction
   } catch (err) {}
 

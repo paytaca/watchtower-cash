@@ -22,16 +22,17 @@ class Command(BaseCommand):
         sender_address = options['sender_address']
         sender_pubkey = options['sender_pubkey']
 
-        address = bytearray.fromhex(sender_pubkey)
-        address = public_key_to_address(address)
         pos_device = PosDevice.objects.get(id=pos_device_id)
+        address = bytearray.fromhex(pos_device.vault.pubkey)
+        address = public_key_to_address(address)
         
-        self.stdout.write(self.style.SUCCESS(address))
+        self.stdout.write(self.style.SUCCESS(sender_address))
 
         payload = {
             'params': {
                 'merchant': {
-                    'receiverPk': pos_device.vault.pubkey
+                    'address': address,
+                    'pubkey': pos_device.vault.pubkey
                 },
                 'sender': {
                     'pubkey': sender_pubkey,

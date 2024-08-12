@@ -39,13 +39,17 @@ def refund_expired_vouchers():
         address = bytearray.fromhex(pubkey)
         address = public_key_to_address(address)
         payload = {
-            'category': voucher.category,
-            'merchant': {
-                'address': address,
-                'pubkey': pubkey,
+            'params': {
+                'category': voucher.category,
+                'latestBlockTimestamp': median_time,
+                'merchant': {
+                    'address': address,
+                    'pubkey': pubkey,
+                },
             },
-            'latestBlockTimestamp': median_time,
-            'network': 'mainnet'
+            'options': {
+                'network': 'mainnet'
+            }
         }
         response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/refund', json=payload)
         response = response.json()

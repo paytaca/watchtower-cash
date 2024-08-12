@@ -34,8 +34,8 @@ contract Vault (pubkey merchantReceiverPK) {
     function claim (bytes32 voucherCategory) {
         // 2 inputs: lock & key nft
         // 1 output: recipient of BCH stored in lock NFT
-        require(tx.inputs.length >= 2);
-        require(tx.outputs.length >= 1);
+        require(tx.inputs.length == 2);
+        require(tx.outputs.length == 1);
 
         // key NFT must be an immutable NFT & lock/key should be the same category
         require(tx.inputs[0].tokenCategory == voucherCategory);
@@ -54,9 +54,15 @@ contract Vault (pubkey merchantReceiverPK) {
         // the amount sent must be from lock nft's input
         require(tx.inputs[0].value == claimAmount);
 
-        // the funds must be sent to the merchant receiving address
+        // converted NFT to BCH funds must be sent to this contract
+        require(tx.inputs[0].lockingBytecode == tx.outputs[0].lockingBytecode);
+    }
+
+    function release () {
         bytes20 merchantPKH = hash160(merchantReceiverPK);
         bytes25 merchant = new LockingBytecodeP2PKH(merchantPKH);
+
+        require(tx.outputs.length == 1);
         require(tx.outputs[0].lockingBytecode == merchant);
     }
 

@@ -4,6 +4,8 @@ from paytacapos.models import Merchant
 from vouchers.models import Vault
 from main.utils.subscription import new_subscription
 
+from bitcash.keygen import public_key_to_address
+
 import requests
 
 
@@ -13,10 +15,12 @@ def generate_voucher_vault(pos_device_id, pubkey):
     if not pubkey:
         return
 
+    address = bytearray.fromhex(pubkey)
     payload = {
         'params': {
             'merchant': {
-                'receiverPk': pubkey
+                'address': public_key_to_address(address),
+                'pubkey': pubkey
             }
         },
         'options': {

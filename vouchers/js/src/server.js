@@ -5,6 +5,7 @@ import {
   compileVaultContract,
   emergencyRefund,
   refundVoucher,
+  releaseFunds,
 } from './funcs/vault.js'
 
 
@@ -17,6 +18,11 @@ const root = '/vouchers'
 
 app.post(`${root}/claim`, async (req, res) => {
   const result = await claimVoucher(req.body)
+  res.send(result)
+})
+
+app.post(`${root}/release`, async (req, res) => {
+  const result = await releaseFunds(req.body)
   res.send(result)
 })
 

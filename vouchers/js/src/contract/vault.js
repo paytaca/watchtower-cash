@@ -6,16 +6,27 @@ import {
 } from "cashscript";
 
 
+/**
+ * @param {Object} opts
+ * @param {Object} opts.params
+ * @param {Object} opts.params.merchant
+ * @param {String} opts.params.merchant.address
+ * @param {String} opts.params.merchant.pubkey
+ * @param {Object} opts.options
+ * @param {String} opts.options.network = 'mainnet | chipnet' 
+ * 
+ */
 export class Vault {
 
   constructor (opts) {
     this.merchant = opts?.params?.merchant
     this.network = opts?.options?.network
+    this.dust = 1000n
   }
 
   get contractCreationParams () {
     return [
-      this.merchant?.receiverPk,
+      this.merchant?.pubkey,
     ]
   }
 
@@ -27,7 +38,7 @@ export class Vault {
     return compileFile(new URL('vault.cash', import.meta.url))
   }
 
-  getContract () {
+  get contract () {
     const contract = new Contract(
       this.artifact,
       this.contractCreationParams,
@@ -43,21 +54,24 @@ export class Vault {
     return contract
   }
 
-  async claim ({ category, voucherClaimerAddress }) {
-    const contract = this.getContract()
+  getContract () {
+    return this.contract
+  }
+
+  async claim (category) {
     let voucherUtxos = []
     
     while (voucherUtxos.length !== 2) {
-      const utxos = await this.provider.getUtxos(contract.address)
+      const utxos = await this.provider.getUtxos(this.contract.address)
       voucherUtxos = utxos.filter(utxo => utxo?.token?.category === category)
     }
 
     if (voucherUtxos.length === 0) throw new Error(`No category ${category} utxos found`)
 
     const lockNftUtxo = voucherUtxos.find(utxo => utxo.satoshis !== this.dust)
-    const transaction = await contract.functions.claim(reverseHex(category))
+    const transaction = await this.contract.functions.claim(reverseHex(category))
       .from(voucherUtxos)
-      .to(voucherClaimerAddress, lockNftUtxo.satoshis)
+      .to(this.contract.address, lockNftUtxo.satoshis)
       .withoutTokenChange()
       .withoutChange()
       .send()
@@ -69,9 +83,24 @@ export class Vault {
     return result
   }
 
-  async refund ({ category, voucherClaimerAddress, latestBlockTimestamp }) {
-    const contract = this.getContract()
-    const utxos = await this.provider.getUtxos(contract.address)
+  async release () {
+    const balance = await this.contract.getBalance()
+    const amount = balance - this.dust
+    const transaction = await this.contract.functions
+      .release()
+      .to(this.merchant?.address, amount)
+      .withHardcodedFee(this.dust)
+      .send()
+
+    const result = {
+      success: true,
+      txid: transaction.txid
+    }
+    return result
+  }
+
+  async refund (category, latestBlockTimestamp) {
+    const utxos = await this.provider.getUtxos(this.contract.address)
     const lockNftUtxo = utxos.find(utxo =>
       utxo?.token?.category === category &&
       utxo?.satoshis !== this.dust
@@ -81,10 +110,10 @@ export class Vault {
 
     // get latest MTP (median timestamp) from latest block
     const refundedAmount = lockNftUtxo.satoshis - this.dust
-    const transaction = await contract.functions
+    const transaction = await this.contract.functions
       .refund()
       .from(lockNftUtxo)
-      .to(voucherClaimerAddress, refundedAmount)
+      .to(this.merchant?.address, refundedAmount)
       .withoutTokenChange()
       .withHardcodedFee(this.dust)
       .withTime(latestBlockTimestamp)

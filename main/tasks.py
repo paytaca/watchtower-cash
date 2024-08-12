@@ -87,12 +87,15 @@ def claim_voucher(category, pubkey):
     address = bytearray.fromhex(pubkey)
     address = public_key_to_address(address)
     payload = {
-        'category': category,
-        'merchant': {
-            'address': address,
-            'pubkey': pubkey,
+        'params': {
+            'category': category,
+            'merchant': {
+                'pubkey': pubkey,
+            },
         },
-        'network': 'mainnet'
+        'options': {
+            'network': 'mainnet'
+        }
     }
     response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/claim', json=payload)
     response = response.json()
