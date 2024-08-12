@@ -20,7 +20,7 @@ import { Vault } from '../contract/vault.js'
  * }
  * 
  */
-export async function compileVaultContract (opts) {
+export async function compile (opts) {
   const vault = new Vault(opts)
   const contract = vault.getContract()
   const balance = await contract.getBalance()
@@ -111,7 +111,7 @@ export async function emergencyRefund (opts) {
  * }
  * 
  */
-export async function claimVoucher (opts) {
+export async function claim (opts) {
   const category = opts.params?.category
   delete opts.params?.category
 
@@ -140,7 +140,7 @@ export async function claimVoucher (opts) {
 * }
 * 
 */
-export async function releaseFunds (opts) {
+export async function release (opts) {
   try {
     const vault = new Vault(opts)
     const transaction = await vault.release()
@@ -171,7 +171,7 @@ export async function releaseFunds (opts) {
  * }
  * 
  */
-export async function refundVoucher (opts) {
+export async function refund (opts) {
   const latestBlockTimestamp =  opts.params?.latestBlockTimestamp
   const category =  opts.params?.category
 

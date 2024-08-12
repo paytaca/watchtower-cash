@@ -1,11 +1,11 @@
 import express from 'express'
 import bodyParser from 'body-parser'
 import {
-  claimVoucher,
-  compileVaultContract,
+  claim,
+  compile,
   emergencyRefund,
-  refundVoucher,
-  releaseFunds,
+  refund,
+  release,
 } from './funcs/vault.js'
 
 
@@ -17,17 +17,17 @@ const root = '/vouchers'
 
 
 app.post(`${root}/claim`, async (req, res) => {
-  const result = await claimVoucher(req.body)
+  const result = await claim(req.body)
   res.send(result)
 })
 
 app.post(`${root}/release`, async (req, res) => {
-  const result = await releaseFunds(req.body)
+  const result = await release(req.body)
   res.send(result)
 })
 
 app.post(`${root}/refund`, async (req, res) => {
-  const result = await refundVoucher(req.body)
+  const result = await refund(req.body)
   res.send(result)
 })
 
@@ -37,7 +37,12 @@ app.post(`${root}/emergency-refund`, async (req, res) => {
 })
 
 app.post(`${root}/compile-vault`, async (req, res) => {
-  const result = await compileVaultContract(req.body)
+  const result = await compile(req.body)
+  res.send(result)
+})
+
+app.post(`${root}/vault-balance`, async (req, res) => {
+  const result = await compile(req.body)
   res.send(result)
 })
 

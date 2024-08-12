@@ -4,7 +4,6 @@ from decimal import Decimal
 from datetime import datetime
 from urllib.parse import urlparse
 from django.db import models
-from bitcash.keygen import public_key_to_address
 from watchtower.settings import MAX_RESTB_RETRIES
 from celery import shared_task
 from celery_heimdall import HeimdallTask, RateLimit
@@ -16,7 +15,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
-from main.utils.vouchers import is_key_nft, flag_claimed_voucher
+from main.utils.vouchers import is_voucher, claim_voucher
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -82,40 +81,6 @@ def send_telegram_message(message, chat_id):
     return f"send notification to {chat_id}"
 
 
-@shared_task(queue='vouchers')
-def claim_voucher(category, pubkey):
-    address = bytearray.fromhex(pubkey)
-    address = public_key_to_address(address)
-    payload = {
-        'params': {
-            'category': category,
-            'merchant': {
-                'pubkey': pubkey,
-            },
-        },
-        'options': {
-            'network': 'mainnet'
-        }
-    }
-    response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/claim', json=payload)
-    response = response.json()
-
-    if response['success']:
-        txid = response['txid']
-        data = { 'update_type': 'voucher_processed' }
-        room_name = address.replace(':','_') + '_'
-        flag_claimed_voucher(txid, category)
-        
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f"{room_name}", 
-            {
-                "type": "send_update",
-                "data": data
-            }
-        )
-
-
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, txid):
     this_transaction = Transaction.objects.filter(id=txid)
@@ -165,8 +130,9 @@ def client_acknowledgement(self, txid):
                 token = None
                 image_url = None
                 token_details_key = None
-                __is_key_nft = False
                 category = None
+                __is_key_nft = False
+                __is_lock_nft = False
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
@@ -175,7 +141,8 @@ def client_acknowledgement(self, txid):
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
-                    __is_key_nft = is_key_nft(category, transaction.value)
+                    __is_key_nft = is_voucher(category, transaction.value, key_nft=True)
+                    __is_lock_nft = is_voucher(category, transaction.value)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
@@ -211,7 +178,6 @@ def client_acknowledgement(self, txid):
                         'address_path' : transaction.address.address_path,
                         'senders': senders,
                         'is_nft': False,
-                        'voucher': None
                     }
 
                     if transaction.cashtoken_nft:
@@ -221,9 +187,10 @@ def client_acknowledgement(self, txid):
                         data['is_nft'] = True
 
                     if __is_key_nft:
-                        data['voucher'] = category
+                        pass
+
+                    if __is_lock_nft:
                         vaults = Vault.objects.filter(address=address.address)
-                        
                         if vaults.exists():
                             vault = vaults.first()
                             claim_voucher.delay(category, vault.pubkey)

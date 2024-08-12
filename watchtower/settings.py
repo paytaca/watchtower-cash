@@ -260,6 +260,7 @@ REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', ''))
 REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = (
     'main.tasks',
+    'main.utils.vouchers',
     'smartbch.tasks',
     'anyhedge.tasks',
     'ramp.tasks',
