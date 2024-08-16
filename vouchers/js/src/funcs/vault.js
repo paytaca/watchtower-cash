@@ -49,7 +49,7 @@ export async function compileVaultContract (opts) {
 export async function emergencyRefund (opts) {
   const vault = new Vault(opts)
   const contract = vault.getContract()
-  const { provider, artifact } = vault.getProviderAndArtifact()
+  const { provider } = vault.getProviderAndArtifact()
 
   const senderPubkey = opts?.params?.sender?.pubkey
   const senderAddress = opts?.params?.sender?.address
@@ -61,7 +61,6 @@ export async function emergencyRefund (opts) {
   
   for (const utxo of utxos) {
     try {
-
       const fee = 1000n
       const dust = 546n
       const finalAmount = utxo?.satoshis - fee
@@ -75,12 +74,94 @@ export async function emergencyRefund (opts) {
         .withoutChange()
         .send()
 
-      break
+      transaction.success = true
+      return transaction
     } catch (err) {
       // added catch here to see which utxo matches the sender
       console.log(err)
     }
   }
 
-  return transaction
+  return { success: false }
+}
+
+
+/**
+ * 
+ * @param {String} category
+ * 
+ * @param {Object} merchant
+ * @param {String} merchant.address
+ * @param {String} merchant.pubkey
+ * 
+ * @param {String} network 'mainnet | chipnet'
+ * 
+ * @returns {transaction: Object}
+ * 
+ */
+export async function claimVoucher ({ category, merchant, network }) {
+  const vaultParams = {
+    params: {
+      merchant: {
+        receiverPk: merchant?.pubkey,
+      }
+    },
+    options: {
+      network
+    }
+  }
+  const claimPayload = {
+    voucherClaimerAddress: merchant?.address,
+    category,
+  }
+
+  try {
+    const vault = new Vault(vaultParams)
+    const transaction = await vault.claim(claimPayload)
+    return transaction
+  } catch (err) {}
+
+  return { success: false }
+}
+
+
+/**
+ * 
+ * @param {String} category
+ * 
+ * @param {Object} merchant
+ * @param {String} merchant.address
+ * @param {String} merchant.pubkey
+ * 
+ * @param {String} network 'mainnet | chipnet'
+ * 
+ * @param {Number} latestBlockTimestamp
+ * 
+ * @returns {transaction: Object}
+ * 
+ */
+export async function refundVoucher ({ category, merchant, network, latestBlockTimestamp }) {
+  const vaultParams = {
+    params: {
+      merchant: {
+        receiverPk: merchant?.pubkey,
+      }
+    },
+    options: {
+      network
+    }
+  }
+  const refundPayload = {
+    voucherClaimerAddress: merchant?.address,
+    latestBlockTimestamp,
+    category,
+  }
+
+  try {
+    const vault = new Vault(vaultParams)
+    const transaction = await vault.refund(refundPayload)
+    return transaction
+  } catch (err) {}
+
+  return { success: false }
 }

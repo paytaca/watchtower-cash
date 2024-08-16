@@ -2,6 +2,7 @@ from django.conf import settings
 from drf_yasg.utils import swagger_auto_schema
 from main.models import Transaction, Wallet, Token, CashFungibleToken, CashNonFungibleToken
 from django.db.models import Q, Sum, F
+from django.utils import timezone
 from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +11,7 @@ from main.utils.address_validator import *
 from main.utils.address_converter import *
 from main.utils.bch_yield import compute_wallet_yield
 from main import serializers
+from main.tasks import rescan_utxos
 from main.utils.tx_fee import (
     get_tx_fee_sats,
     bch_to_satoshi,
@@ -212,6 +214,20 @@ class Balance(APIView):
                     data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
+                
+                # Execute UTXO scanning if conditions are met
+                execute_utxo_scan = False
+                if wallet.last_balance_check:
+                    # Trigger scan if last balance check is more than an hour ago
+                    time_diff = timezone.now() - wallet.last_balance_check
+                    if time_diff.total_seconds() > 3600:
+                        execute_utxo_scan = True
+                else:
+                    # Trigger scan if last_balance_check is none
+                    execute_utxo_scan = True
+                if execute_utxo_scan:
+                    rescan_utxos.delay(wallet_hash, full=True)
+
                 if tokenid_or_category or category:
                     is_bch = False
                     query = Q(wallet=wallet) & Q(spent=False)
@@ -270,6 +286,10 @@ class Balance(APIView):
                     if is_cashtoken_nft:
                         data['commitment'] = token.commitment
                         data['capability'] = token.capability
+
+            # Update last_balance_check timestamp
+            wallet.last_balance_check = timezone.now()
+            wallet.save()
 
         return Response(data=data, status=status.HTTP_200_OK)
 

@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import datetime
 from urllib.parse import urlparse
 from django.db import models
+from bitcash.keygen import public_key_to_address
 from watchtower.settings import MAX_RESTB_RETRIES
 from celery import shared_task
 from celery_heimdall import HeimdallTask, RateLimit
@@ -15,7 +16,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
-from main.utils.vouchers import is_key_nft
+from main.utils.vouchers import is_key_nft, flag_claimed_voucher
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -79,6 +80,41 @@ def send_telegram_message(message, chat_id):
         f"{url}{settings.TELEGRAM_BOT_TOKEN}/sendMessage", data=data
     )
     return f"send notification to {chat_id}"
+
+
+@shared_task(queue='vouchers')
+def claim_voucher(category, pubkey):
+    address = bytearray.fromhex(pubkey)
+    address = public_key_to_address(address)
+    payload = {
+        'category': category,
+        'merchant': {
+            'address': address,
+            'pubkey': pubkey,
+        },
+        'network': 'mainnet'
+    }
+    response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/claim', json=payload)
+    response = response.json()
+
+    if response['success']:
+        txid = response['txid']
+        data = {
+            'update_type': 'voucher_claimed',
+            'txid': txid,
+            'category': category,
+        }
+        room_name = address.replace(':','_') + '_'
+        channel_layer = get_channel_layer()
+
+        flag_claimed_voucher(txid, category)
+        async_to_sync(channel_layer.group_send)(
+            f"{room_name}", 
+            {
+                "type": "send_update",
+                "data": data
+            }
+        )
 
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
@@ -187,6 +223,12 @@ def client_acknowledgement(self, txid):
 
                     if __is_key_nft:
                         data['voucher'] = category
+                        vaults = Vault.objects.filter(address=address.address)
+                        
+                        if vaults.exists():
+                            vault = vaults.first()
+                            pubkey = vault.merchant.receiving_pubkey
+                            claim_voucher.delay(category, pubkey)
                     
                     if jpp_invoice_uuid:
                         data['jpp_invoice_uuid'] = jpp_invoice_uuid
@@ -216,6 +258,9 @@ def client_acknowledgement(self, txid):
                             elif resp.status_code == 404 or resp.status_code == 522 or resp.status_code == 502:
                                 Recipient.objects.filter(id=recipient.id).update(valid=False)
                                 LOGGER.info(f"!!! ATTENTION !!! THIS IS AN INVALID DESTINATION URL: {recipient.web_url}")
+                            elif resp.status_code == 400:
+                                Recipient.objects.filter(id=recipient.id).update(valid=False)
+                                LOGGER.info(f"!!! ATTENTION !!! ENCOUNTERED AN ERROR SENDING REQUEST TO: {recipient.web_url}")
                             else:
                                 LOGGER.error(resp)
                                 self.retry(countdown=3)
@@ -748,7 +793,7 @@ def manage_blocks(self):
             block = BlockHeight.objects.get(number=active_block)
         except BlockHeight.DoesNotExist:
             discard_block = True   
-    
+
         if active_block in blocks:
             blocks.remove(active_block)
             blocks = list(set(blocks))  # Uniquify the list
@@ -778,12 +823,14 @@ def manage_blocks(self):
                     parsed_tx = NODE.BCH._parse_transaction(tx)
                     save_transaction(parsed_tx, block_id=block.id)
 
-                ready_to_accept.delay(block.number, len(transactions))
+                ready_to_accept(block.number, len(transactions))
             finally:
                 REDIS_STORAGE.set('READY', 1)
 
-    active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
-    if active_block: return f'CURRENTLY PROCESSING BLOCK {str(active_block)}.'
+    active_block = REDIS_STORAGE.get('ACTIVE-BLOCK')
+    if active_block:
+        active_block = str(REDIS_STORAGE.get('ACTIVE-BLOCK').decode())
+        LOGGER.info(f'CURRENTLY PROCESSING BLOCK {str(active_block)}')
 
 
 def save_transaction(tx, block_id=None):
@@ -919,7 +966,7 @@ def get_bch_utxos(self, address):
             parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
-        txn_check = Transaction.objects.filter(
+        Transaction.objects.filter(
             address__address=address,
             spent=False
         ).exclude(
@@ -927,8 +974,6 @@ def get_bch_utxos(self, address):
         ).update(
             spent=True
         )
-
-
 
     except Exception as exc:
         try:
@@ -1001,7 +1046,7 @@ def get_slp_utxos(self, address):
                         saved_utxo_ids.append(obj.id)
         
         # Mark other transactions of the same address as spent
-        txn_check = Transaction.objects.filter(
+        Transaction.objects.filter(
             address__address=address,
             spent=False
         ).exclude(
@@ -1822,18 +1867,25 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
 
 @shared_task(queue='rescan_utxos')
-def rescan_utxos(wallet_hash, full=False, bch_only=False):
+def rescan_utxos(wallet_hash, full=False):
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
     if full:
         addresses = wallet.addresses.all()
     else:
         addresses = wallet.addresses.filter(transactions__spent=False)
 
-    for address in addresses:
-        if wallet.wallet_type == 'bch':
-            get_bch_utxos(address.address)
-        elif wallet.wallet_type == 'slp':
-            get_slp_utxos(address.address)
+    try:
+        for address in addresses:
+            if wallet.wallet_type == 'bch':
+                get_bch_utxos(address.address)
+            elif wallet.wallet_type == 'slp':
+                get_slp_utxos(address.address)
+        wallet.last_utxo_scan_succeeded = True
+        wallet.save()
+    except Exception as exc:
+        wallet.last_utxo_scan_succeeded = False
+        wallet.save()
+        raise exc
 
 
 def rebuild_address_wallet_history(address, tx_count_limit=30, ignore_txids=[]):
@@ -2408,7 +2460,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                                 data['nft'] = output['tokenData']['nft']
 
                             LOGGER.info('Sending MQTT message: ' + str(data))
-                            msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                            msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1, retain=True)
                             LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
                         LOGGER.info(data)

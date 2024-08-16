@@ -17,11 +17,12 @@ from main.tasks import (
 import paho.mqtt.client as mqtt
 
 
+client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-publisher"
 if settings.BCH_NETWORK == 'mainnet':
-    mqtt_client = mqtt.Client(transport='websockets')
+    mqtt_client = mqtt.Client(transport='websockets', client_id=client_id, clean_session=False)
     mqtt_client.tls_set()
 else:
-    mqtt_client = mqtt.Client()
+    mqtt_client = mqtt.Client(client_id=client_id)
 
 mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
 mqtt_client.loop_start()
@@ -129,7 +130,7 @@ def run():
                             'amount': amount
                         }
                         LOGGER.info('Sending MQTT message: ' + str(data))
-                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1)
+                        msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1, retain=True)
                         LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
 
                         client_acknowledgement(obj_id)
@@ -166,7 +167,7 @@ def run():
                             'token_type': 'slp',
                             'token_id': token_id
                         }
-                        mqtt_client.publish(f"transactions/{slp_address}", json.dumps(data), qos=1)
+                        mqtt_client.publish(f"transactions/{slp_address}", json.dumps(data), qos=1, retain=True)
 
                         client_acknowledgement(obj_id)
                     

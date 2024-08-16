@@ -406,8 +406,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'paytacagifts.tasks.check_unclaimed_gifts',
         'schedule': 7
     },
-    'claim_expired_unclaimed_vouchers': {
-        'task': 'vouchers.tasks.claim_expired_unclaimed_vouchers',
+    'refund_expired_vouchers': {
+        'task': 'vouchers.tasks.refund_expired_vouchers',
         'schedule': 60 * 60
     },
     'bulk_rebroadcast': {
@@ -483,7 +483,7 @@ MAX_RESTB_RETRIES = 14
 MAX_SLPBITCOIN_SOCKET_DURATION = 10
 MAX_BITSOCKET_DURATION = 10
 BITDB_QUERY_LIMIT_PER_PAGE = 1000
-TRANSACTIONS_PER_CHUNK=100
+TRANSACTIONS_PER_CHUNK = 100
 
 # Sideshift credentials
 SIDESHIFT_SECRET_KEY = config('SIDESHIFT_SECRET_KEY')
@@ -586,6 +586,7 @@ SMARTBCH = {
 
 
 PAYTACAPOS = {
+    "POS_ID_MAX_DIGITS": 4,
     "TOTP_SECRET_KEY": decipher(config('TOTP_SECRET_KEY')),
 }
 
@@ -660,6 +661,17 @@ IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 # vouchers
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
+VOUCHER_EXPRESS_URL = 'http://localhost:3002/vouchers'
+
+# purelypeer
+
+PURELYPEER_AUTH_HEADER = config('PURELYPEER_AUTH_HEADER')
+PURELYPEER_ENV = config('PURELYPEER_ENV')
+PURELYPEER_URL_PREFIX = 'backend-staging'
+if PURELYPEER_ENV == 'production':
+    PURELYPEER_URL_PREFIX = 'backend'
+
+PURELYPEER_API_URL = f'https://{PURELYPEER_URL_PREFIX}.purelypeer.cash/api'
 
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')

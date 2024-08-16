@@ -152,7 +152,10 @@ class InvoicePaymentSerializer(serializers.ModelSerializer):
                 InvoicePaymentRefundOutput.objects.create(**output_data)
 
         if not tx_exists(txid):
-            broadcast_response = broadcast_transaction(raw_tx_hex)
+            broadcast_response = broadcast_transaction(
+                raw_tx_hex,
+                invoice_uuid=self.invoice.uuid.hex,
+            )
             if not broadcast_response["success"]:
                 raise serializers.ValidationError(
                     broadcast_response.get("error", "Failed to broadcast transaction")
