@@ -306,16 +306,22 @@ def verify_txn(action, contract, txn: Dict):
         
         '''
         Transaction is not valid if:
-            (1) the arbiter or servicer is not found in the outputs, or
-            (2) the transaction is for RELEASE but the buyer was not found, or
-            (3) the transaction is for REFUND but the seller was not found
+            (1) output[1] is not servicer and/or output[2] is not arbiter, or
+            (2) the transaction is for RELEASE but output[0] is not buyer, or
+            (3) the transaction is for REFUND but  output[0] is not seller
         '''
         NANS = not(sends_to_arbiter and sends_to_servicer)
         RLS_NSTB = (action == Transaction.ActionType.RELEASE and not sends_to_buyer)
         RFN_NSTS = (action == Transaction.ActionType.REFUND and not sends_to_seller)
         if NANS or (RLS_NSTB or RFN_NSTS):
             valid = False
-            error = f'Transaction requirements not met NANS={NANS} RLS_NSTB={RLS_NSTB} RFN_NSTS={RFN_NSTS}'
+            extra_message = ''
+            if (RLS_NSTB or RFN_NSTS):
+                key = ''
+                if RLS_NSTB: key = 'buyer'
+                if RFN_NSTS: key = 'seller'
+                extra_message = f'Expected output[0]={expected_addresses[key]}, got output[0]={outputs[0].get("address")}'
+            error = f'Transaction requirements not met NotSentToArbiterOrServicer={NANS} ReleasedNotSentToBuyer={RLS_NSTB} RefundedNotSentToSeller={RFN_NSTS}. {extra_message}'
     
     logger.warn(f'Result: valid = {valid} | {error} | {outputs}')
     return valid, error, outputs

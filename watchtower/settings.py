@@ -641,7 +641,7 @@ DEFAULT_TOKEN_DETAILS = {
     }
 }
 
-# p2p-ramp
+# P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_WALLET_HASH = config('SERVICER_WALLET_HASH', '')
 SERVICER_PK = config('SERVICER_PK', '')
@@ -651,8 +651,13 @@ ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
 HARDCODED_FEE = config('HARDCODED_FEE', 1000)
 SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
-# vouchers
+# P2P Exchange Image Uploads Config
+from requests.compat import urljoin
+IMAGE_UPLOAD_FOLDER = 'image_uploads'
+IMAGE_UPLOAD_PATH = urljoin(MEDIA_URL, IMAGE_UPLOAD_FOLDER)
+IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 
+# vouchers
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
 
