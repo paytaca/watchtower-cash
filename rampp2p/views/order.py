@@ -17,10 +17,11 @@ from authentication.token import TokenAuthentication
 from rampp2p.viewcodes import WSGeneralMessageType
 
 import rampp2p.utils.websocket as websocket
-from rampp2p.utils.utils import get_latest_status
+# from rampp2p.utils.utils import get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 import rampp2p.utils.file_upload as file_upload_utils
+import rampp2p.utils.utils as rampp2putils
 
 from rampp2p.validators import *
 import rampp2p.serializers as serializers
@@ -962,7 +963,7 @@ class CancelOrder(APIView):
 
         # Update Ad trade_amount if order was CONFIRMED
         order = models.Order.objects.get(pk=pk)
-        latest_status = get_latest_status(order.id)
+        latest_status = rampp2putils.get_last_status(order.id)
 
         # Update Ad trade_amount
         if latest_status.status == StatusType.CONFIRMED:
@@ -1011,15 +1012,20 @@ class UploadOrderPaymentAttachmentView(APIView):
         image_file = request.FILES.get('image')
         if image_file is None:
             return Response({'error': 'image is required'}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         try:
+            order_payment_obj = models.OrderPayment.objects.prefetch_related('order').get(id=payment_id)
+
+            '''Order must be status=ESCROWED for payment attachment upload.
+            (It doesn't make sense for buyers to upload proof of payment if order 
+            is not waiting for fiat payment (i.e. order is not status=ESCROWED))'''
+            validate_awaiting_payment(order_payment_obj.order)
+
             filesize = image_file.size
             if filesize > 5 * 1024 * 1024: # 5mb limit
                 raise ValidationError(
                     { 'image': _('File size cannot exceed 5 MB.')}
                 )
-            
-            order_payment_obj = models.OrderPayment.objects.get(id=payment_id)
 
             img_object = Image.open(image_file)
             image_upload_obj = file_upload_utils.save_image(img_object, max_width=450, request=request)
@@ -1040,6 +1046,10 @@ class DeleteOrderPaymentAttachmentView(APIView):
 
         try:
             attachment = models.OrderPaymentAttachment.objects.get(id=order_payment_attachment_id)
+
+            # Buyers should only be allowed to alter proof of payment when order is status=ESCROWED
+            validate_awaiting_payment(attachment.payment.order)
+
             file_upload_utils.delete_file(attachment.image.url_path)
             attachment.delete()
         except (models.OrderPaymentAttachment.DoesNotExist, Exception) as err:
@@ -1047,5 +1057,15 @@ class DeleteOrderPaymentAttachmentView(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_200_OK)
 
+def validate_awaiting_payment(order):
+    '''
+    Validates that `order` is awaiting fiat payment.
+    Raises ValidationError when order's last status is not ESCRW (Escrowed)
+    '''
+    last_status = rampp2putils.get_last_status(order.id)
+    if last_status.status != models.StatusType.ESCROWED:
+        raise ValidationError(
+            { 'order': _(f'Invalid action for {last_status.status.label} order')}
+        )
 
             
