@@ -3,15 +3,11 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from django.http import Http404
-
-from authentication.token import TokenAuthentication
-
 from rampp2p.models import FiatCurrency, CryptoCurrency
 from rampp2p.serializers import FiatCurrencySerializer, CryptoCurrencySerializer
 from django.db.models import Count
 
 class FiatCurrencyList(APIView):
-    authentication_classes = [TokenAuthentication]
 
     def get(self, _):
         queryset = FiatCurrency.objects.annotate(paymenttypes_count=Count('payment_types')).filter(paymenttypes_count__gte=1)
@@ -19,7 +15,6 @@ class FiatCurrencyList(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
 
 class FiatCurrencyDetail(APIView):
-    authentication_classes = [TokenAuthentication]
 
     def get_object(self, pk):
         try:
@@ -33,7 +28,6 @@ class FiatCurrencyDetail(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class CryptoCurrencyList(APIView):
-    authentication_classes = [TokenAuthentication]
 
     def get(self, request):
         queryset = CryptoCurrency.objects.all()
@@ -41,7 +35,6 @@ class CryptoCurrencyList(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
 
 class CryptoCurrencyDetail(APIView):
-    authentication_classes = [TokenAuthentication]
     
     def get_object(self, pk):
         try:

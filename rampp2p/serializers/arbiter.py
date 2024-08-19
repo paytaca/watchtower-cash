@@ -28,7 +28,9 @@ class ArbiterSerializer(serializers.ModelSerializer):
             'inactive_until',
             'is_disabled',
             'fiat_currencies',
-            'rating'
+            'rating',
+            'is_online',
+            'last_online_at'
         ]
 
     def get_rating(self, obj):

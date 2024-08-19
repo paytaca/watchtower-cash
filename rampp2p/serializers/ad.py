@@ -48,6 +48,7 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
 
 class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     id = serializers.SerializerMethodField()
+    owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     payment_types = serializers.SlugRelatedField(slug_field="short_name", queryset=models.PaymentType.objects.all(), many=True)
@@ -57,6 +58,7 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     class Meta(AdSnapshotSerializer.Meta):
         fields = [
             'id',
+            'owner',
             'payment_types',
             'payment_methods',
             'trade_type',
@@ -69,6 +71,12 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     
     def get_id(self, obj):
         return obj.ad.id
+
+    def get_owner(self, obj):
+        return {
+            'id': obj.ad.owner.id,
+            'name': obj.ad.owner.name
+        }
     
     def get_payment_methods(self, obj: models.AdSnapshot):
         payment_type_ids = obj.payment_types.values_list('id')
@@ -83,7 +91,6 @@ class AdListSerializer(serializers.ModelSerializer):
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     price = serializers.SerializerMethodField()
-    # payment_methods = RelatedPaymentMethodSerializer(many=True)
     payment_methods = serializers.SerializerMethodField()
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
@@ -177,6 +184,35 @@ class AdListSerializer(serializers.ModelSerializer):
         release_orders_count = user_orders.filter(status__status=models.StatusType.RELEASED).count()
         return release_orders_count, completed_orders_count
 
+class CashinAdSerializer(AdListSerializer):
+    is_online = serializers.SerializerMethodField()
+    last_online_at = serializers.SerializerMethodField()
+    payment_methods = RelatedPaymentMethodSerializer(many=True)
+    
+    class Meta(AdListSerializer.Meta):
+        fields = [
+            'id',
+            'owner',
+            'price_type',
+            'price',
+            'trade_floor',
+            'trade_ceiling',
+            'trade_amount',
+            'trade_limits_in_fiat',
+            'trade_amount_in_fiat',
+            'payment_methods',
+            'trade_count',
+            'completion_rate',
+            'is_online',
+            'last_online_at'
+        ]
+    
+    def get_is_online(self, obj):
+        return obj.owner.is_online
+
+    def get_last_online_at(self, obj):
+        return obj.owner.last_online_at
+
 class AdDetailSerializer(AdListSerializer):
     fees = serializers.SerializerMethodField()
 
@@ -223,12 +259,27 @@ class AdCreateSerializer(serializers.ModelSerializer):
             'modified_at',
         ]
     
-class AdUpdateSerializer(serializers.ModelSerializer):
-    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True)
-    appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices)
+class AdSerializer(serializers.ModelSerializer):
+    trade_type = serializers.ChoiceField(choices=models.TradeType.choices, required=False)
+    price_type = serializers.ChoiceField(choices=models.PriceType.choices, required=False)
+    fixed_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    floating_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_floor = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_ceiling = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_amount = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_limits_in_fiat = serializers.BooleanField(required=False)
+    trade_amount_in_fiat = serializers.BooleanField(required=False)
+    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all(), required=False)
+    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True, required=False)
+    appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices, required=False)
+    is_public = serializers.BooleanField(required=False)
+    modified_at = serializers.DateTimeField(read_only=True)
+    
     class Meta:
         model = models.Ad
         fields = [
+            'id',
+            'trade_type',
             'price_type',
             'fixed_price',
             'floating_price',

@@ -102,14 +102,11 @@ admin.site.register(Contract, ContractAdmin)
 
 class PaymentTypeAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'full_name',
         'short_name',
-        'format__type',
         'is_disabled'
     ]
-
-    def format__type(self, obj):
-        return ", ".join([related_field.format for related_field in obj.formats.all()])
 
 admin.site.register(PaymentType, PaymentTypeAdmin)
 
@@ -208,3 +205,40 @@ admin.site.register(ReservedName)
 admin.site.register(IdentifierFormat)
 admin.site.register(OrderMember)
 admin.site.register(OrderPaymentMethod)
+admin.site.register(DynamicPaymentTypeField)
+
+class PaymentTypeFieldAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'payment_type',
+        'fieldname',
+        'required'
+    ]
+    search_fields = [
+        'fieldname'
+    ]
+admin.site.register(PaymentTypeField, PaymentTypeFieldAdmin)
+
+class PaymentMethodFieldAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'payment_method_name',
+        'field_reference_name',
+        'value',
+        'created_at',
+        'modified_at'
+    ]
+    search_fields = [
+        'value'
+    ]
+    
+    def payment_method_name(self, obj):        
+        name = obj.payment_method.payment_type.full_name
+        if name:
+            name = obj.payment_method.payment_type.short_name
+        return name
+        
+    def field_reference_name(self, obj):
+        return obj.field_reference.fieldname
+    
+admin.site.register(PaymentMethodField, PaymentMethodFieldAdmin)

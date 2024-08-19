@@ -14,6 +14,8 @@ class Arbiter(models.Model):
     inactive_until = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+    is_online = models.BooleanField(default=False)
+    last_online_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.name

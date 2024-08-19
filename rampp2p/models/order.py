@@ -1,10 +1,12 @@
 from django.db import models
+from django.db.models import Q
 from .ad import AdSnapshot
 from .peer import Peer
 from .arbiter import Arbiter
 from .payment import PaymentMethod, PaymentType
 
 class Order(models.Model):
+    tracking_id = models.CharField(max_length=50, null=True, blank=True)
     ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
     owner = models.ForeignKey(Peer, on_delete=models.PROTECT, editable=False, related_name="created_orders")
     chat_session_ref = models.CharField(max_length=100, null=True, blank=True)
@@ -15,6 +17,7 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     appealable_at = models.DateTimeField(null=True)
     expires_at = models.DateTimeField(null=True)
+    is_cash_in = models.BooleanField(default=False)
 
     def __str__(self):
         return f'{self.id}'
