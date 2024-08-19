@@ -1,7 +1,8 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from datetime import datetime
+from datetime import timedelta
+from django.utils import timezone
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
@@ -51,8 +52,8 @@ class CashInAdsList(APIView):
             - Ad fiat currency
             - If SELL ad accepts the payment type selected by buyer
             - If buy amount is within range of the SELL ad
+            - Sorted by last online
             - Sorted by price lowest first
-            - Online ads are prioritized
         NB
             - Will not consider ads where trade_limits_in_fiat=True
     '''
@@ -94,9 +95,6 @@ class CashInAdsList(APIView):
 
         # prioritize online ads
         queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
-        online_ads = queryset.filter(owner__is_online = True)
-        if online_ads.count() > 0:
-            queryset = online_ads
         queryset = queryset.order_by('-last_online_at', 'price')
         
         # fetch related payment methods
@@ -107,20 +105,49 @@ class CashInAdsList(APIView):
                 payment_types_set.add(payment_method.payment_type)
         distinct_payment_types = list(payment_types_set)
 
+        # count the number of available ads for given preset order amounts
         amount_ad_count = {}
         for amount in amounts:
-            queryset_count = queryset.filter((Q(trade_floor__lt=amount) & Q(trade_ceiling__gt=amount))).count()
+            queryset_count = queryset.filter((Q(trade_floor__lte=amount) & Q(trade_ceiling__gte=amount))).count()
             amount_ad_count[amount] = queryset_count
 
         cashin_ads = queryset[:10]
         serialized_ads = CashinAdSerializer(cashin_ads, many=True, context = { 'wallet_hash': wallet_hash })
-        serialized_paymenttypes = PaymentTypeSerializer(distinct_payment_types, many=True)
+        # serialized_paymenttypes = PaymentTypeSerializer(distinct_payment_types, many=True)
+        paymenttypes = self.get_paymenttypes(wallet_hash, currency, distinct_payment_types)
         responsedata = {
             'ads': serialized_ads.data,
-            'payment_types': serialized_paymenttypes.data,
+            'payment_types': paymenttypes,
             'amount_ad_count': amount_ad_count
         }
         return Response(responsedata, status=status.HTTP_200_OK)
+    
+    def get_paymenttypes(self, wallet_hash, currency, payment_types):
+        queryset = Ad.objects.filter(
+            Q(deleted_at__isnull=True) & 
+            Q(trade_type=TradeType.SELL) & 
+            Q(is_public=True) & 
+            Q(trade_amount__gt=0) &
+            Q(trade_limits_in_fiat=False) &
+            Q(fiat_currency__symbol=currency))
+        
+        queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
+        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
+        queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))        
+
+        paymenttypes = []
+        for payment_type in payment_types:
+            # Filters which ads accept the selected payment method
+            pt_queryset = queryset.filter(payment_methods__payment_type__id=payment_type.id).values('owner').distinct()
+            paymenttypes.append({
+                'id': payment_type.id,
+                'full_name': payment_type.full_name,
+                'short_name': payment_type.short_name,
+                'online_ads_count': pt_queryset.count()
+            })
+
+        return paymenttypes
+
     
 class AdListCreate(APIView):
     authentication_classes = [TokenAuthentication]
