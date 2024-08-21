@@ -5,7 +5,7 @@ from django.db import transaction
 
 from .ad import SubsetAdSnapshotSerializer
 from .payment import SubsetPaymentMethodSerializer
-import rampp2p.utils.file_upload as file_upload_utils
+from .transaction import TransactionSerializer
 
 import rampp2p.models as models
 
@@ -30,6 +30,7 @@ class OrderSerializer(serializers.ModelSerializer):
     members = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
     contract  = serializers.SerializerMethodField()
+    transactions = serializers.SerializerMethodField()
     arbiter = OrderArbiterSerializer()
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
@@ -49,6 +50,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'members',
             'owner',
             'contract',
+            'transactions',
             'arbiter',
             'payment_method_opts',
             'payment_methods_selected',
@@ -111,6 +113,11 @@ class OrderSerializer(serializers.ModelSerializer):
         except models.Contract.DoesNotExist:
             return None
         return contract.id
+    
+    def get_transactions(self, obj):
+        transactions = models.Transaction.objects.filter(contract__order__id = obj.id)
+        serializer = TransactionSerializer(transactions, many=True)
+        return serializer.data
 
     def get_payment_method_opts(self, obj):
         escrowed_status = models.Status.objects.filter(Q(order=obj) & Q(status=models.StatusType.ESCROWED))
