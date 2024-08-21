@@ -6,7 +6,6 @@ from .feedback import *
 from .order import *
 from .payment import *
 from .peer import *
-from .receipt import *
 from .status import *
 from .transaction import *
 from .market_rate import *

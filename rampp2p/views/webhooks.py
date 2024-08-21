@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+
 from rampp2p.models import Order, Peer, Appeal
 from django.http import Http404
 from rampp2p.utils.notifications import send_push_notification
@@ -48,4 +49,3 @@ class ChatWebhookView(APIView):
         message = f'New message from Order No. {order.id}'
         send_push_notification(recipients, message, extra=extra_data)
         return Response(status=status.HTTP_200_OK)
-    

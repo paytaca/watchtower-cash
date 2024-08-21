@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser
 
 from django.http import Http404
 from django.db import IntegrityError, transaction
@@ -8,27 +9,27 @@ from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanFi
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from datetime import datetime, time, timedelta
-
+from PIL import Image
 import math
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 from authentication.token import TokenAuthentication
 from rampp2p.viewcodes import WSGeneralMessageType
+
 import rampp2p.utils.websocket as websocket
-from rampp2p.utils.utils import get_latest_status
+# from rampp2p.utils.utils import get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
+import rampp2p.utils.file_upload as file_upload_utils
+import rampp2p.utils.utils as rampp2putils
+
 from rampp2p.validators import *
 import rampp2p.serializers as serializers
-from rampp2p.serializers import (
-    OrderSerializer, 
-    WriteOrderSerializer, 
-    StatusSerializer, 
-    StatusReadSerializer,
-    TransactionSerializer,
-    AppealSerializer
-)
 import rampp2p.models as models
+
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class CashinOrderList(APIView):
         page_results = queryset[offset:offset + limit]
 
         context = { 'wallet_hash': wallet_hash }
-        serializer = OrderSerializer(page_results, many=True, context=context)
+        serializer = serializers.OrderSerializer(page_results, many=True, context=context)
         data = {
             'orders': serializer.data,
             'count': count,
@@ -280,7 +281,7 @@ class OrderListCreate(APIView):
         page_results = queryset[offset:offset + limit]
 
         context = { 'wallet_hash': wallet_hash }
-        serializer = OrderSerializer(page_results, many=True, context=context)
+        serializer = serializers.OrderSerializer(page_results, many=True, context=context)
         unread_count = models.OrderMember.objects.filter(Q(peer__wallet_hash=wallet_hash) & Q(read_at__isnull=True)).count()
         data = {
             'orders': serializer.data,
@@ -366,7 +367,7 @@ class OrderListCreate(APIView):
                 else:
                     price = ad_snapshot.fixed_price
                 data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                serialized_order = WriteOrderSerializer(data=data)
+                serialized_order = serializers.WriteOrderSerializer(data=data)
 
                 # Raise error if order isn't valid
                 serialized_order.is_valid(raise_exception=True)
@@ -379,9 +380,9 @@ class OrderListCreate(APIView):
                 order.expires_at = expiration
 
                 # Create SUBMITTED status for order
-                submitted_status = StatusSerializer(data={'status': StatusType.SUBMITTED, 'order': order.id})
+                submitted_status = serializers.StatusSerializer(data={'status': StatusType.SUBMITTED, 'order': order.id})
                 submitted_status.is_valid(raise_exception=True)
-                submitted_status = StatusSerializer(submitted_status.save()).data
+                submitted_status = serializers.StatusSerializer(submitted_status.save()).data
                 
                 # Create and associate order members
                 seller, buyer = None, None
@@ -412,12 +413,12 @@ class OrderListCreate(APIView):
                             "payment_method": payment_method.id,
                             "payment_type": payment_method.payment_type.id
                         }
-                        order_method = serializers.OrderPaymentMethodSerializer(data=data)
+                        order_method = serializers.OrderPaymentSerializer(data=data)
                         if order_method.is_valid():
                             order_method.save()
 
                 # Serialize response data
-                serialized_order = OrderSerializer(order, context={'wallet_hash': wallet_hash}).data    
+                serialized_order = serializers.OrderSerializer(order, context={'wallet_hash': wallet_hash}).data    
                 response = {
                     'success': True,
                     'order': serialized_order,
@@ -432,7 +433,7 @@ class OrderListCreate(APIView):
 
         # Recount the number of unopened orders for the Ad owner, send this value to general websocket
         unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=ad.owner.wallet_hash)).count()
-        serialized_order = OrderSerializer(order, context={'wallet_hash': ad.owner.wallet_hash})
+        serialized_order = serializers.OrderSerializer(order, context={'wallet_hash': ad.owner.wallet_hash})
         websocket.send_general_update({
             'type': WSGeneralMessageType.NEW_ORDER.value,
             'extra': {
@@ -569,7 +570,7 @@ class OrderListStatus(APIView):
     authentication_classes = [TokenAuthentication]
     def get(self, request, pk):
         queryset = Status.objects.filter(order=pk)
-        serializer = StatusSerializer(queryset, many=True)
+        serializer = serializers.StatusSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class OrderDetail(APIView):
@@ -588,12 +589,12 @@ class OrderDetail(APIView):
             return Response({'error': 'wallet_hash is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         context = { 'wallet_hash': wallet_hash }
-        serialized_order = OrderSerializer(order, context=context).data
+        serialized_order = serializers.OrderSerializer(order, context=context).data
         
         if serialized_order['status']['value'] == StatusType.APPEALED:
             appeal = models.Appeal.objects.filter(order_id=order.id)
             if appeal.exists():
-                serialized_appeal = AppealSerializer(appeal.first()).data
+                serialized_appeal = serializers.AppealSerializer(appeal.first()).data
                 serialized_order['appeal'] = serialized_appeal
         return Response(serialized_order, status=status.HTTP_200_OK)
     
@@ -605,7 +606,7 @@ class OrderDetail(APIView):
         if chat_session_ref:
             order.chat_session_ref = chat_session_ref
             order.save()
-            serialized_order = OrderSerializer(order, context={ 'wallet_hash': wallet_hash }).data
+            serialized_order = serializers.OrderSerializer(order, context={ 'wallet_hash': wallet_hash }).data
         return Response(serialized_order, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
@@ -653,13 +654,13 @@ class ConfirmOrder(APIView):
         except (ValidationError, IntegrityError, models.Order.DoesNotExist, models.Ad.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
                 
-        serialized_status = StatusSerializer(data={
+        serialized_status = serializers.StatusSerializer(data={
             'status': StatusType.CONFIRMED,
             'order': pk
         })
 
         if serialized_status.is_valid():
-            serialized_status = StatusReadSerializer(serialized_status.save())
+            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
             
             # send websocket notification
             websocket.send_order_update({
@@ -709,13 +710,13 @@ class PendingEscrowOrder(APIView):
             contract = models.Contract.objects.get(order__id=pk)
             
             # create ESCROW_PENDING status for order
-            status_serializer = StatusSerializer(data={
+            status_serializer = serializers.StatusSerializer(data={
                 'status': StatusType.ESCROW_PENDING,
                 'order': pk
             })
 
             if status_serializer.is_valid():
-                status_serializer = StatusReadSerializer(status_serializer.save())
+                status_serializer = serializers.StatusReadSerializer(status_serializer.save())
             else: 
                 raise ValidationError(f"Encountered error saving status for order#{pk}")
 
@@ -729,7 +730,7 @@ class PendingEscrowOrder(APIView):
                 contract=contract,
                 action=models.Transaction.ActionType.ESCROW,
             )
-            websocket_msg['transaction'] = TransactionSerializer(transaction).data
+            websocket_msg['transaction'] = serializers.TransactionSerializer(transaction).data
             websocket.send_order_update(websocket_msg, pk)
             response = websocket_msg
             
@@ -847,24 +848,24 @@ class CryptoBuyerConfirmPayment(APIView):
                     "payment_method": payment_method.id,
                     "payment_type": payment_method.payment_type.id
                 }
-                order_method = serializers.OrderPaymentMethodSerializer(data=data)
+                order_method = serializers.OrderPaymentSerializer(data=data)
                 if order_method.is_valid():
                     order_payment_methods.append(order_method.save())
-            order_payment_methods = serializers.OrderPaymentMethodSerializer(order_payment_methods, many=True)
+            order_payment_methods = serializers.OrderPaymentSerializer(order_payment_methods, many=True)
             response["order_payment_methods"] = order_payment_methods.data
 
         context = { 'wallet_hash': wallet_hash }
-        serialized_order = OrderSerializer(order, context=context)
+        serialized_order = serializers.OrderSerializer(order, context=context)
         response["order"] = serialized_order.data
         
         # create PAID_PENDING status for order
-        serialized_status = StatusSerializer(data={
+        serialized_status = serializers.StatusSerializer(data={
             'status': StatusType.PAID_PENDING,
             'order': pk
         })
 
         if serialized_status.is_valid():            
-            serialized_status = StatusReadSerializer(serialized_status.save())
+            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
             websocket.send_order_update({
                 'success' : True,
                 'status': serialized_status.data
@@ -904,13 +905,13 @@ class CryptoSellerConfirmPayment(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         # create PAID status for order
-        serialized_status = StatusSerializer(data={
+        serialized_status = serializers.StatusSerializer(data={
             'status': StatusType.PAID,
             'order': pk
         })
 
         if serialized_status.is_valid():
-            serialized_status = StatusReadSerializer(serialized_status.save())
+            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
 
             contract = models.Contract.objects.get(order__id=pk)
             _, _ = models.Transaction.objects.get_or_create(
@@ -962,7 +963,7 @@ class CancelOrder(APIView):
 
         # Update Ad trade_amount if order was CONFIRMED
         order = models.Order.objects.get(pk=pk)
-        latest_status = get_latest_status(order.id)
+        latest_status = rampp2putils.get_last_status(order.id)
 
         # Update Ad trade_amount
         if latest_status.status == StatusType.CONFIRMED:
@@ -972,13 +973,13 @@ class CancelOrder(APIView):
             ad.save()
             
         # create CANCELED status for order
-        serializer = StatusSerializer(data={
+        serializer = serializers.StatusSerializer(data={
             'status': StatusType.CANCELED,
             'order': pk
         })
 
         if serializer.is_valid():
-            serialized_status = StatusReadSerializer(serializer.save())
+            serialized_status = serializers.StatusReadSerializer(serializer.save())
             websocket_msg = {
                 'success' : True,
                 'status': serialized_status.data
@@ -1000,3 +1001,71 @@ class CancelOrder(APIView):
         ad_owner = order.ad_snapshot.ad.owner.wallet_hash
         if wallet_hash != order_owner and wallet_hash != ad_owner:
            raise ValidationError('caller must be order/ad owner')
+        
+class UploadOrderPaymentAttachmentView(APIView):
+    authentication_classes = [TokenAuthentication]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        
+        payment_id = request.data.get('payment_id')
+        image_file = request.FILES.get('image')
+        if image_file is None:
+            return Response({'error': 'image is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            order_payment_obj = models.OrderPayment.objects.prefetch_related('order').get(id=payment_id)
+
+            '''Order must be status=ESCROWED for payment attachment upload.
+            (It doesn't make sense for buyers to upload proof of payment if order 
+            is not waiting for fiat payment (i.e. order is not status=ESCROWED))'''
+            validate_awaiting_payment(order_payment_obj.order)
+
+            filesize = image_file.size
+            if filesize > 5 * 1024 * 1024: # 5mb limit
+                raise ValidationError(
+                    { 'image': _('File size cannot exceed 5 MB.')}
+                )
+
+            img_object = Image.open(image_file)
+            image_upload_obj = file_upload_utils.save_image(img_object, max_width=450, request=request)
+
+            attachment, _ = models.OrderPaymentAttachment.objects.update_or_create(payment=order_payment_obj, image=image_upload_obj)
+            serializer = serializers.OrderPaymentAttachmentSerializer(attachment)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        except (models.OrderPayment.DoesNotExist, ValidationError) as err:
+            logger.exception(err.args[0])
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+class DeleteOrderPaymentAttachmentView(APIView):
+    authentication_classes = [TokenAuthentication]
+
+    def post(self, request):
+        order_payment_attachment_id = request.data.get('attachment_id')
+
+        try:
+            attachment = models.OrderPaymentAttachment.objects.get(id=order_payment_attachment_id)
+
+            # Buyers should only be allowed to alter proof of payment when order is status=ESCROWED
+            validate_awaiting_payment(attachment.payment.order)
+
+            file_upload_utils.delete_file(attachment.image.url_path)
+            attachment.delete()
+        except (models.OrderPaymentAttachment.DoesNotExist, Exception) as err:
+            logger.exception(err.args[0])
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_200_OK)
+
+def validate_awaiting_payment(order):
+    '''
+    Validates that `order` is awaiting fiat payment.
+    Raises ValidationError when order's last status is not ESCRW (Escrowed)
+    '''
+    last_status = rampp2putils.get_last_status(order.id)
+    if last_status.status != models.StatusType.ESCROWED:
+        raise ValidationError(
+            { 'order': _(f'Invalid action for {last_status.status.label} order')}
+        )
+
+            

@@ -91,9 +91,23 @@ urlpatterns = [
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui')
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
 
 
 urlpatterns += [
     path('api/', include(paytacagifts_urlpatterns)),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    import re
+    from django.urls import re_path
+    from django.conf import settings
+    from rampp2p.views.utils import media_proxy_view
+    
+    base_media_url = settings.MEDIA_URL.strip("/")
+    urlpatterns += [
+        re_path(r'^'+ re.escape(base_media_url) + r'/(?P<path>.*)$', media_proxy_view),
+        path(base_media_url, media_proxy_view),
+    ]

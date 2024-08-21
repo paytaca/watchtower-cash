@@ -204,7 +204,7 @@ admin.site.register(CryptoCurrency)
 admin.site.register(ReservedName)
 admin.site.register(IdentifierFormat)
 admin.site.register(OrderMember)
-admin.site.register(OrderPaymentMethod)
+admin.site.register(OrderPayment)
 admin.site.register(DynamicPaymentTypeField)
 
 class PaymentTypeFieldAdmin(admin.ModelAdmin):
@@ -242,3 +242,5 @@ class PaymentMethodFieldAdmin(admin.ModelAdmin):
         return obj.field_reference.fieldname
     
 admin.site.register(PaymentMethodField, PaymentMethodFieldAdmin)
+admin.site.register(ImageUpload)
+admin.site.register(OrderPaymentAttachment)

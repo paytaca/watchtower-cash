@@ -171,13 +171,15 @@ class AppealRequest(APIView):
     def post(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            appealable, appealable_at = is_appealable(pk)
-            if not appealable:
-                response_data = {
-                    'error': 'order is not appealable now',
-                    'appealable_at': appealable_at
-                }
-                return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
+            order = models.Order.objects.get(id=pk)
+            if not order.is_cash_in:
+                appealable, appealable_at = is_appealable(pk)
+                if not appealable:
+                    response_data = {
+                        'error': 'order is not appealable now',
+                        'appealable_at': appealable_at
+                    }
+                    return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
             
             self.validate_permissions(wallet_hash, pk)
             validate_status_inst_count(StatusType.APPEALED, pk)
@@ -187,7 +189,7 @@ class AppealRequest(APIView):
 
             peer = models.Peer.objects.get(wallet_hash=wallet_hash)
 
-        except (ValidationError, ValueError, models.Peer.DoesNotExist) as err:
+        except (ValidationError, ValueError, models.Peer.DoesNotExist, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         data = {
@@ -239,7 +241,7 @@ class AppealRequest(APIView):
                 if wallet_hash == party_b:
                     recipients.append(party_a)
                 message = f'Order #{pk} {appeal_type} appealed'
-                send_push_notification(recipients, message, extra={ 'order_id': pk, 'appeal_id':  serialized_appeal.id})
+                send_push_notification(recipients, message, extra={ 'order_id': pk, 'appeal_id':  appeal.id})
 
                 return Response(response_data, status=status.HTTP_200_OK)
             else:

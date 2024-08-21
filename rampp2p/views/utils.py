@@ -2,6 +2,11 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+import os
+from django.conf import settings
+from django.http import FileResponse
+from django.http import HttpResponse
+
 from main.utils.subscription import save_subscription
 
 from rampp2p.models import MarketRate
@@ -32,3 +37,14 @@ class SubscribeContractAddress(APIView):
         
         created = save_subscription(address, subscriber_id)
         return Response({'success': created}, status.HTTP_200_OK)
+    
+def media_proxy_view(request, *args, **kwargs):
+    path = kwargs.get("path", "")
+    if path.endswith("/"): path = path[:-1]
+
+    file_path = os.path.join(settings.MEDIA_ROOT, path)
+
+    if os.path.exists(file_path):
+        return FileResponse(open(file_path, 'rb'))
+    else:
+        return HttpResponse(status=404)
