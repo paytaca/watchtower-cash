@@ -131,10 +131,14 @@ class CashInAdsList(APIView):
             queryset_count = queryset.filter((Q(trade_floor__lte=amount) & Q(trade_ceiling__gte=amount))).count()
             amount_ad_count[amount] = queryset_count
 
+        # fetch only ads with paymenttypes that have recently online owners
+        paymenttypes, paymenttypes_ids = self.get_paymenttypes(count_online_queryset, distinct_payment_types)
+        if payment_type is None:
+            queryset = queryset.filter(payment_methods__payment_type__id__in=paymenttypes_ids)
+
         cashin_ads = queryset[:10]
         serialized_ads = CashinAdSerializer(cashin_ads, many=True, context = { 'wallet_hash': wallet_hash })
 
-        paymenttypes = self.get_paymenttypes(count_online_queryset, distinct_payment_types)
         responsedata = {
             'ads': serialized_ads.data,
             'payment_types': paymenttypes,
@@ -147,17 +151,20 @@ class CashInAdsList(APIView):
         queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))        
 
         paymenttypes = []
+        ids = []
         for payment_type in payment_types:
             # Filters which ads accept the selected payment method
             pt_queryset = queryset.filter(payment_methods__payment_type__id=payment_type.id).values('owner').distinct()
-            paymenttypes.append({
-                'id': payment_type.id,
-                'full_name': payment_type.full_name,
-                'short_name': payment_type.short_name,
-                'online_ads_count': pt_queryset.count()
-            })
+            if pt_queryset.count() > 0:
+                paymenttypes.append({
+                    'id': payment_type.id,
+                    'full_name': payment_type.full_name,
+                    'short_name': payment_type.short_name,
+                    'online_ads_count': pt_queryset.count()
+                })
+                ids.append(payment_type.id)
 
-        return paymenttypes
+        return paymenttypes, ids
 
     
 class AdListCreate(APIView):
