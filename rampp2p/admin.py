@@ -24,11 +24,11 @@ admin.site.register(Ad, AdAdmin)
 
 class CashInBlacklistInline(admin.TabularInline):
     model = FiatCurrency.cashin_blacklist.through
-    verbose_name_plural = "Cash in Blacklist"
+    verbose_name_plural = "Cash in Seller Blacklist"
 
 class CashInWhitelistInline(admin.TabularInline):
     model = FiatCurrency.cashin_whitelist.through
-    verbose_name_plural = "Cash in Whitelist"
+    verbose_name_plural = "Cash in Seller Whitelist"
 
 class FiatCurrencyAdmin(admin.ModelAdmin):
     inlines = [CashInBlacklistInline, CashInWhitelistInline]
