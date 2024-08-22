@@ -1,5 +1,4 @@
 from django.db import models
-from django.db.models import Q
 from .ad import AdSnapshot
 from .peer import Peer
 from .arbiter import Arbiter
@@ -22,11 +21,22 @@ class Order(models.Model):
     def __str__(self):
         return f'{self.id}'
 
-class OrderPaymentMethod(models.Model):
+class OrderPayment(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
     payment_type = models.ForeignKey(PaymentType, on_delete=models.PROTECT)
-    
+
+class ImageUpload(models.Model):
+    url = models.URLField(null=True, blank=True)
+    url_path = models.CharField(max_length=256, null=True, blank=True)
+    file_hash = models.CharField(max_length=70, null=True, blank=True, unique=True)
+    size = models.IntegerField(null=True, blank=True)
+
+class OrderPaymentAttachment(models.Model):
+    payment = models.ForeignKey(OrderPayment, on_delete=models.CASCADE)
+    image = models.ForeignKey(ImageUpload, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+        
 class OrderMember(models.Model):
     class MemberType(models.TextChoices):
         SELLER = 'SELLER'

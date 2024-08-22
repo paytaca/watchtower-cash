@@ -1,8 +1,13 @@
+from PIL import Image
 from rest_framework import serializers
 from django.db.models import Q
-import rampp2p.models as models
+from django.db import transaction
+
 from .ad import SubsetAdSnapshotSerializer
 from .payment import SubsetPaymentMethodSerializer
+from .transaction import TransactionSerializer
+
+import rampp2p.models as models
 
 import logging
 logger = logging.getLogger(__name__)
@@ -20,28 +25,12 @@ class OrderArbiterSerializer(serializers.ModelSerializer):
         model = models.Arbiter
         fields = ['id', 'name']
 
-class TimeField(serializers.Field):
-    def to_representation(self, value):
-        return str(value)
-
-class OrderPaymentMethodSerializer(serializers.ModelSerializer):
-    order = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Order.objects.all())
-    payment_method = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentMethod.objects.all())
-    payment_type = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentType.objects.all())
-    class Meta:
-        model = models.OrderPaymentMethod
-        fields = [
-            'id',
-            'order',
-            'payment_method',
-            'payment_type'
-        ]
-
 class OrderSerializer(serializers.ModelSerializer):
     ad = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
     contract  = serializers.SerializerMethodField()
+    transactions = serializers.SerializerMethodField()
     arbiter = OrderArbiterSerializer()
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
@@ -51,9 +40,6 @@ class OrderSerializer(serializers.ModelSerializer):
     is_ad_owner = serializers.SerializerMethodField()
     feedback = serializers.SerializerMethodField()
     read_at = serializers.SerializerMethodField()
-    created_at = TimeField()
-    appealable_at = TimeField()
-    expires_at = TimeField()
     
     class Meta:
         model = models.Order
@@ -64,6 +50,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'members',
             'owner',
             'contract',
+            'transactions',
             'arbiter',
             'payment_method_opts',
             'payment_methods_selected',
@@ -71,15 +58,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'locked_price',
             'trade_type',
             'status',
-            'created_at',
-            'appealable_at',
-            'last_modified_at',
             'is_ad_owner',
             'feedback',
             'chat_session_ref',
+            'is_cash_in',
+            'created_at',
+            'appealable_at',
+            'last_modified_at',
             'expires_at',
-            'read_at',
-            'is_cash_in'
+            'read_at'
         ]
     
     def get_ad(self, obj):
@@ -126,6 +113,11 @@ class OrderSerializer(serializers.ModelSerializer):
         except models.Contract.DoesNotExist:
             return None
         return contract.id
+    
+    def get_transactions(self, obj):
+        transactions = models.Transaction.objects.filter(contract__order__id = obj.id)
+        serializer = TransactionSerializer(transactions, many=True)
+        return serializer.data
 
     def get_payment_method_opts(self, obj):
         escrowed_status = models.Status.objects.filter(Q(order=obj) & Q(status=models.StatusType.ESCROWED))
@@ -139,10 +131,14 @@ class OrderSerializer(serializers.ModelSerializer):
             return payment_methods
     
     def get_payment_methods_selected(self, obj):
-        order_payment_methods = models.OrderPaymentMethod.objects.select_related('payment_method').filter(order_id=obj.id)
+        order_payments = models.OrderPayment.objects.select_related('payment_method').filter(order_id=obj.id)
         payment_methods = []
-        for method in order_payment_methods:
-            payment_methods.append(SubsetPaymentMethodSerializer(method.payment_method, context={'order_id': obj.id}).data)
+        for method in order_payments:
+            attachments = models.OrderPaymentAttachment.objects.filter(payment__id=method.id)
+            data = SubsetPaymentMethodSerializer(method.payment_method, context={'order_id': obj.id}).data
+            data['order_payment_id'] = method.id
+            data['attachments'] = OrderPaymentAttachmentSerializer(attachments, many=True).data
+            payment_methods.append(data)
         return payment_methods
 
     def get_latest_order_status(self, obj):
@@ -222,3 +218,30 @@ class WriteOrderSerializer(serializers.ModelSerializer):
             'chat_session_ref',
             'is_cash_in'
         ]
+
+class OrderPaymentSerializer(serializers.ModelSerializer):
+    order = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Order.objects.all())
+    payment_method = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentMethod.objects.all())
+    payment_type = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentType.objects.all())
+    
+    class Meta:
+        model = models.OrderPayment
+        fields = [
+            'id',
+            'order',
+            'payment_method',
+            'payment_type'
+        ]
+
+class ImageUploadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ImageUpload
+        fields = ['id', 'url', 'url_path', 'file_hash', 'size']
+
+class OrderPaymentAttachmentSerializer(serializers.ModelSerializer):
+    payment = serializers.PrimaryKeyRelatedField(queryset=models.OrderPayment.objects.all())
+    image = ImageUploadSerializer()
+
+    class Meta:
+        model = models.OrderPaymentAttachment
+        fields = ['id', 'payment', 'image']

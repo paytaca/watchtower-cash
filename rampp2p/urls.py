@@ -1,5 +1,6 @@
 from django.urls import path
-
+from django.conf.urls.static import static
+from django.conf import settings
 from rampp2p.views import *
 
 urlpatterns = [
@@ -34,6 +35,8 @@ urlpatterns = [
     path('order/<int:pk>/pending-escrow', PendingEscrowOrder.as_view(), name='pending-escrow'),
     path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
     path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
+    path('order/payment/attachment/upload', UploadOrderPaymentAttachmentView.as_view(), name='upload-payment-attachment'),
+    path('order/payment/attachment/delete', DeleteOrderPaymentAttachmentView.as_view(), name='delete-payment-attachment'),
     
     path('order/<int:pk>/verify-escrow', VerifyEscrow.as_view(), name='verify-escrow'),
     path('order/<int:pk>/verify-release', VerifyRelease.as_view(), name='verify-release'),

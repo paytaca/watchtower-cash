@@ -128,7 +128,7 @@ def get_trading_fees():
     }
     return total_fee, fees
 
-def get_latest_status(order_id: int):
+def get_last_status(order_id: int):
     latest_status = models.Status.objects.filter(order__pk=order_id)
     if latest_status.exists():
         return latest_status.last()
