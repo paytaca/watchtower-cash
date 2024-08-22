@@ -5,6 +5,13 @@ from django.utils.crypto import get_random_string
 import logging
 logger = logging.getLogger(__name__)
 
+class PeerManager(models.Manager):
+    def cashin_blacklisted(self):
+        return self.filter(is_cashin_blacklisted=True)
+    
+    def cashin_whitelisted(self):
+        return self.filter(is_cashin_whitelisted=True)
+
 class Peer(models.Model):
     chat_identity_id = models.IntegerField(null=True, blank=True)
     name = models.CharField(max_length=64, unique=True)
@@ -12,11 +19,17 @@ class Peer(models.Model):
     public_key = models.CharField(max_length=75)
     address = models.CharField(max_length=75)
     address_path = models.CharField(max_length=10, null=True)
+    
     is_disabled = models.BooleanField(default=False)
+    is_cashin_blacklisted = models.BooleanField(default=False)
+    is_cashin_whitelisted = models.BooleanField(default=False)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
     is_online = models.BooleanField(default=False)
     last_online_at = models.DateTimeField(blank=True, null=True)
+
+    objects = PeerManager()
 
     def __str__(self):
         return self.name

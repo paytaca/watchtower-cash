@@ -55,7 +55,9 @@ class CashInAdsList(APIView):
             - Sorted by last online
             - Sorted by price lowest first
         NB
-            - Will not consider ads where trade_limits_in_fiat=True
+            - Excludes ads where trade_limits_in_fiat=True
+            - Excludes cash-in blacklisted peer ads if cash-in whitelist is empty
+            - Only includes cash-in whitelisted peer ads if cash-in whitelist is not empty
     '''
     def get(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
@@ -73,6 +75,17 @@ class CashInAdsList(APIView):
             Q(fiat_currency__symbol=currency))
         
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
+
+        cashin_whitelisted_ids = Peer.objects.cashin_whitelisted().values_list('id', flat=True)
+        # If whitelist is NOT empty, only whitelisted peer ads are allowed
+        if len(cashin_whitelisted_ids) > 0:
+            queryset = queryset.filter(owner__id__in=cashin_whitelisted_ids)
+        else:
+            # If whitelist is empty, blacklisted peer ads are not allowed
+            cashin_blacklisted_ids = Peer.objects.cashin_blacklisted().values_list('id', flat=True)
+
+            if len(cashin_blacklisted_ids) > 0:
+                queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
 
         # Filters which ads accept the selected payment method
         if payment_type:
@@ -113,7 +126,7 @@ class CashInAdsList(APIView):
 
         cashin_ads = queryset[:10]
         serialized_ads = CashinAdSerializer(cashin_ads, many=True, context = { 'wallet_hash': wallet_hash })
-        # serialized_paymenttypes = PaymentTypeSerializer(distinct_payment_types, many=True)
+
         paymenttypes = self.get_paymenttypes(wallet_hash, currency, distinct_payment_types)
         responsedata = {
             'ads': serialized_ads.data,
