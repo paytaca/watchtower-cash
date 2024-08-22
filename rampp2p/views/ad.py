@@ -76,16 +76,24 @@ class CashInAdsList(APIView):
         
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
 
-        cashin_whitelisted_ids = Peer.objects.cashin_whitelisted().values_list('id', flat=True)
-        # If whitelist is NOT empty, only whitelisted peer ads are allowed
-        if len(cashin_whitelisted_ids) > 0:
-            queryset = queryset.filter(owner__id__in=cashin_whitelisted_ids)
-        else:
-            # If whitelist is empty, blacklisted peer ads are not allowed
-            cashin_blacklisted_ids = Peer.objects.cashin_blacklisted().values_list('id', flat=True)
+        # Filter blacklisted/whitelisted
+        currency_obj = FiatCurrency.objects.filter(symbol=currency)
+        if currency_obj.exists():
+            currency_obj = currency_obj.first()
+            cashin_whitelisted_ids = currency_obj.cashin_whitelist.values_list('id', flat=True).all()
+            
+            # If whitelist is NOT empty, only whitelisted peer ads are allowed
+            if len(cashin_whitelisted_ids) > 0:
+                queryset = queryset.filter(owner__id__in=cashin_whitelisted_ids)
+            else:
+                # If whitelist is empty, blacklisted peer ads are not allowed
+                cashin_blacklisted_ids = currency_obj.cashin_blacklist.values_list('id', flat=True).all()
 
-            if len(cashin_blacklisted_ids) > 0:
-                queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
+                if len(cashin_blacklisted_ids) > 0:
+                    queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
+
+        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
+        count_online_queryset = queryset
 
         # Filters which ads accept the selected payment method
         if payment_type:
@@ -107,7 +115,6 @@ class CashInAdsList(APIView):
         )
 
         # prioritize online ads
-        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
         queryset = queryset.order_by('-last_online_at', 'price')
         
         # fetch related payment methods
@@ -127,7 +134,7 @@ class CashInAdsList(APIView):
         cashin_ads = queryset[:10]
         serialized_ads = CashinAdSerializer(cashin_ads, many=True, context = { 'wallet_hash': wallet_hash })
 
-        paymenttypes = self.get_paymenttypes(wallet_hash, currency, distinct_payment_types)
+        paymenttypes = self.get_paymenttypes(count_online_queryset, distinct_payment_types)
         responsedata = {
             'ads': serialized_ads.data,
             'payment_types': paymenttypes,
@@ -135,17 +142,8 @@ class CashInAdsList(APIView):
         }
         return Response(responsedata, status=status.HTTP_200_OK)
     
-    def get_paymenttypes(self, wallet_hash, currency, payment_types):
-        queryset = Ad.objects.filter(
-            Q(deleted_at__isnull=True) & 
-            Q(trade_type=TradeType.SELL) & 
-            Q(is_public=True) & 
-            Q(trade_amount__gt=0) &
-            Q(trade_limits_in_fiat=False) &
-            Q(fiat_currency__symbol=currency))
+    def get_paymenttypes(self, queryset, payment_types):
         
-        queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
-        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
         queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))        
 
         paymenttypes = []

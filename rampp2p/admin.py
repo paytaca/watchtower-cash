@@ -22,19 +22,20 @@ class AdAdmin(admin.ModelAdmin):
 admin.site.register(Ad, AdAdmin)
 
 
+class CashInBlacklistInline(admin.TabularInline):
+    model = FiatCurrency.cashin_blacklist.through
+    verbose_name_plural = "Cash in Blacklist"
+
+class CashInWhitelistInline(admin.TabularInline):
+    model = FiatCurrency.cashin_whitelist.through
+    verbose_name_plural = "Cash in Whitelist"
+
 class FiatCurrencyAdmin(admin.ModelAdmin):
-    list_display = [
-        'name',
-        'symbol',
-        'created_at'
-    ]
-    search_fields = [
-        'name',
-        'symbol'
-    ]
+    inlines = [CashInBlacklistInline, CashInWhitelistInline]
+    list_display = ['name', 'symbol', 'created_at']
+    search_fields = ['name', 'symbol']
 
 admin.site.register(FiatCurrency, FiatCurrencyAdmin)
-
 
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
@@ -111,22 +112,8 @@ class PaymentTypeAdmin(admin.ModelAdmin):
 admin.site.register(PaymentType, PaymentTypeAdmin)
 
 class PeerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'address', 'is_disabled', 'is_cashin_blacklisted', 'is_cashin_whitelisted']
-    list_filter = ['is_cashin_blacklisted', 'is_cashin_whitelisted']
+    list_display = ['name', 'address', 'is_disabled']
     search_fields = ['name', 'address']
-    actions = ['add_to_blacklist', 'add_to_whitelist', 'remove_to_blacklist', 'remove_to_whitelist']
-
-    def add_to_blacklist(self, request, queryset):
-        queryset.update(is_cashin_blacklisted=True)
-    
-    def add_to_whitelist(self, request, queryset):
-        queryset.update(is_cashin_whitelisted=True)
-
-    def remove_to_blacklist(self, request, queryset):
-        queryset.update(is_cashin_blacklisted=False)
-
-    def remove_to_whitelist(self, request, queryset):
-        queryset.update(is_cashin_whitelisted=False)
 
 admin.site.register(Peer, PeerAdmin)
 
