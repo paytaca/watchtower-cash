@@ -22,19 +22,20 @@ class AdAdmin(admin.ModelAdmin):
 admin.site.register(Ad, AdAdmin)
 
 
+class CashInBlacklistInline(admin.TabularInline):
+    model = FiatCurrency.cashin_blacklist.through
+    verbose_name_plural = "Cash in Seller Blacklist"
+
+class CashInWhitelistInline(admin.TabularInline):
+    model = FiatCurrency.cashin_whitelist.through
+    verbose_name_plural = "Cash in Seller Whitelist"
+
 class FiatCurrencyAdmin(admin.ModelAdmin):
-    list_display = [
-        'name',
-        'symbol',
-        'created_at'
-    ]
-    search_fields = [
-        'name',
-        'symbol'
-    ]
+    inlines = [CashInBlacklistInline, CashInWhitelistInline]
+    list_display = ['name', 'symbol', 'created_at']
+    search_fields = ['name', 'symbol']
 
 admin.site.register(FiatCurrency, FiatCurrencyAdmin)
-
 
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
@@ -111,15 +112,8 @@ class PaymentTypeAdmin(admin.ModelAdmin):
 admin.site.register(PaymentType, PaymentTypeAdmin)
 
 class PeerAdmin(admin.ModelAdmin):
-    list_display = [
-        'name',
-        'address',
-        'is_disabled'
-    ]
-    search_fields = [
-        'name',
-        'address'
-    ]
+    list_display = ['name', 'address', 'is_disabled']
+    search_fields = ['name', 'address']
 
 admin.site.register(Peer, PeerAdmin)
 
