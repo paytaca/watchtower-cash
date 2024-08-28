@@ -17,7 +17,6 @@ from authentication.token import TokenAuthentication
 from rampp2p.viewcodes import WSGeneralMessageType
 
 import rampp2p.utils.websocket as websocket
-# from rampp2p.utils.utils import get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 import rampp2p.utils.file_upload as file_upload_utils
@@ -985,6 +984,13 @@ class CancelOrder(APIView):
                 'status': serialized_status.data
             }
             websocket.send_order_update(websocket_msg, pk)
+
+            # mark order as read by all parties
+            members = order.members.all()
+            for member in members:
+                member.read_at = timezone.now()
+                member.save()
+
             return Response(serialized_status.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
