@@ -37,7 +37,7 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
         _addrs = tx_out.get('scriptPubKey').get('addresses')
         if _addrs:
             address = _addrs[0]
-            device_id = None
+            device_id = []
 
             # get device ID from wallet hash of sender_0 address
             try:
@@ -46,16 +46,18 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
                 device_wallet_check = device_wallet_model.objects.filter(wallet_hash=sender_wallet_hash)
 
                 if device_wallet_check.exists():
-                    device_wallet = device_wallet_check.get()
-                    gcm_device_id = device_wallet.gcm_device.device_id
-                    apns_device_id = device_wallet.apns_device.device_id
-                    gcm_device_id_hash = md5(str.encode(gcm_device_id)).hexdigest if gcm_device_id else None
-                    apns_device_id_hash = md5(str.encode(apns_device_id)).hexdigest if apns_device_id else None
-                    device_id = [gcm_device_id_hash, apns_device_id_hash]
+                    for device in device_wallet_check.all():
+                        gcm_device_id = device.gcm_device.device_id
+                        apns_device_id = device.apns_device.device_id
+                        gcm_device_id_hash = md5(str.encode(gcm_device_id)).hexdigest if gcm_device_id else None
+                        apns_device_id_hash = md5(str.encode(apns_device_id)).hexdigest if apns_device_id else None
+                        
+                        if gcm_device_id_hash: device_id.append(gcm_device_id_hash)
+                        if apns_device_id_hash: device_id.append(apns_device_id_hash)
                 else:
-                    device_id = None
+                    device_id = []
             except:
-                device_id = None
+                device_id = []
 
             # Send mqtt notif
             data = {
