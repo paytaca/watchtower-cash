@@ -49,8 +49,8 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
                     for device in device_wallet_check.all():
                         gcm_device_id = device.gcm_device.device_id
                         apns_device_id = device.apns_device.device_id
-                        gcm_device_id_hash = md5(str.encode(gcm_device_id)).hexdigest if gcm_device_id else None
-                        apns_device_id_hash = md5(str.encode(apns_device_id)).hexdigest if apns_device_id else None
+                        gcm_device_id_hash = md5(str.encode(gcm_device_id)).hexdigest() if gcm_device_id else None
+                        apns_device_id_hash = md5(str.encode(apns_device_id)).hexdigest() if apns_device_id else None
                         
                         if gcm_device_id_hash: device_id.append(gcm_device_id_hash)
                         if apns_device_id_hash: device_id.append(apns_device_id_hash)
