@@ -67,7 +67,7 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
                 'sender_0': sender_0,
                 'decimals': 8,
                 'value': round(tx_out['value'] * (10 ** 8)),
-                'device_id': device_id
+                'device_id': device_id,
                 **extra_data
             }
             mqtt_client.publish(f"transactions/{address}", json.dumps(data), qos=1, retain=True)
