@@ -252,17 +252,27 @@ def resolve_pos_data(wallet_hash, address_path):
 
     if pos_device.merchant:
         merchant = pos_device.merchant
-        location = None
+        response['location'] = None
 
         if merchant.location:
             location_model = apps.get_model("paytacapos", "Location")
-            location = location_model.objects.filter(pk=merchant.location.pk)
+            location = location_model.objects.get(pk=merchant.location.pk)
+
+            response['location'] = dict(
+                landmark=location.landmark,
+                location=location.location,
+                street=location.street,
+                city=location.city,
+                country=location.country,
+                longitude=float(location.longitude),
+                latitude=float(location.latitude),
+            )
 
         response["merchant"] = dict(
             id=merchant.id,
             name=merchant.name,
             category=merchant.category.name if merchant.category else None,
-            location=location,
+            # location=location,
             # description=merchant.description,
         )
 
