@@ -256,7 +256,7 @@ def resolve_pos_data(wallet_hash, address_path):
 
         if merchant.location:
             location_model = apps.get_model("paytacapos", "Location")
-            location = location_model.objects.filter(pk=merchant.location.pk)
+            location = location_model.objects.get(pk=merchant.location.pk)
 
             response['location'] = dict(
                 landmark=location.landmark,
