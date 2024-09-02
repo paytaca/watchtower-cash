@@ -264,8 +264,8 @@ def resolve_pos_data(wallet_hash, address_path):
                 street=location.street,
                 city=location.city,
                 country=location.country,
-                longitude=location.longitude,
-                latitude=location.latitude,
+                longitude=float(location.longitude),
+                latitude=float(location.latitude),
             )
 
         response["merchant"] = dict(
