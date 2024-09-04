@@ -1598,24 +1598,28 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 date_created=txn.date_created,
                 tx_timestamp=tx_timestamp,
             )
-            history.save()
-
-            resolve_wallet_history_usd_values.delay(txid=txid)
-
-            if history.tx_timestamp:
-                try:
-                    parse_wallet_history_market_values(history.id)
-                    history.refresh_from_db()
-                except Exception as exception:
-                    LOGGER.exception(exception)
 
             try:
-                # Do not send notifications for amounts less than or equal to 0.00001
-                if abs(amount) > 0.00001:
-                    LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
-                    send_wallet_history_push_notification(history)
-            except Exception as exception:
-                LOGGER.exception(exception)
+                history.save()
+
+                resolve_wallet_history_usd_values.delay(txid=txid)
+
+                if history.tx_timestamp:
+                    try:
+                        parse_wallet_history_market_values(history.id)
+                        history.refresh_from_db()
+                    except Exception as exception:
+                        LOGGER.exception(exception)
+
+                try:
+                    # Do not send notifications for amounts less than or equal to 0.00001
+                    if abs(amount) > 0.00001:
+                        LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
+                        send_wallet_history_push_notification(history)
+                except Exception as exception:
+                    LOGGER.exception(exception)
+            except IntegrityError as exc:
+                LOGGER.exception(exc)
 
         # merchant wallet check
         merchant_check = Merchant.objects.filter(wallet_hash=wallet.wallet_hash)
