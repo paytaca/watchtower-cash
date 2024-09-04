@@ -1,6 +1,7 @@
 from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 
 from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
@@ -10,6 +11,7 @@ from django.utils import timezone
 
 from authentication.token import TokenAuthentication
 from authentication.serializers import UserSerializer
+from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.serializers as rampp2p_serializers
 import rampp2p.models as rampp2p_models
@@ -47,28 +49,36 @@ class UserProfileView(APIView):
         }
         return Response(response, status.HTTP_200_OK)
     
-class ArbiterListCreateView(APIView):
+class ArbiterView(APIView):
     authentication_classes = [TokenAuthentication]
 
-    def get(self, request):
-        queryset = rampp2p_models.Arbiter.objects.filter(
-                Q(is_disabled=False) &
-                (Q(inactive_until__isnull=True) |
-                 Q(inactive_until__lte=datetime.now())))
+    def get(self, request, wallet_hash=None):
+        if wallet_hash:
+            try:
+                arbiter = rampp2p_models.Arbiter.objects.get(wallet_hash=wallet_hash)
+            except rampp2p_models.Arbiter.DoesNotExist as err:
+                return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(rampp2p_serializers.ArbiterSerializer(arbiter).data, status=status.HTTP_200_OK)
+        else:
+            # List arbiters
+            queryset = rampp2p_models.Arbiter.objects.filter(
+                    Q(is_disabled=False) &
+                    (Q(inactive_until__isnull=True) |
+                    Q(inactive_until__lte=datetime.now())))
 
-        # Filter by currency. Default to arbiter for PHP if not set
-        currency = request.query_params.get('currency') or 'PHP'
-        if not currency:
-            return Response({'error': 'currency is required'}, status.HTTP_400_BAD_REQUEST)
-        queryset = queryset.filter(fiat_currencies__symbol=currency)
+            # Filter by currency. Default to arbiter for PHP if not set
+            currency = request.query_params.get('currency') or 'PHP'
+            if not currency:
+                return Response({'error': 'currency is required'}, status.HTTP_400_BAD_REQUEST)
+            queryset = queryset.filter(fiat_currencies__symbol=currency)
 
-        # Filter by arbiter id
-        id = request.query_params.get('id')
-        if id:
-            queryset = queryset.filter(id=id)
+            # Filter by arbiter id
+            id = request.query_params.get('id')
+            if id:
+                queryset = queryset.filter(id=id)
 
-        serializer = rampp2p_serializers.ArbiterSerializer(queryset, many=True)
-        return Response(serializer.data, status.HTTP_200_OK)
+            serializer = rampp2p_serializers.ArbiterSerializer(queryset, many=True)
+            return Response(serializer.data, status.HTTP_200_OK)
     
     def post(self, request):
         public_key = request.data.get('public_key')
@@ -96,26 +106,9 @@ class ArbiterListCreateView(APIView):
         except IntegrityError:
             return Response({'error': 'arbiter with wallet_hash already exists'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serialized_arbiter.data, status=status.HTTP_200_OK)
-
-class ArbiterDetailView(APIView):
-    authentication_classes = [TokenAuthentication]
-    
-    def get(self, request):
-        arbiter_id = request.data.get('arbiter_id')
-        wallet_hash = request.user.wallet_hash
-        try:
-            arbiter = None
-            if arbiter_id:
-                arbiter = rampp2p_models.Arbiter.objects.get(pk=arbiter_id)
-            else:
-                arbiter = rampp2p_models.Arbiter.objects.get(wallet_hash=wallet_hash)
-        except rampp2p_models.Arbiter.DoesNotExist as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(rampp2p_serializers.ArbiterSerializer(arbiter).data, status=status.HTTP_200_OK)
     
     def patch(self, request):
         data = request.data.copy()
-        
         inactive_hours = request.data.get('inactive_hours')
         if inactive_hours:
             data['inactive_until'] = datetime.now() + timedelta(hours=inactive_hours)
@@ -126,7 +119,25 @@ class ArbiterDetailView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class PeerCreateView(APIView):
+class PeerView(APIView):
+    def get_authenticators(self):
+        if self.request.method in ['GET', 'PATCH']:
+            return [TokenAuthentication()]
+        return []
+
+    def get_permissions(self):
+        if self.request.method in ['GET', 'PATCH']:
+            return [RampP2PIsAuthenticated()]
+        return [AllowAny()]
+
+    def get(self, request, pk):
+        try:
+            peer = rampp2p_models.Peer.objects.get(pk=pk)
+        except rampp2p_models.Peer.DoesNotExist:
+            raise Http404
+        serializer = rampp2p_serializers.PeerSerializer(peer)
+        return Response(serializer.data, status.HTTP_200_OK)
+
     def post(self, request):
         try:
             signature, timestamp, wallet_hash = get_verification_headers(request)
@@ -184,18 +195,6 @@ class PeerCreateView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-class PeerDetailView(APIView):
-    authentication_classes = [TokenAuthentication]
-    
-    def get(self, request):
-        id = request.query_params.get('id')
-        try:
-            peer = rampp2p_models.Peer.objects.get(id=id)
-        except rampp2p_models.Peer.DoesNotExist:
-            raise Http404
-        serializer = rampp2p_serializers.PeerSerializer(peer)
-        return Response(serializer.data, status.HTTP_200_OK)
-
     def patch(self, request):        
         serializer = rampp2p_serializers.PeerUpdateSerializer(request.user, data=request.data)
         if serializer.is_valid():

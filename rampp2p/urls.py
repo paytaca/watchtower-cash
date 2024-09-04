@@ -11,11 +11,11 @@ urlpatterns = [
     path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
     path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
 
-    path('user', UserProfileView.as_view(), name='user-profile'),
-    path('peer/create', PeerCreateView.as_view(), name='peer-create'),
-    path('peer/detail', PeerDetailView.as_view(), name='peer-detail'),
-    path('arbiter/', ArbiterListCreateView.as_view(), name='arbiter-list-create'),
-    path('arbiter/detail', ArbiterDetailView.as_view(), name='arbiter-detail'),
+    path('user/', UserProfileView.as_view(), name='user-profile'),
+    path('peer/', PeerView.as_view(), name='peer-create-edit'),
+    path('peer/<int:pk>/', PeerView.as_view(), name='peer-detail'),
+    path('arbiter/', ArbiterView.as_view(), name='arbiter-list-create-edit'),
+    path('arbiter/<str:wallet_hash>/', ArbiterView.as_view(), name='arbiter-detail'),
 
     path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list'),
     path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),
