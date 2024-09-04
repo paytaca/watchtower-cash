@@ -1,21 +1,24 @@
 from django.urls import path
+from django.conf.urls.static import static
+from django.conf import settings
 from rampp2p.views import *
 
 urlpatterns = [
     path('cashin/ad', CashInAdsList.as_view(), name='cashin-ads'),
-    path('ad/', AdView.as_view(), name='ad-list-create'),
-    path('ad/<int:pk>/', AdView.as_view(), name='ad-detail'),
+    path('ad/', AdListCreate.as_view(), name='ad-list-create'),
+    path('ad/<int:pk>', AdDetail.as_view(), name='ad-detail'),
     path('ad-snapshot', AdSnapshotView.as_view(), name='ad-snapshot'),
 
     path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list'),
     path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
     path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
 
-    path('user', UserProfileView.as_view(), name='user-profile'),
     path('peer/create', PeerCreateView.as_view(), name='peer-create'),
     path('peer/detail', PeerDetailView.as_view(), name='peer-detail'),
-    path('arbiter/', ArbiterListCreateView.as_view(), name='arbiter-list-create'),
-    path('arbiter/detail', ArbiterDetailView.as_view(), name='arbiter-detail'),
+    path('user', UserProfileView.as_view(), name='user-profile'),
+    path('arbiter/', ArbiterListCreate.as_view(), name='arbiter-list-create'),
+    path('arbiter/detail', ArbiterDetail.as_view(), name='arbiter-detail'),
+    path('arbiter/config', ArbiterConfig.as_view(), name='arbiter-config'),
 
     path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list'),
     path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),
@@ -44,9 +47,9 @@ urlpatterns = [
     path('order/<int:pk>/appeal/pending-release', AppealPendingRelease.as_view(), name='appeal-pending-release'),
     path('order/<int:pk>/appeal/pending-refund', AppealPendingRefund.as_view(), name='appeal-pending-refund'),
 
-    path('order/feedback/arbiter', ArbiterFeedbackView.as_view(), name='arbiter-feedback-view'),
-    path('order/feedback/peer', PeerFeedbackView.as_view(), name='peer-feedback-view'),
-    path('order/feedback/<int:feedback_id>', FeedbackDetailView.as_view(), name='feedback-detail'),
+    path('order/feedback/arbiter', ArbiterFeedbackListCreate.as_view(), name='arbiter-feedback-list-create'),
+    path('order/feedback/peer', PeerFeedbackListCreate.as_view(), name='peer-feedback-list-create'),
+    path('order/feedback/<int:feedback_id>', FeedbackDetail.as_view(), name='feedback-detail'),
 
     path('order/contract/create', ContractCreateView.as_view(), name='generate-contract'),
     path('order/contract', ContractDetailsView.as_view(), name='contract-detail'),
