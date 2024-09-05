@@ -81,6 +81,21 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin)
         return Response('OK', status=status.HTTP_200_OK)
 
 
+    @swagger_auto_schema(request_body=UpdatePaymentRequestSerializer, responses={ 200: 'OK' })
+    @decorators.action(methods=["post"], detail=False)
+    def update_amount(self, request, *args, **kwargs):
+        serializer = UpdatePaymentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  
+
+        pos_device = serializer.validated_data['pos_device']
+        payment_request = PosPaymentRequest.objects.filter(
+            pos_device__posid=pos_device['posid'],
+            wallet_hash=pos_device['wallet_hash'],
+        )
+        payment_request.update(amount=serializer.validated_data['amount'])
+        return Response('OK', status=status.HTTP_200_OK)
+
+
 class PosDeviceViewSet(
     viewsets.GenericViewSet,
     mixins.ListModelMixin,

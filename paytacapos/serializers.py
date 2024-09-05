@@ -508,6 +508,11 @@ class CreatePosPaymentRequestSerializer(serializers.Serializer):
 
 class CancelPaymentRequestSerializer(serializers.Serializer):
     pos_device = POSDevicePaymentSerializer()
+
+
+class UpdatePaymentRequestSerializer(serializers.Serializer):
+    pos_device = POSDevicePaymentSerializer()
+    amount = serializers.IntegerField()
     
 
 class PosPaymentRequestSerializer(serializers.ModelSerializer):
