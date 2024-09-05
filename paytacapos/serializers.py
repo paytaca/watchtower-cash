@@ -14,7 +14,7 @@ from vouchers.serializers import PosDeviceVaultSerializer, MerchantVaultSerializ
 from vouchers.models import Voucher
 from vouchers.vault import create_device_vault
 
-from main.models import CashNonFungibleToken, Wallet
+from main.models import CashNonFungibleToken, Wallet, Address
 
 from .models import *
 from .permissions import HasMinPaytacaVersionHeader
@@ -314,6 +314,20 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
             pos_device.save()
 
         return instance
+
+
+class PosDeviceVaultAddressSerializer(serializers.Serializer):
+    posid = serializers.IntegerField()
+    address = serializers.CharField(max_length=70)
+
+    def validate_posid(self, value):
+        if value < 0: raise serializers.ValidationError('POSID should be >= 0')
+        return value
+
+    def validate_address(self, value):
+        address = Address.objects.filter(address=value)
+        if not address.exists(): raise serializers.ValidationError('Address is not subscribed')
+        return value
 
 
 class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):

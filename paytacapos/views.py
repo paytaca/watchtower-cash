@@ -21,7 +21,8 @@ from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 
-from .models import Location, Category, Merchant
+from .models import Location, Category, Merchant, PosDevice
+from main.models import Address
 
 from authentication.token import WalletAuthentication
 
@@ -212,6 +213,20 @@ class PosDeviceViewSet(
         serializer.remove_link_code_data()
         send_device_update(instance.pos_device, action="link")
         return Response(self.serializer_class(instance.pos_device).data)
+    
+    @swagger_auto_schema(method="post", request_body=PosDeviceVaultAddressSerializer, response={ 200: PosDeviceVaultSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def vault_address(self, request, *args, **kwargs):
+        serializer = PosDeviceVaultAddressSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        address = Address.objects.get(address=serializer.validated_data['address'])
+        pos_device = PosDevice.objects.get(
+            wallet_hash=address.wallet.wallet_hash,
+            posid=serializer.validated_data['posid']
+        )
+        serializer = PosDeviceVaultSerializer(pos_device.vault)
+        return Response(serializer.data)
 
     @swagger_auto_schema(
         method="get",
