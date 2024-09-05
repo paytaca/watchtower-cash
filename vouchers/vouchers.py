@@ -1,5 +1,26 @@
+from main.utils.subscription import new_subscription
 from paytacapos.models import PosDevice
 from vouchers.models import Voucher
+
+from django.conf import settings
+
+
+def subscribe_vault_address(address):
+    project_id = {
+        'mainnet': '8feaa0b2-f92e-49fd-a27a-aa6cb23345c7',
+        'chipnet': '95ccec69-479a-41c4-90bc-182413ad2f37'
+    }
+    project_id = project_id[settings.BCH_NETWORK]
+    subscription_data = {
+        'address': address,
+        'project_id': project_id,
+    }
+
+    # added try catch here for already subscribed addresses error
+    try:
+        new_subscription(**subscription_data)
+    except:
+        pass
 
 
 def verify_voucher(device_vault_token_address, voucher_ids):

@@ -2,29 +2,10 @@ from django.conf import settings
 
 from paytacapos.models import Merchant, PosDevice
 from vouchers.models import PosDeviceVault, MerchantVault
-from main.utils.subscription import new_subscription
 
 from bitcash.keygen import public_key_to_address
 
 import requests
-
-
-def subscribe_vault_address(address):
-    project_id = {
-        'mainnet': '8feaa0b2-f92e-49fd-a27a-aa6cb23345c7',
-        'chipnet': '95ccec69-479a-41c4-90bc-182413ad2f37'
-    }
-    project_id = project_id[settings.BCH_NETWORK]
-    subscription_data = {
-        'address': address,
-        'project_id': project_id,
-    }
-
-    # added try catch here for already subscribed addresses error
-    try:
-        new_subscription(**subscription_data)
-    except:
-        pass
 
 
 def get_merchant_vault(merchant_id):
@@ -111,7 +92,6 @@ def create_device_vault(pos_device_id, pubkey):
     address = bytearray.fromhex(pubkey)
     device_vault = get_device_vault(pos_device.id)
     contract = device_vault['contract']
-    subscribe_vault_address(contract['address'])
 
     # delete old vaults
     PosDeviceVault.objects.filter(pos_device=pos_device).delete()
@@ -132,7 +112,6 @@ def create_merchant_vault(merchant_id, pubkey):
 
     merchant_vault = get_merchant_vault(merchant.id)
     contract = merchant_vault['contract']
-    subscribe_vault_address(contract['address'])
 
     # delete old vaults
     MerchantVault.objects.filter(merchant=merchant).delete()
