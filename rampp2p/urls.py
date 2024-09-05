@@ -2,10 +2,10 @@ from django.urls import path
 from rampp2p.views import *
 
 urlpatterns = [
-    path('cashin/ad', CashInAdsList.as_view(), name='cashin-ads'),
     path('ad/', AdView.as_view(), name='ad-list-create'),
     path('ad/<int:pk>/', AdView.as_view(), name='ad-detail'),
-    path('ad-snapshot', AdSnapshotView.as_view(), name='ad-snapshot'),
+    path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
+    path('ad/cash-in/', CashInAdView.as_view(), name='cashin-ads-list'),
 
     path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list'),
     path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
@@ -22,9 +22,8 @@ urlpatterns = [
     path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list'),
     path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view(), name='crypto-detail'),
 
-    path('cashin/order', CashinOrderList.as_view(), name='cashin-order-list'),
-    path('order/', OrderListCreate.as_view(), name='order-list-create'),
-    path('order/<int:pk>', OrderDetail.as_view(), name='order-detail'),
+    path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
+    path('order/<int:pk>/', OrderViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}), name='order-detail-edit'),
     path('order/<int:pk>/members', OrderMemberView.as_view(), name='order-members'),
     path('order/<int:pk>/status', OrderListStatus.as_view(), name='order-list-status'),
     path('order/<int:pk>/cancel', CancelOrder.as_view(), name='order-cancel'),
@@ -32,6 +31,7 @@ urlpatterns = [
     path('order/<int:pk>/pending-escrow', PendingEscrowOrder.as_view(), name='pending-escrow'),
     path('order/<int:pk>/confirm-payment/buyer', CryptoBuyerConfirmPayment.as_view(), name='buyer-confirm-payment'),
     path('order/<int:pk>/confirm-payment/seller', CryptoSellerConfirmPayment.as_view(), name='seller-confirm-payment'),
+    path('order/cash-in/', CashinOrderView.as_view(), name='cashin-order-list'),
     path('order/payment/attachment/upload', UploadOrderPaymentAttachmentView.as_view(), name='upload-payment-attachment'),
     path('order/payment/attachment/delete', DeleteOrderPaymentAttachmentView.as_view(), name='delete-payment-attachment'),
     

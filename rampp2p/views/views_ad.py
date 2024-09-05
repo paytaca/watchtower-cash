@@ -18,7 +18,7 @@ import rampp2p.models as rampp2p_models
 import logging
 logger = logging.getLogger(__name__)
 
-class ListCashInAdView(APIView):
+class CashInAdView(APIView):
     '''
         Filters the best Sell Ad for given payment type and amount.
         The best SELL ad is determined by:
