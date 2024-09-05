@@ -45,7 +45,7 @@ class VoucherViewSet(
     serializer_classes = {
         'list': VoucherSerializer,
         'merchants': MerchantListSerializer,
-        'claim_check': VoucherClaimCheckSerializer,
+        'verify': VoucherClaimVerificationSerializer,
     }
 
     def list(self, request, *args, **kwargs):

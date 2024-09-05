@@ -145,6 +145,8 @@ class Merchant(models.Model):
     logo_120 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
 
     last_update = models.DateTimeField(null=True)
+    pubkey = models.CharField(max_length=100, null=True, blank=True) # 0th index
+    verification_category = models.CharField(max_length=100, null=True, blank=Truess)
 
     class Meta:
         ordering = ('-id', )

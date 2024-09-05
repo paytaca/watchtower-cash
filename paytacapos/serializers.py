@@ -10,9 +10,9 @@ from django.db.models import Sum
 from rest_framework import serializers, exceptions
 from bitcash.keygen import public_key_to_address
 
-from vouchers.serializers import VaultSerializer
+from vouchers.serializers import PosDeviceVaultSerializer, MerchantVaultSerializer
 from vouchers.models import Voucher
-from vouchers.vault import generate_voucher_vault
+from vouchers.vault import create_device_vault
 
 from main.models import CashNonFungibleToken, Wallet
 
@@ -319,8 +319,8 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
 class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
-    vault = VaultSerializer(read_only=True)
-    pubkey = serializers.CharField(write_only=True, required=False, help_text="Vault pubkey")
+    vault = PosDeviceVaultSerializer(read_only=True)
+    pubkey = serializers.CharField(write_only=True, required=False, help_text="POS Device Vault pubkey")
     name = serializers.CharField(required=False)
     merchant_id = serializers.PrimaryKeyRelatedField(
         queryset=Merchant.objects, source="merchant", required=False,
@@ -447,13 +447,14 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
         try:
             instance = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
             instance = super().update(instance, validated_data)
+            create_device_vault(instance.id, validated_data['pubkey'])
             send_device_update(instance, action="update")
             return instance
         except PosDevice.DoesNotExist:
             pass
 
         instance = super().create(validated_data, *args, **kwargs)
-        generate_voucher_vault(instance.id, validated_data['pubkey'])
+        create_device_vault(instance.id, validated_data['pubkey'])
         send_device_update(instance, action="create")
         return instance
 
@@ -608,12 +609,14 @@ class MerchantListSerializer(serializers.ModelSerializer):
     vouchers = serializers.SerializerMethodField()
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
+    vault = MerchantVaultSerializer(read_only=True)
     
     class Meta:
         model = Merchant
         fields = [
             "id",
             "wallet_hash",
+            "vault",
             "slug",
             "name",
             "location",
@@ -622,6 +625,8 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "description",
             "gmap_business_link",
             "last_transaction_date",
+            "pubkey",
+            "verification_category",
             "vouchers",
             "logos",
             "last_update",
@@ -708,6 +713,8 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "description",
             "primary_contact_number",
             "location",
+            "pubkey",
+            "verification_category",
 
             "allow_duplicates", # temporary field
             "branch_count",

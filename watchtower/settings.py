@@ -658,6 +658,13 @@ SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
 VOUCHER_EXPRESS_URL = 'http://localhost:3002/vouchers'
+VAULT_EXPRESS_URLS = {
+    'device': f'{VOUCHER_EXPRESS_URL}/vault/device',
+    'merchant': f'{VOUCHER_EXPRESS_URL}/vault/merchant',
+}
+
+VOUCHER_FEE_FUNDER_ADDRESS = config('VOUCHER_FEE_FUNDER_ADDRESS') 
+VOUCHER_FEE_FUNDER_WIF = config('VOUCHER_FEE_FUNDER_WIF') 
 
 # purelypeer
 

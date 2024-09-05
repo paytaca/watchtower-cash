@@ -2,12 +2,12 @@ from paytacapos.models import PosDevice
 from vouchers.models import Voucher
 
 
-def verify_voucher(vault_token_address, voucher_ids):
-    pos_device = PosDevice.objects.filter(vault__token_address=vault_token_address)
-    is_vault_address = pos_device.exists()
+def verify_voucher(device_vault_token_address, voucher_ids):
+    pos_device = PosDevice.objects.filter(vault__token_address=device_vault_token_address)
+    is_device_vault_address = pos_device.exists()
     result = { 'proceed': False }
     
-    if is_vault_address:
+    if is_device_vault_address:
         pos_device = pos_device.first()
         valid_categories = []
 
@@ -22,7 +22,7 @@ def verify_voucher(vault_token_address, voucher_ids):
             if vouchers.exists():
                 voucher = vouchers.first()
 
-                if pos_device.vault == voucher.vault:
+                if pos_device.merchant == voucher.vault.merchant:
                     if voucher.expired:
                         result[voucher_id]['err'] = VOUCHER_EXPIRED
                         return result
@@ -40,7 +40,7 @@ def verify_voucher(vault_token_address, voucher_ids):
                         key_nft_category = key_nft_output['token_data']['category']
 
                         # check if lock NFT recipient address is this endpoint payload's vault address
-                        if key_nft_category == voucher.category and lock_nft_recipient == vault_token_address:
+                        if key_nft_category == voucher.category and lock_nft_recipient == device_vault_token_address:
                             valid_categories.append(key_nft_category)
                         else:
                             result[voucher_id]['err'] = VOUCHER_MERCHANT_MISMATCH

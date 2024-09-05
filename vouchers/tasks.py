@@ -51,5 +51,7 @@ def refund_expired_vouchers():
                 'network': 'mainnet'
             }
         }
-        response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/refund', json=payload)
+        url = settings.VAULT_EXPRESS_URLS['device']
+        url = f'{url}/refund'
+        response = requests.post(url, json=payload)
         response = response.json()

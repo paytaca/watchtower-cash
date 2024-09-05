@@ -5,7 +5,7 @@ from django.conf import settings
 from datetime import timedelta
 
 
-class Vault(models.Model):
+class PosDeviceVault(models.Model):
     pos_device = models.OneToOneField(
         'paytacapos.PosDevice',
         related_name='vault',
@@ -23,10 +23,26 @@ class Vault(models.Model):
             'pos_device__merchant__name',
         )
 
+    
+class MerchantVault(models.Model):
+    merchant = models.OneToOneField(
+        'paytacapos.Merchant',
+        related_name='vault',
+        on_delete=models.CASCADE,
+        db_index=True
+    )
+    address = models.CharField(max_length=100, unique=True, db_index=True)
+    token_address = models.CharField(max_length=100, unique=True, db_index=True)
+
+    class Meta:
+        ordering = (
+            'merchant__name',
+        )
+
 
 class Voucher(models.Model):
     vault = models.ForeignKey(
-        Vault,
+        MerchantVault,
         related_name='vouchers',
         on_delete=models.CASCADE,
         db_index=True

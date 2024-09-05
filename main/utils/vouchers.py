@@ -1,11 +1,13 @@
 from paytacapos.models import PosPaymentRequest
 from vouchers.models import *
+from vouchers.vault import get_device_vault, get_merchant_vault
 
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
 from django.utils import timezone
 from django.conf import settings
+from django.db.models import Q
 
 from bitcash.keygen import public_key_to_address
 from celery import shared_task
@@ -47,15 +49,36 @@ def flag_claimed_voucher(txid, category):
     update_purelypeer_voucher(txid, category)
 
 
-def process_pending_payment_requests(pubkey, amount, payload):
+def process_pending_payment_requests(address, senders):
+    device_vaults = PosDeviceVault.objects.filter(address=address)
+    merchant_vaults = MerchantVault.objects.filter(
+        models.Q(address__in=senders) |
+        models.Q(token_address__in=senders)
+    )
+
+    if not device_vaults.exists(): return
+    if not merchant_vaults.exists(): return
+
+    device_vault = device_vaults.first()
     payment_requests = PosPaymentRequest.objects.filter(
-        pos_device__vault__pubkey=pubkey,
-        amount__lte=amount,
+        pos_device__vault__pubkey=device_vault.pos_device.pubkey,
         paid=False
     )
+    payment_request = payment_requests.first()
+    
     if not payment_requests.exists(): return
 
-    url = f'{settings.VOUCHER_EXPRESS_URL}/release'
+    payload = get_device_vault(device_vault.pos_device.id)['payload']
+    prefix = settings.VAULT_EXPRESS_URLS['device']
+    url = f'{prefix}/compile'
+    response = requests.post(url, json=payload)
+    response = response.json()
+    balance = response['balance']
+
+    if payment_request.amount > balance: return
+
+    url = f'{prefix}/release'
+    payload['params']['amount'] = payment_request.amount * 1e8
     response = requests.post(url, json=payload)
     response = response.json()
 
@@ -64,43 +87,46 @@ def process_pending_payment_requests(pubkey, amount, payload):
 
 
 @shared_task(queue='vouchers')
-def claim_voucher(category, pubkey):
-    address = bytearray.fromhex(pubkey)
-    address = public_key_to_address(address)
-    payload = {
-        'params': {
-            'category': category,
-            'merchant': {
-                'pubkey': pubkey,
-            },
-        },
-        'options': {
-            'network': 'mainnet'
-        }
-    }
-    url = f'{settings.VOUCHER_EXPRESS_URL}/claim'
-    response = requests.post(url, json=payload)
-    response = response.json()
+def process_key_nft(txid, category, recipient_address, senders):
+    device_vaults = PosDeviceVault.objects.filter(address=recipient_address)
+    if device_vaults.exists():
+        pos_device = device_vaults.first().pos_device
+        url = settings.VAULT_EXPRESS_URLS['device']
+        url = f'{url}/send-tokens'
+        payload = get_device_vault(pos_device.id)['payload']
+        response = requests.post(url, json=payload)
+        result = response.json()
+        return
+        
+    merchant_vaults = MerchantVault.objects.filter(address=recipient_address)
+    if merchant_vaults.exists():
+        merchant = merchant_vaults.first().merchant
+        url = settings.VAULT_EXPRESS_URLS['merchant']
+        url = f'{url}/claim'
+        payload = get_merchant_vault(merchant.id)['payload']
+        response = requests.post(url, json=payload)
+        result = response.json()
 
-    if not response['success']: return
+        if not result['success']: return
 
-    txid = response['txid']
-    data = { 'update_type': 'voucher_processed' }
-    room_name = address.replace(':','_') + '_'
-    channel_layer = get_channel_layer()
+        device_vault = PosDeviceVault.objects.filter(
+            Q(address__in=senders) |
+            Q(token_address__in=senders)
+        )
+        device_vault = device_vault.first()
 
-    flag_claimed_voucher(txid, category)
-    async_to_sync(channel_layer.group_send)(
-        f"{room_name}", 
-        {
-            "type": "send_update",
-            "data": data
-        }
-    )
+        if not device_vault.exists(): return
 
-    url = f'{settings.VOUCHER_EXPRESS_URL}/vault-balance'
-    response = requests.post(url, json=payload)
-    response = response.json()
-    balance = response['balance']
-
-    process_pending_payment_requests(pubkey, balance, payload)
+        data = { 'update_type': 'voucher_processed' }
+        address = bytearray.fromhex(device_vault.pos_device.pubkey)
+        address = public_key_to_address(address)
+        room_name = address.replace(':','_') + '_'
+        channel_layer = get_channel_layer()
+        flag_claimed_voucher(txid, category)
+        async_to_sync(channel_layer.group_send)(
+            f"{room_name}", 
+            {
+                "type": "send_update",
+                "data": data
+            }
+        )

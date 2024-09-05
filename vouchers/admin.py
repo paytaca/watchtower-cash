@@ -3,14 +3,27 @@ from django.contrib import admin
 from vouchers.models import *
 
 
-@admin.register(Vault)
-class VaultAdmin(admin.ModelAdmin):
+@admin.register(PosDeviceVault)
+class PosDeviceVaultAdmin(admin.ModelAdmin):
     search_fields = [
         'address',
         'token_address',
     ]
     list_display = [
         'pos_device',
+        'address',
+        'token_address',
+    ]
+
+
+@admin.register(MerchantVault)
+class MerchantVaultAdmin(admin.ModelAdmin):
+    search_fields = [
+        'address',
+        'token_address',
+    ]
+    list_display = [
+        'merchant',
         'address',
         'token_address',
     ]

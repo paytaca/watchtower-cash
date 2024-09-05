@@ -15,7 +15,10 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
-from main.utils.vouchers import is_voucher, claim_voucher
+from main.utils.vouchers import (
+    is_voucher,
+    process_key_nft,
+)
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -98,16 +101,11 @@ def client_acknowledgement(self, txid):
         address = transaction.address
 
             
-        subscriptions = Subscription.objects.filter(
-            address=address
-        )
-
+        subscriptions = Subscription.objects.filter(address=address)
         senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
 
         if subscriptions.exists():
-            
             for subscription in subscriptions:
-
                 recipient = subscription.recipient
                 websocket = subscription.websocket
 
@@ -187,14 +185,11 @@ def client_acknowledgement(self, txid):
                         data['is_nft'] = True
 
                     if __is_key_nft:
-                        pass
+                        process_key_nft.delay(transaction.txid, category, address.address, senders)
 
-                    if __is_lock_nft:
-                        vaults = Vault.objects.filter(address=address.address)
-                        if vaults.exists():
-                            vault = vaults.first()
-                            claim_voucher.delay(category, vault.pubkey)
-                    
+                    if token_name == 'bch':
+                        process_pending_payment_requests(address.address, senders)
+
                     if jpp_invoice_uuid:
                         data['jpp_invoice_uuid'] = jpp_invoice_uuid
 
@@ -564,11 +559,11 @@ def process_nft_txn(txid):
     # 2 = quest NFT
     if txns.exists() and txns.count() == 3:
         txn_addresses = txns.values('address__address')
-        vault = Vault.objects.filter(address__in=txn_addresses)
+        merchant_vault = MerchantVault.objects.filter(address__in=txn_addresses)
         
-        if vault.exists():
-            vault = vault.first()
-            lock_nft_txn = txns.filter(address__address=vault.address)
+        if merchant_vault.exists():
+            merchant_vault = merchant_vault.first()
+            lock_nft_txn = txns.filter(address__address=merchant_vault.address)
             lock_nft_txn = lock_nft_txn.first()
 
             if lock_nft_txn.cashtoken_nft.current_index == 1:
@@ -577,7 +572,7 @@ def process_nft_txn(txid):
 
                 Voucher(
                     nft=nft,
-                    vault=vault,
+                    vault=merchant_vault,
                     value=value,
                     minting_txid=lock_nft_txn.txid,
                     category=nft.category,
