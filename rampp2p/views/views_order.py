@@ -1,9 +1,9 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound
 from rest_framework.parsers import MultiPartParser
 from rest_framework import viewsets
+from rest_framework.decorators import action
 
 from django.http import Http404
 from django.utils import timezone
@@ -446,6 +446,321 @@ class OrderViewSet(viewsets.GenericViewSet):
         serialized_order = serializers.OrderSerializer(order, context={ 'wallet_hash': wallet_hash }).data
         return Response(serialized_order, status=status.HTTP_200_OK)
     
+    @action(detail=True, methods=['get'])
+    def members(self, request, pk):
+        if request.method == 'GET':
+            try:
+                order = models.Order.objects.get(pk=pk)
+                members = [order.owner, order.ad_snapshot.ad.owner]
+                if order.arbiter:
+                    members.append(order.arbiter)
+
+                member_info = []
+                for member in members:
+                    member_info.append({
+                        'id': member.id,
+                        'chat_identity_id': member.chat_identity_id,
+                        'public_key': member.public_key,
+                        'name': member.name,
+                        'address': member.address,
+                        'is_arbiter': isinstance(member, models.Arbiter)
+                    })
+                
+                members = serializers.OrderMemberSerializer(member_info, many=True)
+            except models.Order.DoesNotExist:
+                raise Http404
+            except Exception as err:
+                return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(members.data, status=status.HTTP_200_OK)
+        
+        if request.method == 'PATCH':
+            wallet_hash = request.user.wallet_hash
+            member = models.OrderMember.objects.filter(Q(order__id=pk) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
+            if not member.exists():
+                return Response({'success': False, 'error': 'no such member'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            member = member.first()
+            member.read_at = timezone.now()
+            member.save()
+        
+            if isinstance(request.user, models.Arbiter):
+                member_orders = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(arbiter__wallet_hash=wallet_hash)).values_list('order', flat=True)
+                unread_count = models.Appeal.objects.filter(order__in=member_orders).count()
+            else:
+                unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=wallet_hash)).count()
+            
+            websocket.send_general_update({'type': WSGeneralMessageType.READ_ORDER.value, 'extra': { 'unread_count': unread_count }}, wallet_hash)
+            return Response({'success': True}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'])
+    def list_status(self, request, pk):
+        queryset = Status.objects.filter(order__id=pk)
+        serializer = serializers.StatusSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk):
+        '''Confirms an order. Is callable only by the ad owner.'''
+
+        wallet_hash = request.user.wallet_hash
+        try:
+            with transaction.atomic():
+                order = models.Order.objects.get(pk=pk)
+                
+                # User must be ad owner
+                is_ad_owner = models.Ad.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(pk=order.ad_snapshot.ad.id)).exists()
+                if not is_ad_owner:
+                    raise ValidationError('User must be ad owner')
+                    
+                validate_status(pk, StatusType.SUBMITTED)
+                validate_status_inst_count(StatusType.CONFIRMED, pk)
+                validate_status_progression(StatusType.CONFIRMED, pk)
+
+                order = models.Order.objects.get(pk=pk)
+
+                if order.expires_at and order.expires_at < timezone.now():
+                    raise ValidationError('Cannot confirm expired order')
+                
+                order.expires_at = None
+                order.save()
+
+                # Decrease the Ad's trade amount
+                # If ad snapshot's trade amount is in fiat, convert order crypto_amount
+                # to fiat and decrement this from ad's current trade_amount
+                amount_to_dec = order.crypto_amount
+                if (order.ad_snapshot.ad.trade_amount_in_fiat):
+                    # convert to fiat
+                    amount_to_dec = order.crypto_amount * order.locked_price
+                    logger.warn(f'amount_to_dec: {amount_to_dec}')
+                trade_amount = order.ad_snapshot.ad.trade_amount - amount_to_dec
+                if trade_amount < 0:
+                    raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
+                ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
+                ad.trade_amount = trade_amount
+                ad.save()
+
+        except (ValidationError, IntegrityError, models.Order.DoesNotExist, models.Ad.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+                
+        serialized_status = serializers.StatusSerializer(data={
+            'status': StatusType.CONFIRMED,
+            'order': pk
+        })
+
+        if not serialized_status.is_valid():
+            return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        serialized_status = serializers.StatusReadSerializer(serialized_status.save())
+        
+        # send websocket notification
+        websocket.send_order_update({
+            'success': True,
+            'status': serialized_status.data
+        }, pk)
+        
+        # send push notification
+        message = f'Order #{order.id} confirmed'
+        send_push_notification([order.owner.wallet_hash], message, extra={'order_id': order.id})
+        
+        return Response(serialized_status.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk):
+        '''Cancels an order. Is callable by the order or ad owner.'''
+
+        wallet_hash = request.user.wallet_hash
+
+        try:
+            order = models.Order.objects.get(pk=pk)
+        
+            # Caller must be order or ad owner
+            order_owner = order.owner.wallet_hash
+            ad_owner = order.ad_snapshot.ad.owner.wallet_hash
+            if wallet_hash != order_owner and wallet_hash != ad_owner:
+                raise ValidationError('Caller must be order or ad owner')
+
+            validate_status_inst_count(StatusType.CANCELED, pk)
+            validate_status_progression(StatusType.CANCELED, pk)
+
+            with transaction.atomic():
+                # Update Ad trade_amount if order was CONFIRMED
+                order = models.Order.objects.get(pk=pk)
+                current_status = rampp2putils.get_last_status(order.id)
+                if current_status.status == StatusType.CONFIRMED:
+                    trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
+                    ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
+                    ad.trade_amount = trade_amount
+                    ad.save()
+                    
+                # Create CANCELED status for order
+                serializer = serializers.StatusSerializer(data={'status': StatusType.CANCELED, 'order': pk})
+                if not serializer.is_valid():
+                    raise ValidationError(serializer.errors)
+                serialized_status = serializers.StatusReadSerializer(serializer.save())
+
+                # Mark order as read by all parties
+                members = order.members.all()
+                for member in members:
+                    member.read_at = timezone.now()
+                    member.save()
+
+                # Send WebSocket update
+                websocket_msg = {'success' : True, 'status': serialized_status.data}
+                websocket.send_order_update(websocket_msg, pk)
+
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serialized_status.data, status=status.HTTP_200_OK)        
+
+    @action(detail=True, methods=['post'])
+    def escrow(self, request, pk):
+        '''Creates a status ESCROW_PENDING for a given order.Callable only by the order's seller.'''
+
+        wallet_hash = request.user.wallet_hash
+        try:
+            order = models.Order.objects.get(pk=pk)        
+
+            # Require user is seller
+            seller = None
+            if order.ad_snapshot.trade_type == models.TradeType.SELL:
+                seller = order.ad_snapshot.ad.owner
+            else:
+                seller = order.owner
+            if wallet_hash != seller.wallet_hash:
+                raise ValidationError('Caller must be seller.')
+
+            validate_status(pk, StatusType.CONFIRMED)
+            validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
+            validate_status_progression(StatusType.ESCROW_PENDING, pk)
+
+            contract = models.Contract.objects.get(order__id=pk)
+            
+            # Create ESCROW_PENDING status for order
+            status_serializer = serializers.StatusSerializer(data={'status': StatusType.ESCROW_PENDING, 'order': pk})
+            if status_serializer.is_valid():
+                status_serializer = serializers.StatusReadSerializer(status_serializer.save())
+            else: 
+                raise ValidationError(f"Encountered error saving status for order#{pk}")
+
+            # Create ESCROW transaction
+            transaction, _ = models.Transaction.objects.get_or_create(contract=contract, action=models.Transaction.ActionType.ESCROW)
+
+            # Notify order WebSocket subscribers
+            websocket_msg = {
+                'success' : True,
+                'status': status_serializer.data,
+                'transaction': serializers.TransactionSerializer(transaction).data
+            }
+            websocket.send_order_update(websocket_msg, pk)
+            response = websocket_msg
+        except (ValidationError, IntegrityError, models.Contract.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(response, status=status.HTTP_200_OK)  
+
+    @action(detail=True, methods=['post'])
+    def buyer_confirm_payment(self, request, pk):
+        wallet_hash = request.user.wallet_hash
+        try:
+            order = models.Order.objects.get(pk=pk)
+
+            # Only buyers can set order status to PAID_PENDING
+            buyer = None
+            if order.ad_snapshot.trade_type == models.TradeType.SELL:
+                buyer = order.owner
+            else:
+                buyer = order.ad_snapshot.ad.owner
+
+            if wallet_hash != buyer.wallet_hash:
+                raise ValidationError('Caller must be buyer')
+
+            validate_status_inst_count(StatusType.PAID_PENDING, pk)
+            validate_status_progression(StatusType.PAID_PENDING, pk)
+
+            response = {}
+            if not order.is_cash_in:
+                '''Require selected payment methods if order is not cash-in.
+                Cash-in orders already have payment methods selected on order creation'''
+
+                payment_method_ids = request.data.get('payment_methods')
+                if payment_method_ids is None or len(payment_method_ids) == 0:
+                    raise ValidationError('Field payment_methods is required')
+                
+                # Update order payment methods to selected payment methods
+                payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
+                order.payment_methods.add(*payment_methods)
+                order.save() 
+
+                # Create order-specific payment methods
+                order_payment_methods = []
+                for payment_method in payment_methods:
+                    data = {
+                        "order": order.id,
+                        "payment_method": payment_method.id,
+                        "payment_type": payment_method.payment_type.id
+                    }
+                    order_method = serializers.OrderPaymentSerializer(data=data)
+                    if order_method.is_valid():
+                        order_payment_methods.append(order_method.save())
+                order_payment_methods = serializers.OrderPaymentSerializer(order_payment_methods, many=True)
+                response["order_payment_methods"] = order_payment_methods.data
+
+            context = { 'wallet_hash': wallet_hash }
+            serialized_order = serializers.OrderSerializer(order, context=context)
+            response["order"] = serialized_order.data
+            
+            # Create PAID_PENDING status for order
+            serialized_status = serializers.StatusSerializer(data={
+                'status': StatusType.PAID_PENDING,
+                'order': pk
+            })
+
+            if not serialized_status.is_valid():            
+                raise ValidationError(serialized_status.errors)
+            
+            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
+            websocket.send_order_update({'success' : True, 'status': serialized_status.data}, pk)
+            response["status"] = serialized_status.data
+            return Response(response, status=status.HTTP_200_OK)
+
+        except (ValidationError, models.Order.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def seller_confirm_payment(self, request, pk):
+        wallet_hash = request.user.wallet_hash
+        try:
+            order = models.Order.objects.get(pk=pk)
+            
+            # Require that user is seller
+            seller = None
+            if order.ad_snapshot.trade_type == models.TradeType.SELL:
+                seller = order.ad_snapshot.ad.owner
+            else:
+                seller = order.owner
+            if wallet_hash != seller.wallet_hash:
+                raise ValidationError('Caller must be seller')
+            
+            validate_status_inst_count(StatusType.PAID, pk)
+            validate_status_progression(StatusType.PAID, pk)
+
+            # Create PAID status for order
+            serialized_status = serializers.StatusSerializer(data={'status': StatusType.PAID, 'order': pk})
+            if not serialized_status.is_valid():
+                raise ValidationError(serialized_status.errors)
+            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
+
+            # Create RELEASE transaction record for order contract
+            contract = models.Contract.objects.get(order__id=pk)
+            _, _ = models.Transaction.objects.get_or_create(contract=contract, action=models.Transaction.ActionType.RELEASE)
+
+            # Send WebSocket update
+            websocket.send_order_update({'success' : True, 'status': serialized_status.data}, pk)
+            return Response(serialized_status.data, status=status.HTTP_200_OK)
+
+        except (ValidationError, models.Order.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
     def _parse_params(self, request):
         limit = request.query_params.get('limit', 0)
         page = request.query_params.get('page', 1)
@@ -487,7 +802,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         }
     
     def _generate_tracking_id(self):
-        ''' PEO[YEAR][MONTH][DAY]-[ORDER_COUNT_TODAY] e.g. PEO20211201-0001 '''
+        ''' PEO[year][month][day]-[order_count_today] e.g. PEO20211201-0001 '''
         today = datetime.today()
         today_midnight = datetime.combine(today, time.min)
         next_day_midnight = datetime.combine(today + timedelta(days=1), time.min)
@@ -498,7 +813,7 @@ class OrderViewSet(viewsets.GenericViewSet):
     def _check_permissions(self, wallet_hash, pk):
         '''
             - Arbiters are not allowed to create orders
-            - Ad owners are not create orders for their own ads
+            - Ad owners are not allowed to create orders for their own ads
         '''
         # check if arbiter
         is_arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists()
@@ -513,207 +828,6 @@ class OrderViewSet(viewsets.GenericViewSet):
         owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
         if len(payment_method_ids) != owned_payment_methods.count():
             raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
-
-class OrderMemberView(APIView):
-    authentication_classes = [TokenAuthentication]
-    def get(self, _, pk):
-        try:
-            order = models.Order.objects.get(pk=pk)
-            members = [order.owner, order.ad_snapshot.ad.owner]
-            if order.arbiter:
-                members.append(order.arbiter)
-
-            member_info = []
-            for member in members:
-                member_info.append({
-                    'id': member.id,
-                    'chat_identity_id': member.chat_identity_id,
-                    'public_key': member.public_key,
-                    'name': member.name,
-                    'address': member.address,
-                    'is_arbiter': isinstance(member, models.Arbiter)
-                })
-            
-            members = serializers.OrderMemberSerializer(member_info, many=True)
-        except models.Order.DoesNotExist:
-            raise Http404
-        except Exception as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(members.data, status=status.HTTP_200_OK)
-    
-    def patch(self, request, pk):
-        wallet_hash = request.user.wallet_hash
-        member = models.OrderMember.objects.filter(Q(order__id=pk) & (Q(peer__wallet_hash=wallet_hash) | Q(arbiter__wallet_hash=wallet_hash)))
-        if member.exists():
-            member = member.first()
-            member.read_at = timezone.now()
-            member.save()
-        
-            if isinstance(request.user, models.Arbiter):
-                member_orders = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(arbiter__wallet_hash=wallet_hash)).values_list('order', flat=True)
-                unread_count = models.Appeal.objects.filter(order__in=member_orders).count()
-            else:
-                unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=wallet_hash)).count()
-            websocket.send_general_update({
-                'type': WSGeneralMessageType.READ_ORDER.value,
-                'extra': { 'unread_count': unread_count }
-            }, wallet_hash)
-            return Response({'success': True}, status=status.HTTP_200_OK)
-        return Response({'success': False, 'error': 'no such member'}, status=status.HTTP_400_BAD_REQUEST)
-
-class OrderListStatus(APIView):
-    authentication_classes = [TokenAuthentication]
-    def get(self, request, pk):
-        queryset = Status.objects.filter(order=pk)
-        serializer = serializers.StatusSerializer(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-class ConfirmOrder(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    '''
-    ConfirmOrder creates a status=CONFIRMED for an order. 
-    This is callable only by the order's ad owner.
-    '''
-    def post(self, request, pk):
-        wallet_hash = request.user.wallet_hash
-        try:
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            validate_status(pk, StatusType.SUBMITTED)
-            validate_status_inst_count(StatusType.CONFIRMED, pk)
-            validate_status_progression(StatusType.CONFIRMED, pk)
-
-            order = models.Order.objects.get(pk=pk)
-
-            if order.expires_at and order.expires_at < timezone.now():
-                raise ValidationError('cannot confirm expired order')
-            
-            order.expires_at = None
-            order.save()
-
-            # Decrease the Ad's trade amount
-            # If ad snapshot's trade amount is in fiat, convert order crypto_amount
-            # to fiat and decrement this from ad's current trade_amount
-            amount_to_dec = order.crypto_amount
-            if (order.ad_snapshot.ad.trade_amount_in_fiat):
-                # convert to fiat
-                amount_to_dec = order.crypto_amount * order.locked_price
-                logger.warn(f'amount_to_dec: {amount_to_dec}')
-            trade_amount = order.ad_snapshot.ad.trade_amount - amount_to_dec
-            if trade_amount < 0:
-                raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
-            ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
-            ad.trade_amount = trade_amount
-            ad.save()
-
-        except (ValidationError, IntegrityError, models.Order.DoesNotExist, models.Ad.DoesNotExist) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-                
-        serialized_status = serializers.StatusSerializer(data={
-            'status': StatusType.CONFIRMED,
-            'order': pk
-        })
-
-        if serialized_status.is_valid():
-            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
-            
-            # send websocket notification
-            websocket.send_order_update({
-                'success': True,
-                'status': serialized_status.data
-            }, pk)
-            
-            # send push notification
-            message = f'Order #{order.id} confirmed'
-            send_push_notification([order.owner.wallet_hash], message, extra={'order_id': order.id})
-            
-            return Response(serialized_status.data, status=status.HTTP_200_OK)
-        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        Only ad owners can set order status to CONFIRMED
-        '''
-        try:
-            order = models.Order.objects.get(pk=pk)
-        except models.Order.DoesNotExist as err:
-            raise ValidationError(err.args[0])
-
-        if order.ad_snapshot.ad.owner.wallet_hash != wallet_hash:
-            raise ValidationError('Caller must be ad owner.')
-
-class PendingEscrowOrder(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    '''
-    EscrowPendingOrder creates a status=ESCROW_PENDING for the given order.
-    If transaction id is given, it is sent to a task queue for validation, if valid, 
-    the order status is set to ESCROWED automatically.
-    Callable only by the order's seller.
-    '''
-    def post(self, request, pk):
-        try:
-            self.validate_permissions(request.user.wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            validate_status(pk, StatusType.CONFIRMED)
-            validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
-            validate_status_progression(StatusType.ESCROW_PENDING, pk)
-
-            contract = models.Contract.objects.get(order__id=pk)
-            
-            # create ESCROW_PENDING status for order
-            status_serializer = serializers.StatusSerializer(data={
-                'status': StatusType.ESCROW_PENDING,
-                'order': pk
-            })
-
-            if status_serializer.is_valid():
-                status_serializer = serializers.StatusReadSerializer(status_serializer.save())
-            else: 
-                raise ValidationError(f"Encountered error saving status for order#{pk}")
-
-            # notify order update subscribers
-            websocket_msg = {
-                'success' : True,
-                'status': status_serializer.data
-            }
-
-            transaction, _ = models.Transaction.objects.get_or_create(
-                contract=contract,
-                action=models.Transaction.ActionType.ESCROW,
-            )
-            websocket_msg['transaction'] = serializers.TransactionSerializer(transaction).data
-            websocket.send_order_update(websocket_msg, pk)
-            response = websocket_msg
-            
-        except (ValidationError, IntegrityError, models.Contract.DoesNotExist) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(response, status=status.HTTP_200_OK)  
-
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        Only order sellers can set order status to ESCROW_PENDING
-        '''
-        try:
-            order = models.Order.objects.get(pk=pk)
-        except models.Order.DoesNotExist as err:
-            raise ValidationError(err.args[0])
-        
-        seller = None
-        if order.ad_snapshot.trade_type == models.TradeType.SELL:
-            seller = order.ad_snapshot.ad.owner
-        else:
-            seller = order.owner
-
-        if wallet_hash != seller.wallet_hash:
-            raise ValidationError('Caller must be seller.')
 
 class VerifyEscrow(APIView):
     authentication_classes = [TokenAuthentication]
@@ -768,205 +882,6 @@ class VerifyEscrow(APIView):
         # Caller must be seller
         if wallet_hash != seller.wallet_hash:
             raise ValidationError('Caller is not seller')
-    
-class CryptoBuyerConfirmPayment(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    def post(self, request, pk):
-        wallet_hash = request.user.wallet_hash
-        try:
-            order = models.Order.objects.get(pk=pk)
-            self.validate_permissions(wallet_hash, order)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        except models.Order.DoesNotExist as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # validations
-            validate_status_inst_count(StatusType.PAID_PENDING, pk)
-            validate_status_progression(StatusType.PAID_PENDING, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        response = {}
-        if not order.is_cash_in:
-            payment_method_ids = request.data.get('payment_methods')
-            if payment_method_ids is None or len(payment_method_ids) == 0:
-                return Response({'error': 'payment_methods field is required'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
-            order.payment_methods.add(*payment_methods)
-            order.save() 
-
-            # payment_methods = request.data.get('payment_methods')
-            order_payment_methods = []
-            for payment_method in payment_methods:
-                data = {
-                    "order": order.id,
-                    "payment_method": payment_method.id,
-                    "payment_type": payment_method.payment_type.id
-                }
-                order_method = serializers.OrderPaymentSerializer(data=data)
-                if order_method.is_valid():
-                    order_payment_methods.append(order_method.save())
-            order_payment_methods = serializers.OrderPaymentSerializer(order_payment_methods, many=True)
-            response["order_payment_methods"] = order_payment_methods.data
-
-        context = { 'wallet_hash': wallet_hash }
-        serialized_order = serializers.OrderSerializer(order, context=context)
-        response["order"] = serialized_order.data
-        
-        # create PAID_PENDING status for order
-        serialized_status = serializers.StatusSerializer(data={
-            'status': StatusType.PAID_PENDING,
-            'order': pk
-        })
-
-        if serialized_status.is_valid():            
-            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
-            websocket.send_order_update({
-                'success' : True,
-                'status': serialized_status.data
-            }, pk)
-            response["status"] = serialized_status.data
-            return Response(response, status=status.HTTP_200_OK)
-        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def validate_permissions(self, wallet_hash, order):
-        '''
-        Only buyers can set order status to PAID_PENDING
-        '''        
-        buyer = None
-        if order.ad_snapshot.trade_type == models.TradeType.SELL:
-            buyer = order.owner
-        else:
-            buyer = order.ad_snapshot.ad.owner
-
-        if wallet_hash != buyer.wallet_hash:
-            raise ValidationError('caller must be buyer')
-    
-class CryptoSellerConfirmPayment(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    def post(self, request, pk):
-        wallet_hash = request.user.wallet_hash
-        try:
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
-            # status validations
-            validate_status_inst_count(StatusType.PAID, pk)
-            validate_status_progression(StatusType.PAID, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        # create PAID status for order
-        serialized_status = serializers.StatusSerializer(data={
-            'status': StatusType.PAID,
-            'order': pk
-        })
-
-        if serialized_status.is_valid():
-            serialized_status = serializers.StatusReadSerializer(serialized_status.save())
-
-            contract = models.Contract.objects.get(order__id=pk)
-            _, _ = models.Transaction.objects.get_or_create(
-                contract=contract,
-                action=models.Transaction.ActionType.RELEASE,
-            )
-
-            websocket.send_order_update({
-                'success' : True,
-                'status': serialized_status.data
-            }, pk)
-            return Response(serialized_status.data, status=status.HTTP_200_OK)        
-        return Response(serialized_status.errors, status=status.HTTP_400_BAD_REQUEST)
-  
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        Only the seller can set the order status to PAID
-        '''
-        try:
-            order = models.Order.objects.get(pk=pk)
-        except models.Order.DoesNotExist as err:
-            raise ValidationError(err.args[0])
-        
-        seller = None
-        if order.ad_snapshot.trade_type == models.TradeType.SELL:
-            seller = order.ad_snapshot.ad.owner
-        else:
-            seller = order.owner
-
-        if wallet_hash != seller.wallet_hash:
-            raise ValidationError('Caller must be seller')
-
-class CancelOrder(APIView):
-    authentication_classes = [TokenAuthentication]
-        
-    def post(self, request, pk):
-        wallet_hash = request.user.wallet_hash
-        try:
-            self.validate_permissions(wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            # status validations
-            validate_status_inst_count(StatusType.CANCELED, pk)
-            validate_status_progression(StatusType.CANCELED, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Update Ad trade_amount if order was CONFIRMED
-        order = models.Order.objects.get(pk=pk)
-        latest_status = rampp2putils.get_last_status(order.id)
-
-        # Update Ad trade_amount
-        if latest_status.status == StatusType.CONFIRMED:
-            trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
-            ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
-            ad.trade_amount = trade_amount
-            ad.save()
-            
-        # create CANCELED status for order
-        serializer = serializers.StatusSerializer(data={
-            'status': StatusType.CANCELED,
-            'order': pk
-        })
-
-        if serializer.is_valid():
-            serialized_status = serializers.StatusReadSerializer(serializer.save())
-            websocket_msg = {
-                'success' : True,
-                'status': serialized_status.data
-            }
-            websocket.send_order_update(websocket_msg, pk)
-
-            # mark order as read by all parties
-            members = order.members.all()
-            for member in members:
-                member.read_at = timezone.now()
-                member.save()
-
-            return Response(serialized_status.data, status=status.HTTP_200_OK)        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        CancelOrder is callable by the order/ad owner.
-        '''
-        try:
-            order = models.Order.objects.get(pk=pk)
-        except models.Order.DoesNotExist as err:
-            raise ValidationError(err.args[0])
-        
-        order_owner = order.owner.wallet_hash
-        ad_owner = order.ad_snapshot.ad.owner.wallet_hash
-        if wallet_hash != order_owner and wallet_hash != ad_owner:
-           raise ValidationError('caller must be order/ad owner')
         
 class UploadOrderPaymentAttachmentView(APIView):
     authentication_classes = [TokenAuthentication]
