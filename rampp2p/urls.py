@@ -31,13 +31,22 @@ urlpatterns = [
     path('order/<int:pk>/escrow/', OrderViewSet.as_view({'post': 'escrow'}), name='order-escrow'),
     path('order/<int:pk>/confirm-payment/buyer/', OrderViewSet.as_view({'post': 'buyer_confirm_payment'}), name='buyer-confirm-payment'),
     path('order/<int:pk>/confirm-payment/seller/', OrderViewSet.as_view({'post': 'seller_confirm_payment'}), name='seller-confirm-payment'),
+
+    path('order/<int:pk>/contract/', ContractViewSet.as_view({'get': 'retrieve_by_order'}), name='order-contract-detail'),
+    path('order/<int:pk>/contract/transactions/', ContractViewSet.as_view({'get': 'transactions_by_order'}), name='order-contract-tx'),
+
+    path('order/contract/', ContractViewSet.as_view({'post': 'create'}), name='contract-create'),
+    path('order/contract/<int:pk>/', ContractViewSet.as_view({'get': 'retrieve'}), name='contract-detail'),
+    path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
+    path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
+
+    path('order/<int:pk>/verify-escrow/', ContractViewSet.as_view({'post': 'verify_escrow'}), name='verify-escrow'),
+    path('order/<int:pk>/verify-release/', ContractViewSet.as_view({'post': 'verify_release'}), name='verify-release'),
+    path('order/<int:pk>/verify-refund/', ContractViewSet.as_view({'post': 'verify_refund'}), name='verify-refund'),
+    
     path('order/cash-in/', CashinOrderView.as_view(), name='cashin-order-list'),
     path('order/payment/attachment/upload', UploadOrderPaymentAttachmentView.as_view(), name='upload-payment-attachment'),
     path('order/payment/attachment/delete', DeleteOrderPaymentAttachmentView.as_view(), name='delete-payment-attachment'),
-    
-    path('order/<int:pk>/verify-escrow', VerifyEscrow.as_view(), name='verify-escrow'),
-    path('order/<int:pk>/verify-release', VerifyRelease.as_view(), name='verify-release'),
-    path('order/<int:pk>/verify-refund', VerifyRefund.as_view(), name='verify-refund'),
 
     path('appeal', AppealList.as_view(), name='appeal-list'),
     path('order/<int:pk>/appeal', AppealRequest.as_view(), name='appeal-request'),
@@ -48,11 +57,6 @@ urlpatterns = [
     path('order/feedback/peer', PeerFeedbackView.as_view(), name='peer-feedback-view'),
     path('order/feedback/<int:feedback_id>', FeedbackDetailView.as_view(), name='feedback-detail'),
 
-    path('order/contract/create', ContractCreateView.as_view(), name='generate-contract'),
-    path('order/contract', ContractDetailsView.as_view(), name='contract-detail'),
-    path('order/contract/transactions', ContractTransactionsView.as_view(), name='contract-transactions'),
-    path('order/contract/fees', ContractFeesView.as_view(), name='contract-fees'),
-    
     path('utils/market-price', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address', SubscribeContractAddress.as_view(), name='subscribe-address'),
     

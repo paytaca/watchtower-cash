@@ -1,14 +1,14 @@
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
-from rest_framework import viewsets
 from rest_framework.decorators import action
 
 from django.http import Http404
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.utils.translation import gettext_lazy as _
 from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
 
 from datetime import datetime, time, timedelta
@@ -26,13 +26,9 @@ import rampp2p.utils.utils as rampp2putils
 import rampp2p.utils.websocket as websocket
 import rampp2p.utils.file_upload as file_upload_utils
 
-from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
 from rampp2p.validators import *
-
-from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
 
 import logging
 logger = logging.getLogger(__name__)
@@ -614,7 +610,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=['post'])
     def escrow(self, request, pk):
-        '''Creates a status ESCROW_PENDING for a given order.Callable only by the order's seller.'''
+        '''Creates a status ESCROW_PENDING for a given order. Callable only by the order's seller.'''
 
         wallet_hash = request.user.wallet_hash
         try:
@@ -812,8 +808,8 @@ class OrderViewSet(viewsets.GenericViewSet):
     
     def _check_permissions(self, wallet_hash, pk):
         '''
-            - Arbiters are not allowed to create orders
-            - Ad owners are not allowed to create orders for their own ads
+        - Arbiters are not allowed to create orders
+        - Ad owners are not allowed to create orders for their own ads
         '''
         # check if arbiter
         is_arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists()
@@ -828,60 +824,6 @@ class OrderViewSet(viewsets.GenericViewSet):
         owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
         if len(payment_method_ids) != owned_payment_methods.count():
             raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
-
-class VerifyEscrow(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    '''
-    Manually marks the order as ESCROWED by submitting the transaction id
-    for validation (should only be used as fallback when listener fails to update the status 
-    after calling ConfirmOrder).
-    '''
-    def post(self, request, pk):
-        try:
-            self.validate_permissions(request.user.wallet_hash, pk)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            validate_status(pk, StatusType.ESCROW_PENDING)
-            validate_status_inst_count(StatusType.ESCROWED, pk)
-            validate_status_progression(StatusType.ESCROWED, pk)
-
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid is required')
-                
-            contract = models.Contract.objects.get(order_id=pk)
-
-            # Validate the transaction
-            validate_transaction(txid, models.Transaction.ActionType.ESCROW, contract.id)
-
-        except (ValidationError, models.Contract.DoesNotExist) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        except IntegrityError as err:
-            return Response({'error': 'duplicate txid'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        return Response(status=status.HTTP_200_OK)  
-
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        Only SELLERS can verify the ESCROW status of order.
-        '''
-
-        try:
-            order = models.Order.objects.get(pk=pk)
-        except models.Order.DoesNotExist as err:
-            raise ValidationError(err.args[0])
-
-        if order.ad_snapshot.trade_type == models.TradeType.SELL:
-            seller = order.ad_snapshot.ad.owner
-        else:
-            seller = order.owner
-        
-        # Caller must be seller
-        if wallet_hash != seller.wallet_hash:
-            raise ValidationError('Caller is not seller')
         
 class UploadOrderPaymentAttachmentView(APIView):
     authentication_classes = [TokenAuthentication]
