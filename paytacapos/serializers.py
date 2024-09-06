@@ -12,7 +12,7 @@ from bitcash.keygen import public_key_to_address
 
 from vouchers.serializers import PosDeviceVaultSerializer, MerchantVaultSerializer
 from vouchers.models import Voucher
-from vouchers.vault import create_device_vault
+from vouchers.vault import create_device_vault, create_merchant_vault
 
 from main.models import CashNonFungibleToken, Wallet, Address
 
@@ -334,7 +334,7 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
     vault = PosDeviceVaultSerializer(read_only=True)
-    pubkey = serializers.CharField(write_only=True, required=False, help_text="POS Device Vault pubkey")
+    pubkey = serializers.CharField(write_only=True, required=False, help_text="POS Device Vault pubkey (1-<POSID>th address)")
     name = serializers.CharField(required=False)
     merchant_id = serializers.PrimaryKeyRelatedField(
         queryset=Merchant.objects, source="merchant", required=False,
@@ -644,8 +644,6 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "description",
             "gmap_business_link",
             "last_transaction_date",
-            "pubkey",
-            "verification_category",
             "vouchers",
             "logos",
             "last_update",
@@ -721,6 +719,12 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
 
+    pubkey = serializers.CharField(
+        write_only=True,
+        required=False,
+        help_text='Merchant Vault pubkey (0th address)'
+    )
+
     class Meta:
         model = Merchant
         fields = [
@@ -733,7 +737,6 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "primary_contact_number",
             "location",
             "pubkey",
-            "verification_category",
 
             "allow_duplicates", # temporary field
             "branch_count",
@@ -800,6 +803,7 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
 
         instance = super().create(validated_data)
         instance.get_or_create_main_branch()
+        create_merchant_vault(instance.id, validated_data['pubkey'])
         return instance
 
     @transaction.atomic()
@@ -812,7 +816,9 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
-        return super().update(instance, validated_data)
+        instance = super().update(instance, validated_data)
+        create_merchant_vault(instance.id, validated_data['pubkey'])
+        return instance
 
 
 class BranchMerchantSerializer(serializers.ModelSerializer):

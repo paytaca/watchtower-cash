@@ -37,6 +37,7 @@ export class PosDeviceVault {
     this.network = opts?.options?.network
     this.dust = 1000n
     this.mintFee = 2000n
+    this.neededFromFunder = this.dust + this.mintFee
   }
 
   get contractCreationParams () {
@@ -83,10 +84,9 @@ export class PosDeviceVault {
 
   async sendTokens (voucherCategory) {
     const utxos = await this.contract.getUtxos()
-    const __funderUtxos = await this.provider.getUtxos(this.funder?.address)
+    const funderUtxos = await this.provider.getUtxos(this.funder?.address)
 
-    const verificationTokenUtxo = __funderUtxos.find(utxo => !utxo?.token && utxo.satoshis >= this.dust)
-    const feeUtxo = __funderUtxos.find(utxo => !utxo?.token && utxo.satoshis >= this.mintFee)
+    const funderUtxo = funderUtxos.filter(utxo => !utxo?.token && utxo.satoshis >= this.neededFromFunder)
     const keyNftUtxo = utxos.find(utxo => utxo?.token?.category === voucherCategory)
     const mintingNftUtxo = utxos.find(
       utxo => {
@@ -97,12 +97,10 @@ export class PosDeviceVault {
       }
     )
     const contractUtxos = [ mintingNftUtxo, keyNftUtxo ]
-    const funderUtxos = [ verificationTokenUtxo, feeUtxo ].map(utxo => {
-      return {
-        wif: this.funder?.wif,
-        ...utxo,
-      }
-    })
+
+    if (funderUtxo === undefined) throw new Error('No more available UTXOs on funder')
+
+    funderUtxo.wif = this.funder?.wif
     const verificationToken = {
       amount: 0n,
       category: this.merchant?.verificationCategory,
@@ -112,7 +110,8 @@ export class PosDeviceVault {
       }
     }
 
-    const funderChange = (feeUtxo.satoshis + verificationTokenUtxo.satoshis) - (this.mintFee + this.dust)
+    const fees = this.mintFee + this.dust
+    const funderChange = funderUtxo.satoshis - fees
 
     let transaction = this.contract.functions
       .sendTokens(reverseHex(voucherCategory))

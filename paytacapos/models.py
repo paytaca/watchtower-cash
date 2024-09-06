@@ -146,7 +146,6 @@ class Merchant(models.Model):
 
     last_update = models.DateTimeField(null=True)
     pubkey = models.CharField(max_length=100, null=True, blank=True) # 0th index
-    verification_category = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         ordering = ('-id', )

@@ -18,6 +18,12 @@ class MerchantVaultSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class VerificationTokenMinterSerializer(serializers.ModelSerializer):    
+    class Meta:
+        model = VerificationTokenMinter
+        fields = '__all__'
+
+
 class VoucherSerializer(serializers.ModelSerializer):
     capability = serializers.SerializerMethodField()
     merchant = serializers.SerializerMethodField()

@@ -10,6 +10,7 @@ class PosDeviceVaultAdmin(admin.ModelAdmin):
         'token_address',
     ]
     list_display = [
+        'pubkey',
         'pos_device',
         'address',
         'token_address',
@@ -23,6 +24,21 @@ class MerchantVaultAdmin(admin.ModelAdmin):
         'token_address',
     ]
     list_display = [
+        'pubkey',
+        'merchant',
+        'address',
+        'token_address',
+    ]
+
+
+@admin.register(VerificationTokenMinter)
+class VerificationTokenMinterAdmin(admin.ModelAdmin):
+    search_fields = [
+        'address',
+        'token_address',
+    ]
+    list_display = [
+        'category',
         'merchant',
         'address',
         'token_address',

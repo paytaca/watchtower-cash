@@ -35,9 +35,11 @@ contract PosDeviceVault (
         require(tx.outputs[2].tokenCategory == voucherCategory);
         
         // commitment of the verification token should be the script hash of this vault
+        // needs to have dust BCH value
         bytes32 commitmentScriptHash = bytes32(tx.outputs[1].nftCommitment);
         bytes35 commitmentLockingBytecode = new LockingBytecodeP2SH32(commitmentScriptHash);
         require(tx.outputs[0].lockingBytecode == commitmentLockingBytecode);
+        require(tx.outputs[0].value == 1000);
 
         // minting NFT must be sent back to this contract
         require(tx.inputs[0].lockingBytecode == tx.outputs[0].lockingBytecode);

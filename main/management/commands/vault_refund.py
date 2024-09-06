@@ -45,8 +45,7 @@ class Command(BaseCommand):
             'pubkey': sender_pubkey,
         }
 
-        url = settings.VAULT_EXPRESS_URLS['device']
-        url = f'{url}/emergency-refund'
+        url = settings.VAULT_EXPRESS_URLS['device'] + '/emergency-refund'
         response = requests.post(url, json=device_payload)
         response = response.json()
 
@@ -56,8 +55,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f'TXID: {txid}')) 
 
 
-        url = settings.VAULT_EXPRESS_URLS['merchant']
-        url = f'{url}/emergency-refund'
+        url = settings.VAULT_EXPRESS_URLS['merchant'] + '/emergency-refund'
         response = requests.post(url, json=merchant_payload)
         response = response.json()
 

@@ -70,14 +70,15 @@ def process_pending_payment_requests(address, senders):
 
     payload = get_device_vault(device_vault.pos_device.id)['payload']
     prefix = settings.VAULT_EXPRESS_URLS['device']
-    url = f'{prefix}/compile'
+    
+    url = prefix + '/compile'
     response = requests.post(url, json=payload)
     response = response.json()
     balance = response['balance']
 
     if payment_request.amount > balance: return
 
-    url = f'{prefix}/release'
+    url = prefix + '/release'
     payload['params']['amount'] = payment_request.amount * 1e8
     response = requests.post(url, json=payload)
     response = response.json()
@@ -91,8 +92,7 @@ def process_key_nft(txid, category, recipient_address, senders):
     device_vaults = PosDeviceVault.objects.filter(address=recipient_address)
     if device_vaults.exists():
         pos_device = device_vaults.first().pos_device
-        url = settings.VAULT_EXPRESS_URLS['device']
-        url = f'{url}/send-tokens'
+        url = settings.VAULT_EXPRESS_URLS['device'] + '/send-tokens'
         payload = get_device_vault(pos_device.id)['payload']
         response = requests.post(url, json=payload)
         result = response.json()
@@ -101,9 +101,13 @@ def process_key_nft(txid, category, recipient_address, senders):
     merchant_vaults = MerchantVault.objects.filter(address=recipient_address)
     if merchant_vaults.exists():
         merchant = merchant_vaults.first().merchant
-        url = settings.VAULT_EXPRESS_URLS['merchant']
-        url = f'{url}/claim'
+        url = settings.VAULT_EXPRESS_URLS['merchant'] + '/claim'
         payload = get_merchant_vault(merchant.id)['payload']
+
+        pos_device_vault = PosDeviceVault.objects.filter(address__in=senders)
+        pos_device = pos_device_vault.first().pos_device
+        payload['params']['merchant']['pubkey']['device'] = pos_device.pubkey
+
         response = requests.post(url, json=payload)
         result = response.json()
 
@@ -120,6 +124,7 @@ def process_key_nft(txid, category, recipient_address, senders):
         data = { 'update_type': 'voucher_processed' }
         address = bytearray.fromhex(device_vault.pos_device.pubkey)
         address = public_key_to_address(address)
+
         room_name = address.replace(':','_') + '_'
         channel_layer = get_channel_layer()
         flag_claimed_voucher(txid, category)

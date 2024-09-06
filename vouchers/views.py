@@ -109,3 +109,11 @@ class VoucherViewSet(
         if self.action in self.serializer_classes.keys():
             return self.serializer_classes[self.action]
         return super().get_serializer_class()
+
+
+class VerificationTokenMinterViewSet(
+    viewsets.GenericViewSet,
+    mixins.CreateModelMixin,
+):
+    queryset = VerificationTokenMinter.objects.all()
+    serializer_class = VerificationTokenMinterSerializer
