@@ -133,6 +133,7 @@ class GiftViewSet(viewsets.GenericViewSet):
         if created:
             gift.address=data["address"]
             gift.amount=data["amount"]
+            gift.encrypted_share = data.get('encrypted_share') or ''
             gift.share=data["share"]
             gift.campaign=campaign
             gift.save()
@@ -157,6 +158,7 @@ class GiftViewSet(viewsets.GenericViewSet):
         if claim:
             return Response({
                 "share": gift.share,
+                "encrypted_share": gift.encrypted_share,
                 "claim_id": str(claim.id)
             })
 
@@ -184,6 +186,7 @@ class GiftViewSet(viewsets.GenericViewSet):
         if claim:
             return Response({
                 "share": gift.share,
+                "encrypted_share": gift.encrypted_share,
                 "claim_id": str(claim.id)
             })
         else:
@@ -218,7 +221,8 @@ class GiftViewSet(viewsets.GenericViewSet):
                     gift=gift
                 )
                 return Response({
-                    "share": gift.share
+                    "share": gift.share,
+                    "encrypted_share": gift.encrypted_share
                 })
         else:
             raise Exception("This gift does not exist.")
