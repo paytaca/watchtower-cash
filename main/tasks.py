@@ -18,6 +18,7 @@ from main.utils.ipfs import (
 from main.utils.vouchers import (
     is_voucher,
     process_key_nft,
+    process_pending_payment_requests
 )
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
