@@ -17,7 +17,6 @@ from authentication.token import TokenAuthentication
 from rampp2p.viewcodes import WSGeneralMessageType
 
 import rampp2p.utils.websocket as websocket
-# from rampp2p.utils.utils import get_latest_status
 from rampp2p.utils.transaction import validate_transaction
 from rampp2p.utils.notifications import send_push_notification
 import rampp2p.utils.file_upload as file_upload_utils
@@ -985,6 +984,13 @@ class CancelOrder(APIView):
                 'status': serialized_status.data
             }
             websocket.send_order_update(websocket_msg, pk)
+
+            # mark order as read by all parties
+            members = order.members.all()
+            for member in members:
+                member.read_at = timezone.now()
+                member.save()
+
             return Response(serialized_status.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -1010,13 +1016,14 @@ class UploadOrderPaymentAttachmentView(APIView):
         
         payment_id = request.data.get('payment_id')
         image_file = request.FILES.get('image')
+
         if image_file is None:
             return Response({'error': 'image is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             order_payment_obj = models.OrderPayment.objects.prefetch_related('order').get(id=payment_id)
 
-            '''Order must be status=ESCROWED for payment attachment upload.
+            '''Order must be status=ESCROWED || PD_PN for payment attachment upload.
             (It doesn't make sense for buyers to upload proof of payment if order 
             is not waiting for fiat payment (i.e. order is not status=ESCROWED))'''
             validate_awaiting_payment(order_payment_obj.order)
@@ -1060,12 +1067,12 @@ class DeleteOrderPaymentAttachmentView(APIView):
 def validate_awaiting_payment(order):
     '''
     Validates that `order` is awaiting fiat payment.
-    Raises ValidationError when order's last status is not ESCRW (Escrowed)
+    Raises ValidationError when order's last status is not ESCRW (Escrowed) nor PD_PN
     '''
     last_status = rampp2putils.get_last_status(order.id)
-    if last_status.status != models.StatusType.ESCROWED:
+    if last_status.status != models.StatusType.ESCROWED and last_status.status != models.StatusType.PAID_PENDING:
         raise ValidationError(
-            { 'order': _(f'Invalid action for {last_status.status.label} order')}
+            { 'order': _(f'Invalid action for {last_status.status} order')}
         )
 
             
