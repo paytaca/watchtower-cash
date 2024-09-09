@@ -24,6 +24,14 @@ class VerificationTokenMinterSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class LatestPosIdSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField()
+
+
+class LatestPosIdResponseSerializer(serializers.Serializer):
+    posid = serializers.IntegerField()
+
+
 class VoucherSerializer(serializers.ModelSerializer):
     capability = serializers.SerializerMethodField()
     merchant = serializers.SerializerMethodField()

@@ -278,6 +278,14 @@ class PosDeviceViewSet(
         serializer = SalesSummarySerializer(sales_summary)
         return Response(serializer.data)
 
+    @swagger_auto_schema(method="post", request_body=LatestPosIdSerializer, response={ 200: LatestPosIdResponseSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def latest_posid(self, request, *args, **kwargs):
+        serializer = LatestPosIdSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        posid = PosDevice.find_new_posid(serializer.validated_data['wallet_hash'])
+        return Response({ 'posid': posid or 0 })
+
 
 class MerchantViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "patch", "delete"]
