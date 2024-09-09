@@ -1,15 +1,30 @@
+from paytacapos.models import PosPaymentRequest
 from vouchers.models import *
+from vouchers.vault import get_device_vault, get_merchant_vault
+
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from django.utils import timezone
 from django.conf import settings
+from django.db.models import Q
 
+from bitcash.keygen import public_key_to_address
+from celery import shared_task
 import requests
 
 
-def is_key_nft(category, bch_value):
+# key_nft = False, means your checking for lock NFTs
+def is_voucher(category, amount, key_nft=False):
     vouchers = Voucher.objects.filter(category=category)
-    __is_key_nft = vouchers.exists() and bch_value == 1000  # lock NFT value will always be > 1000
-    return __is_key_nft
+    is_voucher = vouchers.exists()
+    dust = 1000
+
+    is_valid_amount = amount > dust
+    if key_nft:
+        is_valid_amount = amount == dust or amount == 0.00001
+
+    return is_voucher and is_valid_amount
 
 
 def update_purelypeer_voucher(txid, category):
@@ -32,3 +47,91 @@ def flag_claimed_voucher(txid, category):
         date_claimed=timezone.now()
     )
     update_purelypeer_voucher(txid, category)
+
+
+def process_pending_payment_requests(address, senders):
+    device_vaults = PosDeviceVault.objects.filter(address=address)
+    merchant_vaults = MerchantVault.objects.filter(
+        models.Q(address__in=senders) |
+        models.Q(token_address__in=senders)
+    )
+
+    if not device_vaults.exists(): return
+    if not merchant_vaults.exists(): return
+
+    device_vault = device_vaults.first()
+    payment_requests = PosPaymentRequest.objects.filter(
+        pos_device__vault__pubkey=device_vault.pos_device.pubkey,
+        paid=False
+    )
+    payment_request = payment_requests.first()
+    
+    if not payment_requests.exists(): return
+
+    payload = get_device_vault(device_vault.pos_device.id)['payload']
+    prefix = settings.VAULT_EXPRESS_URLS['device']
+    
+    url = prefix + '/compile'
+    response = requests.post(url, json=payload)
+    response = response.json()
+    balance = response['balance']
+
+    if payment_request.amount > balance: return
+
+    url = prefix + '/release'
+    payload['params']['amount'] = payment_request.amount * 1e8
+    response = requests.post(url, json=payload)
+    response = response.json()
+
+    if response['success']:
+        payment_requests.update(paid=True)
+
+
+@shared_task(queue='vouchers')
+def process_key_nft(txid, category, recipient_address, senders):
+    device_vaults = PosDeviceVault.objects.filter(address=recipient_address)
+    if device_vaults.exists():
+        pos_device = device_vaults.first().pos_device
+        url = settings.VAULT_EXPRESS_URLS['device'] + '/send-tokens'
+        payload = get_device_vault(pos_device.id)['payload']
+        response = requests.post(url, json=payload)
+        result = response.json()
+        return
+        
+    merchant_vaults = MerchantVault.objects.filter(address=recipient_address)
+    if merchant_vaults.exists():
+        merchant = merchant_vaults.first().merchant
+        url = settings.VAULT_EXPRESS_URLS['merchant'] + '/claim'
+        payload = get_merchant_vault(merchant.id)['payload']
+
+        pos_device_vault = PosDeviceVault.objects.filter(address__in=senders)
+        pos_device = pos_device_vault.first().pos_device
+        payload['params']['merchant']['pubkey']['device'] = pos_device.pubkey
+
+        response = requests.post(url, json=payload)
+        result = response.json()
+
+        if not result['success']: return
+
+        device_vault = PosDeviceVault.objects.filter(
+            Q(address__in=senders) |
+            Q(token_address__in=senders)
+        )
+        device_vault = device_vault.first()
+
+        if not device_vault.exists(): return
+
+        data = { 'update_type': 'voucher_processed' }
+        address = bytearray.fromhex(device_vault.pos_device.pubkey)
+        address = public_key_to_address(address)
+
+        room_name = address.replace(':','_') + '_'
+        channel_layer = get_channel_layer()
+        flag_claimed_voucher(txid, category)
+        async_to_sync(channel_layer.group_send)(
+            f"{room_name}", 
+            {
+                "type": "send_update",
+                "data": data
+            }
+        )
