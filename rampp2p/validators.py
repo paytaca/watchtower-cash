@@ -31,8 +31,7 @@ def validate_exclusive_stats(status, order_id):
 def validate_status_progression(new_status, order_id):
     current_status = Status.objects.filter(Q(order=order_id)).latest('created_at')
     if (current_status.status == StatusType.RELEASED or 
-        current_status.status == StatusType.REFUNDED or
-        current_status.status == StatusType.CANCELED):
+        current_status.status == StatusType.REFUNDED):
             raise ValidationError('Cannot change a completed order\'s status')
 
     invalid_status = False
