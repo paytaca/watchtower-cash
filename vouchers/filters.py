@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters
 
-from vouchers.models import Voucher
+from vouchers.models import Voucher, PosDeviceVault
 from paytacapos.models import PosDevice
 from main.models import CashNonFungibleToken
 
@@ -51,3 +51,15 @@ class VoucherFilter(filters.FilterSet):
         )
 
         return filtered_queryset
+
+
+class PosDeviceVaultFilter(filters.FilterSet):
+    posid = filters.NumberFilter(field_name="pos_device__posid", lookup_expr="exact")
+    wallet_hash = filters.CharFilter(field_name="pos_device__wallet_hash", lookup_expr="exact")
+    
+    class Meta:
+        model = PosDeviceVault
+        fields = [
+            'posid',
+            'wallet_hash',
+        ]

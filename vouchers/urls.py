@@ -5,5 +5,6 @@ from .views import *
 router = routers.DefaultRouter()
 router.register("", VoucherViewSet)
 router.register("verification-token-minter", VerificationTokenMinterViewSet)
+router.register("device-vaults", PosDeviceVaultViewSet)
 
 urlpatterns = router.urls

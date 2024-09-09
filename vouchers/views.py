@@ -9,8 +9,12 @@ from django.db.models import F, Q, ExpressionWrapper, DateTimeField
 from django.utils import timezone
 
 from vouchers.serializers import *
-from vouchers.models import Voucher
-from vouchers.filters import VoucherFilter
+from vouchers.models import (
+    Voucher,
+    VerificationTokenMinter,
+    PosDeviceVault,
+)
+from vouchers.filters import VoucherFilter, PosDeviceVaultFilter
 from vouchers.vouchers import verify_voucher
 
 from paytacapos.serializers import MerchantListSerializer
@@ -117,3 +121,11 @@ class VerificationTokenMinterViewSet(
 ):
     queryset = VerificationTokenMinter.objects.all()
     serializer_class = VerificationTokenMinterSerializer
+
+
+class PosDeviceVaultViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = PosDeviceVault.objects.all()
+    serializer_class = PosDeviceVaultSerializer
+    filter_class = (filters.DjangoFilterBackend, )
+    filterset_class = PosDeviceVaultFilter
+    pagination_class = CustomLimitOffsetPagination
