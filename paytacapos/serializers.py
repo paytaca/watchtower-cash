@@ -10,7 +10,7 @@ from django.db.models import Sum
 from rest_framework import serializers, exceptions
 from bitcash.keygen import public_key_to_address
 
-from vouchers.serializers import PosDeviceVaultSerializer, MerchantVaultSerializer
+from vouchers.serializers import *
 from vouchers.models import Voucher
 from vouchers.vault import create_device_vault, create_merchant_vault
 
@@ -629,6 +629,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
     vault = MerchantVaultSerializer(read_only=True)
+    minter = VerificationTokenMinterSerializer(read_only=True)
     
     class Meta:
         model = Merchant
@@ -636,6 +637,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "id",
             "wallet_hash",
             "vault",
+            "minter",
             "slug",
             "name",
             "location",
@@ -724,11 +726,15 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
         required=False,
         help_text='Merchant Vault pubkey (0th address)'
     )
+    vault = MerchantVaultSerializer(read_only=True)
+    minter = VerificationTokenMinterSerializer(read_only=True)
 
     class Meta:
         model = Merchant
         fields = [
             "id",
+            "vault",
+            "minter",
             "wallet_hash",
             "name",
             "website_url",
