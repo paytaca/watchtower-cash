@@ -543,6 +543,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False    
+        },
+        'paytacagifts': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False    
         }
     },
 }

@@ -29,6 +29,7 @@ class CreateGiftPayloadSerializer(serializers.Serializer):
     gift_code_hash = serializers.CharField()
     address = serializers.CharField()
     share = serializers.CharField()
+    encrypted_share = serializers.CharField()
     amount = serializers.FloatField()
     campaign = CampaignPayloadSerializer()
 
@@ -48,11 +49,13 @@ class CreateGiftResponseSerializer(serializers.Serializer):
 
 class ClaimGiftResponseSerializer(serializers.Serializer):
     share = serializers.CharField()
+    encrypted_share = serializers.CharField()
     claim_id = serializers.CharField()
 
 
 class RecoverGiftResponseSerializer(serializers.Serializer):
     share = serializers.CharField()
+    encrypted_share = serializers.CharField()
 
 
 class ListGiftsResponseSerializer(serializers.Serializer):
