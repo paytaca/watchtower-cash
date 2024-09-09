@@ -500,22 +500,19 @@ class POSDevicePaymentSerializer(serializers.Serializer):
 class CreatePosPaymentRequestSerializer(serializers.Serializer):
     pos_device = POSDevicePaymentSerializer()
     amount = serializers.FloatField()
-    receiving_address = serializers.CharField()
+    receiving_address = serializers.CharField(required=False)
 
     @transaction.atomic()
     def create(self, validated_data):
-        posid = validated_data['posid']
-        wallet_hash = validated_data['wallet_hash']
+        posid = validated_data['pos_device'].get('posid')
+        wallet_hash = validated_data['pos_device'].get('wallet_hash')
 
         # some payment requests might not be deleted on POS, in the case of internet failure on the device
         # so we delete old requests of the device
-        old_uncancelled_requests = PosPaymentRequest.objects.filter(
-            posid=posid,
-            wallet_hash=wallet_hash
-        )
+        pos_device = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
+        old_uncancelled_requests = PosPaymentRequest.objects.filter(pos_device=pos_device)
         old_uncancelled_requests.delete()
         
-        pos_device = PosDevice.objects.filter(posid=posid, wallet_hash=wallet_hash)
         validated_data['pos_device'] = pos_device
         return super().create(validated_data)
 
@@ -681,7 +678,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
                 voucher_nfts = voucher_nfts.distinct()
 
         merchant_vouchers = Voucher.objects.filter(
-            vault__pos_device__merchant=obj,
+            vault__merchant=obj,
             category__in=voucher_nfts.values('category'),
             commitment__in=voucher_nfts.values('commitment')
         )

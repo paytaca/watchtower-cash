@@ -62,11 +62,13 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin)
     def create(self, request, *args, **kwargs):
         serializer = CreatePosPaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        instance = serializer.save()
-        headers = self.get_success_headers(serializer.data)
-        serializer = PosPaymentRequestSerializer(instance)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-
+        try:
+            instance = serializer.save()
+            headers = self.get_success_headers(serializer.data)
+            serializer = PosPaymentRequestSerializer(instance)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except PosDevice.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
     @swagger_auto_schema(request_body=CancelPaymentRequestSerializer, responses={ 200: 'OK' })
     @decorators.action(methods=["post"], detail=False)
@@ -91,7 +93,7 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin)
         pos_device = serializer.validated_data['pos_device']
         payment_request = PosPaymentRequest.objects.filter(
             pos_device__posid=pos_device['posid'],
-            wallet_hash=pos_device['wallet_hash'],
+            pos_device__wallet_hash=pos_device['wallet_hash'],
         )
         payment_request.update(amount=serializer.validated_data['amount'])
         return Response('OK', status=status.HTTP_200_OK)
