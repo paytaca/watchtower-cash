@@ -6,10 +6,30 @@ from main.serializers import CashNonFungibleTokenSerializer
 from vouchers.models import *
 
 
-class VaultSerializer(serializers.ModelSerializer):    
+class PosDeviceVaultSerializer(serializers.ModelSerializer):    
     class Meta:
-        model = Vault
+        model = PosDeviceVault
         fields = '__all__'
+
+
+class MerchantVaultSerializer(serializers.ModelSerializer):    
+    class Meta:
+        model = MerchantVault
+        fields = '__all__'
+
+
+class VerificationTokenMinterSerializer(serializers.ModelSerializer):    
+    class Meta:
+        model = VerificationTokenMinter
+        fields = '__all__'
+
+
+class LatestPosIdSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField()
+
+
+class LatestPosIdResponseSerializer(serializers.Serializer):
+    posid = serializers.IntegerField()
 
 
 class VoucherSerializer(serializers.ModelSerializer):
@@ -48,11 +68,11 @@ class VoucherSerializer(serializers.ModelSerializer):
         return 'none'
     
     def get_merchant(self, obj):
-        return obj.vault.merchant.name
+        return obj.vault.pos_device.merchant.name
 
 
-class VoucherClaimCheckSerializer(serializers.Serializer):
-    address = serializers.CharField(max_length=100, required=True)  # vault token address
+class VoucherClaimVerificationSerializer(serializers.Serializer):
+    device_vault_token_address = serializers.CharField(max_length=100, required=True)
     voucher_ids = serializers.ListField(
         child=serializers.IntegerField(),
         allow_empty=True
