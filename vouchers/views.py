@@ -81,12 +81,10 @@ class VoucherViewSet(
                 transaction__spent=False
             ).distinct()
 
-        pos_devices = PosDevice.objects.filter(
+        voucher_merchants = Merchant.objects.filter(
             vault__vouchers__category__in=voucher_nfts.values('category'),
             vault__vouchers__commitment__in=voucher_nfts.values('commitment')
         ).distinct()
-
-        voucher_merchants = Merchant.objects.filter(id__in=pos_device.values('merchant'))
 
         page = self.paginate_queryset(voucher_merchants)
         if page is not None:
@@ -113,14 +111,6 @@ class VoucherViewSet(
         if self.action in self.serializer_classes.keys():
             return self.serializer_classes[self.action]
         return super().get_serializer_class()
-
-
-class VerificationTokenMinterViewSet(
-    viewsets.GenericViewSet,
-    mixins.CreateModelMixin,
-):
-    queryset = VerificationTokenMinter.objects.all()
-    serializer_class = VerificationTokenMinterSerializer
 
 
 class PosDeviceVaultViewSet(viewsets.ReadOnlyModelViewSet):
