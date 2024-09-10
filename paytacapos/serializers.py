@@ -500,7 +500,7 @@ class POSDevicePaymentSerializer(serializers.Serializer):
 class CreatePosPaymentRequestSerializer(serializers.Serializer):
     pos_device = POSDevicePaymentSerializer()
     amount = serializers.FloatField()
-    receiving_address = serializers.CharField(required=False)
+    receiving_address = serializers.CharField()
 
     @transaction.atomic()
     def create(self, validated_data):
@@ -723,6 +723,9 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
         required=False,
         help_text='Merchant Vault pubkey (0th address)'
     )
+    minter_address = serializers.CharField(write_only=True)
+    minter_category = serializers.CharField(write_only=True)
+
     vault = MerchantVaultSerializer(read_only=True)
     minter = VerificationTokenMinterSerializer(read_only=True)
 
@@ -739,7 +742,10 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "description",
             "primary_contact_number",
             "location",
+
             "pubkey",
+            "minter_address",
+            "minter_category",
 
             "allow_duplicates", # temporary field
             "branch_count",
@@ -806,7 +812,13 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
 
         instance = super().create(validated_data)
         instance.get_or_create_main_branch()
-        create_merchant_vault(instance.id, validated_data['pubkey'])
+        create_merchant_vault(
+            instance.id,
+            validated_data['pubkey'],
+            validated_data['minter_address'],
+            validated_data['minter_category']
+        )
+
         return instance
 
     @transaction.atomic()
@@ -820,7 +832,13 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             validated_data["location"] = location_serializer.save()
 
         instance = super().update(instance, validated_data)
-        create_merchant_vault(instance.id, validated_data['pubkey'])
+        create_merchant_vault(
+            instance.id,
+            validated_data['pubkey'],
+            validated_data['minter_address'],
+            validated_data['minter_category']
+        )
+
         return instance
 
 

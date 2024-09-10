@@ -61,7 +61,7 @@ def process_pending_payment_requests(address, senders):
 
     device_vault = device_vaults.first()
     payment_requests = PosPaymentRequest.objects.filter(
-        pos_device__vault__pubkey=device_vault.pos_device.pubkey,
+        pos_device__vault__pubkey=device_vault.pubkey,
         paid=False
     )
     payment_request = payment_requests.first()
@@ -106,7 +106,7 @@ def process_key_nft(txid, category, recipient_address, senders):
 
         pos_device_vault = PosDeviceVault.objects.filter(address__in=senders)
         pos_device = pos_device_vault.first().pos_device
-        payload['params']['merchant']['pubkey']['device'] = pos_device.pubkey
+        payload['params']['merchant']['pubkey']['device'] = pos_device.vault.pubkey
 
         response = requests.post(url, json=payload)
         result = response.json()
@@ -122,7 +122,7 @@ def process_key_nft(txid, category, recipient_address, senders):
         if not device_vault.exists(): return
 
         data = { 'update_type': 'voucher_processed' }
-        address = bytearray.fromhex(device_vault.pos_device.pubkey)
+        address = bytearray.fromhex(device_vault.pubkey)
         address = public_key_to_address(address)
 
         room_name = address.replace(':','_') + '_'
