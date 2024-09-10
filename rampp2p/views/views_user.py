@@ -1,4 +1,4 @@
-from rest_framework import status, generics
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -14,7 +14,7 @@ from authentication.serializers import UserSerializer
 from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.serializers as rampp2p_serializers
-import rampp2p.models as rampp2p_models
+import rampp2p.models as models
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
@@ -32,14 +32,14 @@ class UserProfileView(APIView):
 
         user = None
         is_arbiter = False
-        arbiter = rampp2p_models.Arbiter.objects.filter(wallet_hash=wallet_hash)
+        arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash)
         
         if arbiter.exists():
             user = rampp2p_serializers.ArbiterSerializer(arbiter.first()).data
             is_arbiter = True
         
         if not is_arbiter:
-            peer = rampp2p_models.Peer.objects.filter(wallet_hash=wallet_hash)
+            peer = models.Peer.objects.filter(wallet_hash=wallet_hash)
             if peer.exists():    
                 user = rampp2p_serializers.PeerProfileSerializer(peer.first()).data
             
@@ -55,13 +55,13 @@ class ArbiterView(APIView):
     def get(self, request, wallet_hash=None):
         if wallet_hash:
             try:
-                arbiter = rampp2p_models.Arbiter.objects.get(wallet_hash=wallet_hash)
-            except rampp2p_models.Arbiter.DoesNotExist as err:
+                arbiter = models.Arbiter.objects.get(wallet_hash=wallet_hash)
+            except models.Arbiter.DoesNotExist as err:
                 return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             return Response(rampp2p_serializers.ArbiterSerializer(arbiter).data, status=status.HTTP_200_OK)
         else:
             # List arbiters
-            queryset = rampp2p_models.Arbiter.objects.filter(
+            queryset = models.Arbiter.objects.filter(
                     Q(is_disabled=False) &
                     (Q(inactive_until__isnull=True) |
                     Q(inactive_until__lte=datetime.now())))
@@ -90,7 +90,7 @@ class ArbiterView(APIView):
         message = ViewCode.ARBITER_CREATE.value + '::' + timestamp
         verify_signature(wallet_hash, signature, message, public_key=public_key)
         
-        peer = rampp2p_models.Peer.objects.filter(wallet_hash=wallet_hash)
+        peer = models.Peer.objects.filter(wallet_hash=wallet_hash)
         if peer.exists():
             return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -132,8 +132,8 @@ class PeerView(APIView):
 
     def get(self, request, pk):
         try:
-            peer = rampp2p_models.Peer.objects.get(pk=pk)
-        except rampp2p_models.Peer.DoesNotExist:
+            peer = models.Peer.objects.get(pk=pk)
+        except models.Peer.DoesNotExist:
             raise Http404
         serializer = rampp2p_serializers.PeerSerializer(peer)
         return Response(serializer.data, status.HTTP_200_OK)
@@ -148,7 +148,7 @@ class PeerView(APIView):
         except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        arbiter = rampp2p_models.Arbiter.objects.filter(wallet_hash=wallet_hash)
+        arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash)
         if arbiter.exists():
             return Response({'error': 'Users cannot be both Peer and Arbiter'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -159,7 +159,7 @@ class PeerView(APIView):
         duplicate_name_error = False
         if (username.startswith(prefix)):
             subset_key = username[len(prefix):]
-            reserved_name = rampp2p_models.ReservedName.objects.filter(key=subset_key)
+            reserved_name = models.ReservedName.objects.filter(key=subset_key)
             if reserved_name.exists():
                 # accept key if reserved name is not yet associated with a Peer
                 if reserved_name.first().peer is None:
@@ -171,8 +171,8 @@ class PeerView(APIView):
                 return Response({'error': 'no such reserved username'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # check if username already exists
-            if (rampp2p_models.Peer.objects.filter(name__iexact=username).exists() or
-                rampp2p_models.ReservedName.objects.filter(name__iexact=username).exists()):
+            if (models.Peer.objects.filter(name__iexact=username).exists() or
+                models.ReservedName.objects.filter(name__iexact=username).exists()):
                 duplicate_name_error = True
         
         if duplicate_name_error:
@@ -210,12 +210,13 @@ class PeerView(APIView):
             return Response(UserSerializer(user_info).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class ArbiterFeedbackView(APIView):
+class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+    queryset = models.ArbiterFeedback.objects.all()
 
-    def get(self, request):
-        queryset = rampp2p_models.ArbiterFeedback.objects.all()
-
+    def list(self, request):
+        queryset = self.get_queryset()
         order_id = request.query_params.get('order_id')
         from_peer = request.query_params.get('from_peer')
         to_peer = request.query_params.get('to_peer')
@@ -270,12 +271,12 @@ class ArbiterFeedbackView(APIView):
         }
         return Response(data, status.HTTP_200_OK)
 
-    def post(self, request):
+    def create(self, request):
         try:
             order_id = request.data.get('order_id')
-            from_peer, arbiter, order = self.validate_permissions(request.user.wallet_hash, order_id)
-            self.validate_limit(from_peer, order)
-        except (AssertionError, rampp2p_models.Peer.DoesNotExist, rampp2p_models.Order.DoesNotExist) as err:
+            from_peer, arbiter, order = self._validate_permissions(request.user.wallet_hash, order_id)
+            self._validate_limit(from_peer, order)
+        except (AssertionError, models.Peer.DoesNotExist, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
         # TODO: block feedback if order is not yet completed
@@ -286,7 +287,6 @@ class ArbiterFeedbackView(APIView):
         data['order'] = order.id
         data['from_peer'] = from_peer.id
         data['to_arbiter'] = arbiter.id
-        logger.warn(f'data: {data}')
         
         serializer = rampp2p_serializers.ArbiterFeedbackCreateSerializer(data=data)
         if serializer.is_valid():                        
@@ -294,37 +294,35 @@ class ArbiterFeedbackView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-    def validate_limit(self, from_peer, order):
-        '''
-        Limits feedback to 1 per order peer.
-        '''
-        feedback_count = (rampp2p_models.ArbiterFeedback.objects.filter(Q(order=order) & Q(from_peer=from_peer))).count()
+    def _validate_limit(self, from_peer, order):
+        ''' Limits feedback to 1 per order peer. '''
+        feedback_count = (models.ArbiterFeedback.objects.filter(Q(order=order) & Q(from_peer=from_peer))).count()
         assert feedback_count == 0, 'peer feedback already existing'
     
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        Validates if from_peer is allowed to create an arbiter feedback for this order.
-        ''' 
+    def _validate_permissions(self, wallet_hash, pk):
+        ''' Validates if from_peer is allowed to create an arbiter feedback for this order. ''' 
         try:
-            from_peer = rampp2p_models.Peer.objects.get(wallet_hash=wallet_hash)
-            order = rampp2p_models.Order.objects.get(pk=pk)
-        except (rampp2p_models.Peer.DoesNotExist, rampp2p_models.Order.DoesNotExist) as err:
+            from_peer = models.Peer.objects.get(wallet_hash=wallet_hash)
+            order = models.Order.objects.get(pk=pk)
+        except (models.Peer.DoesNotExist, models.Order.DoesNotExist) as err:
             raise ValidationError(err.args[0])
 
         order_creator = order.owner.id == from_peer.id
         order_ad_creator = order.ad_snapshot.ad.owner.id == from_peer.id
 
         if not (order_creator or order_ad_creator):
-            raise ValidationError('not allowed to feedback this order')
+            raise ValidationError('User not allowed to feedback this order')
         
         arbiter = order.arbiter
         return from_peer, arbiter, order
     
-class PeerFeedbackView(APIView):
+class PeerFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+    queryset = models.Feedback.objects.all()
 
-    def get(self, request):
-        queryset = rampp2p_models.Feedback.objects.all()
+    def list(self, request):
+        queryset = self.get_queryset()
 
         ad_id = request.query_params.get('ad_id')
         order_id = request.query_params.get('order_id')
@@ -377,17 +375,17 @@ class PeerFeedbackView(APIView):
 
         return Response(data, status.HTTP_200_OK)
 
-    def post(self, request):
+    def create(self, request):
         try:
             order_id = request.data.get('order_id')
-            from_peer, to_peer, order = self.validate_permissions(request.user.wallet_hash, order_id)
+            from_peer, to_peer, order = self._validate_permissions(request.user.wallet_hash, order_id)
 
             data = request.data.copy()
             data['from_peer'] = from_peer.id
             data['to_peer'] = to_peer.id
             data['order'] = order.id
-            self.validate_limit(data['from_peer'], data['to_peer'], data['order'])
-        except (AssertionError, rampp2p_models.Peer.DoesNotExist, rampp2p_models.Order.DoesNotExist) as err:
+            self._validate_limit(data['from_peer'], data['to_peer'], data['order'])
+        except (AssertionError, models.Peer.DoesNotExist, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             
         serializer = rampp2p_serializers.FeedbackCreateSerializer(data=data)
@@ -397,28 +395,24 @@ class PeerFeedbackView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def validate_limit(self, from_peer, to_peer, order):
-        '''
-        Validates that from_peer can only create 1 feedback for the order.
-        '''
-        feedback_count = (rampp2p_models.Feedback.objects.filter(Q(from_peer=from_peer) & Q(to_peer=to_peer) & Q(order=order))).count()
+    def _validate_limit(self, from_peer, to_peer, order):
+        ''' Validates that from_peer can only create 1 feedback for the order.'''
+        feedback_count = (models.Feedback.objects.filter(Q(from_peer=from_peer) & Q(to_peer=to_peer) & Q(order=order))).count()
         assert feedback_count == 0, 'peer feedback already existing'
     
-    def validate_permissions(self, wallet_hash, pk):
-        '''
-        Validates if from_peer is allowed to create a peer feedback for this order.
-        ''' 
+    def _validate_permissions(self, wallet_hash, pk):
+        ''' Validates if from_peer is allowed to create a peer feedback for this order. ''' 
         try:
-            from_peer = rampp2p_models.Peer.objects.get(wallet_hash=wallet_hash)
-            order = rampp2p_models.Order.objects.get(pk=pk)
-        except (rampp2p_models.Peer.DoesNotExist, rampp2p_models.Order.DoesNotExist) as err:
+            from_peer = models.Peer.objects.get(wallet_hash=wallet_hash)
+            order = models.Order.objects.get(pk=pk)
+        except (models.Peer.DoesNotExist, models.Order.DoesNotExist) as err:
             raise ValidationError(err.args[0])
 
         order_creator = order.owner.id == from_peer.id
         order_ad_creator = order.ad_snapshot.ad.owner.id == from_peer.id
 
         if not (order_creator or order_ad_creator):
-            raise ValidationError('not allowed to feedback this order')
+            raise ValidationError('User not allowed to feedback this order')
         
         to_peer = None
         if order_creator:
@@ -428,8 +422,3 @@ class PeerFeedbackView(APIView):
         
         return from_peer, to_peer, order
     
-class FeedbackDetailView(generics.RetrieveUpdateAPIView):
-    authentication_classes = [TokenAuthentication]
-    queryset = rampp2p_models.Feedback.objects.all()
-    serializer_class = rampp2p_serializers.FeedbackSerializer
-

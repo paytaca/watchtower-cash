@@ -1,5 +1,4 @@
 from rest_framework import status, viewsets
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
@@ -14,6 +13,7 @@ from authentication.permissions import RampP2PIsAuthenticated
 import rampp2p.utils as utils
 import rampp2p.models as models
 import rampp2p.serializers as serializers
+import rampp2p.utils.websocket as websocket
 
 from rampp2p.validators import *
 from rampp2p.utils.contract import create_contract
@@ -178,6 +178,52 @@ class ContractViewSet(viewsets.GenericViewSet):
         return Response(response, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
+    def pending_escrow(self, request, pk):
+        '''Creates a status ESCROW_PENDING for a given order. Callable only by the order's seller.'''
+
+        wallet_hash = request.user.wallet_hash
+        try:
+            order = models.Order.objects.get(pk=pk)        
+
+            # Require user is seller
+            seller = None
+            if order.ad_snapshot.trade_type == models.TradeType.SELL:
+                seller = order.ad_snapshot.ad.owner
+            else:
+                seller = order.owner
+            if wallet_hash != seller.wallet_hash:
+                raise ValidationError('Caller must be seller.')
+
+            validate_status(pk, StatusType.CONFIRMED)
+            validate_status_inst_count(StatusType.ESCROW_PENDING, pk)
+            validate_status_progression(StatusType.ESCROW_PENDING, pk)
+
+            contract = models.Contract.objects.get(order__id=pk)
+            
+            # Create ESCROW_PENDING status for order
+            status_serializer = serializers.StatusSerializer(data={'status': StatusType.ESCROW_PENDING, 'order': pk})
+            if status_serializer.is_valid():
+                status_serializer = serializers.StatusReadSerializer(status_serializer.save())
+            else: 
+                raise ValidationError(f"Encountered error saving status for order#{pk}")
+
+            # Create ESCROW transaction
+            transaction, _ = models.Transaction.objects.get_or_create(contract=contract, action=models.Transaction.ActionType.ESCROW)
+
+            # Notify order WebSocket subscribers
+            websocket_msg = {
+                'success' : True,
+                'status': status_serializer.data,
+                'transaction': serializers.TransactionSerializer(transaction).data
+            }
+            websocket.send_order_update(websocket_msg, pk)
+            response = websocket_msg
+        except (ValidationError, IntegrityError, models.Contract.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(response, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
     def verify_escrow(self, request, pk):
         '''
         Manually marks the order as ESCROWED by submitting the transaction id
@@ -221,6 +267,9 @@ class ContractViewSet(viewsets.GenericViewSet):
             (2) The order's current status must be RELEASE_PENDING
         '''
         try:
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid field is required')
 
             order = models.Order.objects.get(pk=pk)
             contract = models.Contract.objects.get(order__id=pk)
@@ -233,10 +282,6 @@ class ContractViewSet(viewsets.GenericViewSet):
             validate_status_inst_count(status_type, pk)
             validate_exclusive_stats(status_type, pk)
             validate_status_progression(status_type, pk)      
-            
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid field is required')
             
             # Validate the transaction
             validate_transaction(txid, models.Transaction.ActionType.RELEASE, contract.id)
@@ -256,6 +301,9 @@ class ContractViewSet(viewsets.GenericViewSet):
             (2) The order's current status must be REFUND_PENDING
         '''
         try:
+            txid = request.data.get('txid')
+            if txid is None:
+                raise ValidationError('txid field is required')
             
             order = models.Order.objects.get(pk=pk)
             contract = models.Contract.objects.get(order__id=pk)
@@ -268,10 +316,6 @@ class ContractViewSet(viewsets.GenericViewSet):
             validate_status_inst_count(status_type, pk)
             validate_exclusive_stats(status_type, pk)
             validate_status_progression(status_type, pk)
-            
-            txid = request.data.get('txid')
-            if txid is None:
-                raise ValidationError('txid field is required')
 
             # Validate the transaction
             validate_transaction(txid, models.Transaction.ActionType.REFUND, contract.id)

@@ -609,7 +609,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         return Response(serialized_status.data, status=status.HTTP_200_OK)        
 
     @action(detail=True, methods=['post'])
-    def escrow(self, request, pk):
+    def pending_escrow(self, request, pk):
         '''Creates a status ESCROW_PENDING for a given order. Callable only by the order's seller.'''
 
         wallet_hash = request.user.wallet_hash

@@ -150,16 +150,14 @@ admin.site.register(Feedback, FeedbackAdmin)
 
 class AppealAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'type',
         'order',
         'owner',
         'created_at',
         'resolved_at'
     ]
-    search_fields = [
-        'order',
-        'owner'
-    ]
+    search_fields = ['id', 'order__id', 'owner__name']
 
 admin.site.register(Appeal, AppealAdmin)
 
