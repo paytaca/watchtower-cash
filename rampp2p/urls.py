@@ -17,10 +17,10 @@ urlpatterns = [
     path('arbiter/', ArbiterView.as_view(), name='arbiter-list-create-edit'),
     path('arbiter/<str:wallet_hash>/', ArbiterView.as_view(), name='arbiter-detail'),
 
-    path('currency/fiat/', FiatCurrencyList.as_view(), name='fiat-list'),
-    path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view(), name='fiat-detail'),
-    path('currency/crypto/', CryptoCurrencyList.as_view(), name='crypto-list'),
-    path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view(), name='crypto-detail'),
+    path('currency/fiat/', FiatCurrencyViewSet.as_view({'get': 'list'}), name='fiat-list'),
+    path('currency/fiat/<int:pk>/', FiatCurrencyViewSet.as_view({'get': 'retrieve'}), name='fiat-detail'),
+    path('currency/crypto/', CryptoCurrencyViewSet.as_view({'get': 'list'}), name='crypto-list'),
+    path('currency/crypto/<int:pk>/', CryptoCurrencyViewSet.as_view({'get': 'retrieve'}), name='crypto-detail'),
 
     # Orders
     path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
