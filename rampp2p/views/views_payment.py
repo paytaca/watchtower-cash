@@ -1,22 +1,28 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets
+from rest_framework.parsers import MultiPartParser
+from rest_framework.decorators import action
 
 from django.db import transaction
-from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import OuterRef, Subquery, Q
+from django.utils.translation import gettext_lazy as _
 
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.models as models
 import rampp2p.serializers as serializers
+import rampp2p.utils.file_upload as file_upload_utils
+import rampp2p.utils.utils as rampp2putils
+
+from PIL import Image
 
 import logging
 logger = logging.getLogger(__name__)
 
-class PaymentTypeList(APIView):
+class PaymentTypeView(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -155,3 +161,70 @@ class PaymentMethodViewSet(viewsets.GenericViewSet):
         '''Throws an error if wallet_hash is not the owner of payment_method.'''        
         if wallet_hash != payment_method.owner.wallet_hash:
             raise ValidationError('User not allowed to access this payment method.')
+        
+class OrderPaymentViewSet(viewsets.GenericViewSet):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+    parser_classes = [MultiPartParser]
+    queryset = models.OrderPayment.objects.all()
+
+    def list(self, request):
+        queryset = self.get_queryset()
+        order_id = request.query_params.get('order_id')
+        if order_id:
+            queryset = queryset.filter(order__id=order_id)
+        serializer = serializers.OrderPaymentSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def retrieve(self, request, pk):
+        try: 
+            queryset = self.get_queryset().get(pk=pk)
+            serializer = serializers.OrderPaymentSerializer(queryset)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except models.OrderPayment.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def upload_attachment(self, request, pk):
+        try:
+            image_file = request.FILES.get('image')
+            if image_file is None: raise ValidationError('image is required')
+            order_payment_obj = models.OrderPayment.objects.prefetch_related('order').get(id=pk)
+
+            # Order status must be ESCROWED or PAID PENDING for payment attachment upload.
+            self._validate_awaiting_payment(order_payment_obj.order)
+
+            filesize = image_file.size
+            if filesize > 5 * 1024 * 1024: # 5mb limit
+                raise ValidationError(
+                    { 'image': _('File size cannot exceed 5 MB.')}
+                )
+
+            img_object = Image.open(image_file)
+            image_upload_obj = file_upload_utils.save_image(img_object, max_width=450, request=request)
+
+            attachment, _ = models.OrderPaymentAttachment.objects.update_or_create(payment=order_payment_obj, image=image_upload_obj)
+            serializer = serializers.OrderPaymentAttachmentSerializer(attachment)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        except (models.OrderPayment.DoesNotExist, ValidationError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+    @action(detail=True, methods=['delete'])
+    def delete_attachment(self, request, pk):
+        try:
+            attachment = models.OrderPaymentAttachment.objects.get(id=pk)
+            self._validate_awaiting_payment(attachment.payment.order)
+            file_upload_utils.delete_file(attachment.image.url_path)
+            attachment.delete()
+            return Response(status=status.HTTP_200_OK)
+        
+        except (models.OrderPaymentAttachment.DoesNotExist, Exception) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _validate_awaiting_payment(self, order):
+        '''Validates that `order` is awaiting fiat payment. Raises ValidationError 
+        when order's last status is not ESCRW nor PD_PN'''
+        last_status = rampp2putils.get_last_status(order.id)
+        if last_status.status != models.StatusType.ESCROWED and last_status.status != models.StatusType.PAID_PENDING:
+            raise ValidationError({ 'order': _(f'Invalid action for {last_status.status} order')})

@@ -39,12 +39,13 @@ urlpatterns = [
     path('order/contract/<int:pk>/', ContractViewSet.as_view({'get': 'retrieve'}), name='contract-detail'),
     path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
     path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
-    
     path('order/cash-in/', CashinOrderView.as_view(), name='cashin-order-list'),
     
-    path('order/payment/attachment/upload', UploadOrderPaymentAttachmentView.as_view(), name='upload-payment-attachment'),
-    path('order/payment/attachment/delete', DeleteOrderPaymentAttachmentView.as_view(), name='delete-payment-attachment'),
-    path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list'),
+    # Payment
+    path('order/payment/', OrderPaymentViewSet.as_view({'get': 'list'}), name='order-payment-list'),
+    path('order/payment/<int:pk>/', OrderPaymentViewSet.as_view({'get': 'retrieve'}), name='order-payment-detail'),
+    path('order/payment/<int:pk>/attachment/', OrderPaymentViewSet.as_view({'post': 'upload_attachment', 'delete': 'delete_attachment'}), name='payment-attachment-upload-delete'),
+    path('payment-type/', PaymentTypeView.as_view(), name='payment-type-list'),
     path('payment-method/', PaymentMethodViewSet.as_view({'get': 'list', 'post': 'create'}), name='payment-method-list'),
     path('payment-method/<int:pk>/', PaymentMethodViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}), name='payment-method-detail'),
 
@@ -59,8 +60,8 @@ urlpatterns = [
     path('order/feedback/arbiter/', ArbiterFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='arbiter-feedback-list-create'),
     path('order/feedback/peer/', PeerFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='peer-feedback-list-create'),
 
-    path('utils/market-price', MarketRates.as_view(), name='market-price'),
-    path('utils/subscribe-address', SubscribeContractAddress.as_view(), name='subscribe-address'),
+    path('utils/market-price/', MarketRates.as_view(), name='market-price'),
+    path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
     
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
 ]
