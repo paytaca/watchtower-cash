@@ -1,12 +1,15 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, viewsets
 
 from django.db import transaction
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from authentication.token import TokenAuthentication
 from django.db.models import OuterRef, Subquery, Q
+
+from authentication.token import TokenAuthentication
+from authentication.permissions import RampP2PIsAuthenticated
+
 import rampp2p.models as models
 import rampp2p.serializers as serializers
 
@@ -28,11 +31,13 @@ class PaymentTypeList(APIView):
         serializer = serializers.PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-class PaymentMethodListCreate(APIView):  
+class PaymentMethodViewSet(viewsets.GenericViewSet):  
     authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+    queryset = models.PaymentMethod.objects.all()
 
-    def get(self, request):
-        queryset = models.PaymentMethod.objects.filter(owner__wallet_hash=request.user.wallet_hash)
+    def list(self, request):
+        queryset = self.get_queryset().filter(owner__wallet_hash=request.user.wallet_hash)
         currency = request.query_params.get('currency')
         if currency:
             fiat_currency = models.FiatCurrency.objects.filter(symbol=currency)
@@ -44,16 +49,17 @@ class PaymentMethodListCreate(APIView):
         serializer = serializers.PaymentMethodSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-    def post(self, request):
-        data = request.data.copy()
+    def create(self, request):
         owner = request.user
         
         try:
+            data = request.data.copy()
             fields = data.get('fields')
             if fields is None or len(fields) == 0:
                 raise ValidationError('Empty payment method fields')
             
             payment_type = models.PaymentType.objects.get(id=data.get('payment_type'))
+
             # Return error if a payment_method with same payment type already exists for this user
             if models.PaymentMethod.objects.filter(Q(owner__wallet_hash=owner.wallet_hash) & Q(payment_type__id=payment_type.id)).exists():
                 raise ValidationError('Duplicate payment method with payment type')
@@ -75,41 +81,27 @@ class PaymentMethodListCreate(APIView):
                         'value': field['value']
                     }
                     models.PaymentMethodField.objects.create(**data)
-
+                
+            serializer = serializers.PaymentMethodSerializer(payment_method)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        serializer = serializers.PaymentMethodSerializer(payment_method)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-  
-class PaymentMethodDetail(APIView):
-    authentication_classes = [TokenAuthentication]
     
-    def get_object(self, pk):
+    def retrieve(self, request, pk):
         try:
-            payment_method = models.PaymentMethod.objects.get(pk=pk)
-            return payment_method
-        except models.PaymentMethod.DoesNotExist:
-            raise Http404
-    
-    def get(self, request, pk):
-        try:
-            payment_method = self.get_object(pk)
-            self.validate_permissions(request.user.wallet_hash, payment_method)
+            payment_method = self.get_queryset().get(pk=pk)
+            self._check_permissions(request.user.wallet_hash, payment_method)
+            serializer = serializers.PaymentMethodSerializer(payment_method)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = serializers.PaymentMethodSerializer(payment_method)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    def put(self, request, pk):
+    def partial_update(self, request, pk):
         try:
-            payment_method = self.get_object(pk)
-            self.validate_permissions(request.user.wallet_hash, payment_method)
+            payment_method = self.get_queryset().get(pk=pk)
+            self._check_permissions(request.user.wallet_hash, payment_method)
         
             data = request.data.copy()
-            logger.warn(f'request data: {data}')
-
             fields = data.get('fields')
             if fields is None or len(fields) == 0:
                 raise ValidationError('Empty payment method fields')
@@ -134,45 +126,32 @@ class PaymentMethodDetail(APIView):
         except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
-    def delete(self, request, pk):
+    def destroy(self, request, pk):
         try:
-            payment_method = self.get_object(pk)
-            self.validate_permissions(request.user.wallet_hash, payment_method)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
-            payment_method = self.get_object(pk=pk)
+            payment_method = self.get_queryset().get(pk=pk)
+            self._check_permissions(request.user.wallet_hash, payment_method)
+            
             # disable deletion if used by any Ad as payment method
             ads_using_this = models.Ad.objects.filter(deleted_at__isnull=True, payment_methods__id=payment_method.id)
             if ads_using_this.exists():
                 raise ValidationError("Unable to delete Ad payment method")
     
             # disable deletion if payment method is used by ongoing orders
-            latest_status_subquery = models.Status.objects.filter(
-                order=OuterRef('pk'),
-            ).order_by('-created_at').values('status')[:1]
+            latest_status_subquery = models.Status.objects.filter(order=OuterRef('pk')).order_by('-created_at').values('status')[:1]
             annotated_orders = models.Order.objects.annotate(latest_status = Subquery(latest_status_subquery))
             completed_status = [models.StatusType.CANCELED, models.StatusType.RELEASED, models.StatusType.REFUNDED]
             incomplete_orders = annotated_orders.exclude(latest_status__in=completed_status)
             orders_using_this = incomplete_orders.filter(payment_methods__id=payment_method.id)
-            logger.warn(f'{orders_using_this.count()} orders using this payment method')
+            logger.warning(f'{orders_using_this.count()} orders using this payment method')
             if orders_using_this.exists():
                 raise ValidationError(f"Unable to delete payment method used by {orders_using_this.count()} ongoing order(s)")
             
             payment_method.delete()
+            return Response(status=status.HTTP_200_OK)
         except Exception as err:
             return Response({'error': err.args[0]},status=status.HTTP_400_BAD_REQUEST)
-        return Response(status=status.HTTP_200_OK)
 
-    def validate_permissions(self, wallet_hash, payment_method):
-        '''
-        Validates if caller is owner
-        '''
-        try:
-            caller = models.Peer.objects.get(wallet_hash=wallet_hash)
-        except models.Peer.DoesNotExist as err:
-            raise ValidationError(err.args[0])
-        
-        if caller.wallet_hash != payment_method.owner.wallet_hash:
-            raise ValidationError('caller must be payment method owner')
+    def _check_permissions(self, wallet_hash, payment_method):
+        '''Throws an error if wallet_hash is not the owner of payment_method.'''        
+        if wallet_hash != payment_method.owner.wallet_hash:
+            raise ValidationError('User not allowed to access this payment method.')

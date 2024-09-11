@@ -7,10 +7,6 @@ urlpatterns = [
     path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
     path('ad/cash-in/', CashInAdView.as_view(), name='cashin-ads-list'),
 
-    path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list'),
-    path('payment-method/', PaymentMethodListCreate.as_view(), name='payment-method-list'),
-    path('payment-method/<int:pk>', PaymentMethodDetail.as_view(), name='payment-method-detail'),
-
     path('user/', UserProfileView.as_view(), name='user-profile'),
     path('peer/', PeerView.as_view(), name='peer-create-edit'),
     path('peer/<int:pk>/', PeerView.as_view(), name='peer-detail'),
@@ -45,8 +41,12 @@ urlpatterns = [
     path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
     
     path('order/cash-in/', CashinOrderView.as_view(), name='cashin-order-list'),
+    
     path('order/payment/attachment/upload', UploadOrderPaymentAttachmentView.as_view(), name='upload-payment-attachment'),
     path('order/payment/attachment/delete', DeleteOrderPaymentAttachmentView.as_view(), name='delete-payment-attachment'),
+    path('payment-type/', PaymentTypeList.as_view(), name='payment-type-list'),
+    path('payment-method/', PaymentMethodViewSet.as_view({'get': 'list', 'post': 'create'}), name='payment-method-list'),
+    path('payment-method/<int:pk>/', PaymentMethodViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update', 'delete': 'destroy'}), name='payment-method-detail'),
 
     # Appeal
     path('appeal/', AppealViewSet.as_view({'get': 'list', 'post': 'create'}), name='appeal-list-create'),
