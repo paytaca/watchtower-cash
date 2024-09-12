@@ -1,6 +1,7 @@
 from django_filters import rest_framework as filters
 
 from .models import *
+from vouchers.models import MerchantVault
 
 
 class PosDeviceFilter(filters.FilterSet):
@@ -31,7 +32,7 @@ class MerchantFilter(filters.FilterSet):
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
     device_vault_token_address = filters.CharFilter(method="vault_address_filter")
-    # no_vault = filters.BooleanFilter(field_name="vault", lookup_expr="isnull")
+    supports_voucher = filters.BooleanFilter(method="has_vault_filter")
 
     active = filters.BooleanFilter()
     verified = filters.BooleanFilter()
@@ -56,7 +57,7 @@ class MerchantFilter(filters.FilterSet):
             "street",
             "category",
             "device_vault_token_address",
-            # "no_vault",
+            "supports_voucher",
         ]
 
     def wallet_hashes_filter(self, queryset, name, value):
@@ -69,3 +70,6 @@ class MerchantFilter(filters.FilterSet):
     def vault_address_filter(self, queryset, name, value):
         pos_devices = PosDevice.objects.filter(vault__token_address=value)
         return queryset.filter(merchant__in=pos_devices.values('merchant'))
+
+    def has_vault_filter(self, queryset, name, value):
+        return queryset.exclude(vault__isnull=value)
