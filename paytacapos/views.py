@@ -5,6 +5,7 @@ from django.db.models import (
     CharField,
     Max,
 )
+from django.http import Http404
 from django.db import transaction
 from django.utils import timezone
 from django_filters import rest_framework as filters
