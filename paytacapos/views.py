@@ -342,6 +342,13 @@ class MerchantViewSet(viewsets.ModelViewSet):
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
+    
+    @swagger_auto_schema(deprecated=True)
+    @decorators.action(methods=['post'], detail=False)
+    def latest_index(self, request, *args, **kwargs):
+        # This endpoint is maintained for older versions of Paytaca app that still use this
+        response = { 'index': 0 }
+        return Response(response)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
