@@ -87,8 +87,10 @@ def get_device_vault(pos_device_id, pubkey=None):
     }
 
 
-def create_device_vault(pos_device_id, pubkey):
+def create_device_vault(pos_device_id, pubkey=None):
     pos_device = PosDevice.objects.get(id=pos_device_id)
+
+    if not pubkey: return
 
     try:
         pos_device.merchant.vault
@@ -125,8 +127,12 @@ def create_verification_token_minter(merchant_id, address, category):
     )
 
 
-def create_merchant_vault(merchant_id, pubkey, minter_address, minter_category):
+def create_merchant_vault(merchant_id, pubkey=None, minter_address=None, minter_category=None):
     merchant = Merchant.objects.get(id=merchant_id)
+
+    if not pubkey: return
+    if not minter_address: return
+    if not minter_category: return
     
     try:
         if merchant.vault and merchant.minter: return

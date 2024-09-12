@@ -458,17 +458,20 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
                 raise serializers.ValidationError("unable to find new posid")
             validated_data["posid"] = posid
 
+        pubkey = validated_data.get('pubkey')
+        if 'pubkey' in validated_data.keys(): del validated_data['pubkey']
+
         try:
             instance = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
             instance = super().update(instance, validated_data)
-            create_device_vault(instance.id, validated_data['pubkey'])
+            create_device_vault(instance.id, pubkey)
             send_device_update(instance, action="update")
             return instance
         except PosDevice.DoesNotExist:
             pass
 
         instance = super().create(validated_data, *args, **kwargs)
-        create_device_vault(instance.id, validated_data['pubkey'])
+        create_device_vault(instance.id, pubkey)
         send_device_update(instance, action="create")
         return instance
 
@@ -723,8 +726,8 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
         required=False,
         help_text='Merchant Vault pubkey (0th address)'
     )
-    minter_address = serializers.CharField(write_only=True)
-    minter_category = serializers.CharField(write_only=True)
+    minter_address = serializers.CharField(write_only=True, required=False)
+    minter_category = serializers.CharField(write_only=True, required=False)
 
     vault = MerchantVaultSerializer(read_only=True)
     minter = VerificationTokenMinterSerializer(read_only=True)
@@ -810,14 +813,18 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
+        pubkey = validated_data.get('pubkey')
+        minter_address = validated_data.get('minter_address')
+        minter_category = validated_data.get('minter_category')
+        data_keys = validated_data.keys()
+
+        if 'pubkey' in data_keys: del validated_data['pubkey']
+        if 'minter_address' in data_keys: del validated_data['minter_address']
+        if 'minter_category' in data_keys: del validated_data['minter_category']
+
         instance = super().create(validated_data)
         instance.get_or_create_main_branch()
-        create_merchant_vault(
-            instance.id,
-            validated_data['pubkey'],
-            validated_data['minter_address'],
-            validated_data['minter_category']
-        )
+        create_merchant_vault(instance.id, pubkey, minter_address, minter_category)
 
         return instance
 
@@ -831,13 +838,18 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
+
+        pubkey = validated_data.get('pubkey')
+        minter_address = validated_data.get('minter_address')
+        minter_category = validated_data.get('minter_category')
+        data_keys = validated_data.keys()
+
+        if 'pubkey' in data_keys: del validated_data['pubkey']
+        if 'minter_address' in data_keys: del validated_data['minter_address']
+        if 'minter_category' in data_keys: del validated_data['minter_category']
+
         instance = super().update(instance, validated_data)
-        create_merchant_vault(
-            instance.id,
-            validated_data['pubkey'],
-            validated_data['minter_address'],
-            validated_data['minter_category']
-        )
+        create_merchant_vault(instance.id, pubkey, minter_address, minter_category)
 
         return instance
 
