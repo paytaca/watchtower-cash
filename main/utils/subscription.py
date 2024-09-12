@@ -258,15 +258,16 @@ def resolve_pos_data(wallet_hash, address_path):
             location_model = apps.get_model("paytacapos", "Location")
             location = location_model.objects.get(pk=merchant.location.pk)
 
-            response['location'] = dict(
-                landmark=location.landmark,
-                location=location.location,
-                street=location.street,
-                city=location.city,
-                country=location.country,
-                longitude=float(location.longitude),
-                latitude=float(location.latitude),
-            )
+            if location.longitude and location.latitude:
+                response['location'] = dict(
+                    landmark=location.landmark,
+                    location=location.location,
+                    street=location.street,
+                    city=location.city,
+                    country=location.country,
+                    longitude=float(location.longitude),
+                    latitude=float(location.latitude),
+                )
 
         response["merchant"] = dict(
             id=merchant.id,
