@@ -1,6 +1,6 @@
 import BCHJS from "@psf/bch-js"
 import { compileFile } from "cashc";
-import { reverseHex, toBytes32 } from "../../funcs/utils.js"
+import { reverseHex, toBytes32 } from "../funcs/utils.js"
 import {
   Contract,
   ElectrumNetworkProvider,

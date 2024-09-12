@@ -1,4 +1,4 @@
-import { MerchantVault } from '../../contract/scripts/merchant.js'
+import { MerchantVault } from '../../contract/merchant.js'
 import { toBytes32 } from '../utils.js'
 
 
