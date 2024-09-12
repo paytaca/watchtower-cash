@@ -1,4 +1,4 @@
-import { PosDeviceVault } from '../../contract/scripts/device.js'
+import { PosDeviceVault } from '../../contract/device.js'
 import { toBytes32 } from '../utils.js'
 
 

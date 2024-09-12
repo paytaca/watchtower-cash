@@ -1,5 +1,6 @@
 from django.conf import settings
 
+from main.utils.address_converter import bch_address_converter
 from paytacapos.models import Merchant, PosDevice
 from vouchers.models import (
     PosDeviceVault,
@@ -49,7 +50,7 @@ def get_merchant_vault(merchant_id, pubkey=None):
 def get_device_vault(pos_device_id, pubkey=None):
     pos_device = PosDevice.objects.get(id=pos_device_id)
     merchant_vault = get_merchant_vault(pos_device.merchant.id)
-    __pubkey = pubkey or pos_device.pubkey
+    __pubkey = pubkey or pos_device.vault.pubkey
     payload = {
         'params': {
             'merchant': {
@@ -74,7 +75,7 @@ def get_device_vault(pos_device_id, pubkey=None):
             # 'amount': None
         },
         'options': {
-            'network': setings.BCH_NETWORK
+            'network': settings.BCH_NETWORK
         }
     }
     url = settings.VAULT_EXPRESS_URLS['device'] + '/compile'
@@ -86,12 +87,21 @@ def get_device_vault(pos_device_id, pubkey=None):
     }
 
 
-def create_device_vault(pos_device_id, pubkey):
+def create_device_vault(pos_device_id, pubkey=None):
     pos_device = PosDevice.objects.get(id=pos_device_id)
 
-    if not pos_device.merchant.vault: return
-    if not pos_device.merchant.minter: return
-    if pos_device.vault: return
+    if not pubkey: return
+
+    try:
+        pos_device.merchant.vault
+        pos_device.merchant.minter
+    except:
+        return
+
+    try:
+        if pos_device.vault: return
+    except:
+        pass
 
     address = bytearray.fromhex(pubkey)
     device_vault = get_device_vault(pos_device.id, pubkey=pubkey)
@@ -106,10 +116,32 @@ def create_device_vault(pos_device_id, pubkey):
     )
 
 
-def create_merchant_vault(merchant_id, pubkey):
+def create_verification_token_minter(merchant_id, address, category):
     merchant = Merchant.objects.get(id=merchant_id)
+    token_address = bch_address_converter(address)
+    VerificationTokenMinter.objects.create(
+        merchant=merchant,
+        category=category,
+        address=address,
+        token_address=token_address
+    )
+
+
+def create_merchant_vault(merchant_id, pubkey=None, minter_address=None, minter_category=None):
+    merchant = Merchant.objects.get(id=merchant_id)
+
+    if not pubkey: return
+    if not minter_address: return
+    if not minter_category: return
     
-    if merchant.vault and merchant.minter: return
+    try:
+        if merchant.vault and merchant.minter: return
+    except:
+        create_verification_token_minter(
+            merchant.id,
+            minter_address,
+            minter_category
+        )
 
     merchant_vault = get_merchant_vault(merchant.id, pubkey=pubkey)
     contract = merchant_vault['contract']
