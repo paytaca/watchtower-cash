@@ -36,8 +36,8 @@ def refund_expired_vouchers():
 
     for voucher in unclaimed_vouchers:
         pubkey = voucher.vault.pubkey
-        address = bytearray.fromhex(pubkey)
-        address = public_key_to_address(address)
+        pubkey = bytearray.fromhex(pubkey)
+        address = public_key_to_address(pubkey)
         payload = {
             'params': {
                 'category': voucher.category,

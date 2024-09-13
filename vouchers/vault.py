@@ -51,10 +51,12 @@ def get_device_vault(pos_device_id, pubkey=None):
     pos_device = PosDevice.objects.get(id=pos_device_id)
     merchant_vault = get_merchant_vault(pos_device.merchant.id)
     __pubkey = pubkey or pos_device.vault.pubkey
+    pubkey_arr = bytearray.fromhex(__pubkey)
+
     payload = {
         'params': {
             'merchant': {
-                'address': public_key_to_address(__pubkey),
+                'address': public_key_to_address(pubkey_arr),
                 'pubkey': __pubkey,
                 'vaultTokenAddress': pos_device.merchant.vault.token_address,
                 'scriptHash': merchant_vault['contract']['scriptHash'],
@@ -103,7 +105,6 @@ def create_device_vault(pos_device_id, pubkey=None):
     except:
         pass
 
-    address = bytearray.fromhex(pubkey)
     device_vault = get_device_vault(pos_device.id, pubkey=pubkey)
     contract = device_vault['contract']
 
@@ -151,4 +152,5 @@ def create_merchant_vault(merchant_id, pubkey=None, minter_address=None, minter_
         merchant=merchant,
         address=contract['address'],
         token_address=contract['tokenAddress'],
+        pubkey=pubkey
     )
