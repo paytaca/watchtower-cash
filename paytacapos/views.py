@@ -45,7 +45,7 @@ class BroadcastPaymentView(APIView):
         return Response(success_data, status=status.HTTP_200_OK)
 
 
-class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.RetrieveModelMixin):
     serializer_class = PosPaymentRequestSerializer
     queryset = PosPaymentRequest.objects.filter(paid=False)
     
@@ -70,6 +70,19 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
         except PosDevice.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def retrieve(self, request, *args, **kwargs):
+        pos_device_id = kwargs.get('id', None)
+
+        if pos_device_id:
+            pos_device_check = PosPaymentRequest.objects.filter(pos_device__posid=pos_device_id)
+            if pos_device_check.exists():
+                data = []
+                for details in pos_device_check.all():
+                    data.append(details.receiving_address)
+                return Response(data=data, status=status.HTTP_200_OK) 
+        
+        return Response(status=status.HTTP_404_NOT_FOUND)
 
     @swagger_auto_schema(request_body=CancelPaymentRequestSerializer, responses={ 200: 'OK' })
     @decorators.action(methods=["post"], detail=False)
