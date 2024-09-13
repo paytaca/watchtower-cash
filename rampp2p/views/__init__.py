@@ -7,3 +7,13 @@ from .views_contract import *
 from .views_appeal import *
 from .views_payment import *
 from .views_misc import *
+
+from .ad import *
+from .appeal import *
+from .contract import *
+from .currency import *
+from .feedback import *
+from .order import *
+from .payment import *
+from .peer import *
+from .arbiter import *
