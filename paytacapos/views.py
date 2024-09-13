@@ -45,7 +45,7 @@ class BroadcastPaymentView(APIView):
         return Response(success_data, status=status.HTTP_200_OK)
 
 
-class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, mixins.RetrieveModelMixin):
     serializer_class = PosPaymentRequestSerializer
     queryset = PosPaymentRequest.objects.filter(paid=False)
     
