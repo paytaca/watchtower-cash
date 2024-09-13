@@ -1,3 +1,13 @@
+from .views_utils import *
+from .views_webhooks import *
+from .views_user import *
+from .views_ad import *
+from .views_order import *
+from .views_contract import *
+from .views_appeal import *
+from .views_payment import *
+from .views_misc import *
+
 from .ad import *
 from .appeal import *
 from .contract import *
@@ -6,6 +16,4 @@ from .feedback import *
 from .order import *
 from .payment import *
 from .peer import *
-from .utils import *
 from .arbiter import *
-from .webhooks import *

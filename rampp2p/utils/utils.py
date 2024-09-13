@@ -68,6 +68,9 @@ def is_buyer(order: models.Order, wallet_hash: str):
         return True
     return False
 
+def is_arbiter(order: models.Order, wallet_hash: str):
+    return wallet_hash == order.arbiter.wallet_hash
+
 def is_appealable(id: int):
     appealable_at = models.Order.objects.get(pk=id).appealable_at    
     time_now = timezone.make_aware(datetime.now())

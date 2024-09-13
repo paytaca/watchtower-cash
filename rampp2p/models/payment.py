@@ -25,6 +25,9 @@ class PaymentMethod(models.Model):
   owner = models.ForeignKey(Peer, on_delete=models.CASCADE)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
+  # class Meta:
+  #   unique_together = ('owner', 'payment_type')
+
   def __str__(self):
     return f"{self.id}"
   
