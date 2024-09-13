@@ -838,7 +838,6 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
-
         pubkey = validated_data.get('pubkey')
         minter_address = validated_data.get('minter_address')
         minter_category = validated_data.get('minter_category')

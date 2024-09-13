@@ -6,10 +6,25 @@ from main.serializers import CashNonFungibleTokenSerializer
 from vouchers.models import *
 
 
-class PosDeviceVaultSerializer(serializers.ModelSerializer):    
+class PosDeviceVaultSerializer(serializers.ModelSerializer):
+    category = serializers.SerializerMethodField()
+
     class Meta:
         model = PosDeviceVault
-        fields = '__all__'
+        fields = (
+            'id',
+            'pos_device',
+            'address',
+            'token_address',
+            'pubkey',
+            'category',
+        )
+    
+    def get_category(self, obj):
+        try:
+            return obj.pos_device.merchant.minter.category
+        except:
+            return None
 
 
 class MerchantVaultSerializer(serializers.ModelSerializer):    
