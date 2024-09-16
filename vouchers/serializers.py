@@ -83,7 +83,7 @@ class VoucherSerializer(serializers.ModelSerializer):
         return 'none'
     
     def get_merchant(self, obj):
-        return obj.vault.pos_device.merchant.name
+        return obj.vault.merchant.name
 
 
 class VoucherClaimVerificationSerializer(serializers.Serializer):
