@@ -1,20 +1,39 @@
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework.decorators import action
 
 import os
 from django.conf import settings
 from django.http import FileResponse
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 
 from main.utils.subscription import save_subscription
 
-from rampp2p.models import MarketRate
+from rampp2p.models import MarketRate, AppVersion
 from rampp2p.serializers import MarketRateSerializer
 
 import logging
 logger = logging.getLogger(__name__)
     
+def check_app_version(request, platform=None):
+    if platform:
+        version_info = AppVersion.objects.filter(platform=platform).order_by('-release_date').first()
+    else:
+        version_info = AppVersion.objects.order_by('-release_date').first()
+    
+    if version_info:
+        response_data = {
+            'latest_version': version_info.latest_version,
+            'min_required_version': version_info.min_required_version
+        }
+    else:
+        response_data = {
+            'error': 'No version information available'
+        }
+    
+    return JsonResponse(response_data)
+
 class MarketRates(APIView):
     def get(self, request):
         queryset = MarketRate.objects.all()
