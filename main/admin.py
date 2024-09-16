@@ -407,3 +407,9 @@ admin.site.register(Project, ProjectAdmin)
 admin.site.register(WalletHistory, WalletHistoryAdmin)
 admin.site.register(WalletNftToken, WalletNftTokenAdmin)
 admin.site.register(TransactionBroadcast, TransactionBroadcastAdmin)
+
+class AppVersionAdmin(admin.ModelAdmin):
+    list_display = ('platform', 'latest_version', 'min_required_version', 'release_date')
+    fields = ('platform', 'latest_version', 'min_required_version', 'notes')
+
+admin.site.register(AppVersion, AppVersionAdmin)
