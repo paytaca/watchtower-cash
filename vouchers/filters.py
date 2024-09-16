@@ -1,7 +1,6 @@
 from django_filters import rest_framework as filters
 
-from vouchers.models import Voucher, PosDeviceVault
-from paytacapos.models import PosDevice
+from vouchers.models import Voucher, PosDeviceVault, MerchantVault
 from main.models import CashNonFungibleToken
 
 
@@ -25,8 +24,8 @@ class VoucherFilter(filters.FilterSet):
         ]
 
     def filter_merchant(self, queryset, name, value):
-        pos_devices = PosDevice.objects.filter(merchant__id=merchant)
-        queryset = queryset.filter(vault__pos_device__in=pos_devices)
+        merchant_vaults = MerchantVault.objects.filter(merchant__id=value)
+        queryset = queryset.filter(vault__in=merchant_vaults)
         return queryset
 
     def filter_wallet_hash(self, queryset, name, value):
