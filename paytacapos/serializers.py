@@ -498,6 +498,7 @@ class POSDevicePaymentSerializer(serializers.Serializer):
         if not self.supress_merchant_info_validations:
             if not Merchant.objects.filter(wallet_hash = value).exists():
                 raise serializers.ValidationError("Wallet hash does not have merchant information", code="missing_merchant_info")
+        return value
 
 
 class CreatePosPaymentRequestSerializer(serializers.Serializer):
@@ -505,8 +506,8 @@ class CreatePosPaymentRequestSerializer(serializers.Serializer):
     amount = serializers.FloatField()
     receiving_address = serializers.CharField()
 
-    @transaction.atomic()
-    def create(self, validated_data):
+    def save(self):
+        validated_data = self.validated_data
         posid = validated_data['pos_device'].get('posid')
         wallet_hash = validated_data['pos_device'].get('wallet_hash')
 
@@ -515,9 +516,13 @@ class CreatePosPaymentRequestSerializer(serializers.Serializer):
         pos_device = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
         old_uncancelled_requests = PosPaymentRequest.objects.filter(pos_device=pos_device)
         old_uncancelled_requests.delete()
-        
-        validated_data['pos_device'] = pos_device
-        return super().create(validated_data)
+
+        payment_request = PosPaymentRequest.objects.create(
+            pos_device=pos_device,
+            amount=validated_data['amount'],
+            receiving_address=validated_data['receiving_address'],
+        )
+        return payment_request
 
 
 class CancelPaymentRequestSerializer(serializers.Serializer):
