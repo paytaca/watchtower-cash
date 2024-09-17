@@ -10,7 +10,9 @@ def check_app_version(request, platform=None):
     if version_info:
         response_data = {
             'latest_version': version_info.latest_version,
-            'min_required_version': version_info.min_required_version
+            'min_required_version': version_info.min_required_version,
+            'release_date': version_info.release_date,
+            'notes': version_info.notes
         }
     else:
         response_data = {
