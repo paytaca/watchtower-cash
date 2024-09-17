@@ -94,11 +94,13 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin,
             posid=__pos_device['posid'],
             wallet_hash=__pos_device['wallet_hash'],
         )
-        payment_requests = PosPaymentRequest.objects.filter(
-            pos_device=pos_device,
-            paid=False
-        )
-        payment_requests.delete()
+        if pos_device.exists():
+            pos_device = pos_device.first()
+            payment_requests = PosPaymentRequest.objects.filter(
+                pos_device=pos_device,
+                paid=False
+            )
+            payment_requests.delete()
         return Response('OK', status=status.HTTP_200_OK)
 
 

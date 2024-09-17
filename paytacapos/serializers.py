@@ -531,7 +531,7 @@ class CancelPaymentRequestSerializer(serializers.Serializer):
 
 class UpdatePaymentRequestSerializer(serializers.Serializer):
     pos_device = POSDevicePaymentSerializer()
-    amount = serializers.IntegerField()
+    amount = serializers.FloatField()
     
 
 class PosPaymentRequestSerializer(serializers.ModelSerializer):
