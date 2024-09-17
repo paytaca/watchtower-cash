@@ -90,17 +90,11 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin,
         serializer = CancelPaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)      
         __pos_device = serializer.validated_data['pos_device']
-        pos_device = PosDevice.objects.filter(
-            posid=__pos_device['posid'],
-            wallet_hash=__pos_device['wallet_hash'],
+        payment_requests = PosPaymentRequest.objects.filter(
+            pos_device__posid=__pos_device['posid'],
+            pos_device__wallet_hash=__pos_device['wallet_hash'],
         )
-        if pos_device.exists():
-            pos_device = pos_device.first()
-            payment_requests = PosPaymentRequest.objects.filter(
-                pos_device=pos_device,
-                paid=False
-            )
-            payment_requests.delete()
+        payment_requests.delete()
         return Response('OK', status=status.HTTP_200_OK)
 
 
@@ -116,6 +110,20 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin,
             pos_device__wallet_hash=pos_device['wallet_hash'],
         )
         payment_request.update(amount=serializer.validated_data['amount'])
+        return Response('OK', status=status.HTTP_200_OK)
+
+
+    @swagger_auto_schema(request_body=UpdatePaymentRequestSerializer, responses={ 200: 'OK' })
+    @decorators.action(methods=["post"], detail=False)
+    def paid(self, request, *args, **kwargs):
+        serializer = UpdatePaymentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        pos_device = serializer.validated_data['pos_device']
+        payment_requests = PosPaymentRequest.objects.filter(
+            pos_device__posid=pos_device['posid'],
+            pos_device__wallet_hash=pos_device['wallet_hash'],
+        )
+        payment_requests.update(paid=True)
         return Response('OK', status=status.HTTP_200_OK)
 
 
