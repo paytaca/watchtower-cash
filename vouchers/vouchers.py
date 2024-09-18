@@ -1,4 +1,7 @@
+from main.utils.address_converter import bch_address_converter
 from main.utils.subscription import new_subscription
+from main.utils.queries.node import Node
+
 from paytacapos.models import PosDevice
 from vouchers.models import Voucher
 
@@ -59,9 +62,8 @@ def verify_voucher(device_vault_token_address, voucher_ids):
                         lock_nft_recipient = lock_nft_output['address']
                         lock_nft_recipient = bch_address_converter(lock_nft_recipient)
                         key_nft_category = key_nft_output['token_data']['category']
-
-                        # check if lock NFT recipient address is this endpoint payload's vault address
-                        if key_nft_category == voucher.category and lock_nft_recipient == device_vault_token_address:
+                        
+                        if key_nft_category == voucher.category:
                             valid_categories.append(key_nft_category)
                         else:
                             result[voucher_id]['err'] = VOUCHER_MERCHANT_MISMATCH
