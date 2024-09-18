@@ -26,7 +26,7 @@ class PaymentTypeView(APIView):
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
-        queryset = models.PaymentType.objects.all()
+        queryset = models.PaymentType.objects.filter(payment_currency__isnull=False)
         currency = request.query_params.get('currency')
         if currency:
             fiat_currency = models.FiatCurrency.objects.filter(symbol=currency)

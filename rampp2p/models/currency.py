@@ -5,7 +5,7 @@ from .peer import Peer
 class FiatCurrency(models.Model):
     name = models.CharField(max_length=100, db_index=True)
     symbol = models.CharField(max_length=3, unique=True, db_index=True)
-    payment_types = models.ManyToManyField(PaymentType)
+    payment_types = models.ManyToManyField(PaymentType, related_name='payment_currency')
     
     cashin_blacklist = models.ManyToManyField(Peer, related_name='cashin_currency_blacklist', blank=True)
     cashin_whitelist = models.ManyToManyField(Peer, related_name='cashin_currency_whitelist', blank=True)
