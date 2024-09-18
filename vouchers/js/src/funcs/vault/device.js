@@ -71,16 +71,12 @@ export async function compile (opts) {
  * 
  */
 export async function emergencyRefund (opts) {
-  try {
-    const sender = opts?.params?.sender
-    const refundAmount = opts?.params?.refundAmount
-    
-    const vault = new PosDeviceVault(opts)
-    const transaction = await vault.emergencyRefund(sender, refundAmount)
-    return transaction
-  } catch (err) {}
+  const sender = opts?.params?.sender
+  const refundAmount = opts?.params?.refundAmount
 
-  return { success: false }
+  const vault = new PosDeviceVault(opts)
+  const transaction = await vault.emergencyRefund(sender, refundAmount)
+  return transaction
 }
 
 
@@ -111,13 +107,9 @@ export async function emergencyRefund (opts) {
  * 
  */
 export async function release (opts) {
-  try {
-    const vault = new PosDeviceVault(opts)
-    const transaction = await vault.release(BigInt(opts?.params?.amount))
-    return transaction
-  } catch (err) {}
-
-  return { success: false }
+  const vault = new PosDeviceVault(opts)
+  const transaction = await vault.release(BigInt(opts?.params?.amount))
+  return transaction
 }
 
 
@@ -148,12 +140,8 @@ export async function release (opts) {
 * 
 */
 export async function sendTokens (opts) {
- try {
-   const category = opts?.params?.merchant?.voucher?.category
-   const vault = new PosDeviceVault(opts)
-   const transaction = await vault.sendTokens(category)
-   return transaction
- } catch (err) {}
-
- return { success: false }
+  const category = opts?.params?.merchant?.voucher?.category
+  const vault = new PosDeviceVault(opts)
+  const transaction = await vault.sendTokens(category)
+  return transaction
 }

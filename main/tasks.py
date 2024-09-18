@@ -188,7 +188,7 @@ def client_acknowledgement(self, txid):
                         process_key_nft.delay(transaction.txid, category, address.address, senders)
 
                     if token_name == 'bch':
-                        process_pending_payment_requests(address.address, senders)
+                        process_pending_payment_requests.delay(address.address, senders)
 
                     if jpp_invoice_uuid:
                         data['jpp_invoice_uuid'] = jpp_invoice_uuid

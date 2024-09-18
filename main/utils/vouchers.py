@@ -49,6 +49,7 @@ def flag_claimed_voucher(txid, category):
     update_purelypeer_voucher(txid, category)
 
 
+@shared_task(queue='vouchers')
 def process_pending_payment_requests(address, senders):
     device_vaults = PosDeviceVault.objects.filter(address=address)
     merchant_vaults = MerchantVault.objects.filter(
@@ -97,6 +98,7 @@ def process_key_nft(txid, category, recipient_address, senders):
         pos_device = device_vaults.first().pos_device
         url = settings.VAULT_EXPRESS_URLS['device'] + '/send-tokens'
         payload = get_device_vault(pos_device.id)['payload']
+        payload['params']['merchant']['voucher'] = { 'category': category }
         response = requests.post(url, json=payload)
         result = response.json()
         return
@@ -104,11 +106,13 @@ def process_key_nft(txid, category, recipient_address, senders):
     merchant_vaults = MerchantVault.objects.filter(address=recipient_address)
     if merchant_vaults.exists():
         merchant = merchant_vaults.first().merchant
-        url = settings.VAULT_EXPRESS_URLS['merchant'] + '/claim'
-        payload = get_merchant_vault(merchant.id)['payload']
-
         pos_device_vault = PosDeviceVault.objects.filter(address__in=senders)
+        if not pos_device_vault.exists(): return
+
+        url = settings.VAULT_EXPRESS_URLS['merchant'] + '/claim'
+        payload = get_merchant_vault(merchant.id)['payload'] 
         pos_device = pos_device_vault.first().pos_device
+        payload['params']['merchant']['voucher'] = { 'category': category }
         payload['params']['merchant']['pubkey']['device'] = pos_device.vault.pubkey
 
         response = requests.post(url, json=payload)
