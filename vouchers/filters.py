@@ -21,6 +21,7 @@ class VoucherFilter(filters.FilterSet):
             'merchant',
             'claimed',
             'expired',
+            'sent',
         ]
 
     def filter_merchant(self, queryset, name, value):

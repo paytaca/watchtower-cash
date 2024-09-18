@@ -91,6 +91,9 @@ def process_pending_payment_requests(address, senders):
 def process_key_nft(txid, category, recipient_address, senders):
     device_vaults = PosDeviceVault.objects.filter(address=recipient_address)
     if device_vaults.exists():
+        voucher = Voucher.objects.filter(category=category)
+        voucher.update(sent=True)
+
         pos_device = device_vaults.first().pos_device
         url = settings.VAULT_EXPRESS_URLS['device'] + '/send-tokens'
         payload = get_device_vault(pos_device.id)['payload']

@@ -101,7 +101,6 @@ def client_acknowledgement(self, txid):
             .first()
         address = transaction.address
 
-            
         subscriptions = Subscription.objects.filter(address=address)
         senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
 
