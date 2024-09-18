@@ -124,16 +124,15 @@ def process_key_nft(txid, category, recipient_address, senders):
             Q(address__in=senders) |
             Q(token_address__in=senders)
         )
-        device_vault = device_vault.first()
-
         if not device_vault.exists(): return
+        device_vault = device_vault.first()
 
         data = { 'update_type': 'voucher_processed' }
         pubkey = bytearray.fromhex(device_vault.pubkey)
         address = public_key_to_address(pubkey)
-
         room_name = address.replace(':','_') + '_'
         channel_layer = get_channel_layer()
+        
         flag_claimed_voucher(txid, category)
         async_to_sync(channel_layer.group_send)(
             f"{room_name}", 
