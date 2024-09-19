@@ -125,10 +125,10 @@ def process_key_nft(txid, category, recipient_address, senders):
             Q(token_address__in=senders)
         )
         if not device_vault.exists(): return
-        device_vault = device_vault.first()
+        merchant_vault = device_vault.pos_device.merchant.vault
 
         data = { 'update_type': 'voucher_processed' }
-        pubkey = bytearray.fromhex(device_vault.pubkey)
+        pubkey = bytearray.fromhex(merchant_vault.pubkey)
         address = public_key_to_address(pubkey)
         room_name = address.replace(':','_') + '_'
         channel_layer = get_channel_layer()
