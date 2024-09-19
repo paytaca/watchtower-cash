@@ -125,6 +125,7 @@ def process_key_nft(txid, category, recipient_address, senders):
             Q(token_address__in=senders)
         )
         if not device_vault.exists(): return
+        device_vault = device_vaults.first()
         merchant_vault = device_vault.pos_device.merchant.vault
 
         data = { 'update_type': 'voucher_processed' }
