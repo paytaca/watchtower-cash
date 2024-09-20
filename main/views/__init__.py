@@ -21,4 +21,5 @@ from main.views.view_spender import *
 from main.views.view_status import *
 from main.views.view_wallet_shard import *
 from main.views.view_live_updates import *
+from main.views.view_wallet_addresses import *
 from main.views.view_app_version import *
