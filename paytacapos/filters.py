@@ -2,6 +2,7 @@ from django_filters import rest_framework as filters
 
 from .models import *
 from vouchers.models import MerchantVault
+from django.db.models import Q
 
 
 class PosDeviceFilter(filters.FilterSet):
@@ -36,7 +37,7 @@ class MerchantFilter(filters.FilterSet):
 
     active = filters.BooleanFilter()
     verified = filters.BooleanFilter()
-    name = filters.CharFilter(lookup_expr="icontains")
+    name = filters.CharFilter(method="name_address_filter")
 
     ordering = filters.OrderingFilter(
         fields=(
@@ -66,6 +67,19 @@ class MerchantFilter(filters.FilterSet):
 
         wallet_hashes = [wallet_hash.strip() for wallet_hash in value.split(",") if wallet_hash.strip()]
         return queryset.filter(wallet_hash__in=wallet_hashes)
+
+    def name_address_filter(self, queryset, name, value):
+        return queryset.filter( 
+            Q(name__icontains=value) | 
+            Q(category__name__icontains=value) | 
+            Q(location__location__icontains=value) | 
+            Q(location__city__icontains=value) | 
+            Q(location__street__icontains=value) | 
+            Q(location__country__icontains=value) | 
+            Q(location__town__icontains=value) | 
+            Q(location__province__icontains=value) | 
+            Q(location__state__icontains=value) 
+        )
 
     def has_vault_filter(self, queryset, name, value):
         return queryset.exclude(vault__isnull=value)
