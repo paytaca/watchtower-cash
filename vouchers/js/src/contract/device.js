@@ -86,7 +86,7 @@ export class PosDeviceVault {
     const utxos = await this.contract.getUtxos()
     const funderUtxos = await this.provider.getUtxos(this.funder?.address)
 
-    const funderUtxo = funderUtxos.filter(utxo => !utxo?.token && utxo.satoshis >= this.neededFromFunder)
+    const funderUtxo = funderUtxos.find(utxo => !utxo?.token && utxo.satoshis >= this.neededFromFunder)
     const keyNftUtxo = utxos.find(utxo => utxo?.token?.category === voucherCategory)
     const mintingNftUtxo = utxos.find(
       utxo => {
@@ -110,13 +110,12 @@ export class PosDeviceVault {
       }
     }
 
-    const fees = this.mintFee + this.dust
-    const funderChange = funderUtxo.satoshis - fees
+    const funderChange = funderUtxo.satoshis - this.neededFromFunder
 
     let transaction = this.contract.functions
       .sendTokens(reverseHex(voucherCategory))
       .from(contractUtxos)
-      .fromP2PKH(funderUtxos, this.funderSignature)
+      .fromP2PKH(funderUtxo, this.funderSignature)
       .to(this.contract.tokenAddress, this.dust, mintingNftUtxo?.token)
       .to(this.merchant?.vaultTokenAddress, this.dust, verificationToken)
       .to(this.merchant?.vaultTokenAddress, this.dust, keyNftUtxo?.token)

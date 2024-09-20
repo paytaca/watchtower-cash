@@ -77,26 +77,24 @@ class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin)
         serializer = CancelPaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)      
         __pos_device = serializer.validated_data['pos_device']
-        pos_device = PosDevice.objects.filter(
-            posid=__pos_device['posid'],
-            wallet_hash=__pos_device['wallet_hash'],
+        payment_requests = PosPaymentRequest.objects.filter(
+            pos_device__posid=__pos_device['posid'],
+            pos_device__wallet_hash=__pos_device['wallet_hash'],
         )
-        pos_device.delete()
+        payment_requests.delete()
         return Response('OK', status=status.HTTP_200_OK)
-
 
     @swagger_auto_schema(request_body=UpdatePaymentRequestSerializer, responses={ 200: 'OK' })
     @decorators.action(methods=["post"], detail=False)
-    def update_amount(self, request, *args, **kwargs):
+    def paid(self, request, *args, **kwargs):
         serializer = UpdatePaymentRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)  
-
+        serializer.is_valid(raise_exception=True)
         pos_device = serializer.validated_data['pos_device']
-        payment_request = PosPaymentRequest.objects.filter(
+        payment_requests = PosPaymentRequest.objects.filter(
             pos_device__posid=pos_device['posid'],
             pos_device__wallet_hash=pos_device['wallet_hash'],
         )
-        payment_request.update(amount=serializer.validated_data['amount'])
+        payment_requests.update(paid=True)
         return Response('OK', status=status.HTTP_200_OK)
 
 
@@ -445,6 +443,20 @@ class MerchantViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = ReviewSerializer(reviews, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(method="post", request_body=PosDeviceVaultAddressSerializer, response={ 200: MerchantVaultSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def vault_address(self, request, *args, **kwargs):
+        serializer = PosDeviceVaultAddressSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        address = Address.objects.get(address=serializer.validated_data['address'])
+        pos_device = PosDevice.objects.get(
+            wallet_hash=address.wallet.wallet_hash,
+            posid=serializer.validated_data['posid']
+        )
+        serializer = MerchantVaultSerializer(pos_device.merchant.vault)
         return Response(serializer.data)
     
     def get_serializer_class(self):

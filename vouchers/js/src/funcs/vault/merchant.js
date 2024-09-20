@@ -70,14 +70,9 @@ export async function compile (opts) {
 export async function refund (opts) {
   const latestBlockTimestamp =  opts.params?.latestBlockTimestamp
   const category =  opts.params?.category
-
-  try {
-    const vault = new MerchantVault(opts)
-    const transaction = await vault.refund(category, latestBlockTimestamp)
-    return transaction
-  } catch (err) {}
-
-  return { success: false }
+  const vault = new MerchantVault(opts)
+  const transaction = await vault.refund(category, latestBlockTimestamp)
+  return transaction
 }
 
 
@@ -107,15 +102,10 @@ export async function refund (opts) {
  * 
  */
 export async function claim (opts) {
- const category = opts.params?.merchant?.voucher?.category
-
- try {
-   const vault = new MerchantVault(opts)
-   const transaction = await vault.claim(category)
-   return transaction
- } catch (err) {}
-
- return { success: false }
+  const category = opts.params?.merchant?.voucher?.category
+  const vault = new MerchantVault(opts)
+  const transaction = await vault.claim(category)
+  return transaction
 }
 
 
@@ -150,14 +140,10 @@ export async function claim (opts) {
 * 
 */
 export async function emergencyRefund (opts) {
- try {
-   const sender = opts?.params?.sender
-   const refundAmount = opts?.params?.refundAmount
-   
-   const vault = new MerchantVault(opts)
-   const transaction = await vault.emergencyRefund(sender, refundAmount)
-   return transaction
- } catch (err) {}
-
- return { success: false }
+  const sender = opts?.params?.sender
+  const refundAmount = opts?.params?.refundAmount
+  
+  const vault = new MerchantVault(opts)
+  const transaction = await vault.emergencyRefund(sender, refundAmount)
+  return transaction
 }

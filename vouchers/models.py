@@ -77,6 +77,7 @@ class Voucher(models.Model):
     claim_txid = models.CharField(max_length=100, null=True, blank=True)
     category = models.CharField(max_length=100, unique=True, db_index=True)
     commitment = models.CharField(max_length=255, default='', blank=True)
+    sent = models.BooleanField(default=False, db_index=True)
     claimed = models.BooleanField(default=False, db_index=True)
     expired = models.BooleanField(default=False, db_index=True)
     duration_days = models.PositiveIntegerField(default=settings.UNCLAIMED_VOUCHER_EXPIRY_DAYS)
