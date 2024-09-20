@@ -88,8 +88,8 @@ def process_pending_payment_requests(address, senders):
         payment_requests.update(paid=True)
 
 
-@shared_task(queue='vouchers')
-def process_key_nft(txid, category, recipient_address, senders):
+@shared_task(queue='process_key_nft')
+def process_key_nft(self, txid, category, recipient_address, senders):
     device_vaults = PosDeviceVault.objects.filter(address=recipient_address)
     if device_vaults.exists():
         voucher = Voucher.objects.filter(category=category)
