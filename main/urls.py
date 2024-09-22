@@ -77,6 +77,9 @@ main_urls += [
     path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction"),
 
     path('wallet/shard/get/', views.WalletShardViewSet.as_view({'get': 'get_first_shard'}), name='wallet-shard-get-shard'),
+    
+    # App version
+    path('version/check/<str:platform>/', views.check_app_version)
 ]
 
 test_urls = [
