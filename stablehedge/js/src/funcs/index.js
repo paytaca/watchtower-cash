@@ -1,5 +1,5 @@
 import { compileRedemptionContract, deposit, redeem, sweepRedemptionContract } from './redemption-contract.js'
-import { generatePriceMessage } from './price-oracle.js'
+import { generatePriceMessage, parsePriceMessage } from './price-oracle.js'
 
 export default {
   compileRedemptionContract,
@@ -7,5 +7,6 @@ export default {
   redeem,
   sweepRedemptionContract,
 
+  parsePriceMessage,
   generatePriceMessage,
 }
