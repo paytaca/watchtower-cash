@@ -1,18 +1,15 @@
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser
 from rest_framework.decorators import action
 
 from django.http import Http404
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.utils.translation import gettext_lazy as _
 from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
 
 from datetime import datetime, time, timedelta
-from PIL import Image
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
@@ -22,9 +19,8 @@ from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.models as models
 import rampp2p.serializers as serializers
-import rampp2p.utils.utils as rampp2putils
+import rampp2p.utils.utils as utils
 import rampp2p.utils.websocket as websocket
-import rampp2p.utils.file_upload as file_upload_utils
 
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
@@ -292,7 +288,7 @@ class OrderViewSet(viewsets.GenericViewSet):
                 self._check_payment_permissions(wallet_hash, payment_method_ids)
             
             # check permissions
-            self._check_permissions(wallet_hash, ad.id)
+            self._check_create_permissions(wallet_hash, ad.id)
 
             # query market price for ad fiat currency
             market_price = models.MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
@@ -494,6 +490,27 @@ class OrderViewSet(viewsets.GenericViewSet):
         serializer = serializers.StatusSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['patch'])
+    def read_status(self, request, pk):
+        try:
+            # check edit permission
+            member = self._check_status_edit_permissions(pk, request.user.wallet_hash)
+            statuses = models.Status.objects.filter(order__id=pk)
+
+            status_id = request.data.get('status_id')
+            if status_id:
+                statuses = statuses.filter(id=status_id)
+                
+            for status_obj in statuses:
+                if member.type == models.OrderMember.MemberType.SELLER:
+                    status_obj.seller_read_at = timezone.now()
+                if member.type == models.OrderMember.MemberType.BUYER:
+                    status_obj.buyer_read_at = timezone.now()
+                status_obj.save()
+            return Response(status=status.HTTP_200_OK)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk):
         '''Confirms an order. Is callable only by the ad owner.'''
@@ -527,7 +544,7 @@ class OrderViewSet(viewsets.GenericViewSet):
                 if (order.ad_snapshot.ad.trade_amount_in_fiat):
                     # convert to fiat
                     amount_to_dec = order.crypto_amount * order.locked_price
-                    logger.warn(f'amount_to_dec: {amount_to_dec}')
+
                 trade_amount = order.ad_snapshot.ad.trade_amount - amount_to_dec
                 if trade_amount < 0:
                     raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
@@ -581,7 +598,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             with transaction.atomic():
                 # Update Ad trade_amount if order was CONFIRMED
                 order = models.Order.objects.get(pk=pk)
-                current_status = rampp2putils.get_last_status(order.id)
+                current_status = utils.get_last_status(order.id)
                 if current_status.status == StatusType.CONFIRMED:
                     trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
                     ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
@@ -806,7 +823,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
         return tracking_id
     
-    def _check_permissions(self, wallet_hash, pk):
+    def _check_create_permissions(self, wallet_hash, pk):
         '''
         - Arbiters are not allowed to create orders
         - Ad owners are not allowed to create orders for their own ads
@@ -824,72 +841,20 @@ class OrderViewSet(viewsets.GenericViewSet):
         owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
         if len(payment_method_ids) != owned_payment_methods.count():
             raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
+    
+    def _check_status_edit_permissions(self, order_pk, wallet_hash):
+        '''Throws an error if wallet_hash is not a participant of status's order'''
         
-class UploadOrderPaymentAttachmentView(APIView):
+        members = utils.get_order_members(order_pk)
+        if wallet_hash == members['seller'].peer.wallet_hash:
+            return members['seller']
+        if wallet_hash == members['buyer'].peer.wallet_hash:
+            return members['buyer']
+        raise ValidationError('User not allowed to perform this action')
+        
+class OrderStatusViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
-    parser_classes = [MultiPartParser]
-
-    def post(self, request):
-        
-        payment_id = request.data.get('payment_id')
-        image_file = request.FILES.get('image')
-
-        if image_file is None:
-            return Response({'error': 'image is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            order_payment_obj = models.OrderPayment.objects.prefetch_related('order').get(id=payment_id)
-
-            '''Order must be status=ESCROWED || PD_PN for payment attachment upload.
-            (It doesn't make sense for buyers to upload proof of payment if order 
-            is not waiting for fiat payment (i.e. order is not status=ESCROWED))'''
-            validate_awaiting_payment(order_payment_obj.order)
-
-            filesize = image_file.size
-            if filesize > 5 * 1024 * 1024: # 5mb limit
-                raise ValidationError(
-                    { 'image': _('File size cannot exceed 5 MB.')}
-                )
-
-            img_object = Image.open(image_file)
-            image_upload_obj = file_upload_utils.save_image(img_object, max_width=450, request=request)
-
-            attachment, _ = models.OrderPaymentAttachment.objects.update_or_create(payment=order_payment_obj, image=image_upload_obj)
-            serializer = serializers.OrderPaymentAttachmentSerializer(attachment)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-        except (models.OrderPayment.DoesNotExist, ValidationError) as err:
-            logger.exception(err.args[0])
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-class DeleteOrderPaymentAttachmentView(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    def post(self, request):
-        order_payment_attachment_id = request.data.get('attachment_id')
-
-        try:
-            attachment = models.OrderPaymentAttachment.objects.get(id=order_payment_attachment_id)
-
-            # Buyers should only be allowed to alter proof of payment when order is status=ESCROWED
-            validate_awaiting_payment(attachment.payment.order)
-
-            file_upload_utils.delete_file(attachment.image.url_path)
-            attachment.delete()
-        except (models.OrderPaymentAttachment.DoesNotExist, Exception) as err:
-            logger.exception(err.args[0])
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(status=status.HTTP_200_OK)
-
-def validate_awaiting_payment(order):
-    '''
-    Validates that `order` is awaiting fiat payment.
-    Raises ValidationError when order's last status is not ESCRW (Escrowed) nor PD_PN
-    '''
-    last_status = rampp2putils.get_last_status(order.id)
-    if last_status.status != models.StatusType.ESCROWED and last_status.status != models.StatusType.PAID_PENDING:
-        raise ValidationError(
-            { 'order': _(f'Invalid action for {last_status.status} order')}
-        )
-
-            
+    permission_classes = [RampP2PIsAuthenticated]
+    queryset = models.Status.objects.all()
+    
+   

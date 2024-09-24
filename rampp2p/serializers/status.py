@@ -5,13 +5,18 @@ from rampp2p.models import (
 )
 class StatusSerializer(serializers.ModelSerializer):
   order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+  seller_read_at = serializers.DateTimeField(required=False)
+  buyer_read_at = serializers.DateTimeField(required=False)
+
   class Meta:
     model = Status
     fields = [
       'id',
       'status',
       'order',
-      'created_at'
+      'created_at',
+      'seller_read_at',
+      'buyer_read_at'
     ]
 
 class StatusReadSerializer(serializers.ModelSerializer):
@@ -23,7 +28,9 @@ class StatusReadSerializer(serializers.ModelSerializer):
       'id',
       'status',
       'order',
-      'created_at'
+      'created_at',
+      'seller_read_at',
+      'buyer_read_at'
     ]
   
   def get_status(self, instance: Status):

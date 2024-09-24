@@ -5,7 +5,7 @@ from .arbiter import Arbiter
 from .payment import PaymentMethod, PaymentType
 
 class Order(models.Model):
-    tracking_id = models.CharField(max_length=50, null=True, blank=True)
+    tracking_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
     ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
     owner = models.ForeignKey(Peer, on_delete=models.PROTECT, editable=False, related_name="created_orders")
     chat_session_ref = models.CharField(max_length=100, null=True, blank=True)
