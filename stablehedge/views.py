@@ -9,6 +9,13 @@ from stablehedge.filters import (
     RedemptionContractFilter,
 )
 
+from django.utils import timezone
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+from stablehedge.js.runner import ScriptFunctions
+from anyhedge import models as anyhedge_models
+
+
 
 class FiatTokenViewSet(
     viewsets.GenericViewSet,
@@ -55,4 +62,43 @@ class RedemptionContractViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
+        return Response(result)
+
+
+class TestUtilsViewSet(viewsets.GenericViewSet):
+    @swagger_auto_schema(
+        method="get",
+        manual_parameters=[
+            openapi.Parameter('price', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+            openapi.Parameter('wif', openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Optional"),
+            openapi.Parameter('save', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
+        ],
+    )
+    @decorators.action(methods=["get"], detail=False)
+    def price_message(self, request, *args, **kwargs):
+        save = str(request.query_params.get("save", "")).lower().strip() == "true"
+        wif = request.query_params.get("wif", None) or None
+        try:
+            price = int(request.query_params.get("price"))
+        except (TypeError, ValueError):
+            price = hash(request) % 2 ** 32 # almost random
+
+        result = ScriptFunctions.generatePriceMessage(dict(price=price, wif=wif))
+
+        if save:
+            msg_timestamp = timezone.datetime.fromtimestamp(result["priceData"]["timestamp"] / 1000)
+            msg_timestamp = timezone.make_aware(msg_timestamp)
+            anyhedge_models.PriceOracleMessage.objects.update_or_create(
+                pubkey=result["publicKey"],
+                message=result["priceMessage"],
+                defaults=dict(
+                    signature=result["signature"],
+                    message_timestamp=msg_timestamp,
+                    price_value=result["priceData"]["price"],
+                    price_sequence=result["priceData"]["dataSequence"],
+                    message_sequence=result["priceData"]["msgSequence"],
+                ),
+            )
+
+        result.pop("privateKey", None)
         return Response(result)
