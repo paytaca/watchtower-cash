@@ -33,6 +33,9 @@ RUN npm install --prefix /code/vouchers/js --legacy-peer-deps
 COPY ./cts/js/package*.json /code/cts/js/
 RUN npm install --prefix /code/cts/js 
 
+COPY ./stablehedge/js/package*.json /code/stablehedge/js/
+RUN npm install --prefix /code/stablehedge/js 
+
 COPY . /code
 WORKDIR /code
 
