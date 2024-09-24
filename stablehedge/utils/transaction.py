@@ -9,7 +9,7 @@ def validate_utxo_keys(data, require_cashtoken=False, require_nft_token=False, r
         if not isinstance(data, dict):
             raise InvalidUtxoException("Invalid utxo data type")
 
-        keys = data.keys()
+        keys = set(data.keys())
 
         required_fields = {"txid", "vout", "satoshis"}    
         cashtoken_fields = {"category", "amount"}
@@ -27,17 +27,15 @@ def validate_utxo_keys(data, require_cashtoken=False, require_nft_token=False, r
         if missing_required_fields:
             raise InvalidUtxoException(f"Missing required fields: {missing_required_fields}")
 
-        has_cashtoken_fields = keys.intesection(cashtoken_fields)
+        has_cashtoken_fields = keys.intersection(cashtoken_fields)
         missing_cashtoken_fields = cashtoken_fields - keys
         if has_cashtoken_fields and missing_cashtoken_fields:
             raise InvalidUtxoException(f"Missing required cashtoken fields: {missing_cashtoken_fields}")
 
-        has_cashtoken_nft_fields = keys.intesection(cashtoken_nft_fields)
-        missing_cashtoken_nft_fields
+        has_cashtoken_nft_fields = keys.intersection(cashtoken_nft_fields)
+        missing_cashtoken_nft_fields = cashtoken_nft_fields - keys
         if has_cashtoken_nft_fields and missing_cashtoken_nft_fields:
             raise InvalidUtxoException(f"Missing required cashtoken nft fields: {missing_cashtoken_nft_fields}")
-
-        
     except InvalidUtxoException as exception:
         if raise_error: raise exception
         return str(exception)
@@ -85,7 +83,7 @@ def validate_utxo_data(data, require_cashtoken=False, require_nft_token=False,re
 
 
 def numlike(value, no_decimal=False):
-    if not isinstance(value, (decimal,Decimal, int)):
+    if not isinstance(value, (decimal.Decimal, int)):
         return False
 
     if no_decimal and value % 1 != 0:
@@ -97,6 +95,6 @@ def numlike(value, no_decimal=False):
 def is_hex_string(value, require_length=None):
     valid_hex = re.match("[0-9a-fA-F]*", value)
     if not valid_hex: return False
-    if require_length is not None and len(valid_hex) != require_length:
+    if require_length is not None and len(value) != require_length:
         return False
     return True

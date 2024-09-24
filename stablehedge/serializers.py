@@ -1,9 +1,12 @@
 from rest_framework import serializers
 from django.db import transaction
+from django.utils import timezone
 
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.transaction import validate_utxo_data
+
+from anyhedge import models as anyhedge_models
 
 
 class UtxoSerializer(serializers.Serializer):
@@ -121,18 +124,52 @@ class SweepRedemptionContractSerializer(serializers.Serializer):
             authKeyRecipient=validated_data["auth_key_recipient_address"],
         ))
 
+
+class PriceMessageSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    signature = serializers.CharField()
+    pubkey = serializers.CharField()
+
+    message_timestamp = serializers.DateTimeField(read_only=True)
+    price_value = serializers.IntegerField(read_only=True)
+    price_sequence = serializers.IntegerField(read_only=True)
+    message_sequence = serializers.IntegerField(read_only=True)
+
+    def validate(self, data):
+        parse_result = ScriptFunctions.parsePriceMessage(dict(
+            priceMessage=data["message"],
+            signature=data["signature"],
+            publicKey=data["pubkey"],
+        ))
+
+        if "error" in parse_result and not parse_result.get("success"):
+            raise serializers.ValidationError(parse_result["error"])
+
+        price_data = parse_result["priceData"]
+        msg_timestamp = timezone.datetime.fromtimestamp(price_data["timestamp"] / 1000)
+        msg_timestamp = timezone.make_aware(msg_timestamp)
+            
+        data["message_timestamp"] = msg_timestamp
+        data["price_value"] = price_data["price"]
+        data["price_sequence"] = price_data["dataSequence"]
+        data["message_sequence"] = price_data["msgSequence"]
+        return data
+
+
 class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
     redemption_contract_address = serializers.SlugRelatedField(
         queryset=models.RedemptionContract.objects,
         slug_field="address", source="redemption_contract",
         write_only=True,
     )
+    price_oracle_message = PriceMessageSerializer()
     utxo = UtxoSerializer()
 
     class Meta:
         model = models.RedemptionContractTransaction
         fields = [
             "redemption_contract_address",
+            "price_oracle_message",
             "status",
             "transaction_type",
             "txid",
@@ -152,7 +189,7 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
         redemption_contract = data["redemption_contract"]
         utxo_data = data["utxo"]
         transaction_type = data["transaction_type"]
-        require_cashtoken = transaction_type == models.RedemptionContractTransaction.ACTION.REDEEM
+        require_cashtoken = transaction_type == models.RedemptionContractTransaction.Type.REDEEM
         valid_utxo_data = validate_utxo_data(
             utxo_data,
             require_cashtoken=require_cashtoken,
@@ -167,3 +204,23 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Utxo category does not match with redemption contract")
 
         return data
+
+    def save_price_message(self, price_message_data):
+        data = {**price_message_data}
+        pubkey = data.pop("pubkey")
+        message = data.pop("message")
+        obj, _ = anyhedge_models.PriceOracleMessage.objects.update_or_create(
+            pubkey=pubkey,
+            message=message,
+            defaults=data,
+        )
+        return obj
+
+    @transaction.atomic
+    def create(self, validated_data):
+        price_message_data = validated_data.pop("price_oracle_message")
+        validated_data["price_oracle_message"] = self.save_price_message(price_message_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        raise serializers.ValidationError("Invalid action")
