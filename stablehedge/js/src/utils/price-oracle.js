@@ -25,13 +25,20 @@ export function decodePriceMessage(priceMessage='') {
   if (!isHex(priceMessage)) return 'Invalid encoding'
   if (priceMessage?.length !== 32) return 'Invalid byte length, expected 16 bytes'
 
-  const timestampHex = priceMessage.substring(0, 4)
-  const msgSequenceHex = priceMessage.substring(4, 8)
-  const dataSequenceHex = priceMessage.substring(8, 12)
-  const priceHex = priceMessage.substring(12, 16)
+
+  const reverseHex = (hexStr) => {
+    const bytes = hexStr.match(/.{1,2}/g);
+    bytes.reverse();
+    return bytes.join('');
+  }
+
+  const timestampHex = reverseHex(priceMessage.substring(0, 8))
+  const msgSequenceHex = reverseHex(priceMessage.substring(8, 16))
+  const dataSequenceHex = reverseHex(priceMessage.substring(16, 24))
+  const priceHex = reverseHex(priceMessage.substring(24, 32))
 
   return {
-    timestamp: parseInt(timestampHex, 16) * 1000,
+    timestamp: parseInt(timestampHex, 16),
     msgSequence: parseInt(msgSequenceHex, 16),
     dataSequence: parseInt(dataSequenceHex, 16),
     price: parseInt(priceHex, 16),
