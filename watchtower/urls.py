@@ -41,6 +41,7 @@ from rampp2p.urls import urlpatterns as ramp_p2p_urlpatterns
 from paytacagifts.urls import urlpatterns as paytacagifts_urlpatterns
 from cts.urls import urlpatterns as cts_urlpatterns
 from authentication.urls import urlpatterns as auth_urlpatterns
+from stablehedge.urls import urlpatterns as stablehedge_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -86,6 +87,7 @@ urlpatterns = [
     path('api/ramp-p2p/', include(ramp_p2p_urlpatterns)),
     path('api/cts/', include(cts_urlpatterns)),
     path('api/auth/', include(auth_urlpatterns)),
+    path('api/stablehedge/', include(stablehedge_urlpatterns)),
     path(r'test/', include(test_urls)),
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

@@ -90,7 +90,8 @@ INSTALLED_APPS=[
     'ramp',
     'rampp2p',
     'cts',
-    'authentication'
+    'authentication',
+    'stablehedge',
 ]
 
 MIDDLEWARE=[
