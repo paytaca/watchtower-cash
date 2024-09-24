@@ -17,33 +17,6 @@ export function compileRedemptionContract(opts) {
 }
 
 /**
- * @param {Object} opts
- * @param {Object} opts.contractOpts
- * @param {import('cashscript').Utxo} opts.reserveUtxo
- * @param {import('cashscript').Utxo} opts.depositUtxo
- * @param {String} opts.treasuryContractAddress
- * @param {String} opts.recipientAddress
- * @param {String} opts.priceMessage
- * @param {String} opts.priceMessageSig
- */
-export async function deposit(opts) {
-  const redemptionContract = new RedemptionContract(opts?.contractOpts)
-
-  const reserveUtxo = parseUtxo(opts?.reserveUtxo)
-  const depositUtxo = parseUtxo(opts?.depositUtxo)
-  const transaction = await redemptionContract.deposit({
-    reserveUtxo, depositUtxo,
-    treasuryContractAddress: opts?.treasuryContractAddress,
-    recipientAddress: opts?.recipientAddress,
-    priceMessage: opts?.priceMessage,
-    priceMessageSig: opts?.priceMessageSig,
-  })
-
-  if (typeof transaction === 'string') return { success: false, error: transaction }
-  return { success: true, tx_hex: await transaction.build() }
-}
-
-/**
  * @param {Object} opts 
  * @param {Object} opts.contractOpts 
  * @param {import('cashscript').UtxoP2PKH} opts.authKeyUtxo 
