@@ -108,7 +108,7 @@ class CashinOrderViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def check_alerts(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
-        queryset = self.get_queryset().filter(Q(is_cash_in=True) & (Q(owner__wallet_hash=wallet_hash) | Q(ad_snapshot__ad__owner__wallet_hash=wallet_hash)))
+        queryset = self.get_queryset().filter(Q(is_cash_in=True) & Q(owner__wallet_hash=wallet_hash))
         queryset = queryset.order_by('-created_at')
 
         has_cashin_alerts = False
@@ -586,10 +586,9 @@ class OrderViewSet(viewsets.GenericViewSet):
         serialized_status = serializers.StatusReadSerializer(serialized_status.save())
         
         # send websocket notification
-        websocket.send_order_update({
-            'success': True,
-            'status': serialized_status.data
-        }, pk)
+        websocket.send_order_update({'success': True, 'status': serialized_status.data}, pk)
+        if order.is_cash_in:
+            websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': pk}, order.owner.wallet_hash)
         
         # send push notification
         message = f'Order #{order.id} confirmed'
@@ -638,8 +637,9 @@ class OrderViewSet(viewsets.GenericViewSet):
                     member.save()
 
                 # Send WebSocket update
-                websocket_msg = {'success' : True, 'status': serialized_status.data}
-                websocket.send_order_update(websocket_msg, pk)
+                websocket.send_order_update({'success' : True, 'status': serialized_status.data}, pk)
+                if order.is_cash_in:
+                    websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': pk}, order.owner.wallet_hash)
 
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -685,6 +685,9 @@ class OrderViewSet(viewsets.GenericViewSet):
                 'transaction': serializers.TransactionSerializer(transaction).data
             }
             websocket.send_order_update(websocket_msg, pk)
+            if order.is_cash_in:
+                websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': pk}, order.owner.wallet_hash)
+
             response = websocket_msg
         except (ValidationError, IntegrityError, models.Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

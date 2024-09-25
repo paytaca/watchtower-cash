@@ -40,3 +40,7 @@ def send_market_price(data, currency):
 def send_general_update(data, wallet_hash):
     room_name = f'ramp-p2p-subscribe-general-{wallet_hash}'
     send_message(data, room_name)
+
+def send_cashin_order_alert(data, wallet_hash):
+    room_name = f'ramp-p2p-subscribe-cashin-alerts-{wallet_hash}'
+    send_message(data, room_name)
