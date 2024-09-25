@@ -137,16 +137,7 @@ export function verifyECDSASignature(signatureB64, pubkeyHex, dataHex) {
  * @returns {import('cashscript').UtxoP2PKH | import('cashscript').Utxo}
  */
 export function parseUtxo(utxo) {
-  let template
-  if (utxo?.wif) {
-    template = new SignatureTemplate(wif)
-  } else if (utxo?.lockingBytecode && utxo?.unlockingBytecode) {
-    template = templateFromUnlockingBytecode({
-      lockingBytecode: utxo?.lockingBytecode,
-      unlockingBytecode: utxo?.unlockingBytecode,
-    })
-  }
-  return {
+  const result = {
     txid: utxo?.txid,
     vout: utxo?.vout,
     satoshis: BigInt(utxo?.satoshis),
@@ -158,8 +149,18 @@ export function parseUtxo(utxo) {
         commitment: utxo?.token?.nft?.commitment,
       }
     },
-    template,
   }
+
+  if (utxo?.wif) {
+    result.template = new SignatureTemplate(wif)
+  } else if (utxo?.lockingBytecode && utxo?.unlockingBytecode) {
+    result.template = templateFromUnlockingBytecode({
+      lockingBytecode: utxo?.lockingBytecode,
+      unlockingBytecode: utxo?.unlockingBytecode,
+    })
+  }
+
+  return result
 }
 
 /**

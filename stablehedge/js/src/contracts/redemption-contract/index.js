@@ -1,6 +1,6 @@
 import { compileFile } from "cashc"
-import { Contract, ElectrumNetworkProvider, SignatureTemplate } from "cashscript"
-import { hexToBin } from "@bitauth/libauth"
+import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate } from "cashscript"
+import { hexToBin, base64ToBin } from "@bitauth/libauth"
 
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
 import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
@@ -8,8 +8,8 @@ import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
 // import redemptionContractArtifact from './redemption-contract.json'
 // import redemptionContractCode from './redemption-contract.cash'
 
-import { toTokenAddress, verifyECDSASignature } from "../../utils/crypto.js"
-import { decodePriceMessage } from "../../utils/price-oracle.js"
+import { toTokenAddress } from "../../utils/crypto.js"
+import { decodePriceMessage, verifyPriceMessage } from "../../utils/price-oracle.js"
 import { calculateInputSize } from "../../utils/transaction.js"
 
 export class RedemptionContract {
@@ -62,7 +62,7 @@ export class RedemptionContract {
   /**
    * @param {Object} opts
    * @param {import("cashscript").Utxo} opts.reserveUtxo
-   * @param {import("cashscript").Utxo} opts.depositUtxo
+   * @param {import("cashscript").UtxoP2PKH} opts.depositUtxo
    * @param {String} [opts.treasuryContractAddress] if no address is provided, it is injecting liquidity
    * @param {String} opts.recipientAddress
    * @param {String} opts.priceMessage
@@ -72,10 +72,10 @@ export class RedemptionContract {
     if (!opts?.depositUtxo) return 'Deposit UTXO not provided'
     if (opts?.depositUtxo?.token) return 'Deposit UTXO has a token'
     if (!opts?.reserveUtxo) return 'Reserve UTXO not provided'
-    if (!opts?.reserveUtxo?.token?.category !== this.params.tokenCategory) return 'Reserve UTXO provided does not contain fiat token'
+    if (opts?.reserveUtxo?.token?.category !== this.params.tokenCategory) return 'Reserve UTXO provided does not contain fiat token'
 
-    const priceMessageValid = verifyECDSASignature(
-      opts?.priceMessageSig, this.params.oraclePublicKey, opts?.priceMessage,
+    const priceMessageValid = verifyPriceMessage(
+      opts?.priceMessage, opts?.priceMessageSig, this.params.oraclePublicKey, 
     )
     if (!priceMessageValid) return 'Invalid price message signature' 
 
@@ -89,21 +89,26 @@ export class RedemptionContract {
     const releaseOutputSats = 1000n
     const totalDepositSats = opts?.depositUtxo?.satoshis - releaseOutputSats - HARDCODED_FEE
     const depositSats = isInjectLiquidity ? totalDepositSats : totalDepositSats / 2n;
-    const releaseOutputTokens = BigInt(priceData.price) * depositSats
+    const releaseOutputTokens = BigInt(priceData.price) * totalDepositSats
     
     const remainingReserveSupplyTokens = reserveSupplyTokens - releaseOutputTokens
     if (remainingReserveSupplyTokens < 0n) return 'Insufficient reserve tokens'
 
+    const depositUtxoTemplate = opts?.depositUtxo?.template ??
+      new SignatureTemplate(opts?.depositUtxo?.wif)
+
+    const recipientAddress = toTokenAddress(opts?.recipientAddress)
+
     const contract = this.getContract()
-    const transaction = contract.functions.deposit(opts?.priceMessage, opts?.priceMessageSig, isInjectLiquidity)
+    const transaction = contract.functions.deposit(hexToBin(opts?.priceMessage), base64ToBin(opts?.priceMessageSig), isInjectLiquidity)
       .from(opts?.reserveUtxo)
-      .fromP2PKH(opts?.depositUtxo, new SignatureTemplate(opts?.depositUtxo?.wif))
+      .fromP2PKH(opts?.depositUtxo, depositUtxoTemplate)
       .to(contract.tokenAddress, opts?.reserveUtxo.satoshis + depositSats, {
         category: opts?.reserveUtxo?.token?.category,
         amount: remainingReserveSupplyTokens,
         nft: opts?.reserveUtxo?.token?.nft,
       })
-      .to(opts?.recipientAddress, releaseOutputSats, {
+      .to(recipientAddress, releaseOutputSats, {
         category: this.params.tokenCategory,
         amount: releaseOutputTokens,
       })
@@ -128,10 +133,10 @@ export class RedemptionContract {
     if (!opts?.redeemUtxo) return 'Redeem UTXO not provided'
     if (opts?.redeemUtxo?.token?.category !== this.params.tokenCategory) return 'Redeem UTXO is not fiat token'
     if (!opts?.reserveUtxo) return 'Reserve UTXO not provided'
-    if (!opts?.reserveUtxo?.token?.category !== this.params.tokenCategory) return 'Reserve UTXO provided does not contain fiat token'
+    if (opts?.reserveUtxo?.token?.category !== this.params.tokenCategory) return 'Reserve UTXO provided does not contain fiat token'
 
-    const priceMessageValid = verifyECDSASignature(
-      opts?.priceMessageSig, this.params.oraclePublicKey, opts?.priceMessage,
+    const priceMessageValid = verifyPriceMessage(
+      opts?.priceMessage, opts?.priceMessageSig, this.params.oraclePublicKey, 
     )
     if (!priceMessageValid) return 'Invalid price message signature' 
 
@@ -153,7 +158,7 @@ export class RedemptionContract {
     const redeemUtxoTemplate = opts?.redeemUtxo?.template ??
       new SignatureTemplate(opts?.redeemUtxo?.wif)
 
-    const transaction = contract.functions.redeem(opts?.priceMessage. opts?.priceMessageSig)
+    const transaction = contract.functions.redeem(hexToBin(opts?.priceMessage). base64ToBin(opts?.priceMessageSig))
       .from(opts?.reserveUtxo)
       .fromP2PKH(opts?.redeemUtxo, redeemUtxoTemplate)
       .to(contract.tokenAddress, remainingReserveSats, {
