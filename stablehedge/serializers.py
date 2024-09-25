@@ -102,14 +102,7 @@ class SweepRedemptionContractSerializer(serializers.Serializer):
         auth_key_utxo_data = validated_data["auth_key_utxo"]
 
         return ScriptFunctions.sweepRedemptionContract(dict(
-            contractOpts=dict(
-                params=dict(
-                    authKeyId=redemption_contract.auth_token_id,
-                    tokenCategory=redemption_contract.fiat_token.category,
-                    oraclePublicKey=redemption_contract.price_oracle_pubkey,
-                ),
-                options=dict(network=redemption_contract.network, addressType="p2sh32"),
-            ),
+            contractOpts=redemption_contract.contract_opts,
             authKeyUtxo=dict(
                 txid=auth_key_utxo_data["txid"],
                 vout=auth_key_utxo_data["vout"],

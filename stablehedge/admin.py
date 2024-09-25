@@ -41,14 +41,7 @@ class RedemptionContractAdmin(admin.ModelAdmin):
     def recompile(self, request, queryset):
         for obj in queryset.all():
             network = "chipnet" if obj.address.startswith("bchtest") else "mainnet"
-            compile_data = ScriptFunctions.compileRedemptionContract(dict(
-                params=dict(
-                    authKeyId=obj.auth_token_id,
-                    tokenCategory=obj.fiat_token.category,
-                    oraclePublicKey=obj.price_oracle_pubkey,
-                ),
-                options=dict(network=network, addressType="p2sh32"),
-            ))
+            compile_data = ScriptFunctions.compileRedemptionContract(obj.contract_opts)
 
             if obj.address != compile_data["address"]:
                 messages.info(request, f"RedemptionContract({obj.address}) -> {compile_data['address']}")

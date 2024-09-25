@@ -61,6 +61,23 @@ class RedemptionContract(models.Model):
         else:
             return "mainnet"
 
+    @property
+    def contract_opts(self):
+        p2sh20_length = 54 if self.network == "mainnet" else 50
+        address_type = "p2sh20" if len(self.address) <= p2sh20_length else "p2sh32"
+
+        return dict(
+            params=dict(
+                authKeyId=self.auth_token_id,
+                tokenCategory=self.fiat_token.category,
+                oraclePublicKey=self.price_oracle_pubkey,
+            ),
+            options=dict(
+                network=self.network,
+                addressType=address_type,
+            ),
+        )
+
 
 class RedemptionContractTransaction(models.Model):
     class Status(models.TextChoices):
