@@ -168,6 +168,7 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
         fields = [
             "redemption_contract_address",
             "price_oracle_message",
+            "wallet_hash",
             "status",
             "transaction_type",
             "txid",

@@ -101,11 +101,13 @@ class RedemptionContractTransaction(models.Model):
         null=True, blank=True,
     )
 
+    wallet_hash = models.CharField(max_length=70, null=True, blank=True)
+
     transaction_type = models.CharField(max_length=15)
     status = models.CharField(max_length=10, default=Status.PENDING)
     txid = models.CharField(max_length=64, null=True, blank=True)
     utxo = JSONField()
-    result_message = models.CharField(max_length=100, null=True, blank=True)
+    result_message = models.TextField(null=True, blank=True)
 
     resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

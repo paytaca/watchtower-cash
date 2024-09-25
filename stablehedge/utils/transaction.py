@@ -1,6 +1,8 @@
 import re
 import decimal
 
+from main import models as main_models
+
 class InvalidUtxoException(Exception):
     pass
 
@@ -81,6 +83,28 @@ def validate_utxo_data(data, require_cashtoken=False, require_nft_token=False,re
 
     return True
 
+def utxo_data_to_cashscript(data:dict):
+    validate_utxo_data(data)
+    response = dict(
+        txid=data["txid"],
+        vout=data["vout"],
+        satoshis=data["satoshis"],
+    )
+    if "category" in data:
+        response["token"] = dict(category = data["category"], amount = data["amount"])
+
+        if "commitment" in data:
+            response["token"]["nft"] = dict(
+                commitment=data["commitment"],
+                capability=data["capability"]
+            )
+
+    if "locking_bytecode" in data and "unlocking_bytecode" in data:
+        response["lockingBytecode"] = data["locking_bytecode"]
+        response["unlockingBytecode"] = data["unlocking_bytecode"]
+    
+    return response
+
 
 def numlike(value, no_decimal=False):
     if not isinstance(value, (decimal.Decimal, int)):
@@ -98,3 +122,24 @@ def is_hex_string(value, require_length=None):
     if require_length is not None and len(value) != require_length:
         return False
     return True
+
+
+def tx_model_to_cashscript(obj:main_models.Transaction):
+    response = dict(
+        txid= obj.txid,
+        vout= obj.index,
+        satoshis= obj.value,
+    )
+    if obj.cashtoken_ft_id:
+        response["token"] = dict(category=obj.cashtoken_ft.category, amount=obj.amount)
+    if obj.cashtoken_nft:
+        response["token"] = dict(
+            category=obj.cashtoken_nft.category,
+            amount=obj.amount,
+            nft=dict(
+                capability=obj.cashtoken_nft.capability,
+                commitment=obj.cashtoken_nft.commitment,
+            )
+        )
+
+    return response
