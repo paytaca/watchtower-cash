@@ -13,6 +13,7 @@ from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from stablehedge.functions.transaction import (
+    test_transaction_accept,
     RedemptionContractTransactionException,
     create_inject_liquidity_tx,
     create_deposit_tx,
@@ -133,3 +134,8 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
             return Response(result)
         except RedemptionContractTransactionException as error:
             return Response(dict(success=False, error=str(error)))
+
+    @decorators.action(methods=["post"], detail=False, serializer_class=serializers.serializers.Serializer)
+    def test_mempool_accept(self, request, *args, **kwargs):
+        success, error_or_txid = test_transaction_accept(request.data["transaction"])
+        return Response(dict(success=success, result=error_or_txid))
