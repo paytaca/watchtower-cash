@@ -29,9 +29,11 @@ from rampp2p.validators import *
 import logging
 logger = logging.getLogger(__name__)
 
-class CashinOrderView(APIView):
+class CashinOrderViewSet(viewsets.GenericViewSet):
+    queryset = models.Order.objects.all()
 
-    def get(self, request):
+    @action(detail=False, methods=['get'])
+    def list(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
         status_type = request.query_params.get('status_type')
         owned = request.query_params.get('owned')
@@ -102,6 +104,24 @@ class CashinOrderView(APIView):
             'total_pages': total_pages
         }
         return Response(data, status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def check_alerts(self, request):
+        wallet_hash = request.query_params.get('wallet_hash')
+        queryset = self.get_queryset().filter(Q(is_cash_in=True) & (Q(owner__wallet_hash=wallet_hash) | Q(ad_snapshot__ad__owner__wallet_hash=wallet_hash)))
+        queryset = queryset.order_by('-created_at')
+
+        has_cashin_alerts = False
+        for order in queryset:
+            is_seller = utils.is_seller(order, wallet_hash)
+            statuses = models.Status.objects.filter(order__id=order.id)
+            if is_seller:
+                has_cashin_alerts = statuses.filter(seller_read_at__isnull=True).exists()
+            else:
+                has_cashin_alerts = statuses.filter(buyer_read_at__isnull=True).exists()
+            if has_cashin_alerts:
+                break
+        return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
 
 class OrderViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
@@ -437,7 +457,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
         serialized_order = serializers.OrderSerializer(order, context={ 'wallet_hash': wallet_hash }).data
         return Response(serialized_order, status=status.HTTP_200_OK)
-    
+
     @action(detail=True, methods=['get'])
     def members(self, request, pk):
         if request.method == 'GET':
