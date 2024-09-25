@@ -14,19 +14,19 @@ contract RedemptionContract(
 
         // 1000 for tx fee and another 1000 for DUST in deposit output
         int depositSats = tx.inputs[1].value - 1000 - 1000;
+        int tokenAmount = depositSats * price;
 
         if (!isInjectLiquidity) {
             depositSats = depositSats / 2;
             require(tx.outputs[2].value == depositSats);
         }
 
-        int tokenAmount = depositSats * price;
         require(tx.outputs[1].tokenCategory == tokenCategory);
         require(tx.outputs[1].tokenAmount == tokenAmount);
 
         require(tx.outputs[0].tokenCategory == tokenCategory);
         require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount - tokenAmount);
-        require(tx.outputs[0].value == tx.inputs[1].value + depositSats);
+        require(tx.outputs[0].value == tx.inputs[0].value + depositSats);
     }
 
     function redeem(bytes priceMessage, datasig priceMessageSig) {
