@@ -89,8 +89,9 @@ def create_inject_liquidity_tx(redemption_contract_tx:models.RedemptionContractT
         raise RedemptionContractTransactionException(error)
 
     valid_tx, error_or_txid = test_transaction_accept(result["tx_hex"])
-    if valid_tx:
-        raise RedemptionContractTransactionException(error_or_txid)
+    if not valid_tx:
+        result["success"] = False
+        result["error"] = error_or_txid
 
     return result
 
@@ -138,8 +139,9 @@ def create_deposit_tx(redemption_contract_tx:models.RedemptionContractTransactio
         raise RedemptionContractTransactionException(error)
 
     valid_tx, error_or_txid = test_transaction_accept(result["tx_hex"])
-    if valid_tx:
-        raise RedemptionContractTransactionException(error_or_txid)
+    if not valid_tx:
+        result["success"] = False
+        result["error"] = error_or_txid
 
     return result
 
@@ -187,7 +189,8 @@ def create_redeem_tx(redemption_contract_tx:models.RedemptionContractTransaction
         raise RedemptionContractTransactionException(error)
 
     valid_tx, error_or_txid = test_transaction_accept(result["tx_hex"])
-    if valid_tx:
-        raise RedemptionContractTransactionException(error_or_txid)
+    if not valid_tx:
+        result["success"] = False
+        result["error"] = error_or_txid
 
     return result

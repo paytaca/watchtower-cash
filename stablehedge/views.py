@@ -12,6 +12,12 @@ from stablehedge.filters import (
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from stablehedge.functions.transaction import (
+    RedemptionContractTransactionException,
+    create_inject_liquidity_tx,
+    create_deposit_tx,
+    create_redeem_tx,
+)
 from stablehedge.js.runner import ScriptFunctions
 from anyhedge import models as anyhedge_models
 
@@ -105,3 +111,25 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
 
         result.pop("privateKey", None)
         return Response(result)
+
+    @decorators.action(methods=["post"], detail=False, serializer_class=serializers.RedemptionContractTransactionSerializer)
+    def test_redemption_contract_tx(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = { **serializer.validated_data}
+        data["price_oracle_message"] = anyhedge_models.PriceOracleMessage(**data["price_oracle_message"])
+        obj = models.RedemptionContractTransaction(**data)
+        try:
+            if obj.transaction_type == models.RedemptionContractTransaction.Type.INJECT:
+                result = create_inject_liquidity_tx(obj)
+            elif obj.transaction_type == models.RedemptionContractTransaction.Type.DEPOSIT:
+                result = create_deposit_tx(obj)
+            elif obj.transaction_type == models.RedemptionContractTransaction.Type.REDEEM:
+                result = create_redeem_tx(obj)
+            else:
+                return Response(dict(success=False, error="Unknown type"))
+
+            return Response(result)
+        except RedemptionContractTransactionException as error:
+            return Response(dict(success=False, error=str(error)))

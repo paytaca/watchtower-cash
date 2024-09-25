@@ -23,7 +23,7 @@ class Command(BaseCommand):
         LOGGER.info("Running redemption contract transactions queue")
         last_log = 0
         while True:
-            if last_log + LOG_RUNNING_INTERVAL > time.time():
+            if last_log + LOG_RUNNING_INTERVAL < time.time():
                 LOGGER.info("redemption contract transactions queue running")
                 last_log = time.time()
 
