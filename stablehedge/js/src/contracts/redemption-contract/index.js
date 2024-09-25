@@ -158,12 +158,12 @@ export class RedemptionContract {
     const redeemUtxoTemplate = opts?.redeemUtxo?.template ??
       new SignatureTemplate(opts?.redeemUtxo?.wif)
 
-    const transaction = contract.functions.redeem(hexToBin(opts?.priceMessage). base64ToBin(opts?.priceMessageSig))
+    const transaction = contract.functions.redeem(hexToBin(opts?.priceMessage), base64ToBin(opts?.priceMessageSig))
       .from(opts?.reserveUtxo)
       .fromP2PKH(opts?.redeemUtxo, redeemUtxoTemplate)
       .to(contract.tokenAddress, remainingReserveSats, {
         category: opts?.reserveUtxo?.token?.category,
-        amount: opts?.redeemUtxo?.token?.amount + tokenAmount,
+        amount: opts?.reserveUtxo?.token?.amount + tokenAmount,
         nft: opts?.reserveUtxo?.token?.nft,
       })
       .to(opts?.recipientAddress, redeemSats)

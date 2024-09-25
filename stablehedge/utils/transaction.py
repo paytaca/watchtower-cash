@@ -15,7 +15,7 @@ def validate_utxo_keys(data, require_cashtoken=False, require_nft_token=False, r
 
         required_fields = {"txid", "vout", "satoshis"}    
         cashtoken_fields = {"category", "amount"}
-        cashtoken_nft_fields = {"capability", "commitment", *cashtoken_fields}
+        cashtoken_nft_fields = {"capability", "commitment"}
 
         if require_cashtoken:
             required_fields.update(cashtoken_fields)
@@ -35,7 +35,7 @@ def validate_utxo_keys(data, require_cashtoken=False, require_nft_token=False, r
             raise InvalidUtxoException(f"Missing required cashtoken fields: {missing_cashtoken_fields}")
 
         has_cashtoken_nft_fields = keys.intersection(cashtoken_nft_fields)
-        missing_cashtoken_nft_fields = cashtoken_nft_fields - keys
+        missing_cashtoken_nft_fields = {*cashtoken_nft_fields, *cashtoken_fields} - keys
         if has_cashtoken_nft_fields and missing_cashtoken_nft_fields:
             raise InvalidUtxoException(f"Missing required cashtoken nft fields: {missing_cashtoken_nft_fields}")
     except InvalidUtxoException as exception:
