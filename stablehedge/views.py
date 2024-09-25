@@ -42,7 +42,10 @@ class RedemptionContractViewSet(
     filterset_class = RedemptionContractFilter
 
     def get_queryset(self):
-        return models.RedemptionContract.objects.all()
+        return models.RedemptionContract.objects \
+            .annotate_redeemable() \
+            .annotate_reserve_supply() \
+            .all()
 
     @decorators.action(
         methods=["post"], detail=False,
@@ -62,7 +65,7 @@ class RedemptionContractViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
-        return Response(result)
+        return Response(serializer.data)
 
 
 class TestUtilsViewSet(viewsets.GenericViewSet):

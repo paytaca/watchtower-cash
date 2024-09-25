@@ -41,6 +41,8 @@ class FiatTokenSerializer(serializers.ModelSerializer):
 class RedemptionContractSerializer(serializers.ModelSerializer):
     fiat_token = FiatTokenSerializer()
     network = serializers.CharField(required=False, default="chipnet", write_only=True)
+    redeemable = serializers.IntegerField(read_only=True)
+    reserve_supply = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = models.RedemptionContract
@@ -50,6 +52,9 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
             "fiat_token",
             "auth_token_id",
             "price_oracle_pubkey",
+
+            "redeemable",
+            "reserve_supply",
         ]
 
         extra_kwargs = dict(
@@ -146,7 +151,7 @@ class PriceMessageSerializer(serializers.Serializer):
             raise serializers.ValidationError(parse_result["error"])
 
         price_data = parse_result["priceData"]
-        msg_timestamp = timezone.datetime.fromtimestamp(price_data["timestamp"] / 1000)
+        msg_timestamp = timezone.datetime.fromtimestamp(price_data["timestamp"])
         msg_timestamp = timezone.make_aware(msg_timestamp)
             
         data["message_timestamp"] = msg_timestamp
