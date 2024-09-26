@@ -3,6 +3,7 @@ from .ad import AdSnapshot
 from .peer import Peer
 from .arbiter import Arbiter
 from .payment import PaymentMethod, PaymentType
+from django.apps import apps
 
 class Order(models.Model):
     tracking_id = models.CharField(max_length=50, null=True, blank=True)
@@ -20,6 +21,13 @@ class Order(models.Model):
 
     def __str__(self):
         return f'{self.id}'
+    
+    @property
+    def status(self):
+        Status = apps.get_model('rampp2p', 'Status')
+        last_status = Status.objects.filter(order__id=self.id).last()
+        return last_status
+
 
 class OrderPayment(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE)

@@ -63,10 +63,11 @@ urlpatterns = [
     path('order/feedback/arbiter/', ArbiterFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='arbiter-feedback-list-create'),
     path('order/feedback/peer/', PeerFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='peer-feedback-list-create'),
 
+    # Utils
     path('utils/market-price/', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
-    
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
+    path('test-send-to-slack/', test_send_to_slack),
 
     # Old endpoints kept for backward-compatibility
     path('cashin/ad', CashInAdsList.as_view()),

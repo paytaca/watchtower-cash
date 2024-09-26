@@ -11,6 +11,7 @@ from main.utils.subscription import save_subscription
 
 from rampp2p.models import MarketRate, AppVersion
 from rampp2p.serializers import MarketRateSerializer
+from rampp2p.utils.slackbot import send_to_slack
 
 import logging
 logger = logging.getLogger(__name__)
@@ -34,6 +35,16 @@ def check_app_version(request, platform=None):
         }
     
     return JsonResponse(response_data)
+
+from slack.errors import SlackApiError
+def test_send_to_slack(request):
+    text = 'Hello world!'
+    logger.warning(f'test_send_to_slack: {text}')
+    try:
+        send_to_slack(channel='#social', text=text)
+        return JsonResponse({'success': True })
+    except SlackApiError as e:
+        return JsonResponse(e.args[0])
 
 class MarketRates(APIView):
     def get(self, request):
