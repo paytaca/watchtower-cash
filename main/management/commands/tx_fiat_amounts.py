@@ -4,7 +4,7 @@ import json
 from decimal import Decimal
 from django.utils import timezone
 from django.db.models import F
-from main.models import WalletHistory, Address, Transaction, AssetPriceLog
+from main.models import WalletHistory, Transaction, AssetPriceLog
 from main.tasks import NODE
 
 class Command(BaseCommand):
@@ -19,7 +19,7 @@ class Command(BaseCommand):
         currency = options["currency"]
         currency = str(currency).upper().strip()
 
-        tx_data = get_tx_fiat_amounts(txid, currency=currency)
+        tx_data = get_tx_with_fiat_amounts(txid, currency=currency)
 
         print(json.dumps(tx_data, indent=4, default=str))
 
@@ -39,10 +39,6 @@ def get_tx_with_fiat_amounts(txid, currency="PHP"):
         market_price_field = "usd_price"
 
     for vin in tx["inputs"]:
-        # vin["wallet_hash"] = Address.objects \
-        #     .filter(address=vin["address"]) \
-        #     .values_list("wallet__wallet_hash", flat=True).first()
-
         price = WalletHistory.objects \
             .filter(txid=vin["txid"]) \
             .filter(token__name="bch") \
@@ -100,36 +96,4 @@ def get_tx_with_fiat_amounts(txid, currency="PHP"):
     tx["total_input_amount"] = total_input_amount
     tx["total_output_amount"] = total_output_amount
 
-    return tx
-
-def get_tx_fiat_amounts(txid, currency="PHP"):
-    tx = get_tx_with_fiat_amounts(txid, currency=currency)
-    total_input_amount = 0
-    total_output_amount = 0
-    inputs = []
-    for vin in tx["inputs"]:
-        inputs.append(dict(
-            bch = Decimal(vin["value"]) / 10 ** 8,
-            price=vin.get("price"),
-            amount=vin.get("amount"),
-        ))
-
-        if vin.get("amount"):
-            total_input_amount += vin.get("amount")
-    tx["inputs"] = inputs
-
-    outputs = []
-    for vout in tx["outputs"]:
-        outputs.append(dict(
-            bch = Decimal(vout["value"]) / 10 ** 8,
-            price=vout.get("price"),
-            amount=vout.get("amount"),
-        ))
-
-        if vout.get("amount"):
-            total_output_amount += vout.get("amount")
-    tx["outputs"] = outputs
-
-    tx["total_input_amount"] = total_input_amount
-    tx["total_output_amount"] = total_output_amount
     return tx
