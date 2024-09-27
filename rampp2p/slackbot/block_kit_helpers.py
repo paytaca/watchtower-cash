@@ -1,5 +1,8 @@
 from rampp2p.models import StatusType
 
+import logging
+logger = logging.getLogger(__name__)
+
 def resolve_color_from_order_status(status:str):
     if status == StatusType.SUBMITTED:
         return "#ffc107"
@@ -17,7 +20,7 @@ def resolve_color_from_order_status(status:str):
         return '#43a047'
     elif status == StatusType.RELEASED:
         return '#388e3c'
-    elif status == StatusType.CANCELLED:
+    elif status == StatusType.CANCELED:
         return '#f44336'
     else:
         return "#9e9e9e"

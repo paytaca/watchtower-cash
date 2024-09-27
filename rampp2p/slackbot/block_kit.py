@@ -19,10 +19,23 @@ class Markdown(Text):
 class Button(Text):
     TYPE = "button"
 
+class Divider(MessageComponent):
+    TYPE = "divider"
+
+    def __init__(self, *args, **kwargs):
+        return super().__init__(type=self.TYPE, *args, **kwargs)
+    
 class Emoji(MessageComponent):
     def __init__(self, name, **kwargs):
         assert isinstance(name, str)
         return super().__init__(name=name, type="emoji", **kwargs)
+    
+class Header(MessageComponent):
+    TYPE = "header"
+
+    def __init__(self, text, **kwargs):
+        assert isinstance(text, dict)
+        return super().__init__(text=text, type=self.TYPE, **kwargs)
 
 # ----------- #
 
@@ -43,7 +56,6 @@ class Blocks(ListTypeBlock):
 class SectionBlock(ListTypeBlock):
     LIST_PROPERTY = "fields"
     TYPE = "section"
-
 
 class ContextBlock(ListTypeBlock):
     LIST_PROPERTY = "elements"

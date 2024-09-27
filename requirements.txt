@@ -46,6 +46,7 @@ ipython-genutils==0.2.0
 itypes==1.2.0
 jedi==0.16.0
 Jinja2==2.11.2
+jsonfield==3.1.0
 MarkupSafe==1.1.1
 more-itertools==8.4.0
 packaging==20.4

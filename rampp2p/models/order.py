@@ -1,5 +1,5 @@
 from django.db import models
-from .ad import AdSnapshot
+from .ad import AdSnapshot, TradeType
 from .peer import Peer
 from .arbiter import Arbiter
 from .payment import PaymentMethod, PaymentType
@@ -27,6 +27,16 @@ class Order(models.Model):
         Status = apps.get_model('rampp2p', 'Status')
         last_status = Status.objects.filter(order__id=self.id).last()
         return last_status
+    
+    @property
+    def trade_type(self):
+        if self.ad_snapshot.trade_type == TradeType.SELL:
+            return TradeType.BUY
+        return TradeType.SELL
+    
+    @property
+    def currency(self):
+        return self.ad_snapshot.fiat_currency
 
 
 class OrderPayment(models.Model):

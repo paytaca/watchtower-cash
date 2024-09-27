@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-
+from jsonfield import JSONField
 from slack import WebClient
 
 # Create your models here.
@@ -15,7 +15,7 @@ class SlackMessageLog(models.Model):
 
     topic = models.CharField(max_length=50, choices=Topic.choices)
     object_id = models.BigIntegerField()
-    metadata = models.JSONField(
+    metadata = JSONField(
         null=True, blank=True,
         help_text="Arbitrary data to add context to the message",
     )

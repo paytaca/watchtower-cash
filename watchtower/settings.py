@@ -662,7 +662,8 @@ IMAGE_UPLOAD_FOLDER = 'image_uploads'
 IMAGE_UPLOAD_PATH = urljoin(MEDIA_URL, IMAGE_UPLOAD_FOLDER)
 IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 
-P2P_SLACK_CHANNEL=config('P2P_SLACK_CHANNEL', '#paytaca-p2pexchange-alerts')
+SLACK_CHANNEL=config('SLACK_CHANNEL', '#paytaca-p2pexchange-alerts')
+
 
 # vouchers
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30

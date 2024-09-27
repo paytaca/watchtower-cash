@@ -80,3 +80,14 @@ class AdSnapshot(models.Model):
         # convert to a timedelta object
         minutes = self.appeal_cooldown_choice
         return timedelta(minutes=minutes)
+    
+    @property
+    def owner(self):
+        return self.ad.owner
+    
+    @property
+    def price(self):
+        if self.price_type == PriceType.FLOATING:
+            floating_price = self.floating_price/100
+            return self.market_price * floating_price
+        return self.fixed_price

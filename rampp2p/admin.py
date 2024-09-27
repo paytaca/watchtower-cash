@@ -242,3 +242,39 @@ class AppVersionAdmin(admin.ModelAdmin):
     fields = ('platform', 'latest_version', 'min_required_version', 'notes')
 
 admin.site.register(AppVersion, AppVersionAdmin)
+
+from rampp2p.slackbot.send import MessageBase
+class SlackMessageLogAdmin(admin.ModelAdmin):
+    search_fields = [
+        "topic",
+        "object_id",
+        "channel",
+        "ts",
+    ]
+
+    list_display = [
+        "__str__",
+        "topic",
+        "object_id",
+        "channel",
+        "ts",
+        "thread_ts",
+        "metadata",
+        "deleted_at",
+    ]
+
+    actions = [
+        "delete_in_slack",
+    ]
+
+    def delete_in_slack(self, request, queryset):
+        for msg in queryset:
+            MessageBase.delete_message(
+                msg.channel,
+                str(msg.ts),
+                update_db=True,
+            )
+
+    delete_in_slack.short_description = "Delete selected messages in slack"
+
+admin.site.register(SlackMessageLog, SlackMessageLogAdmin)
