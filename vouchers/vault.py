@@ -24,10 +24,6 @@ def get_merchant_vault(merchant_id, pubkey=None):
                     # 'device': None
                 }
             },
-            'funder': {
-                'address': settings.VOUCHER_FEE_FUNDER_ADDRESS,
-                'wif': settings.VOUCHER_FEE_FUNDER_WIF
-            },
             # 'sender': {
             #     'pubkey': '',
             #     'address': '',
@@ -64,10 +60,6 @@ def get_device_vault(pos_device_id, pubkey=None):
                 # 'voucher': {
                 #     'category': None
                 # }
-            },
-            'funder': {
-                'address': settings.VOUCHER_FEE_FUNDER_ADDRESS,
-                'wif': settings.VOUCHER_FEE_FUNDER_WIF,
             },
             # 'sender': {
             #     'pubkey': '',

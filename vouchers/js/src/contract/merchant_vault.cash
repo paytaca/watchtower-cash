@@ -8,9 +8,9 @@ contract MerchantVault (
 
     function claim (bytes32 voucherCategory) {
         // 3 inputs: lock nft, key nft, verification token
-        // 1 output: recipient of BCH stored in lock NFT, we burn the verification token
-        require(tx.inputs.length == 3);
-        require(tx.outputs.length == 1);
+        // 2 outputs: recipient of BCH stored in lock NFT
+        require(tx.inputs.length >= 3);
+        require(tx.outputs.length >= 2);
 
         // key NFT must be an immutable NFT & lock/key should be the same category
         require(tx.inputs[0].tokenCategory == voucherCategory);
@@ -36,6 +36,10 @@ contract MerchantVault (
         bytes32 deviceVaultScriptHash = bytes32(tx.inputs[2].nftCommitment);
         bytes35 deviceVault = new LockingBytecodeP2SH32(deviceVaultScriptHash);
         require(tx.outputs[0].lockingBytecode == deviceVault);
+        
+        // second output must be the verification token
+        require(tx.outputs[1].lockingBytecode == deviceVault);
+        require(tx.outputs[1].tokenCategory == verificationTokenCategory);
     }
 
     function refund () {
