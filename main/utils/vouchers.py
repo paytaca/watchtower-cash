@@ -11,7 +11,10 @@ from django.db.models import Q
 
 from bitcash.keygen import public_key_to_address
 from celery import shared_task
-import requests
+import requests, logging
+
+
+logger = logging.getLogger(__name__)
 
 
 # key_nft = False, means your checking for lock NFTs
@@ -88,10 +91,32 @@ def process_pending_payment_requests(address, senders):
         payment_requests.update(paid=True)
 
 
-@shared_task(queue='process_key_nft')
-def process_key_nft(txid, category, recipient_address, senders):
+def send_voucher_payment_notification(txid, category, senders):
+    device_vault = PosDeviceVault.objects.filter(address__in=senders)
+    device_vault = device_vault.first()
+    merchant_vault = device_vault.pos_device.merchant.vault
+
+    data = { 'update_type': 'voucher_processed' }
+    pubkey = bytearray.fromhex(merchant_vault.pubkey)
+    address = public_key_to_address(pubkey)
+    room_name = address.replace(':','_') + '_'
+    channel_layer = get_channel_layer()
+    
+    flag_claimed_voucher(txid, category)
+    async_to_sync(channel_layer.group_send)(
+        f"{room_name}", 
+        {
+            "type": "send_update",
+            "data": data
+        }
+    )
+
+
+def process_device_vault(category, recipient_address, senders):
     device_vaults = PosDeviceVault.objects.filter(address=recipient_address)
     if device_vaults.exists():
+        logger.info('PROCESSING DEVICE VAULT...')
+
         voucher = Voucher.objects.filter(category=category)
         voucher.update(sent=True)
 
@@ -101,17 +126,20 @@ def process_key_nft(txid, category, recipient_address, senders):
         payload['params']['merchant']['voucher'] = { 'category': category }
         response = requests.post(url, json=payload)
         result = response.json()
-        return
-        
+
+
+def process_merchant_vault(txid, category, recipient_address, senders):
     merchant_vaults = MerchantVault.objects.filter(address=recipient_address)
     if merchant_vaults.exists():
         merchant = merchant_vaults.first().merchant
-        pos_device_vault = PosDeviceVault.objects.filter(address__in=senders)
-        if not pos_device_vault.exists(): return
+        pos_device_vaults = PosDeviceVault.objects.filter(address__in=senders)
+        if not pos_device_vaults.exists(): return
+
+        logger.info('PROCESSING MERCHANT VAULT...')
 
         url = settings.VAULT_EXPRESS_URLS['merchant'] + '/claim'
         payload = get_merchant_vault(merchant.id)['payload'] 
-        pos_device = pos_device_vault.first().pos_device
+        pos_device = pos_device_vaults.first().pos_device
         payload['params']['merchant']['voucher'] = { 'category': category }
         payload['params']['merchant']['pubkey']['device'] = pos_device.vault.pubkey
 
@@ -119,26 +147,10 @@ def process_key_nft(txid, category, recipient_address, senders):
         result = response.json()
 
         if not result['success']: return
+        send_voucher_payment_notification(txid, category, senders)
 
-        device_vault = PosDeviceVault.objects.filter(
-            Q(address__in=senders) |
-            Q(token_address__in=senders)
-        )
-        if not device_vault.exists(): return
-        device_vault = device_vaults.first()
-        merchant_vault = device_vault.pos_device.merchant.vault
 
-        data = { 'update_type': 'voucher_processed' }
-        pubkey = bytearray.fromhex(merchant_vault.pubkey)
-        address = public_key_to_address(pubkey)
-        room_name = address.replace(':','_') + '_'
-        channel_layer = get_channel_layer()
-        
-        flag_claimed_voucher(txid, category)
-        async_to_sync(channel_layer.group_send)(
-            f"{room_name}", 
-            {
-                "type": "send_update",
-                "data": data
-            }
-        )
+@shared_task(queue='process_key_nft')
+def process_key_nft(txid, category, recipient_address, senders):
+    process_device_vault(category, recipient_address, senders)
+    process_merchant_vault(txid, category, recipient_address, senders)

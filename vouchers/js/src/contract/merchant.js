@@ -103,8 +103,8 @@ export class MerchantVault {
 
     if (voucherUtxos.length < 2) throw new Error('Key and Lock NFTs should both be present before claiming')
     if (voucherUtxos.length === 0) throw new Error(`No category ${voucherCategory} utxos found`)
-
-    // add verification token UTXO to be burned
+    
+    // Do not burn verification token to be used as fee for POS device release to merchant
     const verificationTokenUtxo = _utxos.find(utxo => utxo?.token?.category === this.merchant?.verificationCategory)
     const lockNftUtxo = voucherUtxos.find(utxo => {
       return (
@@ -118,6 +118,7 @@ export class MerchantVault {
       .claim(reverseHex(voucherCategory))
       .from(voucherUtxos)
       .to(this.deviceContract.address, lockNftUtxo.satoshis)
+      .to(this.deviceContract.tokenAddress, this.dust, verificationTokenUtxo?.token)
       .withoutTokenChange()
       .withoutChange()
       .send()
