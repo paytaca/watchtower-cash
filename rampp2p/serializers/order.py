@@ -235,15 +235,22 @@ class OrderPaymentSerializer(serializers.ModelSerializer):
     order = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Order.objects.all())
     payment_method = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentMethod.objects.all())
     payment_type = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentType.objects.all())
-    
+    attachments = serializers.SerializerMethodField(required=False)
+
     class Meta:
         model = models.OrderPayment
         fields = [
             'id',
             'order',
             'payment_method',
-            'payment_type'
+            'payment_type',
+            'attachments'
         ]
+    
+    def get_attachments(self, obj):
+        attachments = models.OrderPaymentAttachment.objects.filter(payment__id=obj.id)
+        return OrderPaymentAttachmentSerializer(attachments, many=True).data
+
 
 class ImageUploadSerializer(serializers.ModelSerializer):
     class Meta:
