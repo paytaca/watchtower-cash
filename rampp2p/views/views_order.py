@@ -530,6 +530,18 @@ class OrderViewSet(viewsets.GenericViewSet):
             return Response(status=status.HTTP_200_OK)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['patch'])
+    def read_all_cashin_order_status(self, request):
+        wallet_hash = request.user.wallet_hash
+        if not wallet_hash:
+            return Response(status=401)
+        
+        statuses = models.Status.objects.filter(order__is_cash_in=True, order__owner__wallet_hash=wallet_hash)
+        for status in statuses:
+            status.buyer_read_at = timezone.now()
+            status.save()
+        return Response(status=200)
     
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk):
@@ -880,9 +892,3 @@ class OrderViewSet(viewsets.GenericViewSet):
             return members['buyer']
         raise ValidationError('User not allowed to perform this action')
         
-class OrderStatusViewSet(viewsets.GenericViewSet):
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [RampP2PIsAuthenticated]
-    queryset = models.Status.objects.all()
-    
-   
