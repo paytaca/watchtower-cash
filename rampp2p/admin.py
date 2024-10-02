@@ -196,7 +196,12 @@ admin.site.register(CryptoCurrency)
 admin.site.register(ReservedName)
 admin.site.register(IdentifierFormat)
 admin.site.register(OrderMember)
-admin.site.register(OrderPayment)
+
+class OrderPaymentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'order', 'payment_type', 'payment_method')
+    search_fields = ['id', 'order__id', 'payment_type__short_name', 'payment_type__full_name', 'payment_method__id']
+admin.site.register(OrderPayment, OrderPaymentAdmin)
+
 admin.site.register(DynamicPaymentTypeField)
 
 class PaymentTypeFieldAdmin(admin.ModelAdmin):

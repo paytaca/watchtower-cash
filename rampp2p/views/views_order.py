@@ -714,6 +714,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             validate_status_progression(StatusType.PAID_PENDING, pk)
 
             response = {}
+            order_payment_methods = []
             if not order.is_cash_in:
                 '''Require selected payment methods if order is not cash-in.
                 Cash-in orders already have payment methods selected on order creation'''
@@ -728,7 +729,6 @@ class OrderViewSet(viewsets.GenericViewSet):
                 order.save() 
 
                 # Create order-specific payment methods
-                order_payment_methods = []
                 for payment_method in payment_methods:
                     data = {
                         "order": order.id,
@@ -739,7 +739,12 @@ class OrderViewSet(viewsets.GenericViewSet):
                     if order_method.is_valid():
                         order_payment_methods.append(order_method.save())
                 order_payment_methods = serializers.OrderPaymentSerializer(order_payment_methods, many=True)
-                response["order_payment_methods"] = order_payment_methods.data
+            else:
+                order_methods = models.OrderPayment.objects.filter(order__id=order.id)
+                if order_methods.exists():
+                    order_payment_methods = serializers.OrderPaymentSerializer(order_methods, many=True)
+            
+            response["order_payment_methods"] = order_payment_methods.data
 
             context = { 'wallet_hash': wallet_hash }
             serialized_order = serializers.OrderSerializer(order, context=context)
