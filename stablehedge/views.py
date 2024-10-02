@@ -75,6 +75,29 @@ class RedemptionContractViewSet(
         return Response(serializer.data)
 
 
+class TreasuryContractViewSet(
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+):
+    lookup_field = "address"
+    serializer_class = serializers.TreasuryContractSerializer
+
+    def get_queryset(self):
+        return models.TreasuryContract.objects.all()
+
+    @decorators.action(
+        methods=["post"], detail=False,
+        serializer_class=serializers.SweepTreasuryContractSerializer,
+    )
+    def sweep(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = serializer.save()
+        return Response(result)
+
+
 class TestUtilsViewSet(viewsets.GenericViewSet):
     @swagger_auto_schema(
         method="get",

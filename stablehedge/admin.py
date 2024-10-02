@@ -69,3 +69,38 @@ class RedemptionContractTransactionAdmin(admin.ModelAdmin):
         "transaction_type",
         "status",
     ]
+
+
+@admin.register(models.TreasuryContract)
+class TreasuryContractAdmin(admin.ModelAdmin):
+    search_fields = [
+        "auth_token_id",
+        "pubkey1",
+        "pubkey2",
+        "pubkey3",
+        "pubkey4",
+        "pubkey5",
+    ]
+
+    list_display = [
+        "__str__",
+        "auth_token_id",
+    ]
+
+    actions = [
+        "recompile",
+    ]
+
+    def recompile(self, request, queryset):
+        for obj in queryset.all():
+            compile_data = ScriptFunctions.compileTreasuryContract(obj.contract_opts)
+
+            if obj.address != compile_data["address"]:
+                messages.info(request, f"TreasuryContract({obj.address}) -> {compile_data['address']}")
+                obj.address = compile_data["address"]
+                obj.save()
+            else:
+                messages.info(request, f"TreasuryContract({obj.address})")
+
+    recompile.short_description = "Recompile address"
+

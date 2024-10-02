@@ -111,3 +111,47 @@ class RedemptionContractTransaction(models.Model):
 
     resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TreasuryContract(models.Model):
+    address = models.CharField(max_length=70)
+
+    auth_token_id = models.CharField(max_length=64)
+
+    pubkey1 = models.CharField(max_length=70)
+    pubkey2 = models.CharField(max_length=70)
+    pubkey3 = models.CharField(max_length=70)
+    pubkey4 = models.CharField(max_length=70)
+    pubkey5 = models.CharField(max_length=70)
+
+    def __str__(self):
+        return f"TreasuryContract#{self.id}: {self.address}"
+
+    @property
+    def network(self):
+        if self.address.startswith("bchtest:"):
+            return "chipnet"
+        else:
+            return "mainnet"
+
+    @property
+    def contract_opts(self):
+        p2sh20_length = 54 if self.network == "mainnet" else 50
+        address_type = "p2sh20" if len(self.address) <= p2sh20_length else "p2sh32"
+
+        return dict(
+            params=dict(
+                authKeyId=self.auth_token_id,
+                pubkeys=[
+                    self.pubkey1,
+                    self.pubkey2,
+                    self.pubkey3,
+                    self.pubkey4,
+                    self.pubkey5,
+                ],
+            ),
+            options=dict(
+                network=self.network,
+                addressType=address_type,
+            ),
+        )

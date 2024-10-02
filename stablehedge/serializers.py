@@ -78,6 +78,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        validated_data.pop("network", None)
         fiat_token_data = validated_data.pop("fiat_token")
         fiat_token = models.FiatToken(**fiat_token_data)
         fiat_token.save()
@@ -223,3 +224,87 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         raise serializers.ValidationError("Invalid action")
+
+
+class TreasuryContractSerializer(serializers.ModelSerializer):
+    network = serializers.CharField(required=False, default="chipnet", write_only=True)
+
+    class Meta:
+        model = models.TreasuryContract
+        fields = [
+            "network",
+            "address",
+            "auth_token_id",
+            "pubkey1",
+            "pubkey2",
+            "pubkey3",
+            "pubkey4",
+            "pubkey5",
+        ]
+
+        extra_kwargs = dict(
+            address=dict(read_only=True),
+        )
+
+
+    def validate(self, data):
+        compile_data = ScriptFunctions.compileTreasuryContract(dict(
+            params=dict(
+                authKeyId=data["auth_token_id"],
+                pubkeys=[
+                    data["pubkey1"],
+                    data["pubkey2"],
+                    data["pubkey3"],
+                    data["pubkey4"],
+                    data["pubkey5"],
+                ]
+            ),
+            options=dict(network=data["network"], addressType="p2sh32"),
+        ))
+        data["address"] = compile_data["address"]
+        existing = models.TreasuryContract.objects.filter(address=data["address"]).first()
+        if existing and (not self.instance or self.instance.id != existing.id):
+            raise serializers.ValidationError("This contract already exists")
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop("network", None)
+        return super().create(validated_data)
+
+
+class SweepTreasuryContractSerializer(serializers.Serializer):
+    treasury_contract_address = serializers.SlugRelatedField(
+        queryset=models.TreasuryContract.objects,
+        slug_field="address", source="treasury_contract",
+        write_only=True,
+    )
+    recipient_address = serializers.CharField(write_only=True)
+    auth_key_recipient_address = serializers.CharField(write_only=True)
+    auth_key_utxo = UtxoSerializer(write_only=True)
+    tx_hex = serializers.CharField(read_only=True)
+
+    def save(self):
+        validated_data = {**self.validated_data}
+        treasury_contract = validated_data["treasury_contract"]
+        auth_key_utxo_data = validated_data["auth_key_utxo"]
+
+        return ScriptFunctions.sweepTreasuryContract(dict(
+            contractOpts=treasury_contract.contract_opts,
+            authKeyUtxo=dict(
+                txid=auth_key_utxo_data["txid"],
+                vout=auth_key_utxo_data["vout"],
+                satoshis=auth_key_utxo_data["satoshis"],
+                token=dict(
+                    category=auth_key_utxo_data["category"],
+                    amount=auth_key_utxo_data["amount"],
+                    nft=dict(
+                        commitment=auth_key_utxo_data["commitment"],
+                        capability=auth_key_utxo_data["capability"],
+                    ),
+                ),
+                unlockingBytecode=auth_key_utxo_data["unlocking_bytecode"],
+                lockingBytecode=auth_key_utxo_data["locking_bytecode"],
+            ),
+            recipientAddress=validated_data["recipient_address"],
+            authKeyRecipient=validated_data["auth_key_recipient_address"],
+        ))
