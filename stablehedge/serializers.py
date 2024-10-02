@@ -4,7 +4,10 @@ from django.utils import timezone
 
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
-from stablehedge.utils.transaction import validate_utxo_data
+from stablehedge.utils.transaction import (
+    validate_utxo_data,
+    utxo_data_to_cashscript,
+)
 
 from anyhedge import models as anyhedge_models
 
@@ -104,21 +107,7 @@ class SweepRedemptionContractSerializer(serializers.Serializer):
 
         return ScriptFunctions.sweepRedemptionContract(dict(
             contractOpts=redemption_contract.contract_opts,
-            authKeyUtxo=dict(
-                txid=auth_key_utxo_data["txid"],
-                vout=auth_key_utxo_data["vout"],
-                satoshis=auth_key_utxo_data["satoshis"],
-                token=dict(
-                    category=auth_key_utxo_data["category"],
-                    amount=auth_key_utxo_data["amount"],
-                    nft=dict(
-                        commitment=auth_key_utxo_data["commitment"],
-                        capability=auth_key_utxo_data["capability"],
-                    ),
-                ),
-                unlockingBytecode=auth_key_utxo_data["unlocking_bytecode"],
-                lockingBytecode=auth_key_utxo_data["locking_bytecode"],
-            ),
+            authKeyUtxo=utxo_data_to_cashscript(auth_key_utxo_data),
             recipientAddress=validated_data["recipient_address"],
             authKeyRecipient=validated_data["auth_key_recipient_address"],
         ))
@@ -290,21 +279,7 @@ class SweepTreasuryContractSerializer(serializers.Serializer):
 
         return ScriptFunctions.sweepTreasuryContract(dict(
             contractOpts=treasury_contract.contract_opts,
-            authKeyUtxo=dict(
-                txid=auth_key_utxo_data["txid"],
-                vout=auth_key_utxo_data["vout"],
-                satoshis=auth_key_utxo_data["satoshis"],
-                token=dict(
-                    category=auth_key_utxo_data["category"],
-                    amount=auth_key_utxo_data["amount"],
-                    nft=dict(
-                        commitment=auth_key_utxo_data["commitment"],
-                        capability=auth_key_utxo_data["capability"],
-                    ),
-                ),
-                unlockingBytecode=auth_key_utxo_data["unlocking_bytecode"],
-                lockingBytecode=auth_key_utxo_data["locking_bytecode"],
-            ),
+            authKeyUtxo=utxo_data_to_cashscript(auth_key_utxo_data),
             recipientAddress=validated_data["recipient_address"],
             authKeyRecipient=validated_data["auth_key_recipient_address"],
         ))
