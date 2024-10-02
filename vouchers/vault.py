@@ -112,6 +112,7 @@ def create_device_vault(pos_device_id, pubkey=None):
 def create_verification_token_minter(merchant_id, address, category):
     merchant = Merchant.objects.get(id=merchant_id)
     token_address = bch_address_converter(address)
+    VerificationTokenMinter.objects.filter(merchant=merchant).delete()
     VerificationTokenMinter.objects.create(
         merchant=merchant,
         category=category,
