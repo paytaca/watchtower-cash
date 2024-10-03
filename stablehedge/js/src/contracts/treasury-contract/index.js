@@ -43,11 +43,11 @@ export class TreasuryContract {
 
     const contractParams = [
       hexToBin(this.params?.authKeyId).reverse(),
-      hexToBin(this.params?.pubkeys?.[0]).reverse(),
-      hexToBin(this.params?.pubkeys?.[1]).reverse(),
-      hexToBin(this.params?.pubkeys?.[2]).reverse(),
-      hexToBin(this.params?.pubkeys?.[3]).reverse(),
-      hexToBin(this.params?.pubkeys?.[4]).reverse(),
+      hexToBin(this.params?.pubkeys?.[0]),
+      hexToBin(this.params?.pubkeys?.[1]),
+      hexToBin(this.params?.pubkeys?.[2]),
+      hexToBin(this.params?.pubkeys?.[3]),
+      hexToBin(this.params?.pubkeys?.[4]),
     ]
     const contract = new Contract(artifact, contractParams, opts);
 
@@ -113,6 +113,7 @@ export class TreasuryContract {
    * @param {[String, String, String]} opts.wifs
    * @param {String} opts.recipientAddress
    * @param {import("cashscript").Utxo[]} opts.contractUtxos
+   * @param {Number} [opts.locktime]
    */
   async sweepMultiSig(opts) {
     const recipientAddress = opts?.recipientAddress
@@ -182,10 +183,10 @@ export class TreasuryContract {
     })
 
     const inputSize = calculateInputSize(contract.functions.unlockWithMultiSig(
-      new Uint8Array(65).fill(0),
-      new Uint8Array(65).fill(0),
-      new Uint8Array(65).fill(0),
-    ))
+      new Uint8Array(65).fill(255),
+      new Uint8Array(65).fill(255),
+      new Uint8Array(65).fill(255),
+    )) + 20 // tx calculations have been off by atmost 19 bytes (so far)
     const feePerByte = 1.0
 
     const totalInputFeeSats = BigInt(Math.ceil((inputs.length * inputSize) * feePerByte))
@@ -227,6 +228,9 @@ export class TreasuryContract {
 
     transaction.withFeePerByte(feePerByte)
     transaction.withHardcodedFee(totalFees)
+    if (!Number.isNaN(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
     return transaction
   }
 
