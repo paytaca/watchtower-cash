@@ -16,6 +16,7 @@ import {
   hexToBin,
   base64ToBin,
   binToBase58,
+  isHex,
 } from '@bitauth/libauth'
 import { SignatureTemplate } from 'cashscript'
 import { templateFromUnlockingBytecode } from './signature-template.js'
@@ -161,6 +162,33 @@ export function parseUtxo(utxo) {
   }
 
   return result
+}
+
+/**
+ * @param {Object} output 
+ * @param {String} output.to
+ * @param {Number} output.amount
+ * @param {Object} [output.token]
+ * @param {Number | String} output.token.amount
+ * @param {String} output.token.category
+ * @param {Object} [output.token.nft]
+ * @param {'none' | 'mutable' | 'minting'} output.token.nft.capability
+ * @param {String} output.token.nft.commitment
+ * @returns {import('cashscript').Output}
+ */
+export function parseCashscriptOutput(output) {
+  return {
+    to: isHex(output?.to) ? hexToBin(output?.to) : output?.to,
+    amount: BigInt(output?.amount),
+    token: !output?.token ? undefined : {
+      category: output?.token?.category,
+      amount: BigInt(output?.token?.amount),
+      nft: !output?.token?.nft ? undefined : {
+        capability: output?.token?.nft?.capability,
+        commitment: output?.token?.nft?.commitment,
+      }
+    },
+  }
 }
 
 /**

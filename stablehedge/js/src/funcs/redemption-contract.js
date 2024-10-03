@@ -1,5 +1,5 @@
 import { RedemptionContract } from '../contracts/redemption-contract/index.js'
-import { parseUtxo } from '../utils/crypto.js'
+import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 
 /**
  * @param {Object} opts 
@@ -90,6 +90,31 @@ export async function redeem(opts) {
     recipientAddress: opts?.recipientAddress,
     priceMessage: opts?.priceMessage,
     priceMessageSig: opts?.priceMessageSig,
+    locktime: opts?.locktime,
+  })
+
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build() }
+}
+
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts
+ * @param {Boolean} [opts.keepGuarded]
+ * @param {import('cashscript').Utxo[]} opts.inputs
+ * @param {import('cashscript').Output} opts.outputs
+ * @param {Number} [opts.locktime]
+ */
+export async function unlockRedemptionContractWithNft(opts) {
+  const redemptionContract = new RedemptionContract(opts?.contractOpts)
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+  const outputs = opts?.outputs?.map(parseCashscriptOutput)
+
+  const transaction = await redemptionContract.unlockWithNft({
+    keepGuarded: opts?.keepGuarded,
+    inputs, outputs,
     locktime: opts?.locktime,
   })
 
