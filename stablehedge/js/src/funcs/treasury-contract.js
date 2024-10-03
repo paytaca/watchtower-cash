@@ -23,6 +23,7 @@ export function compileTreasuryContract(opts) {
  * @param {import('cashscript').UtxoP2PKH[]} opts.contractUtxos
  * @param {import('cashscript').UtxoP2PKH} opts.recipientAddress
  * @param {import('cashscript').UtxoP2PKH} opts.authKeyRecipient
+ * @param {Number} [opts.locktime]
  */
 export async function sweepTreasuryContract(opts) {
   const treasuryContract = new TreasuryContract(opts?.contractOpts)

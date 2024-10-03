@@ -62,6 +62,7 @@ export class TreasuryContract {
    * @param {Boolean} opts.keepGuarded
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
+   * @param {Number} [opts.locktime]
    */
   async unlockWithNft(opts) {
     const authKeyUtxo = opts?.inputs?.[1]
@@ -79,6 +80,9 @@ export class TreasuryContract {
     })
 
     transaction.to(opts?.outputs)
+    if (!Number.isNaN(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
     return transaction
   }
 
@@ -89,6 +93,7 @@ export class TreasuryContract {
    * @param {String | SignatureTemplate} opts.sig3
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
+   * @param {Number} [opts.locktime]
    */
   async unlockWithMultiSig(opts) {
     const sig1 = typeof opts?.sig1 === 'string'  ? hexToBin(opts?.sig1) : opts?.sig1
@@ -105,6 +110,9 @@ export class TreasuryContract {
     })
 
     transaction.to(opts?.outputs)
+    if (!Number.isNaN(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
     return transaction
   }
 
@@ -223,14 +231,12 @@ export class TreasuryContract {
       sig1: new SignatureTemplate(opts?.wifs[0], undefined, SignatureAlgorithm.ECDSA),
       sig2: new SignatureTemplate(opts?.wifs[1], undefined, SignatureAlgorithm.ECDSA),
       sig3: new SignatureTemplate(opts?.wifs[2], undefined, SignatureAlgorithm.ECDSA),
+      locktime: opts?.locktime,
     })
     if (typeof transaction === 'string') return transaction
 
     transaction.withFeePerByte(feePerByte)
     transaction.withHardcodedFee(totalFees)
-    if (!Number.isNaN(opts?.locktime)) {
-      transaction.withTime(opts?.locktime)
-    }
     return transaction
   }
 

@@ -23,6 +23,7 @@ export function compileRedemptionContract(opts) {
  * @param {import('cashscript').UtxoP2PKH[]} opts.contractUtxos
  * @param {import('cashscript').UtxoP2PKH} opts.recipientAddress
  * @param {import('cashscript').UtxoP2PKH} opts.authKeyRecipient
+ * @param {Number} [opts.locktime]
  */
 export async function sweepRedemptionContract(opts) {
   const redemptionContract = new RedemptionContract(opts?.contractOpts)
@@ -34,6 +35,7 @@ export async function sweepRedemptionContract(opts) {
     authKeyUtxo, 
     recipientAddress: opts?.recipientAddress,
     authKeyRecipient: opts?.authKeyRecipient,
+    locktime: opts?.locktime,
   })
   if (typeof transaction === 'string') return { success: false, error: transaction }
   return { success: true, tx_hex: await transaction.build() }
@@ -47,6 +49,7 @@ export async function sweepRedemptionContract(opts) {
  * @param {String} [opts.treasuryContractAddress]
  * @param {String} opts.priceMessage
  * @param {String} opts.priceMessageSig
+ * @param {Number} [opts.locktime]
  */
 export async function deposit(opts) {
   const redemptionContract = new RedemptionContract(opts?.contractOpts)
@@ -59,6 +62,7 @@ export async function deposit(opts) {
     treasuryContractAddress: opts?.treasuryContractAddress,
     priceMessage: opts?.priceMessage,
     priceMessageSig: opts?.priceMessageSig,
+    locktime: opts?.locktime,
   })
 
   if (typeof transaction === 'string') return { success: false, error: transaction }
@@ -74,6 +78,7 @@ export async function deposit(opts) {
  * @param {String} opts.recipientAddress
  * @param {String} opts.priceMessage
  * @param {String} opts.priceMessageSig
+ * @param {Number} [opts.locktime]
  */
 export async function redeem(opts) {
   const redemptionContract = new RedemptionContract(opts?.contractOpts)
@@ -85,6 +90,7 @@ export async function redeem(opts) {
     recipientAddress: opts?.recipientAddress,
     priceMessage: opts?.priceMessage,
     priceMessageSig: opts?.priceMessageSig,
+    locktime: opts?.locktime,
   })
 
   if (typeof transaction === 'string') return { success: false, error: transaction }

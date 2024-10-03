@@ -67,6 +67,7 @@ export class RedemptionContract {
    * @param {String} opts.recipientAddress
    * @param {String} opts.priceMessage
    * @param {String} opts.priceMessageSig
+   * @param {Number} [opts.locktime]
    */
   async deposit(opts) {
     if (!opts?.depositUtxo) return 'Deposit UTXO not provided'
@@ -118,6 +119,9 @@ export class RedemptionContract {
     }
 
     transaction.withHardcodedFee(HARDCODED_FEE)
+    if (!Number.isNaN(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
     return transaction
   }
 
@@ -128,6 +132,7 @@ export class RedemptionContract {
    * @param {String} opts.recipientAddress
    * @param {String} opts.priceMessage
    * @param {String} opts.priceMessageSig
+   * @param {Number} [opts.locktime]
    */
   async redeem(opts) {
     if (!opts?.redeemUtxo) return 'Redeem UTXO not provided'
@@ -169,6 +174,10 @@ export class RedemptionContract {
       .to(opts?.recipientAddress, redeemSats)
       .withHardcodedFee(EXPECTED_TX_FEE)
 
+    if (!Number.isNaN(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
+
     return transaction
   }
 
@@ -177,6 +186,7 @@ export class RedemptionContract {
    * @param {Boolean} opts.keepGuarded
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
+   * @param {Number} [opts.locktime]
    */
   async unlockWithNft(opts) {
     const authKeyUtxo = opts?.inputs?.[1]
@@ -194,6 +204,9 @@ export class RedemptionContract {
     })
 
     transaction.to(opts?.outputs)
+    if (!Number.isNaN(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
     return transaction
   }
 
@@ -203,6 +216,7 @@ export class RedemptionContract {
    * @param {String} opts.authKeyRecipient
    * @param {import("cashscript").Utxo} opts.authKeyUtxo
    * @param {import("cashscript").Utxo[]} opts.contractUtxos
+   * @param {Number} [opts.locktime]
    */
   async sweep(opts) {
     const recipientAddress = opts?.recipientAddress
@@ -317,7 +331,12 @@ export class RedemptionContract {
     inputs.splice(1, 0, authKeyUtxo)
     outputs.splice(1, 0, authKeyOutput)
 
-    const transaction = await this.unlockWithNft({ keepGuarded: false, inputs: inputs, outputs: outputs })
+    const transaction = await this.unlockWithNft({
+      keepGuarded: false,
+      inputs: inputs,
+      outputs: outputs,
+      locktime: opts?.locktime,
+    })
     if (typeof transaction === 'string') return transaction
 
     transaction.withFeePerByte(feePerByte)
