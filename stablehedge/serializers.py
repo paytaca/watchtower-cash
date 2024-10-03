@@ -216,11 +216,17 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
 
 
 class TreasuryContractSerializer(serializers.ModelSerializer):
+    redemption_contract_address = serializers.SlugRelatedField(
+        queryset=models.RedemptionContract.objects,
+        slug_field="address", source="redemption_contract",
+        write_only=True,
+    )
     network = serializers.CharField(required=False, default="chipnet", write_only=True)
 
     class Meta:
         model = models.TreasuryContract
         fields = [
+            "redemption_contract_address",
             "network",
             "address",
             "auth_token_id",

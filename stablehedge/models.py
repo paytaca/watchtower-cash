@@ -78,6 +78,14 @@ class RedemptionContract(models.Model):
             ),
         )
 
+    @property
+    def treasury_contract_address(self):
+        try:
+            self.treasury_contract
+            return self.treasury_contract.address
+        except self.__class__.treasury_contract.RelatedObjectDoesNotExist:
+            pass
+
 
 class RedemptionContractTransaction(models.Model):
     class Status(models.TextChoices):
@@ -114,7 +122,12 @@ class RedemptionContractTransaction(models.Model):
 
 
 class TreasuryContract(models.Model):
-    address = models.CharField(max_length=70)
+    redemption_contract = models.OneToOneField(
+        RedemptionContract, on_delete=models.PROTECT,
+        related_name="treasury_contract",
+    )
+
+    address = models.CharField(max_length=100)
 
     auth_token_id = models.CharField(max_length=64)
 
