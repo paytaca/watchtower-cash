@@ -96,12 +96,10 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         await self.accept()
         is_online = True
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
-        unread_count = await unread_orders_count(self.wallet_hash)
         data = { 
             'type': 'ConnectionMessage',
             'extra': {
                 'message': f"Subscribed to '{self.room_name}'", 
-                'unread_count': unread_count
             }
         }
         await self.send(text_data=json.dumps(data))

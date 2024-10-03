@@ -45,7 +45,8 @@ urlpatterns = [
     
     path('order/cash-in/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
     path('order/cash-in/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
-    path('order/cash-in/status/', OrderViewSet.as_view({'patch': 'read_all_cashin_order_status'})),
+    path('order/status/', OrderViewSet.as_view({'patch': 'read_order_status'})),
+    
     # Payment
     path('order/payment/', OrderPaymentViewSet.as_view({'get': 'list'}), name='order-payment-list'),
     path('order/payment/<int:pk>/', OrderPaymentViewSet.as_view({'get': 'retrieve'}), name='order-payment-detail'),

@@ -108,19 +108,7 @@ class CashinOrderViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def check_alerts(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
-        queryset = self.get_queryset().filter(Q(is_cash_in=True) & Q(owner__wallet_hash=wallet_hash))
-        queryset = queryset.order_by('-created_at')
-
-        has_cashin_alerts = False
-        for order in queryset:
-            is_seller = utils.is_seller(order, wallet_hash)
-            statuses = models.Status.objects.filter(order__id=order.id)
-            if is_seller:
-                has_cashin_alerts = statuses.filter(seller_read_at__isnull=True).exists()
-            else:
-                has_cashin_alerts = statuses.filter(buyer_read_at__isnull=True).exists()
-            if has_cashin_alerts:
-                break
+        has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
         return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
 
 class OrderViewSet(viewsets.GenericViewSet):
@@ -530,18 +518,18 @@ class OrderViewSet(viewsets.GenericViewSet):
             return Response(status=status.HTTP_200_OK)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=True, methods=['patch'])
-    def read_all_cashin_order_status(self, request):
+    
+    @action(detail=False, methods=['patch'])
+    def read_order_status(self, request):
         wallet_hash = request.user.wallet_hash
-        if not wallet_hash:
-            return Response(status=401)
-        
-        statuses = models.Status.objects.filter(order__is_cash_in=True, order__owner__wallet_hash=wallet_hash)
+        order_ids = request.data.get('order_ids', [])
+        statuses = models.Status.objects.filter(order__id__in=order_ids)
         for status in statuses:
             status.buyer_read_at = timezone.now()
             status.save()
-        return Response(status=200)
+
+        has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
+        return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
     
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk):
