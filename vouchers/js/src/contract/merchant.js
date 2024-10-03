@@ -93,8 +93,18 @@ export class MerchantVault {
     return deviceContract
   }
 
-  getContract () {
-    return this.contract
+  async getBalance () {
+    const utxos = await this.contract.getUtxos()
+    const bchUtxos = utxos.filter(utxo => !utxo?.token)
+    
+    const balance = await this.contract.getBalance()
+    const bchBalance = bchUtxos.reduce((acc, obj) => acc + obj?.satoshis, 0n)
+    const tokenBalance = balance - bchBalance
+
+    return {
+      bch: Number(bchBalance) / 1e8,
+      tokens: Number(tokenBalance) / 1e8,
+    }
   }
 
   async claim (voucherCategory) {

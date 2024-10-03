@@ -78,7 +78,7 @@ def process_pending_payment_requests(address, senders):
     url = prefix + '/compile'
     response = requests.post(url, json=payload)
     response = response.json()
-    balance = response['balance']
+    balance = response['balance']['bch']
 
     if payment_request.amount > balance: return
 
