@@ -23,6 +23,11 @@ class RedemptionContractTransactionException(Exception):
         self.code = code
         super().__init__(*args, **kwargs)
 
+
+def get_locktime():
+    return NODE.BCH.get_latest_block()
+
+
 def test_transaction_accept(transaction):
     test_accept = NODE.BCH.test_mempool_accept(transaction)
     if not test_accept["allowed"]:
@@ -82,6 +87,7 @@ def create_inject_liquidity_tx(redemption_contract_tx:models.RedemptionContractT
         recipientAddress=recipient_address,
         priceMessage=price_message.message,
         priceMessageSig=price_message.signature,
+        locktime=get_locktime(),
     ))
 
     if not result["success"]:
@@ -132,6 +138,7 @@ def create_deposit_tx(redemption_contract_tx:models.RedemptionContractTransactio
         treasuryContractAddress=redemption_contract.treasury_contract_address,
         priceMessage=price_message.message,
         priceMessageSig=price_message.signature,
+        locktime=get_locktime(),
     ))
 
     if not result["success"]:
@@ -182,6 +189,7 @@ def create_redeem_tx(redemption_contract_tx:models.RedemptionContractTransaction
         recipientAddress=recipient_address,
         priceMessage=price_message.message,
         priceMessageSig=price_message.signature,
+        locktime=get_locktime(),
     ))
 
     if not result["success"]:
