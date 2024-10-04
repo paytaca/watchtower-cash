@@ -30,14 +30,13 @@ import { toBytes32 } from '../utils.js'
  */
 export async function compile (opts) {
   const vault = new PosDeviceVault(opts)
-  const contract = vault.getContract()
-  const balance = await contract.getBalance()
+  const balance = await vault.getBalance()
 
   return {
-    address: contract.address,
-    tokenAddress: contract.tokenAddress,
-    scriptHash: toBytes32(contract.bytecode, 'hex', true),
-    balance: Number(balance) / 1e8
+    address: vault.contract.address,
+    tokenAddress: vault.contract.tokenAddress,
+    scriptHash: toBytes32(vault.contract.bytecode, 'hex', true),
+    balance,
   }
 }
 
