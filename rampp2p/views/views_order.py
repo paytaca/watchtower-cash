@@ -525,8 +525,9 @@ class OrderViewSet(viewsets.GenericViewSet):
         order_ids = request.data.get('order_ids', [])
         statuses = models.Status.objects.filter(order__id__in=order_ids)
         for status in statuses:
-            status.buyer_read_at = timezone.now()
-            status.save()
+            if not status.buyer_read_at:
+                status.buyer_read_at = timezone.now()
+                status.save()
 
         has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
         return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
