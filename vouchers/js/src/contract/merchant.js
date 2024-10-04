@@ -1,14 +1,9 @@
-import BCHJS from "@psf/bch-js"
 import { compileFile } from "cashc";
 import { reverseHex, toBytes32 } from "../funcs/utils.js"
 import {
   Contract,
   ElectrumNetworkProvider,
-  SignatureTemplate,
 } from "cashscript";
-
-
-const bchjs = new BCHJS()
 
 
 /**
@@ -20,10 +15,6 @@ const bchjs = new BCHJS()
  * @param {String} opts.params.merchant.pubkey.merchant = 0th index pubkey
  * @param {String} opts.params.merchant.pubkey.device = 1<PADDED_ZEROS><POSID>th index pubkey of POS device 
  * 
- * @param {Object} opts.params.funder
- * @param {String} opts.params.funder.address
- * @param {String} opts.params.funder.wif
- * 
  * @param {Object} opts.options
  * @param {String} opts.options.network = 'mainnet | chipnet' 
  * 
@@ -32,7 +23,6 @@ export class MerchantVault {
 
   constructor (opts) {    
     this.merchant = opts?.params?.merchant
-    this.funder = opts?.params?.funder
     this.network = opts?.options?.network
     this.dust = 1000n
   }
@@ -53,11 +43,6 @@ export class MerchantVault {
       merchant: compileFile(new URL('merchant_vault.cash', import.meta.url)),
       device: compileFile(new URL('device_vault.cash', import.meta.url)),
     }
-  }
-
-  get funderSignature () {
-    const keyPair = bchjs.ECPair.fromWIF(this.funder?.wif)
-    return new SignatureTemplate(keyPair)
   }
 
   get contract () {
@@ -149,22 +134,16 @@ export class MerchantVault {
 
     if (!lockNftUtxo) throw new Error(`No lock NFT of category ${category} utxos found`)
 
-    const funderUtxos = this.provider.getUtxos(this.funder?.address)
-    const funderUtxo = funderUtxos.find(utxo => !utxo?.token && utxo.satoshis >= this.dust)
-    const funderChange = funderUtxo.satoshis - this.dust
+    const excessForFee = lockNftUtxo.satoshis - this.dust
+    if (excessForFee < this.dust) return
 
-    let transaction = this.contract.functions
+    const transaction = await this.contract.functions
       .refund()
-      .from(lockNftUtxo)
-      .fromP2PKH(funderUtxo, this.funderSignature)
-      .to(this.merchant?.address, lockNftUtxo.satoshis)
-    
-    if (funderChange >= this.dust) transaction = transaction.to(this.funder?.address, funderChange)
-      
-    transaction = await transaction
-      .withoutTokenChange()
+      .from([ lockNftUtxo ])
+      .to(this.merchant?.address, excessForFee)
       .withHardcodedFee(this.dust)
       .withTime(latestBlockTimestamp)
+      .withoutTokenChange()
       .send()
 
     const result = {
