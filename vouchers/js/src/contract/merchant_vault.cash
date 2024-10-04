@@ -8,7 +8,7 @@ contract MerchantVault (
 
     function claim (bytes32 voucherCategory) {
         // 3 inputs: lock nft, key nft, verification token
-        // 2 outputs: recipient of BCH stored in lock NFT
+        // 2 outputs: recipient of BCH stored in lock NFT, verification token
         require(tx.inputs.length >= 3);
         require(tx.outputs.length >= 2);
 

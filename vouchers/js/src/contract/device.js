@@ -4,7 +4,6 @@ import { reverseHex, toBytes32 } from "../funcs/utils.js"
 import {
   Contract,
   ElectrumNetworkProvider,
-  SignatureTemplate,
 } from "cashscript";
 
 
@@ -109,7 +108,7 @@ export class PosDeviceVault {
       .from(contractUtxos)
       .to(this.contract.tokenAddress, this.dust, mintingNftUtxo?.token)
       .to(this.merchant?.vaultTokenAddress, this.dust, verificationToken)
-      .to(this.merchant?.vaultTokenAddress, this.dust, keyNftUtxo?.token)
+      .to(this.merchant?.vaultTokenAddress, this.dust + 500n, keyNftUtxo?.token)
       .withHardcodedFee(2000n)
       .withoutChange()
       .send()
@@ -135,18 +134,20 @@ export class PosDeviceVault {
       bchBalance += utxo.satoshis
     }
 
+    const finalUtxos = bchUtxos
     const voucherExcessBch = bchBalance - amount
     let fee = voucherExcessBch
-    let transaction = this.contract.functions
-      .release()
-      .from(bchUtxos)
-      .to(this.merchant?.address, amount)
-
     if (voucherExcessBch < this.dust) {
       fee = this.dust
-      transaction = transaction.from([ verificationTokenUtxo ])
+      finalUtxos.push(verificationTokenUtxo)
     }
-    transaction = await transaction.withHardcodedFee(fee).send()
+
+    const transaction = await this.contract.functions
+      .release()
+      .from(finalUtxos)
+      .to(this.merchant?.address, amount)
+      .withHardcodedFee(fee)
+      .send()
 
     return {
       success: true,

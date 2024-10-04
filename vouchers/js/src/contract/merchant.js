@@ -129,6 +129,7 @@ export class MerchantVault {
       .from(voucherUtxos)
       .to(this.deviceContract.address, lockNftUtxo.satoshis)
       .to(this.deviceContract.tokenAddress, this.dust, verificationTokenUtxo?.token)
+      .withHardcodedFee(1500n)
       .withoutTokenChange()
       .withoutChange()
       .send()

@@ -22,10 +22,16 @@ def is_voucher(category, amount, key_nft=False):
     vouchers = Voucher.objects.filter(category=category)
     is_voucher = vouchers.exists()
     dust = 1000
+    key_nft_value = 4500
 
     is_valid_amount = amount > dust
     if key_nft:
-        is_valid_amount = amount == dust or amount == 0.00001
+        is_valid_amount = (
+            amount == key_nft_value or
+            amount == key_nft_value / 1e8 or
+            amount == dust or
+            amount == dust / 1e8
+        )
 
     return is_voucher and is_valid_amount
 
@@ -112,7 +118,7 @@ def send_voucher_payment_notification(txid, category, senders):
     )
 
 
-def process_device_vault(category, recipient_address, senders):
+def process_device_vault(category, recipient_address):
     device_vaults = PosDeviceVault.objects.filter(address=recipient_address)
     if device_vaults.exists():
         logger.info('PROCESSING DEVICE VAULT...')
@@ -152,5 +158,5 @@ def process_merchant_vault(txid, category, recipient_address, senders):
 
 @shared_task(queue='process_key_nft')
 def process_key_nft(txid, category, recipient_address, senders):
-    process_device_vault(category, recipient_address, senders)
+    process_device_vault(category, recipient_address)
     process_merchant_vault(txid, category, recipient_address, senders)
