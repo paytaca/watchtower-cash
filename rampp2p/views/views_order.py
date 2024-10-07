@@ -7,7 +7,7 @@ from django.http import Http404
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
+from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField, CharField
 
 from datetime import datetime, time, timedelta
 from typing import List
@@ -310,6 +310,12 @@ class OrderViewSet(viewsets.GenericViewSet):
 
         try:
             with transaction.atomic():
+                # Prevent multiple cash-in orders with status Submitted/Confirmed
+                if is_cash_in:
+                    cancellable_cashin_orders = self._cancellable_cash_in_orders(wallet_hash)
+                    if cancellable_cashin_orders.count() > 0:
+                        raise ValidationError({ 'pending_orders': cancellable_cashin_orders })
+
                 # Create a snapshot of ad
                 ad_snapshot = models.AdSnapshot(
                     ad = ad,
@@ -803,6 +809,11 @@ class OrderViewSet(viewsets.GenericViewSet):
         except (ValidationError, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=True, methods=['get'])
+    def check_cancellable_cashin_orders(self, request, wallet_hash):
+        pending_orders = self._cancellable_cash_in_orders(wallet_hash)
+        return Response({ 'pending_orders': pending_orders }, status=200)
+
     def _parse_params(self, request):
         limit = request.query_params.get('limit', 0)
         page = request.query_params.get('page', 1)
@@ -880,4 +891,14 @@ class OrderViewSet(viewsets.GenericViewSet):
         if wallet_hash == members['buyer'].peer.wallet_hash:
             return members['buyer']
         raise ValidationError('User not allowed to perform this action')
-        
+    
+    def _cancellable_cash_in_orders(self, wallet_hash):
+        queryset = models.Order.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(is_cash_in=True))
+
+        latest_status = models.Status.objects.filter(order__id=OuterRef('pk')).order_by('-id')
+        queryset = queryset.annotate(
+            latest_status = Subquery(latest_status.values('status')[:1], output_field=CharField())
+        )
+        queryset = queryset.filter(Q(latest_status=StatusType.SUBMITTED) | Q(latest_status=StatusType.CONFIRMED)).values_list('id', flat=True)
+        logger.warning(f'queryset: {queryset}')
+        return queryset

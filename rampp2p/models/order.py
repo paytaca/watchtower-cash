@@ -1,4 +1,6 @@
 from django.db import models
+from django.apps import apps
+
 from .ad import AdSnapshot
 from .peer import Peer
 from .arbiter import Arbiter
@@ -20,6 +22,12 @@ class Order(models.Model):
 
     def __str__(self):
         return f'{self.id}'
+    
+    @property
+    def status(self):
+        Status = apps.get_model('rampp2p', 'Status')
+        last_status = Status.objects.filter(order__id=self.id).last()
+        return last_status.status
 
 class OrderPayment(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
