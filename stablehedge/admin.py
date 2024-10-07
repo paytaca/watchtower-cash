@@ -26,12 +26,14 @@ class RedemptionContractAdmin(admin.ModelAdmin):
         "address",
         "auth_token_id",
         "price_oracle_pubkey",
+        "treasury_contract__address",
     ]
 
     list_display = [
-        "address",
+        "__str__",
         "price_oracle_pubkey",
         "fiat_token",
+        "treasury_contract_address",
     ]
 
     actions = [
@@ -75,6 +77,7 @@ class RedemptionContractTransactionAdmin(admin.ModelAdmin):
 class TreasuryContractAdmin(admin.ModelAdmin):
     search_fields = [
         "auth_token_id",
+        "redemption_contract__address",
         "pubkey1",
         "pubkey2",
         "pubkey3",
@@ -84,6 +87,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     list_display = [
         "__str__",
+        "redemption_contract",
         "auth_token_id",
     ]
 

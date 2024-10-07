@@ -29,6 +29,16 @@ class UtxoSerializer(serializers.Serializer):
         ref_name = "stablehedge_UtxoSerializer"
 
 
+class TxOutputSerializer(serializers.Serializer):
+    to = serializers.CharField()
+    satoshis = serializers.IntegerField()
+
+    category = serializers.CharField(required=False)
+    capability = serializers.CharField(required=False)
+    commitment = serializers.CharField(required=False)
+    amount = serializers.IntegerField(required=False)
+
+
 class FiatTokenSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.FiatToken
@@ -46,6 +56,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
     network = serializers.CharField(required=False, default="chipnet", write_only=True)
     redeemable = serializers.IntegerField(read_only=True)
     reserve_supply = serializers.IntegerField(read_only=True)
+    treasury_contract_address = serializers.CharField(read_only=True)
 
     class Meta:
         model = models.RedemptionContract
@@ -58,6 +69,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
 
             "redeemable",
             "reserve_supply",
+            "treasury_contract_address",
         ]
 
         extra_kwargs = dict(
@@ -156,6 +168,7 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.RedemptionContractTransaction
         fields = [
+            "id",
             "redemption_contract_address",
             "price_oracle_message",
             "wallet_hash",
@@ -219,7 +232,6 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
     redemption_contract_address = serializers.SlugRelatedField(
         queryset=models.RedemptionContract.objects,
         slug_field="address", source="redemption_contract",
-        write_only=True,
     )
     network = serializers.CharField(required=False, default="chipnet", write_only=True)
 

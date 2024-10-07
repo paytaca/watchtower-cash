@@ -21,6 +21,7 @@ from stablehedge.functions.transaction import (
 )
 from stablehedge.js.runner import ScriptFunctions
 from anyhedge import models as anyhedge_models
+from main.tasks import NODE
 
 
 
@@ -52,6 +53,7 @@ class RedemptionContractViewSet(
         return models.RedemptionContract.objects \
             .annotate_redeemable() \
             .annotate_reserve_supply() \
+            .select_related("treasury_contract") \
             .all()
 
     @decorators.action(
@@ -85,7 +87,9 @@ class TreasuryContractViewSet(
     serializer_class = serializers.TreasuryContractSerializer
 
     def get_queryset(self):
-        return models.TreasuryContract.objects.all()
+        return models.TreasuryContract.objects \
+            .select_related("redemption_contract") \
+            .all()
 
     @decorators.action(
         methods=["post"], detail=False,
@@ -162,3 +166,8 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
     def test_mempool_accept(self, request, *args, **kwargs):
         success, error_or_txid = test_transaction_accept(request.data["transaction"])
         return Response(dict(success=success, result=error_or_txid))
+
+    @decorators.action(methods=["post"], detail=False, serializer_class=serializers.serializers.Serializer)
+    def decode_raw_tx(self, request, *args, **kwargs):
+        result = NODE.BCH.build_tx_from_hex(request.data["transaction"])
+        return Response(result)
