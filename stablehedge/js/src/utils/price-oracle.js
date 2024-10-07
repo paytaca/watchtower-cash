@@ -11,7 +11,7 @@ import {
 import { wifToPubkey } from './crypto.js'
 import { intToHexString } from './math.js'
 
-const MOCK_ORACLE_WIF='Kzf85aCzLmV4Ag9hjjn7RMZMHLHwdkW6Uq6yKoDxmoArr1UAizYv'
+export const MOCK_ORACLE_WIF='Kzf85aCzLmV4Ag9hjjn7RMZMHLHwdkW6Uq6yKoDxmoArr1UAizYv'
 
 
 export function verifyPriceMessage(priceMessage, signature, publicKey) {
@@ -62,6 +62,20 @@ export function constructPriceMessage(opts) {
 
 /**
  * @param {Object} opts
+ * @param {String} opts.priceMessage
+ * @param {String} opts.wif
+ */
+export function signPriceMessage(opts) {
+  const messageHash = sha256.hash(hexToBin(opts?.priceMessage))
+  const signatureBin = secp256k1.signMessageHashSchnorr(
+    decodePrivateKeyWif(opts?.wif).privateKey,
+    messageHash,
+  )
+  return signatureBin
+}
+
+/**
+ * @param {Object} opts
  * @param {String} opts.wif
  * @param {Number} opts.price
  */
@@ -76,12 +90,7 @@ export function generatePriceMessage(opts) {
     price: opts?.price || Math.floor(Math.random() * 2 ** 32),
   }
   const priceMessage = constructPriceMessage(priceData)
-  const messageHash = sha256.hash(hexToBin(priceMessage))
-  const signatureBin = secp256k1.signMessageHashSchnorr(
-    decodePrivateKeyWif(wif).privateKey,
-    messageHash,
-  )
-  const signature = binToBase64(signatureBin)
+  const signature = binToBase64(signPriceMessage({ priceMessage, wif }))
 
   return {
     privateKey: wif,
