@@ -119,34 +119,22 @@ export class PosDeviceVault {
     }
   }
 
-  async release (amount) {
+  async release () {
     const utxos = await this.contract.getUtxos()
-    const bchUtxos = utxos.filter(utxo => !utxo?.token)
+    const bchUtxo = utxos.find(utxo => !utxo?.token)
     const verificationTokenUtxo = utxos.find(utxo => {
       return (
         utxo?.token?.nft?.capability === 'none' &&
         utxo?.token?.nft?.commitment === this.scriptHashCommitment
       )
     })
-
-    let bchBalance = 0n
-    for (const utxo of bchUtxos) {
-      bchBalance += utxo.satoshis
-    }
-
-    const finalUtxos = bchUtxos
-    const voucherExcessBch = bchBalance - amount
-    let fee = voucherExcessBch
-    if (voucherExcessBch < this.dust) {
-      fee = this.dust
-      finalUtxos.push(verificationTokenUtxo)
-    }
-
+    const finalUtxos = [ bchUtxo, verificationTokenUtxo ]
     const transaction = await this.contract.functions
       .release()
       .from(finalUtxos)
-      .to(this.merchant?.address, amount)
-      .withHardcodedFee(fee)
+      .to(this.merchant?.address, bchUtxo.satoshis)
+      .withoutTokenChange()
+      .withoutChange()
       .send()
 
     return {

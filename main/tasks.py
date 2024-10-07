@@ -130,7 +130,6 @@ def client_acknowledgement(self, txid):
                 token_details_key = None
                 category = None
                 __is_key_nft = False
-                __is_lock_nft = False
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
@@ -140,7 +139,6 @@ def client_acknowledgement(self, txid):
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
                     __is_key_nft = is_voucher(category, transaction.value, key_nft=True)
-                    __is_lock_nft = is_voucher(category, transaction.value)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
