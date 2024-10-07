@@ -24,10 +24,6 @@ def get_merchant_vault(merchant_id, pubkey=None):
                     # 'device': None
                 }
             },
-            'funder': {
-                'address': settings.VOUCHER_FEE_FUNDER_ADDRESS,
-                'wif': settings.VOUCHER_FEE_FUNDER_WIF
-            },
             # 'sender': {
             #     'pubkey': '',
             #     'address': '',
@@ -64,10 +60,6 @@ def get_device_vault(pos_device_id, pubkey=None):
                 # 'voucher': {
                 #     'category': None
                 # }
-            },
-            'funder': {
-                'address': settings.VOUCHER_FEE_FUNDER_ADDRESS,
-                'wif': settings.VOUCHER_FEE_FUNDER_WIF,
             },
             # 'sender': {
             #     'pubkey': '',
@@ -120,6 +112,7 @@ def create_device_vault(pos_device_id, pubkey=None):
 def create_verification_token_minter(merchant_id, address, category):
     merchant = Merchant.objects.get(id=merchant_id)
     token_address = bch_address_converter(address)
+    VerificationTokenMinter.objects.filter(merchant=merchant).delete()
     VerificationTokenMinter.objects.create(
         merchant=merchant,
         category=category,

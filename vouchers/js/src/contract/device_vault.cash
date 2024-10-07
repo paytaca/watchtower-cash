@@ -19,9 +19,9 @@ contract PosDeviceVault (
     }
     
     function sendTokens (bytes32 voucherCategory) {
-        // >= 3 (unordered, except 0th -- should be minting nft) inputs: minting NFT, verification token, key NFT, <fee inputs>
+        // >= 2 (unordered, except 0th -- should be minting nft) inputs: minting NFT, key NFT
         // >= 3 outputs: minting NFT, verification token, key NFT, <fee change>
-        require(tx.inputs.length >= 3);
+        require(tx.inputs.length >= 2);
         require(tx.outputs.length >= 3);
 
         // minting NFT input and output must have a minting capability

@@ -4,7 +4,6 @@ import { reverseHex, toBytes32 } from "../funcs/utils.js"
 import {
   Contract,
   ElectrumNetworkProvider,
-  SignatureTemplate,
 } from "cashscript";
 
 
@@ -21,10 +20,6 @@ const bchjs = new BCHJS()
  * @param {String} opts.params.merchant.scriptHash = 32 byte script pubkey of merchant vault
  * @param {String} opts.params.merchant.verificationCategory
  * 
- * @param {Object} opts.params.funder
- * @param {String} opts.params.funder.address
- * @param {String} opts.params.funder.wif
- * 
  * @param {Object} opts.options
  * @param {String} opts.options.network = 'mainnet | chipnet' 
  * 
@@ -33,11 +28,8 @@ export class PosDeviceVault {
 
   constructor (opts) {
     this.merchant = opts?.params?.merchant
-    this.funder = opts?.params?.funder
     this.network = opts?.options?.network
     this.dust = 1000n
-    this.mintFee = 2000n
-    this.neededFromFunder = this.dust + this.mintFee
   }
 
   get contractCreationParams () {
@@ -73,21 +65,27 @@ export class PosDeviceVault {
     return toBytes32(this.contract.bytecode, 'hex', true)
   }
 
-  get funderSignature () {
-    const keyPair = bchjs.ECPair.fromWIF(this.funder?.wif)
-    return new SignatureTemplate(keyPair)
-  }
+  async getBalance () {
+    const utxos = await this.contract.getUtxos()
+    const bchUtxos = utxos.filter(utxo => !utxo?.token)
+    
+    const balance = await this.contract.getBalance()
+    const bchBalance = bchUtxos.reduce((acc, obj) => acc + obj?.satoshis, 0n)
+    const tokenBalance = balance - bchBalance
 
-  getContract () {
-    return this.contract
+    return {
+      bch: Number(bchBalance) / 1e8,
+      tokens: Number(tokenBalance) / 1e8,
+    }
   }
 
   async sendTokens (voucherCategory) {
     const utxos = await this.contract.getUtxos()
-    const funderUtxos = await this.provider.getUtxos(this.funder?.address)
+    let keyNftUtxo = undefined
+    while (keyNftUtxo === undefined) {
+      keyNftUtxo = utxos.find(utxo => utxo?.token?.category === voucherCategory)
+    }
 
-    const funderUtxo = funderUtxos.find(utxo => !utxo?.token && utxo.satoshis >= this.neededFromFunder)
-    const keyNftUtxo = utxos.find(utxo => utxo?.token?.category === voucherCategory)
     const mintingNftUtxo = utxos.find(
       utxo => {
         return (
@@ -97,10 +95,6 @@ export class PosDeviceVault {
       }
     )
     const contractUtxos = [ mintingNftUtxo, keyNftUtxo ]
-
-    if (funderUtxo === undefined) throw new Error('No more available UTXOs on funder')
-
-    funderUtxo.wif = this.funder?.wif
     const verificationToken = {
       amount: 0n,
       category: this.merchant?.verificationCategory,
@@ -109,20 +103,15 @@ export class PosDeviceVault {
         commitment: this.scriptHashCommitment
       }
     }
-
-    const funderChange = funderUtxo.satoshis - this.neededFromFunder
-
-    let transaction = this.contract.functions
+    const transaction = await this.contract.functions
       .sendTokens(reverseHex(voucherCategory))
       .from(contractUtxos)
-      .fromP2PKH(funderUtxo, this.funderSignature)
       .to(this.contract.tokenAddress, this.dust, mintingNftUtxo?.token)
       .to(this.merchant?.vaultTokenAddress, this.dust, verificationToken)
-      .to(this.merchant?.vaultTokenAddress, this.dust, keyNftUtxo?.token)
-    
-    if (funderChange >= this.dust) transaction = transaction.to(this.funder?.address, funderChange)
-
-    transaction = await transaction.withHardcodedFee(this.mintFee).send()
+      .to(this.merchant?.vaultTokenAddress, this.dust + 500n, keyNftUtxo?.token)
+      .withHardcodedFee(2000n)
+      .withoutChange()
+      .send()
 
     return {
       success: true,
@@ -130,35 +119,23 @@ export class PosDeviceVault {
     }
   }
 
-  async release (amount) {
+  async release () {
     const utxos = await this.contract.getUtxos()
-    const contractBchUtxos = utxos.filter(utxo => !utxo?.token)
-
-    let bchBalance = 0n
-    for (const utxo of contractBchUtxos) {
-      bchBalance += utxo.satoshis
-    }
-
-    const possibleFee = bchBalance - amount
-    let fee = possibleFee
-    
-    let transaction = this.contract.functions
+    const bchUtxo = utxos.find(utxo => !utxo?.token)
+    const verificationTokenUtxo = utxos.find(utxo => {
+      return (
+        utxo?.token?.nft?.capability === 'none' &&
+        utxo?.token?.nft?.commitment === this.scriptHashCommitment
+      )
+    })
+    const finalUtxos = [ bchUtxo, verificationTokenUtxo ]
+    const transaction = await this.contract.functions
       .release()
-      .from(contractBchUtxos)
-      .to(this.merchant?.address, amount)
-
-    if (possibleFee < this.dust) {
-      fee = this.dust
-
-      const funderUtxos = await this.provider.getUtxos(this.funder?.address)
-      const funderUtxo = funderUtxos.find(utxo => !utxo?.token && utxo.satoshis >= this.dust)
-      transaction = transaction.fromP2PKH(funderUtxo, this.funderSignature)
-
-      const funderChange = funderUtxo.satoshis - fee
-      if (funderChange >= this.dust) transaction = transaction.to(this.funder?.address, funderChange)
-    }
-  
-    transaction = await transaction.withHardcodedFee(fee).send()
+      .from(finalUtxos)
+      .to(this.merchant?.address, bchUtxo.satoshis)
+      .withoutTokenChange()
+      .withoutChange()
+      .send()
 
     return {
       success: true,
