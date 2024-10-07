@@ -3,6 +3,8 @@ from ..models import (
     HedgePositionOffer,
     MutualRedemption,
 )
+from main.utils.broadcast import broadcast_to_engagementhub
+from django.utils import timezone
 
 def send_position_offer_settled(hedge_position_offer):
     extra = {
@@ -17,6 +19,14 @@ def send_position_offer_settled(hedge_position_offer):
     elif hedge_position_offer.position == HedgePositionOffer.POSITION_LONG:
         message = f"Long position offer of {hedge_position_offer.satoshis/10**8} BCH " + \
                     "is now ready for funding" 
+
+    broadcast_to_engagementhub({
+        'title': title,
+        'message': message,
+        'wallet_hash': hedge_position_offer.wallet_hash,
+        'notif_type': 'AH',
+        'date_posted': timezone.now().isoformat()
+    })
 
     return send_push_notification_to_wallet_hashes(
         [hedge_position_offer.wallet_hash],
@@ -43,6 +53,14 @@ def send_contract_cancelled(hedge_position_obj):
             extra=extra,
         )
 
+        broadcast_to_engagementhub({
+            'title': title,
+            'message': message,
+            'wallet_hash': hedge_position_obj.wallet_hash,
+            'notif_type': 'AH',
+            'date_posted': timezone.now().isoformat()
+        })
+
     if hedge_position_obj.long_wallet_hash and hedge_position_obj.cancelled_by == "short":
         message = f"Long position was cancelled:\n{hedge_position_obj.address}"
         extra["position"] = "long"
@@ -52,6 +70,14 @@ def send_contract_cancelled(hedge_position_obj):
             title=title,
             extra=extra,
         )
+
+        broadcast_to_engagementhub({
+            'title': title,
+            'message': message,
+            'wallet_hash': hedge_position_obj.wallet_hash,
+            'notif_type': 'AH',
+            'date_posted': timezone.now().isoformat()
+        })
 
 
 def send_contract_matured(hedge_position_obj):
@@ -81,6 +107,14 @@ def send_contract_matured(hedge_position_obj):
             title=title,
             extra=extra,
         )
+
+    broadcast_to_engagementhub({
+        'title': title,
+        'message': message,
+        'wallet_hash': hedge_position_obj.wallet_hash,
+        'notif_type': 'AH',
+        'date_posted': timezone.now().isoformat()
+    })
 
     return response        
 
@@ -113,6 +147,14 @@ def send_contract_require_funding(hedge_position_obj):
             title=title,
             extra=extra,
         )
+
+    broadcast_to_engagementhub({
+        'title': title,
+        'message': message,
+        'wallet_hash': hedge_position_obj.wallet_hash,
+        'notif_type': 'AH',
+        'date_posted': timezone.now().isoformat()
+    })
 
     return response
 
@@ -176,6 +218,14 @@ def send_mutual_redemption_proposal_update(hedge_position_obj, action="", positi
             extra=extra,
         )
 
+    broadcast_to_engagementhub({
+        'title': title,
+        'message': message,
+        'wallet_hash': hedge_position_obj.wallet_hash,
+        'notif_type': 'AH',
+        'date_posted': timezone.now().isoformat()
+    })
+
     return response
 
 
@@ -196,6 +246,14 @@ def send_mutual_redemption_completed(hedge_position_obj):
             title=title,
             extra=extra,
         )
+
+        broadcast_to_engagementhub({
+            'title': title,
+            'message': message,
+            'wallet_hash': hedge_position_obj.wallet_hash,
+            'notif_type': 'AH',
+            'date_posted': timezone.now().isoformat()
+        })
     if hedge_position_obj.long_wallet_hash:
         message = f"Long position mutually redeemed:\n{hedge_position_obj.address}"
         extra["position"] = "long"
@@ -205,3 +263,11 @@ def send_mutual_redemption_completed(hedge_position_obj):
             title=title,
             extra=extra,
         )
+
+        broadcast_to_engagementhub({
+            'title': title,
+            'message': message,
+            'wallet_hash': hedge_position_obj.wallet_hash,
+            'notif_type': 'AH',
+            'date_posted': timezone.now().isoformat()
+        })
