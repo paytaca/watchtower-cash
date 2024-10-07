@@ -22,16 +22,11 @@ def is_voucher(category, amount, key_nft=False):
     vouchers = Voucher.objects.filter(category=category)
     is_voucher = vouchers.exists()
     dust = 1000
-    key_nft_value = 4500
 
     is_valid_amount = amount > dust
     if key_nft:
-        is_valid_amount = (
-            amount == key_nft_value or
-            amount == key_nft_value / 1e8 or
-            amount == dust or
-            amount == dust / 1e8
-        )
+        key_nft_value = [1500, 4500, 0.000015, 0.000045]
+        is_valid_amount = amount in key_nft_value
 
     return is_voucher and is_valid_amount
 
@@ -89,7 +84,6 @@ def process_pending_payment_requests(address, senders):
     if payment_request.amount > balance: return
 
     url = prefix + '/release'
-    payload['params']['amount'] = payment_request.amount * 1e8
     response = requests.post(url, json=payload)
     response = response.json()
 
