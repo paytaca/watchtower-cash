@@ -23,6 +23,7 @@ class FiatCurrencyViewSet(viewsets.GenericViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except FiatCurrency.DoesNotExist as err:
             raise Http404
+        
 
 class CryptoCurrencyViewSet(viewsets.GenericViewSet):
     queryset = FiatCurrency.objects.all()

@@ -1,8 +1,8 @@
 from django.contrib import admin
+from rampp2p.models import *
+from rampp2p.forms import *
 
 # Register your models here.
-from rampp2p.models import *
-
 
 class AdAdmin(admin.ModelAdmin):
     list_display = [
@@ -21,18 +21,22 @@ class AdAdmin(admin.ModelAdmin):
 
 admin.site.register(Ad, AdAdmin)
 
-
-class CashInBlacklistInline(admin.TabularInline):
-    model = FiatCurrency.cashin_blacklist.through
-    verbose_name_plural = "Cash in Seller Blacklist"
-
-class CashInWhitelistInline(admin.TabularInline):
-    model = FiatCurrency.cashin_whitelist.through
-    verbose_name_plural = "Cash in Seller Whitelist"
-
 class FiatCurrencyAdmin(admin.ModelAdmin):
-    inlines = [CashInBlacklistInline, CashInWhitelistInline]
-    list_display = ['name', 'symbol', 'created_at']
+    form = FiatCurrencyForm
+
+    def save_model(self, request, obj, form, change):
+        obj.cashin_presets = form.cleaned_data['cashin_presets']
+        super().save_model(request, obj, form, change)
+
+    def cashin_presets_display(self, obj):
+        presets = obj.get_cashin_presets()
+        if presets:
+            return ', '.join(map(str, presets))
+        return None
+        
+    cashin_presets_display.short_description = 'Cash In Presets'
+
+    list_display = ['name', 'symbol', 'cashin_presets_display']
     search_fields = ['name', 'symbol']
 
 admin.site.register(FiatCurrency, FiatCurrencyAdmin)
