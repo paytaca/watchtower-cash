@@ -41,6 +41,13 @@ class RedemptionContractQueryset(PostgresQuerySet):
 
         return self.annotate(reserve_supply=subquery)
 
+    def annotate_is_subscribed(self):
+        Subscription = apps.get_model("main", "Subscription")
+        subquery = models.Exists(
+            Subscription.objects.filter(address__address=models.OuterRef("address"))
+        )
+        return self.annotate(is_subscribed=subquery)
+
 
 class RedemptionContract(models.Model):
     objects = RedemptionContractQueryset.as_manager()
@@ -86,6 +93,20 @@ class RedemptionContract(models.Model):
         except self.__class__.treasury_contract.RelatedObjectDoesNotExist:
             pass
 
+    def get_subscription(self):
+        Subscription = apps.get_model("main", "Subscription")
+        return Subscription.objects.filter(address__address=self.address).first()
+
+    @property
+    def is_subscribed(self):
+        if not hasattr(self, "_is_subscribed"):
+            return bool(self.get_subscription())
+        return self._is_subscribed
+
+    @is_subscribed.setter
+    def is_subscribed(self, value):
+        self._is_subscribed = value
+
 
 class RedemptionContractTransaction(models.Model):
     class Status(models.TextChoices):
@@ -121,7 +142,18 @@ class RedemptionContractTransaction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class TreasuryContractQuerySet(PostgresQuerySet):
+    def annotate_is_subscribed(self):
+        Subscription = apps.get_model("main", "Subscription")
+        subquery = models.Exists(
+            Subscription.objects.filter(address__address=models.OuterRef("address"))
+        )
+        return self.annotate(is_subscribed=subquery)
+
+
 class TreasuryContract(models.Model):
+    objects = TreasuryContractQuerySet.as_manager()
+
     redemption_contract = models.OneToOneField(
         RedemptionContract, on_delete=models.PROTECT,
         related_name="treasury_contract",
@@ -168,3 +200,17 @@ class TreasuryContract(models.Model):
                 addressType=address_type,
             ),
         )
+
+    def get_subscription(self):
+        Subscription = apps.get_model("main", "Subscription")
+        return Subscription.objects.filter(address__address=self.address).first()
+
+    @property
+    def is_subscribed(self):
+        if not hasattr(self, "_is_subscribed"):
+            return bool(self.get_subscription())
+        return self._is_subscribed
+
+    @is_subscribed.setter
+    def is_subscribed(self, value):
+        self._is_subscribed = value
