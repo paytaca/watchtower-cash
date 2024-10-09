@@ -1,6 +1,7 @@
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import decimal
+import datetime
 
 import logging
 logger = logging.getLogger(__name__)
@@ -12,6 +13,8 @@ def serialize_data(data):
         return [serialize_data(v) for v in data]
     elif isinstance(data, decimal.Decimal):
         return str(data)  # or float(data) if you prefer
+    elif isinstance(data, datetime.datetime):
+        return str(data)
     else:
         return data
     
@@ -36,4 +39,8 @@ def send_market_price(data, currency):
 
 def send_general_update(data, wallet_hash):
     room_name = f'ramp-p2p-subscribe-general-{wallet_hash}'
+    send_message(data, room_name)
+
+def send_cashin_order_alert(data, wallet_hash):
+    room_name = f'ramp-p2p-subscribe-cashin-alerts-{wallet_hash}'
     send_message(data, room_name)

@@ -160,10 +160,7 @@ class AppealViewSet(viewsets.GenericViewSet):
                 }
                 
                 # Send WebSocket updates
-                websocket.send_order_update({
-                    'success' : True,
-                    'status': serialized_status.data
-                }, order_id)
+                websocket.send_order_update({'success' : True, 'status': serialized_status.data}, order_id)
 
                 # Serialize appeal for arbiter
                 rbtr_wallet_hash = appeal.order.arbiter.wallet_hash

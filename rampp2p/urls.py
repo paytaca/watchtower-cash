@@ -25,7 +25,7 @@ urlpatterns = [
     path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
     path('order/<int:pk>/', OrderViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}), name='order-detail-edit'),
     path('order/<int:pk>/members/', OrderViewSet.as_view({'get': 'members', 'patch': 'members'}), name='order-members'),
-    path('order/<int:pk>/status/', OrderViewSet.as_view({'get': 'list_status'}), name='order-list-status'),
+    path('order/<int:pk>/status/', OrderViewSet.as_view({'get': 'list_status', 'patch': 'read_status'}), name='order-list-edit-status'),
     path('order/<int:pk>/cancel/', OrderViewSet.as_view({'post': 'cancel'}), name='order-cancel'),
     path('order/<int:pk>/confirm/', OrderViewSet.as_view({'post': 'confirm'}), name='order-confirm'),
     path('order/<int:pk>/pending-escrow/', OrderViewSet.as_view({'post': 'pending_escrow'}), name='order-pending-escrow'),
@@ -42,7 +42,11 @@ urlpatterns = [
     path('order/contract/<int:pk>/', ContractViewSet.as_view({'get': 'retrieve'}), name='contract-detail'),
     path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
     path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
-    path('order/cash-in/', CashinOrderView.as_view(), name='cashin-order-list'),
+    
+    path('order/cash-in/check-cancellables/', OrderViewSet.as_view({'get', 'check_cancellable_cashin_orders'})),
+    path('order/cash-in/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
+    path('order/cash-in/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
+    path('order/status/', OrderViewSet.as_view({'patch': 'read_order_status'})),
     
     # Payment
     path('order/payment/', OrderPaymentViewSet.as_view({'get': 'list'}), name='order-payment-list'),
@@ -70,23 +74,16 @@ urlpatterns = [
 
     # Old endpoints kept for backward-compatibility
     path('cashin/ad', CashInAdsList.as_view()),
-    # path('ad/', AdListCreate.as_view()),
     path('ad/<int:pk>', AdDetail.as_view()),
     path('ad-snapshot', AdSnapshotView.as_view()),
-    # path('payment-type/', PaymentTypeList.as_view()),
-    # path('payment-method/', PaymentMethodListCreate.as_view()),
     path('payment-method/<int:pk>', PaymentMethodDetail.as_view()),
     path('peer/create', PeerCreateView.as_view()),
     path('peer/detail', PeerDetailView.as_view()),
     path('user', UserProfileView.as_view()),
-    # path('arbiter/', ArbiterListCreate.as_view()),
     path('arbiter/detail', ArbiterDetail.as_view()),
-    # path('currency/fiat/', FiatCurrencyList.as_view()),
     path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view()),
-    # path('currency/crypto/', CryptoCurrencyList.as_view()),
     path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view()),
     path('cashin/order', CashinOrderList.as_view()),
-    # path('order/', OrderListCreate.as_view()),
     path('order/<int:pk>', OrderDetail.as_view()),
     path('order/<int:pk>/members', OrderMemberView.as_view()),
     path('order/<int:pk>/status', OrderListStatus.as_view()),
@@ -113,5 +110,4 @@ urlpatterns = [
     path('order/contract/fees', ContractFeesView.as_view()),
     path('utils/market-price', MarketRates.as_view()),
     path('utils/subscribe-address', SubscribeContractAddress.as_view()),
-    # path('chats/webhook/', ChatWebhookView.as_view()),
 ]

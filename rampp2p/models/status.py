@@ -20,6 +20,8 @@ class Status(models.Model):
   status = models.CharField(max_length=10, choices=StatusType.choices, blank=False, db_index=True)
   order = models.ForeignKey(Order, on_delete=models.CASCADE)
   created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
+  seller_read_at = models.DateTimeField(null=True, blank=True)
+  buyer_read_at = models.DateTimeField(null=True, blank=True)
 
   def __str__(self):
     return str(self.id)
