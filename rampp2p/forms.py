@@ -2,7 +2,19 @@ from django import forms
 from .models import *
 
 class FiatCurrencyForm(forms.ModelForm):
-    cashin_presets = forms.CharField(widget=forms.Textarea, required=False)
+    cashin_blacklist = forms.ModelMultipleChoiceField(
+        queryset=Peer.objects.all(),
+        help_text='Peers not allowed to receive cash-in orders in this currency. If whitelist is not empty, this list is ignored.'
+    )
+    cashin_whitelist = forms.ModelMultipleChoiceField(
+        queryset=Peer.objects.all(),
+        help_text='Peers allowed to receive cash-in orders in this currency. Blacklist is ignored if this list is not empty.'
+    )
+    cashin_presets = forms.CharField(
+        widget=forms.Textarea,
+        required=False,
+        help_text='Enter a comma-separated list of integers'
+    )
 
     class Meta:
         model = FiatCurrency

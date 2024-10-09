@@ -199,13 +199,18 @@ admin.site.register(Transaction, TransactionAdmin)
 admin.site.register(CryptoCurrency)
 admin.site.register(ReservedName)
 admin.site.register(IdentifierFormat)
-admin.site.register(OrderMember)
+
+class OrderMemberAdmin(admin.ModelAdmin):
+    list_display = ['order', 'type', 'name']
+    search_fields = ['order__id', 'type']
+
+admin.site.register(OrderMember, OrderMemberAdmin)
 
 class OrderPaymentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'order', 'payment_type', 'payment_method')
+    list_display = ['id', 'order', 'payment_type', 'payment_method']
     search_fields = ['id', 'order__id', 'payment_type__short_name', 'payment_type__full_name', 'payment_method__id']
-admin.site.register(OrderPayment, OrderPaymentAdmin)
 
+admin.site.register(OrderPayment, OrderPaymentAdmin)
 admin.site.register(DynamicPaymentTypeField)
 
 class PaymentTypeFieldAdmin(admin.ModelAdmin):
@@ -247,7 +252,7 @@ admin.site.register(ImageUpload)
 admin.site.register(OrderPaymentAttachment)
 
 class AppVersionAdmin(admin.ModelAdmin):
-    list_display = ('platform', 'latest_version', 'min_required_version', 'release_date')
-    fields = ('platform', 'latest_version', 'min_required_version', 'notes')
+    list_display = ['platform', 'latest_version', 'min_required_version', 'release_date']
+    fields = ['platform', 'latest_version', 'min_required_version', 'notes']
 
 admin.site.register(AppVersion, AppVersionAdmin)

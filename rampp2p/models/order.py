@@ -58,12 +58,14 @@ class OrderMember(models.Model):
     read_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
-        member_name = ''
+        return f'{self.id}'
+
+    @property
+    def name(self):
         if self.peer:
-            member_name = self.peer.name
+           return self.peer.name
         elif self.arbiter:
-            member_name = self.arbiter.name
-        return f'{self.id} | Order #{self.order.id} | {self.type} | {member_name}'
+            return self.arbiter.name
 
     class Meta:
          constraints = [
