@@ -40,11 +40,16 @@ export class RedemptionContract {
     return this.options?.network === 'chipnet'
   }
 
+  static getArtifact() {
+    const cashscriptFilename = 'redemption-contract.cash';
+    const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
+    return artifact;
+  }
+
   getContract() {
     const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
     const opts = { provider, addressType: this.options?.addressType }
-    const cashscriptFilename = 'redemption-contract.cash'
-    const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
+    const artifact = RedemptionContract.getArtifact();
     // const artifact = redemptionContractArtifact
     const contractParams = [
       hexToBin(this.params.authKeyId).reverse(),

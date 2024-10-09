@@ -3,6 +3,12 @@ import { TreasuryContract } from '../contracts/treasury-contract/index.js'
 import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 import { SignatureTemplate } from 'cashscript'
 
+
+export function getTreasuryContractArtifact() {
+  const artifact = TreasuryContract.getArtifact();
+  return { success: true, artifact }
+}
+
 /**
  * @param {Object} opts 
  */

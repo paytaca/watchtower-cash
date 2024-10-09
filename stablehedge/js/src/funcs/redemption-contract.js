@@ -1,6 +1,12 @@
 import { RedemptionContract } from '../contracts/redemption-contract/index.js'
 import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 
+
+export function getRedemptionContractArtifact() {
+  const artifact = RedemptionContract.getArtifact();
+  return { success: true, artifact }
+}
+
 /**
  * @param {Object} opts 
  */

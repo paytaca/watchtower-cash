@@ -34,12 +34,17 @@ export class TreasuryContract {
     return this.options?.network === 'chipnet'
   }
   
+  static getArtifact() {
+    const cashscriptFilename = 'treasury-contract.cash';
+    const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
+    return artifact;
+  }
+  
   getContract() {
     const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
     const opts = { provider, addressType: this.options?.addressType }
 
-    const cashscriptFilename = 'treasury-contract.cash'
-    const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
+    const artifact = TreasuryContract.getArtifact()    
 
     const contractParams = [
       hexToBin(this.params?.authKeyId).reverse(),

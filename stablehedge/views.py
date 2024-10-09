@@ -8,6 +8,8 @@ from stablehedge import serializers
 from stablehedge.filters import (
     RedemptionContractFilter,
 )
+from stablehedge.js.runner import ScriptFunctions
+
 
 from django.utils import timezone
 from drf_yasg import openapi
@@ -19,7 +21,6 @@ from stablehedge.functions.transaction import (
     create_deposit_tx,
     create_redeem_tx,
 )
-from stablehedge.js.runner import ScriptFunctions
 from anyhedge import models as anyhedge_models
 from main.tasks import NODE
 
@@ -57,6 +58,20 @@ class RedemptionContractViewSet(
             .all()
 
     @decorators.action(
+        methods=["get"], detail=False,
+        serializer_class=serializers.serializers.Serializer,
+    )
+    def artifact(self, request, *args, **kwargs):
+        result = ScriptFunctions.getRedemptionContractArtifact()
+
+        # remove unnecessary data for compiling the contract
+        result["artifact"].pop("source", None)
+        # result["artifact"].pop("compiler", None)
+        # result["artifact"].pop("updatedAt", None)
+
+        return Response(result)
+
+    @decorators.action(
         methods=["post"], detail=False,
         serializer_class=serializers.SweepRedemptionContractSerializer,
     )
@@ -90,6 +105,20 @@ class TreasuryContractViewSet(
         return models.TreasuryContract.objects \
             .select_related("redemption_contract") \
             .all()
+
+    @decorators.action(
+        methods=["get"], detail=False,
+        serializer_class=serializers.serializers.Serializer,
+    )
+    def artifact(self, request, *args, **kwargs):
+        result = ScriptFunctions.getTreasuryContractArtifact()
+
+        # remove unnecessary data for compiling the contract
+        result["artifact"].pop("source", None)
+        # result["artifact"].pop("compiler", None)
+        # result["artifact"].pop("updatedAt", None)
+
+        return Response(result)
 
     @decorators.action(
         methods=["post"], detail=False,
