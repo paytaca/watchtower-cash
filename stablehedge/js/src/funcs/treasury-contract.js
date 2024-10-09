@@ -1,6 +1,5 @@
-import { isHex } from '@bitauth/libauth'
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
-import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
+import { isValidWif, parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 import { SignatureTemplate } from 'cashscript'
 
 
@@ -53,9 +52,9 @@ export async function sweepTreasuryContract(opts) {
  * @param {Object} opts.contractOpts
  * @param {import('cashscript').Utxo[]} opts.inputs
  * @param {import('cashscript').Output} opts.outputs
- * @param {String} opts.sig1
- * @param {String} opts.sig1
- * @param {String} opts.sig1
+ * @param {Map<String, String> | String} opts.sig1
+ * @param {Map<String, String> | String} opts.sig2
+ * @param {Map<String, String> | String} opts.sig3
  * @param {Number} [opts.locktime]
  */
 export async function unlockTreasuryContractWithMultiSig(opts) {
@@ -66,9 +65,9 @@ export async function unlockTreasuryContractWithMultiSig(opts) {
 
   const transaction = await treasuryContract.unlockWithMultiSig({
     inputs, outputs,
-    sig1: isHex(opts?.sig1) ? opts?.sig1 : new SignatureTemplate(opts?.sig1),
-    sig2: isHex(opts?.sig2) ? opts?.sig2 : new SignatureTemplate(opts?.sig2),
-    sig3: isHex(opts?.sig3) ? opts?.sig3 : new SignatureTemplate(opts?.sig3),
+    sig1: isValidWif(opts?.sig1) ? new SignatureTemplate(opts?.sig1) : opts?.sig1,
+    sig2: isValidWif(opts?.sig2) ? new SignatureTemplate(opts?.sig2) : opts?.sig2,
+    sig3: isValidWif(opts?.sig3) ? new SignatureTemplate(opts?.sig3) : opts?.sig3,
     locktime: opts?.locktime,
   })
 

@@ -21,6 +21,11 @@ import {
 import { SignatureTemplate } from 'cashscript'
 import { templateFromUnlockingBytecode } from './signature-template.js'
 
+
+export function isValidWif(value='') {
+  return /^[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$/.test(value)
+}
+
 export function sha256(data='', encoding='utf8') {
   const _sha256 = crypto.createHash('sha256')
   _sha256.update(Buffer.from(data, encoding))

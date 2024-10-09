@@ -93,17 +93,22 @@ export class TreasuryContract {
 
   /**
    * @param {Object} opts
-   * @param {String | SignatureTemplate} opts.sig1
-   * @param {String | SignatureTemplate} opts.sig2
-   * @param {String | SignatureTemplate} opts.sig3
+   * @param {Map<String, String> | SignatureTemplate} opts.sig1
+   * @param {Map<String, String> | SignatureTemplate} opts.sig2
+   * @param {Map<String, String> | SignatureTemplate} opts.sig3
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
    * @param {Number} [opts.locktime]
    */
   async unlockWithMultiSig(opts) {
-    const sig1 = typeof opts?.sig1 === 'string'  ? hexToBin(opts?.sig1) : opts?.sig1
-    const sig2 = typeof opts?.sig2 === 'string'  ? hexToBin(opts?.sig2) : opts?.sig2
-    const sig3 = typeof opts?.sig3 === 'string'  ? hexToBin(opts?.sig3) : opts?.sig3
+    /**
+     * Directly passing signature as Uint8Array gives error in some cases since
+     *   it expects 65bytes, but some signatures(like SignatureAlgorithm.ECDSA) gives 71bytes
+     *   wrapping the signature inside a SignatureTemplate class skips the byte length checking
+     */
+    const sig1 = parseSigParam(opts?.sig1)
+    const sig2 = parseSigParam(opts?.sig2)
+    const sig3 = parseSigParam(opts?.sig3)
 
     const contract = this.getContract()
     const transaction = contract.functions.unlockWithMultiSig(sig1, sig2, sig3)
@@ -375,4 +380,42 @@ export class TreasuryContract {
     transaction.withFeePerByte(feePerByte)
     return transaction
   }
+}
+
+
+/**
+ * @param {Map<String, String> | SignatureTemplate} sig 
+ */
+function parseSigParam(sig) {
+  if (sig instanceof SignatureTemplate) return sig
+
+  // last byte of a signatures is the hashType
+  const hashTypes = Object.values(sig).map(signature => hexToBin(signature).at(-1))
+
+  // we get only one, assumming all hashtypes of the signatures are the same
+  const hashType = hashTypes[0]
+
+  /**
+   * signature parameters use signature templates,
+   * we provide the `hashType` & `generateSignature`
+   * since it is what's used in the class when
+   * building a tx with signature parameter(see link below)
+   *
+   * we expect a map <sighash, signature> since
+   * each input to be signed in a transaction
+   * produces a different sighash
+   * 
+   * https://github.com/CashScript/cashscript/blob/v0.9.2/packages/cashscript/src/Contract.ts#L156
+   */
+  const template = new SignatureTemplate({}, hashType)
+  template.generateSignature = (sighash) => {
+    const sighashHex = binToHex(sighash)
+    const sigHex = sig?.[sighashHex] ?? ''
+    if (!sigHex) {
+      // console.error('Unable to find sig for sighash', sighashHex, 'in', sig)
+      throw new Error(`Unable to find sig for sighash '${sighashHex}'`)
+    }
+    return hexToBin(sigHex)
+  }
+  return template
 }
