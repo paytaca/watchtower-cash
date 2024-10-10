@@ -24,6 +24,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ArbiterFeedbackListCreate(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -134,6 +135,7 @@ class ArbiterFeedbackListCreate(APIView):
         return from_peer, arbiter, order
     
 class PeerFeedbackListCreate(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -242,6 +244,7 @@ class PeerFeedbackListCreate(APIView):
         return from_peer, to_peer, order
     
 class FeedbackDetail(generics.RetrieveUpdateAPIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     queryset = Feedback.objects.all()
     serializer_class = FeedbackSerializer

@@ -38,6 +38,7 @@ class PaymentTypeView(APIView):
         return Response(serializer.data, status.HTTP_200_OK)
 
 class PaymentMethodViewSet(viewsets.GenericViewSet):  
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
     queryset = models.PaymentMethod.objects.all()
@@ -165,6 +166,7 @@ class PaymentMethodViewSet(viewsets.GenericViewSet):
 class OrderPaymentViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.OrderPaymentSerializer
     parser_classes = [MultiPartParser]
     queryset = models.OrderPayment.objects.all()
 

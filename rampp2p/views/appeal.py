@@ -23,6 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
     
 class AppealList(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -92,6 +93,7 @@ class AppealList(APIView):
             raise ValidationError(err.args[0])        
 
 class AppealRequest(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, request, pk):
@@ -250,6 +252,7 @@ class AppealRequest(APIView):
             return Response({'error': serialized_appeal.errors}, status=status.HTTP_400_BAD_REQUEST)        
 
 class AppealPendingRelease(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     '''
@@ -314,6 +317,7 @@ class AppealPendingRelease(APIView):
             raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class AppealPendingRefund(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     '''
@@ -379,6 +383,7 @@ class AppealPendingRefund(APIView):
             raise ValidationError(f'{prefix} action requires status={StatusType.APPEALED.label}')
 
 class VerifyRelease(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     '''
@@ -445,6 +450,7 @@ class VerifyRelease(APIView):
             raise ValidationError(f'{prefix} action requires status {StatusType.RELEASE_PENDING.label} or {StatusType.PAID.label}')
 
 class VerifyRefund(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
         
     '''

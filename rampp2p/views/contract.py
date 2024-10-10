@@ -17,6 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ContractDetailsView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get_object(self, order_id, contract_id):
@@ -43,6 +44,7 @@ class ContractDetailsView(APIView):
         return Response(serialized_contract.data, status=status.HTTP_200_OK)
 
 class ContractCreateView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     
     def post(self, request):
@@ -203,6 +205,7 @@ class ContractCreateView(APIView):
         return utils.is_seller(order, wallet_hash)
         
 class ContractTransactionsView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get_object(self, order_id, contract_id):
@@ -238,6 +241,7 @@ class ContractTransactionsView(APIView):
         return Response(tx_data, status=status.HTTP_200_OK)
 
 class ContractFeesView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, _,):

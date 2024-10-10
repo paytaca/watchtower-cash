@@ -13,6 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PaymentTypeList(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -27,7 +28,8 @@ class PaymentTypeList(APIView):
         serializer = serializers.PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
-class PaymentMethodListCreate(APIView):  
+class PaymentMethodListCreate(APIView): 
+    swagger_schema = None 
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -71,6 +73,7 @@ class PaymentMethodListCreate(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
   
 class PaymentMethodDetail(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     
     def get_object(self, pk):

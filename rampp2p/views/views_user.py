@@ -213,6 +213,7 @@ class PeerView(APIView):
 class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = rampp2p_serializers.ArbiterFeedbackSerializer
     queryset = models.ArbiterFeedback.objects.all()
 
     def list(self, request):
@@ -319,6 +320,7 @@ class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
 class PeerFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = rampp2p_serializers.FeedbackSerializer
     queryset = models.Feedback.objects.all()
 
     def list(self, request):

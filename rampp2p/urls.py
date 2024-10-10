@@ -25,12 +25,12 @@ urlpatterns = [
     path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
     path('order/<int:pk>/', OrderViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}), name='order-detail-edit'),
     path('order/<int:pk>/members/', OrderViewSet.as_view({'get': 'members', 'patch': 'members'}), name='order-members'),
-    path('order/<int:pk>/status/', OrderViewSet.as_view({'get': 'list_status', 'patch': 'read_status'}), name='order-list-edit-status'),
-    path('order/<int:pk>/cancel/', OrderViewSet.as_view({'post': 'cancel'}), name='order-cancel'),
-    path('order/<int:pk>/confirm/', OrderViewSet.as_view({'post': 'confirm'}), name='order-confirm'),
-    path('order/<int:pk>/pending-escrow/', OrderViewSet.as_view({'post': 'pending_escrow'}), name='order-pending-escrow'),
-    path('order/<int:pk>/confirm-payment/buyer/', OrderViewSet.as_view({'post': 'buyer_confirm_payment'}), name='buyer-confirm-payment'),
-    path('order/<int:pk>/confirm-payment/seller/', OrderViewSet.as_view({'post': 'seller_confirm_payment'}), name='seller-confirm-payment'),
+    path('order/<int:pk>/status/', OrderStatusViewSet.as_view({'get': 'list_status', 'patch': 'read_status'}), name='order-list-edit-status'),
+    path('order/<int:pk>/cancel/', OrderStatusViewSet.as_view({'post': 'cancel'}), name='order-cancel'),
+    path('order/<int:pk>/confirm/', OrderStatusViewSet.as_view({'post': 'confirm'}), name='order-confirm'),
+    path('order/<int:pk>/pending-escrow/', OrderStatusViewSet.as_view({'post': 'pending_escrow'}), name='order-pending-escrow'),
+    path('order/<int:pk>/confirm-payment/buyer/', OrderStatusViewSet.as_view({'post': 'buyer_confirm_payment'}), name='buyer-confirm-payment'),
+    path('order/<int:pk>/confirm-payment/seller/', OrderStatusViewSet.as_view({'post': 'seller_confirm_payment'}), name='seller-confirm-payment'),
 
     # Contract
     path('order/<int:pk>/contract/', ContractViewSet.as_view({'get': 'retrieve_by_order'}), name='order-contract-detail'),
@@ -43,10 +43,10 @@ urlpatterns = [
     path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
     path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
     
-    path('order/cash-in/check-cancellables/', OrderViewSet.as_view({'get', 'check_cancellable_cashin_orders'})),
+    # path('order/cash-in/check-cancellables/', OrderViewSet.as_view({'get', 'check_cancellable_cashin_orders'})),
     path('order/cash-in/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
     path('order/cash-in/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
-    path('order/status/', OrderViewSet.as_view({'patch': 'read_order_status'})),
+    path('order/status/', OrderStatusViewSet.as_view({'patch': 'read_order_status'})),
     
     # Payment
     path('order/payment/', OrderPaymentViewSet.as_view({'get': 'list'}), name='order-payment-list'),
