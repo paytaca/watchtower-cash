@@ -498,10 +498,10 @@ class OrderViewSet(viewsets.GenericViewSet):
             websocket.send_general_update({'type': WSGeneralMessageType.READ_ORDER.value, 'extra': { 'unread_count': unread_count }}, wallet_hash)
             return Response({'success': True}, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['get'])
-    def check_cancellable_cashin_orders(self, request, wallet_hash):
-        pending_orders = self._cancellable_cash_in_orders(wallet_hash)
-        return Response({ 'pending_orders': pending_orders }, status=200)
+    # @action(detail=True, methods=['get'])
+    # def check_cancellable_cashin_orders(self, request, wallet_hash):
+    #     pending_orders = self._cancellable_cash_in_orders(wallet_hash)
+    #     return Response({ 'pending_orders': pending_orders }, status=200)
 
     def _parse_params(self, request_data):
         request = request_data

@@ -142,7 +142,6 @@ class CashInAdView(APIView):
 class AdView(APIView):
     authentication_classes = [TokenAuthentication]
 
-    @swagger_auto_schema(auto_schema=None)
     def get_object(self, pk):
         Ad = rampp2p_models.Ad
         try:
@@ -153,7 +152,6 @@ class AdView(APIView):
         except Ad.DoesNotExist:
             raise Http404
 
-    @swagger_auto_schema(auto_schema=None)
     def get_queryset (self, request=None, pk=None):
         if request is None:
             return []
