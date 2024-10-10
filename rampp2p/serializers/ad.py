@@ -302,8 +302,3 @@ class AdSerializer(serializers.ModelSerializer):
             'is_public',
             'modified_at',
         ]
-
-class AdPaginationSerializer(serializers.Serializer):
-    ads = AdListSerializer(many=True)
-    count = serializers.IntegerField()
-    total_pages = serializers.IntegerField()

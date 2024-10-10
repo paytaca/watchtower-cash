@@ -270,15 +270,10 @@ class AdView(APIView):
             response_data = data
         return response_data
 
-    @swagger_auto_schema(responses={200: rampp2p_serializers.AdPaginationSerializer})
     def get(self, request, pk=None):
         try:
             data = self.get_queryset(request=request, pk=pk)
-            serialized = rampp2p_serializers.AdPaginationSerializer(data=data)
-            if serialized.is_valid():
-                return Response(serialized.data, status=status.HTTP_200_OK)
-            else:
-                raise ValidationError(serialized.errors)
+            return Response(data, status=status.HTTP_200_OK)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -351,7 +346,6 @@ class AdView(APIView):
         
 class AdSnapshotView(APIView):
     authentication_classes = [TokenAuthentication]
-    
     def get(self, request):
         ad_snapshot_id = request.query_params.get('ad_snapshot_id')
         order_id = request.query_params.get('order_id')
