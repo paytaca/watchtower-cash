@@ -32,6 +32,7 @@ def create_contract(
     high_price_multiplier:float=2,
     duration_seconds:int=0,
     taker_side:str="",
+    is_simple_hedge:bool=True,
     short_address:str="",
     short_pubkey:str="",
     long_address:str="",
@@ -45,6 +46,7 @@ def create_contract(
         "highPriceMult": high_price_multiplier,
         "duration": duration_seconds,
         "takerSide": taker_side,
+        "isSimpleHedge": is_simple_hedge,
     }
     pubkeys = {
         "shortAddress": short_address,
@@ -93,6 +95,7 @@ def compile_contract(
     maturityTimestamp:int=0,
     highLiquidationPriceMultiplier:float=0.0,
     lowLiquidationPriceMultiplier:float=0.0,
+    isSimpleHedge:bool=True,
     shortPublicKey:str="",
     longPublicKey:str="",
     shortAddress:str="",
@@ -116,7 +119,7 @@ def compile_contract(
         "shortPayoutAddress": shortAddress,
         "longPayoutAddress": longAddress,
         "enableMutualRedemption": 1,
-        "isSimpleHedge": 1,
+        "isSimpleHedge": 1 if isSimpleHedge else 0,
     }
 
     parsed_fees = []
@@ -165,7 +168,7 @@ def compile_contract(
     return AnyhedgeFunctions.compileContract(data, parsed_fees, parsed_fundings, opts)
 
 
-def compile_contract_from_hedge_position(hedge_position_obj):
+def compile_contract_from_hedge_position(hedge_position_obj, taker_side=""):
     fees = []
     for fee in hedge_position_obj.fees.all():
         if not fee.address or not fee.satoshis:
@@ -183,7 +186,7 @@ def compile_contract_from_hedge_position(hedge_position_obj):
         if hedge_position_obj.metadata:
             taker = hedge_position_obj.metadata.position_taker
     except hedge_position_obj.__class__.metadata.RelatedObjectDoesNotExist:
-        pass
+        taker = taker_side
 
     starting_oracle_message = hedge_position_obj.starting_oracle_message
     starting_oracle_signature = hedge_position_obj.starting_oracle_signature
@@ -215,6 +218,7 @@ def compile_contract_from_hedge_position(hedge_position_obj):
         longPublicKey=hedge_position_obj.long_pubkey,
         shortAddress=hedge_position_obj.short_address,
         longAddress=hedge_position_obj.long_address,
+        isSimpleHedge=hedge_position_obj.is_simple_hedge,
         fees=fees,
         fundings=fundings,
         contract_version=hedge_position_obj.anyhedge_contract_version,

@@ -90,6 +90,7 @@ class HedgePosition(models.Model):
         null=True, blank=True,
     )
 
+    is_simple_hedge = models.BooleanField(default=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancelled_by = models.CharField(max_length=5, null=True, blank=True)
 
