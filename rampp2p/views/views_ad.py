@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from drf_yasg.utils import swagger_auto_schema
 
 from django.utils import timezone
 from django.db.models import Q
@@ -141,6 +142,7 @@ class CashInAdView(APIView):
 class AdView(APIView):
     authentication_classes = [TokenAuthentication]
 
+    @swagger_auto_schema(auto_schema=None)
     def get_object(self, pk):
         Ad = rampp2p_models.Ad
         try:
@@ -151,7 +153,11 @@ class AdView(APIView):
         except Ad.DoesNotExist:
             raise Http404
 
-    def get_queryset (self, request, pk=None):
+    @swagger_auto_schema(auto_schema=None)
+    def get_queryset (self, request=None, pk=None):
+        if request is None:
+            return []
+        
         response_data = None
         if pk:
             ad = self.get_object(pk)
@@ -264,12 +270,17 @@ class AdView(APIView):
             response_data = data
         return response_data
 
+    @swagger_auto_schema(responses={200: rampp2p_serializers.AdPaginationSerializer})
     def get(self, request, pk=None):
         try:
-            response_data = self.get_queryset(request, pk=pk)
+            data = self.get_queryset(request=request, pk=pk)
+            serialized = rampp2p_serializers.AdPaginationSerializer(data=data)
+            if serialized.is_valid():
+                return Response(serialized.data, status=status.HTTP_200_OK)
+            else:
+                raise ValidationError(serialized.errors)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(response_data, status=status.HTTP_200_OK)
 
     def post(self, request):
         wallet_hash = request.headers.get('wallet_hash')
@@ -340,6 +351,7 @@ class AdView(APIView):
         
 class AdSnapshotView(APIView):
     authentication_classes = [TokenAuthentication]
+    
     def get(self, request):
         ad_snapshot_id = request.query_params.get('ad_snapshot_id')
         order_id = request.query_params.get('order_id')

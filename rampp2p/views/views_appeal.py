@@ -23,6 +23,7 @@ import math
 class AppealViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.AppealSerializer
     queryset = models.Appeal.objects.all()
 
     def list(self, request):

@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 class ContractViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.ContractSerializer
     queryset = models.Contract.objects.all()
 
     def retrieve(self, request, pk):

@@ -112,6 +112,7 @@ class CashinOrderViewSet(viewsets.GenericViewSet):
         return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
 
 class OrderViewSet(viewsets.GenericViewSet):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
     queryset = models.Order.objects.all()
@@ -137,7 +138,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         wallet_hash = request.user.wallet_hash
-        params = self._parse_params(request=request)
+        params = self._parse_params(request)
 
         if params['status_type'] is None:
             return Response(

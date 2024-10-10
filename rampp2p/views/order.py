@@ -33,7 +33,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CashinOrderList(APIView):
-
+    swagger_schema = None
     def get(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
         status_type = request.query_params.get('status_type')
@@ -107,6 +107,7 @@ class CashinOrderList(APIView):
         return Response(data, status.HTTP_200_OK)
 
 class OrderListCreate(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def _parse_params(self, request):
@@ -519,6 +520,7 @@ class OrderListCreate(APIView):
                 raise ValidationError('invalid payment method, not caller owned')
 
 class OrderMemberView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     def get(self, _, pk):
         try:
@@ -566,6 +568,7 @@ class OrderMemberView(APIView):
         return Response({'success': False, 'error': 'no such member'}, status=status.HTTP_400_BAD_REQUEST)
 
 class OrderListStatus(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     def get(self, request, pk):
         queryset = Status.objects.filter(order=pk)
@@ -573,6 +576,7 @@ class OrderListStatus(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class OrderDetail(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get_object(self, pk):
@@ -609,6 +613,7 @@ class OrderDetail(APIView):
         return Response(serialized_order, status=status.HTTP_200_OK)
 
 class ConfirmOrder(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     '''
@@ -687,6 +692,7 @@ class ConfirmOrder(APIView):
             raise ValidationError('Caller must be ad owner.')
 
 class PendingEscrowOrder(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     '''
@@ -756,6 +762,7 @@ class PendingEscrowOrder(APIView):
             raise ValidationError('Caller must be seller.')
 
 class VerifyEscrow(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     '''
@@ -810,6 +817,7 @@ class VerifyEscrow(APIView):
             raise ValidationError('Caller is not seller')
     
 class CryptoBuyerConfirmPayment(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def post(self, request, pk):
@@ -887,6 +895,7 @@ class CryptoBuyerConfirmPayment(APIView):
             raise ValidationError('caller must be buyer')
     
 class CryptoSellerConfirmPayment(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def post(self, request, pk):
@@ -944,6 +953,7 @@ class CryptoSellerConfirmPayment(APIView):
             raise ValidationError('Caller must be seller')
 
 class CancelOrder(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
         
     def post(self, request, pk):
@@ -1009,6 +1019,7 @@ class CancelOrder(APIView):
            raise ValidationError('caller must be order/ad owner')
         
 class UploadOrderPaymentAttachmentView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     parser_classes = [MultiPartParser]
 
@@ -1046,6 +1057,7 @@ class UploadOrderPaymentAttachmentView(APIView):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
 class DeleteOrderPaymentAttachmentView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def post(self, request):
