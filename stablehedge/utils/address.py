@@ -34,8 +34,8 @@ def locking_bytecode_to_address(script_pubkey_hex):
 
 
 def to_cash_address(address, testnet=None):
-    if testnet is None:
-        return convert.to_cash_address(address)
+    # if testnet is None:
+    #     return convert.to_cash_address(address)
 
     address_obj = convert.Address.from_string(address)
     TESTNET_POSTFIX = "-TESTNET"
