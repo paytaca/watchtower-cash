@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def process_transaction(txid, output_address, inputs=None):
-    logger.warn(f'RampP2P processing tx {txid}')
+    logger.warning(f'RampP2P processing tx {txid}')
     try:
         pending_transactions = Transaction.objects.filter(txid__isnull=True)
         transaction = pending_transactions.filter(contract__address=output_address)
@@ -51,13 +51,15 @@ def get_transaction_details(txid):
         node = Node()
         txn = node.BCH.get_transaction(txid)
 
-        if txn is None:
-            try:
-                url = f'https://watchtower.cash/api/transactions/{txid}/' 
-                txn = (requests.get(url)).json().get('details')
-                logger(f'txn: {txn}')
-            except Exception as err:
-                logger.warning(f'err: {err.args[0]}')
+        # Alternative fetching of transaction in debug mode
+        if settings.DEBUG:
+            if txn is None:
+                try:
+                    url = f'https://watchtower.cash/api/transactions/{txid}/' 
+                    txn = (requests.get(url)).json().get('details')
+                    logger(f'txn: {txn}')
+                except Exception as err:
+                    logger.warning(f'err: {err.args[0]}')
         
         if txn != None:
             response['valid'] = True
