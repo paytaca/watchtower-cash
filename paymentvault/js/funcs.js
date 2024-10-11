@@ -11,7 +11,11 @@ import Vault from "./vault"
  * @param {String} opts.options.network 'chipnet | mainnet'
  * 
  */
-export const getContract = (opts) => {
+export const getContract = async (opts) => {
   const vault = new Vault(opts)
-  return vault.contract
+  const balance = await vault.contract.getBalance()
+  return {
+    contract: vault.contract,
+    balance: Number(balance) / 1e8
+  }
 }

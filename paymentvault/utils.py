@@ -21,10 +21,12 @@ def get_payment_vault(user_pubkey, merchant_pubkey):
 
 def create_vault(user_pubkey, merchant):
     vault = get_payment_vault(user_pubkey, merchant.pubkey)
+    contract = vault['contract']
+    
     payment_vault = PaymentVault.objects.create(
         user_pubkey=user_pubkey,
         merchant=merchant,
-        address=vault['address'],
-        token_address=vault['tokenAddress']
+        address=contract['address'],
+        token_address=contract['tokenAddress']
     )
     return payment_vault
