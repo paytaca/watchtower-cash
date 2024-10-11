@@ -57,7 +57,6 @@ def get_transaction_details(txid):
                 try:
                     url = f'https://watchtower.cash/api/transactions/{txid}/' 
                     txn = (requests.get(url)).json().get('details')
-                    logger(f'txn: {txn}')
                 except Exception as err:
                     logger.warning(f'err: {err.args[0]}')
         
