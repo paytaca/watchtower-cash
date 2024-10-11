@@ -145,7 +145,8 @@ class Merchant(models.Model):
     logo_120 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
 
     last_update = models.DateTimeField(null=True)
-    pubkey = models.CharField(max_length=100, null=True, blank=True) # 0th index
+    index = models.PositiveIntegerField(default=0) # index = 2 means that this is the 2nd merchant of a wallet
+    pubkey = models.CharField(max_length=100, null=True, blank=True) # 0/{index}
 
     class Meta:
         ordering = ('-id', )
@@ -268,15 +269,3 @@ class Branch(models.Model):
                 raise Exception("Unable to save as main branch due to existing main branch")
 
         return super().save(*args, **kwargs)
-
-
-class PosPaymentRequest(models.Model):
-    pos_device = models.ForeignKey(
-        PosDevice,
-        on_delete=models.CASCADE,
-        related_name='payment_requests',
-        db_index=True
-    )
-    amount = models.FloatField() # bch
-    receiving_address = models.CharField(max_length=75, db_index=True)
-    paid = models.BooleanField(default=False)

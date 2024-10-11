@@ -27,9 +27,6 @@ RUN npm install --prefix /code/anyhedge/js --legacy-peer-deps
 COPY ./rampp2p/js/package*.json /code/rampp2p/js/
 RUN npm install --prefix /code/rampp2p/js --legacy-peer-deps
 
-COPY ./vouchers/js/package*.json /code/vouchers/js/
-RUN npm install --prefix /code/vouchers/js --legacy-peer-deps
-
 COPY ./cts/js/package*.json /code/cts/js/
 RUN npm install --prefix /code/cts/js 
 
