@@ -648,6 +648,10 @@ DEFAULT_TOKEN_DETAILS = {
     }
 }
 
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = config('ENV', 'prod') != 'prod'
+ENV = config('ENV', 'prod')
+
 # P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_WALLET_HASH = config('SERVICER_WALLET_HASH', '')
