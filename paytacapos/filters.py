@@ -31,6 +31,7 @@ class MerchantFilter(filters.FilterSet):
     city = filters.CharFilter(field_name="location__city", lookup_expr="icontains")
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
+    has_vault = filters.BooleanFilter(method="has_vault_filter")
 
     active = filters.BooleanFilter()
     verified = filters.BooleanFilter()
@@ -75,3 +76,6 @@ class MerchantFilter(filters.FilterSet):
             Q(location__province__icontains=value) | 
             Q(location__state__icontains=value) 
         )
+
+    def has_vault_filter(self, queryset, name, value):
+        return queryset.exclude(pubkey__isnull=value)
