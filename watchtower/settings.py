@@ -81,6 +81,7 @@ INSTALLED_APPS=[
     'main',
     'smartbch',
     'paytacapos',
+    'paymentvault',
     'paytacagifts',
     'anyhedge',
     'chat',
@@ -665,7 +666,12 @@ PURELYPEER_URL_PREFIX = 'backend-staging'
 if PURELYPEER_ENV == 'production':
     PURELYPEER_URL_PREFIX = 'backend'
 
+
 PURELYPEER_API_URL = f'https://{PURELYPEER_URL_PREFIX}.purelypeer.cash/api'
+
+# payment vaults
+
+VAULT_EXPRESS_URL = 'http://localhost:3002/payment-vaults'
 
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')

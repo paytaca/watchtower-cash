@@ -68,6 +68,7 @@ services:
       - /code/anyhedge/js/node_modules
       - /code/rampp2p/js/node_modules
       - /code/cts/js/node_modules
+      - /code/paymentvault/js/node_modules
 volumes:
   watchtower_db_data:
     # external: true
