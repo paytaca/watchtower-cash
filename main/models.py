@@ -532,16 +532,14 @@ class Subscription(PostgresModel):
 class WalletHistoryQuerySet(PostgresQuerySet):
     POS_ID_MAX_DIGITS = 4
 
-    def filter_pos(self, wallet_hash, posid=None, include_claim_vouchers=True):
+    def filter_pos(self, wallet_hash, posid=None):
         try:
-            raw_pos_id = posid
             posid = int(posid)
             posid = str(posid)
             pad = "0" * (self.POS_ID_MAX_DIGITS-len(posid))
             posid = pad + posid
         except (ValueError, TypeError):
             posid = None
-            raw_pos_id = None
     
         addresses = Address.objects.filter(wallet__wallet_hash=models.OuterRef("wallet__wallet_hash"))
         if posid is None:
@@ -562,14 +560,6 @@ class WalletHistoryQuerySet(PostgresQuerySet):
         addresses_subquery = models.Func(models.Subquery(addresses), function="array")
 
         filter_arg = models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery)
-
-        if include_claim_vouchers and raw_pos_id is not None:
-            voucher_transactions = TransactionMetaAttribute.objects.filter(
-                key=f'voucher_claim_{raw_pos_id}',
-                wallet_hash=wallet_hash
-            ).values('txid')
-            filter_arg |= Q(txid__in=voucher_transactions)
-
         return self.filter(filter_arg, wallet__wallet_hash=wallet_hash)
 
     def annotate_empty_attributes(self):
@@ -826,3 +816,19 @@ class WalletShard(PostgresModel):
     shard = models.CharField(max_length=400, primary_key=True)
     first_identifier = models.CharField(max_length=64)
     second_identifier = models.CharField(max_length=64)
+
+class AppVersion(models.Model):
+    PLATFORM_CHOICES = [
+        ('ios', 'iOS'),
+        ('android', 'Android'),
+        ('web', 'Web')
+    ]
+
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES)
+    latest_version = models.CharField(max_length=10)
+    min_required_version = models.CharField(max_length=10)
+    release_date = models.DateField(auto_now_add=True)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.platform} - Latest: {self.latest_version}, Min Required: {self.min_required_version}"

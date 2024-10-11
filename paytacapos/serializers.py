@@ -10,10 +10,11 @@ from django.db.models import Sum
 from rest_framework import serializers, exceptions
 from bitcash.keygen import public_key_to_address
 
-from vouchers.serializers import VaultSerializer
+from vouchers.serializers import *
 from vouchers.models import Voucher
+from vouchers.vault import create_device_vault, create_merchant_vault
 
-from main.models import CashNonFungibleToken, Wallet
+from main.models import CashNonFungibleToken, Wallet, Address
 
 from .models import *
 from .permissions import HasMinPaytacaVersionHeader
@@ -315,9 +316,25 @@ class LinkedDeviceInfoSerializer(serializers.ModelSerializer):
         return instance
 
 
+class PosDeviceVaultAddressSerializer(serializers.Serializer):
+    posid = serializers.IntegerField()
+    address = serializers.CharField(max_length=70)
+
+    def validate_posid(self, value):
+        if value < 0: raise serializers.ValidationError('POSID should be >= 0')
+        return value
+
+    def validate_address(self, value):
+        address = Address.objects.filter(address=value)
+        if not address.exists(): raise serializers.ValidationError('Address is not subscribed')
+        return value
+
+
 class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
     posid = serializers.IntegerField(help_text="Resolves to a new posid if negative value")
     wallet_hash = serializers.CharField()
+    vault = PosDeviceVaultSerializer(read_only=True)
+    pubkey = serializers.CharField(write_only=True, required=False, help_text="POS Device Vault pubkey (1-<POSID>th address)")
     name = serializers.CharField(required=False)
     merchant_id = serializers.PrimaryKeyRelatedField(
         queryset=Merchant.objects, source="merchant", required=False,
@@ -330,6 +347,8 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
         fields = [
             "posid",
             "wallet_hash",
+            "pubkey",
+            "vault",
             "name",
             "merchant_id",
             "branch_id",
@@ -439,15 +458,20 @@ class PosDeviceSerializer(PermissionSerializerMixin, serializers.ModelSerializer
                 raise serializers.ValidationError("unable to find new posid")
             validated_data["posid"] = posid
 
+        pubkey = validated_data.get('pubkey')
+        if 'pubkey' in validated_data.keys(): del validated_data['pubkey']
+
         try:
             instance = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
             instance = super().update(instance, validated_data)
+            create_device_vault(instance.id, pubkey)
             send_device_update(instance, action="update")
             return instance
         except PosDevice.DoesNotExist:
             pass
 
         instance = super().create(validated_data, *args, **kwargs)
+        create_device_vault(instance.id, pubkey)
         send_device_update(instance, action="create")
         return instance
 
@@ -474,6 +498,53 @@ class POSDevicePaymentSerializer(serializers.Serializer):
         if not self.supress_merchant_info_validations:
             if not Merchant.objects.filter(wallet_hash = value).exists():
                 raise serializers.ValidationError("Wallet hash does not have merchant information", code="missing_merchant_info")
+        return value
+
+
+class CreatePosPaymentRequestSerializer(serializers.Serializer):
+    pos_device = POSDevicePaymentSerializer()
+    amount = serializers.FloatField()
+    receiving_address = serializers.CharField()
+
+    def save(self):
+        validated_data = self.validated_data
+        posid = validated_data['pos_device'].get('posid')
+        wallet_hash = validated_data['pos_device'].get('wallet_hash')
+
+        # some payment requests might not be deleted on POS, in the case of internet failure on the device
+        # so we delete old requests of the device
+        pos_device = PosDevice.objects.get(posid=posid, wallet_hash=wallet_hash)
+        old_uncancelled_requests = PosPaymentRequest.objects.filter(pos_device=pos_device)
+        old_uncancelled_requests.delete()
+
+        payment_request = PosPaymentRequest.objects.create(
+            pos_device=pos_device,
+            amount=validated_data['amount'],
+            receiving_address=validated_data['receiving_address'],
+        )
+        return payment_request
+
+
+class CancelPaymentRequestSerializer(serializers.Serializer):
+    pos_device = POSDevicePaymentSerializer()
+
+
+class UpdatePaymentRequestSerializer(serializers.Serializer):
+    pos_device = POSDevicePaymentSerializer()
+    amount = serializers.FloatField()
+    
+
+class PosPaymentRequestSerializer(serializers.ModelSerializer):
+    pos_device = POSDevicePaymentSerializer()
+
+    class Meta:
+        model = PosPaymentRequest
+        fields = [
+            'pos_device',
+            'amount',
+            'receiving_address',
+            'paid',
+        ]
 
 
 class POSPaymentSerializer(serializers.Serializer):
@@ -557,19 +628,21 @@ class ReviewSerializer(serializers.ModelSerializer):
 class MerchantListSerializer(serializers.ModelSerializer):
     location = LocationSerializer(required=False)
     last_transaction_date = serializers.CharField()
-    vault = VaultSerializer(required=False)
 
     logos = serializers.SerializerMethodField()
-    receiving_address = serializers.SerializerMethodField()
     vouchers = serializers.SerializerMethodField()
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
+    vault = MerchantVaultSerializer(read_only=True)
+    minter = VerificationTokenMinterSerializer(read_only=True)
     
     class Meta:
         model = Merchant
         fields = [
             "id",
             "wallet_hash",
+            "vault",
+            "minter",
             "slug",
             "name",
             "location",
@@ -578,23 +651,12 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "description",
             "gmap_business_link",
             "last_transaction_date",
-            "receiving_pubkey",
-            "receiving_address",
-            "receiving_index",
-            "vault",
             "vouchers",
             "logos",
             "last_update",
             "branch_count",
             "pos_device_count",
         ]
-
-    def get_receiving_address(self, obj):
-        if obj.receiving_pubkey:
-            pk_bytes_str = bytearray.fromhex(obj.receiving_pubkey)
-            return public_key_to_address(pk_bytes_str)
-        else:
-            return ''
     
     def get_logos(self, obj):
         logos = {
@@ -660,15 +722,27 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
     allow_duplicates = serializers.BooleanField(write_only=True, default=False)
 
     location = LocationSerializer(required=False)
-    vault = VaultSerializer(required=False)
 
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
+
+    pubkey = serializers.CharField(
+        write_only=True,
+        required=False,
+        help_text='Merchant Vault pubkey (0th address)'
+    )
+    minter_address = serializers.CharField(write_only=True, required=False)
+    minter_category = serializers.CharField(write_only=True, required=False)
+
+    vault = MerchantVaultSerializer(read_only=True)
+    minter = VerificationTokenMinterSerializer(read_only=True)
 
     class Meta:
         model = Merchant
         fields = [
             "id",
+            "vault",
+            "minter",
             "wallet_hash",
             "name",
             "website_url",
@@ -676,16 +750,15 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "description",
             "primary_contact_number",
             "location",
-            "receiving_pubkey",
-            "receiving_index",
-            "vault",
+
+            "pubkey",
+            "minter_address",
+            "minter_category",
 
             "allow_duplicates", # temporary field
             "branch_count",
             "pos_device_count",
         ]
-
-        read_only_fields = ('vault', )
 
     def validate_wallet_hash(self, value):
         if self.instance and self.instance.wallet_hash != value:
@@ -745,8 +818,19 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
+        pubkey = validated_data.get('pubkey')
+        minter_address = validated_data.get('minter_address')
+        minter_category = validated_data.get('minter_category')
+        data_keys = validated_data.keys()
+
+        if 'pubkey' in data_keys: del validated_data['pubkey']
+        if 'minter_address' in data_keys: del validated_data['minter_address']
+        if 'minter_category' in data_keys: del validated_data['minter_category']
+
         instance = super().create(validated_data)
         instance.get_or_create_main_branch()
+        create_merchant_vault(instance.id, pubkey, minter_address, minter_category)
+
         return instance
 
     @transaction.atomic()
@@ -759,7 +843,19 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
                 raise serializers.ValidationError({ "location": location_serializer.errors })
             validated_data["location"] = location_serializer.save()
 
-        return super().update(instance, validated_data)
+        pubkey = validated_data.get('pubkey')
+        minter_address = validated_data.get('minter_address')
+        minter_category = validated_data.get('minter_category')
+        data_keys = validated_data.keys()
+
+        if 'pubkey' in data_keys: del validated_data['pubkey']
+        if 'minter_address' in data_keys: del validated_data['minter_address']
+        if 'minter_category' in data_keys: del validated_data['minter_category']
+
+        instance = super().update(instance, validated_data)
+        create_merchant_vault(instance.id, pubkey, minter_address, minter_category)
+
+        return instance
 
 
 class BranchMerchantSerializer(serializers.ModelSerializer):

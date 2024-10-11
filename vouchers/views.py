@@ -9,12 +9,17 @@ from django.db.models import F, Q, ExpressionWrapper, DateTimeField
 from django.utils import timezone
 
 from vouchers.serializers import *
-from vouchers.models import Voucher
-from vouchers.filters import VoucherFilter
+from vouchers.models import (
+    Voucher,
+    VerificationTokenMinter,
+    PosDeviceVault,
+)
+from vouchers.filters import VoucherFilter, PosDeviceVaultFilter
+from vouchers.vouchers import verify_voucher
 
 from paytacapos.serializers import MerchantListSerializer
 from paytacapos.pagination import CustomLimitOffsetPagination
-from paytacapos.models import Merchant
+from paytacapos.models import Merchant, PosDevice 
 
 from main.utils.queries.node import Node
 from main.utils.address_converter import bch_address_converter
@@ -44,7 +49,7 @@ class VoucherViewSet(
     serializer_classes = {
         'list': VoucherSerializer,
         'merchants': MerchantListSerializer,
-        'claim_check': VoucherClaimCheckSerializer,
+        'verify': VoucherClaimVerificationSerializer,
     }
 
     def list(self, request, *args, **kwargs):
@@ -74,9 +79,8 @@ class VoucherViewSet(
             voucher_nfts = voucher_nfts.filter(
                 transaction__wallet__wallet_hash=wallet_hash,
                 transaction__spent=False
-            )
+            ).distinct()
 
-        voucher_nfts = voucher_nfts.distinct()
         voucher_merchants = Merchant.objects.filter(
             vault__vouchers__category__in=voucher_nfts.values('category'),
             vault__vouchers__commitment__in=voucher_nfts.values('commitment')
@@ -93,70 +97,10 @@ class VoucherViewSet(
 
     @action(methods=['POST'], detail=False)
     @swagger_auto_schema(responses={200: VoucherClaimCheckResponseSerializer})
-    def claim_check(self, request, *args, **kwargs):
+    def verify(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        # check if recipient is merchant
-        vault_token_address = serializer.validated_data['address']
-        merchants = Merchant.objects.filter(
-            vault__token_address=vault_token_address
-        )
-        is_merchant_address = merchants.exists()
-        result = {
-            'proceed': False
-        }
-        
-        if is_merchant_address:
-            valid_categories = []
-            voucher_ids = serializer.validated_data['voucher_ids']
-
-            # error keys
-            VOUCHER_EXPIRED = 'voucher_expired'
-            INVALID_VOUCHER = 'invalid_voucher'
-            VOUCHER_MERCHANT_MISMATCH = 'voucher_merchant_mismatch'
-
-            for voucher_id in voucher_ids:
-                vouchers = Voucher.objects.filter(id=voucher_id)
-                result[voucher_id] = { 'err': '' }
-
-                if vouchers.exists():
-                    voucher = vouchers.first()
-                    merchant = merchants.first()
-                    voucher_belongs_to_merchant = merchant.id == voucher.vault.merchant.id
-
-                    if voucher_belongs_to_merchant:
-                        if voucher.expired:
-                            result[voucher_id]['err'] = VOUCHER_EXPIRED
-                            return Response(result)
-
-                        node = Node()
-                        txn = node.BCH.get_transaction(voucher.minting_txid)
-
-                        if txn['valid']:
-                            outputs = txn['outputs']
-                            key_nft_output = outputs[0]
-                            lock_nft_output = outputs[1]
-
-                            lock_nft_recipient = lock_nft_output['address']
-                            lock_nft_recipient = bch_address_converter(lock_nft_recipient)
-                            key_nft_category = key_nft_output['token_data']['category']
-
-                            # check if lock NFT recipient address is this endpoint payload's vault address
-                            if key_nft_category == voucher.category and lock_nft_recipient == vault_token_address:
-                                valid_categories.append(key_nft_category)
-                            else:
-                                result[voucher_id]['err'] = VOUCHER_MERCHANT_MISMATCH
-                        else:
-                            result[voucher_id]['err'] = INVALID_VOUCHER
-                    else:
-                        result[voucher_id]['err'] = VOUCHER_MERCHANT_MISMATCH
-                else:
-                    result[voucher_id]['err'] = INVALID_VOUCHER
-
-            if len(valid_categories) == len(voucher_ids):
-                result['proceed'] = True
-        
+        result = verify_voucher(**serializer.validated_data)
         return Response(result, status=status.HTTP_200_OK)
         
 
@@ -167,3 +111,11 @@ class VoucherViewSet(
         if self.action in self.serializer_classes.keys():
             return self.serializer_classes[self.action]
         return super().get_serializer_class()
+
+
+class PosDeviceVaultViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = PosDeviceVault.objects.all()
+    serializer_class = PosDeviceVaultSerializer
+    filter_class = (filters.DjangoFilterBackend, )
+    filterset_class = PosDeviceVaultFilter
+    pagination_class = CustomLimitOffsetPagination

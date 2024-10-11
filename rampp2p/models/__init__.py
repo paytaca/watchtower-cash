@@ -10,3 +10,4 @@ from .contract import *
 from .transaction import *
 from .market_rate import *
 from .arbiter import *
+from .models_utils import *

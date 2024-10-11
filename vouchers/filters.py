@@ -1,8 +1,6 @@
 from django_filters import rest_framework as filters
-from django.db.models import Q
 
-from vouchers.models import Voucher
-
+from vouchers.models import Voucher, PosDeviceVault, MerchantVault
 from main.models import CashNonFungibleToken
 
 
@@ -11,25 +9,24 @@ class VoucherFilter(filters.FilterSet):
         help_text='Filter vouchers by wallet hash of user',
         method='filter_wallet_hash'
     )
-    vault_address = filters.CharFilter(
-        help_text='Filter vouchers by merchant using either its token or cash address',
-        method='filter_vault_address'
+    merchant = filters.CharFilter(
+        help_text='Filter vouchers by merchant ID',
+        method='filter_merchant'
     )
 
     class Meta:
         model = Voucher
         fields = [
             'wallet_hash',
-            'vault_address',
+            'merchant',
             'claimed',
             'expired',
+            'sent',
         ]
 
-    def filter_vault_address(self, queryset, name, value):
-        queryset = queryset.filter(
-            Q(vault__token_address=value) |
-            Q(vault__address=value)
-        )
+    def filter_merchant(self, queryset, name, value):
+        merchant_vaults = MerchantVault.objects.filter(merchant__id=value)
+        queryset = queryset.filter(vault__in=merchant_vaults)
         return queryset
 
     def filter_wallet_hash(self, queryset, name, value):
@@ -54,3 +51,15 @@ class VoucherFilter(filters.FilterSet):
         )
 
         return filtered_queryset
+
+
+class PosDeviceVaultFilter(filters.FilterSet):
+    posid = filters.NumberFilter(field_name="pos_device__posid", lookup_expr="exact")
+    wallet_hash = filters.CharFilter(field_name="pos_device__wallet_hash", lookup_expr="exact")
+    
+    class Meta:
+        model = PosDeviceVault
+        fields = [
+            'posid',
+            'wallet_hash',
+        ]

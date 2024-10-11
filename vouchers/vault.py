@@ -1,55 +1,149 @@
 from django.conf import settings
 
-from paytacapos.models import Merchant
-from vouchers.models import Vault, Voucher
-from main.utils.subscription import new_subscription
+from main.utils.address_converter import bch_address_converter
+from paytacapos.models import Merchant, PosDevice
+from vouchers.models import (
+    PosDeviceVault,
+    MerchantVault,
+    VerificationTokenMinter,
+)
 
+from bitcash.keygen import public_key_to_address
 import requests
 
 
-def generate_merchant_vault(merchant_id):
+def get_merchant_vault(merchant_id, pubkey=None):
     merchant = Merchant.objects.get(id=merchant_id)
-    if not merchant.receiving_pubkey:
-        return
-
-    receiving_pubkey = merchant.receiving_pubkey
-
+    __pubkey = pubkey or merchant.vault.pubkey
     payload = {
         'params': {
             'merchant': {
-                'receiverPk': receiving_pubkey
-            }
+                'verificationCategory': merchant.minter.category,
+                'pubkey': {
+                    'merchant': __pubkey,
+                    # 'device': None
+                }
+            },
+            # 'sender': {
+            #     'pubkey': '',
+            #     'address': '',
+            # },
+            # 'refundAmount': None,
         },
         'options': {
             'network': settings.BCH_NETWORK
         }
     }
-    response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/compile-vault', json=payload)
+    url = settings.VAULT_EXPRESS_URLS['merchant'] + '/compile'
+    response = requests.post(url, json=payload)
     contract = response.json()
-
-    # subscribe merchant vault address
-    project_id = {
-        'mainnet': '8feaa0b2-f92e-49fd-a27a-aa6cb23345c7',
-        'chipnet': '95ccec69-479a-41c4-90bc-182413ad2f37'
-    }
-    project_id = project_id[settings.BCH_NETWORK]
-
-    subscription_data = {
-        'address': contract['address'],
-        'project_id': project_id,
+    return {
+        'contract': contract,
+        'payload': payload
     }
 
-    # added try catch here for already subscribed addresses error
+
+def get_device_vault(pos_device_id, pubkey=None):
+    pos_device = PosDevice.objects.get(id=pos_device_id)
+    merchant_vault = get_merchant_vault(pos_device.merchant.id)
+    __pubkey = pubkey or pos_device.vault.pubkey
+    pubkey_arr = bytearray.fromhex(__pubkey)
+
+    payload = {
+        'params': {
+            'merchant': {
+                'address': public_key_to_address(pubkey_arr),
+                'pubkey': __pubkey,
+                'vaultTokenAddress': pos_device.merchant.vault.token_address,
+                'scriptHash': merchant_vault['contract']['scriptHash'],
+                'verificationCategory': pos_device.merchant.minter.category,
+                # 'voucher': {
+                #     'category': None
+                # }
+            },
+            # 'sender': {
+            #     'pubkey': '',
+            #     'address': '',
+            # },
+            # 'refundAmount': None,
+            # 'amount': None
+        },
+        'options': {
+            'network': settings.BCH_NETWORK
+        }
+    }
+    url = settings.VAULT_EXPRESS_URLS['device'] + '/compile'
+    response = requests.post(url, json=payload)
+    contract = response.json()
+    return {
+        'contract': contract,
+        'payload': payload
+    }
+
+
+def create_device_vault(pos_device_id, pubkey=None):
+    pos_device = PosDevice.objects.get(id=pos_device_id)
+
+    if not pubkey: return
+
     try:
-        new_subscription(**subscription_data)
+        pos_device.merchant.vault
+        pos_device.merchant.minter
+    except:
+        return
+
+    try:
+        if pos_device.vault: return
     except:
         pass
 
-    # delete existing old vault
-    Vault.objects.filter(merchant=merchant).delete()
+    device_vault = get_device_vault(pos_device.id, pubkey=pubkey)
+    contract = device_vault['contract']
 
-    Vault(
-        merchant=merchant,
+    PosDeviceVault.objects.filter(pos_device=pos_device).delete()
+    PosDeviceVault.objects.create(
+        pos_device=pos_device,
+        pubkey=pubkey,
         address=contract['address'],
         token_address=contract['tokenAddress']
-    ).save()
+    )
+
+
+def create_verification_token_minter(merchant_id, address, category):
+    merchant = Merchant.objects.get(id=merchant_id)
+    token_address = bch_address_converter(address)
+    VerificationTokenMinter.objects.filter(merchant=merchant).delete()
+    VerificationTokenMinter.objects.create(
+        merchant=merchant,
+        category=category,
+        address=address,
+        token_address=token_address
+    )
+
+
+def create_merchant_vault(merchant_id, pubkey=None, minter_address=None, minter_category=None):
+    merchant = Merchant.objects.get(id=merchant_id)
+
+    if not pubkey: return
+    if not minter_address: return
+    if not minter_category: return
+    
+    try:
+        if merchant.vault and merchant.minter: return
+    except:
+        create_verification_token_minter(
+            merchant.id,
+            minter_address,
+            minter_category
+        )
+
+    merchant_vault = get_merchant_vault(merchant.id, pubkey=pubkey)
+    contract = merchant_vault['contract']
+
+    MerchantVault.objects.filter(merchant=merchant).delete()
+    merchant_vault = MerchantVault.objects.create(
+        merchant=merchant,
+        address=contract['address'],
+        token_address=contract['tokenAddress'],
+        pubkey=pubkey
+    )

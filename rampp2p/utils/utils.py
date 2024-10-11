@@ -68,6 +68,9 @@ def is_buyer(order: models.Order, wallet_hash: str):
         return True
     return False
 
+def is_arbiter(order: models.Order, wallet_hash: str):
+    return wallet_hash == order.arbiter.wallet_hash
+
 def is_appealable(id: int):
     appealable_at = models.Order.objects.get(pk=id).appealable_at    
     time_now = timezone.make_aware(datetime.now())
@@ -133,3 +136,19 @@ def get_last_status(order_id: int):
     if latest_status.exists():
         return latest_status.last()
     return None
+
+def check_has_cashin_alerts(wallet_hash):
+    queryset = models.Order.objects.filter(Q(is_cash_in=True) & Q(owner__wallet_hash=wallet_hash))
+    queryset = queryset.order_by('-created_at')
+
+    has_cashin_alerts = False
+    for order in queryset:
+        _is_seller = is_seller(order, wallet_hash)
+        statuses = models.Status.objects.filter(order__id=order.id)
+        if _is_seller:
+            has_cashin_alerts = statuses.filter(seller_read_at__isnull=True).exists()
+        else:
+            has_cashin_alerts = statuses.filter(buyer_read_at__isnull=True).exists()
+        if has_cashin_alerts:
+            break
+    return has_cashin_alerts

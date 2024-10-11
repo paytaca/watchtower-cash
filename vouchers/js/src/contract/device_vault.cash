@@ -1,0 +1,61 @@
+pragma cashscript ^0.8.0;
+
+
+contract PosDeviceVault (
+    pubkey merchantPubkey,  // 1<PADDED_ZEROS><POSID>th address of POS device (for release)
+    bytes32 merchantVaultScriptHash,
+    bytes32 verificationTokenCategory
+) {
+
+    function release () {
+        bytes20 merchantPKH = hash160(merchantPubkey);
+        bytes25 merchant = new LockingBytecodeP2PKH(merchantPKH);
+        
+        // 1 output: total pooled BCH of this contract, <fee change>
+        require(tx.outputs.length >= 1);
+        
+        // release the pooled BCH to the linked POS device merchant address
+        require(tx.outputs[0].lockingBytecode == merchant);
+    }
+    
+    function sendTokens (bytes32 voucherCategory) {
+        // >= 2 (unordered, except 0th -- should be minting nft) inputs: minting NFT, key NFT
+        // >= 3 outputs: minting NFT, verification token, key NFT, <fee change>
+        require(tx.inputs.length >= 2);
+        require(tx.outputs.length >= 3);
+
+        // minting NFT input and output must have a minting capability
+        bytes minterInputCategory = tx.inputs[0].tokenCategory;
+        bytes minterOutputCategory = tx.outputs[0].tokenCategory;
+        require(verificationTokenCategory + 0x02 == minterInputCategory);
+        require(verificationTokenCategory + 0x02 == minterOutputCategory);
+
+        // verification and key NFTs' inputs and outputs must be immutable NFTs
+        require(tx.outputs[1].tokenCategory == verificationTokenCategory);
+        require(tx.outputs[2].tokenCategory == voucherCategory);
+        
+        // commitment of the verification token should be the script hash of this vault
+        // needs to have dust BCH value
+        bytes32 commitmentScriptHash = bytes32(tx.outputs[1].nftCommitment);
+        bytes35 commitmentLockingBytecode = new LockingBytecodeP2SH32(commitmentScriptHash);
+        require(tx.outputs[0].lockingBytecode == commitmentLockingBytecode);
+        require(tx.outputs[0].value == 1000);
+
+        // minting NFT must be sent back to this contract
+        require(tx.inputs[0].lockingBytecode == tx.outputs[0].lockingBytecode);
+
+        // verification and key NFTs must be sent to the merchant vault
+        bytes35 merchantVault = new LockingBytecodeP2SH32(merchantVaultScriptHash);
+        require(tx.outputs[1].lockingBytecode == merchantVault);
+        require(tx.outputs[2].lockingBytecode == merchantVault);
+    }
+
+    // for accidental sending of BCH to this contract
+    function emergencyRefund (pubkey senderPk) {
+        // ensure utxo is from sender and gets sent back to that wallets
+        bytes25 sender = new LockingBytecodeP2PKH(hash160(senderPk));
+        require(tx.inputs[0].lockingBytecode == sender);
+        require(tx.outputs[0].lockingBytecode == sender);
+    }
+
+}

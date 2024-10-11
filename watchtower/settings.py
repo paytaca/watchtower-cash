@@ -260,6 +260,7 @@ REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', ''))
 REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = (
     'main.tasks',
+    'main.utils.vouchers',
     'smartbch.tasks',
     'anyhedge.tasks',
     'ramp.tasks',
@@ -543,6 +544,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False    
+        },
+        'paytacagifts': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False    
         }
     },
 }
@@ -662,6 +668,13 @@ IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
 VOUCHER_ROOM = 'voucher_room'
 VOUCHER_EXPRESS_URL = 'http://localhost:3002/vouchers'
+VAULT_EXPRESS_URLS = {
+    'device': f'{VOUCHER_EXPRESS_URL}/vault/device',
+    'merchant': f'{VOUCHER_EXPRESS_URL}/vault/merchant',
+}
+
+VOUCHER_FEE_FUNDER_ADDRESS = config('VOUCHER_FEE_FUNDER_ADDRESS') 
+VOUCHER_FEE_FUNDER_WIF = config('VOUCHER_FEE_FUNDER_WIF') 
 
 # purelypeer
 

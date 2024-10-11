@@ -1,11 +1,13 @@
 from django.db import models
+from django.apps import apps
+
 from .ad import AdSnapshot
 from .peer import Peer
 from .arbiter import Arbiter
 from .payment import PaymentMethod, PaymentType
 
 class Order(models.Model):
-    tracking_id = models.CharField(max_length=50, null=True, blank=True)
+    tracking_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
     ad_snapshot = models.ForeignKey(AdSnapshot, on_delete=models.PROTECT, editable=False)
     owner = models.ForeignKey(Peer, on_delete=models.PROTECT, editable=False, related_name="created_orders")
     chat_session_ref = models.CharField(max_length=100, null=True, blank=True)
@@ -20,6 +22,12 @@ class Order(models.Model):
 
     def __str__(self):
         return f'{self.id}'
+    
+    @property
+    def status(self):
+        Status = apps.get_model('rampp2p', 'Status')
+        last_status = Status.objects.filter(order__id=self.id).last()
+        return last_status.status
 
 class OrderPayment(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
@@ -50,12 +58,14 @@ class OrderMember(models.Model):
     read_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
-        member_name = ''
+        return f'{self.id}'
+
+    @property
+    def name(self):
         if self.peer:
-            member_name = self.peer.name
+           return self.peer.name
         elif self.arbiter:
-            member_name = self.arbiter.name
-        return f'{self.id} | Order #{self.order.id} | {self.type} | {member_name}'
+            return self.arbiter.name
 
     class Meta:
          constraints = [

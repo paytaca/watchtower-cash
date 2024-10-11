@@ -25,7 +25,7 @@ class ChatWebhookView(APIView):
         if sender.exists():
             sender = sender.first()
         else:
-            logger.warn(f'Unable to find Peer with chat_identity_id {chat_identity.id}.')
+            logger.warning(f'Unable to find Peer with chat_identity_id {chat_identity.id}.')
         
         counterparty = None
         if sender.wallet_hash == order.ad_snapshot.ad.owner.wallet_hash:

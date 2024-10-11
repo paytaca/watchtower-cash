@@ -161,6 +161,8 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
 
             # Update order status
             status = update_order_status(contract.order.id, status_type).data
+            if contract.order.is_cash_in:
+                websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': contract.order.id}, contract.order.owner.wallet_hash)
 
             # Remove subscription once order is complete
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:

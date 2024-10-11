@@ -7,16 +7,18 @@ from main.models import Wallet as MainWallet
 from rampp2p.models import Peer as PeerWallet
 from rampp2p.models import Arbiter as ArbiterWallet
 from rampp2p.serializers import PeerProfileSerializer, ArbiterSerializer
-from authentication.backends import SignatureBackend
-from authentication.models import AuthToken
 
+import rampp2p.models as rampp2p_models
 import authentication.serializers as serializers
-import rampp2p.models as rampmodels
-
-from django.conf import settings
-from cryptography.fernet import Fernet, InvalidToken
 
 from authentication.token import TokenAuthentication, WalletAuthentication
+from authentication.backends import SignatureBackend
+from authentication.models import AuthToken
+from ecdsa.keys import BadSignatureError
+
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from cryptography.fernet import Fernet, InvalidToken
 
 import logging
 logger = logging.getLogger(__name__)
@@ -37,50 +39,53 @@ class LoginView(APIView):
         if path == '/api/auth/login/arbiter':
             app = 'ramp-arbiter'
 
-        backend = SignatureBackend()
-        wallet, token, error = backend.authenticate(
-            app=app,
-            wallet_hash=wallet_hash,
-            signature=signature,
-            public_key=public_key
-        )
+        try:
+            backend = SignatureBackend()
+            wallet, token, error = backend.authenticate(
+                app=app,
+                wallet_hash=wallet_hash,
+                signature=signature,
+                public_key=public_key
+            )    
         
-        if wallet is not None and token is not None:
-            # Check if user is disabled
-            if not isinstance(wallet, MainWallet) and wallet.is_disabled:
-                return Response({'error': 'Wallet is disabled'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Checking if token is valid:
-            try:
-                cipher_suite = Fernet(settings.FERNET_KEY)
-                key = cipher_suite.decrypt(token.key).decode()
-            except InvalidToken:
-                return Response({'error': 'Token is invalid'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            response = {
-                'token': key,
-                'expires_at': token.key_expires_at
-            }
-
-            serialized_wallet = None
-            # if app == 'main':
-            #     # serialized_wallet = WalletSerialized(wallet)
-            if app == 'ramp-peer':
-                serialized_wallet = PeerProfileSerializer(wallet)
+            if wallet is not None and token is not None:
+                # Check if user is disabled
+                if not isinstance(wallet, MainWallet) and wallet.is_disabled:
+                    raise ValidationError('Wallet disabled')
                 
-            if app == 'ramp-arbiter':
-                serialized_wallet = ArbiterSerializer(wallet)
+                # Checking if token is valid:
+                try:
+                    cipher_suite = Fernet(settings.FERNET_KEY)
+                    key = cipher_suite.decrypt(token.key).decode()
+                except InvalidToken:
+                    raise ValidationError('Invalid token')
+                
+                response = {
+                    'token': key,
+                    'expires_at': token.key_expires_at
+                }
 
-            if serialized_wallet is not None:
-                response['user'] = serialized_wallet.data
+                serialized_wallet = None
+                # if app == 'main':
+                #     # serialized_wallet = WalletSerialized(wallet)
+                if app == 'ramp-peer':
+                    serialized_wallet = PeerProfileSerializer(wallet)
+                    
+                if app == 'ramp-arbiter':
+                    serialized_wallet = ArbiterSerializer(wallet)
 
-            return Response(response)
-        else:
-            # Authentication failed
-            response = {
-                'error': error if error is not None else 'Invalid signature'
-            }
-            return Response(response, status=400)
+                if serialized_wallet is not None:
+                    response['user'] = serialized_wallet.data
+
+                return Response(response)
+            else:
+                # authentication failed
+                raise ValidationError('Invalid signature')
+            
+        except (BadSignatureError, ValidationError) as err:
+            logger.exception(err)
+            return Response({ 'error': err.args[0] }, status=status.HTTP_400_BAD_REQUEST)
+
 
 class AuthNonceView(APIView):
     def get(self, request):
@@ -131,9 +136,9 @@ class UserView(APIView):
             return Response({'error': 'wallet_hash is required'}, status=400)
         
         # get user
-        user = rampmodels.Arbiter.objects.filter(wallet_hash=wallet_hash)
+        user = rampp2p_models.Arbiter.objects.filter(wallet_hash=wallet_hash)
         if not user.exists():
-            user = rampmodels.Peer.objects.filter(wallet_hash=wallet_hash)
+            user = rampp2p_models.Peer.objects.filter(wallet_hash=wallet_hash)
         if not user.exists():
             return Response({'error': 'user does not exist'}, status=404)
         
@@ -151,7 +156,7 @@ class UserView(APIView):
             'name': user.name,
             'address': user.address,
             'address_path': user.address_path,
-            'is_arbiter': isinstance(user, rampmodels.Arbiter),
+            'is_arbiter': isinstance(user, rampp2p_models.Arbiter),
             'is_authenticated': is_authenticated
         }
         return Response(serializers.UserSerializer(user_info).data, status=200)

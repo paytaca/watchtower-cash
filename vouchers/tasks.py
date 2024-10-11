@@ -35,17 +35,22 @@ def refund_expired_vouchers():
     median_time = block_chain_info['mediantime']
 
     for voucher in unclaimed_vouchers:
-        pubkey = voucher.vault.merchant.receiving_pubkey
-        address = bytearray.fromhex(pubkey)
-        address = public_key_to_address(address)
+        pubkey = voucher.vault.pubkey
+        pubkey = bytearray.fromhex(pubkey)
+        address = public_key_to_address(pubkey)
         payload = {
-            'category': voucher.category,
-            'merchant': {
-                'address': address,
-                'pubkey': pubkey,
+            'params': {
+                'category': voucher.category,
+                'latestBlockTimestamp': median_time,
+                'merchant': {
+                    'address': address,
+                    'pubkey': pubkey,
+                },
             },
-            'latestBlockTimestamp': median_time,
-            'network': 'mainnet'
+            'options': {
+                'network': 'mainnet'
+            }
         }
-        response = requests.post(f'{settings.VOUCHER_EXPRESS_URL}/refund', json=payload)
+        url = settings.VAULT_EXPRESS_URLS['device'] + '/refund'
+        response = requests.post(url, json=payload)
         response = response.json()

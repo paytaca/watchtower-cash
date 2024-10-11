@@ -70,11 +70,16 @@ main_urls += [
     re_path(r"^transactions/attributes/$", views.TransactionMetaAttributeView.as_view(),name='transaction-attributes'),
     re_path(r"^transactions/(?P<txid>[\w+]+)/$", views.TransactionDetailsView.as_view(),name='transaction-details'),
 
+    re_path(r"^wallet-addresses/(?P<wallethash>[\w+:]+)/$", views.WalletAddressesView.as_view(),name='wallet-addresses'),
+
     # re_path(r"^tokens/(?P<tokenid>[\w+:]+)/$", views.TokensView.as_view(),name='tokens'),
     path('transaction/spender/', views.SpenderTransactionView.as_view(), name='find-transaction-spender'),
     path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction"),
 
-    path('wallet/shard/get/', views.WalletShardViewSet.as_view({'get': 'get_first_shard'}), name='wallet-shard-get-shard')
+    path('wallet/shard/get/', views.WalletShardViewSet.as_view({'get': 'get_first_shard'}), name='wallet-shard-get-shard'),
+    
+    # App version
+    path('version/check/<str:platform>/', views.check_app_version)
 ]
 
 test_urls = [
