@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from drf_yasg.utils import swagger_auto_schema
 
 from django.utils import timezone
 from django.db.models import Q
@@ -151,7 +152,10 @@ class AdView(APIView):
         except Ad.DoesNotExist:
             raise Http404
 
-    def get_queryset (self, request, pk=None):
+    def get_queryset (self, request=None, pk=None):
+        if request is None:
+            return []
+        
         response_data = None
         if pk:
             ad = self.get_object(pk)
@@ -266,10 +270,10 @@ class AdView(APIView):
 
     def get(self, request, pk=None):
         try:
-            response_data = self.get_queryset(request, pk=pk)
+            data = self.get_queryset(request=request, pk=pk)
+            return Response(data, status=status.HTTP_200_OK)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(response_data, status=status.HTTP_200_OK)
 
     def post(self, request):
         wallet_hash = request.headers.get('wallet_hash')

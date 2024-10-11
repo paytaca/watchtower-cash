@@ -14,6 +14,7 @@ from rampp2p.utils.signature import verify_signature, get_verification_headers
 from datetime import datetime, timedelta
 
 class ArbiterListCreate(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -61,6 +62,7 @@ class ArbiterListCreate(APIView):
         return Response(serialized_arbiter.data, status=status.HTTP_200_OK)
 
 class ArbiterDetail(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     
     def get(self, request):
