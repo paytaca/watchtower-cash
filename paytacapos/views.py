@@ -267,11 +267,13 @@ class MerchantViewSet(viewsets.ModelViewSet):
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
     
-    @swagger_auto_schema(deprecated=True)
+    @swagger_auto_schema(request_body=WalletLatestMerchantIndexSerializer, response={ 200: { 'index': 0 } })
     @decorators.action(methods=['post'], detail=False)
     def latest_index(self, request, *args, **kwargs):
-        # This endpoint is maintained for older versions of Paytaca app that still use this
-        response = { 'index': 0 }
+        serializer = WalletLatestMerchantIndexSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        index = Merchant.get_latest_merchant_index(**serializer.validated_data)
+        response = { 'index': index }
         return Response(response)
 
     @decorators.action(methods=['get'], detail=False)

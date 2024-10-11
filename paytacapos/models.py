@@ -231,6 +231,23 @@ class Merchant(models.Model):
         )
         return branch, True
 
+    @classmethod
+    def get_latest_merchant_index(cls, wallet_hash):
+        queryset = cls.objects.filter(
+            wallet_hash=wallet_hash,
+            active=True,
+            verified=True
+        ).order_by(
+            'index'
+        )
+        
+        index = 0
+        for merchant in queryset:
+            if merchant.index != index:
+                break
+            index += 1
+        return index
+
 
 
 class Review(models.Model):

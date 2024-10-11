@@ -559,7 +559,6 @@ class MerchantListSerializer(serializers.ModelSerializer):
     logos = serializers.SerializerMethodField()
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
-    # vault = MerchantVaultSerializer(read_only=True)
     
     class Meta:
         model = Merchant
@@ -568,7 +567,6 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "wallet_hash",
             "pubkey",
             "index",
-            # "vault",
             "slug",
             "name",
             "location",
@@ -815,3 +813,11 @@ class BranchSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
                 .update(is_main=False)
 
         return super().update(instance, validated_data)
+
+
+class WalletLatestMerchantIndexSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Merchant
+        fields = (
+            'wallet_hash',
+        )
