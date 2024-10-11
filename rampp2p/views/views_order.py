@@ -137,7 +137,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         wallet_hash = request.user.wallet_hash
-        params = self._parse_params(request=request)
+        params = self._parse_params(request)
 
         if params['status_type'] is None:
             return Response(
@@ -498,6 +498,97 @@ class OrderViewSet(viewsets.GenericViewSet):
             websocket.send_general_update({'type': WSGeneralMessageType.READ_ORDER.value, 'extra': { 'unread_count': unread_count }}, wallet_hash)
             return Response({'success': True}, status=status.HTTP_200_OK)
 
+    # @action(detail=True, methods=['get'])
+    # def check_cancellable_cashin_orders(self, request, wallet_hash):
+    #     pending_orders = self._cancellable_cash_in_orders(wallet_hash)
+    #     return Response({ 'pending_orders': pending_orders }, status=200)
+
+    def _parse_params(self, request_data):
+        request = request_data
+        limit = request.query_params.get('limit', 0)
+        page = request.query_params.get('page', 1)
+        status_type = request.query_params.get('status_type')
+        currency = request.query_params.get('currency')
+        trade_type = request.query_params.get('trade_type')
+        statuses = request.query_params.getlist('status')
+        payment_types = request.query_params.getlist('payment_types')
+        time_limits = request.query_params.getlist('time_limits')
+        sort_by = request.query_params.get('sort_by')
+        sort_type = request.query_params.get('sort_type')
+        owned = request.query_params.get('owned')
+        appealable = request.query_params.get('appealable')
+        not_appealable = request.query_params.get('not_appealable')
+        query_name = request.query_params.get('query_name')
+
+        if owned is not None:
+            owned = owned == 'true'
+        if appealable is not None:
+            appealable = appealable == 'true'
+        if not_appealable is not None:
+            not_appealable = not_appealable == 'true'
+
+        return {
+            'limit': limit,
+            'page': page,
+            'status_type': status_type,
+            'currency': currency,
+            'trade_type': trade_type,
+            'statuses': statuses,
+            'payment_types': payment_types,
+            'time_limits': time_limits,
+            'sort_by': sort_by,
+            'sort_type': sort_type,
+            'owned': owned,
+            'appealable': appealable,
+            'not_appealable': not_appealable,
+            'query_name': query_name
+        }
+    
+    def _generate_tracking_id(self):
+        ''' PEO[year][month][day]-[order_count_today] e.g. PEO20211201-0001 '''
+        today = datetime.today()
+        today_midnight = datetime.combine(today, time.min)
+        next_day_midnight = datetime.combine(today + timedelta(days=1), time.min)
+        order_count = models.Order.objects.filter(created_at__gte=today_midnight, created_at__lt=next_day_midnight).count()
+        tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
+        return tracking_id
+    
+    def _check_create_permissions(self, wallet_hash, pk):
+        '''
+        - Arbiters are not allowed to create orders
+        - Ad owners are not allowed to create orders for their own ads
+        '''
+        # check if arbiter
+        is_arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists()
+        if is_arbiter: raise ValidationError('Arbiter cannot create orders')
+
+        # check if ad owner
+        is_ad_owner = models.Ad.objects.filter(pk=pk, owner__wallet_hash=wallet_hash).exists()
+        if is_ad_owner: raise ValidationError('Ad owner cannot create order for this ad')
+
+    def _check_payment_permissions(self, wallet_hash, payment_method_ids: List[int]):
+        ''' Validates if peer owns the payment methods '''
+        owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
+        if len(payment_method_ids) != owned_payment_methods.count():
+            raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
+    
+    def _cancellable_cash_in_orders(self, wallet_hash):
+        queryset = models.Order.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(is_cash_in=True))
+
+        latest_status = models.Status.objects.filter(order__id=OuterRef('pk')).order_by('-id')
+        queryset = queryset.annotate(
+            latest_status = Subquery(latest_status.values('status')[:1], output_field=CharField())
+        )
+        queryset = queryset.filter(Q(latest_status=StatusType.SUBMITTED) | Q(latest_status=StatusType.CONFIRMED)).values_list('id', flat=True)
+        logger.warning(f'queryset: {queryset}')
+        return queryset
+
+class OrderStatusViewSet(viewsets.GenericViewSet):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.OrderSerializer
+    queryset = models.Order.objects.all()
+
     @action(detail=True, methods=['get'])
     def list_status(self, request, pk):
         queryset = Status.objects.filter(order__id=pk)
@@ -809,79 +900,6 @@ class OrderViewSet(viewsets.GenericViewSet):
         except (ValidationError, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=True, methods=['get'])
-    def check_cancellable_cashin_orders(self, request, wallet_hash):
-        pending_orders = self._cancellable_cash_in_orders(wallet_hash)
-        return Response({ 'pending_orders': pending_orders }, status=200)
-
-    def _parse_params(self, request):
-        limit = request.query_params.get('limit', 0)
-        page = request.query_params.get('page', 1)
-        status_type = request.query_params.get('status_type')
-        currency = request.query_params.get('currency')
-        trade_type = request.query_params.get('trade_type')
-        statuses = request.query_params.getlist('status')
-        payment_types = request.query_params.getlist('payment_types')
-        time_limits = request.query_params.getlist('time_limits')
-        sort_by = request.query_params.get('sort_by')
-        sort_type = request.query_params.get('sort_type')
-        owned = request.query_params.get('owned')
-        appealable = request.query_params.get('appealable')
-        not_appealable = request.query_params.get('not_appealable')
-        query_name = request.query_params.get('query_name')
-
-        if owned is not None:
-            owned = owned == 'true'
-        if appealable is not None:
-            appealable = appealable == 'true'
-        if not_appealable is not None:
-            not_appealable = not_appealable == 'true'
-
-        return {
-            'limit': limit,
-            'page': page,
-            'status_type': status_type,
-            'currency': currency,
-            'trade_type': trade_type,
-            'statuses': statuses,
-            'payment_types': payment_types,
-            'time_limits': time_limits,
-            'sort_by': sort_by,
-            'sort_type': sort_type,
-            'owned': owned,
-            'appealable': appealable,
-            'not_appealable': not_appealable,
-            'query_name': query_name
-        }
-    
-    def _generate_tracking_id(self):
-        ''' PEO[year][month][day]-[order_count_today] e.g. PEO20211201-0001 '''
-        today = datetime.today()
-        today_midnight = datetime.combine(today, time.min)
-        next_day_midnight = datetime.combine(today + timedelta(days=1), time.min)
-        order_count = models.Order.objects.filter(created_at__gte=today_midnight, created_at__lt=next_day_midnight).count()
-        tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
-        return tracking_id
-    
-    def _check_create_permissions(self, wallet_hash, pk):
-        '''
-        - Arbiters are not allowed to create orders
-        - Ad owners are not allowed to create orders for their own ads
-        '''
-        # check if arbiter
-        is_arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists()
-        if is_arbiter: raise ValidationError('Arbiter cannot create orders')
-
-        # check if ad owner
-        is_ad_owner = models.Ad.objects.filter(pk=pk, owner__wallet_hash=wallet_hash).exists()
-        if is_ad_owner: raise ValidationError('Ad owner cannot create order for this ad')
-
-    def _check_payment_permissions(self, wallet_hash, payment_method_ids: List[int]):
-        ''' Validates if peer owns the payment methods '''
-        owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
-        if len(payment_method_ids) != owned_payment_methods.count():
-            raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
-    
     def _check_status_edit_permissions(self, order_pk, wallet_hash):
         '''Throws an error if wallet_hash is not a participant of status's order'''
         
@@ -892,13 +910,3 @@ class OrderViewSet(viewsets.GenericViewSet):
             return members['buyer']
         raise ValidationError('User not allowed to perform this action')
     
-    def _cancellable_cash_in_orders(self, wallet_hash):
-        queryset = models.Order.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(is_cash_in=True))
-
-        latest_status = models.Status.objects.filter(order__id=OuterRef('pk')).order_by('-id')
-        queryset = queryset.annotate(
-            latest_status = Subquery(latest_status.values('status')[:1], output_field=CharField())
-        )
-        queryset = queryset.filter(Q(latest_status=StatusType.SUBMITTED) | Q(latest_status=StatusType.CONFIRMED)).values_list('id', flat=True)
-        logger.warning(f'queryset: {queryset}')
-        return queryset
