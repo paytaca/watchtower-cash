@@ -1243,6 +1243,9 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         #       remove handling old one after stable
         if "shortInputInSatoshis" in contract_metadata:
             satoshis = int(contract_metadata["shortInputInSatoshis"])
+            if int(contract_metadata["isSimpleHedge"]):
+                satoshis = int(int(contract_parameters["nominalUnitsXSatsPerBch"]) / int(contract_metadata["startPrice"]))
+
             maturity_timestamp = int(contract_parameters["maturityTimestamp"])
 
             short_address = contract_metadata["shortPayoutAddress"]
