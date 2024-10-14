@@ -8,7 +8,9 @@ urlpatterns = [
     path('ad/', AdView.as_view(), name='ad-list-create'),
     path('ad/<int:pk>/', AdView.as_view(), name='ad-detail'),
     path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
-    path('ad/cash-in/', CashInAdView.as_view(), name='cashin-ads-list'),
+    path('ad/cash-in/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
+    path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'retrieve_ads_by_amount'})),
+    # path('ad/cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_ad_count_by_payment_types'})),
 
     path('user/', UserProfileView.as_view(), name='user-profile'),
     path('peer/', PeerView.as_view(), name='peer-create-edit'),
@@ -43,7 +45,6 @@ urlpatterns = [
     path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
     path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
     
-    # path('order/cash-in/check-cancellables/', OrderViewSet.as_view({'get', 'check_cancellable_cashin_orders'})),
     path('order/cash-in/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
     path('order/cash-in/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
     path('order/status/', OrderStatusViewSet.as_view({'patch': 'read_order_status'})),

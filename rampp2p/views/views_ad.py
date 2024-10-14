@@ -1,7 +1,7 @@
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
+from rest_framework.decorators import action
 
 from django.utils import timezone
 from django.db.models import Q
@@ -11,6 +11,7 @@ from django.db.models import (F, ExpressionWrapper, DecimalField, Case, When, Ou
 
 import math
 from datetime import timedelta
+from decimal import Decimal, ROUND_DOWN
 from authentication.token import TokenAuthentication
 
 import rampp2p.serializers as rampp2p_serializers
@@ -19,125 +20,258 @@ import rampp2p.models as rampp2p_models
 import logging
 logger = logging.getLogger(__name__)
 
-class CashInAdView(APIView):
+class CashInAdViewSet(viewsets.GenericViewSet):
     '''
-        Filters the best Sell Ad for given payment type and amount.
-        The best SELL ad is determined by:
-            - Ad fiat currency
-            - If SELL ad accepts the payment type selected by buyer
-            - If buy amount is within range of the SELL ad
-            - Sorted by last online
-            - Sorted by price lowest first
-        NB
-            - Excludes ads where trade_limits_in_fiat=True
-            - Excludes cash-in blacklisted peer ads if cash-in whitelist is empty
-            - Only includes cash-in whitelisted peer ads if cash-in whitelist is not empty
+        Filters the best Sell Ad for given currency, payment type and amount.
+        The best SELL ads are determined by:
+            (1) ad fiat currency,
+            (2) if ad accepts the given payment type,
+            (3) if ad limits can accomodate at least one of the given buy amount(s),
+            (4) sorted by last online,
+            (5) sorted by price lowest first
+        Limitation & restrictions:
+            (1) Excludes ads where trade_limits_in_fiat=True
+            (2) Excludes cash-in blacklisted peer ads if cash-in whitelist is empty
+            (3) Only includes cash-in whitelisted peer ads if cash-in whitelist is not empty
     '''
-    def get(self, request):
+
+    @action(methods=['get'], detail=False)
+    def retrieve_ad_count_by_payment_types(self, request):
+        '''
+        Retrieves a list by payment types where the number of recently online ads that are able to 
+        accomodate at least 1 cash-in preset is greater than 0.
+        '''
         wallet_hash = request.query_params.get('wallet_hash')
         currency = request.query_params.get('currency')
-        payment_type = request.query_params.get('payment_type')
-        amounts = request.query_params.getlist('amounts')
-        trade_type = rampp2p_models.TradeType.SELL
 
+        try: 
+            currency = rampp2p_models.FiatCurrency.objects.get(symbol=currency)
+            queryset = self.get_queryset(currency, wallet_hash)
+
+            # Filter recently online ads
+            queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
+            queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))   
+            queryset = self.filter_preset_available_ads(queryset, currency)
+
+            # Count ads per payment_type
+            payment_types = currency.payment_types.all()
+            ad_count_by_payment = []
+            for payment in payment_types:
+                paymenttype_ads = queryset.filter(payment_methods__payment_type__id=payment.id)
+                ad_count = paymenttype_ads.count()
+                if ad_count > 0:
+                    unique_sellers_count = paymenttype_ads.order_by('owner').distinct('owner').count()
+                    ad_count_by_payment.append({
+                        'payment_type': {
+                            'id': payment.id,
+                            'short_name': payment.short_name,
+                            'full_name': payment.full_name
+                        },
+                        'ad_count': ad_count,
+                        'online_sellers': unique_sellers_count
+                    })
+            return Response(ad_count_by_payment, status=status.HTTP_200_OK)
+        except rampp2p_models.FiatCurrency.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(methods=['get'], detail=False)
+    def retrieve_ads_by_amount(self, request):
+        wallet_hash = request.query_params.get('wallet_hash')
+        payment_type_id = request.query_params.get('payment_type_id')
+        currency = request.query_params.get('currency')
+
+        try:
+            currency = rampp2p_models.FiatCurrency.objects.get(symbol=currency)
+            queryset = self.get_queryset(currency, wallet_hash)
+            queryset = queryset.filter(payment_methods__payment_type_id=payment_type_id)
+
+            ads_by_amount = {}
+            fiat_presets = currency.get_cashin_presets()
+            amounts = self.get_bch_preset_amounts(currency)
+        
+            for index, amount in enumerate(amounts):
+                ads = queryset.filter(trade_ceiling__gte=amount)
+                serialized_ads = rampp2p_serializers.AdSerializer(ads, many=True)
+                key = fiat_presets[index]
+                if key is None:
+                    key = amounts[index]
+                ads_by_amount[key] = serialized_ads.data
+            
+            logger.warning(f'ads_by_amount: {ads_by_amount}')
+            return Response(ads_by_amount, status=status.HTTP_200_OK)
+        except (rampp2p_models.PaymentMethod.DoesNotExist, 
+                rampp2p_models.FiatCurrency.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)    
+
+    def get_queryset(self, currency, wallet_hash):
+        trade_type = rampp2p_models.TradeType.SELL
         queryset = rampp2p_models.Ad.objects.filter(
             Q(deleted_at__isnull=True) & 
             Q(trade_type=trade_type) & 
             Q(is_public=True) & 
             Q(trade_amount__gt=0) &
-            Q(trade_limits_in_fiat=False) &
-            Q(fiat_currency__symbol=currency))
-        
+            Q(fiat_currency__symbol=currency.symbol) &
+            Q(trade_limits_in_fiat=False)) 
+       
+        # Exclude ads owned by caller
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
-
-        # Filter blacklisted/whitelisted
-        currency_obj = rampp2p_models.FiatCurrency.objects.filter(symbol=currency)
-        if currency_obj.exists():
-            currency_obj = currency_obj.first()
-            cashin_whitelisted_ids = currency_obj.cashin_whitelist.values_list('id', flat=True).all()
-            
-            # If whitelist is NOT empty, only whitelisted peer ads are allowed
-            if len(cashin_whitelisted_ids) > 0:
-                queryset = queryset.filter(owner__id__in=cashin_whitelisted_ids)
-            else:
-                # If whitelist is empty, blacklisted peer ads are not allowed
-                cashin_blacklisted_ids = currency_obj.cashin_blacklist.values_list('id', flat=True).all()
-
-                if len(cashin_blacklisted_ids) > 0:
-                    queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
-
-        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
-        count_online_queryset = queryset
-
-        # Filters which ads accept the selected payment method
-        if payment_type:
-            queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
-
-        market_rate_subq = rampp2p_models.MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
-        queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
-
-        # Annotate ad price for sorting
-        queryset = queryset.annotate(
-            price=ExpressionWrapper(
-                Case(
-                    When(price_type=rampp2p_models.PriceType.FLOATING, then=(F('floating_price')/100 * F('market_rate'))),
-                    default=F('fixed_price'),
-                    output_field=DecimalField()
-                ),
-                output_field=DecimalField()
-            )
-        )
-
-        # prioritize online ads
-        queryset = queryset.order_by('-last_online_at', 'price')
-        
-        # fetch related payment methods
-        ads_with_payment_methods = queryset.prefetch_related('payment_methods')
-        payment_types_set = set()
-        for ad in ads_with_payment_methods:
-            for payment_method in ad.payment_methods.all():
-                payment_types_set.add(payment_method.payment_type)
-        distinct_payment_types = list(payment_types_set)
-
-        # count the number of available ads for given preset order amounts
-        amount_ad_count = {}
-        for amount in amounts:
-            queryset_count = queryset.filter((Q(trade_floor__lte=amount) & Q(trade_ceiling__gte=amount))).count()
-            amount_ad_count[amount] = queryset_count
-
-        # fetch only ads with paymenttypes that have recently online owners
-        paymenttypes, paymenttypes_ids = self.get_paymenttypes(count_online_queryset, distinct_payment_types)
-        if payment_type is None:
-            queryset = queryset.filter(payment_methods__payment_type__id__in=paymenttypes_ids)
-
-        cashin_ads = queryset[:10]
-        serialized_ads = rampp2p_serializers.CashinAdSerializer(cashin_ads, many=True, context = { 'wallet_hash': wallet_hash })
-
-        responsedata = {
-            'ads': serialized_ads.data,
-            'payment_types': paymenttypes,
-            'amount_ad_count': amount_ad_count
-        }
-        return Response(responsedata, status=status.HTTP_200_OK)
+        queryset = self.filter_by_access_control(currency, queryset)
+        return queryset
     
-    def get_paymenttypes(self, queryset, payment_types):
-        queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))        
+    def filter_by_access_control(self, currency, queryset):
+        '''Filter/exclude by blacklisted or whitelisted list'''
+        whitelist = currency.cashin_whitelist.values_list('id', flat=True).all()
+        
+        if len(whitelist) > 0:
+            queryset = queryset.filter(owner__id__in=whitelist)
+        else:
+            cashin_blacklisted_ids = currency.cashin_blacklist.values_list('id', flat=True).all()
 
-        paymenttypes = []
-        ids = []
-        for payment_type in payment_types:
-            # Filters which ads accept the selected payment method
-            pt_queryset = queryset.filter(payment_methods__payment_type__id=payment_type.id).values('owner').distinct()
-            if pt_queryset.count() > 0:
-                paymenttypes.append({
-                    'id': payment_type.id,
-                    'full_name': payment_type.full_name,
-                    'short_name': payment_type.short_name,
-                    'online_ads_count': pt_queryset.count()
-                })
-                ids.append(payment_type.id)
+            if len(cashin_blacklisted_ids) > 0:
+                queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
+        return queryset
 
-        return paymenttypes, ids
+    # def get(self, request):
+    #     wallet_hash = request.query_params.get('wallet_hash')
+    #     currency = request.query_params.get('currency')
+    #     payment_type = request.query_params.get('payment_type')
+    #     # amounts = request.query_params.getlist('amounts')
+    #     trade_type = rampp2p_models.TradeType.SELL
+
+    #     queryset = rampp2p_models.Ad.objects.filter(
+    #         Q(deleted_at__isnull=True) & 
+    #         Q(trade_type=trade_type) & 
+    #         Q(is_public=True) & 
+    #         Q(trade_amount__gt=0) &
+    #         Q(trade_limits_in_fiat=False) &
+    #         Q(fiat_currency__symbol=currency))
+        
+    #     queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
+
+    #     # Filter blacklisted/whitelisted
+    #     currency_obj = rampp2p_models.FiatCurrency.objects.filter(symbol=currency)
+    #     if currency_obj.exists():
+    #         currency_obj = currency_obj.first()
+    #         cashin_whitelisted_ids = currency_obj.cashin_whitelist.values_list('id', flat=True).all()
+            
+    #         # If whitelist is NOT empty, only whitelisted peer ads are allowed
+    #         if len(cashin_whitelisted_ids) > 0:
+    #             queryset = queryset.filter(owner__id__in=cashin_whitelisted_ids)
+    #         else:
+    #             # If whitelist is empty, blacklisted peer ads are not allowed
+    #             cashin_blacklisted_ids = currency_obj.cashin_blacklist.values_list('id', flat=True).all()
+
+    #             if len(cashin_blacklisted_ids) > 0:
+    #                 queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
+
+    #     queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
+
+    #     # Filters which ads accept the selected payment method
+    #     if payment_type:
+    #         queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
+
+    #     market_rate_subq = rampp2p_models.MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+    #     queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
+
+    #     # Annotate ad price for sorting
+    #     queryset = queryset.annotate(
+    #         price=ExpressionWrapper(
+    #             Case(
+    #                 When(price_type=rampp2p_models.PriceType.FLOATING, then=(F('floating_price')/100 * F('market_rate'))),
+    #                 default=F('fixed_price'),
+    #                 output_field=DecimalField()
+    #             ),
+    #             output_field=DecimalField()
+    #         )
+    #     )
+
+    #     # prioritize online ads
+    #     queryset = queryset.order_by('-last_online_at', 'price')
+        
+    #     # fetch related payment methods
+    #     ads_with_payment_methods = queryset.prefetch_related('payment_methods')
+    #     payment_types_set = set()
+    #     for ad in ads_with_payment_methods:
+    #         for payment_method in ad.payment_methods.all():
+    #             payment_types_set.add(payment_method.payment_type)
+    #     distinct_payment_types = list(payment_types_set)
+
+    #     # fetch only ads with paymenttypes that have recently online owners
+    #     paymenttypes, paymenttypes_ids = self._get_ad_count_by_payment(queryset, distinct_payment_types)
+    #     if payment_type is None:
+    #         queryset = queryset.filter(payment_methods__payment_type__id__in=paymenttypes_ids)
+
+    #     queryset = queryset.distinct()
+    #     cashin_ads = queryset[:10]
+
+    #     # count the number of available ads for given preset order amounts
+    #     fiat_presets = currency_obj.get_cashin_presets()
+    #     amount_ad_count = self._get_ad_count_by_amount(queryset, fiat_presets, currency_obj.symbol)
+    #     serialized_ads = rampp2p_serializers.CashinAdSerializer(cashin_ads, many=True, context = { 'wallet_hash': wallet_hash })
+
+    #     responsedata = {
+    #         'ads': serialized_ads.data,
+    #         'payment_types': paymenttypes,
+    #         'amount_ad_count': amount_ad_count
+    #     }
+    #     return Response(responsedata, status=status.HTTP_200_OK)
+    
+    def get_bch_preset_amounts(self, currency):
+        # Use currency presets by default
+        cashin_presets = currency.get_cashin_presets()
+        convert_to_bch = True
+
+        # Use bch presets if currency's cash-in presets are not set
+        if cashin_presets is None:
+            convert_to_bch = False
+            bch_presets = rampp2p_models.CryptoCurrency.objects.get(symbol='BCH').get_cashin_presets()
+            if bch_presets:
+                cashin_presets = bch_presets
+            else:
+                # Use hard coded presets if cryptocurrency cash-in presets are not set
+                cashin_presets = ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
+        
+        # Convert to BCH using market price
+        if convert_to_bch:
+            bch_amounts = []
+            market_rate_obj = rampp2p_models.MarketRate.objects.filter(currency=currency.symbol)
+            market_price = None
+            if market_rate_obj.exists:
+                market_price = market_rate_obj.first().price
+                
+            for preset in cashin_presets:
+                amount = (preset/market_price).quantize(Decimal('0.00000001'), rounding=ROUND_DOWN) # truncate to 8 decimals
+                bch_amounts.append(str(amount))
+            cashin_presets = bch_amounts
+        
+        logger.warning(f'cashin_presets: {cashin_presets}')
+        return cashin_presets
+
+    def filter_preset_available_ads(self, queryset, currency):
+        amounts = self.get_bch_preset_amounts(currency)
+        lowest_amount = min(Decimal(amount) for amount in amounts)
+        logger.warning(f'lowest_amount: {lowest_amount}')
+        filtered_ads = queryset.filter(trade_ceiling__gte=lowest_amount)
+        return filtered_ads
+            
+    # def _get_ad_count_by_payment(self, queryset, payment_types):
+    #     queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))        
+
+    #     paymenttypes = []
+    #     ids = []
+    #     for payment_type in payment_types:
+    #         # Filters which ads accept the selected payment method
+    #         pt_queryset = queryset.filter(payment_methods__payment_type__id=payment_type.id).values('owner').distinct()
+    #         if pt_queryset.count() > 0:
+    #             paymenttypes.append({
+    #                 'id': payment_type.id,
+    #                 'full_name': payment_type.full_name,
+    #                 'short_name': payment_type.short_name,
+    #                 'online_ads_count': pt_queryset.count()
+    #             })
+    #             ids.append(payment_type.id)
+
+    #     return paymenttypes, ids
 
 class AdView(APIView):
     authentication_classes = [TokenAuthentication]

@@ -1,4 +1,3 @@
-from django import forms
 from django.db import models
 from .payment import PaymentType
 from .peer import Peer
@@ -31,7 +30,16 @@ class FiatCurrency(models.Model):
 class CryptoCurrency(models.Model):
     name = models.CharField(max_length=100)
     symbol = models.CharField(max_length=10, unique=True)
+    cashin_presets = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
        return self.symbol
+    
+    def get_cashin_presets(self):
+        if self.cashin_presets:
+            return list(map(int, self.cashin_presets.split(',')))
+        return None
+
+    def set_cashin_presets(self, presets):
+        self.cashin_presets = ','.join(map(str, presets))
