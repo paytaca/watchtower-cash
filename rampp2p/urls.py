@@ -8,9 +8,12 @@ urlpatterns = [
     path('ad/', AdView.as_view(), name='ad-list-create'),
     path('ad/<int:pk>/', AdView.as_view(), name='ad-detail'),
     path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
-    path('ad/cash-in/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
-    path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'retrieve_ads_by_amount'})),
-    # path('ad/cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_ad_count_by_payment_types'})),
+    path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
+
+    path('cash-in/ad/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
+    path('cash-in/ad/', CashInAdViewSet.as_view({'get': 'retrieve_ads_by_amount'})),
+    path('cash-in/order/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
+    path('cash-in/order/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
 
     path('user/', UserProfileView.as_view(), name='user-profile'),
     path('peer/', PeerView.as_view(), name='peer-create-edit'),
