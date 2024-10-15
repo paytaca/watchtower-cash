@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -53,7 +54,6 @@ class FiatTokenSerializer(serializers.ModelSerializer):
 
 class RedemptionContractSerializer(serializers.ModelSerializer):
     fiat_token = FiatTokenSerializer()
-    network = serializers.CharField(required=False, default="chipnet", write_only=True)
     redeemable = serializers.IntegerField(read_only=True)
     reserve_supply = serializers.IntegerField(read_only=True)
     treasury_contract_address = serializers.CharField(read_only=True)
@@ -61,7 +61,6 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.RedemptionContract
         fields = [
-            "network",
             "address",
             "fiat_token",
             "auth_token_id",
@@ -83,7 +82,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
                 tokenCategory=data["fiat_token"]["category"],
                 oraclePublicKey=data["price_oracle_pubkey"],
             ),
-            options=dict(network=data["network"], addressType="p2sh32"),
+            options=dict(network=settings.BCH_NETWORK, addressType="p2sh32"),
         ))
         data["address"] = compile_data["address"]
         existing = models.RedemptionContract.objects.filter(address=data["address"]).first()
@@ -93,7 +92,6 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        validated_data.pop("network", None)
         fiat_token_data = validated_data.pop("fiat_token")
         fiat_token = models.FiatToken(**fiat_token_data)
         fiat_token.save()
@@ -233,13 +231,11 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
         queryset=models.RedemptionContract.objects,
         slug_field="address", source="redemption_contract",
     )
-    network = serializers.CharField(required=False, default="chipnet", write_only=True)
 
     class Meta:
         model = models.TreasuryContract
         fields = [
             "redemption_contract_address",
-            "network",
             "address",
             "auth_token_id",
             "pubkey1",
@@ -266,17 +262,13 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
                     data["pubkey5"],
                 ]
             ),
-            options=dict(network=data["network"], addressType="p2sh32"),
+            options=dict(network=settings.BCH_NETWORK, addressType="p2sh32"),
         ))
         data["address"] = compile_data["address"]
         existing = models.TreasuryContract.objects.filter(address=data["address"]).first()
         if existing and (not self.instance or self.instance.id != existing.id):
             raise serializers.ValidationError("This contract already exists")
         return data
-
-    def create(self, validated_data):
-        validated_data.pop("network", None)
-        return super().create(validated_data)
 
 
 class SweepTreasuryContractSerializer(serializers.Serializer):
