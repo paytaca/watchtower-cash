@@ -52,9 +52,9 @@ export async function sweepTreasuryContract(opts) {
  * @param {Object} opts.contractOpts
  * @param {import('cashscript').Utxo[]} opts.inputs
  * @param {import('cashscript').Output} opts.outputs
- * @param {Map<String, String> | String} opts.sig1
- * @param {Map<String, String> | String} opts.sig2
- * @param {Map<String, String> | String} opts.sig3
+ * @param {{ sighash: String, signature: String }[] | String} opts.sig1
+ * @param {{ sighash: String, signature: String }[] | String} opts.sig2
+ * @param {{ sighash: String, signature: String }[] | String} opts.sig3
  * @param {Number} [opts.locktime]
  */
 export async function unlockTreasuryContractWithMultiSig(opts) {

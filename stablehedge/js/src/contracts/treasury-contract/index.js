@@ -93,9 +93,9 @@ export class TreasuryContract {
 
   /**
    * @param {Object} opts
-   * @param {Map<String, String> | SignatureTemplate} opts.sig1
-   * @param {Map<String, String> | SignatureTemplate} opts.sig2
-   * @param {Map<String, String> | SignatureTemplate} opts.sig3
+   * @param {{ sighash: String, signature: String }[] | SignatureTemplate} opts.sig1
+   * @param {{ sighash: String, signature: String }[] | SignatureTemplate} opts.sig2
+   * @param {{ sighash: String, signature: String }[] | SignatureTemplate} opts.sig3
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
    * @param {Number} [opts.locktime]
@@ -384,13 +384,13 @@ export class TreasuryContract {
 
 
 /**
- * @param {Map<String, String> | SignatureTemplate} sig 
+ * @param {{ sighash: String, signature: String }[] | SignatureTemplate} sig 
  */
 function parseSigParam(sig) {
   if (sig instanceof SignatureTemplate) return sig
 
   // last byte of a signatures is the hashType
-  const hashTypes = Object.values(sig).map(signature => hexToBin(signature).at(-1))
+  const hashTypes = sig.map(sigdata => hexToBin(sigdata.signature).at(-1))
 
   // we get only one, assumming all hashtypes of the signatures are the same
   const hashType = hashTypes[0]
@@ -410,7 +410,8 @@ function parseSigParam(sig) {
   const template = new SignatureTemplate({}, hashType)
   template.generateSignature = (sighash) => {
     const sighashHex = binToHex(sighash)
-    const sigHex = sig?.[sighashHex] ?? ''
+    const sigData = sig.find(sigData => sigData?.sighash == sighashHex)
+    const sigHex = sigData?.signature ?? ''
     if (!sigHex) {
       // console.error('Unable to find sig for sighash', sighashHex, 'in', sig)
       throw new Error(`Unable to find sig for sighash '${sighashHex}'`)
