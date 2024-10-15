@@ -7,6 +7,7 @@ from stablehedge import serializers
 
 from stablehedge.filters import (
     RedemptionContractFilter,
+    RedemptionContractTransactionFilter,
 )
 from stablehedge.js.runner import ScriptFunctions
 
@@ -90,6 +91,21 @@ class RedemptionContractViewSet(
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
         return Response(serializer.data)
+
+class RedemptionContractTransactionViewSet(
+    viewsets.GenericViewSet,
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+):
+    serializer_class = serializers.RedemptionContractTransactionSerializer
+
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = RedemptionContractTransactionFilter
+
+    def get_queryset(self):
+        return models.RedemptionContractTransaction.objects.all()
+
 
 
 class TreasuryContractViewSet(
