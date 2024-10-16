@@ -1,6 +1,7 @@
+import { cashScriptOutputToLibauthOutput } from 'cashscript/dist/utils.js';
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
-import { isValidWif, parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
-import { SignatureTemplate } from 'cashscript'
+import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo } from '../utils/crypto.js'
+import { isUtxoP2PKH, SignatureAlgorithm, SignatureTemplate, TransactionBuilder } from 'cashscript'
 
 
 export function getTreasuryContractArtifact() {
@@ -65,9 +66,9 @@ export async function unlockTreasuryContractWithMultiSig(opts) {
 
   const transaction = await treasuryContract.unlockWithMultiSig({
     inputs, outputs,
-    sig1: isValidWif(opts?.sig1) ? new SignatureTemplate(opts?.sig1) : opts?.sig1,
-    sig2: isValidWif(opts?.sig2) ? new SignatureTemplate(opts?.sig2) : opts?.sig2,
-    sig3: isValidWif(opts?.sig3) ? new SignatureTemplate(opts?.sig3) : opts?.sig3,
+    sig1: !isValidWif(opts?.sig1) ? opts?.sig1 : new SignatureTemplate(opts?.sig1, undefined, SignatureAlgorithm.ECDSA),
+    sig2: !isValidWif(opts?.sig2) ? opts?.sig2 : new SignatureTemplate(opts?.sig2, undefined, SignatureAlgorithm.ECDSA),
+    sig3: !isValidWif(opts?.sig3) ? opts?.sig3 : new SignatureTemplate(opts?.sig3, undefined, SignatureAlgorithm.ECDSA),
     locktime: opts?.locktime,
   })
 
@@ -98,4 +99,38 @@ export async function unlockTreasuryContractWithNft(opts) {
 
   if (typeof transaction === 'string') return { success: false, error: transaction }
   return { success: true, tx_hex: await transaction.build() }
+}
+
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts 
+ * @param {import('cashscript').Utxo[]} opts.inputs
+ * @param {import('cashscript').Output[]} opts.outputs
+ */
+export async function constructTreasuryContractTx(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+  const outputs = opts?.outputs?.map(parseCashscriptOutput)
+  const transaction = await treasuryContract.unlockWithMultiSig({
+    inputs, outputs,
+    locktime: 0,
+    sig1: [],
+    sig2: [],
+    sig3: [],
+  })
+
+  // using a higher fee per byte for now due to incorrect 
+  // since multisig signatures use a 71 byte but
+  // the fee calculator in cashscript uses a 65 byte only
+  // resulting in invalid transaction since there are
+  // less sats left for transaction fee
+  transaction.withFeePerByte(1.25); 
+
+  transaction.setInputsAndOutputs();
+  return {
+    inputs: transaction.inputs.map(serializeUtxo),
+    outputs: transaction.outputs.map(serializeOutput),
+  }
 }

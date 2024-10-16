@@ -1,6 +1,9 @@
+from django.utils import timezone
 from datetime import datetime, timedelta
 from ..js.runner import AnyhedgeFunctions
 from ..models import (
+    HedgePosition,
+    HedgePositionMetadata,
     HedgePositionOffer,
     Oracle,
     PriceOracleMessage,
@@ -281,6 +284,64 @@ def compile_contract_from_hedge_position_offer(hedge_position_offer_obj):
         longAddress=long_address,
         fees=fees,
     )
+
+def contract_data_to_obj(contract_data:dict):
+    parameters = contract_data["parameters"]
+    metadata = contract_data["metadata"]
+
+    metadata_obj = HedgePositionMetadata(
+        position_taker=metadata["takerSide"]
+    )
+
+    start_timestamp = int(parameters["startTimestamp"])
+    maturity_timestamp = int(parameters["maturityTimestamp"])
+
+    start_timestamp = timezone.datetime.fromtimestamp(start_timestamp)
+    maturity_timestamp = timezone.datetime.fromtimestamp(maturity_timestamp)
+
+    start_timestamp = timezone.make_aware(start_timestamp)
+    maturity_timestamp = timezone.make_aware(maturity_timestamp)
+
+    is_simple_hedge = True if int(metadata["isSimpleHedge"]) else False
+    satoshis = int(metadata["shortInputInSatoshis"])
+    if not is_simple_hedge:
+        satoshis = int(int(parameters["nominalUnitsXSatsPerBch"]) / int(metadata["startPrice"]))
+
+    hedge_pos_obj = HedgePosition(
+        address = contract_data["address"],
+        anyhedge_contract_version = contract_data["version"],
+        satoshis = satoshis,
+        start_timestamp = start_timestamp,
+        maturity_timestamp = maturity_timestamp,
+
+        short_wallet_hash = "",
+        short_address = metadata["shortPayoutAddress"],
+        short_pubkey = parameters["shortMutualRedeemPublicKey"],
+        short_address_path = None,
+
+        long_wallet_hash = "",
+        long_address = metadata["longPayoutAddress"],
+        long_pubkey = parameters["longMutualRedeemPublicKey"],
+        long_address_path = None,
+
+        oracle_pubkey = parameters["oraclePublicKey"],
+        start_price = int(metadata["startPrice"]),
+
+        low_liquidation_multiplier = metadata["lowLiquidationPriceMultiplier"],
+        high_liquidation_multiplier = metadata["highLiquidationPriceMultiplier"],
+
+        starting_oracle_message = metadata["startingOracleMessage"],
+        starting_oracle_signature = metadata["startingOracleSignature"],
+
+        is_simple_hedge = is_simple_hedge,
+    )
+
+    # check if it's still reproducing the correct address
+    contract_data2 = compile_contract_from_hedge_position(hedge_pos_obj, taker_side=metadata["takerSide"])
+    if contract_data2["address"] != hedge_pos_obj.address:
+        raise Exception("Recompiled hedge position does not match")
+
+    return hedge_pos_obj, metadata_obj
 
 
 def get_contract_status(

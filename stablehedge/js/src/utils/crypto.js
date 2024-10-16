@@ -214,3 +214,21 @@ export function serializeUtxo(utxo) {
     }
   }
 }
+
+/**
+ * @param {import('cashscript').Output} output
+ */
+export function serializeOutput(output) {
+  return {
+    to: typeof output.to === 'string' ? output.to : binToHex(output.to),
+    amount: String(output.amount),
+    token: !output?.token ? undefined : {
+      category: output?.token?.category,
+      amount: String(output?.token?.amount),
+      nft: !output?.token?.nft ? undefined : {
+        capability: output?.token?.nft?.capability,
+        commitment: output?.token?.nft?.commitment,
+      }
+    }
+  }
+}
