@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import (F, ExpressionWrapper, DecimalField, Case, When, OuterRef, Subquery)
+from django.db.models import (F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery)
 
 import math
 from datetime import timedelta
@@ -19,6 +19,10 @@ import rampp2p.models as rampp2p_models
 
 import logging
 logger = logging.getLogger(__name__)
+
+class Round(Func):
+    function = 'ROUND'
+    template = '%(function)s(%(expressions)s, 8)'
 
 class CashInAdViewSet(viewsets.GenericViewSet):
 
@@ -112,6 +116,17 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         return Response(responsedata, status=status.HTTP_200_OK)
 
     @action(methods=['get'], detail=False)
+    def list_presets(self, request):
+        currency = request.query_params.get('currency')
+
+        try: 
+            currency = rampp2p_models.FiatCurrency.objects.get(symbol=currency)
+            presets = currency.get_cashin_presets()
+            return Response(presets, status=status.HTTP_200_OK)
+        except rampp2p_models.FiatCurrency.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+    @action(methods=['get'], detail=False)
     def retrieve_ad_count_by_payment_types(self, request):
         '''
         Retrieves a list by payment types where the number of recently online ads that are able to 
@@ -147,12 +162,14 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(methods=['get'], detail=False)
-    def retrieve_ads_by_amount(self, request):
+    def retrieve_ads_by_presets(self, request):
         ''' Retrieves cash-in ads sorted by preset amounts of a given currency. '''
 
         wallet_hash = request.query_params.get('wallet_hash')
         payment_type_id = request.query_params.get('payment_type')
         currency = request.query_params.get('currency')
+        by_fiat = request.query_params.get('by_fiat')
+        by_fiat = by_fiat == 'true'
 
         try:
             currency = rampp2p_models.FiatCurrency.objects.get(symbol=currency)
@@ -160,16 +177,22 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             queryset = queryset.filter(payment_methods__payment_type_id=payment_type_id)
 
             ads_by_amount = {}
-            fiat_presets = currency.get_cashin_presets()
+            presets = currency.get_cashin_presets()
             amounts = self.get_bch_preset_amounts(currency)
-        
-            for index, amount in enumerate(amounts):
-                ads = queryset.filter(Q(trade_floor__lte=amount) & (Q(trade_amount__gte=amount) & Q(trade_ceiling__gte=amount)))
-                serialized_ads = rampp2p_serializers.CashinAdSerializer(ads, many=True)
-                key = fiat_presets[index]
-                if key is None:
-                    key = amounts[index]
-                ads_by_amount[key] = serialized_ads.data
+            
+            if not by_fiat:
+                bch = rampp2p_models.CryptoCurrency.objects.get(symbol="BCH")
+                presets = bch.get_cashin_presets() or ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
+                amounts = presets 
+
+            if presets:
+                for index, amount in enumerate(amounts):
+                    ads = queryset.filter(Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount))
+                    serialized_ads = rampp2p_serializers.CashinAdSerializer(ads, many=True)
+                    key = presets[index]
+                    if key is None:
+                        key = amounts[index]
+                    ads_by_amount[key] = serialized_ads.data
             
             return Response(ads_by_amount, status=status.HTTP_200_OK)
         except (rampp2p_models.PaymentMethod.DoesNotExist, 
@@ -186,8 +209,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             Q(trade_type=trade_type) & 
             Q(is_public=True) & 
             Q(trade_amount__gt=0) &
-            Q(fiat_currency__symbol=currency.symbol) &
-            Q(trade_limits_in_fiat=False)) 
+            Q(fiat_currency__symbol=currency.symbol)) 
        
         # Exclude ads owned by caller
         queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
@@ -205,6 +227,39 @@ class CashInAdViewSet(viewsets.GenericViewSet):
                 output_field=DecimalField()
             )
         )
+
+        queryset = queryset.annotate(
+            bch_trade_amount=ExpressionWrapper(
+                Case(When(
+                    trade_amount_in_fiat=True,
+                    then=(F('trade_amount') / F('price'))),
+                    default=F('trade_amount'),
+                    output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ).annotate(rounded_bch_trade_amount=Round('bch_trade_amount', output_field=DecimalField(max_digits=18, decimal_places=8)))
+        
+        queryset = queryset.annotate(
+            bch_trade_floor=ExpressionWrapper(
+                Case(When(
+                    trade_limits_in_fiat=True,
+                    then=(F('trade_floor') / F('price'))),
+                    default=F('trade_floor'),
+                    output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ).annotate(rounded_bch_trade_floor=Round('bch_trade_floor', output_field=DecimalField(max_digits=18, decimal_places=8)))
+        
+        queryset = queryset.annotate(
+            bch_trade_ceiling=ExpressionWrapper(
+                Case(When(
+                    trade_limits_in_fiat=True,
+                    then=(F('trade_ceiling') / F('price'))),
+                    default=F('trade_ceiling'),
+                    output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ).annotate(rounded_bch_trade_ceiling=Round('bch_trade_ceiling', output_field=DecimalField(max_digits=18, decimal_places=8)))
 
         # Filter recently online ads
         queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
@@ -264,7 +319,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         amounts = self.get_bch_preset_amounts(currency)
         combined_query = Q()
         for amount in amounts:
-            combined_query |= Q(trade_floor__lte=amount) & Q(trade_amount__gte=amount) & Q(trade_ceiling__gte=amount)
+            combined_query |= Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount)
         return queryset.filter(combined_query)
     
     def get_paymenttypes(self, queryset, payment_types):

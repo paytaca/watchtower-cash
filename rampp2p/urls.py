@@ -10,8 +10,9 @@ urlpatterns = [
     path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
     path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
 
+    path('cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_presets'})),
     path('cash-in/ad/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
-    path('cash-in/ad/', CashInAdViewSet.as_view({'get': 'retrieve_ads_by_amount'})),
+    path('cash-in/ad/', CashInAdViewSet.as_view({'get': 'retrieve_ads_by_presets'})),
     path('cash-in/order/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
     path('cash-in/order/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
 

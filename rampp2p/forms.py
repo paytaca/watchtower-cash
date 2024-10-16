@@ -4,11 +4,13 @@ from .models import *
 class FiatCurrencyForm(forms.ModelForm):
     cashin_blacklist = forms.ModelMultipleChoiceField(
         queryset=Peer.objects.all(),
-        help_text='Peers not allowed to receive cash-in orders in this currency. If whitelist is not empty, this list is ignored.'
+        help_text='Peers not allowed to receive cash-in orders in this currency. If whitelist is not empty, this list is ignored.',
+        required=False
     )
     cashin_whitelist = forms.ModelMultipleChoiceField(
         queryset=Peer.objects.all(),
-        help_text='Peers allowed to receive cash-in orders in this currency. Blacklist is ignored if this list is not empty.'
+        help_text='Peers allowed to receive cash-in orders in this currency. Blacklist is ignored if this list is not empty.',
+        required=False
     )
     cashin_presets = forms.CharField(
         widget=forms.Textarea,

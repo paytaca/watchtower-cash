@@ -19,7 +19,7 @@ class FiatCurrency(models.Model):
     def get_cashin_presets(self):
         if self.cashin_presets:
             return list(map(int, self.cashin_presets.split(',')))
-        return None
+        return []
 
     def set_cashin_presets(self, presets):
         self.cashin_presets = ','.join(map(str, presets))
