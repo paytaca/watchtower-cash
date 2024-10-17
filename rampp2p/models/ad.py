@@ -1,6 +1,9 @@
 from django.db import models
 from django.utils import timezone
+from django.apps import apps
+
 from datetime import timedelta
+
 from .peer import Peer
 from .currency import FiatCurrency, CryptoCurrency
 from .payment import PaymentMethod, PaymentType

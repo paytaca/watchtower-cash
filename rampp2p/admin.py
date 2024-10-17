@@ -41,6 +41,26 @@ class FiatCurrencyAdmin(admin.ModelAdmin):
 
 admin.site.register(FiatCurrency, FiatCurrencyAdmin)
 
+class CryptoCurrencyAdmin(admin.ModelAdmin):
+    form = CryptoCurrencyForm
+
+    def save_model(self, request, obj, form, change):
+        obj.cashin_presets = form.cleaned_data['cashin_presets']
+        super().save_model(request, obj, form, change)
+
+    def cashin_presets_display(self, obj):
+        presets = obj.get_cashin_presets()
+        if presets:
+            return ', '.join(map(str, presets))
+        return None
+        
+    cashin_presets_display.short_description = 'Cash In Presets'
+
+    list_display = ['name', 'symbol', 'cashin_presets_display']
+    search_fields = ['name', 'symbol']
+
+admin.site.register(CryptoCurrency, CryptoCurrencyAdmin)
+
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -196,7 +216,6 @@ class TransactionAdmin(admin.ModelAdmin):
     ]
 admin.site.register(Transaction, TransactionAdmin)
 
-admin.site.register(CryptoCurrency)
 admin.site.register(ReservedName)
 admin.site.register(IdentifierFormat)
 
