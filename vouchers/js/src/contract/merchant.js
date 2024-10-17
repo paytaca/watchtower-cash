@@ -1,14 +1,9 @@
-import BCHJS from "@psf/bch-js"
 import { compileFile } from "cashc";
 import { reverseHex, toBytes32 } from "../funcs/utils.js"
 import {
   Contract,
   ElectrumNetworkProvider,
-  SignatureTemplate,
 } from "cashscript";
-
-
-const bchjs = new BCHJS()
 
 
 /**
@@ -20,10 +15,6 @@ const bchjs = new BCHJS()
  * @param {String} opts.params.merchant.pubkey.merchant = 0th index pubkey
  * @param {String} opts.params.merchant.pubkey.device = 1<PADDED_ZEROS><POSID>th index pubkey of POS device 
  * 
- * @param {Object} opts.params.funder
- * @param {String} opts.params.funder.address
- * @param {String} opts.params.funder.wif
- * 
  * @param {Object} opts.options
  * @param {String} opts.options.network = 'mainnet | chipnet' 
  * 
@@ -32,7 +23,6 @@ export class MerchantVault {
 
   constructor (opts) {    
     this.merchant = opts?.params?.merchant
-    this.funder = opts?.params?.funder
     this.network = opts?.options?.network
     this.dust = 1000n
   }
@@ -53,11 +43,6 @@ export class MerchantVault {
       merchant: compileFile(new URL('merchant_vault.cash', import.meta.url)),
       device: compileFile(new URL('device_vault.cash', import.meta.url)),
     }
-  }
-
-  get funderSignature () {
-    const keyPair = bchjs.ECPair.fromWIF(this.funder?.wif)
-    return new SignatureTemplate(keyPair)
   }
 
   get contract () {
@@ -93,8 +78,18 @@ export class MerchantVault {
     return deviceContract
   }
 
-  getContract () {
-    return this.contract
+  async getBalance () {
+    const utxos = await this.contract.getUtxos()
+    const bchUtxos = utxos.filter(utxo => !utxo?.token)
+    
+    const balance = await this.contract.getBalance()
+    const bchBalance = bchUtxos.reduce((acc, obj) => acc + obj?.satoshis, 0n)
+    const tokenBalance = balance - bchBalance
+
+    return {
+      bch: Number(bchBalance) / 1e8,
+      tokens: Number(tokenBalance) / 1e8,
+    }
   }
 
   async claim (voucherCategory) {
@@ -103,8 +98,8 @@ export class MerchantVault {
 
     if (voucherUtxos.length < 2) throw new Error('Key and Lock NFTs should both be present before claiming')
     if (voucherUtxos.length === 0) throw new Error(`No category ${voucherCategory} utxos found`)
-
-    // add verification token UTXO to be burned
+    
+    // Do not burn verification token to be used as fee for POS device release to merchant
     const verificationTokenUtxo = _utxos.find(utxo => utxo?.token?.category === this.merchant?.verificationCategory)
     const lockNftUtxo = voucherUtxos.find(utxo => {
       return (
@@ -118,6 +113,8 @@ export class MerchantVault {
       .claim(reverseHex(voucherCategory))
       .from(voucherUtxos)
       .to(this.deviceContract.address, lockNftUtxo.satoshis)
+      .to(this.deviceContract.tokenAddress, this.dust, verificationTokenUtxo?.token)
+      .withHardcodedFee(1500n)
       .withoutTokenChange()
       .withoutChange()
       .send()
@@ -137,22 +134,16 @@ export class MerchantVault {
 
     if (!lockNftUtxo) throw new Error(`No lock NFT of category ${category} utxos found`)
 
-    const funderUtxos = this.provider.getUtxos(this.funder?.address)
-    const funderUtxo = funderUtxos.find(utxo => !utxo?.token && utxo.satoshis >= this.dust)
-    const funderChange = funderUtxo.satoshis - this.dust
+    const excessForFee = lockNftUtxo.satoshis - this.dust
+    if (excessForFee < this.dust) return
 
-    let transaction = this.contract.functions
+    const transaction = await this.contract.functions
       .refund()
-      .from(lockNftUtxo)
-      .fromP2PKH(funderUtxo, this.funderSignature)
-      .to(this.merchant?.address, lockNftUtxo.satoshis)
-    
-    if (funderChange >= this.dust) transaction = transaction.to(this.funder?.address, funderChange)
-      
-    transaction = await transaction
-      .withoutTokenChange()
+      .from([ lockNftUtxo ])
+      .to(this.merchant?.address, excessForFee)
       .withHardcodedFee(this.dust)
       .withTime(latestBlockTimestamp)
+      .withoutTokenChange()
       .send()
 
     const result = {

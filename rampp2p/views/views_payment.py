@@ -165,6 +165,7 @@ class PaymentMethodViewSet(viewsets.GenericViewSet):
 class OrderPaymentViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.OrderPaymentSerializer
     parser_classes = [MultiPartParser]
     queryset = models.OrderPayment.objects.all()
 

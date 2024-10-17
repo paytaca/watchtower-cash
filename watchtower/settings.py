@@ -648,7 +648,15 @@ DEFAULT_TOKEN_DETAILS = {
     }
 }
 
-# p2p exchange
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = config('ENV', 'prod') != 'prod'
+ENV = config('ENV', 'prod')
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = config('ENV', 'prod') != 'prod'
+ENV = config('ENV', 'prod')
+
+# P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_PK = config('SERVICER_PK', '')
 SERVICER_ADDR = config('SERVICER_ADDR', '')

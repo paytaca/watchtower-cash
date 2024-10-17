@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import serializers
+from main.utils.broadcast import broadcast_to_engagementhub
 
 from .models import (
     Invoice,
@@ -234,6 +235,15 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
         title = "Payment Request"
         message = f"You have a payment request of {instance.total_bch} BCH"
+
+        broadcast_to_engagementhub({
+            'title': title,
+            'message': message,
+            'wallet_hash': wallet_hashes,
+            'notif_type': 'TR',
+            'date_posted': timezone.now().isoformat()
+        })
+
         return send_push_notification_to_wallet_hashes(
             wallet_hashes,
             message,

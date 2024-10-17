@@ -1,18 +1,15 @@
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser
 from rest_framework.decorators import action
 
 from django.http import Http404
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.utils.translation import gettext_lazy as _
-from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField
+from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField, CharField
 
 from datetime import datetime, time, timedelta
-from PIL import Image
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
 import math
@@ -22,9 +19,8 @@ from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.models as models
 import rampp2p.serializers as serializers
-import rampp2p.utils.utils as rampp2putils
+import rampp2p.utils.utils as utils
 import rampp2p.utils.websocket as websocket
-import rampp2p.utils.file_upload as file_upload_utils
 
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
@@ -33,9 +29,11 @@ from rampp2p.validators import *
 import logging
 logger = logging.getLogger(__name__)
 
-class CashinOrderView(APIView):
+class CashinOrderViewSet(viewsets.GenericViewSet):
+    queryset = models.Order.objects.all()
 
-    def get(self, request):
+    @action(detail=False, methods=['get'])
+    def list(self, request):
         wallet_hash = request.query_params.get('wallet_hash')
         status_type = request.query_params.get('status_type')
         owned = request.query_params.get('owned')
@@ -107,6 +105,12 @@ class CashinOrderView(APIView):
         }
         return Response(data, status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'])
+    def check_alerts(self, request):
+        wallet_hash = request.query_params.get('wallet_hash')
+        has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
+        return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
+
 class OrderViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
@@ -133,7 +137,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         wallet_hash = request.user.wallet_hash
-        params = self._parse_params(request=request)
+        params = self._parse_params(request)
 
         if params['status_type'] is None:
             return Response(
@@ -292,7 +296,7 @@ class OrderViewSet(viewsets.GenericViewSet):
                 self._check_payment_permissions(wallet_hash, payment_method_ids)
             
             # check permissions
-            self._check_permissions(wallet_hash, ad.id)
+            self._check_create_permissions(wallet_hash, ad.id)
 
             # query market price for ad fiat currency
             market_price = models.MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
@@ -306,6 +310,12 @@ class OrderViewSet(viewsets.GenericViewSet):
 
         try:
             with transaction.atomic():
+                # Prevent multiple cash-in orders with status Submitted/Confirmed
+                if is_cash_in:
+                    cancellable_cashin_orders = self._cancellable_cash_in_orders(wallet_hash)
+                    if cancellable_cashin_orders.count() > 0:
+                        raise ValidationError({ 'pending_orders': cancellable_cashin_orders })
+
                 # Create a snapshot of ad
                 ad_snapshot = models.AdSnapshot(
                     ad = ad,
@@ -441,7 +451,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
         serialized_order = serializers.OrderSerializer(order, context={ 'wallet_hash': wallet_hash }).data
         return Response(serialized_order, status=status.HTTP_200_OK)
-    
+
     @action(detail=True, methods=['get'])
     def members(self, request, pk):
         if request.method == 'GET':
@@ -488,12 +498,137 @@ class OrderViewSet(viewsets.GenericViewSet):
             websocket.send_general_update({'type': WSGeneralMessageType.READ_ORDER.value, 'extra': { 'unread_count': unread_count }}, wallet_hash)
             return Response({'success': True}, status=status.HTTP_200_OK)
 
+    # @action(detail=True, methods=['get'])
+    # def check_cancellable_cashin_orders(self, request, wallet_hash):
+    #     pending_orders = self._cancellable_cash_in_orders(wallet_hash)
+    #     return Response({ 'pending_orders': pending_orders }, status=200)
+
+    def _parse_params(self, request_data):
+        request = request_data
+        limit = request.query_params.get('limit', 0)
+        page = request.query_params.get('page', 1)
+        status_type = request.query_params.get('status_type')
+        currency = request.query_params.get('currency')
+        trade_type = request.query_params.get('trade_type')
+        statuses = request.query_params.getlist('status')
+        payment_types = request.query_params.getlist('payment_types')
+        time_limits = request.query_params.getlist('time_limits')
+        sort_by = request.query_params.get('sort_by')
+        sort_type = request.query_params.get('sort_type')
+        owned = request.query_params.get('owned')
+        appealable = request.query_params.get('appealable')
+        not_appealable = request.query_params.get('not_appealable')
+        query_name = request.query_params.get('query_name')
+
+        if owned is not None:
+            owned = owned == 'true'
+        if appealable is not None:
+            appealable = appealable == 'true'
+        if not_appealable is not None:
+            not_appealable = not_appealable == 'true'
+
+        return {
+            'limit': limit,
+            'page': page,
+            'status_type': status_type,
+            'currency': currency,
+            'trade_type': trade_type,
+            'statuses': statuses,
+            'payment_types': payment_types,
+            'time_limits': time_limits,
+            'sort_by': sort_by,
+            'sort_type': sort_type,
+            'owned': owned,
+            'appealable': appealable,
+            'not_appealable': not_appealable,
+            'query_name': query_name
+        }
+    
+    def _generate_tracking_id(self):
+        ''' PEO[year][month][day]-[order_count_today] e.g. PEO20211201-0001 '''
+        today = datetime.today()
+        today_midnight = datetime.combine(today, time.min)
+        next_day_midnight = datetime.combine(today + timedelta(days=1), time.min)
+        order_count = models.Order.objects.filter(created_at__gte=today_midnight, created_at__lt=next_day_midnight).count()
+        tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
+        return tracking_id
+    
+    def _check_create_permissions(self, wallet_hash, pk):
+        '''
+        - Arbiters are not allowed to create orders
+        - Ad owners are not allowed to create orders for their own ads
+        '''
+        # check if arbiter
+        is_arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists()
+        if is_arbiter: raise ValidationError('Arbiter cannot create orders')
+
+        # check if ad owner
+        is_ad_owner = models.Ad.objects.filter(pk=pk, owner__wallet_hash=wallet_hash).exists()
+        if is_ad_owner: raise ValidationError('Ad owner cannot create order for this ad')
+
+    def _check_payment_permissions(self, wallet_hash, payment_method_ids: List[int]):
+        ''' Validates if peer owns the payment methods '''
+        owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
+        if len(payment_method_ids) != owned_payment_methods.count():
+            raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
+    
+    def _cancellable_cash_in_orders(self, wallet_hash):
+        queryset = models.Order.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(is_cash_in=True))
+
+        latest_status = models.Status.objects.filter(order__id=OuterRef('pk')).order_by('-id')
+        queryset = queryset.annotate(
+            latest_status = Subquery(latest_status.values('status')[:1], output_field=CharField())
+        )
+        queryset = queryset.filter(Q(latest_status=StatusType.SUBMITTED) | Q(latest_status=StatusType.CONFIRMED)).values_list('id', flat=True)
+        logger.warning(f'queryset: {queryset}')
+        return queryset
+
+class OrderStatusViewSet(viewsets.GenericViewSet):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.OrderSerializer
+    queryset = models.Order.objects.all()
+
     @action(detail=True, methods=['get'])
     def list_status(self, request, pk):
         queryset = Status.objects.filter(order__id=pk)
         serializer = serializers.StatusSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['patch'])
+    def read_status(self, request, pk):
+        try:
+            # check edit permission
+            member = self._check_status_edit_permissions(pk, request.user.wallet_hash)
+            statuses = models.Status.objects.filter(order__id=pk)
+
+            status_id = request.data.get('status_id')
+            if status_id:
+                statuses = statuses.filter(id=status_id)
+                
+            for status_obj in statuses:
+                if member.type == models.OrderMember.MemberType.SELLER:
+                    status_obj.seller_read_at = timezone.now()
+                if member.type == models.OrderMember.MemberType.BUYER:
+                    status_obj.buyer_read_at = timezone.now()
+                status_obj.save()
+            return Response(status=status.HTTP_200_OK)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['patch'])
+    def read_order_status(self, request):
+        wallet_hash = request.user.wallet_hash
+        order_ids = request.data.get('order_ids', [])
+        statuses = models.Status.objects.filter(order__id__in=order_ids)
+        for status in statuses:
+            if not status.buyer_read_at:
+                status.buyer_read_at = timezone.now()
+                status.save()
+
+        has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
+        return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
+    
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk):
         '''Confirms an order. Is callable only by the ad owner.'''
@@ -527,7 +662,7 @@ class OrderViewSet(viewsets.GenericViewSet):
                 if (order.ad_snapshot.ad.trade_amount_in_fiat):
                     # convert to fiat
                     amount_to_dec = order.crypto_amount * order.locked_price
-                    logger.warn(f'amount_to_dec: {amount_to_dec}')
+
                 trade_amount = order.ad_snapshot.ad.trade_amount - amount_to_dec
                 if trade_amount < 0:
                     raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
@@ -549,10 +684,9 @@ class OrderViewSet(viewsets.GenericViewSet):
         serialized_status = serializers.StatusReadSerializer(serialized_status.save())
         
         # send websocket notification
-        websocket.send_order_update({
-            'success': True,
-            'status': serialized_status.data
-        }, pk)
+        websocket.send_order_update({'success': True, 'status': serialized_status.data}, pk)
+        if order.is_cash_in:
+            websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': pk}, order.owner.wallet_hash)
         
         # send push notification
         message = f'Order #{order.id} confirmed'
@@ -581,7 +715,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             with transaction.atomic():
                 # Update Ad trade_amount if order was CONFIRMED
                 order = models.Order.objects.get(pk=pk)
-                current_status = rampp2putils.get_last_status(order.id)
+                current_status = utils.get_last_status(order.id)
                 if current_status.status == StatusType.CONFIRMED:
                     trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
                     ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
@@ -601,8 +735,9 @@ class OrderViewSet(viewsets.GenericViewSet):
                     member.save()
 
                 # Send WebSocket update
-                websocket_msg = {'success' : True, 'status': serialized_status.data}
-                websocket.send_order_update(websocket_msg, pk)
+                websocket.send_order_update({'success' : True, 'status': serialized_status.data}, pk)
+                if order.is_cash_in:
+                    websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': pk}, order.owner.wallet_hash)
 
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -648,6 +783,9 @@ class OrderViewSet(viewsets.GenericViewSet):
                 'transaction': serializers.TransactionSerializer(transaction).data
             }
             websocket.send_order_update(websocket_msg, pk)
+            if order.is_cash_in:
+                websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': pk}, order.owner.wallet_hash)
+
             response = websocket_msg
         except (ValidationError, IntegrityError, models.Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -674,6 +812,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             validate_status_progression(StatusType.PAID_PENDING, pk)
 
             response = {}
+            order_payment_methods = []
             if not order.is_cash_in:
                 '''Require selected payment methods if order is not cash-in.
                 Cash-in orders already have payment methods selected on order creation'''
@@ -688,7 +827,6 @@ class OrderViewSet(viewsets.GenericViewSet):
                 order.save() 
 
                 # Create order-specific payment methods
-                order_payment_methods = []
                 for payment_method in payment_methods:
                     data = {
                         "order": order.id,
@@ -699,7 +837,12 @@ class OrderViewSet(viewsets.GenericViewSet):
                     if order_method.is_valid():
                         order_payment_methods.append(order_method.save())
                 order_payment_methods = serializers.OrderPaymentSerializer(order_payment_methods, many=True)
-                response["order_payment_methods"] = order_payment_methods.data
+            else:
+                order_methods = models.OrderPayment.objects.filter(order__id=order.id)
+                if order_methods.exists():
+                    order_payment_methods = serializers.OrderPaymentSerializer(order_methods, many=True)
+            
+            response["order_payment_methods"] = order_payment_methods.data
 
             context = { 'wallet_hash': wallet_hash }
             serialized_order = serializers.OrderSerializer(order, context=context)
@@ -757,139 +900,13 @@ class OrderViewSet(viewsets.GenericViewSet):
         except (ValidationError, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
-    def _parse_params(self, request):
-        limit = request.query_params.get('limit', 0)
-        page = request.query_params.get('page', 1)
-        status_type = request.query_params.get('status_type')
-        currency = request.query_params.get('currency')
-        trade_type = request.query_params.get('trade_type')
-        statuses = request.query_params.getlist('status')
-        payment_types = request.query_params.getlist('payment_types')
-        time_limits = request.query_params.getlist('time_limits')
-        sort_by = request.query_params.get('sort_by')
-        sort_type = request.query_params.get('sort_type')
-        owned = request.query_params.get('owned')
-        appealable = request.query_params.get('appealable')
-        not_appealable = request.query_params.get('not_appealable')
-        query_name = request.query_params.get('query_name')
-
-        if owned is not None:
-            owned = owned == 'true'
-        if appealable is not None:
-            appealable = appealable == 'true'
-        if not_appealable is not None:
-            not_appealable = not_appealable == 'true'
-
-        return {
-            'limit': limit,
-            'page': page,
-            'status_type': status_type,
-            'currency': currency,
-            'trade_type': trade_type,
-            'statuses': statuses,
-            'payment_types': payment_types,
-            'time_limits': time_limits,
-            'sort_by': sort_by,
-            'sort_type': sort_type,
-            'owned': owned,
-            'appealable': appealable,
-            'not_appealable': not_appealable,
-            'query_name': query_name
-        }
+    def _check_status_edit_permissions(self, order_pk, wallet_hash):
+        '''Throws an error if wallet_hash is not a participant of status's order'''
+        
+        members = utils.get_order_members(order_pk)
+        if wallet_hash == members['seller'].peer.wallet_hash:
+            return members['seller']
+        if wallet_hash == members['buyer'].peer.wallet_hash:
+            return members['buyer']
+        raise ValidationError('User not allowed to perform this action')
     
-    def _generate_tracking_id(self):
-        ''' PEO[year][month][day]-[order_count_today] e.g. PEO20211201-0001 '''
-        today = datetime.today()
-        today_midnight = datetime.combine(today, time.min)
-        next_day_midnight = datetime.combine(today + timedelta(days=1), time.min)
-        order_count = models.Order.objects.filter(created_at__gte=today_midnight, created_at__lt=next_day_midnight).count()
-        tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
-        return tracking_id
-    
-    def _check_permissions(self, wallet_hash, pk):
-        '''
-        - Arbiters are not allowed to create orders
-        - Ad owners are not allowed to create orders for their own ads
-        '''
-        # check if arbiter
-        is_arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash).exists()
-        if is_arbiter: raise ValidationError('Arbiter cannot create orders')
-
-        # check if ad owner
-        is_ad_owner = models.Ad.objects.filter(pk=pk, owner__wallet_hash=wallet_hash).exists()
-        if is_ad_owner: raise ValidationError('Ad owner cannot create order for this ad')
-
-    def _check_payment_permissions(self, wallet_hash, payment_method_ids: List[int]):
-        ''' Validates if peer owns the payment methods '''
-        owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
-        if len(payment_method_ids) != owned_payment_methods.count():
-            raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
-        
-class UploadOrderPaymentAttachmentView(APIView):
-    authentication_classes = [TokenAuthentication]
-    parser_classes = [MultiPartParser]
-
-    def post(self, request):
-        
-        payment_id = request.data.get('payment_id')
-        image_file = request.FILES.get('image')
-
-        if image_file is None:
-            return Response({'error': 'image is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            order_payment_obj = models.OrderPayment.objects.prefetch_related('order').get(id=payment_id)
-
-            '''Order must be status=ESCROWED || PD_PN for payment attachment upload.
-            (It doesn't make sense for buyers to upload proof of payment if order 
-            is not waiting for fiat payment (i.e. order is not status=ESCROWED))'''
-            validate_awaiting_payment(order_payment_obj.order)
-
-            filesize = image_file.size
-            if filesize > 5 * 1024 * 1024: # 5mb limit
-                raise ValidationError(
-                    { 'image': _('File size cannot exceed 5 MB.')}
-                )
-
-            img_object = Image.open(image_file)
-            image_upload_obj = file_upload_utils.save_image(img_object, max_width=450, request=request)
-
-            attachment, _ = models.OrderPaymentAttachment.objects.update_or_create(payment=order_payment_obj, image=image_upload_obj)
-            serializer = serializers.OrderPaymentAttachmentSerializer(attachment)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-        except (models.OrderPayment.DoesNotExist, ValidationError) as err:
-            logger.exception(err.args[0])
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-class DeleteOrderPaymentAttachmentView(APIView):
-    authentication_classes = [TokenAuthentication]
-
-    def post(self, request):
-        order_payment_attachment_id = request.data.get('attachment_id')
-
-        try:
-            attachment = models.OrderPaymentAttachment.objects.get(id=order_payment_attachment_id)
-
-            # Buyers should only be allowed to alter proof of payment when order is status=ESCROWED
-            validate_awaiting_payment(attachment.payment.order)
-
-            file_upload_utils.delete_file(attachment.image.url_path)
-            attachment.delete()
-        except (models.OrderPaymentAttachment.DoesNotExist, Exception) as err:
-            logger.exception(err.args[0])
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(status=status.HTTP_200_OK)
-
-def validate_awaiting_payment(order):
-    '''
-    Validates that `order` is awaiting fiat payment.
-    Raises ValidationError when order's last status is not ESCRW (Escrowed) nor PD_PN
-    '''
-    last_status = rampp2putils.get_last_status(order.id)
-    if last_status.status != models.StatusType.ESCROWED and last_status.status != models.StatusType.PAID_PENDING:
-        raise ValidationError(
-            { 'order': _(f'Invalid action for {last_status.status} order')}
-        )
-
-            

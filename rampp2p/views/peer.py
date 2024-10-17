@@ -17,6 +17,7 @@ from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
 
 class PeerCreateView(APIView):
+    swagger_schema = None
     def post(self, request):
         try:
             signature, timestamp, wallet_hash = get_verification_headers(request)
@@ -75,6 +76,7 @@ class PeerCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class PeerDetailView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     
     def get(self, request):
@@ -102,6 +104,7 @@ class PeerDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class UserProfileView(APIView):
+    swagger_schema = None
     def get(self, request):
         wallet_hash = request.headers.get('wallet_hash')
         if wallet_hash is None:

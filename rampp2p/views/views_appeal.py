@@ -23,6 +23,7 @@ import math
 class AppealViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.AppealSerializer
     queryset = models.Appeal.objects.all()
 
     def list(self, request):
@@ -160,10 +161,7 @@ class AppealViewSet(viewsets.GenericViewSet):
                 }
                 
                 # Send WebSocket updates
-                websocket.send_order_update({
-                    'success' : True,
-                    'status': serialized_status.data
-                }, order_id)
+                websocket.send_order_update({'success' : True, 'status': serialized_status.data}, order_id)
 
                 # Serialize appeal for arbiter
                 rbtr_wallet_hash = appeal.order.arbiter.wallet_hash

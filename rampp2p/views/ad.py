@@ -46,6 +46,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CashInAdsList(APIView):
+    swagger_schema = None
     '''
         Filters the best Sell Ad for given payment type and amount.
         The best SELL ad is determined by:
@@ -168,6 +169,7 @@ class CashInAdsList(APIView):
 
     
 class AdListCreate(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
 
     def get(self, request):
@@ -304,6 +306,7 @@ class AdListCreate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AdDetail(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     
     def get_object(self, pk):
@@ -367,6 +370,7 @@ class AdDetail(APIView):
             raise ValidationError('No such Ad with owner exists')
 
 class AdSnapshotView(APIView):
+    swagger_schema = None
     authentication_classes = [TokenAuthentication]
     def get(self, request):
         ad_snapshot_id = request.query_params.get('ad_snapshot_id')

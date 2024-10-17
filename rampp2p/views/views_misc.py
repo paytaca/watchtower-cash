@@ -9,6 +9,7 @@ from rampp2p.models import FiatCurrency, CryptoCurrency
 from rampp2p.serializers import FiatCurrencySerializer, CryptoCurrencySerializer
 
 class FiatCurrencyViewSet(viewsets.GenericViewSet):
+    serializer_class = FiatCurrencySerializer
     queryset = FiatCurrency.objects.all()
 
     def list(self, request):
@@ -23,8 +24,10 @@ class FiatCurrencyViewSet(viewsets.GenericViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except FiatCurrency.DoesNotExist as err:
             raise Http404
+        
 
 class CryptoCurrencyViewSet(viewsets.GenericViewSet):
+    serializer_class = CryptoCurrencySerializer
     queryset = FiatCurrency.objects.all()
 
     def list(self, request):

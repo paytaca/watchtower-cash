@@ -1,5 +1,7 @@
 from notifications.utils.send import send_push_notification_to_wallet_hashes, NotificationTypes
 from django.conf import settings
+from django.utils import timezone
+from main.utils.broadcast import broadcast_to_engagementhub
 
 
 def send_wallet_history_push_notification(wallet_history_obj):
@@ -39,6 +41,14 @@ def send_wallet_history_push_notification(wallet_history_obj):
         message = f"Received {amount} {token_name}"
         if fiat_value and fiat_value.get('value', None):
             message += f" ({abs(fiat_value['value'])} {fiat_value['currency']})"
+
+        broadcast_to_engagementhub({
+            'title': title,
+            'message': message,
+            'wallet_hash': wallet_history_obj.wallet.wallet_hash,
+            'notif_type': 'TR',
+            'date_posted': timezone.now().isoformat()
+        })
 
         return send_push_notification_to_wallet_hashes(
             [wallet_history_obj.wallet.wallet_hash],
