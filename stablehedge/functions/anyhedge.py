@@ -1,4 +1,7 @@
+import time
+import json
 import decimal
+from django.conf import settings
 
 from stablehedge import models
 from stablehedge.utils.address import to_cash_address
@@ -14,12 +17,56 @@ from anyhedge import models as anyhedge_models
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
 from anyhedge.utils.funding import calculate_funding_amounts
 from anyhedge.utils.contract import (
+    AnyhedgeException,
     create_contract,
     contract_data_to_obj,
 )
 
 
 GP_LP = GeneralProtocolsLP()
+REDIS_STORAGE = settings.REDISKV
+
+
+def get_or_create_short_proposal(treasury_contract_address:str):
+    existing_data = get_short_contract_proposal(treasury_contract_address)
+    if existing_data:
+        return existing_data
+
+    return create_short_proposal(treasury_contract_address)
+
+
+def create_short_proposal(treasury_contract_address:str):
+    contract_data, settlement_service, funding_amounts, partial_tx, *_ = short_funds(treasury_contract_address)
+
+    timeout = funding_amounts["recalculate_after"]
+    ttl = int(timeout - time.time()) - 5 # 5 seconds for margin
+
+    result = [contract_data, settlement_service, funding_amounts, partial_tx]
+    REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
+
+    REDIS_STORAGE.set(REDIS_KEY, GP_LP.json_parser.dumps(result), ex=ttl)
+    return result
+
+
+def get_short_contract_proposal(treasury_contract_address:str):
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+
+    REDIS_KEY = f"treasury-contract-short-{treasury_contract.address}"
+    try:
+        data = REDIS_STORAGE.get(REDIS_KEY)
+        contract_data, settlement_service, funding_amounts, partial_tx, *_ = GP_LP.json_parser.loads(data)
+
+        # there is a recompile check inside that will throw error if address mismatch
+        contract_data_to_obj(contract_data)
+
+        return contract_data, settlement_service, funding_amounts, partial_tx
+    except (TypeError, json.JSONDecodeError):
+        return
+    except AnyhedgeException as exception:
+        if exception.code == AnyhedgeException.ADDRESS_MISMATCH:
+            return
+        else:
+            raise exception
 
 
 def short_funds(treasury_contract_address:str, pubkey1_wif=""):
@@ -75,6 +122,7 @@ def short_funds(treasury_contract_address:str, pubkey1_wif=""):
     sats_to_fund += P2PKH_OUTPUT_FEE + lp_fee
 
     funding_amounts["liquidity_fee"] = int(lp_fee)
+    funding_amounts["recalculate_after"] = int(lp_timeout)
     funding_amounts["settlement_service_fee"] = int(service_fee_estimate)
     funding_amounts["satoshis_to_fund"] = int(sats_to_fund)
 

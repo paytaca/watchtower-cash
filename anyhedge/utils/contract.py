@@ -10,6 +10,14 @@ from ..models import (
 )
 
 
+class AnyhedgeException(Exception):
+    ADDRESS_MISMATCH = "address_mismatch"
+
+    def __init__(self, *args, code=None, **kwargs):
+        self.code = code
+        super().__init__(*args, **kwargs)
+
+
 def calculate_hedge_sats(long_sats=0.0, low_price_mult=1, price_value=None):
     """
         Calculate hedge satoshis based on long satoshis
@@ -339,7 +347,10 @@ def contract_data_to_obj(contract_data:dict):
     # check if it's still reproducing the correct address
     contract_data2 = compile_contract_from_hedge_position(hedge_pos_obj, taker_side=metadata["takerSide"])
     if contract_data2["address"] != hedge_pos_obj.address:
-        raise Exception("Recompiled hedge position does not match")
+        raise AnyhedgeException(
+            "Recompiled hedge position does not match",
+            code=AnyhedgeException.ADDRESS_MISMATCH,
+        )
 
     return hedge_pos_obj, metadata_obj
 

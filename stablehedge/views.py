@@ -1,10 +1,15 @@
-from rest_framework import viewsets, mixins, decorators
+from rest_framework import viewsets, mixins, decorators, exceptions
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
 
 from stablehedge import models
 from stablehedge import serializers
 
+from stablehedge.functions.treasury_contract import get_spendable_sats
+from stablehedge.functions.anyhedge import (
+    get_short_contract_proposal,
+    get_or_create_short_proposal,
+)
 from stablehedge.filters import (
     RedemptionContractFilter,
     RedemptionContractTransactionFilter,
@@ -144,6 +149,23 @@ class TreasuryContractViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
+        return Response(result)
+
+    @decorators.action(methods=["get"], detail=True)
+    def balance(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return Response(get_spendable_sats(instance.address))
+
+    @decorators.action(methods=["get", "post"], detail=True)
+    def short_proposal(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if self.request.method == "GET": 
+            result = get_short_contract_proposal(instance.address)
+        elif self.request.method == "POST":
+            result = get_or_create_short_proposal(instance.address)
+        else:
+            raise exceptions.MethodNotAllowed(self.request.method)
+
         return Response(result)
 
 
