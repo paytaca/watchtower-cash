@@ -3,25 +3,35 @@ from rampp2p.models import StatusType
 import logging
 logger = logging.getLogger(__name__)
 
+def resolve_color_from_appeal_status(status:str):
+    if status == StatusType.APPEALED:
+        return '#ffbf00'
+    elif status == StatusType.REFUNDED:
+        return '#6495ed'
+    elif status == StatusType.RELEASED:
+        return '#40e0d0'
+    else:
+        return "#9e9e9e"
+
 def resolve_color_from_order_status(status:str):
     if status == StatusType.SUBMITTED:
-        return "#ffc107"
+        return "#ffbf00"
     elif status == StatusType.CONFIRMED:
-        return "#2196f3"
+        return "#ffbf00"
     elif status == StatusType.ESCROW_PENDING:
-        return '#ffb300'
+        return '#ffbf00'
     elif status == StatusType.ESCROWED:
-        return '#ffa000'
+        return '#6495ed'
     elif status == StatusType.PAID_PENDING:
-        return '#43a047'
+        return '#6495ed'
     elif status == StatusType.PAID:
-        return '#4caf50'
+        return '#40e0d0'
     elif status == StatusType.REFUNDED:
-        return '#43a047'
+        return '#e74c3c'
     elif status == StatusType.RELEASED:
-        return '#388e3c'
+        return '#28b463'
     elif status == StatusType.CANCELED:
-        return '#f44336'
+        return '#e74c3c'
     else:
         return "#9e9e9e"
 

@@ -162,7 +162,6 @@ class OrderSummaryMessage(MessageBase):
 
             if (result["success"] or result.get("error") != "message_not_found") and \
                 (not channel or msg_log.channel == channel):
-
                 send_new = False
 
             results.append(result)
@@ -172,8 +171,6 @@ class OrderSummaryMessage(MessageBase):
             if channel: kwargs["channel"] = channel
             result = cls.send_message(**kwargs)
             results.append(result)
-
-        logger.warning(f'results: {results}')
 
         for result in results:
             if not result.get("success"):
@@ -252,7 +249,6 @@ class OrderSummaryMessage(MessageBase):
             block_kit.Markdown(f"Order created at {block_kit_helpers.format_timestamp(created_at)}")
         )
 
-
 class OrderStatusUpdateMessage(MessageBase):
     @classmethod
     def send_safe(cls, *args, **kwargs):
@@ -266,14 +262,11 @@ class OrderStatusUpdateMessage(MessageBase):
     def send(cls, order_id:int, status=None):
         order = models.Order.objects.filter(id=order_id).first()
 
-        logger.warning(f'order________:{order}')
         if not order:
             return
 
         if not status:
             status = order.status
-
-        logger.warning(f'status={status}')
 
         msg_kwargs = cls.build(order, status=status.status)
         if not msg_kwargs:
@@ -286,12 +279,10 @@ class OrderStatusUpdateMessage(MessageBase):
         ).values("channel", "ts").distinct()
 
         results = []
-        logger.warning(f'summary_msgs: {summary_msgs.count()}')
         for thread_data in summary_msgs:
             channel = thread_data["channel"]
             thread_ts = str(thread_data["ts"])
             result = dict(channel=channel, thread_ts=thread_ts)
-            logger.warning(f'result: {result}')
 
             response = cls.send_message(
                 channel=channel,
@@ -323,7 +314,6 @@ class OrderStatusUpdateMessage(MessageBase):
 
         text = cls.get_text(order, status=status)
 
-        logger.warning(f'build | text: {text}')
         if not text:
             return
 
@@ -339,21 +329,19 @@ class OrderStatusUpdateMessage(MessageBase):
     def get_text(cls, order:models.Order, status=None):
         if not status:
             status = order.status
-
-        logger.warning(f'get_text | status: {status} vs {models.StatusType.SUBMITTED}')
         
         if status == models.StatusType.SUBMITTED:
             return f"Order #{order.id} submitted"
         elif status == models.StatusType.CONFIRMED:
             return f"Order #{order.id} confirmed"
         elif status == models.StatusType.ESCROW_PENDING:
-            return f"Order #{order.id} is pending for escrow"
+            return f"Order #{order.id} waiting for escrow"
         elif status == models.StatusType.ESCROWED:
             return f"Order #{order.id} escrowed"
         elif status == models.StatusType.PAID_PENDING:
-            return f"Order #{order.id} payment pending"
+            return f"Order #{order.id} fiat payment awaiting confirmation"
         elif status == models.StatusType.PAID:
-            return f"Order #{order.id} paid"
+            return f"Order #{order.id} fiat payment confirmed"
         elif status == models.StatusType.APPEALED:
             return f"Order #{order.id} appealed"
         elif status == models.StatusType.RELEASED:
@@ -362,5 +350,221 @@ class OrderStatusUpdateMessage(MessageBase):
             return f"Order #{order.id} refunded"
         elif status == models.StatusType.CANCELED:
             return f"Order #{order.id} canceled"
+        else:
+            return ""
+
+class AppealSummaryMessage(MessageBase):
+    @classmethod
+    def send_safe(cls, *args, **kwargs):
+        try:
+            return cls.send(*args, **kwargs)
+        except Exception as exception:
+            logger.exception(exception)
+            return exception
+
+    @classmethod
+    def send(cls, appeal_id:int, channel:str=None):
+        appeal = models.Appeal.objects.filter(id=appeal_id).first()
+        if not appeal:
+            return
+
+        # Build the message blocks
+        blocks = [
+            cls.get_message_header_block(appeal),
+            *cls.get_appeal_details_block(appeal),
+            cls.get_created_at_block(appeal),
+        ]
+
+        text=f"Appeal #{appeal.id} Summary"
+        attachments = [
+            block_kit.Blocks(*blocks, color=cls.resolve_color_from_status(appeal)),
+        ]
+        msg_logs = models.SlackMessageLog.objects.filter(
+            topic=models.SlackMessageLog.Topic.APPEAL_SUMMARY,
+            object_id=appeal.id,
+            deleted_at__isnull=True,
+        )
+
+        send_new = True
+        results = []
+        for msg_log in msg_logs:
+            result = cls.update_message(
+                channel=msg_log.channel,
+                ts=str(msg_log.ts),
+                attachments=attachments,
+            )
+
+            if (result["success"] or result.get("error") != "message_not_found") and \
+                (not channel or msg_log.channel == channel):
+                send_new = False
+
+            results.append(result)
+
+        if send_new:
+            kwargs = dict(text=text, attachments=attachments)
+            if channel: kwargs["channel"] = channel
+            result = cls.send_message(**kwargs)
+            results.append(result)
+
+        for result in results:
+            if not result.get("success"):
+                continue
+
+            models.SlackMessageLog.objects.update_or_create(
+                topic=models.SlackMessageLog.Topic.APPEAL_SUMMARY,
+                object_id=appeal.id,
+                channel=result["channel"],
+                defaults=dict(
+                    ts=result["ts"],
+                    deleted_at=None,
+                )
+            )
+
+        return results
+    
+    @classmethod
+    def resolve_color_from_status(cls, appeal: models.Appeal):
+        return block_kit_helpers.resolve_color_from_appeal_status(appeal.order.status.status)
+
+    @classmethod
+    def resolve_status(cls, appeal:models.Appeal):
+        status = 'Pending'
+        if appeal.resolved_at:
+            order_status = appeal.order.status.status
+            if order_status == models.StatusType.REFUND_PENDING:
+                status = models.StatusType.REFUNDED.label
+            elif order_status == models.StatusType.RELEASE_PENDING:
+                status = models.StatusType.RELEASED.label
+        logger.warning(f'status: {status}')
+        return status
+
+    @classmethod
+    def get_message_header_block(cls, appeal:models.Appeal):
+        header_text = f'Appeal #{appeal.id} Summary'
+        plain_text = block_kit.PlainText(header_text)
+        header = block_kit.Header(plain_text)
+        return header
+
+    @classmethod
+    def get_appeal_details_block(cls, appeal:models.Appeal):
+        status_label = cls.resolve_status(appeal)
+
+        blocks = [
+            
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Status*\n{status_label}"),
+                block_kit.Markdown(f"*Appeal ID*\n{appeal.id}")
+            ]),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Created by*\n{appeal.owner.name}"),
+                block_kit.Markdown(f"*Order ID*\n{appeal.order.id}")
+            ]),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Appeal type*\n{models.AppealType(appeal.type).label}")
+            ]),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Appeal reasons*\n{', '.join(appeal.get_reasons())}")
+            ])
+        ]
+
+        return blocks
+
+    @classmethod
+    def get_created_at_block(self, appeal:models.Appeal):
+        created_at = appeal.created_at
+        if isinstance(created_at, str):
+            created_at = datetime.strptime(appeal.created_at, "%Y-%m-%dT%H:%M:%S%z")
+
+        return block_kit.ContextBlock(
+            block_kit.Markdown(f"Appeal created {block_kit_helpers.format_timestamp(created_at)}")
+        )
+
+class AppealStatusUpdateMessage(MessageBase):
+    @classmethod
+    def send_safe(cls, *args, **kwargs):
+        try:
+            return cls.send(*args, **kwargs)
+        except Exception as exception:
+            logger.exception(exception)
+            return exception
+
+    @classmethod
+    def send(cls, appeal_id:int, status=None):
+        appeal = models.Appeal.objects.filter(id=appeal_id).first()
+
+        if not appeal:
+            return
+
+        if not status:
+            status = appeal.order.status
+
+        msg_kwargs = cls.build(appeal, status=status.status)
+        if not msg_kwargs:
+            return
+
+        summary_msgs = models.SlackMessageLog.objects.filter(
+            topic=models.SlackMessageLog.Topic.APPEAL_SUMMARY,
+            object_id=appeal.id,
+            deleted_at__isnull=True,
+        ).values("channel", "ts").distinct()
+
+        results = []
+        for thread_data in summary_msgs:
+            channel = thread_data["channel"]
+            thread_ts = str(thread_data["ts"])
+            result = dict(channel=channel, thread_ts=thread_ts)
+
+            response = cls.send_message(
+                channel=channel,
+                thread_ts=thread_ts,
+                reply_broadcast=True,
+                **msg_kwargs,
+            )
+            result.update(response)
+
+            if response["success"]:
+                models.SlackMessageLog.objects.create(
+                    topic=models.SlackMessageLog.Topic.APPEAL_UPDATE,
+                    object_id=appeal.id,
+                    metadata=dict(status=status.status),
+                    channel=response["channel"],
+                    ts=response["ts"],
+                    thread_ts=thread_ts,
+                    deleted_at=None,
+                )
+
+            results.append(result)
+
+        return dict(results=results)
+
+    @classmethod
+    def build(cls, appeal:models.Appeal, status=None):
+        if not status:
+            status = appeal.status
+
+        text = cls.get_text(appeal, status=status)
+
+        if not text:
+            return
+
+        return dict(
+            text=text
+        )
+
+    @classmethod
+    def get_text(cls, appeal:models.Appeal, status=None):
+        if not status:
+            status = appeal.order.status
+        
+        if status == models.StatusType.APPEALED:
+            return f"Appeal #{appeal.id} submitted"
+        elif status == models.StatusType.RELEASE_PENDING:
+            return f"Appeal #{appeal.id} validating release"
+        elif status == models.StatusType.REFUND_PENDING:
+            return f"Appeal #{appeal.id} validating refund"
+        elif status == models.StatusType.RELEASED:
+            return f"Appeal #{appeal.id} resolved"
+        elif status == models.StatusType.REFUNDED:
+            return f"Appeal #{appeal.id} resolved"
         else:
             return ""
