@@ -3,6 +3,8 @@ from slack.errors import SlackApiError
 from django.conf import settings
 from django.utils import timezone
 from datetime import datetime
+from decimal import Decimal
+from enum import Enum
 
 from . import block_kit
 from . import block_kit_helpers
@@ -143,7 +145,7 @@ class OrderSummaryMessage(MessageBase):
         if order.is_cash_in:
             text = f"Cash In {text}"
         attachments = [
-            block_kit.Blocks(*blocks, color=cls.resolve_color_from_status(order)),
+            block_kit.Blocks(*blocks),
         ]
         msg_logs = models.SlackMessageLog.objects.filter(
             topic=models.SlackMessageLog.Topic.ORDER_SUMMARY,
@@ -189,10 +191,6 @@ class OrderSummaryMessage(MessageBase):
         return results
 
     @classmethod
-    def resolve_color_from_status(cls, order:models.Order):
-        return block_kit_helpers.resolve_color_from_order_status(order.status.status)
-
-    @classmethod
     def get_message_header_block(cls, order:models.Order):
         header_text = f'{order.trade_type.lower().capitalize()} Order #{order.id} Summary'
         if order.is_cash_in:
@@ -231,11 +229,14 @@ class OrderSummaryMessage(MessageBase):
             block_kit.SectionBlock(
                 text=block_kit.Markdown(":page_with_curl: *Trade Summary:*"),
                 fields=[
-                    block_kit.Markdown(f"*Ad Owner*\n{ad_owner}"),
-                    block_kit.Markdown(f"*Ad Price*\n{ad_price:.2f} {currency}")
+                    block_kit.Markdown(f"*Ad ID*\n{order.ad_snapshot.ad.id}"),
+                    block_kit.Markdown(f"*Ad Owner*\n{ad_owner}")
                 ]
             ),
-            block_kit.SectionBlock(block_kit.Markdown(f"*Trade Amount*\n{trade_amount} BCH ({fiat_trade_amount} {currency})"))
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Ad Price*\n{ad_price:.2f} {currency}"),
+                block_kit.Markdown(f"*Trade Amount*\n{trade_amount} BCH ({fiat_trade_amount} {currency})"),
+            ])
         ]
         return blocks
 
@@ -246,7 +247,7 @@ class OrderSummaryMessage(MessageBase):
             created_at = datetime.strptime(order.created_at, "%Y-%m-%dT%H:%M:%S%z")
 
         return block_kit.ContextBlock(
-            block_kit.Markdown(f"Order created at {block_kit_helpers.format_timestamp(created_at)}")
+            block_kit.Markdown(f"Order created {block_kit_helpers.format_timestamp(created_at)}")
         )
 
 class OrderStatusUpdateMessage(MessageBase):
@@ -322,10 +323,6 @@ class OrderStatusUpdateMessage(MessageBase):
         )
 
     @classmethod
-    def resolve_color_from_status(cls, status:str):
-        return block_kit_helpers.resolve_color_from_order_status(status)
-
-    @classmethod
     def get_text(cls, order:models.Order, status=None):
         if not status:
             status = order.status
@@ -377,7 +374,7 @@ class AppealSummaryMessage(MessageBase):
 
         text=f"Appeal #{appeal.id} Summary"
         attachments = [
-            block_kit.Blocks(*blocks, color=cls.resolve_color_from_status(appeal)),
+            block_kit.Blocks(*blocks),
         ]
         msg_logs = models.SlackMessageLog.objects.filter(
             topic=models.SlackMessageLog.Topic.APPEAL_SUMMARY,
@@ -422,10 +419,6 @@ class AppealSummaryMessage(MessageBase):
 
         return results
     
-    @classmethod
-    def resolve_color_from_status(cls, appeal: models.Appeal):
-        return block_kit_helpers.resolve_color_from_appeal_status(appeal.order.status.status)
-
     @classmethod
     def resolve_status(cls, appeal:models.Appeal):
         status = 'Pending'
@@ -566,5 +559,323 @@ class AppealStatusUpdateMessage(MessageBase):
             return f"Appeal #{appeal.id} resolved"
         elif status == models.StatusType.REFUNDED:
             return f"Appeal #{appeal.id} resolved"
+        else:
+            return ""
+
+class AdSummaryMessage(MessageBase):
+    @classmethod
+    def send_safe(cls, *args, **kwargs):
+        try:
+            return cls.send(*args, **kwargs)
+        except Exception as exception:
+            logger.exception(exception)
+            return exception
+
+    @classmethod
+    def send(cls, ad_id:int, channel:str=None):
+        ad = models.Ad.objects.filter(id=ad_id).first()
+        if not ad:
+            return
+
+        # Build the message blocks
+        blocks = [
+            cls.get_message_header_block(ad),
+            *cls.get_ad_details_block(ad),
+            cls.get_created_at_block(ad)
+        ]
+        if ad.deleted_at:
+            blocks.append(cls.get_deleted_at_block(ad))
+
+        text=f"Ad #{ad.id} Summary"
+        attachments = [
+            block_kit.Blocks(*blocks),
+        ]
+        msg_logs = models.SlackMessageLog.objects.filter(
+            topic=models.SlackMessageLog.Topic.AD_SUMMARY,
+            object_id=ad.id,
+            deleted_at__isnull=True,
+        )
+
+        send_new = True
+        results = []
+        for msg_log in msg_logs:
+            result = cls.update_message(
+                channel=msg_log.channel,
+                ts=str(msg_log.ts),
+                attachments=attachments,
+            )
+
+            if (result["success"] or result.get("error") != "message_not_found") and \
+                (not channel or msg_log.channel == channel):
+                send_new = False
+
+            results.append(result)
+
+        if send_new:
+            kwargs = dict(text=text, attachments=attachments)
+            if channel: kwargs["channel"] = channel
+            result = cls.send_message(**kwargs)
+            results.append(result)
+
+        for result in results:
+            if not result.get("success"):
+                continue
+
+            models.SlackMessageLog.objects.update_or_create(
+                topic=models.SlackMessageLog.Topic.AD_SUMMARY,
+                object_id=ad.id,
+                channel=result["channel"],
+                defaults=dict(
+                    ts=result["ts"],
+                    deleted_at=None,
+                )
+            )
+
+        return results
+
+    @classmethod
+    def get_message_header_block(cls, ad:models.Ad):
+        header_text = f'Ad #{ad.id} Summary'
+        plain_text = block_kit.PlainText(header_text)
+        header = block_kit.Header(plain_text)
+        return header
+
+    @classmethod
+    def get_ad_details_block(cls, ad:models.Ad):
+        price_type_msg = f'{ad.price_type}'
+        if ad.price_type == models.PriceType.FLOATING:
+            floating_price = '{:f}'.format(Decimal(ad.floating_price).normalize())
+            price_type_msg = f'{price_type_msg} ({floating_price}%)'
+
+        trade_amount_msg = f'{Decimal(ad.trade_amount).normalize()}'
+        if ad.trade_amount_in_fiat:
+            trade_amount_msg = f'{trade_amount_msg} {ad.fiat_currency.symbol}'
+        else:
+            trade_amount_msg = f'{trade_amount_msg} {ad.crypto_currency.symbol}'
+
+        trade_floor_msg = f'{Decimal(ad.trade_floor).normalize()}'
+        trade_ceiling_msg = f'{Decimal(ad.trade_ceiling).normalize()}'
+        if ad.trade_limits_in_fiat:
+            trade_floor_msg = f'{trade_floor_msg} {ad.fiat_currency.symbol}'
+            trade_ceiling_msg = f'{trade_ceiling_msg} {ad.fiat_currency.symbol}' 
+        else:
+            trade_floor_msg = f'{trade_floor_msg} {ad.crypto_currency.symbol}'
+            trade_ceiling_msg = f'{trade_ceiling_msg} {ad.crypto_currency.symbol}'
+        
+        price_msg = f'{Decimal(ad.get_price()).normalize()}'
+        price_msg = f'{price_msg} {ad.fiat_currency.symbol}'
+
+        visibility = 'Public :white_check_mark:'
+        if not ad.is_public:
+            visibility = 'Private :negative_squared_cross_mark:'
+
+        payment_methods = ad.payment_methods.all()
+        payment_type_names = []
+        for method in payment_methods:
+            payment_type_names.append(method.payment_type.short_name)
+
+        blocks = [            
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Ad ID*\n{ad.id}"),
+                block_kit.Markdown(f"*Owner*\n{ad.owner.name}")
+            ]),
+            block_kit.SectionBlock(
+                text=block_kit.Markdown(":page_with_curl: *Price Setting*"),
+                fields=[
+                    block_kit.Markdown(f"*Currency*\n{ad.fiat_currency.name} ({ad.fiat_currency.symbol})"),
+                    block_kit.Markdown(f"*Price Type*\n{price_type_msg}"),
+                    block_kit.Markdown(f"*Price*\n{price_msg}")
+                ]
+            ),
+            block_kit.SectionBlock(
+                text=block_kit.Markdown(":page_with_curl: *Trade Settings*"),
+                fields=[
+                    block_kit.Markdown(f"*Trade Floor*\n{trade_floor_msg}"),
+                    block_kit.Markdown(f"*Trade Ceiling*\n{trade_ceiling_msg}"),
+                    block_kit.Markdown(f"*Trade Quantity*\n{trade_amount_msg}")
+                ]
+            ),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Appealable after*\n{models.CooldownChoices(ad.appeal_cooldown_choice).label}")
+            ]),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Visibility*\n{visibility}")
+            ]),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Payment Types:*\n{', '.join(payment_type_names)}")
+            ])
+        ]
+
+        return blocks
+
+    @classmethod
+    def get_created_at_block(self, ad:models.Ad):
+        created_at = ad.created_at
+        if isinstance(created_at, str):
+            created_at = datetime.strptime(ad.created_at, "%Y-%m-%dT%H:%M:%S%z")
+
+        return block_kit.ContextBlock(
+            block_kit.Markdown(f"Ad created {block_kit_helpers.format_timestamp(created_at)}")
+        )
+    
+    @classmethod
+    def get_deleted_at_block(self, ad:models.Ad):
+        deleted_at = ad.deleted_at
+        if not deleted_at:
+            return
+        
+        if isinstance(deleted_at, str):
+            deleted_at = datetime.strptime(ad.deleted_at, "%Y-%m-%dT%H:%M:%S%z")
+        
+        return block_kit.ContextBlock(
+            block_kit.Markdown(f"Ad deleted {block_kit_helpers.format_timestamp(deleted_at)}")
+        )
+
+
+class AdUpdateType(Enum):
+    CURRENCY = 'currency'
+    PRICE_TYPE = 'price_type'
+    FIXED_PRICE = 'fixed_price'
+    FLOATING_PRICE = 'floating_price'
+    TRADE_FLOOR = 'trade_floor'
+    TRADE_CEILING = 'trade_ceiling'
+    TRADE_LIMITS_IN_FIAT = 'trade_limits_in_fiat'
+    TRADE_AMOUNT = 'trade_amount'
+    TRADE_AMOUNT_IN_FIAT = 'trade_amount_in_fiat'
+    APPEAL_COOLDOWN = 'appeal_cooldown'
+    VISIBILITY = 'visibility'
+    PAYMENT_TYPES = 'payment_types'
+    DELETED_AT = 'deleted_at'
+
+class AdUpdateMessage(MessageBase):
+    @classmethod
+    def send_safe(cls, *args, **kwargs):
+        try:
+            return cls.send(*args, **kwargs)
+        except Exception as exception:
+            logger.exception(exception)
+            return exception
+
+    @classmethod
+    def send(cls, ad_id:int, update_type=None, **kwargs):
+        ad = models.Ad.objects.filter(id=ad_id).first()
+
+        if not ad:
+            return
+
+        if not update_type:
+            return
+
+        msg_kwargs = cls.build(ad, update_type=update_type, **kwargs)
+        if not msg_kwargs:
+            return
+
+        summary_msgs = models.SlackMessageLog.objects.filter(
+            topic=models.SlackMessageLog.Topic.AD_SUMMARY,
+            object_id=ad.id,
+            deleted_at__isnull=True,
+        ).values("channel", "ts").distinct()
+
+        results = []
+        for thread_data in summary_msgs:
+            channel = thread_data["channel"]
+            thread_ts = str(thread_data["ts"])
+            result = dict(channel=channel, thread_ts=thread_ts)
+
+            response = cls.send_message(
+                channel=channel,
+                thread_ts=thread_ts,
+                reply_broadcast=True,
+                **msg_kwargs,
+            )
+            result.update(response)
+
+            if response["success"]:
+                models.SlackMessageLog.objects.create(
+                    topic=models.SlackMessageLog.Topic.AD_UPDATE,
+                    object_id=ad.id,
+                    metadata=dict(update_type=update_type.value),
+                    channel=response["channel"],
+                    ts=response["ts"],
+                    thread_ts=thread_ts,
+                    deleted_at=None,
+                )
+
+            results.append(result)
+
+        return dict(results=results)
+
+    @classmethod
+    def build(cls, ad:models.Ad, update_type=None, **kwargs):
+        if not update_type:
+            return
+
+        text = cls.get_text(ad, update_type=update_type, context=kwargs.get('context'))
+
+        if not text:
+            return
+
+        return dict(
+            text=text
+        )
+
+    @classmethod
+    def get_text(cls, ad:models.Ad, update_type=None, context=None):
+        if not update_type:
+            return ""
+
+        old_value = context.get('old')
+        new_value = context.get('new')
+
+        currency = context.get('currency')
+        old_currency = currency
+        new_currency = currency
+
+        if currency:
+            old_currency = currency.get('old')
+            new_currency = currency.get('new')           
+
+        if (update_type == AdUpdateType.FIXED_PRICE or
+            update_type == AdUpdateType.FLOATING_PRICE or
+            update_type == AdUpdateType.TRADE_AMOUNT or
+            update_type == AdUpdateType.TRADE_FLOOR or
+            update_type == AdUpdateType.TRADE_CEILING):
+            old_value = old_value.normalize()
+            new_value = new_value.normalize()
+
+        if update_type == AdUpdateType.CURRENCY:
+            return f"Ad #{ad.id} updated currency from {old_value} to {new_value}"
+        elif update_type == AdUpdateType.PRICE_TYPE:
+            return f"Ad #{ad.id} updated price type from {old_value} to {new_value}"
+        elif update_type == AdUpdateType.FIXED_PRICE:
+            return f"Ad #{ad.id} updated fixed price from {old_value} to {new_value}"
+        elif update_type == AdUpdateType.FLOATING_PRICE:
+            old_value = '{:f}'.format(Decimal(old_value))
+            new_value = '{:f}'.format(Decimal(new_value))
+            return f"Ad #{ad.id} updated floating price from {old_value}% to {new_value}%"
+        elif update_type == AdUpdateType.TRADE_FLOOR:
+            return f"Ad #{ad.id} updated trade floor from {old_value} {old_currency} to {new_value} {new_currency}"
+        elif update_type == AdUpdateType.TRADE_CEILING:
+            return f"Ad #{ad.id} updated trade ceiling from {old_value} {old_currency} to {new_value} {new_currency}"
+        elif update_type == AdUpdateType.TRADE_AMOUNT:
+            return f"Ad #{ad.id} updated trade quantity from {old_value} {old_currency} to {new_value} {new_currency}"
+        elif update_type == AdUpdateType.APPEAL_COOLDOWN:
+            old_value = models.CooldownChoices(old_value).label
+            new_value = models.CooldownChoices(new_value).label
+            return f"Ad #{ad.id} updated appeal cooldown from {old_value} to {new_value}"
+        elif update_type == AdUpdateType.VISIBILITY:            
+            old_visibility = 'public'
+            if not old_value:
+                old_visibility = 'private'
+            new_visibility = 'public'
+            if not new_value:
+                new_visibility = 'private' 
+            return f"Ad #{ad.id} visibility set from {old_visibility} to {new_visibility}"
+        elif update_type == AdUpdateType.PAYMENT_TYPES:
+            old_payment_types = old_value
+            new_payment_types = new_value
+            return f"Ad #{ad.id} updated payment types from {', '.join(old_payment_types)} to {', '.join(new_payment_types)}"
+        elif update_type == AdUpdateType.DELETED_AT:
+            return f"Ad #{ad.id} deleted"
         else:
             return ""

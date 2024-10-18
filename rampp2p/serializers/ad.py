@@ -98,7 +98,7 @@ class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    price = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField(required=False)
     payment_methods = serializers.SerializerMethodField()
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
@@ -154,17 +154,7 @@ class AdListSerializer(serializers.ModelSerializer):
         return False
     
     def get_price(self, instance: models.Ad):
-        if instance.price_type == models.PriceType.FIXED:
-            return instance.fixed_price
-        
-        currency = instance.fiat_currency.symbol
-        market_price = models.MarketRate.objects.filter(currency=currency)
-        if market_price.exists():
-            market_price = market_price.first().price
-            price = market_price * (instance.floating_price/100)
-        else:
-            price = None
-        return price
+        return instance.get_price()
     
     def get_trade_count(self, instance: models.Ad):
         return models.Order.objects.filter(Q(ad_snapshot__ad__id=instance.id)).count()
