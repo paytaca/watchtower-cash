@@ -234,8 +234,8 @@ class OrderSummaryMessage(MessageBase):
                 ]
             ),
             block_kit.SectionBlock(*[
-                block_kit.Markdown(f"*Ad Price*\n{ad_price:.2f} {currency}"),
-                block_kit.Markdown(f"*Trade Amount*\n{trade_amount} BCH ({fiat_trade_amount} {currency})"),
+                block_kit.Markdown(f"*Price*\n{ad_price:.2f} {currency}"),
+                block_kit.Markdown(f"*Amount*\n{trade_amount} BCH ({fiat_trade_amount} {currency})"),
             ])
         ]
         return blocks
@@ -332,17 +332,21 @@ class OrderStatusUpdateMessage(MessageBase):
         elif status == models.StatusType.CONFIRMED:
             return f"Order #{order.id} confirmed"
         elif status == models.StatusType.ESCROW_PENDING:
-            return f"Order #{order.id} waiting for escrow"
+            return f"Order #{order.id} validating escrow"
         elif status == models.StatusType.ESCROWED:
             return f"Order #{order.id} escrowed"
         elif status == models.StatusType.PAID_PENDING:
-            return f"Order #{order.id} fiat payment awaiting confirmation"
+            return f"Order #{order.id} awaiting payment confirmation"
         elif status == models.StatusType.PAID:
-            return f"Order #{order.id} fiat payment confirmed"
+            return f"Order #{order.id} payment confirmed"
         elif status == models.StatusType.APPEALED:
             return f"Order #{order.id} appealed"
+        elif status == models.StatusType.RELEASE_PENDING:
+            return f"Order #{order.id} validating release"
         elif status == models.StatusType.RELEASED:
-            return f"Order #{order.id} released"
+            return f"Order #{order.id} released :tada:"
+        elif status == models.StatusType.REFUND_PENDING:
+            return f"Order #{order.id} validating refund"
         elif status == models.StatusType.REFUNDED:
             return f"Order #{order.id} refunded"
         elif status == models.StatusType.CANCELED:
@@ -446,11 +450,14 @@ class AppealSummaryMessage(MessageBase):
             
             block_kit.SectionBlock(*[
                 block_kit.Markdown(f"*Status*\n{status_label}"),
+                block_kit.Markdown(f"*Submitted by*\n{appeal.owner.name}"),
+            ]),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Order ID*\n{appeal.order.id}"),
                 block_kit.Markdown(f"*Appeal ID*\n{appeal.id}")
             ]),
             block_kit.SectionBlock(*[
-                block_kit.Markdown(f"*Created by*\n{appeal.owner.name}"),
-                block_kit.Markdown(f"*Order ID*\n{appeal.order.id}")
+                block_kit.Markdown(f"*Arbiter :scales:*\n{appeal.order.arbiter.name}")
             ]),
             block_kit.SectionBlock(*[
                 block_kit.Markdown(f"*Appeal type*\n{models.AppealType(appeal.type).label}")
@@ -642,32 +649,32 @@ class AdSummaryMessage(MessageBase):
 
     @classmethod
     def get_ad_details_block(cls, ad:models.Ad):
-        price_type_msg = f'{ad.price_type}'
-        if ad.price_type == models.PriceType.FLOATING:
+        price_type = ad.price_type
+        if price_type == models.PriceType.FLOATING:
             floating_price = '{:f}'.format(Decimal(ad.floating_price).normalize())
-            price_type_msg = f'{price_type_msg} ({floating_price}%)'
+            price_type = f'{price_type} ({floating_price}%)'
 
-        trade_amount_msg = f'{Decimal(ad.trade_amount).normalize()}'
+        trade_amount = '{:f}'.format(Decimal(ad.trade_amount).normalize())
         if ad.trade_amount_in_fiat:
-            trade_amount_msg = f'{trade_amount_msg} {ad.fiat_currency.symbol}'
+            trade_amount = f'{trade_amount} {ad.fiat_currency.symbol}'
         else:
-            trade_amount_msg = f'{trade_amount_msg} {ad.crypto_currency.symbol}'
+            trade_amount = f'{trade_amount} {ad.crypto_currency.symbol}'
 
-        trade_floor_msg = f'{Decimal(ad.trade_floor).normalize()}'
-        trade_ceiling_msg = f'{Decimal(ad.trade_ceiling).normalize()}'
+        trade_floor = '{:f}'.format(Decimal(ad.trade_floor).normalize())
+        trade_ceiling = '{:f}'.format(Decimal(ad.trade_ceiling).normalize())
         if ad.trade_limits_in_fiat:
-            trade_floor_msg = f'{trade_floor_msg} {ad.fiat_currency.symbol}'
-            trade_ceiling_msg = f'{trade_ceiling_msg} {ad.fiat_currency.symbol}' 
+            trade_floor = f'{trade_floor} {ad.fiat_currency.symbol}'
+            trade_ceiling = f'{trade_ceiling} {ad.fiat_currency.symbol}' 
         else:
-            trade_floor_msg = f'{trade_floor_msg} {ad.crypto_currency.symbol}'
-            trade_ceiling_msg = f'{trade_ceiling_msg} {ad.crypto_currency.symbol}'
+            trade_floor = f'{trade_floor} {ad.crypto_currency.symbol}'
+            trade_ceiling = f'{trade_ceiling} {ad.crypto_currency.symbol}'
         
-        price_msg = f'{Decimal(ad.get_price()).normalize()}'
-        price_msg = f'{price_msg} {ad.fiat_currency.symbol}'
+        price = '{:f}'.format(Decimal(ad.get_price()).normalize())
+        price = f'{price} {ad.fiat_currency.symbol}'
 
-        visibility = 'Public :white_check_mark:'
+        visibility = 'Public :loudspeaker:'
         if not ad.is_public:
-            visibility = 'Private :negative_squared_cross_mark:'
+            visibility = 'Private :dotted_line_face:'
 
         payment_methods = ad.payment_methods.all()
         payment_type_names = []
@@ -682,19 +689,23 @@ class AdSummaryMessage(MessageBase):
             block_kit.SectionBlock(
                 text=block_kit.Markdown(":page_with_curl: *Price Setting*"),
                 fields=[
-                    block_kit.Markdown(f"*Currency*\n{ad.fiat_currency.name} ({ad.fiat_currency.symbol})"),
-                    block_kit.Markdown(f"*Price Type*\n{price_type_msg}"),
-                    block_kit.Markdown(f"*Price*\n{price_msg}")
+                    block_kit.Markdown(f"*Price*\n{price}"),
+                    block_kit.Markdown(f"*Price Type*\n{price_type}")
                 ]
             ),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Currency*\n{ad.fiat_currency.name} ({ad.fiat_currency.symbol})")
+            ]),
             block_kit.SectionBlock(
                 text=block_kit.Markdown(":page_with_curl: *Trade Settings*"),
                 fields=[
-                    block_kit.Markdown(f"*Trade Floor*\n{trade_floor_msg}"),
-                    block_kit.Markdown(f"*Trade Ceiling*\n{trade_ceiling_msg}"),
-                    block_kit.Markdown(f"*Trade Quantity*\n{trade_amount_msg}")
+                    block_kit.Markdown(f"*Trade Floor*\n{trade_floor}"),
+                    block_kit.Markdown(f"*Trade Ceiling*\n{trade_ceiling}")
                 ]
             ),
+            block_kit.SectionBlock(*[
+                block_kit.Markdown(f"*Trade Quantity*\n{trade_amount}")
+            ]),
             block_kit.SectionBlock(*[
                 block_kit.Markdown(f"*Appealable after*\n{models.CooldownChoices(ad.appeal_cooldown_choice).label}")
             ]),
@@ -840,8 +851,8 @@ class AdUpdateMessage(MessageBase):
             update_type == AdUpdateType.TRADE_AMOUNT or
             update_type == AdUpdateType.TRADE_FLOOR or
             update_type == AdUpdateType.TRADE_CEILING):
-            old_value = old_value.normalize()
-            new_value = new_value.normalize()
+            old_value = '{:f}'.format(Decimal(old_value.normalize())) if old_currency == 'BCH' else '{:.2f}'.format(Decimal(old_value.normalize()))
+            new_value = '{:f}'.format(Decimal(new_value.normalize())) if old_currency == 'BCH' else '{:.2f}'.format(Decimal(new_value.normalize()))
 
         if update_type == AdUpdateType.CURRENCY:
             return f"Ad #{ad.id} updated currency from {old_value} to {new_value}"
@@ -850,8 +861,6 @@ class AdUpdateMessage(MessageBase):
         elif update_type == AdUpdateType.FIXED_PRICE:
             return f"Ad #{ad.id} updated fixed price from {old_value} to {new_value}"
         elif update_type == AdUpdateType.FLOATING_PRICE:
-            old_value = '{:f}'.format(Decimal(old_value))
-            new_value = '{:f}'.format(Decimal(new_value))
             return f"Ad #{ad.id} updated floating price from {old_value}% to {new_value}%"
         elif update_type == AdUpdateType.TRADE_FLOOR:
             return f"Ad #{ad.id} updated trade floor from {old_value} {old_currency} to {new_value} {new_currency}"
@@ -872,9 +881,10 @@ class AdUpdateMessage(MessageBase):
                 new_visibility = 'private' 
             return f"Ad #{ad.id} visibility set from {old_visibility} to {new_visibility}"
         elif update_type == AdUpdateType.PAYMENT_TYPES:
-            old_payment_types = old_value
-            new_payment_types = new_value
-            return f"Ad #{ad.id} updated payment types from {', '.join(old_payment_types)} to {', '.join(new_payment_types)}"
+            new_payment_types = ', '.join(new_value) or None
+            if new_payment_types == None:
+                return ""
+            return f"Ad #{ad.id} updated payment type(s) to {new_payment_types}"
         elif update_type == AdUpdateType.DELETED_AT:
             return f"Ad #{ad.id} deleted"
         else:
