@@ -1,9 +1,14 @@
+from django.db import transaction
 from django.utils import timezone
 from datetime import datetime, timedelta
 from ..js.runner import AnyhedgeFunctions
 from ..models import (
     HedgePosition,
     HedgePositionMetadata,
+    HedgeSettlement,
+    SettlementService,
+    HedgePositionFunding,
+    HedgePositionFee,
     HedgePositionOffer,
     Oracle,
     PriceOracleMessage,
@@ -344,6 +349,56 @@ def contract_data_to_obj(contract_data:dict):
         is_simple_hedge = is_simple_hedge,
     )
 
+    if isinstance(contract_data.get("fees"), list):
+        fee_objs = []
+        for fee_data in contract_data["fees"]:
+            fee = HedgePositionFee(
+                name=fee_data["name"],
+                description=fee_data["description"],
+                address=fee_data["address"],
+                satoshis=fee_data["satoshis"],
+            )
+            fee_objs.append(fee)
+
+    if isinstance(contract_data.get("fundings"), list):
+        funding_objs = []
+        for funding_data in contract_data["fundings"]:
+            settlement_data = funding_data.get("settlement")
+            settlement = None
+            if settlement_data:
+                settlement_price_data = dict()
+                if "settlementMessage" in settlement_data:
+                    parse_result = AnyhedgeFunctions.parseOracleMessage(
+                        settlement_data["settlementMessage"]
+                    )
+                    settlement_price_data = parse_result["priceData"]
+                    settlement_price_data["messageTimestamp"] = datetime.fromtimestamp(
+                        settlement_price_data["messageTimestamp"]
+                    ).replace(tzinfo=pytz.UTC)
+
+                settlement = HedgeSettlement(
+                    spending_transaction=settlement_data["settlementTransactionHash"],
+                    settlement_type=settlement_data["settlementType"],
+                    short_satoshis=int(settlement_data["shortPayoutInSatoshis"]),
+                    long_satoshis=int(settlement_data["longPayoutInSatoshis"]),
+                    oracle_pubkey=parameters["oraclePublicKey"],
+                    settlement_price=price_data["priceValue"],
+                    settlement_price_sequence=price_data["priceSequence"],
+                    settlement_message_sequence=price_data["messageSequence"],
+                    settlement_message_timestamp=settlement_price_data["messageTimestamp"],
+                    settlement_message=settlement_data.get("settlementMessage"),
+                    settlement_signature=settlement_data.get("settlementSignature"),
+                )
+
+            funding = HedgePositionFunding(
+                tx_hash=funding_data["fundingTransactionHash"],
+                funding_output=int(funding_data["fundingOutputIndex"]),
+                funding_satoshis=int(funding_data["fundingSatoshis"]),
+                validated=bool(settlement),
+                settlement=settlement,
+            )
+            funding_objs.append(funding)
+
     # check if it's still reproducing the correct address
     contract_data2 = compile_contract_from_hedge_position(hedge_pos_obj, taker_side=metadata["takerSide"])
     if contract_data2["address"] != hedge_pos_obj.address:
@@ -352,7 +407,48 @@ def contract_data_to_obj(contract_data:dict):
             code=AnyhedgeException.ADDRESS_MISMATCH,
         )
 
-    return hedge_pos_obj, metadata_obj
+    return hedge_pos_obj, metadata_obj, fee_objs, funding_objs
+
+
+@transaction.atomic
+def save_contract_data(contract_data:dict, settlement_service_data:dict=None):
+    hedge_pos_obj, metadata_obj, fee_objs, funding_objs = contract_data_to_obj(contract_data)
+
+    settlement_service = None
+    if settlement_service_data:
+        settlement_service = SettlementService(
+            domain = settlement_service_data.get("domain") or settlement_service_data.get("host"),
+            scheme = settlement_service_data["scheme"],
+            port = settlement_service_data["port"],
+            short_signature = settlement_service_data.get("short_signature", None),
+            long_signature = settlement_service_data.get("long_signature", None),
+            auth_token = settlement_service_data.get("auth_token", None),
+        )
+
+    hedge_pos_obj.save()
+    metadata_obj.hedge_position = hedge_pos_obj
+    metadata_obj.save()
+
+    if settlement_service:
+        settlement_service.hedge_position = hedge_pos_obj
+        settlement_service.save()
+
+    for fee_obj in fee_objs:
+        fee_obj.hedge_position = hedge_pos_obj
+        fee_obj.save()
+    
+    for funding_obj in funding_objs:
+        if funding_obj.settlement:
+            funding_obj.settlement.hedge_position = hedge_pos_obj
+            funding_obj.settlement.save()
+        funding_obj.hedge_position = hedge_pos_obj
+        funding_obj.save()
+
+        hedge_pos_obj.funding_tx_hash = funding_obj.tx_hash
+        hedge_pos_obj.funding_tx_hash_validated = funding_obj.validated
+        hedge_pos_obj.save()
+
+    return hedge_pos_obj
 
 
 def get_contract_status(
