@@ -1,3 +1,4 @@
+import logging
 import time
 import json
 import decimal
@@ -122,6 +123,7 @@ def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str=
     else:
         settlement_service["long_signature"] = signature
 
+    short_proposal_data["contract_data"] = contract_data
     short_proposal_data["settlement_service"] = settlement_service
     save_short_proposal_data(
         treasury_contract_address,
@@ -319,6 +321,32 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
 
     return result
 
-def update_short_proposal_funding_tx_sig(treasury_contract_address:str):
-    result = get_short_contract_proposal(treasury_contract_address, recompile=False)
-    contract_data, settlement_service, funding_amounts, partial_tx, *_ = result
+def update_short_proposal_funding_utxo_tx_sig(treasury_contract_address:str, sig:list, sig_index:int=0):
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
+
+    verify_result = ScriptFunctions.verifyTreasuryContractMultisigTx(dict(
+        contractOpts=treasury_contract.contract_opts,
+        sig=sig,
+        locktime=funding_utxo_tx.get("locktime", 0),
+        inputs=funding_utxo_tx["inputs"],
+        outputs=funding_utxo_tx["outputs"],
+    ))
+
+    if not verify_result.get("valid"):
+        logging.exception(f"verify_result | {treasury_contract_address.address} | {verify_result}")
+        raise AnyhedgeException("Invalid signature/s", code="invalid_signature")
+
+    sig_index = int(sig_index)
+    if sig_index < 1 or sig_index > 3:
+        raise AnyhedgeException("Invalid index for signature", code="invalid_sig_index")
+    funding_utxo_tx[f"sig{sig_index}"] = sig
+
+    short_proposal_data["funding_utxo_tx"] = funding_utxo_tx
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
+    return short_proposal_data

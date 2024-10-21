@@ -1,12 +1,13 @@
 import { compileFile } from "cashc"
 import { Contract, ElectrumNetworkProvider, SignatureAlgorithm, SignatureTemplate } from "cashscript"
-import { hexToBin } from "@bitauth/libauth"
+import { binToHex, hexToBin, secp256k1 } from "@bitauth/libauth"
 
-import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
+import { calculateDust, createSighashPreimage, getOutputSize } from "cashscript/dist/utils.js"
 import { LOCKTIME_SIZE, P2PKH_INPUT_SIZE, VERSION_SIZE } from "cashscript/dist/constants.js"
+import { hash256 } from "@cashscript/utils"
 
 import { toTokenAddress } from "../../utils/crypto.js"
-import { calculateInputSize } from "../../utils/transaction.js"
+import { calculateInputSize, cashscriptTxToLibauth } from "../../utils/transaction.js"
 
 export class TreasuryContract {
   /**
@@ -380,6 +381,55 @@ export class TreasuryContract {
     transaction.withFeePerByte(feePerByte)
     return transaction
   }
+
+
+  /**
+   * @param {Object} opts 
+   * @param {{ sighash:String, signature:String, pubkey:String }[]} opts.sig
+   * @param {Number} opts.locktime
+   * @param {import("cashscript").UtxoP2PKH[]} opts.inputs
+   * @param {import("cashscript").Output[]} opts.outputs
+   */
+  verifyMultisigTxSignature(opts) {
+    const contract = this.getContract()
+    const { transaction, sourceOutputs } = cashscriptTxToLibauth(contract.address, {
+      version: 2,
+      locktime: opts.locktime,
+      inputs: opts?.inputs,
+      outputs: opts?.outputs,
+    })
+
+    // we get only one, assumming all hashtypes of the signatures are the same
+    const hashType = opts?.sig
+      .filter(Boolean)
+      .map(sigdata => hexToBin(sigdata.signature).at(-1))
+      .at(0)
+
+    const bytecode = hexToBin(contract.bytecode)
+
+    return opts.sig.map((sigData, index) => {
+      if (!sigData) return true
+      
+      const pubkey = hexToBin(sigData.pubkey)
+      if (!this.params.pubkeys.includes(sigData.pubkey)) {
+        return 'invalid_pubkey'
+      }
+
+      const preimage = createSighashPreimage(transaction, sourceOutputs, index, bytecode, hashType)
+      const sighash = hash256(preimage);
+      const sighashHex = binToHex(sighash)
+
+      if (sigData.sighash !== sighashHex) return 'incorrect_sighash'
+
+      // removed the hashtype at the end
+      const signature = hexToBin(sigData.signature).slice(0, -1)
+      const validSignature = secp256k1.verifySignatureDER(signature, pubkey, sighash)
+
+      if (!validSignature) return 'invalid_signature'
+  
+      return validSignature
+    })
+  }
 }
 
 
@@ -390,7 +440,7 @@ function parseSigParam(sig) {
   if (sig instanceof SignatureTemplate) return sig
 
   // last byte of a signatures is the hashType
-  const hashTypes = sig.map(sigdata => hexToBin(sigdata.signature).at(-1))
+  const hashTypes = sig.filter(Boolean).map(sigdata => hexToBin(sigdata.signature).at(-1))
 
   // we get only one, assumming all hashtypes of the signatures are the same
   const hashType = hashTypes[0]

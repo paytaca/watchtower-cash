@@ -11,6 +11,7 @@ from stablehedge.functions.anyhedge import (
     get_short_contract_proposal,
     get_or_create_short_proposal,
     update_short_proposal_access_keys,
+    update_short_proposal_funding_utxo_tx_sig,
 )
 from stablehedge.filters import (
     RedemptionContractFilter,
@@ -185,6 +186,23 @@ class TreasuryContractViewSet(
             }
             return Response(result, status=400)
 
+    @decorators.action(methods=["post"], detail=True)
+    def short_proposal_funding_utxo_tx_sig(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            sig = request.data["sig"]
+            index = request.data["index"]
+            result = update_short_proposal_funding_utxo_tx_sig(
+                instance.address, sig,
+                sig_index=index,
+            )
+            return Response(result)
+        except AnyhedgeException as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
 
 class TestUtilsViewSet(viewsets.GenericViewSet):
     @swagger_auto_schema(

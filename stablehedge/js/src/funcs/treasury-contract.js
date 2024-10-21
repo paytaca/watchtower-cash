@@ -1,7 +1,6 @@
-import { cashScriptOutputToLibauthOutput } from 'cashscript/dist/utils.js';
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
 import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo } from '../utils/crypto.js'
-import { isUtxoP2PKH, SignatureAlgorithm, SignatureTemplate, TransactionBuilder } from 'cashscript'
+import { SignatureAlgorithm, SignatureTemplate } from 'cashscript'
 
 
 export function getTreasuryContractArtifact() {
@@ -133,4 +132,29 @@ export async function constructTreasuryContractTx(opts) {
     inputs: transaction.inputs.map(serializeUtxo),
     outputs: transaction.outputs.map(serializeOutput),
   }
+}
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts 
+ * @param {{ sighash:String, signature: String, pubkey: String }[]} opts.sig
+ * @param {Number} opts.locktime
+ * @param {import('cashscript').Utxo[]} opts.inputs
+ * @param {import('cashscript').Output[]} opts.outputs
+ */
+export function verifyTreasuryContractMultisigTx(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+  const outputs = opts?.outputs?.map(parseCashscriptOutput)
+
+  const sigcheck = treasuryContract.verifyMultisigTxSignature({
+    inputs, outputs,
+    locktime: opts?.locktime,
+    sig: opts?.sig,
+  })
+
+  const validSignatures = sigcheck.every(inputSigCheck => inputSigCheck === true)
+
+  return { success: true, valid: validSignatures, sigcheck: sigcheck }
 }
