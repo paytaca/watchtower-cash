@@ -47,17 +47,14 @@ def handle_ad_payments_changed(sender, instance, action, reverse, model, pk_set,
         for method in payment_methods:
             payment_type_names.append(method.payment_type.short_name)
         instance._previous_payment_types = payment_type_names
+
     elif action in ['post_add', 'post_remove', 'post_clear']: 
-        logger.warning(f'instance._previous_payment_types: {instance._previous_payment_types}',)
         if hasattr(instance, '_previous_payment_types'):
             previous_payment_types = instance._previous_payment_types
             payment_methods = instance.payment_methods.all()
             current_payment_types = []
             for e in payment_methods:
                 current_payment_types.append(e.payment_type.short_name)
-            
-            logger.warning(f'previous_payment_types: {previous_payment_types}')
-            logger.warning(f'current_payment_types: {current_payment_types}')
 
             if sorted(previous_payment_types) != sorted(current_payment_types):
                 context = {
@@ -75,7 +72,7 @@ def resolve_updated_ad_fields(instance: models.Ad):
             field_name = field.attname
             old_value = getattr(instance._previous_state, field_name)
             new_value = getattr(instance, field_name)
-            logger.warning(f"Field: {field_name}, Old Value: {old_value}, New Value: {new_value}")
+            
             if old_value != new_value:
                 if field_name != 'modified_at':
                     context = {
@@ -143,4 +140,5 @@ def send_ad_update_message(ad_id, field_name, context=None):
     else:
         return
     
+    AdSummaryMessage.send_safe(ad_id)
     AdUpdateMessage.send_safe(ad_id, update_type=update_type, context=context)

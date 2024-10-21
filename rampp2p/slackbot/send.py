@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 class MessageBase(object):
     @classmethod
-    def get_client(cls, token=settings.SLACK_BOT_USER_TOKEN):
+    def get_client(cls, token=settings.P2P_EXCHANGE_SLACKBOT_USER_TOKEN):
         return WebClient(token=token)
 
     @classmethod
-    def update_message(cls, channel=settings.SLACK_CHANNEL, ts="", text=None, blocks=[], attachments=[]):
+    def update_message(cls, channel=settings.P2P_EXCHANGE_SLACK_CHANNEL, ts="", text=None, blocks=[], attachments=[]):
         slack_client = cls.get_client()
         logger.info(f"SLACK UPDATE MESSAGE | {channel} | {ts} | text={text} | blocks={blocks} | attachments={attachments}")
         try:
@@ -44,7 +44,7 @@ class MessageBase(object):
             )
 
     @classmethod
-    def send_message(cls, channel=settings.SLACK_CHANNEL, text=None, blocks=[], attachments=[], thread_ts=None, reply_broadcast=False):
+    def send_message(cls, channel=settings.P2P_EXCHANGE_SLACK_CHANNEL, text=None, blocks=[], attachments=[], thread_ts=None, reply_broadcast=False):
         slack_client = cls.get_client()
 
         logger.info(f"SLACK POST MESSAGE | {channel} {('| ' + thread_ts) if thread_ts else ''} | text={text} | blocks={blocks} | attachments={attachments}")
