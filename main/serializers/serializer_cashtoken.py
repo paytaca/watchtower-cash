@@ -2,8 +2,6 @@ from rest_framework import serializers
 
 from django.conf import settings
 
-from vouchers.models import Voucher
-
 from main.models import (
     CashNonFungibleToken,
     CashFungibleToken,

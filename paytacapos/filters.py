@@ -1,7 +1,6 @@
 from django_filters import rest_framework as filters
 
 from .models import *
-from vouchers.models import MerchantVault
 from django.db.models import Q
 
 
@@ -32,8 +31,7 @@ class MerchantFilter(filters.FilterSet):
     city = filters.CharFilter(field_name="location__city", lookup_expr="icontains")
     street = filters.CharFilter(field_name="location__street", lookup_expr="icontains")
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
-    vault_token_address = filters.CharFilter(field_name="vault__token_address", lookup_expr="icontains")
-    supports_voucher = filters.BooleanFilter(method="has_vault_filter")
+    has_vault = filters.BooleanFilter(method="has_vault_filter")
 
     active = filters.BooleanFilter()
     verified = filters.BooleanFilter()
@@ -57,8 +55,6 @@ class MerchantFilter(filters.FilterSet):
             "city",
             "street",
             "category",
-            "vault_token_address",
-            "supports_voucher",
         ]
 
     def wallet_hashes_filter(self, queryset, name, value):
@@ -82,4 +78,4 @@ class MerchantFilter(filters.FilterSet):
         )
 
     def has_vault_filter(self, queryset, name, value):
-        return queryset.exclude(vault__isnull=value)
+        return queryset.exclude(pubkey__isnull=value)
