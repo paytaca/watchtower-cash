@@ -1,4 +1,6 @@
 import { AnyHedgeManager} from '@generalprotocols/anyhedge'
+import { constructFundingOutputs } from '@generalprotocols/anyhedge/build/lib/util/funding-util.js'
+import { binToHex } from '@bitauth/libauth'
 import { castBigIntSafe, parseContractData } from '../utils.js'
 
 export const LIQUIDITY_FEE_NAME = 'Liquidity premium'
@@ -108,4 +110,28 @@ export async function completeFundingProposal(contractData, fundingProposal1, fu
     response.error = error?.message || 'Error completing funding proposal'
   }
   return response
+}
+
+/**
+ * @param {import('@generalprotocols/anyhedge').ContractDataV2} contractData 
+ */
+export async function createFundingTransactionOutputs(contractData) {
+  contractData = parseContractData(contractData)
+  const fundingOutputs = constructFundingOutputs(contractData)
+  const cashscriptOutputs = fundingOutputs.map(output => {
+    return {
+      to: binToHex(output.lockingBytecode),
+      amount: Number(output.valueSatoshis),
+      token: !output.token ? undefined : {
+        category: binToHex(output.token.category),
+        amount: Number(output.token.amount),
+        nft: !output.token.nft ? undefined : {
+          capability: output.token.nft.capability,
+          commitment: binToHex(output.token.nft.commitment),
+        }
+      }
+    }
+  })
+
+  return { success: true, outputs: cashscriptOutputs }
 }
