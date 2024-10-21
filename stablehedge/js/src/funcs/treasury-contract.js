@@ -158,3 +158,30 @@ export function verifyTreasuryContractMultisigTx(opts) {
 
   return { success: true, valid: validSignatures, sigcheck: sigcheck }
 }
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts 
+ * @param {{ sighash: String, signature: String }[] | String} opts.sig1
+ * @param {{ sighash: String, signature: String }[] | String} opts.sig2
+ * @param {{ sighash: String, signature: String }[] | String} opts.sig3
+ * @param {Number} opts.locktime
+ * @param {import('cashscript').Utxo[]} opts.inputs
+ * @param {import('cashscript').Output[]} opts.outputs
+ */
+export function getMultisigTxUnlockingScripts(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+  const outputs = opts?.outputs?.map(parseCashscriptOutput)
+
+  const scriptSigs = treasuryContract.getMultisigSignatures({
+    sig1: !isValidWif(opts?.sig1) ? opts?.sig1 : new SignatureTemplate(opts?.sig1, undefined, SignatureAlgorithm.ECDSA),
+    sig2: !isValidWif(opts?.sig2) ? opts?.sig2 : new SignatureTemplate(opts?.sig2, undefined, SignatureAlgorithm.ECDSA),
+    sig3: !isValidWif(opts?.sig3) ? opts?.sig3 : new SignatureTemplate(opts?.sig3, undefined, SignatureAlgorithm.ECDSA),
+    inputs, outputs,
+    locktime: opts?.locktime,
+  })
+
+  return { success: true, scripts: scriptSigs }
+}

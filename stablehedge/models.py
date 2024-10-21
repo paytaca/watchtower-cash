@@ -214,3 +214,13 @@ class TreasuryContract(models.Model):
     @is_subscribed.setter
     def is_subscribed(self, value):
         self._is_subscribed = value
+
+    @property
+    def pubkeys(self):
+        return [
+            self.pubkey1,
+            self.pubkey2,
+            self.pubkey3,
+            self.pubkey4,
+            self.pubkey5,
+        ]

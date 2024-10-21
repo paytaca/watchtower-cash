@@ -3,27 +3,42 @@ import time
 import json
 import decimal
 from django.conf import settings
+from django.db import transaction
 
 from stablehedge import models
 from stablehedge.utils.address import to_cash_address
-from stablehedge.utils.transaction import tx_model_to_cashscript
+from stablehedge.utils.transaction import (
+    tx_model_to_cashscript,
+    get_tx_input_hashes,
+)
 from stablehedge.js.runner import ScriptFunctions
 
+from .transaction import (
+    test_transaction_accept,
+    broadcast_transaction,
+)
 from .treasury_contract import (
     get_spendable_sats,
     find_single_bch_utxo,
     get_bch_utxos,
+    save_signature_to_tx,
 )
 
 from anyhedge import models as anyhedge_models
+from anyhedge.js.runner import AnyhedgeFunctions
+from anyhedge.tasks import validate_contract_funding
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
+from anyhedge.utils.liquidity import fund_hedge_position
 from anyhedge.utils.funding import calculate_funding_amounts
 from anyhedge.utils.contract import (
     AnyhedgeException,
     create_contract,
     contract_data_to_obj,
+    save_contract_data,
     get_contract_status,
 )
+
+from main.tasks import _process_mempool_transaction
 
 
 GP_LP = GeneralProtocolsLP()
@@ -342,32 +357,232 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
 
     return result
 
+
 def update_short_proposal_funding_utxo_tx_sig(treasury_contract_address:str, sig:list, sig_index:int=0):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
 
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
-    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
+    short_proposal_data["funding_utxo_tx"] = save_signature_to_tx(
+        treasury_contract,
+        short_proposal_data["funding_utxo_tx"],
+        sig,
+        int(sig_index),
+    )
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
 
-    verify_result = ScriptFunctions.verifyTreasuryContractMultisigTx(dict(
+    return short_proposal_data
+
+
+def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+
+    build_result = ScriptFunctions.unlockTreasuryContractWithMultiSig(dict(
         contractOpts=treasury_contract.contract_opts,
-        sig=sig,
-        locktime=funding_utxo_tx.get("locktime", 0),
-        inputs=funding_utxo_tx["inputs"],
-        outputs=funding_utxo_tx["outputs"],
+        sig1=short_proposal_data["sig1"],
+        sig2=short_proposal_data["sig2"],
+        sig3=short_proposal_data["sig3"],
+        locktime=short_proposal_data.get("locktime") or 0,
+        inputs=short_proposal_data["inputs"],
+        outputs=short_proposal_data["outputs"],
     ))
 
-    if not verify_result.get("valid"):
-        logging.exception(f"verify_result | {treasury_contract_address.address} | {verify_result}")
-        raise AnyhedgeException("Invalid signature/s", code="invalid_signature")
+    if not build_result["success"]:
+        error_msg = build_result.get("success") or "Failed to build transaction"
+        raise AnyhedgeException(error_msg, code="build_failed")
 
-    sig_index = int(sig_index)
-    if sig_index < 1 or sig_index > 3:
-        raise AnyhedgeException("Invalid index for signature", code="invalid_sig_index")
-    funding_utxo_tx[f"sig{sig_index}"] = sig
+    tx_hex = build_result["tx_hex"]
+    valid_tx, error_or_txid = test_transaction_accept(tx_hex)
+    if not valid_tx:
+        raise AnyhedgeException("Invalid transaction", code=reason)
 
+    return dict(tx_hex=tx_hex, txid=error_or_txid)
+
+
+def complete_short_proposal_funding_utxo_tx(treasury_contract_address:str):
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
+
+    if "txid" in funding_utxo_tx:
+        return short_proposal_data
+
+    build_result = build_short_proposal_funding_utxo_tx(treasury_contract_address)
+    success, error_or_txid = broadcast_transaction(build_result["tx_hex"])
+    if not success:
+        raise AnyhedgeException("Failed to complete funding proposal transaction", code=error_or_txid)
+
+    funding_utxo_tx["txid"] = error_or_txid
     short_proposal_data["funding_utxo_tx"] = funding_utxo_tx
     save_short_proposal_data(
         treasury_contract_address,
         **short_proposal_data,
     )
     return short_proposal_data
+
+
+def build_short_proposal_funding_tx(treasury_contract_address:str):
+    complete_short_proposal_funding_utxo_tx(treasury_contract_address)
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+
+    contract_data = short_proposal_data["contract_data"]
+    settlement_service = short_proposal_data["settlement_service"]
+    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
+    funding_tx = short_proposal_data["funding_tx"]
+
+    contract_data = get_contract_status(
+        contract_data["address"],
+        pubkey,
+        signature,
+        settlement_service_scheme=settlement_service["scheme"],
+        settlement_service_domain=settlement_service["host"],
+        settlement_service_port=settlement_service["port"],
+        authentication_token=settlement_service.get("auth_token", None),
+    )
+
+    funding_utxo_txid = funding_utxo_tx_build["txid"]
+    funding_utxo_index = int(funding_utxo_tx.get("funding_utxo_index", 0))
+    funding_utxo_sats = int(funding_utxo_tx["outputs"][funding_utxo_index]["amount"])
+
+    funding_outputs = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
+
+    if not funding_tx:
+        funding_tx = {}
+
+    funding_utxo = dict(
+        txid=funding_utxo_txid,
+        vout=funding_utxo_index,
+        satoshis=funding_utxo_sats,
+    )
+
+    funding_tx = dict(
+        inputs=[funding_utxo],
+        outputs=funding_outputs,
+    )
+
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
+    return save_short_proposal_data
+
+
+def update_short_proposal_funding_tx_sig(treasury_contract_address:str, sig:list, sig_index:int):
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    short_proposal_data["funding_tx"] = save_signature_to_tx(
+        treasury_contract,
+        short_proposal_data["funding_tx"],
+        sig,
+        int(sig_index),
+    )
+
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
+    return short_proposal_data
+
+@transaction.atomic
+def complete_short_proposal(treasury_contract_address:str):
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+
+    if not short_proposal_data:
+        raise AnyhedgeException("No short proposal")
+
+    contract_data = short_proposal_data["contract_data"]
+    settlement_service = short_proposal_data["settlement_service"]
+    funding_tx = short_proposal_data["funding_tx"]
+
+    if not funding_tx:
+        raise AnyhedgeException("No funding transaction found")
+
+    for i in range(1, 4):
+        sig = funding_tx.get(f"sig{i}")
+        if not sig:
+            raise AnyhedgeException(f"No data for sig{i}")
+        
+        verify_result = ScriptFunctions.verifyTreasuryContractMultisigTx(dict(
+            contractOpts=treasury_contract.contract_opts,
+            sig=sig,
+            locktime=funding_tx.get("locktime", 0),
+            inputs=funding_tx["inputs"],
+            outputs=funding_tx["outputs"],
+        ))
+
+        if not verify_result.get("valid"):
+            raise AnyhedgeException(f"Invalid signature in sig{i}", code="invalid_signature")
+
+    gen_script_result = ScriptFunctions.getMultisigTxUnlockingScripts(dict(
+        contractOpts=treasury_contract.contract_opts,
+        sig1=funding_tx["sig1"],
+        sig2=funding_tx["sig2"],
+        sig3=funding_tx["sig3"],
+        locktime=funding_tx.get("locktime") or 0,
+        inputs=funding_tx["inputs"],
+        outputs=funding_tx["outputs"],
+    ))
+
+    if not gen_script_result.get("success"):
+        error_msg = gen_script_result.get("error") or "Error generating scriptsig"
+        raise AnyhedgeException(error_msg, code="scriptsig_gen_error")
+
+    scripts = gen_script_result["scripts"]
+    funding_input_index = funding_tx.get("funding_input_index") or 0
+    funding_input = funding_tx["inputs"][funding_input_index]
+    input_tx_hashes = get_tx_input_hashes(funding_input["txid"])
+
+    funding_proposal = dict(
+        txHash=funding_input["txid"],
+        txIndex=funding_input["vout"],
+        txValue=funding_input["satoshis"],
+        scriptSig=scripts[funding_input_index],
+        publicKey=contract_data["parameters"]["shortMutualRedeemPublicKey"],
+        inputTxHashes=input_tx_hashes,
+    )
+
+    position = contract_data["metadata"]["takerSide"]
+    if position == "long":
+        funding_proposal["publicKey"] = contract_data["parameters"]["longMutualRedeemPublicKey"]
+
+    oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
+
+    # ideally these 2 steps should be last
+    # since it communicates with LP
+    hedge_pos_obj = save_contract_data(contract_data, settlement_service_data=settlement_service)
+    funding_response = fund_hedge_position(
+        contract_data,
+        funding_proposal,
+        oracle_message_sequence,
+        position=position,
+    )
+
+    if not funding_response.get("success"):
+        raise AnyhedgeException(funding_response["error"], code="funding_error")
+
+    hedge_pos_obj.funding_tx_hash = funding_response["fundingTransactionHash"]
+    hedge_pos_obj.save()
+
+    # encasing the following steps in try catch since
+    # previous 2 steps must complete & not rollback db transactions; and
+    # the following steps are not that critical
+    try:
+        validate_contract_funding.delay(hedge_pos_obj.address)
+    except Exception as exception:
+        logging.exception(exception)
+
+    try:
+        delete_short_proposal_data(treasury_contract_address)
+    except Exception as exception:
+        logging.exception(exception)
+
+    try:
+        _process_mempool_transaction(hedge_pos_obj.funding_tx_hash, force=True)
+    except Exception as exception:
+        logging.exception(exception)
+
+    return hedge_pos_obj

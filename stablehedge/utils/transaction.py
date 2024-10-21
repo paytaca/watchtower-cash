@@ -2,6 +2,7 @@ import re
 import decimal
 
 from main import models as main_models
+from main.tasks import NODE
 
 class InvalidUtxoException(Exception):
     pass
@@ -143,3 +144,11 @@ def tx_model_to_cashscript(obj:main_models.Transaction):
         )
 
     return response
+
+
+def get_tx_input_hashes(txid:str):
+    txn = NODE.BCH._get_raw_transaction(txid)
+    txids = []
+    for tx_input in txn['vin']:
+        txids.append(tx_input['txid'])
+    return txids

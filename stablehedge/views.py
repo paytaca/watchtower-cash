@@ -12,6 +12,9 @@ from stablehedge.functions.anyhedge import (
     get_or_create_short_proposal,
     update_short_proposal_access_keys,
     update_short_proposal_funding_utxo_tx_sig,
+    build_short_proposal_funding_tx,
+    update_short_proposal_funding_tx_sig,
+    complete_short_proposal,
 )
 from stablehedge.filters import (
     RedemptionContractFilter,
@@ -19,6 +22,8 @@ from stablehedge.filters import (
 )
 from stablehedge.js.runner import ScriptFunctions
 
+from anyhedge import models as anyhedge_models
+from anyhedge import serializers as anyhedge_serializers
 
 from django.utils import timezone
 from drf_yasg import openapi
@@ -30,7 +35,6 @@ from stablehedge.functions.transaction import (
     create_deposit_tx,
     create_redeem_tx,
 )
-from anyhedge import models as anyhedge_models
 from main.tasks import NODE
 
 
@@ -171,6 +175,11 @@ class TreasuryContractViewSet(
 
         return Response(result)
 
+    @decorators.action(
+        methods=["post"],
+        detail=True,
+        url_path="short_proposal/access_keys",
+    )
     @decorators.action(methods=["post"], detail=True)
     def short_proposal_access_keys(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -186,7 +195,11 @@ class TreasuryContractViewSet(
             }
             return Response(result, status=400)
 
-    @decorators.action(methods=["post"], detail=True)
+    @decorators.action(
+        methods=["post"],
+        detail=True,
+        url_path="short_proposal/funding_utxo_tx/sign",
+    )
     def short_proposal_funding_utxo_tx_sig(self, request, *args, **kwargs):
         instance = self.get_object()
         try:
@@ -203,6 +216,68 @@ class TreasuryContractViewSet(
                 "code": str(exception.code),
             }
             return Response(result, status=400)
+    
+    @decorators.action(
+        methods=["post"],
+        detail=True,
+        url_path=f"short_proposal/funding_utxo_tx/build",
+    )
+    def short_proposal_funding_utxo_tx_build(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            result = build_short_proposal_funding_tx(instance.address)
+            return Response(result)
+        except AnyhedgeException as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
+
+    @decorators.action(
+        methods=["post"],
+        detail=True,
+        url_path=f"short_proposal/funding_tx/sign",
+    )
+    def short_proposal_funding_utxo_tx_build(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            sig = request.data["sig"]
+            index = request.data["index"]
+            result = update_short_proposal_funding_tx_sig(instance.address, sig,
+                sig_index=index,
+            )
+            return Response(result)
+
+        except AnyhedgeException as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
+
+    @swagger_auto_schema(
+        method="post",
+        responses={200: anyhedge_serializers.HedgePositionSerializer},
+    )
+    @decorators.action(
+        methods=["post"],
+        detail=True,
+        url_path=f"short_proposal/complete",
+    )
+    def short_proposal_complete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            hedge_pos_obj = complete_short_proposal(instance.address)
+            serializer = anyhedge_serializers.HedgePositionSerializer(hedge_pos_obj)
+            return Response(serializer.data)
+        except AnyhedgeException as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
+            
 
 class TestUtilsViewSet(viewsets.GenericViewSet):
     @swagger_auto_schema(

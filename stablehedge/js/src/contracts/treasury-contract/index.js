@@ -430,6 +430,40 @@ export class TreasuryContract {
       return validSignature
     })
   }
+
+  /**
+   * @param {Object} opts
+   * @param {{ sighash: String, signature: String }[] | SignatureTemplate} opts.sig1
+   * @param {{ sighash: String, signature: String }[] | SignatureTemplate} opts.sig2
+   * @param {{ sighash: String, signature: String }[] | SignatureTemplate} opts.sig3
+   * @param {Number} opts.locktime
+   * @param {import("cashscript").UtxoP2PKH[]} opts.inputs
+   * @param {import("cashscript").Recipient[]} opts.outputs
+   * 
+   */
+  getMultisigSignatures(opts) {
+    const contract = this.getContract()
+    const { transaction, sourceOutputs } = cashscriptTxToLibauth(contract.address, {
+      version: 2,
+      locktime: opts?.locktime,
+      inputs: opts?.inputs,
+      outputs: opts?.outputs,
+    })
+
+    const sig1 = parseSigParam(opts?.sig1)
+    const sig2 = parseSigParam(opts?.sig2)
+    const sig3 = parseSigParam(opts?.sig3)
+
+    const unlocker = contract.unlock.unlockWithMultiSig(sig1, sig2, sig3)
+    return opts?.inputs?.map((input, inputIndex) => {
+      if (input.template) return ''
+      
+      const unlockingBytecode = unlocker.generateUnlockingBytecode({
+        transaction, sourceOutputs, inputIndex,
+      })
+      return binToHex(unlockingBytecode)
+    })
+  }
 }
 
 
