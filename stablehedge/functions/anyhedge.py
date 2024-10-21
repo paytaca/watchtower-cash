@@ -20,6 +20,7 @@ from anyhedge.utils.contract import (
     AnyhedgeException,
     create_contract,
     contract_data_to_obj,
+    get_contract_status,
 )
 
 
@@ -37,7 +38,22 @@ def get_or_create_short_proposal(treasury_contract_address:str):
 
 def create_short_proposal(treasury_contract_address:str):
     contract_data, settlement_service, funding_amounts, partial_tx, *_ = short_funds(treasury_contract_address)
+    save_short_proposal_data(
+        treasury_contract_address,
+        contract_data,
+        settlement_service,
+        funding_amounts,
+        partial_tx,
+    )
+    return contract_data, settlement_service, funding_amounts, partial_tx
 
+def save_short_proposal_data(
+    treasury_contract_address,
+    contract_data,
+    settlement_service,
+    funding_amounts,
+    partial_tx,
+):
     timeout = funding_amounts["recalculate_after"]
     ttl = int(timeout - time.time()) - 5 # 5 seconds for margin
 
@@ -45,10 +61,9 @@ def create_short_proposal(treasury_contract_address:str):
     REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
 
     REDIS_STORAGE.set(REDIS_KEY, GP_LP.json_parser.dumps(result), ex=ttl)
-    return result
+    return ttl
 
-
-def get_short_contract_proposal(treasury_contract_address:str):
+def get_short_contract_proposal(treasury_contract_address:str, recompile=True):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
 
     REDIS_KEY = f"treasury-contract-short-{treasury_contract.address}"
@@ -56,8 +71,9 @@ def get_short_contract_proposal(treasury_contract_address:str):
         data = REDIS_STORAGE.get(REDIS_KEY)
         contract_data, settlement_service, funding_amounts, partial_tx, *_ = GP_LP.json_parser.loads(data)
 
-        # there is a recompile check inside that will throw error if address mismatch
-        contract_data_to_obj(contract_data)
+        if recompile:
+            # there is a recompile check inside that will throw error if address mismatch
+            contract_data_to_obj(contract_data)
 
         return contract_data, settlement_service, funding_amounts, partial_tx
     except (TypeError, json.JSONDecodeError):
@@ -67,6 +83,46 @@ def get_short_contract_proposal(treasury_contract_address:str):
             return
         else:
             raise exception
+
+def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str="", signature:str=""):
+    result = get_short_contract_proposal(treasury_contract_address, recompile=True)
+    contract_data, settlement_service, funding_amounts, partial_tx, *_ = result
+
+    parameters = contract_data["parameters"]
+    short_pubkey = parameters["shortMutualRedeemPublicKey"]
+    long_pubkey = parameters["longMutualRedeemPublicKey"]
+    if pubkey not in [short_pubkey, long_pubkey]:
+        raise AnyhedgeException("Pubkey does not match any side", code="invalid_pubkey")
+
+    contract_data2 = get_contract_status(
+        contract_data["address"],
+        pubkey,
+        signature,
+        settlement_service_scheme=settlement_service["scheme"],
+        settlement_service_domain=settlement_service["host"],
+        settlement_service_port=settlement_service["port"],
+        authentication_token=settlement_service.get("auth_token", None),
+    )
+    print(f"contract_data2 |", GP_LP.json_parser.dumps(contract_data2, indent=2))
+    if contract_data2["address"] != contract_data["address"]:
+        raise AnyhedgeException("Address mismatch", code=AnyhedgeException.ADDRESS_MISMATCH)
+    else:
+        contract_data = contract_data2
+
+    if pubkey == short_pubkey:
+        settlement_service["short_signature"] = signature
+    else:
+        settlement_service["long_signature"] = signature
+
+    save_short_proposal_data(
+        treasury_contract_address,
+        contract_data,
+        settlement_service,
+        funding_amounts,
+        partial_tx,
+    )
+
+    return contract_data, settlement_service, funding_amounts, partial_tx
 
 
 def short_funds(treasury_contract_address:str, pubkey1_wif=""):

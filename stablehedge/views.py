@@ -7,8 +7,10 @@ from stablehedge import serializers
 
 from stablehedge.functions.treasury_contract import get_spendable_sats
 from stablehedge.functions.anyhedge import (
+    AnyhedgeException,
     get_short_contract_proposal,
     get_or_create_short_proposal,
+    update_short_proposal_access_keys,
 )
 from stablehedge.filters import (
     RedemptionContractFilter,
@@ -167,6 +169,21 @@ class TreasuryContractViewSet(
             raise exceptions.MethodNotAllowed(self.request.method)
 
         return Response(result)
+
+    @decorators.action(methods=["post"], detail=True)
+    def short_proposal_access_keys(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            pubkey = request.data["pubkey"]
+            signature = request.data["signature"]
+            result = update_short_proposal_access_keys(instance.address, pubkey, signature)
+            return Response(result)
+        except AnyhedgeException as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
 
 
 class TestUtilsViewSet(viewsets.GenericViewSet):
