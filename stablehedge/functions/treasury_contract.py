@@ -27,6 +27,16 @@ def get_spendable_sats(treasury_contract_address:str):
     return dict(total=total_sats, spendable=spendable_sats, utxo_count=utxo_count)
 
 
+def find_single_bch_utxo(treasury_contract_address:str, satoshis:int):
+    address = to_cash_address(treasury_contract_address, testnet=settings.BCH_NETWORK == "chipnet")
+    return main_models.Transaction.objects.filter(
+        address__address=address,
+        token__name="bch",
+        spent=False,
+        value=satoshis,
+    ).first()
+
+
 def get_bch_utxos(treasury_contract_address:str, satoshis:int=None):
     address = to_cash_address(treasury_contract_address, testnet=settings.BCH_NETWORK == "chipnet")
     utxos = main_models.Transaction.objects.filter(

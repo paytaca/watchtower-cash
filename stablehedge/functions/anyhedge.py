@@ -11,6 +11,7 @@ from stablehedge.js.runner import ScriptFunctions
 
 from .treasury_contract import (
     get_spendable_sats,
+    find_single_bch_utxo,
     get_bch_utxos,
 )
 
@@ -45,6 +46,7 @@ def create_short_proposal(treasury_contract_address:str):
         settlement_service = short_proposal_data["settlement_service"],
         funding_amounts = short_proposal_data["funding_amounts"],
         funding_utxo_tx = short_proposal_data["funding_utxo_tx"],
+        funding_tx = short_proposal_data["funding_tx"],
     )
     return short_proposal_data
 
@@ -54,6 +56,7 @@ def save_short_proposal_data(
     settlement_service=None,
     funding_amounts=None,
     funding_utxo_tx=None,
+    funding_tx=None,
 ):
     timeout = funding_amounts["recalculate_after"]
     ttl = int(timeout - time.time()) - 5 # 5 seconds for margin
@@ -64,11 +67,16 @@ def save_short_proposal_data(
         settlement_service = settlement_service,
         funding_amounts = funding_amounts,
         funding_utxo_tx = funding_utxo_tx,
+        funding_tx = funding_tx,
     )
     REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
 
     REDIS_STORAGE.set(REDIS_KEY, GP_LP.json_parser.dumps(short_proposal_data), ex=ttl)
     return ttl
+
+def delete_short_proposal_data(treasury_contract_address:str):
+    REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
+    return REDIS_STORAGE.delete(REDIS_KEY)
 
 def get_short_contract_proposal(treasury_contract_address:str, recompile=False):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
@@ -190,12 +198,25 @@ def short_funds(treasury_contract_address:str, pubkey1_wif=""):
     funding_amounts["settlement_service_fee"] = int(service_fee_estimate)
     funding_amounts["satoshis_to_fund"] = int(sats_to_fund)
 
-    funding_utxo_tx = create_tx_for_funding_utxo(treasury_contract_address, int(sats_to_fund))
+    funding_tx = None
+    funding_utxo_tx = None
+    funding_utxo = find_single_bch_utxo(treasury_contract_address, int(sats_to_fund))
+    if funding_utxo:
+        funding_tx = dict(
+            inputs=[tx_model_to_cashscript(funding_utxo)],
+        )
+    else:
+        funding_utxo_tx = create_tx_for_funding_utxo(
+            treasury_contract_address,
+            int(sats_to_fund),
+        )
+
     return dict(
         contract_data = contract_data,
         settlement_service = settlement_service,
         funding_amounts = funding_amounts,
         funding_utxo_tx = funding_utxo_tx,
+        funding_tx = funding_tx,
     )
 
 def create_short_contract(
