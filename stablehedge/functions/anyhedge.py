@@ -37,45 +37,52 @@ def get_or_create_short_proposal(treasury_contract_address:str):
 
 
 def create_short_proposal(treasury_contract_address:str):
-    contract_data, settlement_service, funding_amounts, partial_tx, *_ = short_funds(treasury_contract_address)
+    short_proposal_data = short_funds(treasury_contract_address)
     save_short_proposal_data(
         treasury_contract_address,
-        contract_data,
-        settlement_service,
-        funding_amounts,
-        partial_tx,
+        contract_data = short_proposal_data["contract_data"],
+        settlement_service = short_proposal_data["settlement_service"],
+        funding_amounts = short_proposal_data["funding_amounts"],
+        funding_utxo_tx = short_proposal_data["funding_utxo_tx"],
     )
-    return contract_data, settlement_service, funding_amounts, partial_tx
+    return short_proposal_data
 
 def save_short_proposal_data(
     treasury_contract_address,
-    contract_data,
-    settlement_service,
-    funding_amounts,
-    partial_tx,
+    contract_data=None,
+    settlement_service=None,
+    funding_amounts=None,
+    funding_utxo_tx=None,
 ):
     timeout = funding_amounts["recalculate_after"]
     ttl = int(timeout - time.time()) - 5 # 5 seconds for margin
+    ttl = None
 
-    result = [contract_data, settlement_service, funding_amounts, partial_tx]
+    short_proposal_data = dict(
+        contract_data = contract_data,
+        settlement_service = settlement_service,
+        funding_amounts = funding_amounts,
+        funding_utxo_tx = funding_utxo_tx,
+    )
     REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
 
-    REDIS_STORAGE.set(REDIS_KEY, GP_LP.json_parser.dumps(result), ex=ttl)
+    REDIS_STORAGE.set(REDIS_KEY, GP_LP.json_parser.dumps(short_proposal_data), ex=ttl)
     return ttl
 
-def get_short_contract_proposal(treasury_contract_address:str, recompile=True):
+def get_short_contract_proposal(treasury_contract_address:str, recompile=False):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
 
     REDIS_KEY = f"treasury-contract-short-{treasury_contract.address}"
     try:
         data = REDIS_STORAGE.get(REDIS_KEY)
-        contract_data, settlement_service, funding_amounts, partial_tx, *_ = GP_LP.json_parser.loads(data)
+        short_proposal_data = GP_LP.json_parser.loads(data)
 
         if recompile:
+            contract_data = short_proposal_data["contract_data"]
             # there is a recompile check inside that will throw error if address mismatch
             contract_data_to_obj(contract_data)
 
-        return contract_data, settlement_service, funding_amounts, partial_tx
+        return short_proposal_data
     except (TypeError, json.JSONDecodeError):
         return
     except AnyhedgeException as exception:
@@ -85,8 +92,9 @@ def get_short_contract_proposal(treasury_contract_address:str, recompile=True):
             raise exception
 
 def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str="", signature:str=""):
-    result = get_short_contract_proposal(treasury_contract_address, recompile=True)
-    contract_data, settlement_service, funding_amounts, partial_tx, *_ = result
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=True)
+    contract_data = short_proposal_data["contract_data"]
+    settlement_service = short_proposal_data["settlement_service"]
 
     parameters = contract_data["parameters"]
     short_pubkey = parameters["shortMutualRedeemPublicKey"]
@@ -114,15 +122,13 @@ def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str=
     else:
         settlement_service["long_signature"] = signature
 
+    short_proposal_data["settlement_service"] = settlement_service
     save_short_proposal_data(
         treasury_contract_address,
-        contract_data,
-        settlement_service,
-        funding_amounts,
-        partial_tx,
+        **short_proposal_data,
     )
 
-    return contract_data, settlement_service, funding_amounts, partial_tx
+    return short_proposal_data
 
 
 def short_funds(treasury_contract_address:str, pubkey1_wif=""):
@@ -182,8 +188,13 @@ def short_funds(treasury_contract_address:str, pubkey1_wif=""):
     funding_amounts["settlement_service_fee"] = int(service_fee_estimate)
     funding_amounts["satoshis_to_fund"] = int(sats_to_fund)
 
-    partial_tx = create_tx_for_funding_utxo(treasury_contract_address, int(sats_to_fund))
-    return contract_data, settlement_service, funding_amounts, partial_tx
+    funding_utxo_tx = create_tx_for_funding_utxo(treasury_contract_address, int(sats_to_fund))
+    return dict(
+        contract_data = contract_data,
+        settlement_service = settlement_service,
+        funding_amounts = funding_amounts,
+        funding_utxo_tx = funding_utxo_tx,
+    )
 
 def create_short_contract(
     treasury_contract_address:str,
@@ -307,3 +318,7 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
     ))
 
     return result
+
+def update_short_proposal_funding_tx_sig(treasury_contract_address:str):
+    result = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    contract_data, settlement_service, funding_amounts, partial_tx, *_ = result
