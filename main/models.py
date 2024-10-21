@@ -534,12 +534,14 @@ class WalletHistoryQuerySet(PostgresQuerySet):
 
     def filter_pos(self, wallet_hash, posid=None):
         try:
+            raw_pos_id = posid
             posid = int(posid)
             posid = str(posid)
             pad = "0" * (self.POS_ID_MAX_DIGITS-len(posid))
             posid = pad + posid
         except (ValueError, TypeError):
             posid = None
+            raw_pos_id = None
     
         addresses = Address.objects.filter(wallet__wallet_hash=models.OuterRef("wallet__wallet_hash"))
         if posid is None:
@@ -560,6 +562,14 @@ class WalletHistoryQuerySet(PostgresQuerySet):
         addresses_subquery = models.Func(models.Subquery(addresses), function="array")
 
         filter_arg = models.Q(senders__overlap=addresses_subquery) | models.Q(recipients__overlap=addresses_subquery)
+
+        if raw_pos_id is not None:
+            vault_payments = TransactionMetaAttribute.objects.filter(
+                key=f'vault_payment_{raw_pos_id}',
+                wallet_hash=wallet_hash
+            ).values('txid')
+            filter_arg |= Q(txid__in=vault_payments)
+
         return self.filter(filter_arg, wallet__wallet_hash=wallet_hash)
 
     def annotate_empty_attributes(self):
