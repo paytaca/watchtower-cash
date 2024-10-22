@@ -216,11 +216,11 @@ class TreasuryContractViewSet(
                 "code": str(exception.code),
             }
             return Response(result, status=400)
-    
+
     @decorators.action(
         methods=["post"],
         detail=True,
-        url_path=f"short_proposal/funding_utxo_tx/build",
+        url_path=f"short_proposal/funding_tx/build",
     )
     def short_proposal_funding_utxo_tx_build(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -239,7 +239,7 @@ class TreasuryContractViewSet(
         detail=True,
         url_path=f"short_proposal/funding_tx/sign",
     )
-    def short_proposal_funding_utxo_tx_build(self, request, *args, **kwargs):
+    def short_proposal_funding_tx_sign(self, request, *args, **kwargs):
         instance = self.get_object()
         try:
             sig = request.data["sig"]
