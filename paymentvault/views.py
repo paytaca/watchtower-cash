@@ -44,7 +44,7 @@ class PaymentVaultViewSet(
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(filter(serializer.data))
+            return self.get_paginated_response(filter_empty_vaults(serializer.data))
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response(filter(serializer.data))
+        return Response(filter_empty_vaults(serializer.data))
