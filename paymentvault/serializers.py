@@ -20,8 +20,11 @@ class PaymentVaultSerializer(serializers.ModelSerializer):
         )
 
     def get_balance(self, obj):
-        vault = get_payment_vault(obj.user_pubkey, obj.merchant.pubkey)
-        return vault['balance']
+        try:
+            vault = get_payment_vault(obj.user_pubkey, obj.merchant.pubkey)
+            return vault['balance']
+        except:
+            return 0
 
 
 class CreatePaymentVaultSerializer(serializers.ModelSerializer):
