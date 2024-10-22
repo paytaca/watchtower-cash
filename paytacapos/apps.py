@@ -13,4 +13,4 @@ class PaytacaposConfig(AppConfig):
             active=True,
             verified=True
         )
-        verified_merchants.update(index=-1)
+        verified_merchants.update(index=None)
