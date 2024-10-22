@@ -84,3 +84,35 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
     async def send_message(self, event):
         data = event.get('message')
         await self.send(text_data=json.dumps(data))
+
+class CashinAlertsConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.wallet_hash = self.scope['url_route']['kwargs']['wallet_hash']
+        self.room_name = f'ramp-p2p-subscribe-cashin-alerts-{self.wallet_hash}'
+        await self.channel_layer.group_add(
+            self.room_name,
+            self.channel_name
+        )
+        await self.accept()
+        is_online = True
+        await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
+        data = { 
+            'type': 'ConnectionMessage',
+            'extra': {
+                'message': f"Subscribed to '{self.room_name}'", 
+            }
+        }
+        await self.send(text_data=json.dumps(data))
+
+    async def disconnect(self, close_code):
+        is_online = False
+        await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
+
+        await self.channel_layer.group_discard(
+            self.channel_name,
+            self.channel_name
+        )
+
+    async def send_message(self, event):
+        data = event.get('message')
+        await self.send(text_data=json.dumps(data))

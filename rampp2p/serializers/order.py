@@ -1,12 +1,11 @@
 from PIL import Image
 from rest_framework import serializers
 from django.db.models import Q
-from django.db import transaction
 
 from .ad import SubsetAdSnapshotSerializer
 from .payment import SubsetPaymentMethodSerializer
 from .transaction import TransactionSerializer
-
+from rampp2p.utils.utils import is_seller
 import rampp2p.models as models
 
 import logging
@@ -40,6 +39,7 @@ class OrderSerializer(serializers.ModelSerializer):
     is_ad_owner = serializers.SerializerMethodField()
     feedback = serializers.SerializerMethodField()
     read_at = serializers.SerializerMethodField()
+    has_unread_status = serializers.SerializerMethodField()
     
     class Meta:
         model = models.Order
@@ -66,7 +66,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'appealable_at',
             'last_modified_at',
             'expires_at',
-            'read_at'
+            'read_at',
+            'has_unread_status'
         ]
     
     def get_ad(self, obj):
@@ -157,7 +158,8 @@ class OrderSerializer(serializers.ModelSerializer):
         if latest_status is not None:
             latest_status = {
                 'label': latest_status.get_status_display(),
-                'value': latest_status.status
+                'value': latest_status.status,
+                'created_at': latest_status.created_at
             }
         return latest_status
     
@@ -181,6 +183,16 @@ class OrderSerializer(serializers.ModelSerializer):
             read_at = order_member.first().read_at
             return str(read_at) if read_at != None else read_at
         return None
+
+    def get_has_unread_status(self, obj):
+        wallet_hash = self.context.get('wallet_hash')
+        statuses = models.Status.objects.filter(order__id=obj.id)
+        has_unread = False
+        if is_seller(obj, wallet_hash):
+            has_unread = statuses.filter(seller_read_at__isnull=True).exists()
+        else:
+            has_unread = statuses.filter(buyer_read_at__isnull=True).exists()
+        return has_unread
     
     def get_feedback(self, obj):
         wallet_hash = self.context['wallet_hash']
@@ -223,15 +235,22 @@ class OrderPaymentSerializer(serializers.ModelSerializer):
     order = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Order.objects.all())
     payment_method = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentMethod.objects.all())
     payment_type = serializers.PrimaryKeyRelatedField(required=True, queryset=models.PaymentType.objects.all())
-    
+    attachments = serializers.SerializerMethodField(required=False)
+
     class Meta:
         model = models.OrderPayment
         fields = [
             'id',
             'order',
             'payment_method',
-            'payment_type'
+            'payment_type',
+            'attachments'
         ]
+    
+    def get_attachments(self, obj):
+        attachments = models.OrderPaymentAttachment.objects.filter(payment__id=obj.id)
+        return OrderPaymentAttachmentSerializer(attachments, many=True).data
+
 
 class ImageUploadSerializer(serializers.ModelSerializer):
     class Meta:

@@ -45,59 +45,6 @@ class BroadcastPaymentView(APIView):
         return Response(success_data, status=status.HTTP_200_OK)
 
 
-class PosPaymentRequestViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
-    serializer_class = PosPaymentRequestSerializer
-    queryset = PosPaymentRequest.objects.filter(paid=False)
-    
-    permission_classes = [
-        HasMinPaytacaVersionHeader | HasMerchantObjectPermission,
-    ]
-    authentication_classes = [
-        WalletAuthentication,
-    ]
-
-    @swagger_auto_schema(
-        request_body=CreatePosPaymentRequestSerializer,
-        responses={ 201: PosPaymentRequestSerializer }
-    )
-    def create(self, request, *args, **kwargs):
-        serializer = CreatePosPaymentRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            instance = serializer.save()
-            headers = self.get_success_headers(serializer.data)
-            serializer = PosPaymentRequestSerializer(instance)
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-        except PosDevice.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-    @swagger_auto_schema(request_body=CancelPaymentRequestSerializer, responses={ 200: 'OK' })
-    @decorators.action(methods=["post"], detail=False)
-    def cancel(self, request, *args, **kwargs):
-        serializer = CancelPaymentRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)      
-        __pos_device = serializer.validated_data['pos_device']
-        payment_requests = PosPaymentRequest.objects.filter(
-            pos_device__posid=__pos_device['posid'],
-            pos_device__wallet_hash=__pos_device['wallet_hash'],
-        )
-        payment_requests.delete()
-        return Response('OK', status=status.HTTP_200_OK)
-
-    @swagger_auto_schema(request_body=UpdatePaymentRequestSerializer, responses={ 200: 'OK' })
-    @decorators.action(methods=["post"], detail=False)
-    def paid(self, request, *args, **kwargs):
-        serializer = UpdatePaymentRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        pos_device = serializer.validated_data['pos_device']
-        payment_requests = PosPaymentRequest.objects.filter(
-            pos_device__posid=pos_device['posid'],
-            pos_device__wallet_hash=pos_device['wallet_hash'],
-        )
-        payment_requests.update(paid=True)
-        return Response('OK', status=status.HTTP_200_OK)
-
-
 class PosDeviceViewSet(
     viewsets.GenericViewSet,
     mixins.ListModelMixin,
@@ -147,6 +94,13 @@ class PosDeviceViewSet(
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         return Response(self.get_serializer(instance).data)
+
+    @swagger_auto_schema(method="post", request_body=LatestPosIdSerializer, response={ 200: { 'posid': 0 } })
+    @decorators.action(methods=['post'], detail=False)
+    def latest_posid(self, request, *args, **kwargs):
+        serializer = LatestPosIdSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response({ 'posid': 0 })
 
     @transaction.atomic
     @swagger_auto_schema(method="post", request_body=UnlinkDeviceSerializer, responses={ 200: serializer_class })
@@ -214,20 +168,6 @@ class PosDeviceViewSet(
         serializer.remove_link_code_data()
         send_device_update(instance.pos_device, action="link")
         return Response(self.serializer_class(instance.pos_device).data)
-    
-    @swagger_auto_schema(method="post", request_body=PosDeviceVaultAddressSerializer, response={ 200: PosDeviceVaultSerializer })
-    @decorators.action(methods=["post"], detail=False)
-    def vault_address(self, request, *args, **kwargs):
-        serializer = PosDeviceVaultAddressSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        address = Address.objects.get(address=serializer.validated_data['address'])
-        pos_device = PosDevice.objects.get(
-            wallet_hash=address.wallet.wallet_hash,
-            posid=serializer.validated_data['posid']
-        )
-        serializer = PosDeviceVaultSerializer(pos_device.vault)
-        return Response(serializer.data)
 
     @swagger_auto_schema(
         method="get",
@@ -278,14 +218,6 @@ class PosDeviceViewSet(
 
         serializer = SalesSummarySerializer(sales_summary)
         return Response(serializer.data)
-
-    @swagger_auto_schema(method="post", request_body=LatestPosIdSerializer, response={ 200: LatestPosIdResponseSerializer })
-    @decorators.action(methods=["post"], detail=False)
-    def latest_posid(self, request, *args, **kwargs):
-        serializer = LatestPosIdSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        posid = PosDevice.find_new_posid(serializer.validated_data['wallet_hash'])
-        return Response({ 'posid': posid or 0 })
 
 
 class MerchantViewSet(viewsets.ModelViewSet):
@@ -342,12 +274,32 @@ class MerchantViewSet(viewsets.ModelViewSet):
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
     
-    @swagger_auto_schema(deprecated=True)
+    @swagger_auto_schema(request_body=WalletLatestMerchantIndexSerializer, response={ 200: { 'index': 0 } })
     @decorators.action(methods=['post'], detail=False)
     def latest_index(self, request, *args, **kwargs):
-        # This endpoint is maintained for older versions of Paytaca app that still use this
-        response = { 'index': 0 }
+        serializer = WalletLatestMerchantIndexSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        index = Merchant.get_latest_merchant_index(**serializer.validated_data)
+        response = { 'index': index }
         return Response(response)
+
+    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, response={ 200: MerchantListSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def vault_address(self, request, *args, **kwargs):
+        serializer = MerchantVaultAddressSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        address = Address.objects.get(address=serializer.validated_data['address'])
+        try:
+            pos_device = PosDevice.objects.get(
+                wallet_hash=address.wallet.wallet_hash,
+                posid=serializer.validated_data['posid']
+            )
+        except:
+            return Response({})
+
+        serializer = MerchantListSerializer(pos_device.merchant)
+        return Response(serializer.data)
 
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
@@ -443,20 +395,6 @@ class MerchantViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = ReviewSerializer(reviews, many=True)
-        return Response(serializer.data)
-
-    @swagger_auto_schema(method="post", request_body=PosDeviceVaultAddressSerializer, response={ 200: MerchantVaultSerializer })
-    @decorators.action(methods=["post"], detail=False)
-    def vault_address(self, request, *args, **kwargs):
-        serializer = PosDeviceVaultAddressSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        address = Address.objects.get(address=serializer.validated_data['address'])
-        pos_device = PosDevice.objects.get(
-            wallet_hash=address.wallet.wallet_hash,
-            posid=serializer.validated_data['posid']
-        )
-        serializer = MerchantVaultSerializer(pos_device.merchant.vault)
         return Response(serializer.data)
     
     def get_serializer_class(self):

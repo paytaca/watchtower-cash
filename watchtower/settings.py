@@ -80,8 +80,8 @@ INSTALLED_APPS=[
     'constance',
     'main',
     'smartbch',
-    'vouchers',
     'paytacapos',
+    'paymentvault',
     'paytacagifts',
     'anyhedge',
     'chat',
@@ -261,7 +261,6 @@ REDIS_PASSWORD = decipher(config('REDIS_PASSWORD', ''))
 REDIS_PORT = decipher(config('REDIS_PORT'))
 CELERY_IMPORTS = (
     'main.tasks',
-    'main.utils.vouchers',
     'smartbch.tasks',
     'anyhedge.tasks',
     'ramp.tasks',
@@ -269,7 +268,6 @@ CELERY_IMPORTS = (
     'rampp2p.tasks.market_rate_tasks',
     'rampp2p.tasks.transaction_tasks',
     'rampp2p.tasks.order_tasks',
-    'vouchers.tasks',
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -407,10 +405,6 @@ CELERY_BEAT_SCHEDULE = {
     'check_unclaimed_gifts': {
         'task': 'paytacagifts.tasks.check_unclaimed_gifts',
         'schedule': 7
-    },
-    'refund_expired_vouchers': {
-        'task': 'vouchers.tasks.refund_expired_vouchers',
-        'schedule': 60 * 60
     },
     'bulk_rebroadcast': {
         'task': 'main.tasks.bulk_rebroadcast',
@@ -654,9 +648,16 @@ DEFAULT_TOKEN_DETAILS = {
     }
 }
 
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = config('ENV', 'prod') != 'prod'
+ENV = config('ENV', 'prod')
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = config('ENV', 'prod') != 'prod'
+ENV = config('ENV', 'prod')
+
 # P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
-SERVICER_WALLET_HASH = config('SERVICER_WALLET_HASH', '')
 SERVICER_PK = config('SERVICER_PK', '')
 SERVICER_ADDR = config('SERVICER_ADDR', '')
 SERVICE_FEE = config('SERVICE_FEE', 1000)
@@ -664,33 +665,17 @@ ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
 HARDCODED_FEE = config('HARDCODED_FEE', 1000)
 SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
-# P2P Exchange Image Uploads Config
 from requests.compat import urljoin
 IMAGE_UPLOAD_FOLDER = 'image_uploads'
 IMAGE_UPLOAD_PATH = urljoin(MEDIA_URL, IMAGE_UPLOAD_FOLDER)
 IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 
-# vouchers
-UNCLAIMED_VOUCHER_EXPIRY_DAYS = 30
-VOUCHER_ROOM = 'voucher_room'
-VOUCHER_EXPRESS_URL = 'http://localhost:3002/vouchers'
-VAULT_EXPRESS_URLS = {
-    'device': f'{VOUCHER_EXPRESS_URL}/vault/device',
-    'merchant': f'{VOUCHER_EXPRESS_URL}/vault/merchant',
-}
+P2P_EXCHANGE_SLACKBOT_USER_TOKEN=config('P2P_EXCHANGE_SLACKBOT_USER_TOKEN', '')
+P2P_EXCHANGE_SLACK_CHANNEL=config('P2P_EXCHANGE_SLACK_CHANNEL', '#paytaca-p2pexchange-alerts')
 
-VOUCHER_FEE_FUNDER_ADDRESS = config('VOUCHER_FEE_FUNDER_ADDRESS') 
-VOUCHER_FEE_FUNDER_WIF = config('VOUCHER_FEE_FUNDER_WIF') 
+# payment vaults
 
-# purelypeer
-
-PURELYPEER_AUTH_HEADER = config('PURELYPEER_AUTH_HEADER')
-PURELYPEER_ENV = config('PURELYPEER_ENV')
-PURELYPEER_URL_PREFIX = 'backend-staging'
-if PURELYPEER_ENV == 'production':
-    PURELYPEER_URL_PREFIX = 'backend'
-
-PURELYPEER_API_URL = f'https://{PURELYPEER_URL_PREFIX}.purelypeer.cash/api'
+VAULT_EXPRESS_URL = 'http://localhost:3002/payment-vaults'
 
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')

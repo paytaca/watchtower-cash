@@ -1,0 +1,1 @@
+default_app_config = 'rampp2p.apps.Rampp2PConfig'

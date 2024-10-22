@@ -23,6 +23,7 @@ import math
 class AppealViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = serializers.AppealSerializer
     queryset = models.Appeal.objects.all()
 
     def list(self, request):
@@ -85,8 +86,8 @@ class AppealViewSet(viewsets.GenericViewSet):
             self._check_appeal_permissions(wallet_hash, appeal.order)
             response = self._retrieve(request, appeal)
             return Response(response, status=status.HTTP_200_OK)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        except (ValidationError, models.Appeal.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['get'])
     def retrieve_by_order(self, request, pk):
@@ -96,8 +97,8 @@ class AppealViewSet(viewsets.GenericViewSet):
             self._check_appeal_permissions(wallet_hash, appeal.order)
             response = self._retrieve(request, appeal)
             return Response(response, status=status.HTTP_200_OK)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        except (ValidationError, models.Appeal.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
     def create(self, request):
         '''
@@ -160,10 +161,7 @@ class AppealViewSet(viewsets.GenericViewSet):
                 }
                 
                 # Send WebSocket updates
-                websocket.send_order_update({
-                    'success' : True,
-                    'status': serialized_status.data
-                }, order_id)
+                websocket.send_order_update({'success' : True, 'status': serialized_status.data}, order_id)
 
                 # Serialize appeal for arbiter
                 rbtr_wallet_hash = appeal.order.arbiter.wallet_hash

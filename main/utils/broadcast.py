@@ -86,3 +86,9 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
 
     mqtt_client.loop_stop()
     return results
+
+def broadcast_to_engagementhub(data):
+    mqtt_client = connect_to_mqtt()
+    mqtt_client.loop_start()
+    mqtt_client.publish('appnotifs', json.dumps(data, default=str), qos=0, retain=True)
+    mqtt_client.loop_stop()

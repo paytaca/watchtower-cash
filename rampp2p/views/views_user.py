@@ -196,8 +196,18 @@ class PeerView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def patch(self, request):        
-        serializer = rampp2p_serializers.PeerUpdateSerializer(request.user, data=request.data)
-        if serializer.is_valid():
+        logger.warning(f'requestdata: {request.data}')
+        name = request.data.get('name')
+        try:
+            if name:
+                name_conflict_peer = models.Peer.objects.filter(name__iexact=name)
+                if name_conflict_peer.exists() and request.user.wallet_hash != name_conflict_peer.first().wallet_hash:
+                    raise IntegrityError('Name already taken')
+
+            serializer = rampp2p_serializers.PeerUpdateSerializer(request.user, data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
             peer = serializer.save()
             user_info = {
                 'id': peer.id,
@@ -208,11 +218,13 @@ class PeerView(APIView):
                 'address_path': peer.address_path
             }
             return Response(UserSerializer(user_info).data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
 class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = rampp2p_serializers.ArbiterFeedbackSerializer
     queryset = models.ArbiterFeedback.objects.all()
 
     def list(self, request):
@@ -319,6 +331,7 @@ class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
 class PeerFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
+    serializer_class = rampp2p_serializers.FeedbackSerializer
     queryset = models.Feedback.objects.all()
 
     def list(self, request):

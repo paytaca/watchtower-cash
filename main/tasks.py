@@ -15,11 +15,6 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
-from main.utils.vouchers import (
-    is_voucher,
-    process_key_nft,
-    process_pending_payment_requests
-)
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -59,7 +54,6 @@ import pytz
 
 import rampp2p.utils.transaction as rampp2p_utils
 from jpp.models import Invoice as JPPInvoice
-from vouchers.models import *
 
 
 LOGGER = logging.getLogger(__name__)
@@ -129,8 +123,6 @@ def client_acknowledgement(self, txid):
                 image_url = None
                 token_details_key = None
                 category = None
-                __is_key_nft = False
-                __is_lock_nft = False
 
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
@@ -139,8 +131,6 @@ def client_acknowledgement(self, txid):
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
-                    __is_key_nft = is_voucher(category, transaction.value, key_nft=True)
-                    __is_lock_nft = is_voucher(category, transaction.value)
 
                 if transaction.cashtoken_ft or transaction.cashtoken_nft:
                     token_default_details = settings.DEFAULT_TOKEN_DETAILS[token_details_key]
@@ -183,12 +173,6 @@ def client_acknowledgement(self, txid):
                         data['commitment'] = token.commitment
                         data['id'] = token.id
                         data['is_nft'] = True
-
-                    if __is_key_nft:
-                        process_key_nft.delay(transaction.txid, category, address.address, senders)
-
-                    if token_name == 'bch':
-                        process_pending_payment_requests.delay(address.address, senders)
 
                     if jpp_invoice_uuid:
                         data['jpp_invoice_uuid'] = jpp_invoice_uuid
@@ -548,38 +532,6 @@ def save_record(
         return transaction_obj.id, transaction_created
 
 
-# NOTE: this function is mainly used to identify vouchers and save them in the database
-def process_nft_txn(txid):
-    txns = Transaction.objects.filter(txid=txid)
-    txns = txns.filter(cashtoken_nft__isnull=False)
-
-    # transaction count here should be exactly 3, from PurelyPeer voucher structure:
-    # 0 = key NFT
-    # 1 = lock NFT (voucher)
-    # 2 = quest NFT
-    if txns.exists() and txns.count() == 3:
-        txn_addresses = txns.values('address__address')
-        merchant_vault = MerchantVault.objects.filter(address__in=txn_addresses)
-        
-        if merchant_vault.exists():
-            merchant_vault = merchant_vault.first()
-            lock_nft_txn = txns.filter(address__address=merchant_vault.address)
-            lock_nft_txn = lock_nft_txn.first()
-
-            if lock_nft_txn.cashtoken_nft.current_index == 1:
-                value = lock_nft_txn.value / 1e8
-                nft = lock_nft_txn.cashtoken_nft
-
-                Voucher(
-                    nft=nft,
-                    vault=merchant_vault,
-                    value=value,
-                    minting_txid=lock_nft_txn.txid,
-                    category=nft.category,
-                    commitment=nft.commitment
-                ).save()
-
-
 def process_cashtoken_tx(
     token_data,
     address,
@@ -619,7 +571,6 @@ def process_cashtoken_tx(
             commitment=commitment,
             force_create=force_create
         )
-        process_nft_txn(txid)
     else:
         # save fungible token transaction
         obj_id, created = save_record(

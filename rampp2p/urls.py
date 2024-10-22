@@ -8,7 +8,13 @@ urlpatterns = [
     path('ad/', AdView.as_view(), name='ad-list-create'),
     path('ad/<int:pk>/', AdView.as_view(), name='ad-detail'),
     path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
-    path('ad/cash-in/', CashInAdView.as_view(), name='cashin-ads-list'),
+    path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
+
+    path('cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_presets'})),
+    path('cash-in/ad/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
+    path('cash-in/ad/', CashInAdViewSet.as_view({'get': 'retrieve_ads_by_presets'})),
+    path('cash-in/order/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
+    path('cash-in/order/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
 
     path('user/', UserProfileView.as_view(), name='user-profile'),
     path('peer/', PeerView.as_view(), name='peer-create-edit'),
@@ -25,12 +31,12 @@ urlpatterns = [
     path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
     path('order/<int:pk>/', OrderViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}), name='order-detail-edit'),
     path('order/<int:pk>/members/', OrderViewSet.as_view({'get': 'members', 'patch': 'members'}), name='order-members'),
-    path('order/<int:pk>/status/', OrderViewSet.as_view({'get': 'list_status'}), name='order-list-status'),
-    path('order/<int:pk>/cancel/', OrderViewSet.as_view({'post': 'cancel'}), name='order-cancel'),
-    path('order/<int:pk>/confirm/', OrderViewSet.as_view({'post': 'confirm'}), name='order-confirm'),
-    path('order/<int:pk>/pending-escrow/', OrderViewSet.as_view({'post': 'pending_escrow'}), name='order-pending-escrow'),
-    path('order/<int:pk>/confirm-payment/buyer/', OrderViewSet.as_view({'post': 'buyer_confirm_payment'}), name='buyer-confirm-payment'),
-    path('order/<int:pk>/confirm-payment/seller/', OrderViewSet.as_view({'post': 'seller_confirm_payment'}), name='seller-confirm-payment'),
+    path('order/<int:pk>/status/', OrderStatusViewSet.as_view({'get': 'list_status', 'patch': 'read_status'}), name='order-list-edit-status'),
+    path('order/<int:pk>/cancel/', OrderStatusViewSet.as_view({'post': 'cancel'}), name='order-cancel'),
+    path('order/<int:pk>/confirm/', OrderStatusViewSet.as_view({'post': 'confirm'}), name='order-confirm'),
+    path('order/<int:pk>/pending-escrow/', OrderStatusViewSet.as_view({'post': 'pending_escrow'}), name='order-pending-escrow'),
+    path('order/<int:pk>/confirm-payment/buyer/', OrderStatusViewSet.as_view({'post': 'buyer_confirm_payment'}), name='buyer-confirm-payment'),
+    path('order/<int:pk>/confirm-payment/seller/', OrderStatusViewSet.as_view({'post': 'seller_confirm_payment'}), name='seller-confirm-payment'),
 
     # Contract
     path('order/<int:pk>/contract/', ContractViewSet.as_view({'get': 'retrieve_by_order'}), name='order-contract-detail'),
@@ -42,7 +48,10 @@ urlpatterns = [
     path('order/contract/<int:pk>/', ContractViewSet.as_view({'get': 'retrieve'}), name='contract-detail'),
     path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
     path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
-    path('order/cash-in/', CashinOrderView.as_view(), name='cashin-order-list'),
+    
+    path('order/cash-in/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
+    path('order/cash-in/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
+    path('order/status/', OrderStatusViewSet.as_view({'patch': 'read_order_status'})),
     
     # Payment
     path('order/payment/', OrderPaymentViewSet.as_view({'get': 'list'}), name='order-payment-list'),
@@ -63,30 +72,24 @@ urlpatterns = [
     path('order/feedback/arbiter/', ArbiterFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='arbiter-feedback-list-create'),
     path('order/feedback/peer/', PeerFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='peer-feedback-list-create'),
 
+    # Utils
     path('utils/market-price/', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
-    
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
+    path('test-send-to-slack/', test_send_to_slack),
 
     # Old endpoints kept for backward-compatibility
     path('cashin/ad', CashInAdsList.as_view()),
-    # path('ad/', AdListCreate.as_view()),
     path('ad/<int:pk>', AdDetail.as_view()),
     path('ad-snapshot', AdSnapshotView.as_view()),
-    # path('payment-type/', PaymentTypeList.as_view()),
-    # path('payment-method/', PaymentMethodListCreate.as_view()),
     path('payment-method/<int:pk>', PaymentMethodDetail.as_view()),
     path('peer/create', PeerCreateView.as_view()),
     path('peer/detail', PeerDetailView.as_view()),
     path('user', UserProfileView.as_view()),
-    # path('arbiter/', ArbiterListCreate.as_view()),
     path('arbiter/detail', ArbiterDetail.as_view()),
-    # path('currency/fiat/', FiatCurrencyList.as_view()),
     path('currency/fiat/<int:pk>', FiatCurrencyDetail.as_view()),
-    # path('currency/crypto/', CryptoCurrencyList.as_view()),
     path('currency/crypto/<int:pk>', CryptoCurrencyDetail.as_view()),
     path('cashin/order', CashinOrderList.as_view()),
-    # path('order/', OrderListCreate.as_view()),
     path('order/<int:pk>', OrderDetail.as_view()),
     path('order/<int:pk>/members', OrderMemberView.as_view()),
     path('order/<int:pk>/status', OrderListStatus.as_view()),
@@ -113,5 +116,4 @@ urlpatterns = [
     path('order/contract/fees', ContractFeesView.as_view()),
     path('utils/market-price', MarketRates.as_view()),
     path('utils/subscribe-address', SubscribeContractAddress.as_view()),
-    # path('chats/webhook/', ChatWebhookView.as_view()),
 ]
