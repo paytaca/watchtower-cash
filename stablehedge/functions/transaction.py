@@ -47,7 +47,7 @@ def broadcast_transaction(transaction):
         txid=txid,
         tx_hex=transaction
     )
-    broadcast_transaction.delay(transaction, txid, txn_broadcast.id)
+    broadcast_transaction_task.delay(transaction, txid, txn_broadcast.id)
     send_post_broadcast_notifications(transaction)
     return True, txid
 

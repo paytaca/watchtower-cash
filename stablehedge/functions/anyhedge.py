@@ -465,6 +465,16 @@ def build_short_proposal_funding_tx(treasury_contract_address:str):
     funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
     funding_tx = short_proposal_data["funding_tx"]
 
+    pubkey = None
+    signature = None
+    parameters = contract_data["parameters"]
+    if settlement_service.get("short_signature"):
+        signature = settlement_service["short_signature"]
+        pubkey = parameters["shortMutualRedeemPublicKey"]
+    elif settlement_service.get("long_signature"):
+        signature = settlement_service["long_signature"]
+        pubkey = parameters["longMutualRedeemPublicKey"]
+
     contract_data = get_contract_status(
         contract_data["address"],
         pubkey,
@@ -475,11 +485,12 @@ def build_short_proposal_funding_tx(treasury_contract_address:str):
         authentication_token=settlement_service.get("auth_token", None),
     )
 
-    funding_utxo_txid = funding_utxo_tx_build["txid"]
+    funding_utxo_txid = funding_utxo_tx["txid"]
     funding_utxo_index = int(funding_utxo_tx.get("funding_utxo_index", 0))
     funding_utxo_sats = int(funding_utxo_tx["outputs"][funding_utxo_index]["amount"])
 
-    funding_outputs = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
+    create_outputs_result = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
+    funding_outputs = create_outputs_result["outputs"]
     LOGGER.debug(f"FUNDING OUTPUTS | {GP_LP.json_parser.dumps(funding_outputs, indent=2)}")
 
     if not funding_tx:
@@ -507,7 +518,7 @@ def build_short_proposal_funding_tx(treasury_contract_address:str):
     data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
     LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX BUILD | {treasury_contract_address} | {data_str}")
 
-    return save_short_proposal_data
+    return short_proposal_data
 
 
 def update_short_proposal_funding_tx_sig(treasury_contract_address:str, sig:list, sig_index:int):
