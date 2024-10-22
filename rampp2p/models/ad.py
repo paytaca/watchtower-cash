@@ -1,6 +1,9 @@
 from django.db import models
 from django.utils import timezone
+from django.apps import apps
+
 from datetime import timedelta
+
 from .peer import Peer
 from .currency import FiatCurrency, CryptoCurrency
 from .payment import PaymentMethod, PaymentType
@@ -53,6 +56,18 @@ class Ad(models.Model):
         minutes = self.appeal_cooldown_choice
         return timedelta(minutes=minutes)
 
+    def get_price(self):
+        if self.price_type == PriceType.FIXED:
+            return self.fixed_price
+        
+        MarketRate = apps.get_model('rampp2p', 'MarketRate')
+        currency = self.fiat_currency.symbol
+        market_price = MarketRate.objects.filter(currency=currency).first()
+        if market_price:
+            market_price = market_price.price
+            return market_price * (self.floating_price/100)
+        return None
+
 '''A snapshot of the ad is created everytime an order is created.'''
 class AdSnapshot(models.Model):
     ad = models.ForeignKey(Ad, on_delete=models.CASCADE, related_name="snapshots")
@@ -80,3 +95,13 @@ class AdSnapshot(models.Model):
         # convert to a timedelta object
         minutes = self.appeal_cooldown_choice
         return timedelta(minutes=minutes)
+    
+    @property
+    def owner(self):
+        return self.ad.owner
+    
+    @property
+    def price(self):
+        if self.price_type == PriceType.FIXED:
+            return self.fixed_price
+        return self.market_price * (self.floating_price/100)

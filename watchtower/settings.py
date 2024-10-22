@@ -646,9 +646,12 @@ DEFAULT_TOKEN_DETAILS = {
 DEBUG = config('ENV', 'prod') != 'prod'
 ENV = config('ENV', 'prod')
 
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = config('ENV', 'prod') != 'prod'
+ENV = config('ENV', 'prod')
+
 # P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
-SERVICER_WALLET_HASH = config('SERVICER_WALLET_HASH', '')
 SERVICER_PK = config('SERVICER_PK', '')
 SERVICER_ADDR = config('SERVICER_ADDR', '')
 SERVICE_FEE = config('SERVICE_FEE', 1000)
@@ -656,11 +659,13 @@ ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
 HARDCODED_FEE = config('HARDCODED_FEE', 1000)
 SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
-# P2P Exchange Image Uploads Config
 from requests.compat import urljoin
 IMAGE_UPLOAD_FOLDER = 'image_uploads'
 IMAGE_UPLOAD_PATH = urljoin(MEDIA_URL, IMAGE_UPLOAD_FOLDER)
 IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
+
+P2P_EXCHANGE_SLACKBOT_USER_TOKEN=config('P2P_EXCHANGE_SLACKBOT_USER_TOKEN', '')
+P2P_EXCHANGE_SLACK_CHANNEL=config('P2P_EXCHANGE_SLACK_CHANNEL', '#paytaca-p2pexchange-alerts')
 
 # payment vaults
 
