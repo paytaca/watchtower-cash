@@ -276,6 +276,10 @@ class MerchantViewSet(viewsets.ModelViewSet):
         response = { 'index': index }
         return Response(response)
 
+    @decorators.action(methods=['post'], detail=False)
+    def latest_posid(self, request, *args, **kwargs):
+        return Response({ 'posid': -1 })
+
     @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, response={ 200: MerchantListSerializer })
     @decorators.action(methods=["post"], detail=False)
     def vault_address(self, request, *args, **kwargs):
