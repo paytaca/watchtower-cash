@@ -355,6 +355,9 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
         )]
     ))
 
+    result["locktime"] = 0
+    result["funding_utxo_index"] = 0
+
     return result
 
 
@@ -378,16 +381,17 @@ def update_short_proposal_funding_utxo_tx_sig(treasury_contract_address:str, sig
 
 def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
 
     build_result = ScriptFunctions.unlockTreasuryContractWithMultiSig(dict(
         contractOpts=treasury_contract.contract_opts,
-        sig1=short_proposal_data["sig1"],
-        sig2=short_proposal_data["sig2"],
-        sig3=short_proposal_data["sig3"],
-        locktime=short_proposal_data.get("locktime") or 0,
-        inputs=short_proposal_data["inputs"],
-        outputs=short_proposal_data["outputs"],
+        sig1=funding_utxo_tx["sig1"],
+        sig2=funding_utxo_tx["sig2"],
+        sig3=funding_utxo_tx["sig3"],
+        locktime=funding_utxo_tx.get("locktime") or 0,
+        inputs=funding_utxo_tx["inputs"],
+        outputs=funding_utxo_tx["outputs"],
     ))
 
     if not build_result["success"]:
@@ -397,7 +401,7 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     tx_hex = build_result["tx_hex"]
     valid_tx, error_or_txid = test_transaction_accept(tx_hex)
     if not valid_tx:
-        raise AnyhedgeException("Invalid transaction", code=reason)
+        raise AnyhedgeException("Invalid transaction", code=error_or_txid)
 
     return dict(tx_hex=tx_hex, txid=error_or_txid)
 
@@ -458,9 +462,12 @@ def build_short_proposal_funding_tx(treasury_contract_address:str):
     )
 
     funding_tx = dict(
+        locktime=0,
+        funding_input_index=0,
         inputs=[funding_utxo],
         outputs=funding_outputs,
     )
+    short_proposal_data["funding_tx"] = funding_tx
 
     save_short_proposal_data(
         treasury_contract_address,
