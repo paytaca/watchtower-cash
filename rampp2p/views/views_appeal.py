@@ -86,8 +86,8 @@ class AppealViewSet(viewsets.GenericViewSet):
             self._check_appeal_permissions(wallet_hash, appeal.order)
             response = self._retrieve(request, appeal)
             return Response(response, status=status.HTTP_200_OK)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        except (ValidationError, models.Appeal.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['get'])
     def retrieve_by_order(self, request, pk):
@@ -97,8 +97,8 @@ class AppealViewSet(viewsets.GenericViewSet):
             self._check_appeal_permissions(wallet_hash, appeal.order)
             response = self._retrieve(request, appeal)
             return Response(response, status=status.HTTP_200_OK)
-        except ValidationError as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_403_FORBIDDEN)
+        except (ValidationError, models.Appeal.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
         
     def create(self, request):
         '''

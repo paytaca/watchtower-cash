@@ -1,16 +1,17 @@
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from drf_yasg.utils import swagger_auto_schema
+from rest_framework.decorators import action
 
 from django.utils import timezone
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import (F, ExpressionWrapper, DecimalField, Case, When, OuterRef, Subquery)
+from django.db.models import (F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery)
 
 import math
 from datetime import timedelta
+from decimal import Decimal, ROUND_DOWN
 from authentication.token import TokenAuthentication
 
 import rampp2p.serializers as rampp2p_serializers
@@ -19,21 +20,15 @@ import rampp2p.models as rampp2p_models
 import logging
 logger = logging.getLogger(__name__)
 
-class CashInAdView(APIView):
-    '''
-        Filters the best Sell Ad for given payment type and amount.
-        The best SELL ad is determined by:
-            - Ad fiat currency
-            - If SELL ad accepts the payment type selected by buyer
-            - If buy amount is within range of the SELL ad
-            - Sorted by last online
-            - Sorted by price lowest first
-        NB
-            - Excludes ads where trade_limits_in_fiat=True
-            - Excludes cash-in blacklisted peer ads if cash-in whitelist is empty
-            - Only includes cash-in whitelisted peer ads if cash-in whitelist is not empty
-    '''
-    def get(self, request):
+class Round(Func):
+    function = 'ROUND'
+    template = '%(function)s(%(expressions)s, 8)'
+
+class CashInAdViewSet(viewsets.GenericViewSet):
+
+    def list(self, request):
+        ''' [Deprecated] Retrieves a list of cash-in available ads, payment types, 
+        and the ad count per given amounts '''
         wallet_hash = request.query_params.get('wallet_hash')
         currency = request.query_params.get('currency')
         payment_type = request.query_params.get('payment_type')
@@ -119,8 +114,216 @@ class CashInAdView(APIView):
             'amount_ad_count': amount_ad_count
         }
         return Response(responsedata, status=status.HTTP_200_OK)
+
+    @action(methods=['get'], detail=False)
+    def list_presets(self, request):
+        currency = request.query_params.get('currency')
+
+        try: 
+            currency = rampp2p_models.FiatCurrency.objects.get(symbol=currency)
+            presets = currency.get_cashin_presets()
+            return Response(presets, status=status.HTTP_200_OK)
+        except rampp2p_models.FiatCurrency.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        
+    @action(methods=['get'], detail=False)
+    def retrieve_ad_count_by_payment_types(self, request):
+        '''
+        Retrieves a list by payment types where the number of recently online ads that are able to 
+        accomodate at least 1 cash-in preset is greater than 0.
+        '''
+        wallet_hash = request.query_params.get('wallet_hash')
+        currency = request.query_params.get('currency')
+
+        try: 
+            currency = rampp2p_models.FiatCurrency.objects.get(symbol=currency)
+            queryset = self.get_queryset(currency, wallet_hash)
+            queryset = self.filter_preset_available_ads(queryset, currency)
+
+            # Count ads per payment_type
+            payment_types = currency.payment_types.all()
+            ad_count_by_payment = []
+            for payment in payment_types:
+                paymenttype_ads = queryset.filter(payment_methods__payment_type__id=payment.id)
+                ad_count = paymenttype_ads.count()
+                if ad_count > 0:
+                    unique_sellers_count = paymenttype_ads.order_by('owner').distinct('owner').count()
+                    ad_count_by_payment.append({
+                        'payment_type': {
+                            'id': payment.id,
+                            'short_name': payment.short_name,
+                            'full_name': payment.full_name
+                        },
+                        'ad_count': ad_count,
+                        'online_sellers': unique_sellers_count
+                    })
+            return Response(ad_count_by_payment, status=status.HTTP_200_OK)
+        except rampp2p_models.FiatCurrency.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(methods=['get'], detail=False)
+    def retrieve_ads_by_presets(self, request):
+        ''' Retrieves cash-in ads sorted by preset amounts of a given currency. '''
+
+        wallet_hash = request.query_params.get('wallet_hash')
+        payment_type_id = request.query_params.get('payment_type')
+        currency = request.query_params.get('currency')
+        by_fiat = request.query_params.get('by_fiat')
+        by_fiat = by_fiat == 'true'
+
+        try:
+            currency = rampp2p_models.FiatCurrency.objects.get(symbol=currency)
+            queryset = self.get_queryset(currency, wallet_hash)
+            queryset = queryset.filter(payment_methods__payment_type_id=payment_type_id)
+
+            ads_by_amount = {}
+            presets = currency.get_cashin_presets()
+            amounts = self.get_bch_preset_amounts(currency)
+            
+            if not by_fiat:
+                bch = rampp2p_models.CryptoCurrency.objects.get(symbol="BCH")
+                presets = bch.get_cashin_presets() or ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
+                amounts = presets 
+
+            if presets:
+                for index, amount in enumerate(amounts):
+                    ads = queryset.filter(Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount))
+                    serialized_ads = rampp2p_serializers.CashinAdSerializer(ads, many=True)
+                    key = presets[index]
+                    if key is None:
+                        key = amounts[index]
+                    ads_by_amount[key] = serialized_ads.data
+            
+            return Response(ads_by_amount, status=status.HTTP_200_OK)
+        except (rampp2p_models.PaymentMethod.DoesNotExist, 
+                rampp2p_models.FiatCurrency.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)    
+
+    def get_queryset(self, currency, wallet_hash):
+        ''' Retrieves the viewset queryset. Filters public SELL ads of a given currency, excluding ads 
+        created by caller (wallet_hash), and ads with owners offline for more than 24 hours. '''
+
+        trade_type = rampp2p_models.TradeType.SELL
+        queryset = rampp2p_models.Ad.objects.filter(
+            Q(deleted_at__isnull=True) & 
+            Q(trade_type=trade_type) & 
+            Q(is_public=True) & 
+            Q(trade_amount__gt=0) &
+            Q(fiat_currency__symbol=currency.symbol)) 
+       
+        # Exclude ads owned by caller
+        queryset = queryset.exclude(owner__wallet_hash=wallet_hash)
+        queryset = self.filter_by_access_control(currency, queryset)
+
+        # Annotate price
+        market_rate_subq = rampp2p_models.MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+        queryset = queryset.annotate(market_rate=Subquery(market_rate_subq)).annotate(
+            price=ExpressionWrapper(
+                Case(
+                    When(price_type=rampp2p_models.PriceType.FLOATING, then=(F('floating_price')/100 * F('market_rate'))),
+                    default=F('fixed_price'),
+                    output_field=DecimalField()
+                ),
+                output_field=DecimalField()
+            )
+        )
+
+        queryset = queryset.annotate(
+            bch_trade_amount=ExpressionWrapper(
+                Case(When(
+                    trade_amount_in_fiat=True,
+                    then=(F('trade_amount') / F('price'))),
+                    default=F('trade_amount'),
+                    output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ).annotate(rounded_bch_trade_amount=Round('bch_trade_amount', output_field=DecimalField(max_digits=18, decimal_places=8)))
+        
+        queryset = queryset.annotate(
+            bch_trade_floor=ExpressionWrapper(
+                Case(When(
+                    trade_limits_in_fiat=True,
+                    then=(F('trade_floor') / F('price'))),
+                    default=F('trade_floor'),
+                    output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ).annotate(rounded_bch_trade_floor=Round('bch_trade_floor', output_field=DecimalField(max_digits=18, decimal_places=8)))
+        
+        queryset = queryset.annotate(
+            bch_trade_ceiling=ExpressionWrapper(
+                Case(When(
+                    trade_limits_in_fiat=True,
+                    then=(F('trade_ceiling') / F('price'))),
+                    default=F('trade_ceiling'),
+                    output_field=DecimalField()),
+                output_field=DecimalField()
+            )
+        ).annotate(rounded_bch_trade_ceiling=Round('bch_trade_ceiling', output_field=DecimalField(max_digits=18, decimal_places=8)))
+
+        # Filter recently online ads
+        queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
+        queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))
+        queryset = queryset.order_by('price', '-last_online_at')
+
+        return queryset
+    
+    def filter_by_access_control(self, currency, queryset):
+        ''' Filters or excludes records by blacklisted or whitelisted list. '''
+        whitelist = currency.cashin_whitelist.values_list('id', flat=True).all()
+        
+        if len(whitelist) > 0:
+            queryset = queryset.filter(owner__id__in=whitelist)
+        else:
+            cashin_blacklisted_ids = currency.cashin_blacklist.values_list('id', flat=True).all()
+
+            if len(cashin_blacklisted_ids) > 0:
+                queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
+        return queryset
+    
+    def get_bch_preset_amounts(self, currency):
+        ''' Retrives a currency's fiat preset amounts then converts it to BCH. If preset is not set,
+         returns the crypto currency's set preset amounts or the hard coded preset amounts: ['0.02', '0.04', '0.1', '0.25', '0.5', '1'].'''
+
+        # Use currency presets by default
+        cashin_presets = currency.get_cashin_presets()
+        convert_to_bch = True
+
+        # Use bch presets if currency's cash-in presets are not set
+        if cashin_presets is None:
+            convert_to_bch = False
+            bch_presets = rampp2p_models.CryptoCurrency.objects.get(symbol='BCH').get_cashin_presets()
+            if bch_presets:
+                cashin_presets = bch_presets
+            else:
+                # Use hard coded presets if cryptocurrency cash-in presets are not set
+                cashin_presets = ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
+        
+        # Convert to BCH using market price
+        if convert_to_bch:
+            bch_amounts = []
+            market_rate_obj = rampp2p_models.MarketRate.objects.filter(currency=currency.symbol)
+            market_price = None
+            if market_rate_obj.exists:
+                market_price = market_rate_obj.first().price
+                
+            for preset in cashin_presets:
+                amount = (preset/market_price).quantize(Decimal('0.00000001'), rounding=ROUND_DOWN) # truncate to 8 decimals
+                bch_amounts.append(str(amount))
+            cashin_presets = bch_amounts
+        
+        return cashin_presets
+
+    def filter_preset_available_ads(self, queryset, currency):
+        ''' Filters only ads that can accomodate the currency's preset values. '''
+        amounts = self.get_bch_preset_amounts(currency)
+        combined_query = Q()
+        for amount in amounts:
+            combined_query |= Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount)
+        return queryset.filter(combined_query)
     
     def get_paymenttypes(self, queryset, payment_types):
+        ''' [Deprecated] Retrieves the list of unique payment types from cash-in available ads. '''
         queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))        
 
         paymenttypes = []

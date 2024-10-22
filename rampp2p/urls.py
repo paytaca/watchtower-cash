@@ -8,7 +8,13 @@ urlpatterns = [
     path('ad/', AdView.as_view(), name='ad-list-create'),
     path('ad/<int:pk>/', AdView.as_view(), name='ad-detail'),
     path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
-    path('ad/cash-in/', CashInAdView.as_view(), name='cashin-ads-list'),
+    path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
+
+    path('cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_presets'})),
+    path('cash-in/ad/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
+    path('cash-in/ad/', CashInAdViewSet.as_view({'get': 'retrieve_ads_by_presets'})),
+    path('cash-in/order/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
+    path('cash-in/order/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
 
     path('user/', UserProfileView.as_view(), name='user-profile'),
     path('peer/', PeerView.as_view(), name='peer-create-edit'),
@@ -43,7 +49,6 @@ urlpatterns = [
     path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
     path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
     
-    # path('order/cash-in/check-cancellables/', OrderViewSet.as_view({'get', 'check_cancellable_cashin_orders'})),
     path('order/cash-in/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
     path('order/cash-in/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
     path('order/status/', OrderStatusViewSet.as_view({'patch': 'read_order_status'})),
@@ -67,10 +72,11 @@ urlpatterns = [
     path('order/feedback/arbiter/', ArbiterFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='arbiter-feedback-list-create'),
     path('order/feedback/peer/', PeerFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='peer-feedback-list-create'),
 
+    # Utils
     path('utils/market-price/', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
-    
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
+    path('test-send-to-slack/', test_send_to_slack),
 
     # Old endpoints kept for backward-compatibility
     path('cashin/ad', CashInAdsList.as_view()),
