@@ -276,6 +276,24 @@ class MerchantViewSet(viewsets.ModelViewSet):
         response = { 'index': index }
         return Response(response)
 
+    @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, response={ 200: MerchantListSerializer })
+    @decorators.action(methods=["post"], detail=False)
+    def vault_address(self, request, *args, **kwargs):
+        serializer = MerchantVaultAddressSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        address = Address.objects.get(address=serializer.validated_data['address'])
+        try:
+            pos_device = PosDevice.objects.get(
+                wallet_hash=address.wallet.wallet_hash,
+                posid=serializer.validated_data['posid']
+            )
+        except:
+            return Response({})
+
+        serializer = MerchantListSerializer(pos_device.merchant)
+        return Response(serializer.data)
+
     @decorators.action(methods=['get'], detail=False)
     def countries(self, request, *args, **kwargs):
         locations = Location.objects.filter(
