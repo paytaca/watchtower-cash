@@ -667,17 +667,6 @@ IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 P2P_EXCHANGE_SLACKBOT_USER_TOKEN=config('P2P_EXCHANGE_SLACKBOT_USER_TOKEN', '')
 P2P_EXCHANGE_SLACK_CHANNEL=config('P2P_EXCHANGE_SLACK_CHANNEL', '#paytaca-p2pexchange-alerts')
 
-# purelypeer
-
-PURELYPEER_AUTH_HEADER = config('PURELYPEER_AUTH_HEADER')
-PURELYPEER_ENV = config('PURELYPEER_ENV')
-PURELYPEER_URL_PREFIX = 'backend-staging'
-if PURELYPEER_ENV == 'production':
-    PURELYPEER_URL_PREFIX = 'backend'
-
-
-PURELYPEER_API_URL = f'https://{PURELYPEER_URL_PREFIX}.purelypeer.cash/api'
-
 # payment vaults
 
 VAULT_EXPRESS_URL = 'http://localhost:3002/payment-vaults'

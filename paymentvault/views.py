@@ -10,6 +10,12 @@ from .filters import *
 from .utils import create_vault
 
 
+def filter_empty_vaults(vaults):
+    loaded_vaults = filter(lambda v: v['balance'] > 0, vaults)
+    loaded_vaults = list(loaded_vaults)
+    return loaded_vaults
+
+
 class PaymentVaultViewSet(
     viewsets.GenericViewSet,
     mixins.CreateModelMixin,
@@ -31,3 +37,14 @@ class PaymentVaultViewSet(
         vault = create_vault(**serializer.validated_data)
         serializer = self.serializer_class(vault)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(filter_empty_vaults(serializer.data))
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(filter_empty_vaults(serializer.data))
