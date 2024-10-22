@@ -1,6 +1,6 @@
 import { AnyHedgeManager} from '@generalprotocols/anyhedge'
 import { constructFundingOutputs } from '@generalprotocols/anyhedge/build/lib/util/funding-util.js'
-import { binToHex } from '@bitauth/libauth'
+import { binToHex, lockingBytecodeToCashAddress } from '@bitauth/libauth'
 import { castBigIntSafe, parseContractData } from '../utils.js'
 
 export const LIQUIDITY_FEE_NAME = 'Liquidity premium'
@@ -119,8 +119,16 @@ export async function createFundingTransactionOutputs(contractData) {
   contractData = parseContractData(contractData)
   const fundingOutputs = constructFundingOutputs(contractData)
   const cashscriptOutputs = fundingOutputs.map(output => {
+    const cashAddress = lockingBytecodeToCashAddress(
+      output.lockingBytecode,
+      contractData.address.startsWith('bchtest') ? 'bchtest' : 'bitcoincash',
+      { tokenSupport: Boolean(output.token) },
+    )
+
+    if (cashAddress.error) throw new Error(cashAddress.error)
+
     return {
-      to: binToHex(output.lockingBytecode),
+      to: cashAddress,
       amount: Number(output.valueSatoshis),
       token: !output.token ? undefined : {
         category: binToHex(output.token.category),
