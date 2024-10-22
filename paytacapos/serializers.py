@@ -826,3 +826,7 @@ class WalletLatestMerchantIndexSerializer(serializers.ModelSerializer):
 class MerchantVaultAddressSerializer(serializers.Serializer):
     address = serializers.CharField()
     posid = serializers.IntegerField()
+
+
+class LatestPosIdSerializer(serializers.Serializer):
+    wallet_hash = serializers.CharField()

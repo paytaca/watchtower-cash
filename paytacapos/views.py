@@ -95,6 +95,13 @@ class PosDeviceViewSet(
         instance = serializer.save()
         return Response(self.get_serializer(instance).data)
 
+    @swagger_auto_schema(method="post", request_body=LatestPosIdSerializer, response={ 200: { 'posid': 0 } })
+    @decorators.action(methods=['post'], detail=False)
+    def latest_posid(self, request, *args, **kwargs):
+        serializer = LatestPosIdSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response({ 'posid': 0 })
+
     @transaction.atomic
     @swagger_auto_schema(method="post", request_body=UnlinkDeviceSerializer, responses={ 200: serializer_class })
     @decorators.action(methods=["post"], detail=True)
@@ -275,10 +282,6 @@ class MerchantViewSet(viewsets.ModelViewSet):
         index = Merchant.get_latest_merchant_index(**serializer.validated_data)
         response = { 'index': index }
         return Response(response)
-
-    @decorators.action(methods=['post'], detail=False)
-    def latest_posid(self, request, *args, **kwargs):
-        return Response({ 'posid': -1 })
 
     @swagger_auto_schema(method="post", request_body=MerchantVaultAddressSerializer, response={ 200: MerchantListSerializer })
     @decorators.action(methods=["post"], detail=False)
