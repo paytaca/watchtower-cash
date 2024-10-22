@@ -844,7 +844,7 @@ class AdUpdateMessage(MessageBase):
 
         if currency:
             old_currency = currency.get('old')
-            new_currency = currency.get('new')           
+            new_currency = currency.get('new')
 
         if (update_type == AdUpdateType.FIXED_PRICE or
             update_type == AdUpdateType.FLOATING_PRICE or
@@ -859,7 +859,7 @@ class AdUpdateMessage(MessageBase):
         elif update_type == AdUpdateType.PRICE_TYPE:
             return f"Ad #{ad.id} updated price type from {old_value} to {new_value}"
         elif update_type == AdUpdateType.FIXED_PRICE:
-            return f"Ad #{ad.id} updated fixed price from {old_value} to {new_value}"
+            return f"Ad #{ad.id} updated fixed price from {old_value} {old_currency or ad.fiat_currency.symbol} to {new_value} {new_currency or ad.fiat_currency.symbol}"
         elif update_type == AdUpdateType.FLOATING_PRICE:
             return f"Ad #{ad.id} updated floating price from {old_value}% to {new_value}%"
         elif update_type == AdUpdateType.TRADE_FLOOR:
