@@ -1,10 +1,10 @@
-import logging
 import time
 import json
 import decimal
 from django.conf import settings
 from django.db import transaction
 
+from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.utils.address import to_cash_address
 from stablehedge.utils.transaction import (
@@ -54,6 +54,7 @@ def get_or_create_short_proposal(treasury_contract_address:str):
 
 
 def create_short_proposal(treasury_contract_address:str):
+    LOGGER.info(f"SHORT PROPOSAL | CREATE | {treasury_contract_address}")
     short_proposal_data = short_funds(treasury_contract_address)
     save_short_proposal_data(
         treasury_contract_address,
@@ -63,6 +64,10 @@ def create_short_proposal(treasury_contract_address:str):
         funding_utxo_tx = short_proposal_data["funding_utxo_tx"],
         funding_tx = short_proposal_data["funding_tx"],
     )
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.info(f"SHORT PROPOSAL | CREATE |{treasury_contract_address} | {data_str}")
+
     return short_proposal_data
 
 def save_short_proposal_data(
@@ -111,11 +116,13 @@ def get_short_contract_proposal(treasury_contract_address:str, recompile=False):
         return
     except AnyhedgeException as exception:
         if exception.code == AnyhedgeException.ADDRESS_MISMATCH:
+            LOGGER.debug(f"SHORT PROPOSAL | ADDRESS MISMATCH | {treasury_contract_address}")
             return
         else:
             raise exception
 
 def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str="", signature:str=""):
+    LOGGER.info(f"SHORT PROPOSAL | ACCESS KEYS | {treasury_contract_address} | {pubkey} | {signature}")
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=True)
     contract_data = short_proposal_data["contract_data"]
     settlement_service = short_proposal_data["settlement_service"]
@@ -135,7 +142,6 @@ def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str=
         settlement_service_port=settlement_service["port"],
         authentication_token=settlement_service.get("auth_token", None),
     )
-    print(f"contract_data2 |", GP_LP.json_parser.dumps(contract_data2, indent=2))
     if contract_data2["address"] != contract_data["address"]:
         raise AnyhedgeException("Address mismatch", code=AnyhedgeException.ADDRESS_MISMATCH)
     else:
@@ -153,12 +159,16 @@ def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str=
         **short_proposal_data,
     )
 
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | ACCESS KEYS | {treasury_contract_address} | {data_str}")
+
     return short_proposal_data
 
 
 def short_funds(treasury_contract_address:str, pubkey1_wif=""):
     balance_data = get_spendable_sats(treasury_contract_address)
     spendable_sats = balance_data["spendable"]
+    LOGGER.debug(f"SHORT PROPOSAL | BALANCE | {treasury_contract_address} | {balance_data}")
 
     HEDGE_FUNDING_NETWORK_FEES = 2500 # sats
     SETTLEMENT_SERVICE_FEE = 3000 # sats
@@ -254,8 +264,10 @@ def create_short_contract(
 
     liquidity_info = GP_LP.liquidity_service_info()
     settlement_service = liquidity_info["settlementService"]
+    LOGGER.debug(f"SHORT PROPOSAL | SETTLEMENT SERVICE | {GP_LP.json_parser.dumps(settlement_service, indent=2)}")
 
     constraints = liquidity_info["liquidityParameters"][oracle_public_key]
+    LOGGER.debug(f"SHORT PROPOSAL | CONSTRAINTS | {GP_LP.json_parser.dumps(constraints, indent=2)}")
     intent = GP_LP.fit_intent_to_constraints(
         satoshis=satoshis,
         low_liquidation_multiplier = low_liquidation_multiplier,
@@ -265,6 +277,7 @@ def create_short_contract(
         start_price=price_obj.price_value,
         is_simple_hedge=False,
     )
+    LOGGER.debug(f"SHORT PROPOSAL | INTENT | {GP_LP.json_parser.dumps(intent, indent=2)}")
 
     satoshis = intent[0]
     low_liquidation_multiplier = intent[1]
@@ -305,6 +318,7 @@ def create_short_contract(
     if counter_party_data["availableLiquidityInSatoshis"] < long_sats:
         return dict(success=False, error="Not enough liquidity")
 
+    LOGGER.debug(f"SHORT PROPOSAL | CONTRACT | {GP_LP.json_parser.dumps(contract_data, indent=2)}")
     return dict(contract_data=contract_data, settlement_service=settlement_service)
 
 def get_treasury_contract_oracle_pubkey(treasury_contract_address:str):
@@ -362,6 +376,7 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
 
 
 def update_short_proposal_funding_utxo_tx_sig(treasury_contract_address:str, sig:list, sig_index:int=0):
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX SIG | {treasury_contract_address} | {sig_index} | {sig}")
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
 
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
@@ -376,6 +391,9 @@ def update_short_proposal_funding_utxo_tx_sig(treasury_contract_address:str, sig
         **short_proposal_data,
     )
 
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX SIG | {treasury_contract_address} | {data_str}")
+
     return short_proposal_data
 
 
@@ -383,6 +401,9 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
     funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+
+    funding_utxo_tx_str = GP_LP.json_parser.dumps(funding_utxo_tx, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX BUILD | {treasury_contract_address} | {funding_utxo_tx_str}")
 
     build_result = ScriptFunctions.unlockTreasuryContractWithMultiSig(dict(
         contractOpts=treasury_contract.contract_opts,
@@ -403,10 +424,12 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     if not valid_tx:
         raise AnyhedgeException("Invalid transaction", code=error_or_txid)
 
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX BUILD | {treasury_contract_address} | {error_or_txid} | {tx_hex}")
     return dict(tx_hex=tx_hex, txid=error_or_txid)
 
 
 def complete_short_proposal_funding_utxo_tx(treasury_contract_address:str):
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX COMPLETE | {treasury_contract_address}")
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
     funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
 
@@ -424,12 +447,18 @@ def complete_short_proposal_funding_utxo_tx(treasury_contract_address:str):
         treasury_contract_address,
         **short_proposal_data,
     )
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX COMPLETE | {treasury_contract_address} | {data_str}")
     return short_proposal_data
 
 
 def build_short_proposal_funding_tx(treasury_contract_address:str):
     complete_short_proposal_funding_utxo_tx(treasury_contract_address)
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX BUILD | {treasury_contract_address} | {data_str}")
 
     contract_data = short_proposal_data["contract_data"]
     settlement_service = short_proposal_data["settlement_service"]
@@ -451,6 +480,7 @@ def build_short_proposal_funding_tx(treasury_contract_address:str):
     funding_utxo_sats = int(funding_utxo_tx["outputs"][funding_utxo_index]["amount"])
 
     funding_outputs = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
+    LOGGER.debug(f"FUNDING OUTPUTS | {GP_LP.json_parser.dumps(funding_outputs, indent=2)}")
 
     if not funding_tx:
         funding_tx = {}
@@ -473,10 +503,15 @@ def build_short_proposal_funding_tx(treasury_contract_address:str):
         treasury_contract_address,
         **short_proposal_data,
     )
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX BUILD | {treasury_contract_address} | {data_str}")
+
     return save_short_proposal_data
 
 
 def update_short_proposal_funding_tx_sig(treasury_contract_address:str, sig:list, sig_index:int):
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING TX SIG | {treasury_contract_address} | {sig_index} | {sig}")
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
 
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
@@ -491,6 +526,10 @@ def update_short_proposal_funding_tx_sig(treasury_contract_address:str, sig:list
         treasury_contract_address,
         **short_proposal_data,
     )
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX SIG | {treasury_contract_address} | {data_str}")
+
     return short_proposal_data
 
 @transaction.atomic
@@ -500,6 +539,9 @@ def complete_short_proposal(treasury_contract_address:str):
 
     if not short_proposal_data:
         raise AnyhedgeException("No short proposal")
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.info(f"SHORT PROPOSAL | COMPLETE | {treasury_contract_address} | {data_str}")
 
     contract_data = short_proposal_data["contract_data"]
     settlement_service = short_proposal_data["settlement_service"]
@@ -533,6 +575,7 @@ def complete_short_proposal(treasury_contract_address:str):
         inputs=funding_tx["inputs"],
         outputs=funding_tx["outputs"],
     ))
+    LOGGER.debug(f"GEN FUNDING PROPOSAL SCRIPT | {gen_script_result}")
 
     if not gen_script_result.get("success"):
         error_msg = gen_script_result.get("error") or "Error generating scriptsig"
@@ -555,6 +598,9 @@ def complete_short_proposal(treasury_contract_address:str):
     position = contract_data["metadata"]["takerSide"]
     if position == "long":
         funding_proposal["publicKey"] = contract_data["parameters"]["longMutualRedeemPublicKey"]
+
+    funding_proposal_str = GP_LP.json_parser.dumps(funding_proposal, indent=2)
+    LOGGER.info(f"FUNDING PROPOSAL | {treasury_contract_address} | {funding_proposal_str}")
 
     oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
 
@@ -580,16 +626,16 @@ def complete_short_proposal(treasury_contract_address:str):
     try:
         validate_contract_funding.delay(hedge_pos_obj.address)
     except Exception as exception:
-        logging.exception(exception)
+        LOGGER.exception(exception)
 
     try:
         delete_short_proposal_data(treasury_contract_address)
     except Exception as exception:
-        logging.exception(exception)
+        LOGGER.exception(exception)
 
     try:
         _process_mempool_transaction(hedge_pos_obj.funding_tx_hash, force=True)
     except Exception as exception:
-        logging.exception(exception)
+        LOGGER.exception(exception)
 
     return hedge_pos_obj

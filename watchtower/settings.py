@@ -550,6 +550,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False    
+        },
+        'stablehedge': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
         }
     },
 }
