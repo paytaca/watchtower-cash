@@ -145,7 +145,7 @@ class Merchant(models.Model):
     logo_120 = models.ImageField(upload_to='merchant_logos', null=True, blank=True)
 
     last_update = models.DateTimeField(null=True)
-    index = models.IntegerField(default=-1) # index = 2 means that this is the 2nd merchant of a wallet
+    index = models.IntegerField(null=True, blank=True) # index = 2 means that this is the 2nd merchant of a wallet
     pubkey = models.CharField(max_length=100, null=True, blank=True) # 0/{index}
 
     class Meta:
