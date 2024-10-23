@@ -8,9 +8,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework import serializers, exceptions
-from bitcash.keygen import public_key_to_address
 
 from main.models import CashNonFungibleToken, Wallet, Address
+from anyhedge.utils.address import pubkey_to_cashaddr
 
 from .models import *
 from .permissions import HasMinPaytacaVersionHeader
@@ -557,6 +557,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
     last_transaction_date = serializers.CharField()
 
     logos = serializers.SerializerMethodField()
+    receiving_address = serializers.SerializerMethodField()
     branch_count = serializers.IntegerField(read_only=True)
     pos_device_count = serializers.IntegerField(read_only=True)
     
@@ -566,6 +567,7 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "id",
             "wallet_hash",
             "pubkey",
+            "receiving_address",
             "index",
             "slug",
             "name",
@@ -580,6 +582,11 @@ class MerchantListSerializer(serializers.ModelSerializer):
             "branch_count",
             "pos_device_count",
         ]
+
+    def get_receiving_address(self, obj):
+        if obj.pubkey is None:
+            return None
+        return pubkey_to_cashaddr(obj.pubkey)
     
     def get_logos(self, obj):
         logos = {
