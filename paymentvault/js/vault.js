@@ -1,4 +1,4 @@
-import { compileFile } from 'cashsc'
+import { compileFile } from 'cashc'
 import {
   Contract,
   ElectrumNetworkProvider,
