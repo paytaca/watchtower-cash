@@ -6,7 +6,6 @@ from django.db import transaction
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
-from stablehedge.utils.address import to_cash_address
 from stablehedge.utils.transaction import (
     tx_model_to_cashscript,
     get_tx_input_hashes,
@@ -80,7 +79,7 @@ def save_short_proposal_data(
 ):
     timeout = funding_amounts["recalculate_after"]
     ttl = int(timeout - time.time()) - 5 # 5 seconds for margin
-    ttl = None
+    # ttl = None
 
     short_proposal_data = dict(
         contract_data = contract_data,
@@ -266,6 +265,9 @@ def create_short_contract(
     settlement_service = liquidity_info["settlementService"]
     LOGGER.debug(f"SHORT PROPOSAL | SETTLEMENT SERVICE | {GP_LP.json_parser.dumps(settlement_service, indent=2)}")
 
+    if oracle_public_key not in liquidity_info["liquidityParameters"]:
+        return dict(success=False, error="Oracle is not supported by liquidity provider")
+
     constraints = liquidity_info["liquidityParameters"][oracle_public_key]
     LOGGER.debug(f"SHORT PROPOSAL | CONSTRAINTS | {GP_LP.json_parser.dumps(constraints, indent=2)}")
     intent = GP_LP.fit_intent_to_constraints(
@@ -294,7 +296,7 @@ def create_short_contract(
     # 
     # we use pubkey1 from the treasury contract's params since a pubkey must be provided
     short_pubkey = treasury_contract.pubkey1
-    short_address = to_cash_address(treasury_contract.address, testnet = None)
+    short_address = treasury_contract.address
 
     hedge_sats = int(satoshis / (1- 1/high_liquidation_multiplier))
 

@@ -46,7 +46,7 @@ def get_spendable_sats(treasury_contract_address:str):
 
         utxo_count = len(utxos)
     else:
-        total_sats = utxos.aggregate(total_sats = Sum("value"))["total_sats"]
+        total_sats = utxos.aggregate(total_sats = Sum("value"))["total_sats"] or 0
         utxo_count = utxos.count()
  
     # estimate of sats used as fee when using the utxo
