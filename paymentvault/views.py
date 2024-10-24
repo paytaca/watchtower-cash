@@ -1,5 +1,6 @@
 from rest_framework.response import Response
 from rest_framework import viewsets, mixins, status
+from rest_framework.decorators import action
 
 from django_filters import rest_framework as filters
 from drf_yasg.utils import swagger_auto_schema
@@ -7,13 +8,7 @@ from drf_yasg.utils import swagger_auto_schema
 from .models import *
 from .serializers import *
 from .filters import *
-from .utils import create_vault
-
-
-def filter_empty_vaults(vaults):
-    loaded_vaults = filter(lambda v: v['balance'] > 0, vaults)
-    loaded_vaults = list(loaded_vaults)
-    return loaded_vaults
+from .utils import create_vault, get_payment_vault
 
 
 class PaymentVaultViewSet(
@@ -38,13 +33,11 @@ class PaymentVaultViewSet(
         serializer = self.serializer_class(vault)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(filter_empty_vaults(serializer.data))
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(filter_empty_vaults(serializer.data))
+    @swagger_auto_schema(method='POST', request_body=PaymentVaultBalanceSerializer, responses={ 200: { 'balance': 0 } })
+    @action(methods=['POST'], detail=False)
+    def balance(self, request, *args, **kwargs):
+        serializer = PaymentVaultBalanceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vault = get_payment_vault(**serializer.validated_data)
+        response = { 'balance': vault['balance'] }
+        return Response(response, status=status.HTTP_200_OK)
