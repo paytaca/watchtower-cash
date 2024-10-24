@@ -2374,9 +2374,12 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             if 'nft' in output['tokenData'].keys():
                                 data['nft'] = output['tokenData']['nft']
 
+                        try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
                             msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1, retain=True)
                             LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+                        except:
+                            LOGGER.error(f"Failed to send mqtt for tx | {tx_hash} | {bchaddress}")
 
                         LOGGER.info(data)
                         
@@ -2384,7 +2387,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             client_acknowledgement(obj_id)
                         except:
                             LOGGER.error('Failed to send client acknowledgement for txid:' + str(tx_hash))
-        
+
         mqtt_client.loop_stop()
 
         if save_histories:
