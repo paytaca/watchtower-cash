@@ -4,6 +4,8 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from main.utils.redis_block_setter import *
 from main.models import (
     BlockHeight,
@@ -83,8 +85,8 @@ def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwar
 
             if address.exists():
                 address = address.first()
-                transaction = Transaction.objects.get(txid=instance.txid)
-                room_name = transaction.address.address.replace(':','_') + '_'
+                transaction = Transaction.objects.filter(txid=instance.txid).first()
+                room_name = address.address.replace(':','_') + '_'
                 senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
 
                 data = {
