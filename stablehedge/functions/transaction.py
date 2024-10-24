@@ -13,9 +13,7 @@ from stablehedge.js.runner import ScriptFunctions
 
 from .redemption_contract import find_fiat_token_utxos
 
-from main.tasks import NODE
-from main.models import TransactionBroadcast
-from main.tasks import broadcast_transaction as broadcast_transaction_task
+from main.tasks import NODE, process_mempool_transaction_fast
 from main.utils.broadcast import send_post_broadcast_notifications
 
 class RedemptionContractTransactionException(Exception):
@@ -43,11 +41,8 @@ def broadcast_transaction(transaction):
 
     txid = error_or_txid
 
-    txn_broadcast = TransactionBroadcast.objects.create(
-        txid=txid,
-        tx_hex=transaction
-    )
-    broadcast_transaction_task.delay(transaction, txid, txn_broadcast.id)
+    txid = NODE.BCH.broadcast_transaction(transaction)
+    process_mempool_transaction_fast(txid, transaction, True)
     send_post_broadcast_notifications(transaction)
     return True, txid
 
