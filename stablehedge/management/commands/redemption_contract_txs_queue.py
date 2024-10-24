@@ -1,8 +1,8 @@
 import time
-import logging
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.functions.transaction import (
     RedemptionContractTransactionException,
@@ -12,14 +12,11 @@ from stablehedge.functions.transaction import (
     create_redeem_tx,
 )
 
-LOGGER = logging.getLogger("django")
-
-
 class Command(BaseCommand):
     help = "Watches & executes transactions of redemption contract"
 
     def handle(self, *args, **options):
-        LOG_RUNNING_INTERVAL = 30
+        LOG_RUNNING_INTERVAL = 5
         LOGGER.info("Running redemption contract transactions queue")
         last_log = 0
         while True:
@@ -38,6 +35,10 @@ def run_pending_transactions():
     first_pending_tx_per_contract = pending_txs_qs \
         .order_by("redemption_contract", "created_at") \
         .distinct("redemption_contract")
+
+    if first_pending_tx_per_contract.count():
+        ids = first_pending_tx_per_contract.values_list("id", flat=True)
+        LOGGER.info(f"Handling transactions: {ids}")
 
     for pending_tx in first_pending_tx_per_contract:
         LOGGER.info(f"RedemptionContractTransaction#{pending_tx.id} | {pending_tx.transaction_type} |  {pending_tx.wallet_hash} | {pending_tx.redemption_contract.address} | {pending_tx.utxo}")
