@@ -497,12 +497,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             
             websocket.send_general_update({'type': WSGeneralMessageType.READ_ORDER.value, 'extra': { 'unread_count': unread_count }}, wallet_hash)
             return Response({'success': True}, status=status.HTTP_200_OK)
-
-    # @action(detail=True, methods=['get'])
-    # def check_cancellable_cashin_orders(self, request, wallet_hash):
-    #     pending_orders = self._cancellable_cash_in_orders(wallet_hash)
-    #     return Response({ 'pending_orders': pending_orders }, status=200)
-
+    
     def _parse_params(self, request_data):
         request = request_data
         limit = request.query_params.get('limit', 0)
@@ -655,19 +650,44 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 order.expires_at = None
                 order.save()
 
-                # Decrease the Ad's trade amount
-                # If ad snapshot's trade amount is in fiat, convert order crypto_amount
+                # Decrease the Ad's trade amount and ceiling
+                # If amounts are in fiat, convert order crypto_amount
                 # to fiat and decrement this from ad's current trade_amount
                 amount_to_dec = order.crypto_amount
-                if (order.ad_snapshot.ad.trade_amount_in_fiat):
-                    # convert to fiat
-                    amount_to_dec = order.crypto_amount * order.locked_price
-
+                if order.ad_snapshot.ad.trade_amount_in_fiat:
+                    amount_to_dec = order.crypto_amount * order.locked_price # convert to fiat
                 trade_amount = order.ad_snapshot.ad.trade_amount - amount_to_dec
+
                 if trade_amount < 0:
                     raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
+                
                 ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
                 ad.trade_amount = trade_amount
+                
+                trade_amount_lt_ceiling = ad.trade_amount < ad.trade_ceiling
+
+                # If trade_amount and trade_ceiling do NOT have the same currency
+                if ad.trade_amount_in_fiat ^ ad.trade_limits_in_fiat:
+                    # convert trade_ceiling to the currency 
+                    # of trade_amount for comparison
+                    eq_trade_amount = trade_amount
+                    comp_trade_ceil = ad.trade_ceiling
+                    if ad.trade_amount_in_fiat and not ad.trade_limits_in_fiat:
+                        comp_trade_ceil = ad.trade_ceiling * order.locked_price
+                        eq_trade_amount = trade_amount / order.locked_price
+                    if not ad.trade_amount_in_fiat and ad.trade_limits_in_fiat:
+                        comp_trade_ceil = ad.trade_ceiling / order.locked_price
+                        eq_trade_amount = trade_amount * order.locked_price
+                    
+                    trade_amount_lt_ceiling = ad.trade_amount < comp_trade_ceil
+                    
+                    logger.warning(f'eq_trade_amount: {eq_trade_amount} | trade_amount_lt_ceiling: {trade_amount_lt_ceiling}')
+                    # Set the trade_amount in its equivalent amount in trade_ceiling's currency
+                    trade_amount = eq_trade_amount 
+
+                if trade_amount_lt_ceiling:
+                  ad.trade_ceiling = trade_amount
+
                 ad.save()
 
         except (ValidationError, IntegrityError, models.Order.DoesNotExist, models.Ad.DoesNotExist) as err:
@@ -713,15 +733,6 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
             validate_status_progression(StatusType.CANCELED, pk)
 
             with transaction.atomic():
-                # Update Ad trade_amount if order was CONFIRMED
-                order = models.Order.objects.get(pk=pk)
-                current_status = utils.get_last_status(order.id)
-                if current_status.status == StatusType.CONFIRMED:
-                    trade_amount = order.ad_snapshot.ad.trade_amount + order.crypto_amount        
-                    ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
-                    ad.trade_amount = trade_amount
-                    ad.save()
-                    
                 # Create CANCELED status for order
                 serializer = serializers.StatusSerializer(data={'status': StatusType.CANCELED, 'order': pk})
                 if not serializer.is_valid():

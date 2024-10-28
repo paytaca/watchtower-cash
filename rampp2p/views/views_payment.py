@@ -34,6 +34,7 @@ class PaymentTypeView(APIView):
                 return Response({'error': f'no such fiat currency with symbol {currency}'}, status.HTTP_400_BAD_REQUEST)
             fiat_currency = fiat_currency.first()
             queryset = fiat_currency.payment_types
+        queryset = queryset.distinct()
         serializer = serializers.PaymentTypeSerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 
