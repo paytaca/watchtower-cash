@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 
 class AuthToken(models.Model):
     wallet_hash = models.CharField(max_length=100)
-    nonce = models.CharField(max_length=6, null=True)
+    nonce = models.CharField(max_length=6, null=True, blank=True)
     key = models.CharField(max_length=200, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    nonce_expires_at = models.DateTimeField(null=True)
+    nonce_expires_at = models.DateTimeField(null=True, blank=True)
     key_expires_at = models.DateTimeField(null=True)
 
     def is_nonce_expired(self):
