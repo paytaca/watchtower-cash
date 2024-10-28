@@ -1,5 +1,5 @@
 import express from 'express'
-import { getContract } from './funcs'
+import { getContract } from './funcs.js'
 
 
 const port = 3002
@@ -11,7 +11,9 @@ app.get('/payment-vaults/:userPubkey/:merchantPubkey/', async (req, res) => {
     options: {
       network: req.query.network
     },
-    ...req.params,
+    params: {
+      ...req.params,
+    },
   }
   const result = await getContract(opts)
   res.send(result)

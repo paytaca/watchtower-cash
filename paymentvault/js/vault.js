@@ -1,4 +1,4 @@
-import { compileFile } from 'cashsc'
+import { compileFile } from 'cashc'
 import {
   Contract,
   ElectrumNetworkProvider,
@@ -44,8 +44,8 @@ export default class Vault {
       { provider: this.provider }
     )
 
-    if (contract.bytesize < 520) throw new Error('Contract max bytesize should be 520 bytes')
-    if (contract.opcount < 201) throw new Error('Contract max opcount should be 201 bytes')
+    if (contract.bytesize > 520) throw new Error('Contract max bytesize should be 520 bytes')
+    if (contract.opcount > 201) throw new Error('Contract max opcount should be 201 bytes')
 
     return contract
   }
