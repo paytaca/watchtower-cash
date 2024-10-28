@@ -10,6 +10,7 @@ from stablehedge.utils.transaction import (
     tx_model_to_cashscript,
     get_tx_input_hashes,
 )
+from stablehedge.utils.address import wif_to_pubkey
 from stablehedge.js.runner import ScriptFunctions
 
 from .transaction import (
@@ -21,6 +22,8 @@ from .treasury_contract import (
     find_single_bch_utxo,
     get_bch_utxos,
     save_signature_to_tx,
+    get_funding_wif,
+    get_funding_wif_address,
 )
 
 from anyhedge import models as anyhedge_models
@@ -61,7 +64,6 @@ def create_short_proposal(treasury_contract_address:str):
         settlement_service = short_proposal_data["settlement_service"],
         funding_amounts = short_proposal_data["funding_amounts"],
         funding_utxo_tx = short_proposal_data["funding_utxo_tx"],
-        funding_tx = short_proposal_data["funding_tx"],
     )
 
     data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
@@ -75,7 +77,6 @@ def save_short_proposal_data(
     settlement_service=None,
     funding_amounts=None,
     funding_utxo_tx=None,
-    funding_tx=None,
 ):
     timeout = funding_amounts["recalculate_after"]
     ttl = int(timeout - time.time()) - 5 # 5 seconds for margin
@@ -86,7 +87,6 @@ def save_short_proposal_data(
         settlement_service = settlement_service,
         funding_amounts = funding_amounts,
         funding_utxo_tx = funding_utxo_tx,
-        funding_tx = funding_tx,
     )
     REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
 
@@ -163,8 +163,42 @@ def update_short_proposal_access_keys(treasury_contract_address:str, pubkey:str=
 
     return short_proposal_data
 
+def refetch_short_proposal_contract_data(treasury_contract_address:str, pubkey="", signature="", save=False):
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=True)
+
+    contract_data = short_proposal_data["contract_data"]
+    settlement_service = short_proposal_data["settlement_service"]
+
+    if not pubkey or not signature:
+        parameters = contract_data["parameters"]
+        if settlement_service.get("short_signature"):
+            signature = settlement_service["short_signature"]
+            pubkey = parameters["shortMutualRedeemPublicKey"]
+        elif settlement_service.get("long_signature"):
+            signature = settlement_service["long_signature"]
+            pubkey = parameters["longMutualRedeemPublicKey"]
+
+    contract_data = get_contract_status(
+        contract_data["address"],
+        pubkey,
+        signature,
+        settlement_service_scheme=settlement_service["scheme"],
+        settlement_service_domain=settlement_service["host"],
+        settlement_service_port=settlement_service["port"],
+        authentication_token=settlement_service.get("auth_token", None),
+    )
+
+    short_proposal_data["contract_data"] = contract_data
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
+
+    return short_proposal_data
+
 
 def short_funds(treasury_contract_address:str, pubkey1_wif=""):
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
     balance_data = get_spendable_sats(treasury_contract_address)
     spendable_sats = balance_data["spendable"]
     LOGGER.debug(f"SHORT PROPOSAL | BALANCE | {treasury_contract_address} | {balance_data}")
@@ -222,25 +256,16 @@ def short_funds(treasury_contract_address:str, pubkey1_wif=""):
     funding_amounts["settlement_service_fee"] = int(service_fee_estimate)
     funding_amounts["satoshis_to_fund"] = int(sats_to_fund)
 
-    funding_tx = None
-    funding_utxo_tx = None
-    funding_utxo = find_single_bch_utxo(treasury_contract_address, int(sats_to_fund))
-    if funding_utxo:
-        funding_tx = dict(
-            inputs=[tx_model_to_cashscript(funding_utxo)],
-        )
-    else:
-        funding_utxo_tx = create_tx_for_funding_utxo(
-            treasury_contract_address,
-            int(sats_to_fund),
-        )
+    funding_utxo_tx = create_tx_for_funding_utxo(
+        treasury_contract_address,
+        int(sats_to_fund),
+    )
 
     return dict(
         contract_data = contract_data,
         settlement_service = settlement_service,
         funding_amounts = funding_amounts,
         funding_utxo_tx = funding_utxo_tx,
-        funding_tx = funding_tx,
     )
 
 def create_short_contract(
@@ -362,11 +387,12 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
         raise Exception("No utxo/s found")
 
     cashcsript_utxos = [tx_model_to_cashscript(utxo) for utxo in utxos]
+    funding_address = get_funding_wif_address(treasury_contract.address, token=False)
     result = ScriptFunctions.constructTreasuryContractTx(dict(
         contractOpts = treasury_contract.contract_opts,
         inputs = cashcsript_utxos,
         outputs = [dict(
-            to=treasury_contract.address,
+            to=funding_address,
             amount=satoshis,
         )]
     ))
@@ -430,120 +456,73 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     return dict(tx_hex=tx_hex, txid=error_or_txid)
 
 
-def complete_short_proposal_funding_utxo_tx(treasury_contract_address:str):
-    LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX COMPLETE | {treasury_contract_address}")
-    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
-    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
-
-    if "txid" in funding_utxo_tx:
-        return short_proposal_data
-
-    build_result = build_short_proposal_funding_utxo_tx(treasury_contract_address)
-    success, error_or_txid = broadcast_transaction(build_result["tx_hex"])
-    if not success:
-        raise AnyhedgeException("Failed to complete funding proposal transaction", code=error_or_txid)
-
-    funding_utxo_tx["txid"] = error_or_txid
-    short_proposal_data["funding_utxo_tx"] = funding_utxo_tx
-    save_short_proposal_data(
-        treasury_contract_address,
-        **short_proposal_data,
-    )
-
-    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
-    LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX COMPLETE | {treasury_contract_address} | {data_str}")
-    return short_proposal_data
-
-
-def build_short_proposal_funding_tx(treasury_contract_address:str):
-    complete_short_proposal_funding_utxo_tx(treasury_contract_address)
+def complete_short_proposal_funding_txs(treasury_contract_address:str):
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING TXS BUILD | {treasury_contract_address}")
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
 
     data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
-    LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX BUILD | {treasury_contract_address} | {data_str}")
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING TXS BUILD | {treasury_contract_address} | {data_str}")
 
     contract_data = short_proposal_data["contract_data"]
     settlement_service = short_proposal_data["settlement_service"]
     funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
-    funding_tx = short_proposal_data["funding_tx"]
 
-    pubkey = None
-    signature = None
-    parameters = contract_data["parameters"]
-    if settlement_service.get("short_signature"):
-        signature = settlement_service["short_signature"]
-        pubkey = parameters["shortMutualRedeemPublicKey"]
-    elif settlement_service.get("long_signature"):
-        signature = settlement_service["long_signature"]
-        pubkey = parameters["longMutualRedeemPublicKey"]
+    if funding_utxo_tx.get("txid"):
+        funding_utxo_txid = funding_utxo_tx["txid"]
+        funding_utxo_tx_hex = None
+    else:
+        build_result = build_short_proposal_funding_utxo_tx(treasury_contract_address)
+        funding_utxo_txid = build_result["txid"]
+        funding_utxo_tx_hex = build_result["tx_hex"]
 
-    contract_data = get_contract_status(
-        contract_data["address"],
-        pubkey,
-        signature,
-        settlement_service_scheme=settlement_service["scheme"],
-        settlement_service_domain=settlement_service["host"],
-        settlement_service_port=settlement_service["port"],
-        authentication_token=settlement_service.get("auth_token", None),
-    )
-
-    funding_utxo_txid = funding_utxo_tx["txid"]
     funding_utxo_index = int(funding_utxo_tx.get("funding_utxo_index", 0))
     funding_utxo_sats = int(funding_utxo_tx["outputs"][funding_utxo_index]["amount"])
+
+    proxy_funding_wif = get_funding_wif(treasury_contract_address)
+    funding_utxo = dict(
+        txid=funding_utxo_txid,
+        vout=funding_utxo_index,
+        satoshis=funding_utxo_sats,
+        wif=proxy_funding_wif,
+        hashType=1 | 128, # SIGHASH_ALL | SIGHASH_ANYONECANPAY
+    )
 
     create_outputs_result = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
     funding_outputs = create_outputs_result["outputs"]
     LOGGER.debug(f"FUNDING OUTPUTS | {GP_LP.json_parser.dumps(funding_outputs, indent=2)}")
 
-    if not funding_tx:
-        funding_tx = {}
-
-    funding_utxo = dict(
-        txid=funding_utxo_txid,
-        vout=funding_utxo_index,
-        satoshis=funding_utxo_sats,
-    )
-
-    funding_tx = dict(
+    proxy_funding_tx = dict(
         locktime=0,
-        funding_input_index=0,
         inputs=[funding_utxo],
         outputs=funding_outputs,
     )
-    short_proposal_data["funding_tx"] = funding_tx
 
-    save_short_proposal_data(
-        treasury_contract_address,
-        **short_proposal_data,
+    unlock_results = ScriptFunctions.generateSignatures(proxy_funding_tx)
+    script_sig = unlock_results["signatures"][0]
+    input_tx_hashes = [inp["txid"] for inp in funding_utxo_tx["inputs"]]
+
+    funding_proposal = dict(
+        txHash=funding_utxo["txid"],
+        txIndex=funding_utxo["vout"],
+        txValue=funding_utxo["satoshis"],
+        scriptSig=script_sig,
+        # publicKey=contract_data["parameters"]["shortMutualRedeemPublicKey"],
+        publicKey=wif_to_pubkey(proxy_funding_wif),
+        inputTxHashes=input_tx_hashes,
     )
 
-    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
-    LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX BUILD | {treasury_contract_address} | {data_str}")
+    position = contract_data["metadata"]["takerSide"]
+    if position == "long":
+        funding_proposal["publicKey"] = contract_data["parameters"]["longMutualRedeemPublicKey"]
 
-    return short_proposal_data
+    funding_proposal_str = GP_LP.json_parser.dumps(funding_proposal, indent=2)
+    LOGGER.info(f"FUNDING TXS | {treasury_contract_address} | funding_proposal = {funding_proposal_str} | funding_utxo_tx = {funding_utxo_tx_hex}")
 
-
-def update_short_proposal_funding_tx_sig(treasury_contract_address:str, sig:list, sig_index:int):
-    LOGGER.info(f"SHORT PROPOSAL | FUNDING TX SIG | {treasury_contract_address} | {sig_index} | {sig}")
-    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
-
-    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
-    short_proposal_data["funding_tx"] = save_signature_to_tx(
-        treasury_contract,
-        short_proposal_data["funding_tx"],
-        sig,
-        int(sig_index),
+    return dict(
+        # short_proposal_data=short_proposal_data,
+        funding_utxo_tx_hex=funding_utxo_tx_hex,
+        funding_proposal=funding_proposal,   
     )
-
-    save_short_proposal_data(
-        treasury_contract_address,
-        **short_proposal_data,
-    )
-
-    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
-    LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX SIG | {treasury_contract_address} | {data_str}")
-
-    return short_proposal_data
 
 @transaction.atomic
 def complete_short_proposal(treasury_contract_address:str):
@@ -558,64 +537,24 @@ def complete_short_proposal(treasury_contract_address:str):
 
     contract_data = short_proposal_data["contract_data"]
     settlement_service = short_proposal_data["settlement_service"]
-    funding_tx = short_proposal_data["funding_tx"]
 
-    if not funding_tx:
-        raise AnyhedgeException("No funding transaction found")
+    funding_txs_data = complete_short_proposal_funding_txs(treasury_contract_address)
 
-    for i in range(1, 4):
-        sig = funding_tx.get(f"sig{i}")
-        if not sig:
-            raise AnyhedgeException(f"No data for sig{i}")
-        
-        verify_result = ScriptFunctions.verifyTreasuryContractMultisigTx(dict(
-            contractOpts=treasury_contract.contract_opts,
-            sig=sig,
-            locktime=funding_tx.get("locktime", 0),
-            inputs=funding_tx["inputs"],
-            outputs=funding_tx["outputs"],
-        ))
-
-        if not verify_result.get("valid"):
-            raise AnyhedgeException(f"Invalid signature in sig{i}", code="invalid_signature")
-
-    gen_script_result = ScriptFunctions.getMultisigTxUnlockingScripts(dict(
-        contractOpts=treasury_contract.contract_opts,
-        sig1=funding_tx["sig1"],
-        sig2=funding_tx["sig2"],
-        sig3=funding_tx["sig3"],
-        locktime=funding_tx.get("locktime") or 0,
-        inputs=funding_tx["inputs"],
-        outputs=funding_tx["outputs"],
-    ))
-    LOGGER.debug(f"GEN FUNDING PROPOSAL SCRIPT | {gen_script_result}")
-
-    if not gen_script_result.get("success"):
-        error_msg = gen_script_result.get("error") or "Error generating scriptsig"
-        raise AnyhedgeException(error_msg, code="scriptsig_gen_error")
-
-    scripts = gen_script_result["scripts"]
-    funding_input_index = funding_tx.get("funding_input_index") or 0
-    funding_input = funding_tx["inputs"][funding_input_index]
-    input_tx_hashes = get_tx_input_hashes(funding_input["txid"])
-
-    funding_proposal = dict(
-        txHash=funding_input["txid"],
-        txIndex=funding_input["vout"],
-        txValue=funding_input["satoshis"],
-        scriptSig=scripts[funding_input_index],
-        publicKey=contract_data["parameters"]["shortMutualRedeemPublicKey"],
-        inputTxHashes=input_tx_hashes,
-    )
-
-    position = contract_data["metadata"]["takerSide"]
-    if position == "long":
-        funding_proposal["publicKey"] = contract_data["parameters"]["longMutualRedeemPublicKey"]
-
-    funding_proposal_str = GP_LP.json_parser.dumps(funding_proposal, indent=2)
-    LOGGER.info(f"FUNDING PROPOSAL | {treasury_contract_address} | {funding_proposal_str}")
+    funding_utxo_tx_hex = funding_txs_data["funding_utxo_tx_hex"]
+    funding_proposal = funding_txs_data["funding_proposal"]
 
     oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
+
+    if funding_utxo_tx_hex:
+        success, error_or_txid = broadcast_transaction(funding_utxo_tx_hex)
+        if not success:
+            raise AnyhedgeException("Invalid funding utxo tx", code="invalid_transaction")
+        short_proposal_data["funding_utxo_tx"]["txid"] = error_or_txid
+        save_short_proposal_data(
+            treasury_contract_address,
+            **short_proposal_data,
+        )
+        # TODO: process to return funds in case funding utxo is broadcasted but failed to create short
 
     # ideally these 2 steps should be last
     # since it communicates with LP
@@ -624,8 +563,14 @@ def complete_short_proposal(treasury_contract_address:str):
         contract_data,
         funding_proposal,
         oracle_message_sequence,
-        position=position,
+        position=contract_data["metadata"]["takerSide"],
     )
+
+    try:
+        data_str = GP_LP.json_parser.dumps(funding_response, indent=2)
+        LOGGER.info(f"GP LP FUNDING RESPONSE | {treasury_contract_address} | {data_str}")
+    except Exception as exception:
+        LOGGER.exception(exception)
 
     if not funding_response.get("success"):
         raise AnyhedgeException(funding_response["error"], code="funding_error")

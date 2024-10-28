@@ -4,7 +4,7 @@ from django.db.models import Sum
 
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
-from stablehedge.utils.address import to_cash_address
+from stablehedge.utils.address import to_cash_address, wif_to_cash_address
 
 from anyhedge.utils.contract import AnyhedgeException
 
@@ -93,3 +93,26 @@ def get_bch_utxos(treasury_contract_address:str, satoshis:int=None):
 
 
     return _utxos
+
+
+def get_funding_wif_address(treasury_contract_address:str, token=False):
+    funding_wif = get_funding_wif(treasury_contract_address)
+    if not funding_wif:
+        return
+
+    testnet = treasury_contract_address.startswith("bchtest:")
+    return wif_to_cash_address(funding_wif, testnet=testnet, token=token)
+
+
+def get_funding_wif(treasury_contract_address:str):
+    encrypted_funding_wif = models.TreasuryContract.objects \
+        .filter(address=treasury_contract_address) \
+        .values_list("encrypted_funding_wif", flat=True) \
+        .first()
+    
+    if not encrypted_funding_wif: return 
+
+    # TODO: do some encryption here
+    funding_wif = encrypted_funding_wif
+
+    return funding_wif

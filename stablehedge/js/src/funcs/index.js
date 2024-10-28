@@ -10,6 +10,7 @@ import {
  } from './treasury-contract.js'
 import { compileRedemptionContract, deposit, getRedemptionContractArtifact, redeem, sweepRedemptionContract, unlockRedemptionContractWithNft } from './redemption-contract.js'
 import { generatePriceMessage, parsePriceMessage } from './price-oracle.js'
+import { generateSignatures } from './transaction.js'
 
 export default {
   getTreasuryContractArtifact,
@@ -30,4 +31,6 @@ export default {
 
   parsePriceMessage,
   generatePriceMessage,
+
+  generateSignatures,
 }

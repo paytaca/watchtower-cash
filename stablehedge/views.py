@@ -12,8 +12,6 @@ from stablehedge.functions.anyhedge import (
     get_or_create_short_proposal,
     update_short_proposal_access_keys,
     update_short_proposal_funding_utxo_tx_sig,
-    build_short_proposal_funding_tx,
-    update_short_proposal_funding_tx_sig,
     complete_short_proposal,
 )
 from stablehedge.filters import (
@@ -210,45 +208,6 @@ class TreasuryContractViewSet(
                 sig_index=index,
             )
             return Response(result)
-        except AnyhedgeException as exception:
-            result = {
-                "detail": str(exception),
-                "code": str(exception.code),
-            }
-            return Response(result, status=400)
-
-    @decorators.action(
-        methods=["post"],
-        detail=True,
-        url_path=f"short_proposal/funding_tx/build",
-    )
-    def short_proposal_funding_utxo_tx_build(self, request, *args, **kwargs):
-        instance = self.get_object()
-        try:
-            result = build_short_proposal_funding_tx(instance.address)
-            return Response(result)
-        except AnyhedgeException as exception:
-            result = {
-                "detail": str(exception),
-                "code": str(exception.code),
-            }
-            return Response(result, status=400)
-
-    @decorators.action(
-        methods=["post"],
-        detail=True,
-        url_path=f"short_proposal/funding_tx/sign",
-    )
-    def short_proposal_funding_tx_sign(self, request, *args, **kwargs):
-        instance = self.get_object()
-        try:
-            sig = request.data["sig"]
-            index = request.data["index"]
-            result = update_short_proposal_funding_tx_sig(instance.address, sig,
-                sig_index=index,
-            )
-            return Response(result)
-
         except AnyhedgeException as exception:
             result = {
                 "detail": str(exception),

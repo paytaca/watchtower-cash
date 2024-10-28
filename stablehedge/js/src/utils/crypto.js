@@ -18,7 +18,7 @@ import {
   binToBase58,
   isHex,
 } from '@bitauth/libauth'
-import { SignatureTemplate } from 'cashscript'
+import { SignatureAlgorithm, SignatureTemplate } from 'cashscript'
 import { templateFromUnlockingBytecode } from './signature-template.js'
 
 
@@ -138,6 +138,7 @@ export function verifyECDSASignature(signatureB64, pubkeyHex, dataHex) {
  * @param {'none' | 'mutable' | 'minting'} utxo.token.nft.capability
  * @param {String} utxo.token.nft.commitment
  * @param {String} [utxo.wif]
+ * @param {Number} [utxo.hashType]
  * @param {String} [utxo.unlockingBytecode]
  * @param {String} [utxo.lockingBytecode]
  * @returns {import('cashscript').UtxoP2PKH | import('cashscript').Utxo}
@@ -158,7 +159,8 @@ export function parseUtxo(utxo) {
   }
 
   if (utxo?.wif) {
-    result.template = new SignatureTemplate(wif)
+    const hashType = Number.isSafeInteger(utxo?.hashType) ? utxo?.hashType : undefined
+    result.template = new SignatureTemplate(utxo?.wif, hashType)
   } else if (utxo?.lockingBytecode && utxo?.unlockingBytecode) {
     result.template = templateFromUnlockingBytecode({
       lockingBytecode: utxo?.lockingBytecode,

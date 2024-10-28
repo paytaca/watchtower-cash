@@ -169,6 +169,11 @@ class TreasuryContract(models.Model):
     pubkey4 = models.CharField(max_length=70)
     pubkey5 = models.CharField(max_length=70)
 
+    encrypted_funding_wif = models.CharField(
+        max_length=70, unique=True,
+        null=True, blank=True,
+    )
+
     def __str__(self):
         return f"TreasuryContract#{self.id}: {self.address}"
 

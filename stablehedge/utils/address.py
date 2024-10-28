@@ -1,3 +1,4 @@
+import bitcoin
 import binascii
 import hashlib
 import base58
@@ -33,12 +34,13 @@ def locking_bytecode_to_address(script_pubkey_hex):
         raise ValueError("Unknown or unsupported scriptPubKey format")
 
 
-def to_cash_address(address, testnet=None):
+def to_cash_address(address, testnet=None, token=False):
     # if testnet is None:
     #     return convert.to_cash_address(address)
 
     address_obj = convert.Address.from_string(address)
     TESTNET_POSTFIX = "-TESTNET"
+    CASHTOKEN_PREFIX = "CT-"
     if testnet:
         address_obj.prefix = convert.Address.TESTNET_PREFIX
         if not address_obj.version.endswith(TESTNET_POSTFIX):
@@ -48,4 +50,16 @@ def to_cash_address(address, testnet=None):
         if address_obj.version.endswith(TESTNET_POSTFIX):
             address_obj.version = address_obj.version.replace(TESTNET_POSTFIX, "")
 
+    if token and not address_obj.version.startswith(CASHTOKEN_PREFIX):
+        address_obj.version += CASHTOKEN_PREFIX
+    elif not token and address_obj.version.startswith(CASHTOKEN_PREFIX):
+        address_obj.version.replace(CASHTOKEN_PREFIX, "")
+
     return address_obj.cash_address()
+
+def wif_to_cash_address(wif, testnet=False, token=False):
+    legacy_address = bitcoin.privkey_to_address(wif)
+    return to_cash_address(legacy_address, testnet=testnet, token=token)
+
+def wif_to_pubkey(wif):
+    return bitcoin.privkey_to_pubkey(wif)
