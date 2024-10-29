@@ -16,6 +16,7 @@ from stablehedge.functions.anyhedge import (
     update_short_proposal_access_keys,
     update_short_proposal_funding_utxo_tx_sig,
     complete_short_proposal,
+    get_total_short_value,
 )
 from stablehedge.filters import (
     RedemptionContractFilter,
@@ -162,7 +163,13 @@ class TreasuryContractViewSet(
     @decorators.action(methods=["get"], detail=True)
     def balance(self, request, *args, **kwargs):
         instance = self.get_object()
-        return Response(get_spendable_sats(instance.address))
+        short_values = get_total_short_value(instance.address)
+        balance_data = get_spendable_sats(instance.address)
+        result = dict(
+            **balance_data,
+            in_short=short_values,
+        )
+        return Response(result)
 
     @decorators.action(methods=["get", "post"], detail=True)
     def short_proposal(self, request, *args, **kwargs):

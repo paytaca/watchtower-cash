@@ -3,6 +3,7 @@ import json
 import decimal
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
@@ -601,3 +602,58 @@ def complete_short_proposal(treasury_contract_address:str):
         LOGGER.exception(exception)
 
     return hedge_pos_obj
+
+
+# ============================================================================= #
+# """""""""""""""""""""""""""""""""Monitoring"""""""""""""""""""""""""""""""""" #
+# ============================================================================= #
+
+def get_total_short_value(treasury_contract_address:str):
+    ongoing_short_positions = anyhedge_models.HedgePosition.objects.filter(
+        short_address=treasury_contract_address,
+        funding_tx_hash__isnull=False,
+        settlements__isnull=True,
+    )
+
+    nominal_unit_sats = ongoing_short_positions.annotate(
+        nominal_unit_sats = ongoing_short_positions.Annotations.nominal_unit_sats
+    ).values_list("nominal_unit_sats", flat=True)
+
+    oracle_pubkey = ongoing_short_positions \
+        .values_list("oracle_pubkey", flat=True).first()
+
+    asset_data = anyhedge_models.Oracle.objects.filter(pubkey=oracle_pubkey) \
+        .values("asset_decimals", "asset_currency").first()
+
+    decimals = asset_data["asset_decimals"]
+    currency = asset_data["asset_currency"]
+
+
+    asset_multiplier = decimal.Decimal(10 ** decimals)
+    sats_per_bch = decimal.Decimal(10 ** 8)
+
+    total_nominal_unit_sats = decimal.Decimal(sum(nominal_unit_sats))
+    total_nominal_units = total_nominal_unit_sats / sats_per_bch
+    total_nominal_value = total_nominal_units / asset_multiplier
+
+    latest_price = get_latest_oracle_price(oracle_pubkey)
+    total_short_values_in_satoshis = None
+    if latest_price:
+        latest_price = latest_price / asset_multiplier
+        total_short_values_in_bch = total_nominal_value / latest_price
+        total_short_values_in_satoshis = round(total_short_values_in_bch * sats_per_bch)
+
+    return dict(
+        nominal_value=total_nominal_value,
+        count=len(nominal_unit_sats),
+        currency=currency,
+        current_price=latest_price,
+        value_in_satoshis=total_short_values_in_satoshis,
+    )
+
+
+def get_latest_oracle_price(oracle_pubkey:str):
+    return anyhedge_models.PriceOracleMessage.objects.filter(
+        pubkey=oracle_pubkey,
+        message_timestamp__gte=timezone.now() - timezone.timedelta(minutes=2),
+    ).order_by("-message_timestamp").values_list("price_value", flat=True).first()
