@@ -53,7 +53,7 @@ export function cashscriptTxToLibauth(contractAddress, tx) {
     // lazy loading contractAddress' bytecode
     if (!sourceBytecode && !contractBytecode) {
       contractBytecode = cashAddressToLockingBytecode(contractAddress)
-      if (typeof contractBytecode === 'string') throw contractBytecode
+      if (typeof contractBytecode === 'string') throw new Error(contractBytecode)
       contractBytecode = contractBytecode.bytecode
     }
 
@@ -74,4 +74,59 @@ export function cashscriptTxToLibauth(contractAddress, tx) {
   })
 
   return { transaction, sourceOutputs }
+}
+
+/**
+ * 
+ * @param {import("cashscript").Utxo[]} utxos 
+ */
+export function groupUtxoAssets(utxos) {
+  const assets = {
+    totalSats: 0n,
+    fungibleTokens: [].map(() => ({
+      category: '', amount: 0n,
+    })),
+    nfts: [].map(() => ({
+      category: '', capability: '', commitment: '',
+    }))
+  }
+
+  utxos.forEach(utxo => {
+    assets.totalSats += utxo.satoshis
+    if (!utxo.token) return
+    const token = utxo.token
+
+    if (token.amount) {
+      const tokenBalance = assets.fungibleTokens.find(tokenBal => tokenBal.category === token.category)
+      if (tokenBalance) tokenBalance.amount += token.amount
+      else assets.fungibleTokens.push({ category: token.category, amount: token.amount })
+    }
+
+    if (token.nft) {
+      assets.nfts.push({
+        category: token.category,
+        capability: token.nft.capability,
+        commitment: token.nft.commitment,
+      })
+    }
+  })
+
+  return assets
+}
+
+/**
+ * @param {BigInt | Number} value 
+ * @param {Number} decimals 
+ */
+export function addPrecision(value, decimals=4) {
+  return BigInt(Number(value) * 10 ** decimals)
+}
+
+/**
+ * @param {BigInt} value 
+ * @param {Number} decimals 
+ * @returns {BigInt}
+ */
+export function removePrecision(value, decimals=4) {
+  return value / (10n ** BigInt(decimals))
 }

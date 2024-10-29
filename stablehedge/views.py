@@ -5,7 +5,10 @@ from django_filters import rest_framework as filters
 from stablehedge import models
 from stablehedge import serializers
 
-from stablehedge.functions.treasury_contract import get_spendable_sats
+from stablehedge.functions.treasury_contract import (
+    get_spendable_sats,
+    sweep_funding_wif,
+)
 from stablehedge.functions.anyhedge import (
     AnyhedgeException,
     get_short_contract_proposal,
@@ -237,6 +240,12 @@ class TreasuryContractViewSet(
             }
             return Response(result, status=400)
             
+    @decorators.action(methods=["post"], detail=True)
+    def sweep_proxy_funder(self, request, *args, **kwargs):
+        instance = self.get_object()
+        txid = sweep_funding_wif(instance.address)
+        return Response({ "txid": txid })
+
 
 class TestUtilsViewSet(viewsets.GenericViewSet):
     @swagger_auto_schema(

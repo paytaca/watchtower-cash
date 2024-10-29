@@ -2,9 +2,13 @@ import logging
 from django.conf import settings
 from django.db.models import Sum
 
+from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.address import to_cash_address, wif_to_cash_address
+from stablehedge.utils.transaction import tx_model_to_cashscript
+
+from .transaction import broadcast_transaction
 
 from anyhedge.utils.contract import AnyhedgeException
 
@@ -116,3 +120,37 @@ def get_funding_wif(treasury_contract_address:str):
     funding_wif = encrypted_funding_wif
 
     return funding_wif
+
+
+def sweep_funding_wif(treasury_contract_address:str):
+    LOGGER.info(f"SWEEP FUNDING WIF | {treasury_contract_address}")
+    funding_wif = get_funding_wif(treasury_contract_address)
+    funding_wif_address = get_funding_wif_address(treasury_contract_address)
+
+    utxos = main_models.Transaction.objects \
+        .filter(spent=False, address__address=funding_wif_address)
+
+    cashscript_utxos = []
+    for utxo in utxos:
+        cashscript_utxo = tx_model_to_cashscript(utxo)
+        cashscript_utxo["wif"] = funding_wif
+        cashscript_utxos.append(cashscript_utxo)
+
+    tx_result = ScriptFunctions.sweepUtxos(dict(
+        recipientAddress=treasury_contract_address,
+        locktime=0,
+        utxos=cashscript_utxos,
+    ))
+
+    if not tx_result["success"]:
+        raise Exception(tx_result["error"])
+
+    transaction = tx_result["transaction"]
+    success, error_or_txid = broadcast_transaction(transaction)
+
+    LOGGER.info(f"SWEEP FUNDING WIF | {treasury_contract_address} | {error_or_txid}")
+
+    if not success:
+        raise Exception(error_or_txid)
+
+    return error_or_txid

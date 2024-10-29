@@ -24,6 +24,7 @@ from .treasury_contract import (
     save_signature_to_tx,
     get_funding_wif,
     get_funding_wif_address,
+    sweep_funding_wif,
 )
 
 from anyhedge import models as anyhedge_models
@@ -554,7 +555,6 @@ def complete_short_proposal(treasury_contract_address:str):
             treasury_contract_address,
             **short_proposal_data,
         )
-        # TODO: process to return funds in case funding utxo is broadcasted but failed to create short
 
     # ideally these 2 steps should be last
     # since it communicates with LP
@@ -573,6 +573,7 @@ def complete_short_proposal(treasury_contract_address:str):
         LOGGER.exception(exception)
 
     if not funding_response.get("success"):
+        sweep_funding_wif(treasury_contract_address)
         raise AnyhedgeException(funding_response["error"], code="funding_error")
 
     hedge_pos_obj.funding_tx_hash = funding_response["fundingTransactionHash"]

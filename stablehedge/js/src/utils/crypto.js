@@ -48,6 +48,22 @@ export function toTokenAddress(address ='') {
   }
 }
 
+export function toCashAddress(address='') {
+  const decodedAddress = decodeCashAddress(address)
+  if (typeof decodedAddress == 'string') throw decodedAddress
+  const addrType = decodedAddress.type
+  const payload = decodedAddress.payload
+  switch(addrType) {
+    case (CashAddressType.p2pkh):
+    case (CashAddressType.p2sh):
+        return address
+    case (CashAddressType.p2pkhWithTokens):
+      return encodeCashAddress(decodedAddress.prefix, CashAddressType.p2pkh, payload)
+    case (CashAddressType.p2shWithTokens):
+      return encodeCashAddress(decodedAddress.prefix, CashAddressType.p2sh, payload)
+  }
+}
+
 export function toLegacyAddress(address='') {
   const lockingBytecode = cashAddressToLockingBytecode(address) 
   if (typeof lockingBytecode === 'string') throw lockingBytecode

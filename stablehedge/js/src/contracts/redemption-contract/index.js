@@ -11,6 +11,7 @@ import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
 import { toTokenAddress } from "../../utils/crypto.js"
 import { decodePriceMessage, verifyPriceMessage } from "../../utils/price-oracle.js"
 import { calculateInputSize } from "../../utils/transaction.js"
+import { addPrecision, removePrecision } from "../../utils/transaction.js"
 
 export class RedemptionContract {
   /**
@@ -449,14 +450,16 @@ export class RedemptionContract {
     // use sats from utxos as fee if funding utxos is not enough
     for (let index=0; index < outputs.length; index++) {
       const output = outputs[index];
-      if (_totalInputSats >= _totalOutputSats + _totalFeeSats) break
+      const deficitSats =  removePrecision((_totalOutputSats + _totalFeeSats) - _totalInputSats) + 1n
+      if (deficitSats < 0) break
 
       const dust = BigInt(calculateDust(output))
       if (output.amount <= dust) continue;
 
       const diff = output.amount - dust
-      output.amount = dust
-      _totalOutputSats -= addPrecision(diff)
+      const deducted = deficitSats < diff  ? deficitSats : diff
+      output.amount -= deducted
+      _totalOutputSats -= addPrecision(deducted)
     }
 
     const transaction = await this.unlockWithNft({
@@ -469,20 +472,4 @@ export class RedemptionContract {
     transaction.withFeePerByte(feePerByte)
     return transaction
   }
-}
-
-/**
- * @param {BigInt | Number} value 
- * @param {Number} decimals 
- */
-function addPrecision(value, decimals=4) {
-  return BigInt(Number(value) * 10 ** decimals)
-}
-
-/**
- * @param {BigInt} value 
- * @param {Number} decimals 
- */
-function removePrecision(value, decimals=4) {
-  return value / 10n ** BigInt(decimals)
 }

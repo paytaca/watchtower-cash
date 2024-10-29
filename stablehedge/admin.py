@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib import messages
 
 from stablehedge import models
+from stablehedge.functions.treasury_contract import get_funding_wif_address
 from stablehedge.js.runner import ScriptFunctions
 
 from main import models as main_models
@@ -129,6 +130,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
     actions = [
         "recompile",
         "subscribe",
+        "subscribe_funding_wif",
         "update_utxos",
     ]
 
@@ -160,6 +162,17 @@ class TreasuryContractAdmin(admin.ModelAdmin):
             token_address = bch_address_converter(obj.address, to_token_addr=True)
             addr_obj, _ = main_models.Address.objects.get_or_create(
                 address=obj.address,
+                token_address=token_address,
+            )
+            _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
+            messages.info(request, f"{obj} | new: {created}")
+
+    def subscribe_funding_wif(self, request, queryset):
+        for obj in queryset.all():
+            address = get_funding_wif_address(obj.address)
+            token_address = bch_address_converter(address, to_token_addr=True)
+            addr_obj, _ = main_models.Address.objects.get_or_create(
+                address=address,
                 token_address=token_address,
             )
             _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
