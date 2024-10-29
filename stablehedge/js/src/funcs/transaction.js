@@ -22,8 +22,7 @@ export function generateSignatures(opts) {
     outputs: outputs,
   }
 
-  const _ = 'bchtest:qq4sh33hxw2v23g2hwmcp369tany3x73wuveuzrdz5'
-  const { transaction, sourceOutputs } = cashscriptTxToLibauth(_, cashscriptTx)
+  const { transaction, sourceOutputs } = cashscriptTxToLibauth('', cashscriptTx)
   const signatures = inputs.map((input, inputIndex) => {
     const template = input?.template
     if (!template) return ''

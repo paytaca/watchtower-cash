@@ -46,10 +46,19 @@ export function cashscriptTxToLibauth(contractAddress, tx) {
     outputs: tx?.outputs?.map(cashScriptOutputToLibauthOutput),
   }
 
-  const contractBytecode = cashAddressToLockingBytecode(contractAddress).bytecode
+  let contractBytecode
   const sourceOutputs = tx?.inputs?.map(input => {
+    const sourceBytecode = input?.template?.unlockP2PKH()?.generateLockingBytecode?.()
+
+    // lazy loading contractAddress' bytecode
+    if (!sourceBytecode && !contractBytecode) {
+      contractBytecode = cashAddressToLockingBytecode(contractAddress)
+      if (typeof contractBytecode === 'string') throw contractBytecode
+      contractBytecode = contractBytecode.bytecode
+    }
+
     const sourceOutput = {
-      to: input?.template?.unlockP2PKH()?.generateLockingBytecode?.() || contractBytecode,
+      to: sourceBytecode || contractBytecode,
       amount: BigInt(input?.satoshis),
       token: !input?.token ? undefined : {
         category: hexToBin(input?.token?.category),
