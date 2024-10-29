@@ -1,45 +1,8 @@
 import { binToHex, encodeTransaction } from '@bitauth/libauth'
-import { hash256 } from '@cashscript/utils';
-import { parseCashscriptOutput, parseUtxo, toCashAddress, toTokenAddress } from '../utils/crypto.js'
+import { parseUtxo, toCashAddress, toTokenAddress } from '../utils/crypto.js'
 import { addPrecision, cashscriptTxToLibauth, groupUtxoAssets, removePrecision } from '../utils/transaction.js'
-import { calculateDust, createSighashPreimage, getOutputSize, publicKeyToP2PKHLockingBytecode } from 'cashscript/dist/utils.js'
+import { calculateDust, getOutputSize } from 'cashscript/dist/utils.js'
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
-
-/**
- * @param {Object} opts
- * @param {Number} opts.locktime
- * @param {import('cashscript').UtxoP2PKH[]} opts.inputs
- * @param {import('cashscript').Output} opts.outputs
- */
-export function generateSignatures(opts) {
-  /** @type {import('cashscript').UtxoP2PKH[]} */
-  const inputs = opts?.inputs?.map(parseUtxo)
-  const outputs = opts?.outputs?.map(parseCashscriptOutput)
-
-  const cashscriptTx = {
-    version: 2,
-    locktime: opts.locktime,
-    inputs: inputs,
-    outputs: outputs,
-  }
-
-  const { transaction, sourceOutputs } = cashscriptTxToLibauth('', cashscriptTx)
-  const signatures = inputs.map((input, inputIndex) => {
-    const template = input?.template
-    if (!template) return ''
-
-    const publicKey = template.getPublicKey();
-    const prevOutScript = publicKeyToP2PKHLockingBytecode(publicKey);
-    const hashtype = template.getHashType();
-    const preimage = createSighashPreimage(transaction, sourceOutputs, inputIndex, prevOutScript, hashtype);
-    const sighash = hash256(preimage);
-    const signature = template.generateSignature(sighash);
-    
-    return binToHex(signature);
-  });
-
-  return { success: true, signatures }
-}
 
 /**
  * @param {Object} opts 
