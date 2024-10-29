@@ -143,3 +143,27 @@ export async function createFundingTransactionOutputs(contractData) {
 
   return { success: true, outputs: cashscriptOutputs }
 }
+
+/**
+ * @param {Object} contractData 
+ * @param {Object} fundingUtxo 
+ * @param {String} fundingUtxo.txid
+ * @param {Number} fundingUtxo.vout
+ * @param {Number} fundingUtxo.satoshis
+ * @param {String} wif
+ */
+export async function signFundingUtxo(contractData, fundingUtxo, wif) {
+  contractData = parseContractData(contractData)
+  const manager = new AnyHedgeManager({ contractVersion:contractData?.version });
+  const fundingProposal = manager.createFundingProposal(
+    contractData,
+    fundingUtxo.txid,
+    fundingUtxo.vout,
+    castBigIntSafe(fundingUtxo.satoshis),
+  )
+  const signedFundingProposal = await manager.signFundingProposal(wif, fundingProposal)
+  return {
+    signature: signedFundingProposal.signature,
+    publicKey: signedFundingProposal.publicKey,
+  }
+}

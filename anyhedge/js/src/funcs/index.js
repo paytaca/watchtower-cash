@@ -1,6 +1,6 @@
 import { getSettlementServiceAuthToken } from './authToken.js'
 import { compileContract, create } from './create.js'
-import { calculateFundingAmounts, completeFundingProposal, createFundingTransactionOutputs } from './funding.js'
+import { calculateFundingAmounts, completeFundingProposal, createFundingTransactionOutputs, signFundingUtxo } from './funding.js'
 import { completeMutualRedemption } from './mutual-settlement.js'
 import { parseOracleMessage, getPriceMessages } from './price.js'
 import { parseSettlementTransactions, settleContractMaturity, liquidateContract } from './settlement.js'
@@ -15,6 +15,7 @@ const funcs = {
     completeFundingProposal,
     completeMutualRedemption,
     createFundingTransactionOutputs,
+    signFundingUtxo,
     parseOracleMessage,
     getPriceMessages,
     parseSettlementTransactions,

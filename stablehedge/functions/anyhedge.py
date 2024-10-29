@@ -10,7 +10,6 @@ from stablehedge.utils.transaction import (
     tx_model_to_cashscript,
     get_tx_input_hashes,
 )
-from stablehedge.utils.address import wif_to_pubkey
 from stablehedge.js.runner import ScriptFunctions
 
 from .transaction import (
@@ -450,10 +449,11 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
 
     tx_hex = build_result["tx_hex"]
     valid_tx, error_or_txid = test_transaction_accept(tx_hex)
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX BUILD | {treasury_contract_address} | {error_or_txid} | {tx_hex}")
+
     if not valid_tx:
         raise AnyhedgeException("Invalid transaction", code=error_or_txid)
 
-    LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX BUILD | {treasury_contract_address} | {error_or_txid} | {tx_hex}")
     return dict(tx_hex=tx_hex, txid=error_or_txid)
 
 
@@ -484,22 +484,25 @@ def complete_short_proposal_funding_txs(treasury_contract_address:str):
         txid=funding_utxo_txid,
         vout=funding_utxo_index,
         satoshis=funding_utxo_sats,
-        wif=proxy_funding_wif,
-        hashType=1 | 128, # SIGHASH_ALL | SIGHASH_ANYONECANPAY
+        # wif=proxy_funding_wif,
+        # hashType=1 | 128, # SIGHASH_ALL | SIGHASH_ANYONECANPAY
     )
 
     create_outputs_result = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
     funding_outputs = create_outputs_result["outputs"]
     LOGGER.debug(f"FUNDING OUTPUTS | {GP_LP.json_parser.dumps(funding_outputs, indent=2)}")
 
-    proxy_funding_tx = dict(
-        locktime=0,
-        inputs=[funding_utxo],
-        outputs=funding_outputs,
-    )
+    # proxy_funding_tx = dict(
+    #     locktime=0,
+    #     inputs=[funding_utxo],
+    #     outputs=funding_outputs,
+    # )
 
-    unlock_results = ScriptFunctions.generateSignatures(proxy_funding_tx)
-    script_sig = unlock_results["signatures"][0]
+    funding_proposal_signature = AnyhedgeFunctions.signFundingUtxo(
+        contract_data, funding_utxo, proxy_funding_wif,
+    )
+    script_sig = funding_proposal_signature["signature"]
+    script_sig_pubkey = funding_proposal_signature["publicKey"]
     input_tx_hashes = [inp["txid"] for inp in funding_utxo_tx["inputs"]]
 
     funding_proposal = dict(
@@ -508,7 +511,7 @@ def complete_short_proposal_funding_txs(treasury_contract_address:str):
         txValue=funding_utxo["satoshis"],
         scriptSig=script_sig,
         # publicKey=contract_data["parameters"]["shortMutualRedeemPublicKey"],
-        publicKey=wif_to_pubkey(proxy_funding_wif),
+        publicKey=script_sig_pubkey,
         inputTxHashes=input_tx_hashes,
     )
 
