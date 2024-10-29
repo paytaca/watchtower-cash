@@ -347,4 +347,142 @@ export class RedemptionContract {
     transaction.withFeePerByte(feePerByte)
     return transaction  
   }
+
+  /**
+   * - Unlike sweep, each tokens & bch are consolidated into one output
+   *   this will just pass the utxos as is without consolidating
+   * - Would require funding utxos to keep utxo values as is,
+   *   if there is none it will use one the utxos' BCH (will keep dust in mind)
+   * - In case there are changes to the contract's code and need to transfer assets
+   *   to the new contract's version
+   * 
+   * @typedef {import("cashscript").UtxoP2PKH} UtxoP2PKH
+   * @typedef {import("cashscript").Utxo} Utxo
+   * 
+   * @param {Object} opts 
+   * @param {String} opts.recipientAddress
+   * @param {UtxoP2PKH} opts.authKeyUtxo
+   * @param {(Utxo | UtxoP2PKH)[]} opts.utxos
+   * @param {UtxoP2PKH[]} opts.fundingUtxos
+   * @param {} opts.consolidateBch
+   */
+  async transferUtxos(opts) {
+    const recipientAddress = opts?.recipientAddress
+    const recipientTokenAddress = toTokenAddress(recipientAddress)
+
+    const inputs = [...opts?.utxos]
+
+    /** @type {import("cashscript").Output[]} */
+    const outputs = inputs.map(input => {
+      return {
+        to: input?.token ? recipientTokenAddress : recipientAddress,
+        amount: input.satoshis,
+        token: input?.token,
+      }
+    })
+
+    // force authkey input to be index 1 follow smart contract conditions
+    // force authkey output to be the same index to allow SINGLE|ANYONECANPAY sighash
+    const authKeyUtxo = opts?.authKeyUtxo
+    const authKeyOutput = {
+      to: authKeyUtxo.template.unlockP2PKH().generateLockingBytecode(),
+      amount: authKeyUtxo.satoshis,
+      token: authKeyUtxo.token,
+    }
+    inputs.splice(1, 0, authKeyUtxo)
+    outputs.splice(1, 0, authKeyOutput)
+
+    const contract = this.getContract()
+    // to limit confusion, underscore prefix has added precision
+    const feePerByte = 1.1
+    const _feePerByte = addPrecision(feePerByte)
+    const _baseFee = addPrecision(VERSION_SIZE + LOCKTIME_SIZE) * _feePerByte
+
+    const contractInputSize = calculateInputSize(contract.functions.unlockWithNft(true))
+    const _totalInputFeeSats = inputs.reduce((_subtotal, input) => {
+      const inputSize = isUtxoP2PKH(input) ? P2PKH_INPUT_SIZE : contractInputSize
+      const _inputFeeSats = addPrecision(inputSize) * _feePerByte
+      return _inputFeeSats + _subtotal
+    }, 0n)
+
+    const _totalOutputFeeSats = outputs.reduce((_subtotal, output) => {
+      const _outputFee = addPrecision(getOutputSize(output)) * _feePerByte
+      return _subtotal + _outputFee
+    }, 0n)
+
+    let _totalInputSats = addPrecision(inputs.reduce((subtotal, input) => subtotal + input.satoshis, 0n))
+    let _totalOutputSats = addPrecision(outputs.reduce((subtotal, output) => subtotal + output.amount, 0n))
+    let _totalFeeSats = _baseFee + _totalInputFeeSats + _totalOutputFeeSats
+
+    // add funding utxos
+    for (let index=0; index < opts?.fundingUtxos.length; index++) {
+      const fundingUtxo = opts?.fundingUtxos[index];
+      if (_totalInputSats >= _totalOutputSats + _totalFeeSats) break
+
+      const inputSize = isUtxoP2PKH(fundingUtxo) ? P2PKH_INPUT_SIZE : contractInputSize
+      const _inputFeeSats = addPrecision(inputSize) * _feePerByte
+      _totalFeeSats += _inputFeeSats
+      _totalInputSats += addPrecision(fundingUtxo.satoshis)
+      inputs.push(fundingUtxo)
+
+      /** @type {import("cashscript").Output} */
+      const fundingUtxoOutput = {
+        to: fundingUtxo?.template?.unlockP2PKH()?.generateLockingBytecode()?.length
+          ? fundingUtxo?.template?.unlockP2PKH()?.generateLockingBytecode()
+          : contract.address,
+        amount: fundingUtxo.satoshis,
+        token: fundingUtxo?.token,
+      }
+      const outputSize = getOutputSize(fundingUtxoOutput)
+      const _outputFeeSats = addPrecision(outputSize) * _feePerByte
+      const _dust = addPrecision(calculateDust(fundingUtxoOutput))
+
+      const _remainingSats = _totalInputSats - (_totalOutputSats + _totalFeeSats + _outputFeeSats)
+      if (_remainingSats >= _dust) {
+        fundingUtxoOutput.amount = removePrecision(_remainingSats)
+        _totalOutputSats += _remainingSats
+        _totalFeeSats += _outputFeeSats
+        outputs.push(fundingUtxoOutput)
+      }
+    }
+
+    // use sats from utxos as fee if funding utxos is not enough
+    for (let index=0; index < outputs.length; index++) {
+      const output = outputs[index];
+      if (_totalInputSats >= _totalOutputSats + _totalFeeSats) break
+
+      const dust = BigInt(calculateDust(output))
+      if (output.amount <= dust) continue;
+
+      const diff = output.amount - dust
+      output.amount = dust
+      _totalOutputSats -= addPrecision(diff)
+    }
+
+    const transaction = await this.unlockWithNft({
+      inputs, outputs,
+      keepGuarded: false,
+    })
+
+    if (typeof transaction === 'string') return transaction
+
+    transaction.withFeePerByte(feePerByte)
+    return transaction
+  }
+}
+
+/**
+ * @param {BigInt | Number} value 
+ * @param {Number} decimals 
+ */
+function addPrecision(value, decimals=4) {
+  return BigInt(Number(value) * 10 ** decimals)
+}
+
+/**
+ * @param {BigInt} value 
+ * @param {Number} decimals 
+ */
+function removePrecision(value, decimals=4) {
+  return value / 10n ** BigInt(decimals)
 }
