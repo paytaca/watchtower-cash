@@ -72,9 +72,9 @@ def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwar
     # send websocket data to first POS device address
     if created:
         if 'vault_payment_' in instance.key:
-            posid_str = instance.key.split('_')[2]
-            pad = "0" * (WalletHistoryQuerySet.POS_ID_MAX_DIGITS - len(posid_str))
-            posid_str = pad + posid_str
+            raw_posid = instance.key.split('_')[2]
+            pad = "0" * (WalletHistoryQuerySet.POS_ID_MAX_DIGITS - len(raw_posid))
+            posid_str = pad + raw_posid
             first_pos_index = "1" + posid_str
             address_path = "0/" + first_pos_index
 
@@ -82,10 +82,17 @@ def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwar
                 address_path=address_path,
                 wallet__wallet_hash=instance.wallet_hash
             )
+            index_address = Address.objects.filter(
+                address_path=f'0/{raw_posid}',
+                wallet__wallet_hash=instance.wallet_hash
+            )
 
-            if address.exists():
+            if address.exists() and index_address.exists():
                 address = address.first()
-                transaction = Transaction.objects.filter(txid=instance.txid).first()
+                index_address = index_address.first()
+                
+                transaction = Transaction.objects.filter(txid=instance.txid, address=index_address)
+                transaction = transaction.first()
                 room_name = address.address.replace(':','_') + '_'
                 senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
 
