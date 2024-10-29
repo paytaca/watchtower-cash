@@ -120,14 +120,17 @@ export async function constructTreasuryContractTx(opts) {
     sig3: [],
   })
 
-  // using a higher fee per byte for now due to incorrect 
-  // since multisig signatures use a 71 byte but
-  // the fee calculator in cashscript uses a 65 byte only
-  // resulting in invalid transaction since there are
-  // less sats left for transaction fee
-  transaction.withFeePerByte(1.25); 
-
   transaction.setInputsAndOutputs();
+
+  // we are using ECDSA signatures = 72 bytes
+  // but cashscript expects a schnorr signature = 65 bytes
+  // resulting in 7 byte deficit when calculating tx fee
+  // we have 3 signatures so we subtract 21 sats to the change output
+  if (outputs.length + 1 === transaction.outputs.length) {
+    const lastOutput = transaction.outputs.at(-1)
+    lastOutput.amount -= (21n + 3n) // additional 3 sats for safety
+  }
+
   return {
     inputs: transaction.inputs.map(serializeUtxo),
     outputs: transaction.outputs.map(serializeOutput),
