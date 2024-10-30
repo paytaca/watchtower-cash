@@ -5,12 +5,15 @@ from django.utils import timezone
 
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
+from stablehedge.functions.transaction import get_locktime
 from stablehedge.utils.transaction import (
     validate_utxo_data,
     utxo_data_to_cashscript,
+    tx_model_to_cashscript,
 )
 
 from anyhedge import models as anyhedge_models
+from main import models as main_models
 
 
 class UtxoSerializer(serializers.Serializer):
@@ -105,6 +108,8 @@ class SweepRedemptionContractSerializer(serializers.Serializer):
         slug_field="address", source="redemption_contract",
         write_only=True,
     )
+    locktime = serializers.IntegerField(required=False)
+    consolidated = serializers.BooleanField(default=False)
     recipient_address = serializers.CharField(write_only=True)
     auth_key_recipient_address = serializers.CharField(write_only=True)
     auth_key_utxo = UtxoSerializer(write_only=True)
@@ -114,13 +119,33 @@ class SweepRedemptionContractSerializer(serializers.Serializer):
         validated_data = {**self.validated_data}
         redemption_contract = validated_data["redemption_contract"]
         auth_key_utxo_data = validated_data["auth_key_utxo"]
+        consolidated = validated_data["consolidated"]
+        locktime = validated_data.get("locktime")
+        if not isinstance(locktime, int):
+            locktime = get_locktime()
 
-        return ScriptFunctions.sweepRedemptionContract(dict(
-            contractOpts=redemption_contract.contract_opts,
-            authKeyUtxo=utxo_data_to_cashscript(auth_key_utxo_data),
-            recipientAddress=validated_data["recipient_address"],
-            authKeyRecipient=validated_data["auth_key_recipient_address"],
-        ))
+        utxo_qs = main_models.Transaction.objects \
+            .filter(address__address=redemption_contract.address, spent=False)
+
+        utxos = [tx_model_to_cashscript(obj) for obj in utxo_qs]
+
+        if consolidated:
+            return ScriptFunctions.sweepRedemptionContract(dict(
+                contractOpts=redemption_contract.contract_opts,
+                locktime=locktime,
+                contractUtxos=utxos,
+                authKeyUtxo=utxo_data_to_cashscript(auth_key_utxo_data),
+                recipientAddress=validated_data["recipient_address"],
+                authKeyRecipient=validated_data["auth_key_recipient_address"],
+            ))
+        else:
+            return ScriptFunctions.transferRedemptionContractAssets(dict(
+                contractOpts=redemption_contract.contract_opts,
+                locktime=locktime,
+                utxos=utxos,
+                authKeyUtxo=utxo_data_to_cashscript(auth_key_utxo_data),
+                recipientAddress=validated_data["recipient_address"],
+            ))
 
 
 class PriceMessageSerializer(serializers.Serializer):

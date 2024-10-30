@@ -50,6 +50,29 @@ export async function sweepRedemptionContract(opts) {
 /**
  * @param {Object} opts 
  * @param {Object} opts.contractOpts 
+ * @param {import('cashscript').UtxoP2PKH} opts.authKeyUtxo 
+ * @param {import('cashscript').Utxo[]} opts.utxos
+ * @param {String} opts.recipientAddress
+ * @param {Number} [opts.locktime]
+ */
+export async function transferRedemptionContractAssets(opts) {
+  const redemptionContract = new RedemptionContract(opts?.contractOpts)
+  const authKeyUtxo = parseUtxo(opts?.authKeyUtxo)
+  let utxos = undefined
+  if (opts?.utxos?.length) utxos = opts.utxos.map(parseUtxo)
+  const transaction = await redemptionContract.transferUtxos({
+    utxos,
+    authKeyUtxo, 
+    recipientAddress: opts?.recipientAddress,
+    locktime: opts?.locktime,
+  })
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build() }
+}
+
+/**
+ * @param {Object} opts 
+ * @param {Object} opts.contractOpts 
  * @param {import('cashscript').Utxo} opts.reserveUtxo 
  * @param {import('cashscript').UtxoP2PKH} opts.depositUtxo
  * @param {String} [opts.treasuryContractAddress]

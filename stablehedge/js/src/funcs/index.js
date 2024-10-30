@@ -8,7 +8,15 @@ import {
   verifyTreasuryContractMultisigTx,
   getMultisigTxUnlockingScripts,
  } from './treasury-contract.js'
-import { compileRedemptionContract, deposit, getRedemptionContractArtifact, redeem, sweepRedemptionContract, unlockRedemptionContractWithNft } from './redemption-contract.js'
+import {
+  getRedemptionContractArtifact,
+  compileRedemptionContract,
+  deposit,
+  redeem,
+  sweepRedemptionContract,
+  transferRedemptionContractAssets,
+  unlockRedemptionContractWithNft,
+} from './redemption-contract.js'
 import { generatePriceMessage, parsePriceMessage } from './price-oracle.js'
 import { sweepUtxos } from './transaction.js'
 
@@ -27,6 +35,7 @@ export default {
   deposit,
   redeem,
   sweepRedemptionContract,
+  transferRedemptionContractAssets,
   unlockRedemptionContractWithNft,
 
   parsePriceMessage,

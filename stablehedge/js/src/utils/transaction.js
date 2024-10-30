@@ -115,7 +115,7 @@ export function groupUtxoAssets(utxos) {
 }
 
 /**
- * @param {BigInt | Number} value 
+ * @param {bigint | Number} value 
  * @param {Number} decimals 
  */
 export function addPrecision(value, decimals=4) {
@@ -123,9 +123,9 @@ export function addPrecision(value, decimals=4) {
 }
 
 /**
- * @param {BigInt} value 
+ * @param {bigint} value 
  * @param {Number} decimals 
- * @returns {BigInt}
+ * @returns {bigint}
  */
 export function removePrecision(value, decimals=4) {
   return value / (10n ** BigInt(decimals))
