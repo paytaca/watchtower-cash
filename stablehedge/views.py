@@ -30,6 +30,9 @@ from anyhedge import serializers as anyhedge_serializers
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from stablehedge.functions.redemption_contract import (
+    get_fiat_token_balances,
+)
 from stablehedge.functions.transaction import (
     test_transaction_accept,
     RedemptionContractTransactionException,
@@ -275,9 +278,9 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
         result = ScriptFunctions.generatePriceMessage(dict(price=price, wif=wif))
 
         if save:
-            msg_timestamp = timezone.datetime.fromtimestamp(result["priceData"]["timestamp"] / 1000)
+            msg_timestamp = timezone.datetime.fromtimestamp(result["priceData"]["timestamp"])
             msg_timestamp = timezone.make_aware(msg_timestamp)
-            anyhedge_models.PriceOracleMessage.objects.update_or_create(
+            obj, _ = anyhedge_models.PriceOracleMessage.objects.update_or_create(
                 pubkey=result["publicKey"],
                 message=result["priceMessage"],
                 defaults=dict(
@@ -288,6 +291,7 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
                     message_sequence=result["priceData"]["msgSequence"],
                 ),
             )
+            result["id"] = obj.id
 
         result.pop("privateKey", None)
         return Response(result)
@@ -323,3 +327,13 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
     def decode_raw_tx(self, request, *args, **kwargs):
         result = NODE.BCH.build_tx_from_hex(request.data["transaction"])
         return Response(result)
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter('wallet_hash', openapi.IN_QUERY, description="Wallet hash", type=openapi.TYPE_STRING),
+        ]
+    )
+    @decorators.action(methods=["get"], detail=False)
+    def get_fiat_token_balances(self, request, *args, **kwargs):
+        wallet_hash = request.query_params.get("wallet_hash")
+        return Response(get_fiat_token_balances(wallet_hash))
