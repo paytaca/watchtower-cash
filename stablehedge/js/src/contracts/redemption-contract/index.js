@@ -361,17 +361,20 @@ export class RedemptionContract {
    * @typedef {import("cashscript").Utxo} Utxo
    * 
    * @param {Object} opts 
+   * @param {Number} [opts.locktime]
    * @param {String} opts.recipientAddress
    * @param {UtxoP2PKH} opts.authKeyUtxo
    * @param {(Utxo | UtxoP2PKH)[]} opts.utxos
    * @param {UtxoP2PKH[]} opts.fundingUtxos
-   * @param {} opts.consolidateBch
    */
   async transferUtxos(opts) {
     const recipientAddress = opts?.recipientAddress
     const recipientTokenAddress = toTokenAddress(recipientAddress)
 
-    const inputs = [...opts?.utxos]
+    const contract = this.getContract()
+    const utxos = opts?.utxos?.length ? opts?.utxos : await contract.getUtxos()
+
+    const inputs = [...utxos]
 
     /** @type {import("cashscript").Output[]} */
     const outputs = inputs.map(input => {
@@ -393,22 +396,22 @@ export class RedemptionContract {
     inputs.splice(1, 0, authKeyUtxo)
     outputs.splice(1, 0, authKeyOutput)
 
-    const contract = this.getContract()
     // to limit confusion, underscore prefix has added precision
-    const feePerByte = 1.1
+    const feePerByte = 1.0
     const _feePerByte = addPrecision(feePerByte)
-    const _baseFee = addPrecision(VERSION_SIZE + LOCKTIME_SIZE) * _feePerByte
+    const __baseFee = addPrecision(VERSION_SIZE + LOCKTIME_SIZE + 2) * _feePerByte
+    const _baseFee = removePrecision(__baseFee)
 
     const contractInputSize = calculateInputSize(contract.functions.unlockWithNft(true))
     const _totalInputFeeSats = inputs.reduce((_subtotal, input) => {
       const inputSize = isUtxoP2PKH(input) ? P2PKH_INPUT_SIZE : contractInputSize
-      const _inputFeeSats = addPrecision(inputSize) * _feePerByte
-      return _inputFeeSats + _subtotal
+      const __inputFeeSats = addPrecision(inputSize) * _feePerByte
+      return removePrecision(__inputFeeSats) + _subtotal
     }, 0n)
 
     const _totalOutputFeeSats = outputs.reduce((_subtotal, output) => {
-      const _outputFee = addPrecision(getOutputSize(output)) * _feePerByte
-      return _subtotal + _outputFee
+      const __outputFee = addPrecision(getOutputSize(output)) * _feePerByte
+      return _subtotal + removePrecision(__outputFee)
     }, 0n)
 
     let _totalInputSats = addPrecision(inputs.reduce((subtotal, input) => subtotal + input.satoshis, 0n))
@@ -416,13 +419,13 @@ export class RedemptionContract {
     let _totalFeeSats = _baseFee + _totalInputFeeSats + _totalOutputFeeSats
 
     // add funding utxos
-    for (let index=0; index < opts?.fundingUtxos.length; index++) {
+    for (let index=0; index < opts?.fundingUtxos?.length || 0; index++) {
       const fundingUtxo = opts?.fundingUtxos[index];
       if (_totalInputSats >= _totalOutputSats + _totalFeeSats) break
 
       const inputSize = isUtxoP2PKH(fundingUtxo) ? P2PKH_INPUT_SIZE : contractInputSize
-      const _inputFeeSats = addPrecision(inputSize) * _feePerByte
-      _totalFeeSats += _inputFeeSats
+      const __inputFeeSats = addPrecision(inputSize) * _feePerByte
+      _totalFeeSats += removePrecision(__inputFeeSats)
       _totalInputSats += addPrecision(fundingUtxo.satoshis)
       inputs.push(fundingUtxo)
 
@@ -435,7 +438,8 @@ export class RedemptionContract {
         token: fundingUtxo?.token,
       }
       const outputSize = getOutputSize(fundingUtxoOutput)
-      const _outputFeeSats = addPrecision(outputSize) * _feePerByte
+      const __outputFeeSats = addPrecision(outputSize) * _feePerByte
+      const _outputFeeSats = removePrecision(__outputFeeSats)
       const _dust = addPrecision(calculateDust(fundingUtxoOutput))
 
       const _remainingSats = _totalInputSats - (_totalOutputSats + _totalFeeSats + _outputFeeSats)
@@ -450,10 +454,13 @@ export class RedemptionContract {
     // use sats from utxos as fee if funding utxos is not enough
     for (let index=0; index < outputs.length; index++) {
       const output = outputs[index];
-      const deficitSats =  removePrecision((_totalOutputSats + _totalFeeSats) - _totalInputSats) + 1n
+      if (output.token && output.amount <= 1000n) continue;
+
+      const _deficitSats = (_totalOutputSats + _totalFeeSats) - _totalInputSats
+      const deficitSats = removePrecision(_deficitSats) + 1n
       if (deficitSats < 0) break
 
-      const dust = BigInt(calculateDust(output))
+      const dust = output.token ? 1000n : 546n;
       if (output.amount <= dust) continue;
 
       const diff = output.amount - dust
@@ -464,6 +471,7 @@ export class RedemptionContract {
 
     const transaction = await this.unlockWithNft({
       inputs, outputs,
+      locktime: opts?.locktime,
       keepGuarded: false,
     })
 
