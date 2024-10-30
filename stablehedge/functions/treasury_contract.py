@@ -5,8 +5,9 @@ from django.db.models import Sum
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
-from stablehedge.utils.address import to_cash_address, wif_to_cash_address
+from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif
 from stablehedge.utils.transaction import tx_model_to_cashscript
+from stablehedge.utils.encryption import encrypt_str, decrypt_str
 
 from .transaction import broadcast_transaction
 
@@ -107,6 +108,23 @@ def get_funding_wif_address(treasury_contract_address:str, token=False):
     testnet = treasury_contract_address.startswith("bchtest:")
     return wif_to_cash_address(funding_wif, testnet=testnet, token=token)
 
+def set_funding_wif(treasury_contract_address:str, wif:str):
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+    if not is_valid_wif(wif):
+        raise Exception("Invalid WIF")
+
+    cleaned_wif = wif
+    if wif.startswith("bch-wif:"):
+        cleaned_wif = wif
+    else:
+        cleaned_wif = encrypt_str(wif)
+
+    # check if it convertible to address
+    wif_to_cash_address(wif.replace("bch-wif:", ""))
+
+    treasury_contract.encrypted_funding_wif = cleaned_wif
+    treasury_contract.save()
+    return treasury_contract
 
 def get_funding_wif(treasury_contract_address:str):
     encrypted_funding_wif = models.TreasuryContract.objects \
@@ -116,8 +134,11 @@ def get_funding_wif(treasury_contract_address:str):
     
     if not encrypted_funding_wif: return 
 
-    # TODO: do some encryption here
-    funding_wif = encrypted_funding_wif
+    # in case the saved data is not encrypted
+    if is_valid_wif(encrypted_funding_wif):
+        return encrypted_funding_wif.replace("bch-wif:", "")
+
+    funding_wif = decrypt_str(encrypted_funding_wif)
 
     return funding_wif
 
@@ -135,6 +156,9 @@ def sweep_funding_wif(treasury_contract_address:str):
         cashscript_utxo = tx_model_to_cashscript(utxo)
         cashscript_utxo["wif"] = funding_wif
         cashscript_utxos.append(cashscript_utxo)
+
+    if not len(cashscript_utxos):
+        raise Exception("No UTXOs found in funding wif")
 
     tx_result = ScriptFunctions.sweepUtxos(dict(
         recipientAddress=treasury_contract_address,

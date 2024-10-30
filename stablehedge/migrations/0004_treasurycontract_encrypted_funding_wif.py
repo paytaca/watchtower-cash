@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='treasurycontract',
             name='encrypted_funding_wif',
-            field=models.CharField(blank=True, max_length=70, null=True, unique=True),
+            field=models.CharField(blank=True, max_length=200, null=True, unique=True, help_text="Add prefix 'bch-wif:', if data is not encrypted"),
         ),
     ]

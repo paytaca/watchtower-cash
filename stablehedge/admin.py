@@ -1,8 +1,13 @@
 from django.contrib import admin
 from django.contrib import messages
 
+from stablehedge.apps import LOGGER
 from stablehedge import models
-from stablehedge.functions.treasury_contract import get_funding_wif_address
+from stablehedge import forms
+from stablehedge.functions.treasury_contract import (
+    get_funding_wif_address,
+    sweep_funding_wif,
+)
 from stablehedge.js.runner import ScriptFunctions
 
 from main import models as main_models
@@ -110,6 +115,8 @@ class RedemptionContractTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(models.TreasuryContract)
 class TreasuryContractAdmin(admin.ModelAdmin):
+    form = forms.TreasuryContractForm
+
     search_fields = [
         "auth_token_id",
         "redemption_contract__address",
@@ -132,6 +139,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         "subscribe",
         "subscribe_funding_wif",
         "update_utxos",
+        "sweep_funding_wif",
     ]
 
     def recompile(self, request, queryset):
@@ -183,3 +191,12 @@ class TreasuryContractAdmin(admin.ModelAdmin):
             get_bch_utxos.delay(obj.address)
             messages.info(request, f"Queued | {obj}")
     update_utxos.short_description = "Update UTXOS"
+
+    def sweep_funding_wif(self, request, queryset):
+        for obj in queryset.all():
+            try:
+                txid = sweep_funding_wif(obj.address)
+                messages.info(request, f"Sweep | {obj} | {txid}")
+            except Exception as exception:
+                messages.error(request, f"Sweep | {obj} | {exception}")
+                LOGGER.exception(exception)

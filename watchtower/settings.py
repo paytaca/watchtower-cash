@@ -725,3 +725,7 @@ def new_init(self, *args, **kwargs):
 
     return response
 Address.__init__ = new_init
+
+
+# stablehedge configs
+STABLEHEDGE_FERNET_KEY = config('STABLEHEDGE_FERNET_KEY')

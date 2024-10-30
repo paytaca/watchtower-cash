@@ -170,8 +170,9 @@ class TreasuryContract(models.Model):
     pubkey5 = models.CharField(max_length=70)
 
     encrypted_funding_wif = models.CharField(
-        max_length=70, unique=True,
+        max_length=200, unique=True,
         null=True, blank=True,
+        help_text="Add prefix 'bch-wif:', if data is not encrypted"
     )
 
     def __str__(self):

@@ -5,7 +5,7 @@ from stablehedge.utils.transaction import (
     utxo_data_to_cashscript,
     InvalidUtxoException,
 )
-from stablehedge.utils.address import (
+from stablehedge.utils.wallet import (
     locking_bytecode_to_address,
     to_cash_address,
 )

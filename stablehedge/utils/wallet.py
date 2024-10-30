@@ -1,3 +1,4 @@
+import re
 import bitcoin
 import binascii
 import hashlib
@@ -63,3 +64,6 @@ def wif_to_cash_address(wif, testnet=False, token=False):
 
 def wif_to_pubkey(wif):
     return bitcoin.privkey_to_pubkey(wif)
+
+def is_valid_wif(wif:str):
+    return bool(re.match("^(bch-wif\:)?[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$", wif))
