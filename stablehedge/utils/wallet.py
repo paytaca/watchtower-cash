@@ -6,6 +6,21 @@ import base58
 
 from cashaddress import convert
 
+from main import models as main_models
+
+
+def subscribe_address(address:str):
+    testnet = address.startswith("bchtest:")
+    cash_address = to_cash_address(address, testnet=testnet, token=False)
+    token_address = to_cash_address(address, testnet=testnet, token=True)
+    addr_obj, _ = main_models.Address.objects.get_or_create(
+        address=cash_address,
+        token_address=token_address,
+    )
+    _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
+    return created
+
+
 def hash160(data):
     """Performs a RIPEMD-160 hash after a SHA-256 hash (i.e., Bitcoin's HASH160)."""
     sha256_hash = hashlib.sha256(data).digest()

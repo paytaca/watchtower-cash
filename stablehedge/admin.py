@@ -9,10 +9,8 @@ from stablehedge.functions.treasury_contract import (
     sweep_funding_wif,
 )
 from stablehedge.js.runner import ScriptFunctions
+from stablehedge.utils.wallet import subscribe_address
 
-from main import models as main_models
-from main.utils.address_validator import is_token_address
-from main.utils.address_converter import bch_address_converter
 from main.tasks import get_bch_utxos
 
 
@@ -80,12 +78,7 @@ class RedemptionContractAdmin(admin.ModelAdmin):
 
     def subscribe(self, request, queryset):
         for obj in queryset.all():
-            token_address = bch_address_converter(obj.address, to_token_addr=True)
-            addr_obj, _ = main_models.Address.objects.get_or_create(
-                address=obj.address,
-                token_address=token_address,
-            )
-            _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
+            created = subscribe_address(obj.address)
             messages.info(request, f"{obj} | new: {created}")
 
     def update_utxos(self, request, queryset):
@@ -167,23 +160,13 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     def subscribe(self, request, queryset):
         for obj in queryset.all():
-            token_address = bch_address_converter(obj.address, to_token_addr=True)
-            addr_obj, _ = main_models.Address.objects.get_or_create(
-                address=obj.address,
-                token_address=token_address,
-            )
-            _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
+            created = subscribe_address(obj.address)
             messages.info(request, f"{obj} | new: {created}")
 
     def subscribe_funding_wif(self, request, queryset):
         for obj in queryset.all():
             address = get_funding_wif_address(obj.address)
-            token_address = bch_address_converter(address, to_token_addr=True)
-            addr_obj, _ = main_models.Address.objects.get_or_create(
-                address=address,
-                token_address=token_address,
-            )
-            _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
+            created = subscribe_address(obj.address)
             messages.info(request, f"{obj} | new: {created}")
 
     def update_utxos(self, request, queryset):
