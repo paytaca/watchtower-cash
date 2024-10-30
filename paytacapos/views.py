@@ -274,7 +274,7 @@ class MerchantViewSet(viewsets.ModelViewSet):
             raise exceptions.ValidationError("Unable to remove merchant linked to a device")
         return super().destroy(request, *args, **kwargs)
     
-    @swagger_auto_schema(request_body=WalletLatestMerchantIndexSerializer, response={ 200: { 'index': 0 } })
+    @swagger_auto_schema(request_body=WalletLatestMerchantIndexSerializer, response={ 200: WalletLatestMerchantIndexResponseSerializer })
     @decorators.action(methods=['post'], detail=False)
     def latest_index(self, request, *args, **kwargs):
         serializer = WalletLatestMerchantIndexSerializer(data=request.data)

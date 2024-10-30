@@ -78,4 +78,7 @@ class MerchantFilter(filters.FilterSet):
         )
 
     def has_vault_filter(self, queryset, name, value):
-        return queryset.exclude(pubkey__isnull=value)
+        return queryset.exclude(
+            Q(pubkey__isnull=value) |
+            Q(index__isnull=value)
+        )

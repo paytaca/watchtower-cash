@@ -29,3 +29,7 @@ class CreatePaymentVaultSerializer(serializers.ModelSerializer):
 class PaymentVaultBalanceSerializer(serializers.Serializer):
     user_pubkey = serializers.CharField(max_length=80)
     merchant_pubkey = serializers.CharField(max_length=80)
+
+
+class PaymentVaultBalanceResponseSerializer(serializers.Serializer):
+    balance = serializers.FloatField()
