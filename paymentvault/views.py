@@ -33,7 +33,7 @@ class PaymentVaultViewSet(
         serializer = self.serializer_class(vault)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(method='POST', request_body=PaymentVaultBalanceSerializer, responses={ 200: { 'balance': 0 } })
+    @swagger_auto_schema(method='POST', request_body=PaymentVaultBalanceSerializer, responses={ 200: PaymentVaultBalanceResponseSerializer })
     @action(methods=['POST'], detail=False)
     def balance(self, request, *args, **kwargs):
         serializer = PaymentVaultBalanceSerializer(data=request.data)
