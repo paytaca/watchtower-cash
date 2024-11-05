@@ -1,3 +1,4 @@
+import json
 from stablehedge import models
 from stablehedge.utils.transaction import (
     validate_utxo_data,
@@ -13,6 +14,7 @@ from stablehedge.js.runner import ScriptFunctions
 
 from .redemption_contract import find_fiat_token_utxos
 
+from main import models as main_models
 from main.tasks import NODE, process_mempool_transaction_fast
 from main.utils.broadcast import send_post_broadcast_notifications
 
@@ -196,4 +198,65 @@ def create_redeem_tx(redemption_contract_tx:models.RedemptionContractTransaction
         result["success"] = False
         result["error"] = error_or_txid
 
+    return result
+
+def get_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionContractTransaction):
+    if not redemption_contract_tx.txid:
+        return dict(success=False, error="No txid")
+
+    redemption_contract_address = redemption_contract_tx.redemption_contract.address
+    txid = redemption_contract_tx.txid
+    tx_type = redemption_contract_tx.transaction_type
+    wallet_hash = redemption_contract_tx.wallet_hash
+    price_value = redemption_contract_tx.price_oracle_message.price_value
+    currency = redemption_contract_tx.redemption_contract.fiat_token.currency
+    decimals = redemption_contract_tx.redemption_contract.fiat_token.decimals
+
+    reserves_utxo = main_models.Transaction.objects.get(txid=txid, index=0)
+    spent_reserves_utxo = main_models.Transaction.objects.get(spending_txid=txid, index=0)
+
+    sats_diff = reserves_utxo.value - spent_reserves_utxo.value
+    token_amount_diff = reserves_utxo.amount - spent_reserves_utxo.amount
+
+    data = {
+        "id": redemption_contract_tx.id,
+        "redemption_contract": redemption_contract_address,
+        "transaction_type": tx_type,
+        "price": round(price_value / 10 ** decimals, decimals),
+        "currency": currency,
+    }
+
+    Type = models.RedemptionContractTransaction.Type
+    if tx_type == Type.DEPOSIT or tx_type == Type.INJECT:
+        data["satoshis"] = sats_diff
+        if tx_type == Type.DEPOSIT:
+            data["satoshis"] *= 2
+        data["amount"] = token_amount_diff * -1
+    elif tx_type == Type.REDEEM:
+        data["satoshis"] = sats_diff * -1
+        data["amount"] = token_amount_diff
+
+    data["amount"] = round(data["amount"] / 10 ** decimals, decimals)
+
+    return dict(success=True, data=data, txid=txid)
+
+
+def save_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionContractTransaction):
+    result = get_redemption_contract_tx_meta(redemption_contract_tx)
+    if not result["success"]:
+        return result
+
+    data = result["data"]
+    txid = redemption_contract_tx.txid
+
+    obj, created = main_models.TransactionMetaAttribute.objects.update_or_create(
+        txid=txid,
+        system_generated=True,
+        key="stablehedge_transaction",
+        defaults=dict(
+            wallet_hash=redemption_contract_tx.wallet_hash or "",
+            value=json.dumps(data),
+        )
+    )
+    result["new"] = created
     return result

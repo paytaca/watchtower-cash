@@ -1,6 +1,8 @@
 from rest_framework import viewsets, mixins, decorators, exceptions
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
 from stablehedge import models
 from stablehedge import serializers
@@ -18,6 +20,10 @@ from stablehedge.functions.anyhedge import (
     complete_short_proposal,
     get_total_short_value,
 )
+from stablehedge.functions.transaction import (
+    get_redemption_contract_tx_meta,
+    save_redemption_contract_tx_meta,
+)
 from stablehedge.filters import (
     RedemptionContractFilter,
     RedemptionContractTransactionFilter,
@@ -27,9 +33,8 @@ from stablehedge.js.runner import ScriptFunctions
 from anyhedge import models as anyhedge_models
 from anyhedge import serializers as anyhedge_serializers
 
+
 from django.utils import timezone
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
 from stablehedge.functions.redemption_contract import (
     get_fiat_token_balances,
 )
@@ -40,6 +45,7 @@ from stablehedge.functions.transaction import (
     create_deposit_tx,
     create_redeem_tx,
 )
+from main.tasks import _process_mempool_transaction
 from main.tasks import NODE
 
 
@@ -123,6 +129,21 @@ class RedemptionContractTransactionViewSet(
     def get_queryset(self):
         return models.RedemptionContractTransaction.objects.all()
 
+    @swagger_auto_schema(
+        method="get",
+        manual_parameters=[
+            openapi.Parameter('save', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
+        ],
+    )
+    @decorators.action(detail=True, methods=["get"])
+    def meta(self, request, *args, **kwargs):
+        save = str(request.query_params.get("save", "")).lower().strip() == "true"
+        instance = self.get_object()
+        if save:
+            result = save_redemption_contract_tx_meta(instance)
+        else:
+            result = get_redemption_contract_tx_meta(instance)
+        return Response(result)
 
 
 class TreasuryContractViewSet(
@@ -337,3 +358,17 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
     def get_fiat_token_balances(self, request, *args, **kwargs):
         wallet_hash = request.query_params.get("wallet_hash")
         return Response(get_fiat_token_balances(wallet_hash))
+
+    @swagger_auto_schema(
+        method="get",
+        manual_parameters=[
+            openapi.Parameter('txid', openapi.IN_QUERY, type=openapi.TYPE_STRING),
+            openapi.Parameter('force', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
+        ],
+    )
+    @decorators.action(methods=["get"], detail=False)
+    def process_tx(self, request, *args, **kwargs):
+        force = str(request.query_params.get("force", "")).lower().strip() == "true"
+        txid = request.query_params.get("txid", None) or None
+        _process_mempool_transaction(txid, force=force)
+        return Response()
