@@ -9,7 +9,7 @@ import { cashAddressToLockingBytecode, hexToBin } from "@bitauth/libauth";
  * @param {Transaction} transaction
  */
 export function calculateInputSize(transaction) {
-  const placeholderArgs = transaction.args.map((arg) => (arg instanceof SignatureTemplate ? placeholder(71) : arg));
+  const placeholderArgs = transaction.encodedFunctionArgs.map((arg) => (arg instanceof SignatureTemplate ? placeholder(71) : arg));
   // Create a placeholder preimage of the correct size
   const placeholderPreimage = transaction.abiFunction.covenant
       ? placeholder(getPreimageSize(scriptToBytecode(transaction.contract.redeemScript)))
