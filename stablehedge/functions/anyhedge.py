@@ -382,7 +382,8 @@ def get_and_validate_price_message(oracle_public_key:str, price_obj:anyhedge_mod
 
 def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
-    utxos = get_bch_utxos(treasury_contract_address, satoshis=satoshis)
+    # added 1000 to ensure change amount dont end up as transaction fee due to min dust
+    utxos = get_bch_utxos(treasury_contract_address, satoshis=satoshis + 1000)
 
     if not len(utxos):
         raise Exception("No utxo/s found")

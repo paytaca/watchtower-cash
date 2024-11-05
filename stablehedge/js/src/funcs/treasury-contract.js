@@ -115,21 +115,12 @@ export async function constructTreasuryContractTx(opts) {
   const transaction = await treasuryContract.unlockWithMultiSig({
     inputs, outputs,
     locktime: 0,
-    sig1: [],
-    sig2: [],
-    sig3: [],
+    sig1: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+    sig2: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+    sig3: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
   })
 
   transaction.setInputsAndOutputs();
-
-  // we are using ECDSA signatures = 72 bytes
-  // but cashscript expects a schnorr signature = 65 bytes
-  // resulting in 7 byte deficit when calculating tx fee
-  // we have 3 signatures so we subtract 21 sats to the change output
-  if (outputs.length + 1 === transaction.outputs.length) {
-    const lastOutput = transaction.outputs.at(-1)
-    lastOutput.amount -= (21n + 3n) // additional 3 sats for safety
-  }
 
   return {
     inputs: transaction.inputs.map(serializeUtxo),
