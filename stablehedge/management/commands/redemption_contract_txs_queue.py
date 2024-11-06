@@ -61,6 +61,7 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
         else:
             raise RedemptionContractTransactionException(f"Unknown transaction type '{obj.transaction_type}'")
 
+        LOGGER.debug(f"RedemptionContractTransaction#{obj.id} | RESULT | {result}")
         if not result["success"]:
             raise RedemptionContractTransactionException(result["error"])
 

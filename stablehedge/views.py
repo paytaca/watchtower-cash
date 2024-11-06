@@ -28,6 +28,7 @@ from stablehedge.filters import (
     RedemptionContractFilter,
     RedemptionContractTransactionFilter,
 )
+from stablehedge.utils import response_serializers
 from stablehedge.js.runner import ScriptFunctions
 
 from anyhedge import models as anyhedge_models
@@ -81,10 +82,8 @@ class RedemptionContractViewSet(
             .select_related("treasury_contract") \
             .all()
 
-    @decorators.action(
-        methods=["get"], detail=False,
-        serializer_class=serializers.serializers.Serializer,
-    )
+    @swagger_auto_schema(method="get", responses={200:response_serializers.ArtifactResponse})
+    @decorators.action(methods=["get"], detail=False)
     def artifact(self, request, *args, **kwargs):
         result = ScriptFunctions.getRedemptionContractArtifact()
 
@@ -135,7 +134,10 @@ class RedemptionContractTransactionViewSet(
             openapi.Parameter('save', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
         ],
     )
-    @decorators.action(detail=True, methods=["get"])
+    @decorators.action(
+        detail=True, methods=["get"],
+        serializer_class=response_serializers.RedemptionContractTransactionMetaResponse,
+    )
     def meta(self, request, *args, **kwargs):
         save = str(request.query_params.get("save", "")).lower().strip() == "true"
         instance = self.get_object()
@@ -160,10 +162,8 @@ class TreasuryContractViewSet(
             .select_related("redemption_contract") \
             .all()
 
-    @decorators.action(
-        methods=["get"], detail=False,
-        serializer_class=serializers.serializers.Serializer,
-    )
+    @swagger_auto_schema(method="get", responses={200:response_serializers.ArtifactResponse})
+    @decorators.action(methods=["get"], detail=False)
     def artifact(self, request, *args, **kwargs):
         result = ScriptFunctions.getTreasuryContractArtifact()
 
@@ -195,7 +195,10 @@ class TreasuryContractViewSet(
         )
         return Response(result)
 
-    @decorators.action(methods=["get", "post"], detail=True)
+    @decorators.action(
+        methods=["get", "post"], detail=True,
+        serializer_class=response_serializers.ShortProposalData,
+    )
     def short_proposal(self, request, *args, **kwargs):
         instance = self.get_object()
         if self.request.method == "GET": 
@@ -207,10 +210,15 @@ class TreasuryContractViewSet(
 
         return Response(result)
 
+    @swagger_auto_schema(
+        method="post",
+        responses={ 200: response_serializers.ShortProposalData },
+    )
     @decorators.action(
         methods=["post"],
         detail=True,
         url_path="short_proposal/access_keys",
+        serializer_class=response_serializers.ShortProposalAccessKeys,
     )
     @decorators.action(methods=["post"], detail=True)
     def short_proposal_access_keys(self, request, *args, **kwargs):
@@ -227,10 +235,16 @@ class TreasuryContractViewSet(
             }
             return Response(result, status=400)
 
+    @swagger_auto_schema(
+        method="post",
+        request_body=response_serializers.SignatureData(many=True),
+        responses={ 200:response_serializers.ShortProposalData },
+    )
     @decorators.action(
         methods=["post"],
         detail=True,
         url_path="short_proposal/funding_utxo_tx/sign",
+        serializer_class=response_serializers.SignatureData,
     )
     def short_proposal_funding_utxo_tx_sig(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -270,7 +284,11 @@ class TreasuryContractViewSet(
                 "code": str(exception.code),
             }
             return Response(result, status=400)
-            
+
+    @swagger_auto_schema(
+        method="post",
+        responses={ 200:response_serializers.TxidSerializer },
+    )
     @decorators.action(methods=["post"], detail=True)
     def sweep_proxy_funder(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -352,7 +370,8 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter('wallet_hash', openapi.IN_QUERY, description="Wallet hash", type=openapi.TYPE_STRING),
-        ]
+        ],
+        responses={ 200:response_serializers.RedemptionContractWalletBalance(many=True) },
     )
     @decorators.action(methods=["get"], detail=False)
     def get_fiat_token_balances(self, request, *args, **kwargs):
