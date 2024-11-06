@@ -247,7 +247,17 @@ def save_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCon
         return result
 
     data = result["data"]
-    txid = redemption_contract_tx.txid
+    tx_type = redemption_contract_tx.transaction_type
+    Type = models.RedemptionContractTransaction.Type
+
+    # this is what's works. not yet sure if correct since;
+    # there is a problem with the wallet history for deposit & inject txs where;
+    # the outgoing record is the previous txid
+    # (looks like outgoing for BCH txs since BCH is exchanged to cashtoken)
+    if tx_type == Type.DEPOSIT or tx_type == Type.INJECT:
+        txid = redemption_contract_tx.utxo["txid"]
+    else:
+        txid = redemption_contract_tx.txid
 
     obj, created = main_models.TransactionMetaAttribute.objects.update_or_create(
         txid=txid,
@@ -259,4 +269,21 @@ def save_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCon
         )
     )
     result["new"] = created
+    
+    # remove later on
+    from django.conf import settings
+    if settings.BCH_NETWORK == "chipnet":
+        url = "https://chipnet.watchtower.cash/api/transactions/attributes/"
+    else:
+        url = "https://watchtower.cash/api/transactions/attributes/"
+    
+    _data = {
+        "txid": txid,
+        "wallet_hash": redemption_contract_tx.wallet_hash or "",
+        "key": "stablehedge_transaction",
+        "value": json.dumps(data),
+    }
+    import requests
+    requests.post(url, data=_data)
+
     return result
