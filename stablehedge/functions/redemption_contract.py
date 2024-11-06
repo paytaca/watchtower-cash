@@ -1,3 +1,4 @@
+import math
 from django.db.models import Sum, F
 
 from stablehedge import models
@@ -64,10 +65,10 @@ def get_fiat_token_balances(wallet_hash:str):
         latest_price = get_latest_oracle_price(oracle_pubkey)
 
         if not latest_price:
-            raise Exception(f"NO PRICE for {oracle_pubkey}")
+            continue
 
-        redeemable = data["total_amount"] * latest_price
-        redeemable = round(redeemable / 10 ** decimals)
+        redeemable = data["total_amount"] / latest_price
+        redeemable = math.floor(redeemable)
 
         data["current_price"] = latest_price
         data["redeemable_satoshis"] = redeemable 
