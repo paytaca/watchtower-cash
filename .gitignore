@@ -212,3 +212,4 @@ supervisord.pid
 # exclude pem certificates
 **.pem 
 images
+compose/firebase-admin-credentials.json
