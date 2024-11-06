@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
+from stablehedge.utils.anyhedge import get_latest_oracle_price
 from stablehedge.utils.transaction import (
     tx_model_to_cashscript,
     get_tx_input_hashes,
@@ -651,10 +652,3 @@ def get_total_short_value(treasury_contract_address:str):
         current_price=latest_price,
         value_in_satoshis=total_short_values_in_satoshis,
     )
-
-
-def get_latest_oracle_price(oracle_pubkey:str):
-    return anyhedge_models.PriceOracleMessage.objects.filter(
-        pubkey=oracle_pubkey,
-        message_timestamp__gte=timezone.now() - timezone.timedelta(minutes=2),
-    ).order_by("-message_timestamp").values_list("price_value", flat=True).first()

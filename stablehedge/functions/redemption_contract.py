@@ -2,6 +2,7 @@ import math
 from django.db.models import Sum, F
 
 from stablehedge import models
+from stablehedge.utils.anyhedge import get_latest_oracle_price
 
 from main import models as main_models
 
@@ -52,8 +53,6 @@ def get_fiat_token_balances(wallet_hash:str):
         .order_by("category") \
         .annotate(total_amount = Sum("amount")) \
         .values("category", "total_amount")    
-
-    from .anyhedge import get_latest_oracle_price
 
     for data in token_balances:
         oracle_pubkey = token_oracle_map.get(data["category"])

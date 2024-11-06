@@ -29,6 +29,7 @@ from stablehedge.filters import (
     RedemptionContractTransactionFilter,
 )
 from stablehedge.utils import response_serializers
+from stablehedge.utils.anyhedge import get_latest_oracle_price_message
 from stablehedge.js.runner import ScriptFunctions
 
 from anyhedge import models as anyhedge_models
@@ -62,6 +63,18 @@ class FiatTokenViewSet(
     def get_queryset(self):
         return models.FiatToken.objects.all()
 
+    @decorators.action(
+        methods=["get"], detail=True,
+        serializer_class=anyhedge_serializers.PriceOracleMessageSerializer,
+    )
+    def latest_price(self, request, *args, **kwargs):
+        instance = self.get_object()
+        latest_price_message = get_latest_oracle_price_message(instance.category)
+        if not latest_price_message:
+            return Response()
+
+        serializer = self.get_serializer(latest_price_message)
+        return Response(serializer.data)
 
 class RedemptionContractViewSet(
     viewsets.GenericViewSet,
