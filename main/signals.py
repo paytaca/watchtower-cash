@@ -4,11 +4,16 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from main.utils.redis_block_setter import *
 from main.models import (
     BlockHeight,
     Transaction,
     WalletPreferences,
+    TransactionMetaAttribute,
+    WalletHistoryQuerySet,
+    Address,
 )
 from main.tasks import (
     transaction_post_save_task,
@@ -60,3 +65,56 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
 def walletpreferences_post_save(sender, instance=None, created=False, **kwargs):
     if instance and instance.selected_currency and instance.wallet:
         update_wallet_history_currency.delay(instance.wallet.wallet_hash, instance.selected_currency)
+
+
+@receiver(post_save, sender=TransactionMetaAttribute)
+def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwargs):
+    # send websocket data to first POS device address
+    if created:
+        if 'vault_payment_' in instance.key:
+            raw_posid = instance.key.split('_')[2]
+            pad = "0" * (WalletHistoryQuerySet.POS_ID_MAX_DIGITS - len(raw_posid))
+            posid_str = pad + raw_posid
+            first_pos_index = "1" + posid_str
+            address_path = "0/" + first_pos_index
+
+            address = Address.objects.filter(
+                address_path=address_path,
+                wallet__wallet_hash=instance.wallet_hash
+            )
+            index_address = Address.objects.filter(
+                address_path=f'0/{raw_posid}',
+                wallet__wallet_hash=instance.wallet_hash
+            )
+
+            if address.exists() and index_address.exists():
+                address = address.first()
+                index_address = index_address.first()
+                
+                transaction = Transaction.objects.filter(txid=instance.txid, address=index_address)
+                transaction = transaction.first()
+                room_name = address.address.replace(':','_') + '_'
+                senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
+
+                data = {
+                    'token_name': transaction.token.name,
+                    'token_id':  transaction.token.info_id,
+                    'token_symbol': transaction.token.token_ticker.lower(),
+                    'amount': transaction.amount,
+                    'value': transaction.value,
+                    'address': transaction.address.address,
+                    'source': 'WatchTower',
+                    'txid': transaction.txid,
+                    'index': transaction.index,
+                    'address_path' : transaction.address.address_path,
+                    'senders': senders,
+                }
+                
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"{room_name}", 
+                    {
+                        "type": "send_update",
+                        "data": data
+                    }
+                )

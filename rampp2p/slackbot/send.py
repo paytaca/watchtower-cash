@@ -432,7 +432,6 @@ class AppealSummaryMessage(MessageBase):
                 status = models.StatusType.REFUNDED.label
             elif order_status == models.StatusType.RELEASE_PENDING:
                 status = models.StatusType.RELEASED.label
-        logger.warning(f'status: {status}')
         return status
 
     @classmethod
@@ -852,7 +851,7 @@ class AdUpdateMessage(MessageBase):
             update_type == AdUpdateType.TRADE_FLOOR or
             update_type == AdUpdateType.TRADE_CEILING):
             old_value = '{:f}'.format(Decimal(old_value.normalize())) if old_currency == 'BCH' else '{:.2f}'.format(Decimal(old_value.normalize()))
-            new_value = '{:f}'.format(Decimal(new_value.normalize())) if old_currency == 'BCH' else '{:.2f}'.format(Decimal(new_value.normalize()))
+            new_value = '{:f}'.format(Decimal(new_value.normalize())) if new_currency == 'BCH' else '{:.2f}'.format(Decimal(new_value.normalize()))
 
         if update_type == AdUpdateType.CURRENCY:
             return f"Ad #{ad.id} updated currency from {old_value} to {new_value}"

@@ -88,6 +88,7 @@ uritemplate==3.0.1
 urllib3==1.25.8
 wcwidth==0.1.8
 web3==5.28.0
+websockets==10.4
 whitenoise==5.0.1
 zipp==3.0.0
 zope.event==4.4
@@ -101,4 +102,6 @@ paho-mqtt==1.6.1
 cryptography==40.0.2
 ecdsa==0.18.0
 python-slugify==8.0.1
+uvicorn==0.32.0
+uvloop==0.21.0
 git+https://github.com/paytaca/python-bitcoinrpc

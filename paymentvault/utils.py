@@ -23,7 +23,7 @@ def create_vault(user_pubkey, merchant):
     vault = get_payment_vault(user_pubkey, merchant.pubkey)
     contract = vault['contract']
     
-    payment_vault = PaymentVault.objects.create(
+    payment_vault, _ = PaymentVault.objects.get_or_create(
         user_pubkey=user_pubkey,
         merchant=merchant,
         address=contract['address'],
