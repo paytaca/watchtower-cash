@@ -1,6 +1,9 @@
+from firebase_admin import messaging
 from django.db.models import OuterRef, Exists
 from push_notifications.models import GCMDevice, APNSDevice
 from notifications.models import DeviceWallet
+
+from .send_response import parse_gcm_response
 
 APNS_KWARGS = [
     # part of push_notifications.apns._apns_send() func
@@ -58,7 +61,13 @@ def parse_send_message_for_gcm(message, **kwargs):
             kwargs["priority"] = "high"
         else:
             kwargs["priority"] = "normal"
-    
+
+    message = messaging.Message(
+            notification=messaging.Notification(
+            body=message,
+        ),
+    )
+
     return (message, kwargs)
 
 
@@ -119,9 +128,15 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
             print(f"GCM({multi_wallet_index}) | {filtered_gcm_devices}")
             if not filtered_gcm_devices: continue
             _gcm_send_response = filtered_gcm_devices.send_message(gcm_message, **gcm_kwargs)
+            _gcm_send_response = parse_gcm_response(_gcm_send_response)
 
             if not isinstance(gcm_send_response, list): gcm_send_response = []
-            gcm_send_response += _gcm_send_response
+            if isinstance(_gcm_send_response, list):
+                gcm_send_response += _gcm_send_response
+            elif isinstance(getattr(_gcm_send_response, "responses", None), list):
+                gcm_send_response += _gcm_send_response.responses
+            else:
+                gcm_send_response.append(_gcm_send_response)
 
     except Exception as exception:
         gcm_send_response = exception

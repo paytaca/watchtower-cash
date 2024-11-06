@@ -225,10 +225,18 @@ CONSTANCE_CONFIG_FIELDSETS = {
 
 # Push notifications (django-push-notifications)
 # See https://github.com/jazzband/django-push-notifications
+import firebase_admin
+
+# Initialize the default app (either use `GOOGLE_APPLICATION_CREDENTIALS` environment variable, or pass a firebase_admin.credentials.Certificate instance)
+google_app_credentials_path = os.path.join(BASE_DIR, config('GOOGLE_APP_CREDENTIALS_PATH', 'compose/firebase-admin-credentials.json'))
+google_app_cert = firebase_admin.credentials.Certificate(google_app_credentials_path)
+firebase_app = firebase_admin.initialize_app(google_app_cert)
+
 PUSH_NOTIFICATIONS_SETTINGS = {
+    "CONFIG": "push_notifications.conf.LegacyConfig",
     # For Firebase (Android)
     # -----------------------------------------
-    "FCM_API_KEY": config("FIREBASE_API_KEY"),
+    "FIREBASE_APP": firebase_app,
 
     # For Google cloud messaging (Android)
     # -----------------------------------------
