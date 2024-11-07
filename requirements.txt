@@ -5,6 +5,7 @@ asgiref==3.8.1
 atomicwrites==1.4.0
 attrs==22.2.0
 backcall==0.1.0
+base58==2.1.1
 beautifulsoup4==4.10.0
 BitCash==0.6.4
 bitcoin==1.1.42
@@ -104,12 +105,11 @@ sseclient==0.0.24
 supervisor==4.1.0
 tornado==6.0.4
 traitlets==4.3.3
-typing-extensions==4.3.0
 uritemplate==3.0.1
 urllib3==1.25.8
 wcwidth==0.1.8
-web3==5.28.0
-websockets==9.1
+web3==7.0.0
+websockets==10.4
 whitenoise==5.0.1
 zipp==3.0.0
 zope.event==4.4
