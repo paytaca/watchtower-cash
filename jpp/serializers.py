@@ -233,8 +233,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if address_path:
             extra["use_address_path"] = address_path
 
+        total_bch = abs(instance.total_bch)
+        total_bch = f'{total_bch:.5f}'.rstrip('0').rstrip('.')
+
         title = "Payment Request"
-        message = f"You have a payment request of {instance.total_bch} BCH"
+        message = f"You have a payment request of {total_bch} BCH"
 
         broadcast_to_engagementhub({
             'title': title,
