@@ -5,6 +5,25 @@ from notifications.models import DeviceWallet
 
 from .send_response import parse_gcm_response
 
+ANDROID_NOTIF_KWARGS = [
+    # part of messaging.AndroidNotification kwargs
+    "title", "body", "mesasge",
+    "icon", "color",
+    "sound", "default_sound",
+    "tag", "click_action",
+    "body_loc_key", "body_loc_args",
+    "title_loc_key", "title_loc_args",
+    "channel_id", "image",
+    "ticker", "sticky",
+    "event_timestamp", "local_only",
+    "priority",
+    "vibrate_timings_millis", "default_vibrate_timings",
+    "light_settings", "default_light_settings",
+    "visibility",
+    "notification_count",
+]
+
+
 APNS_KWARGS = [
     # part of push_notifications.apns._apns_send() func
     "priority", "collapse_id",
@@ -62,14 +81,29 @@ def parse_send_message_for_gcm(message, **kwargs):
         else:
             kwargs["priority"] = "normal"
 
+    data = kwargs.get("extra")
+    if not isinstance(data, dict):
+        data = {}
+
+    data = { key : str(value) for key, value in data.items() }
+
+    # copied some kwargs in docs, not sure which are necessary
+    # not yet sure how to serialize certain kwargs
+    # https://firebase.google.com/docs/reference/admin/python/firebase_admin.messaging
+    filtered_kwargs = { k: v for k,v in kwargs.items() if  k in ANDROID_NOTIF_KWARGS }
     message = messaging.Message(
-            notification=messaging.Notification(
-            body=message,
+        android=messaging.AndroidConfig(
+            notification=messaging.AndroidNotification(
+                body=message,
+                **filtered_kwargs,
+            )
         ),
+        data=data,
+        topic=kwargs.get("topic"),
+        condition=kwargs.get("condition"),
     )
 
-    return (message, kwargs)
-
+    return (message, {})
 
 def parse_send_message_for_apns(message, **kwargs):
     if "title" in kwargs or "subtitle" in kwargs and not isinstance(message, dict):
@@ -118,8 +152,10 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
         multi_wallet_indices = gcm_devices.values_list("device_wallets__multi_wallet_index", flat=True).distinct()
         print(f"GCM indices: {multi_wallet_indices}")
         for multi_wallet_index in multi_wallet_indices:
-            if "extra" not in gcm_kwargs: gcm_kwargs["extra"] = {}
-            gcm_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
+            if not isinstance(gcm_message.data, dict):
+                gcm_message.data = {}
+
+            gcm_message.data["multi_wallet_index"] = str(multi_wallet_index)
 
             filtered_gcm_devices = filter_device_queryset_by_wallet_index(
                 gcm_devices, wallet_hash_list, multi_wallet_index, 
