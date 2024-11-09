@@ -402,5 +402,5 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
     def process_tx(self, request, *args, **kwargs):
         force = str(request.query_params.get("force", "")).lower().strip() == "true"
         txid = request.query_params.get("txid", None) or None
-        _process_mempool_transaction(txid, force=force)
+        _process_mempool_transaction(txid, force=force, immediate=True)
         return Response()

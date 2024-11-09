@@ -247,17 +247,7 @@ def save_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCon
         return result
 
     data = result["data"]
-    tx_type = redemption_contract_tx.transaction_type
-    Type = models.RedemptionContractTransaction.Type
-
-    # this is what's works. not yet sure if correct since;
-    # there is a problem with the wallet history for deposit & inject txs where;
-    # the outgoing record is the previous txid
-    # (looks like outgoing for BCH txs since BCH is exchanged to cashtoken)
-    if tx_type == Type.DEPOSIT or tx_type == Type.INJECT:
-        txid = redemption_contract_tx.utxo["txid"]
-    else:
-        txid = redemption_contract_tx.txid
+    txid = redemption_contract_tx.txid
 
     obj, created = main_models.TransactionMetaAttribute.objects.update_or_create(
         txid=txid,
