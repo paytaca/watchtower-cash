@@ -6,17 +6,46 @@ from rampp2p.forms import *
 
 class AdAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
+        'price_type',
         'trade_type',
         'crypto_currency',
         'fiat_currency',
         'owner',
         'is_public',
-        'created_at'
+        'deleted_at'
     ]
     search_fields = [
-        'fiat_currency',
-        'owner'
+        'id',
+        'price_type',
+        'trade_type',
+        'fiat_currency__symbol',
+        'owner__name'
     ]
+    actions = [
+        'soft_delete', 'mark_public', 'mark_private'
+    ]
+
+    def soft_delete(self, request, queryset):
+        for ad in queryset:
+            ad.deleted_at = timezone.now()
+            ad.save()
+
+    soft_delete.short_description = "Soft delete selected ads"
+
+    def mark_public(self, request, queryset):
+        for ad in queryset:
+            ad.is_public = True
+            ad.save()
+    
+    mark_public.short_description = "Mark selected ads as public"
+
+    def mark_private(self, request, queryset):
+        for ad in queryset:
+            ad.is_public = False
+            ad.save()
+    
+    mark_private.short_description = "Mark selected ads as private"
 
 
 admin.site.register(Ad, AdAdmin)
