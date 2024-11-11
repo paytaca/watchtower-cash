@@ -451,7 +451,10 @@ class AdView(APIView):
                     order_field = 'price' if price_order == 'ascending' else '-price'
                 queryset = queryset.order_by(order_field, 'created_at')
             else:
-                queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
+                price_order = 'price'
+                if trade_type == rampp2p_models.TradeType.SELL:
+                    price_order = '-price'
+                queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by(price_order, '-created_at')
 
             count = queryset.count()
             total_pages = page
@@ -502,6 +505,10 @@ class AdView(APIView):
         except (rampp2p_models.CryptoCurrency.DoesNotExist, rampp2p_models.FiatCurrency.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
+        # limit to one ad per user per fiat currency
+        if self.exceeds_ad_limit(wallet_hash, data['fiat_currency'], data['trade_type']):
+            return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = rampp2p_serializers.AdCreateSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
@@ -518,6 +525,13 @@ class AdView(APIView):
             return Response({'error': 'No permission to perform this action'}, status=status.HTTP_400_BAD_REQUEST)
         
         ad = self.get_object(pk)
+        is_public = request.data.get('is_public')
+
+        exceeds_ad_limit = self.exceeds_ad_limit(wallet_hash, ad.fiat_currency.id, ad.trade_type)
+        currency_public_ad_count = self.public_ad_count(wallet_hash, ad.fiat_currency.id, ad.trade_type)
+        if is_public == True and exceeds_ad_limit and currency_public_ad_count >= 1:
+            return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
+            
         serializer = rampp2p_serializers.AdSerializer(ad, data=request.data)
         if serializer.is_valid():
             ad = serializer.save()
@@ -544,6 +558,12 @@ class AdView(APIView):
         if payment_method_ids:
             return rampp2p_models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids)).exists()
         return True
+    
+    def exceeds_ad_limit(self, user_wallet_hash, fiat_currency_id, trade_type):
+        return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, deleted_at__isnull=True).count() > 1
+    
+    def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
+        return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, is_public=True, deleted_at__isnull=True).count()
         
 class AdSnapshotView(APIView):
     authentication_classes = [TokenAuthentication]
