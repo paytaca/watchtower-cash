@@ -29,9 +29,6 @@ class WalletAddressesView(APIView):
     )
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', '')
-        if not wallet_hash:
-            return Response(wallet_addresses)
-
         change_index = self.request.query_params.get('change_index', None)
         address_index = self.request.query_params.get('address_index', '\d+')
 
@@ -40,13 +37,12 @@ class WalletAddressesView(APIView):
         address_path_filter = ''
         
         if change_index != None:
-            change_index = str(change_index)
             address_path_filter = address_path_filter + f'{change_index}/{address_index}'
 
         if address_path_filter:
             wallet_addresses = wallet_addresses.filter(
                 address_path__iregex=address_path_filter
             )
-        wallet_addresses = wallet_addresses.order_by('date_created')
+        wallet_addresses = wallet_addresses.order_by('address_path')
 
         return Response(list(wallet_addresses or []))
