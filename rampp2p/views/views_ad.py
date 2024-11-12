@@ -7,12 +7,13 @@ from django.utils import timezone
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import (F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery)
+from django.db.models import (Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery)
 
 import math
 from datetime import timedelta
 from decimal import Decimal, ROUND_DOWN
 from authentication.token import TokenAuthentication
+from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.serializers as rampp2p_serializers
 import rampp2p.models as rampp2p_models
@@ -342,8 +343,10 @@ class CashInAdViewSet(viewsets.GenericViewSet):
 
         return paymenttypes, ids
 
-class AdView(APIView):
+class AdViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
+    permission_classes = [RampP2PIsAuthenticated]
+    queryset = rampp2p_models.Ad.objects.filter(deleted_at__isnull=True)
 
     def get_object(self, pk):
         Ad = rampp2p_models.Ad
@@ -355,7 +358,7 @@ class AdView(APIView):
         except Ad.DoesNotExist:
             raise Http404
 
-    def get_queryset (self, request=None, pk=None):
+    def fetch_queryset (self, request=None, pk=None):
         if request is None:
             return []
         
@@ -471,14 +474,21 @@ class AdView(APIView):
             response_data = data
         return response_data
 
-    def get(self, request, pk=None):
+    def list(self, request):
         try:
-            data = self.get_queryset(request=request, pk=pk)
+            data = self.fetch_queryset(request=request)
             return Response(data, status=status.HTTP_200_OK)
         except ValidationError as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    def post(self, request):
+    def retrieve(self, request, pk):
+        try:
+            data = self.fetch_queryset(request=request, pk=pk)
+            return Response(data, status=status.HTTP_200_OK)
+        except ValidationError as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request):
         wallet_hash = request.headers.get('wallet_hash')
         payment_methods = request.data.get('payment_methods')
 
@@ -512,7 +522,7 @@ class AdView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def put(self, request, pk):
+    def partial_update(self, request, pk):
         wallet_hash = request.user.wallet_hash
         payment_methods = request.data.get('payment_methods')
 
@@ -523,10 +533,11 @@ class AdView(APIView):
         
         ad = self.get_object(pk)
         is_public = request.data.get('is_public')
+        fiat_currency = request.data.get('fiat_currency', ad.fiat_currency.id) 
 
-        exceeds_ad_limit = self.exceeds_ad_limit(wallet_hash, ad.fiat_currency.id, ad.trade_type)
-        currency_public_ad_count = self.public_ad_count(wallet_hash, ad.fiat_currency.id, ad.trade_type)
-        if is_public == True and exceeds_ad_limit and currency_public_ad_count >= 1:
+        exceeds_ad_limit = self.exceeds_ad_limit(wallet_hash, fiat_currency, ad.trade_type)
+        currency_public_ad_count = self.public_ad_count(wallet_hash, fiat_currency, ad.trade_type)
+        if (is_public == True or fiat_currency) and exceeds_ad_limit and currency_public_ad_count >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
             
         serializer = rampp2p_serializers.AdSerializer(ad, data=request.data)
@@ -537,7 +548,7 @@ class AdView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def delete(self, request, pk):
+    def destroy(self, request, pk):
         wallet_hash = request.user.wallet_hash
         if not self.has_permissions(wallet_hash, pk):
             return Response({'error': 'No permission to perform this action'}, status=status.HTTP_400_BAD_REQUEST)
@@ -546,6 +557,30 @@ class AdView(APIView):
         ad.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     
+    @action(detail=False, methods=['get'])
+    def check_ad_limit(self, request):
+        trade_type = request.query_params.get('trade_type')
+        wallet_hash = request.user.wallet_hash
+
+        currencies = rampp2p_models.FiatCurrency.objects.all()
+        currency_ids = currencies.annotate(paymenttype_count=Count('payment_types')).values_list('id', flat=True).filter(paymenttype_count__gt=0)
+
+        queryset = self.get_queryset().filter(owner__wallet_hash=wallet_hash)
+        queryset = queryset.filter(fiat_currency__id__in=currency_ids)
+        if trade_type:
+            queryset = queryset.filter(trade_type=trade_type)
+        queryset = queryset.values('fiat_currency__name').annotate(count=Count('id')).filter(count__gt=1)
+
+        ads = []
+        for entry in queryset:
+            ads.append({'currency': entry['fiat_currency__name'], 'count': entry['count']})
+
+        response = {
+            'exceeds_limit': queryset.exists(),
+            'ads': ads
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
     def has_permissions(self, wallet_hash, ad_id):
         ''' Returns true if user is ad owner, returns false otherwise. '''
         return rampp2p_models.Ad.objects.filter(Q(pk=ad_id) & Q(owner__wallet_hash=wallet_hash)).exists()
@@ -557,7 +592,7 @@ class AdView(APIView):
         return True
     
     def exceeds_ad_limit(self, user_wallet_hash, fiat_currency_id, trade_type):
-        return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, deleted_at__isnull=True).count() > 1
+        return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, deleted_at__isnull=True).count() >= 1
     
     def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
         return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, is_public=True, deleted_at__isnull=True).count()

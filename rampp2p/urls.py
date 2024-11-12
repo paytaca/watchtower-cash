@@ -5,9 +5,10 @@ urlpatterns = [
     
     path('version/check/<str:platform>/', check_app_version),
     
-    path('ad/', AdView.as_view(), name='ad-list-create'),
-    path('ad/<int:pk>/', AdView.as_view(), name='ad-detail'),
-    path('ad/snapshot/', AdSnapshotView.as_view(), name='ad-snapshot'),
+    path('ad/', AdViewSet.as_view({'get': 'list', 'post': 'create'})),
+    path('ad/<int:pk>/', AdViewSet.as_view({'get': 'retrieve', 'put': 'partial_update', 'delete': 'destroy'})),
+    path('ad/check/limit/', AdViewSet.as_view({'get': 'check_ad_limit'})),
+    path('ad/snapshot/', AdSnapshotView.as_view()),
     path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
 
     path('cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_presets'})),
