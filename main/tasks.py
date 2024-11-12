@@ -1401,6 +1401,13 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 txid=txid,
                 address__address__startswith=bch_prefix
             )
+            spent_txns = Transaction.objects.filter(
+                spending_txid=txid,
+                address__address__startswith=bch_prefix,
+            )
+
+            tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
+            date_created = txns.filter(date_created__isnull=False).aggregate(_max=models.Max('date_created'))['_max']
 
             cashtoken_ft = None
             cashtoken_nft = None
@@ -1408,6 +1415,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
             if key == BCH_OR_SLP:
                 txns = txns.filter(token__name='bch')
+                spent_txns = spent_txns.filter(token__name='bch')
             else:
                 _txns = txns.exclude(token__name='bch')
                 if _txns.exists():
@@ -1459,12 +1467,13 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             )
 
         txn = txns.last()
-        tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
+        spent_txn = spent_txns.last()
 
-        if not txn: continue
+        if not txn and not spent_txn: continue
 
         if not token_obj:
-            token_obj = txn.token
+            _txn = txn or spent_txn
+            token_obj = _txn.token
 
         history_check = WalletHistory.objects.filter(
             wallet=wallet,
@@ -1506,7 +1515,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 tx_fee=tx_fee,
                 senders=processed_senders,
                 recipients=processed_recipients,
-                date_created=txn.date_created,
+                date_created=date_created,
                 tx_timestamp=tx_timestamp,
             )
 
@@ -1541,6 +1550,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
         # for older token records
         if (
+            txn and
             txn.token and
             txn.token.tokenid and
             txn.token.tokenid != settings.WT_DEFAULT_CASHTOKEN_ID and
@@ -1549,7 +1559,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             get_token_meta_data(txn.token.tokenid, async_image_download=True)
             txn.token.refresh_from_db()
 
-        if txn.token and txn.token.is_nft:
+        if txn and txn.token and txn.token.is_nft:
             if record_type == 'incoming':
                 wallet_nft_token, created = WalletNftToken.objects.get_or_create(
                     wallet=wallet,
