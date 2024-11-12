@@ -1,19 +1,52 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 from main.models import Wallet
-from main.serializers import WalletAddressesSerializer
+# from main.serializers import WalletAddressesSerializer
 
 class WalletAddressesView(APIView):
-    serializer_class = WalletAddressesSerializer
+    # serializer_class = WalletAddressesSerializer
 
+    @swagger_auto_schema(
+        operation_description="Returns the addresses of provided wallet hash. Ordered by creation date.",
+        responses={status.HTTP_200_OK: openapi.Response(
+            description="List of wallet addresses",
+            examples={
+                'application/json': [
+                    'bitcoincash:qqscs5frlmjmvdscm741mruau9ctsn2le5khg7gl92', 
+                    'bitcoincash:qzzkvnxky1ztgp0xvex7hfu6g92tdwzh9gagyaz2hj'
+                ]
+
+            },
+            type=openapi.TYPE_ARRAY,
+            items=openapi.Items(type=openapi.TYPE_STRING)
+        )},
+        manual_parameters=[
+            openapi.Parameter('change_index', openapi.IN_QUERY, description="Filters based on change index of BIP44 derivation path. Set to 0 for external or deposit addresses, 1 for change addresses.", required=False, type=openapi.TYPE_INTEGER),
+            openapi.Parameter('address_index', openapi.IN_QUERY, description="Filters based on address_index of BIP44 derivation path.", required=False, type=openapi.TYPE_INTEGER),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         wallet_hash = kwargs.get('wallethash', '')
-        wallet_addresses = []
+        if not wallet_hash:
+            return Response(wallet_addresses)
 
-        wallet_check = Wallet.objects.filter(wallet_hash=wallet_hash)
-        if wallet_check.exists():
-            for address in wallet_check.first().addresses.all():
-                wallet_addresses.append(address.address)
+        change_index = self.request.query_params.get('change_index', None)
+        address_index = self.request.query_params.get('address_index', '\d+')
 
-        return Response(wallet_addresses)
+        wallet_addresses = Address.objects.filter(wallet__wallet_hash=wallet_hash)
+        
+        address_path_filter = ''
+        
+        if change_index != None:
+            change_index = str(change_index)
+            address_path_filter = address_path_filter + f'{change_index}/{address_index}'
+
+        if address_path_filter:
+            wallet_addresses = wallet_addresses.filter(
+                address_path__iregex=address_path_filter
+            )
+        wallet_addresses = wallet_addresses.order_by('date_created')
+
+        return Response(list(wallet_addresses or []))
