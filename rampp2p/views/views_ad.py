@@ -451,10 +451,7 @@ class AdView(APIView):
                     order_field = 'price' if price_order == 'ascending' else '-price'
                 queryset = queryset.order_by(order_field, 'created_at')
             else:
-                price_order = 'price'
-                if trade_type == rampp2p_models.TradeType.SELL:
-                    price_order = '-price'
-                queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by(price_order, '-created_at')
+                queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
 
             count = queryset.count()
             total_pages = page
