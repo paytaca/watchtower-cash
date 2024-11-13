@@ -8,6 +8,7 @@ urlpatterns = [
     path('ad/', AdViewSet.as_view({'get': 'list', 'post': 'create'})),
     path('ad/<int:pk>/', AdViewSet.as_view({'get': 'retrieve', 'put': 'partial_update', 'delete': 'destroy'})),
     path('ad/check/limit/', AdViewSet.as_view({'get': 'check_ad_limit'})),
+    path('ad/currency/', AdViewSet.as_view({'get': 'retrieve_currencies'})),
     path('ad/snapshot/', AdSnapshotView.as_view()),
     path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
 

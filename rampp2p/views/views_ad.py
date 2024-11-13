@@ -532,9 +532,9 @@ class AdViewSet(viewsets.GenericViewSet):
             return Response({'error': 'No permission to perform this action'}, status=status.HTTP_400_BAD_REQUEST)
         
         ad = self.get_object(pk)
-        is_public = request.data.get('is_public')
+        is_public = request.data.get('is_public', ad.is_public)
         fiat_currency = request.data.get('fiat_currency')
-        if fiat_currency != ad.fiat_currency.id:
+        if fiat_currency and fiat_currency != ad.fiat_currency.id:
             return Response({ 'error': 'Not allowed to update ad fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
 
         exceeds_ad_limit = self.exceeds_ad_limit(wallet_hash, fiat_currency, ad.trade_type)
@@ -559,7 +559,7 @@ class AdViewSet(viewsets.GenericViewSet):
         ad.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     
-    @action(detail=False, methods=['get'])
+    @action(method='get', detail=False, operation_description="Checks if user has multiple ads that share the same currency")
     def check_ad_limit(self, request):
         trade_type = request.query_params.get('trade_type')
         wallet_hash = request.user.wallet_hash
@@ -583,6 +583,19 @@ class AdViewSet(viewsets.GenericViewSet):
         }
         return Response(response, status=status.HTTP_200_OK)
 
+    @action(method='get', detail=False, operation_description="Retrieve fiat currencies not used in user's existing ads.")
+    def retrieve_currencies(self, request):
+        wallet_hash = request.user.wallet_hash
+        trade_type = request.query_params.get('trade_type')
+        if not trade_type:
+            return Response({ 'error': 'trade_type required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        used_currencies = self.get_queryset().filter(owner__wallet_hash=wallet_hash, trade_type=trade_type).values_list('fiat_currency').distinct()
+        unused_currencies = rampp2p_models.FiatCurrency.objects.exclude(Q(id__in=used_currencies))
+        unused_currencies = unused_currencies.annotate(paymenttype_count=Count('payment_types')).filter(paymenttype_count__gt=0)
+        serializer = rampp2p_serializers.FiatCurrencySerializer(unused_currencies, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     def has_permissions(self, wallet_hash, ad_id):
         ''' Returns true if user is ad owner, returns false otherwise. '''
         return rampp2p_models.Ad.objects.filter(Q(pk=ad_id) & Q(owner__wallet_hash=wallet_hash)).exists()
@@ -594,7 +607,7 @@ class AdViewSet(viewsets.GenericViewSet):
         return True
     
     def exceeds_ad_limit(self, user_wallet_hash, fiat_currency_id, trade_type):
-        return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, deleted_at__isnull=True).count() >= 1
+        return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, deleted_at__isnull=True).count() > 1
     
     def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
         return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, is_public=True, deleted_at__isnull=True).count()
