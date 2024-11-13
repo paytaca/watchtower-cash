@@ -19,7 +19,8 @@ class RedemptionContractTransactionMetaResponse(CommonResponseSerializer):
 
 
 class RedemptionContractWalletBalance(serializers.Serializer):
-    category = serializers.CharField(read_only=True)
-    total_amount = serializers.IntegerField(read_only=True)
-    current_price = serializers.IntegerField(read_only=True)
-    redeemable_satoshis = serializers.IntegerField(read_only=True)
+    category = serializers.CharField()
+    total_amount = serializers.IntegerField()
+    currency = serializers.CharField()
+    current_price = serializers.IntegerField(required=False)
+    redeemable_satoshis = serializers.IntegerField(required=False)

@@ -27,19 +27,22 @@ def find_fiat_token_utxos(redemptionContractOrAddress, min_token_amount=None, mi
     return queryset
 
 
-def get_fiat_token_balances(wallet_hash:str):
+def get_fiat_token_balances(wallet_hash:str, with_satoshis=False):
     redemption_contract_data_qs = models.RedemptionContract.objects \
-        .values("fiat_token__category", "fiat_token__decimals", "price_oracle_pubkey") \
+        .values("fiat_token__category", "fiat_token__decimals", "fiat_token__currency", "price_oracle_pubkey") \
         .distinct()
 
     token_oracle_map = {}
     token_decimals_map = {}
+    token_currency_map = {}
     for redemption_contract_data in redemption_contract_data_qs:
         token_category = redemption_contract_data["fiat_token__category"]
         oracle_pubkey = redemption_contract_data["price_oracle_pubkey"]
         decimals = redemption_contract_data["fiat_token__decimals"]
+        currency = redemption_contract_data["fiat_token__currency"]
         token_oracle_map[token_category] = oracle_pubkey
         token_decimals_map[token_category] = decimals
+        token_currency_map[token_category] = currency
 
 
     fiat_token_categories = list(token_oracle_map.keys())
@@ -52,7 +55,13 @@ def get_fiat_token_balances(wallet_hash:str):
         .values("category") \
         .order_by("category") \
         .annotate(total_amount = Sum("amount")) \
-        .values("category", "total_amount")    
+        .values("category", "total_amount")
+
+    for data in token_balances:
+        data["currency"] = token_currency_map.get(data["category"])
+
+    if not with_satoshis:
+        return token_balances
 
     for data in token_balances:
         oracle_pubkey = token_oracle_map.get(data["category"])

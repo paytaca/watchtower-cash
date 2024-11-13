@@ -29,7 +29,8 @@ from stablehedge.filters import (
     RedemptionContractTransactionFilter,
 )
 from stablehedge.utils import response_serializers
-from stablehedge.utils.anyhedge import get_latest_oracle_price_message
+from stablehedge.utils.anyhedge import get_fiat_token_prices
+from stablehedge.functions.redemption_contract import get_fiat_token_balances
 from stablehedge.js.runner import ScriptFunctions
 
 from anyhedge import models as anyhedge_models
@@ -37,9 +38,6 @@ from anyhedge import serializers as anyhedge_serializers
 
 
 from django.utils import timezone
-from stablehedge.functions.redemption_contract import (
-    get_fiat_token_balances,
-)
 from stablehedge.functions.transaction import (
     test_transaction_accept,
     RedemptionContractTransactionException,
@@ -49,7 +47,6 @@ from stablehedge.functions.transaction import (
 )
 from main.tasks import _process_mempool_transaction
 from main.tasks import NODE
-
 
 
 class FiatTokenViewSet(
@@ -63,18 +60,19 @@ class FiatTokenViewSet(
     def get_queryset(self):
         return models.FiatToken.objects.all()
 
-    @decorators.action(
-        methods=["get"], detail=True,
-        serializer_class=anyhedge_serializers.PriceOracleMessageSerializer,
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter('categories', openapi.IN_QUERY, description="Categories separated by comma", type=openapi.TYPE_STRING),
+        ],
+        responses={ 200:response_serializers.FiatTokenPrice(many=True) },
     )
-    def latest_price(self, request, *args, **kwargs):
-        instance = self.get_object()
-        latest_price_message = get_latest_oracle_price_message(instance.category)
-        if not latest_price_message:
-            return Response()
+    @decorators.action(methods=["get"], detail=False)
+    def latest_prices(self, request, *args, **kwargs):
+        categories = request.query_params.get("categories", "").split(",")
+        categories = [category for category in categories if category]
+        results = get_fiat_token_prices(categories)
+        return Response(results)
 
-        serializer = self.get_serializer(latest_price_message)
-        return Response(serializer.data)
 
 class RedemptionContractViewSet(
     viewsets.GenericViewSet,
@@ -126,6 +124,20 @@ class RedemptionContractViewSet(
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
         return Response(serializer.data)
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter('wallet_hash', openapi.IN_QUERY, description="Wallet hash", type=openapi.TYPE_STRING),
+            openapi.Parameter('with_satoshis', openapi.IN_QUERY, description="Include conversion to satoshis based on latest price", type=openapi.TYPE_BOOLEAN),
+        ],
+        responses={ 200:response_serializers.RedemptionContractWalletBalance(many=True) },
+    )
+    @decorators.action(methods=["get"], detail=False)
+    def get_fiat_token_balances(self, request, *args, **kwargs):
+        with_satoshis = str(request.query_params.get("with_satoshis", "")).lower().strip() == "true"
+        wallet_hash = request.query_params.get("wallet_hash")
+        return Response(get_fiat_token_balances(wallet_hash, with_satoshis))
+
 
 class RedemptionContractTransactionViewSet(
     viewsets.GenericViewSet,
@@ -379,17 +391,6 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
     def decode_raw_tx(self, request, *args, **kwargs):
         result = NODE.BCH.build_tx_from_hex(request.data["transaction"])
         return Response(result)
-
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter('wallet_hash', openapi.IN_QUERY, description="Wallet hash", type=openapi.TYPE_STRING),
-        ],
-        responses={ 200:response_serializers.RedemptionContractWalletBalance(many=True) },
-    )
-    @decorators.action(methods=["get"], detail=False)
-    def get_fiat_token_balances(self, request, *args, **kwargs):
-        wallet_hash = request.query_params.get("wallet_hash")
-        return Response(get_fiat_token_balances(wallet_hash))
 
     @swagger_auto_schema(
         method="get",
