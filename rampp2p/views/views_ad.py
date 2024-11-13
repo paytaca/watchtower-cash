@@ -533,11 +533,13 @@ class AdViewSet(viewsets.GenericViewSet):
         
         ad = self.get_object(pk)
         is_public = request.data.get('is_public')
-        fiat_currency = request.data.get('fiat_currency', ad.fiat_currency.id) 
+        fiat_currency = request.data.get('fiat_currency')
+        if fiat_currency != ad.fiat_currency.id:
+            return Response({ 'error': 'Not allowed to update ad fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
 
         exceeds_ad_limit = self.exceeds_ad_limit(wallet_hash, fiat_currency, ad.trade_type)
         currency_public_ad_count = self.public_ad_count(wallet_hash, fiat_currency, ad.trade_type)
-        if (is_public == True or fiat_currency) and exceeds_ad_limit and currency_public_ad_count >= 1:
+        if is_public == True and exceeds_ad_limit and currency_public_ad_count >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
             
         serializer = rampp2p_serializers.AdSerializer(ad, data=request.data)
