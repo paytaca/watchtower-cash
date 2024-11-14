@@ -1,5 +1,8 @@
 from django.db import models
 
+SATS_PER_BCH = 100000000 # 100,000,000 sats = 1 BCH
+DUST_LIMIT_CAP = 1000 # dust limit is 546 sats
+
 class AppVersion(models.Model):
     PLATFORM_CHOICES = [
         ('ios', 'iOS'),
@@ -22,7 +25,7 @@ class ServiceFee(models.Model):
         FLOATING = 'FLOATING'
 
     type = models.CharField(max_length=8, choices=FeeType.choices, default=FeeType.FLOATING.value)
-    fixed_value = models.DecimalField(max_digits=18, decimal_places=8, default=1000, blank=True)
+    fixed_value = models.IntegerField(default=1000, blank=True)
     floating_value = models.DecimalField(max_digits=18, decimal_places=8, default=0.5, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -39,6 +42,8 @@ class ServiceFee(models.Model):
         if self.type == self.FeeType.FLOATING and trade_amount:
             bch_fee = trade_amount * (self.floating_value / 100)
             # convert value to sats
-            sats_fee = bch_fee * 100000000 # 100,000,000 sats = 1 BCH
-            return sats_fee
+            sats_fee = bch_fee * SATS_PER_BCH
+            sats_fee < DUST_LIMIT_CAP
+            sats_fee = self.fixed_value
+            return int(sats_fee)
         return self.fixed_value

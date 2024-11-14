@@ -7,9 +7,9 @@ const ARBITER_PUBKEY = Buffer.from(process.argv[2], "hex")
 const BUYER_PUBKEY = Buffer.from(process.argv[3], "hex")
 const SELLER_PUBKEY = Buffer.from(process.argv[4], "hex")
 const TIMESTAMP = process.argv[5]
+const SERVICE_FEE = parseInt(process.argv[6])
+const ARBITRATION_FEE = parseInt(process.argv[7])
 const SERVICER_PUBKEY = Buffer.from(process.env.SERVICER_PK, "hex")
-const SERVICE_FEE = parseInt(process.env.SERVICE_FEE)
-const ARBITRATION_FEE = parseInt(process.env.ARBITRATION_FEE)
 
 const bchjs = new BCHJS({
     restURL: 'https://bchn.fullstack.cash/v5/',

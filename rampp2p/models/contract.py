@@ -5,10 +5,46 @@ class Contract(models.Model):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, unique=True)
     address = models.CharField(max_length=100, blank=True, null=True)
     version = models.CharField(max_length=100, null=True)
+    service_fee = models.IntegerField(null=True, editable=False)
+    arbitration_fee = models.IntegerField(null=True, editable=False)
+    hardcoded_fee = models.IntegerField(null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
         return f'{self.id}'
+    
+    def get_total_fees(self):
+        total = None
+        try:
+            total = self.service_fee + self.arbitration_fee + self.hardcoded_fee
+        except Exception:
+            pass
+        return total
+    
+    def get_fees(self):
+        return {
+            'service_fee': self.service_fee,
+            'arbitration_fee': self.arbitration_fee,
+            'hardcoded_fee': self.hardcoded_fee
+        }
+    
+    def get_members(self):
+        members = ContractMember.objects.filter(contract__id=self.id)
+        arbiter, seller, buyer = None, None, None
+        for member in members:
+            type = member.member_type
+            if (type == ContractMember.MemberType.ARBITER):
+                arbiter = member
+            if (type == ContractMember.MemberType.SELLER):
+                seller = member
+            if (type == ContractMember.MemberType.BUYER):
+                buyer = member
+        
+        return {
+            'arbiter': arbiter, 
+            'seller': seller, 
+            'buyer': buyer
+        }
 
 class ContractMember(models.Model):
     class MemberType(models.TextChoices):

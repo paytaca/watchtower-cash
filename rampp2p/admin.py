@@ -152,6 +152,7 @@ class ArbiterAdmin(admin.ModelAdmin):
 admin.site.register(Arbiter, ArbiterAdmin)
 
 class ContractAdmin(admin.ModelAdmin):
+    readonly_fields = ['hardcoded_fee', 'arbitration_fee', 'service_fee']
     list_display = [
         'order',
         'address',

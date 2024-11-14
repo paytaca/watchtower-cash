@@ -6,6 +6,7 @@ from django.http import Http404
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
+from decimal import Decimal
 
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
@@ -83,6 +84,10 @@ class ContractViewSet(viewsets.GenericViewSet):
                     contract.order.arbiter.id != arbiter.id):
                     contract.version = settings.SMART_CONTRACT_VERSION
                     contract.address = None
+                    
+                    _, fees = utils.get_trading_fees(trade_amount=order.crypto_amount)
+                    contract.arbitration_fee = fees['arbitration_fee']
+                    contract.service_fee = fees['service_fee']
                     contract.save()
                     
                     # Execute subprocess (generate the contract)
@@ -91,7 +96,9 @@ class ContractViewSet(viewsets.GenericViewSet):
                         arbiter_pubkey=contract_params['arbiter']['pubkey'], 
                         seller_pubkey=contract_params['seller']['pubkey'], 
                         buyer_pubkey=contract_params['buyer']['pubkey'],
-                        timestamp=timestamp
+                        timestamp=timestamp,
+                        service_fee=fees['service_fee'],
+                        arbitration_fee=fees['arbitration_fee']
                     )
                 else:
                     address = contract.address
@@ -177,6 +184,30 @@ class ContractViewSet(viewsets.GenericViewSet):
         total_fee, breakdown = utils.get_trading_fees()
         response = { 'total': total_fee, 'breakdown': breakdown }
         return Response(response, status=status.HTTP_200_OK)
+    
+    @action(detail=True, method='get')
+    def contract_fees(self, request, pk):
+        try:
+            order = models.Order.objects.get(id=pk)
+            contract = models.Contract.objects.get(order__id=pk)
+            _, breakdown = utils.get_trading_fees(trade_amount=order.crypto_amount)
+            hardcoded_fee = breakdown['hardcoded_fee']
+            service_fee = contract.service_fee
+            arbitration_fee = contract.arbitration_fee
+
+            logger.warning(f'hardcoded: {hardcoded_fee} | service: {service_fee} | arbitration: {arbitration_fee}')
+            total_fee = hardcoded_fee + service_fee + arbitration_fee
+            logger.warning(f'total_fee: {total_fee}')
+            breakdown = {
+                'hardcoded_fee': hardcoded_fee,
+                'service_fee': service_fee,
+                'arbitration_fee': arbitration_fee
+            }
+            response = { 'total': total_fee, 'breakdown':  breakdown }
+            logger.warning(f'response: {response}')
+            return Response(response, status=status.HTTP_200_OK)
+        except (models.Order.DoesNotExist, models.Contract.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
     def pending_escrow(self, request, pk):

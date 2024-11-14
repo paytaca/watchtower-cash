@@ -42,6 +42,7 @@ urlpatterns = [
 
     # Contract
     path('order/<int:pk>/contract/', ContractViewSet.as_view({'get': 'retrieve_by_order'}), name='order-contract-detail'),
+    path('order/<int:pk>/contract/fees/', ContractViewSet.as_view({'get': 'contract_fees'}), name='order-contract-fees'),
     path('order/<int:pk>/contract/transactions/', ContractViewSet.as_view({'get': 'transactions_by_order'}), name='order-contract-tx'),
     path('order/<int:pk>/verify-escrow/', ContractViewSet.as_view({'post': 'verify_escrow'}), name='verify-escrow'),
     path('order/<int:pk>/verify-release/', ContractViewSet.as_view({'post': 'verify_release'}), name='verify-release'),

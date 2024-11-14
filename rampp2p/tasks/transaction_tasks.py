@@ -26,6 +26,8 @@ import re
 import logging
 logger = logging.getLogger(__name__)
 
+SATS_PER_BCH = 100000000
+
 @shared_task(queue='rampp2p__contract_execution')
 def execute_subprocess(command):
     # execute subprocess
@@ -194,139 +196,143 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
     
     return result
 
+class TxnVerificationError(Exception):
+    def __init__(self, message, error_code=None, transaction_id=None):
+        super().__init__(message)
+        self.message = message
+        self.error_code = error_code
+        self.transaction_id = transaction_id
+
+    def __str__(self):
+        details = f"{self.message}"
+        if self.error_code:
+            details += f" (Error Code: {self.error_code})"
+        if self.transaction_id:
+            details += f" (Transaction ID: {self.transaction_id})"
+        return details
+
+
 def verify_txn(action, contract: Contract, txn: Dict):
     outputs = []
-    error = None
-    valid = txn.get('valid')
-    if not valid:
-        error = txn.get('error')
-        return valid, error, outputs
-    
-    txn_details = txn.get('details')
-    inputs = txn_details.get('inputs')
-    outputs = txn_details.get('outputs')
-
-    # The transaction is invalid, if inputs or outputs are empty
-    if not inputs or not outputs:
-        error = 'Txn inputs/outputs empty' if not txn.get('error') else txn.get('error')
-        return False, error, outputs
-    
-    if action == Transaction.ActionType.ESCROW:
-        '''
-        If the transaction ActionType is ESCROW, the:
-            (1) output value must be correct 
-            (2) output address must be the contract address
-        '''
-        total_fees, _ = get_trading_fees(trade_amount=contract.order.crypto_amount)
-        expected_value = Decimal(contract.order.crypto_amount + (total_fees/100000000)).quantize(Decimal('0.00000000'))
-
-        if len(outputs) >= 1:
-            if outputs[0].get('address') == contract.address:
-                # Get the amount transferred and convert to represent 8 decimal places
-                actual_value = Decimal(outputs[0].get('value'))
-                actual_value = actual_value.quantize(Decimal('0.00000000'))/100000000
-                
-                # Check if the amount is correct
-                if actual_value != expected_value:
-                    valid = False
-                    error = f'Transaction value {actual_value} does not match expected value {expected_value}'
-            else:
-                valid = False
-                error = f'Transaction outputs[0] address {outputs[0].get("address")} does not match expected contract address {contract.address}'
-    
-    else:
-        '''
-        If the transaction ActionType is RELEASE or REFUND, the:
-            (1) input address must be the contract address,
-            (2) outputs must include the:
-                (i)   servicer address with value == trading fee,
-                (ii)  arbiter address with value == arbitration fee,
-                (iii) buyer (if RELEASE) or seller (if REFUND) address with correct value minus fees.
-        '''
-        # Find the contract address in the list of transaction's inputs
-        sender_is_contract = False
-        for input in inputs:
-            address = input.get('address')
-            if address == contract.address:
-                sender_is_contract = True
-                break
+    try:
+        if txn.get('valid') is False:
+            raise TxnVerificationError(txn.get('error', 'Transaction inherently invalid'))
         
-        # Set valid=False if contract address is not in transaction inputs and return
-        if sender_is_contract == False:
-            valid = False
-            error = 'Contract address not in transaction inputs'
-            return valid, error, outputs
+        txn_details = txn.get('details')
+        inputs = txn_details.get('inputs')
+        outputs = txn_details.get('outputs')
+
+        # The transaction is invalid, if inputs or outputs are empty
+        if not inputs or not outputs:
+            raise TxnVerificationError(txn.get('error', 'Transaction input/outputs empty'))
         
-        # Retrieve expected transaction output addresses
-        expected_addresses = get_order_members_addresses(contract.id)
-
-        # Calculate expected transaction amount and fees
-        arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))/100000000
-        service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))/100000000
-        expected_value = Decimal(contract.order.crypto_amount).quantize(Decimal('0.00000000'))
-        
-        sends_to_arbiter = False
-        sends_to_servicer = False
-        sends_to_buyer = False
-        sends_to_seller = False
-
-        if len(outputs) >= 3:
-            if action == Transaction.ActionType.RELEASE:
-                # If the action type is RELEASE, 
-                # checks if outputs[0] sends to buyer and if the value sent is correct
-                value = Decimal(outputs[0].get('value')).quantize(Decimal('0.00000000'))/100000000
-                if outputs[0].get('address') == expected_addresses['buyer']:
-                    if value != expected_value:
-                        valid = False
-                        error = f'Incorrect buyer output value {value} (needed {expected_value})'
-                    sends_to_buyer = True
-            elif action == Transaction.ActionType.REFUND:
-                # If the action type is REFUND, 
-                # checks if outputs[0] sends to seller and if the value sent is correct
-                value = Decimal(outputs[0].get('value')).quantize(Decimal('0.00000000'))/100000000
-                if outputs[0].get('address') == expected_addresses['seller']:
-                    if value != expected_value:
-                        valid = False
-                        error = f'Incorrect seller output value {value} (needed {expected_value})'
-                    sends_to_seller = True
-
-            # Checks if outputs[2] sends to arbiter and if value sent is correct
-            if outputs[2].get('address') == expected_addresses['arbiter']:
-                value = Decimal(outputs[2].get('value')).quantize(Decimal('0.00000000'))/100000000
-                if value != arbitration_fee:
-                    valid = False
-                    error = f'Incorrect arbiter output value {value} (needed {arbitration_fee})'
-                sends_to_arbiter = True
+        if action == Transaction.ActionType.ESCROW:
+            '''
+            If the transaction ActionType is ESCROW:
+                (1) check if output value is correct,
+                (2) check if output address is the expected contract address
+            '''
             
-            # Checks if outputs[1] sends to servicer and if value sent is correct
-            if outputs[1].get('address') == expected_addresses['servicer']:
-                value = Decimal(outputs[1].get('value')).quantize(Decimal('0.00000000'))/100000000
-                if value != service_fee:
-                    valid = False
-                    error = f'Incorrect servicer output value {value} (needed {service_fee})'
-                sends_to_servicer = True
+            total_fees = contract.get_total_fees()
+            expected_amount = contract.order.amount
+            if expected_amount is None:
+                expected_amount = contract.order.crypto_amount * SATS_PER_BCH
+            expected_amount_with_fees = expected_amount + total_fees
+
+            if len(outputs) >= 1:
+                to_address = outputs[0].get('address')
+                if to_address == contract.address:
+                    # Check if the amount is correct
+                    actual_amount = outputs[0].get('value')
+                    if actual_amount != expected_amount_with_fees:
+                        raise TxnVerificationError(f'Transaction value {actual_amount} does not match expected value {expected_amount_with_fees}')
+                else:
+                    raise TxnVerificationError(f'Transaction outputs[0] address {outputs[0].get("address")} does not match expected contract address {contract.address}')
         
-        '''
-        Transaction is not valid if:
-            (1) output[1] is not servicer and/or output[2] is not arbiter, or
-            (2) the transaction is for RELEASE but output[0] is not buyer, or
-            (3) the transaction is for REFUND but  output[0] is not seller
-        '''
-        NANS = not(sends_to_arbiter and sends_to_servicer)
-        RLS_NSTB = (action == Transaction.ActionType.RELEASE and not sends_to_buyer)
-        RFN_NSTS = (action == Transaction.ActionType.REFUND and not sends_to_seller)
-        if NANS or (RLS_NSTB or RFN_NSTS):
-            valid = False
-            extra_message = ''
-            if (RLS_NSTB or RFN_NSTS):
-                key = ''
-                if RLS_NSTB: key = 'buyer'
-                if RFN_NSTS: key = 'seller'
-                extra_message = f'Expected output[0]={expected_addresses[key]}, got output[0]={outputs[0].get("address")}'
-            error = f'Transaction requirements not met NotSentToArbiterOrServicer={NANS} ReleasedNotSentToBuyer={RLS_NSTB} RefundedNotSentToSeller={RFN_NSTS}. {extra_message}'
-    
-    logger.warn(f'Result: valid = {valid} | {error} | {outputs}')
-    return valid, error, outputs
+        else:
+            '''
+            If the transaction ActionType is RELEASE or REFUND:
+                (1) check if input address is the contract address
+                (2) check if outputs include:
+                    - servicer address with output amount == service fee
+                    - arbiter address with output amount == arbitration fee
+                    - buyer (if RELEASE) or seller (if REFUND) address with correct value minus fees.
+            '''
+            # Find the contract address in the list of transaction's inputs
+            input_addresses = [item['address'] for item in inputs if 'address' in item]
+            # sender_is_contract = False
+            # for input in inputs:
+            #     address = input.get('address')
+            #     if address == contract.address:
+            #         sender_is_contract = True
+            #         break
+            
+            if contract.address not in input_addresses:
+                raise TxnVerificationError(f'Expected contract address {contract.address} not found in input_addresses: {input_addresses}')
+
+            # # Set valid=False if contract address is not in transaction inputs and return
+            # if sender_is_contract == False:
+            #     valid = False
+            #     error = 'Contract address not in transaction inputs'
+            #     return valid, error, outputs
+            
+            # Retrieve expected transaction output addresses
+            # expected_addresses = get_order_members_addresses(contract.id)
+            contract_members = contract.get_members()
+            expected_addresses = {
+                'arbiter': contract_members['arbiter'].address,
+                'buyer': contract_members['buyer'].address,
+                'seller': contract_members['seller'].address,
+                'servicer': settings.SERVICER_ADDR
+            }
+
+            # Get expected transaction amount and fees
+            expected_arbitration_fee = contract.arbitration_fee
+            expected_service_fee = contract.service_fee
+            expected_transfer_amount = contract.order.amount
+            if expected_transfer_amount is None:
+                expected_transfer_amount = contract.order.crypto_amount * SATS_PER_BCH
+
+            logger.warning(f'expected_addresses: {expected_addresses}')
+            logger.warning(f'expected_transfer_amount: {expected_transfer_amount} | expected_arbitration_fee: {expected_arbitration_fee} | expected_service_fee: {expected_service_fee}')
+
+            if len(outputs) >= 3:
+                transferred_amount = int(outputs[0].get('value'))
+                to_address = outputs[0].get('address')
+
+                if action == Transaction.ActionType.RELEASE:
+                    expected_address = expected_addresses['buyer']
+                if action == Transaction.ActionType.REFUND:
+                    expected_address = expected_addresses['seller']
+                
+                if to_address == expected_address:
+                    if transferred_amount != expected_transfer_amount:
+                        raise TxnVerificationError(f'Incorrect output value {transferred_amount} (expected {expected_transfer_amount})')
+                else:
+                    raise TxnVerificationError(f'Incorrect output address {to_address} (expected {expected_address})')
+
+                # Checks if outputs[1] sends to servicer and if value sent is correct
+                servicer_address = outputs[1].get('address')
+                if servicer_address == expected_addresses['servicer']:
+                    service_fee = outputs[1].get('value')
+                    if service_fee != expected_service_fee:
+                        raise TxnVerificationError(f'Incorrect service output value {service_fee} (expected {expected_service_fee})')
+                else:
+                    raise TxnVerificationError(f'Incorrect service address {servicer_address} (expected {expected_addresses["servicer"]})')
+
+                # Checks if outputs[2] sends to arbiter and if value sent is correct
+                arbiter_address = outputs[2].get('address')
+                if arbiter_address == expected_addresses['arbiter']:
+                    arbitration_fee = int(outputs[2].get('value'))
+                    if arbitration_fee != expected_arbitration_fee:
+                        raise TxnVerificationError(f'Incorrect arbiter output value {arbitration_fee} (expected {expected_arbitration_fee})')
+                else:
+                    raise TxnVerificationError(f'Incorrect arbiter address {arbiter_address} (expected {expected_addresses["arbiter"]})')
+        
+        return True, None, outputs
+    except TxnVerificationError as err:
+        logger.exception(err.message)
+        return False, err.message, outputs
 
 def remove_subscription(address, subscriber_id):
     subscription = Subscription.objects.filter(
