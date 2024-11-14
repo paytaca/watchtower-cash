@@ -194,7 +194,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
     
     return result
 
-def verify_txn(action, contract, txn: Dict):
+def verify_txn(action, contract: Contract, txn: Dict):
     outputs = []
     error = None
     valid = txn.get('valid')
@@ -217,7 +217,7 @@ def verify_txn(action, contract, txn: Dict):
             (1) output value must be correct 
             (2) output address must be the contract address
         '''
-        total_fees, _ = get_trading_fees()
+        total_fees, _ = get_trading_fees(trade_amount=contract.order.crypto_amount)
         expected_value = Decimal(contract.order.crypto_amount + (total_fees/100000000)).quantize(Decimal('0.00000000'))
 
         if len(outputs) >= 1:

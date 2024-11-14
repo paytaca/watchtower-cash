@@ -8,8 +8,9 @@ from django.http import FileResponse
 from django.http import HttpResponse, JsonResponse
 
 from main.utils.subscription import save_subscription
+from rampp2p.utils import get_trading_fees
 
-from rampp2p.models import MarketRate, AppVersion, Order
+from rampp2p.models import MarketRate, AppVersion
 from rampp2p.serializers import MarketRateSerializer
 
 import logging
@@ -35,13 +36,11 @@ def check_app_version(request, platform=None):
     
     return JsonResponse(response_data)
 
-from rampp2p.slackbot.send import OrderSummaryMessage
-def test_send_to_slack(request):
-    text = 'Hello world!'
-    logger.warning(f'test_send_to_slack: {text}')
-    order = Order.objects.all().first()
-    OrderSummaryMessage.send_safe(order.id)
-    return JsonResponse({'success': True })
+class ContractFees(APIView):
+    def get(self, request):
+        trade_amount = request.query_params.get('trade_amount', None)
+        _, fees = get_trading_fees(trade_amount=trade_amount)
+        return Response(fees, status=status.HTTP_200_OK)
 
 class MarketRates(APIView):
     def get(self, request):

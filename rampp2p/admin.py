@@ -4,6 +4,18 @@ from rampp2p.forms import *
 
 # Register your models here.
 
+class ServiceFeeAdmin(admin.ModelAdmin):
+    form = ServiceFeeForm
+    list_display = ['type', 'fixed_value', 'floating_value', 'updated_at']
+
+    def has_add_permission(self, request):
+        return not ServiceFee.objects.exists()
+    
+    def has_delete_permission(self, request, obj = None):
+        return False
+    
+admin.site.register(ServiceFee, ServiceFeeAdmin)
+
 class AdAdmin(admin.ModelAdmin):
     list_display = [
         'id',

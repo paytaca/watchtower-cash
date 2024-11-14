@@ -276,7 +276,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         except (ValidationError, models.Appeal.DoesNotExist, models.Contract.DoesNotExist) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    def _retrieve(self, request, appeal):
+    def _retrieve(self, request, appeal: models.Appeal):
         wallet_hash = request.user.wallet_hash
         serialized_appeal = None            
 
@@ -294,7 +294,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
         serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
 
-        total_fee, fees = get_trading_fees()
+        total_fee, fees = get_trading_fees(appeal.order.crypto_amount)
         response = {
             'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data,
             'order': serialized_order.data,

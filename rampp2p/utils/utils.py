@@ -11,6 +11,8 @@ from asgiref.sync import sync_to_async
 import logging
 logger = logging.getLogger(__name__)
 
+SATS_PER_BCH = 100000000
+
 def update_user_active_status(wallet_hash, is_online):
     try:
         user = models.Peer.objects.get(wallet_hash=wallet_hash)
@@ -117,17 +119,32 @@ def get_order_members(order_id: int):
         'buyer': buyer
     }
 
-def get_trading_fees():
+def sats_to_bch(sats):
+    return sats / SATS_PER_BCH
+
+def bch_to_sats(bch):
+    return bch * SATS_PER_BCH
+
+def get_service_fee(trade_amount=None):
+    service_fee = models.ServiceFee.objects.first()
+    if service_fee:
+       service_fee = service_fee.get_fee_value(trade_amount=trade_amount)
+    else:
+       service_fee = settings.SERVICE_FEE
+    return Decimal(service_fee).quantize(Decimal('0.00000000'))
+
+def get_trading_fees(trade_amount=None):
     # Retrieve fee values. Format must be in satoshi
     hardcoded_fee = Decimal(settings.HARDCODED_FEE).quantize(Decimal('0.00000000'))#/100000000
     arbitration_fee = Decimal(settings.ARBITRATION_FEE).quantize(Decimal('0.00000000'))#/100000000
-    service_fee = Decimal(settings.SERVICE_FEE).quantize(Decimal('0.00000000'))#/100000000
+    trade_amount = Decimal(trade_amount) if trade_amount else None
+    service_fee = get_service_fee(trade_amount=trade_amount)
 
     total_fee = hardcoded_fee + arbitration_fee + service_fee
     fees = {
-        'hardcoded_fee': hardcoded_fee,
-        'arbitration_fee': arbitration_fee,
-        'service_fee': service_fee
+        'hardcoded_fee': str(hardcoded_fee),
+        'arbitration_fee': str(arbitration_fee),
+        'service_fee': str(service_fee)
     }
     return total_fee, fees
 

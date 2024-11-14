@@ -1,6 +1,20 @@
 from django import forms
 from .models import *
 
+class ServiceFeeForm(forms.ModelForm):
+    fixed_value = forms.DecimalField(
+        required=True,
+        help_text='Enter the fixed service fee amount in satoshis'
+    )
+    floating_value = forms.DecimalField(
+        required=True,
+        help_text='Enter the service fee as a percentage of the trade amount (e.g., 5 for 5%)'
+    )
+
+    class Meta:
+        model = ServiceFee
+        fields = '__all__'
+
 class FiatCurrencyForm(forms.ModelForm):
     cashin_blacklist = forms.ModelMultipleChoiceField(
         queryset=Peer.objects.all(),
