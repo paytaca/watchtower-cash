@@ -88,6 +88,7 @@ class ContractViewSet(viewsets.GenericViewSet):
                     _, fees = utils.get_trading_fees(trade_amount=order.crypto_amount)
                     contract.arbitration_fee = fees['arbitration_fee']
                     contract.service_fee = fees['service_fee']
+                    contract.hardcoded_fee = fees['hardcoded_fee']
                     contract.save()
                     
                     # Execute subprocess (generate the contract)

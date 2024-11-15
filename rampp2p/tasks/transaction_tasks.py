@@ -234,10 +234,13 @@ def verify_txn(action, contract: Contract, txn: Dict):
             '''
             
             total_fees = contract.get_total_fees()
+            logger.info(f'total_fees: {total_fees}')
             expected_amount = contract.order.amount
             if expected_amount is None:
                 expected_amount = contract.order.crypto_amount * SATS_PER_BCH
             expected_amount_with_fees = expected_amount + total_fees
+
+            logger.info(f'total_fees: {total_fees} | expected_amount: {expected_amount} | expected_amount_with_fees: {expected_amount_with_fees}')
 
             if len(outputs) >= 1:
                 to_address = outputs[0].get('address')

@@ -1,6 +1,9 @@
 from django.db import models
 from .order import Order
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Contract(models.Model):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, unique=True)
     address = models.CharField(max_length=100, blank=True, null=True)
@@ -17,7 +20,8 @@ class Contract(models.Model):
         total = None
         try:
             total = self.service_fee + self.arbitration_fee + self.hardcoded_fee
-        except Exception:
+        except Exception as err:
+            logger.exception(err.args[0])
             pass
         return total
     
