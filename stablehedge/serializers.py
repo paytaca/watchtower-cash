@@ -187,6 +187,7 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
     )
     price_oracle_message = PriceMessageSerializer()
     utxo = UtxoSerializer()
+    fiat_token = FiatTokenSerializer(source="redemption_contract.fiat_token", read_only=True)
 
     class Meta:
         model = models.RedemptionContractTransaction
@@ -201,6 +202,8 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
             "utxo",
             "resolved_at",
             "created_at",
+
+            "fiat_token",
         ]
 
         extra_kwargs = dict(

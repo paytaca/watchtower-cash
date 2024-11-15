@@ -151,7 +151,9 @@ class RedemptionContractTransactionViewSet(
     filterset_class = RedemptionContractTransactionFilter
 
     def get_queryset(self):
-        return models.RedemptionContractTransaction.objects.all()
+        return models.RedemptionContractTransaction.objects \
+            .select_related("redemption_contract", "redemption_contract__fiat_token") \
+            .all()
 
     @swagger_auto_schema(
         method="get",
