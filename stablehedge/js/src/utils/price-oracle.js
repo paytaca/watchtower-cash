@@ -1,11 +1,10 @@
 import {
   isHex,
   hexToBin,
+  binToHex,
   secp256k1,
   decodePrivateKeyWif,
-  base64ToBin,
   sha256,
-  binToHex,
 } from "@bitauth/libauth"
 
 import { wifToPubkey } from './crypto.js'
@@ -22,7 +21,7 @@ export const mockOracleWifs = [
 export function verifyPriceMessage(priceMessage, signature, publicKey) {
   const messageHash = sha256.hash(hexToBin(priceMessage))
   return secp256k1.verifySignatureSchnorr(
-    base64ToBin(signature), hexToBin(publicKey), messageHash
+    hexToBin(signature), hexToBin(publicKey), messageHash
   )
 }
 

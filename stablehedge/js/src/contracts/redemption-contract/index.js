@@ -1,6 +1,6 @@
 import { compileFile } from "cashc"
 import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate } from "cashscript"
-import { hexToBin, base64ToBin } from "@bitauth/libauth"
+import { hexToBin } from "@bitauth/libauth"
 
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
 import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
@@ -107,7 +107,7 @@ export class RedemptionContract {
     const recipientAddress = toTokenAddress(opts?.recipientAddress)
 
     const contract = this.getContract()
-    const transaction = contract.functions.deposit(hexToBin(opts?.priceMessage), base64ToBin(opts?.priceMessageSig), isInjectLiquidity)
+    const transaction = contract.functions.deposit(hexToBin(opts?.priceMessage), hexToBin(opts?.priceMessageSig), isInjectLiquidity)
       .from(opts?.reserveUtxo)
       .fromP2PKH(opts?.depositUtxo, depositUtxoTemplate)
       .to(contract.tokenAddress, opts?.reserveUtxo.satoshis + depositSats, {
@@ -169,7 +169,7 @@ export class RedemptionContract {
     const redeemUtxoTemplate = opts?.redeemUtxo?.template ??
       new SignatureTemplate(opts?.redeemUtxo?.wif)
 
-    const transaction = contract.functions.redeem(hexToBin(opts?.priceMessage), base64ToBin(opts?.priceMessageSig))
+    const transaction = contract.functions.redeem(hexToBin(opts?.priceMessage), hexToBin(opts?.priceMessageSig))
       .from(opts?.reserveUtxo)
       .fromP2PKH(opts?.redeemUtxo, redeemUtxoTemplate)
       .to(contract.tokenAddress, remainingReserveSats, {
