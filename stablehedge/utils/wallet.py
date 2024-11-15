@@ -67,7 +67,7 @@ def to_cash_address(address, testnet=None, token=False):
             address_obj.version = address_obj.version.replace(TESTNET_POSTFIX, "")
 
     if token and not address_obj.version.startswith(CASHTOKEN_PREFIX):
-        address_obj.version += CASHTOKEN_PREFIX
+        address_obj.version = CASHTOKEN_PREFIX + address_obj.version
     elif not token and address_obj.version.startswith(CASHTOKEN_PREFIX):
         address_obj.version.replace(CASHTOKEN_PREFIX, "")
 
