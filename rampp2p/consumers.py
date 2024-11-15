@@ -15,7 +15,7 @@ class MarketRateConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         await self.accept()
-        data = { 'message': f"Subscribed to '{self.room_name}'" }
+        data = { 'success': True, 'message': f"Subscribed to '{self.room_name}'" }
         await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
@@ -38,7 +38,7 @@ class OrderUpdatesConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
         await self.accept()
-        data = { 'message': f"Subscribed to '{self.room_name}'" }
+        data = { 'success': True, 'message': f"Subscribed to '{self.room_name}'" }
         await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
@@ -64,6 +64,7 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
         unread_count = await unread_orders_count(self.wallet_hash)
         data = { 
+            'success': True, 
             'type': 'ConnectionMessage',
             'extra': {
                 'message': f"Subscribed to '{self.room_name}'", 
@@ -97,6 +98,7 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         is_online = True
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
         data = { 
+            'success': True, 
             'type': 'ConnectionMessage',
             'extra': {
                 'message': f"Subscribed to '{self.room_name}'", 

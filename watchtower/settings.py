@@ -431,7 +431,8 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "wallet-hash",
     "signature",
     "timestamp",
-    "public-key"
+    "public-key",
+    "version"
 ]
 
 REST_FRAMEWORK = {
@@ -664,7 +665,7 @@ SERVICER_PK = config('SERVICER_PK', '')
 SERVICER_ADDR = config('SERVICER_ADDR', '')
 SERVICE_FEE = config('SERVICE_FEE', 1000)
 ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
-HARDCODED_FEE = config('HARDCODED_FEE', 1000)
+CONTRACT_FEE = config('CONTRACT_FEE', 1000)
 SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
 from requests.compat import urljoin

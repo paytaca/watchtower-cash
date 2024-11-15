@@ -51,6 +51,16 @@ class ContractViewSet(viewsets.GenericViewSet):
 
     def create(self, request):
         try:
+            
+            min_version = models.AppVersion.objects.last()
+            if not min_version:
+                return Response({'error': 'Service unavailable at this time'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+            min_version = min_version.min_required_version
+            version = request.headers.get('version')
+            if version != min_version:
+                return Response({ 'error' : f'Invalid app version {version}. Min required version is {min_version}.' }, status=status.HTTP_400_BAD_REQUEST )
+
             order_pk = request.data.get('order_id')
             arbiter_pk = request.data.get('arbiter_id')
             if order_pk is None or arbiter_pk is None:
@@ -88,7 +98,7 @@ class ContractViewSet(viewsets.GenericViewSet):
                     _, fees = utils.get_trading_fees(trade_amount=order.crypto_amount)
                     contract.arbitration_fee = fees['arbitration_fee']
                     contract.service_fee = fees['service_fee']
-                    contract.hardcoded_fee = fees['hardcoded_fee']
+                    contract.contract_fee = fees['contract_fee']
                     contract.save()
                     
                     # Execute subprocess (generate the contract)
@@ -192,15 +202,15 @@ class ContractViewSet(viewsets.GenericViewSet):
             order = models.Order.objects.get(id=pk)
             contract = models.Contract.objects.get(order__id=pk)
             _, breakdown = utils.get_trading_fees(trade_amount=order.crypto_amount)
-            hardcoded_fee = breakdown['hardcoded_fee']
+            contract_fee = breakdown['contract_fee']
             service_fee = contract.service_fee
             arbitration_fee = contract.arbitration_fee
 
-            logger.warning(f'hardcoded: {hardcoded_fee} | service: {service_fee} | arbitration: {arbitration_fee}')
-            total_fee = hardcoded_fee + service_fee + arbitration_fee
+            logger.warning(f'hardcoded: {contract_fee} | service: {service_fee} | arbitration: {arbitration_fee}')
+            total_fee = contract_fee + service_fee + arbitration_fee
             logger.warning(f'total_fee: {total_fee}')
             breakdown = {
-                'hardcoded_fee': hardcoded_fee,
+                'contract_fee': contract_fee,
                 'service_fee': service_fee,
                 'arbitration_fee': arbitration_fee
             }

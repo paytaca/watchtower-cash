@@ -10,7 +10,7 @@ class Contract(models.Model):
     version = models.CharField(max_length=100, null=True)
     service_fee = models.IntegerField(null=True, editable=False)
     arbitration_fee = models.IntegerField(null=True, editable=False)
-    hardcoded_fee = models.IntegerField(null=True, editable=False)
+    contract_fee = models.IntegerField(null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
@@ -19,7 +19,7 @@ class Contract(models.Model):
     def get_total_fees(self):
         total = None
         try:
-            total = self.service_fee + self.arbitration_fee + self.hardcoded_fee
+            total = self.service_fee + self.arbitration_fee + self.contract_fee
         except Exception as err:
             logger.exception(err.args[0])
             pass
@@ -29,7 +29,7 @@ class Contract(models.Model):
         return {
             'service_fee': self.service_fee,
             'arbitration_fee': self.arbitration_fee,
-            'hardcoded_fee': self.hardcoded_fee
+            'contract_fee': self.contract_fee
         }
     
     def get_members(self):

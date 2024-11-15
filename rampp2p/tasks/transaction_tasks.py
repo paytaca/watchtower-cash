@@ -65,6 +65,7 @@ def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
     
     if valid:
         txn = {
+            'action': action,
             'valid': valid,
             'error': error,
             'details': {
@@ -75,6 +76,7 @@ def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
         result = handle_order_status(action, contract, txn)
     else:
         result = {
+            'action': action,
             'success': valid,
             'error': error
         }

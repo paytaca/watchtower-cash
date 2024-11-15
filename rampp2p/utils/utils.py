@@ -135,14 +135,14 @@ def get_service_fee(trade_amount=None):
 
 def get_trading_fees(trade_amount=None):
     # Retrieve fee values. Format must be in satoshi
-    hardcoded_fee = int(settings.HARDCODED_FEE)
+    contract_fee = int(settings.CONTRACT_FEE)
     arbitration_fee = int(settings.ARBITRATION_FEE)
     trade_amount = Decimal(trade_amount) if trade_amount else None
     service_fee = get_service_fee(trade_amount=trade_amount)
 
-    total_fee = hardcoded_fee + arbitration_fee + service_fee
+    total_fee = contract_fee + arbitration_fee + service_fee
     fees = {
-        'hardcoded_fee': int(hardcoded_fee),
+        'contract_fee': int(contract_fee),
         'arbitration_fee': int(arbitration_fee),
         'service_fee': int(service_fee)
     }
