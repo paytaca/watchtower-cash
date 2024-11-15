@@ -1,17 +1,22 @@
 import {
   isHex,
   hexToBin,
-  binToBase64,
   secp256k1,
   decodePrivateKeyWif,
   base64ToBin,
   sha256,
+  binToHex,
 } from "@bitauth/libauth"
 
 import { wifToPubkey } from './crypto.js'
 import { intToHexString } from './math.js'
 
 export const MOCK_ORACLE_WIF='Kzf85aCzLmV4Ag9hjjn7RMZMHLHwdkW6Uq6yKoDxmoArr1UAizYv'
+export const MOCK_ORACLE_WIF2='L3jt91Xu5guFARqPQC3c4mJnkbXZczinNY7aTKicaFyomBc2gxbh'
+export const mockOracleWifs = [
+  MOCK_ORACLE_WIF,
+  MOCK_ORACLE_WIF2,
+]
 
 
 export function verifyPriceMessage(priceMessage, signature, publicKey) {
@@ -76,11 +81,13 @@ export function signPriceMessage(opts) {
 
 /**
  * @param {Object} opts
+ * @param {Number} opts.mockWifIndex
  * @param {String} opts.wif
  * @param {Number} opts.price
  */
 export function generatePriceMessage(opts) {
-  const wif = opts?.wif || MOCK_ORACLE_WIF
+  const mockOracleWif = mockOracleWifs[parseInt(opts?.mockWifIndex) || 0]
+  const wif = opts?.wif || mockOracleWif
   const pubkey = wifToPubkey(wif)
 
   const priceData = {
@@ -90,7 +97,7 @@ export function generatePriceMessage(opts) {
     price: opts?.price || Math.floor(Math.random() * 2 ** 32),
   }
   const priceMessage = constructPriceMessage(priceData)
-  const signature = binToBase64(signPriceMessage({ priceMessage, wif }))
+  const signature = binToHex(signPriceMessage({ priceMessage, wif }))
 
   return {
     privateKey: wif,

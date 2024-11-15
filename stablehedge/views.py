@@ -329,6 +329,7 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
         manual_parameters=[
             openapi.Parameter('price', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
             openapi.Parameter('wif', openapi.IN_QUERY, type=openapi.TYPE_STRING, description="Optional"),
+            openapi.Parameter('mock_wif_index', openapi.IN_QUERY, type=openapi.TYPE_INTEGER, description="Optional"),
             openapi.Parameter('save', openapi.IN_QUERY, type=openapi.TYPE_BOOLEAN),
         ],
     )
@@ -337,11 +338,16 @@ class TestUtilsViewSet(viewsets.GenericViewSet):
         save = str(request.query_params.get("save", "")).lower().strip() == "true"
         wif = request.query_params.get("wif", None) or None
         try:
+            mock_wif_index = int(request.query_params.get("mock_wif_index"))
+        except (TypeError, ValueError):
+            mock_wif_index = 0
+
+        try:
             price = int(request.query_params.get("price"))
         except (TypeError, ValueError):
             price = hash(request) % 2 ** 32 # almost random
 
-        result = ScriptFunctions.generatePriceMessage(dict(price=price, wif=wif))
+        result = ScriptFunctions.generatePriceMessage(dict(price=price, wif=wif, mockWifIndex=mock_wif_index))
 
         if save:
             msg_timestamp = timezone.datetime.fromtimestamp(result["priceData"]["timestamp"])
