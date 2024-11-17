@@ -1,4 +1,5 @@
 import re
+import math
 import decimal
 
 from main import models as main_models
@@ -152,3 +153,17 @@ def get_tx_input_hashes(txid:str):
     for tx_input in txn['vin']:
         txids.append(tx_input['txid'])
     return txids
+
+
+def satoshis_to_token(satoshis, price_value):
+    satoshis = decimal.Decimal(satoshis)
+    token_units_per_bch = decimal.Decimal(price_value)
+    token_units_per_sats = token_units_per_bch / 10 ** 8
+
+    return satoshis * token_units_per_sats
+
+def token_to_satoshis(token_units, price_value):
+    token_units = decimal.Decimal(token_units)
+    token_units_per_bch = decimal.Decimal(price_value)
+    token_units_per_sats = token_units_per_bch / 10 ** 8
+    return token_units / token_units_per_sats

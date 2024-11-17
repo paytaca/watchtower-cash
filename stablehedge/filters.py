@@ -52,5 +52,5 @@ class RedemptionContractTransactionFilter(filters.FilterSet):
     def statuses_filter(self, queryset, name, value):
         return queryset.filter(status__in=str(value).split(","))
 
-    def transaction_types(self, queryset, name, value):
+    def transaction_types_filter(self, queryset, name, value):
         return queryset.filter(transaction_type__in=str(value).split(","))

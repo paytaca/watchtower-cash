@@ -31,6 +31,7 @@ from stablehedge.filters import (
 from stablehedge.utils import response_serializers
 from stablehedge.utils.anyhedge import get_fiat_token_prices
 from stablehedge.functions.redemption_contract import get_fiat_token_balances
+from stablehedge.pagination import CustomLimitOffsetPagination
 from stablehedge.js.runner import ScriptFunctions
 
 from anyhedge import models as anyhedge_models
@@ -149,11 +150,20 @@ class RedemptionContractTransactionViewSet(
 
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = RedemptionContractTransactionFilter
+    pagination_class = CustomLimitOffsetPagination
 
     def get_queryset(self):
         return models.RedemptionContractTransaction.objects \
             .select_related("redemption_contract", "redemption_contract__fiat_token") \
+            .select_related("price_oracle_message") \
             .all()
+
+    @decorators.action(
+        detail=False, methods=["get"],
+        serializer_class=serializers.RedemptionContractTransactionHistorySerializer,
+    )
+    def history(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     @swagger_auto_schema(
         method="get",

@@ -2,7 +2,9 @@ from rest_framework import serializers
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from drf_yasg.utils import swagger_serializer_method
 
+from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.functions.transaction import get_locktime
@@ -10,6 +12,8 @@ from stablehedge.utils.transaction import (
     validate_utxo_data,
     utxo_data_to_cashscript,
     tx_model_to_cashscript,
+    token_to_satoshis,
+    satoshis_to_token,
 )
 
 from anyhedge import models as anyhedge_models
@@ -252,6 +256,66 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         raise serializers.ValidationError("Invalid action")
+
+
+class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer):
+    """
+        Intended for returning minimal data as stablehedge wallet history 
+    """
+    redemption_contract_address = serializers.CharField(source="redemption_contract.address", read_only=True)
+    satoshis = serializers.SerializerMethodField()
+    amount = serializers.SerializerMethodField()
+    category = serializers.CharField(source="redemption_contract.fiat_token.category", read_only=True)
+
+    class Meta:
+        model = models.RedemptionContractTransaction
+        fields = [
+            "id",
+            "redemption_contract_address",
+            "transaction_type",
+            "status",
+            "txid",
+            "category",
+            "satoshis",
+            "amount",
+            "result_message",
+            "resolved_at",
+            "created_at",
+        ]
+
+    @swagger_serializer_method(serializer_or_field=serializers.IntegerField)
+    def get_satoshis(self, obj):
+        try:
+            satoshis = obj.utxo["satoshis"] - 2000
+            amount = obj.utxo.get("amount", 0)
+        except (TypeError, KeyError) as exception:
+            LOGGER.exception(exception)
+            return None
+
+        price_units_per_bch = obj.price_oracle_message.price_value
+
+        Type = models.RedemptionContractTransaction.Type
+        if obj.transaction_type in [Type.DEPOSIT, Type.INJECT]:
+            return satoshis
+        elif obj.transaction_type in [Type.REDEEM]:
+            return token_to_satoshis(amount, price_units_per_bch)
+
+    @swagger_serializer_method(serializer_or_field=serializers.IntegerField)
+    def get_amount(self, obj):
+        try:
+            satoshis = obj.utxo["satoshis"] - 2000
+            amount = obj.utxo.get("amount", 0)
+        except (TypeError, KeyError) as exception:
+            LOGGER.exception(exception)
+            return None
+
+        price_units_per_bch = obj.price_oracle_message.price_value
+
+        Type = models.RedemptionContractTransaction.Type
+        if obj.transaction_type in [Type.DEPOSIT, Type.INJECT]:
+            return satoshis_to_token(satoshis, price_units_per_bch)
+        elif obj.transaction_type in [Type.REDEEM]:
+            return amount
 
 
 class TreasuryContractSerializer(serializers.ModelSerializer):

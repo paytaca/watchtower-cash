@@ -21,19 +21,21 @@ def get_fiat_token_prices(token_categories:list):
     queryset = models.RedemptionContract.objects.filter(
         fiat_token__category__in=token_categories,
     ).values(
-        "fiat_token__category", "price_oracle_pubkey", "fiat_token__currency",
+        "fiat_token__category", "price_oracle_pubkey", "fiat_token__currency", "fiat_token__decimals",
     ).distinct()
 
     results = []
     for data in queryset:
         category = data["fiat_token__category"]
         currency = data["fiat_token__currency"]
+        decimals = data["fiat_token__decimals"]
         pubkey = data["price_oracle_pubkey"]
         price_message = get_latest_oracle_price_message(pubkey)
         results.append(dict(
             category=category,
             price=price_message.price_value,
             currency=currency,
+            decimals=decimals,
             timestamp=price_message.message_timestamp
         ))
 
