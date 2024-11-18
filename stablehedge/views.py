@@ -25,11 +25,12 @@ from stablehedge.functions.transaction import (
     save_redemption_contract_tx_meta,
 )
 from stablehedge.filters import (
+    FiatTokenFilter,
     RedemptionContractFilter,
     RedemptionContractTransactionFilter,
 )
 from stablehedge.utils import response_serializers
-from stablehedge.utils.anyhedge import get_fiat_token_prices
+from stablehedge.utils.anyhedge import get_fiat_token_price_messages
 from stablehedge.functions.redemption_contract import get_fiat_token_balances
 from stablehedge.pagination import CustomLimitOffsetPagination
 from stablehedge.js.runner import ScriptFunctions
@@ -58,6 +59,9 @@ class FiatTokenViewSet(
     lookup_field = "category"
     serializer_class = serializers.FiatTokenSerializer
 
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = FiatTokenFilter
+
     def get_queryset(self):
         return models.FiatToken.objects.all()
 
@@ -71,8 +75,9 @@ class FiatTokenViewSet(
     def latest_prices(self, request, *args, **kwargs):
         categories = request.query_params.get("categories", "").split(",")
         categories = [category for category in categories if category]
-        results = get_fiat_token_prices(categories)
-        return Response(results)
+        results = get_fiat_token_price_messages(categories)
+        serializer = response_serializers.FiatTokenPrice(results, many=True)
+        return Response(serializer.data)
 
 
 class RedemptionContractViewSet(

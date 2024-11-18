@@ -1,4 +1,16 @@
+import re
 from django_filters import rest_framework as filters
+
+
+class FiatTokenFilter(filters.FilterSet):
+    categories = filters.CharFilter(method="categories_filter")
+    currencies = filters.CharFilter(method="currencies_filter")
+
+    def categories_filter(self, queryset, name, value):
+        return queryset.filter(category__in=str(value).split(","))
+
+    def currencies_filter(self, queryset, name, value):
+        return queryset.filter(currency__in=str(value).split(","))
 
 
 class RedemptionContractFilter(filters.FilterSet):
