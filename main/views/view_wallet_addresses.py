@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from main.models import Wallet
+from main.models import Wallet, Address
 # from main.serializers import WalletAddressesSerializer
 
 class WalletAddressesView(APIView):
@@ -44,6 +44,6 @@ class WalletAddressesView(APIView):
             wallet_addresses = wallet_addresses.filter(
                 address_path__iregex=address_path_filter
             )
-        wallet_addresses = wallet_addresses.order_by('address_path')
+        wallet_addresses = wallet_addresses.order_by('address_path').values_list('address', flat=True)
 
-        return Response(list(wallet_addresses or []))
+        return Response(list(wallet_addresses))
