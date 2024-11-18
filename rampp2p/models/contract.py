@@ -22,7 +22,6 @@ class Contract(models.Model):
             total = self.service_fee + self.arbitration_fee + self.contract_fee
         except Exception as err:
             logger.exception(err.args[0])
-            pass
         return total
     
     def get_fees(self):

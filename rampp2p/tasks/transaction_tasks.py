@@ -218,7 +218,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
     outputs = []
     try:
         if txn.get('valid') is False:
-            raise TxnVerificationError(txn.get('error', 'Transaction inherently invalid'))
+            raise TxnVerificationError(txn.get('error', 'Transaction invalid or may still be unconfirmed in the blockchain. Please try again later.'))
         
         txn_details = txn.get('details')
         inputs = txn_details.get('inputs')
@@ -236,13 +236,13 @@ def verify_txn(action, contract: Contract, txn: Dict):
             '''
             
             total_fees = contract.get_total_fees()
-            logger.info(f'total_fees: {total_fees}')
+            if total_fees is None:
+                raise TxnVerificationError(f'Failed to fetch correct total_fees expected an int got {total_fees}')
+            
             expected_amount = contract.order.amount
             if expected_amount is None:
                 expected_amount = contract.order.crypto_amount * SATS_PER_BCH
             expected_amount_with_fees = expected_amount + total_fees
-
-            logger.info(f'total_fees: {total_fees} | expected_amount: {expected_amount} | expected_amount_with_fees: {expected_amount_with_fees}')
 
             if len(outputs) >= 1:
                 to_address = outputs[0].get('address')
@@ -265,24 +265,11 @@ def verify_txn(action, contract: Contract, txn: Dict):
             '''
             # Find the contract address in the list of transaction's inputs
             input_addresses = [item['address'] for item in inputs if 'address' in item]
-            # sender_is_contract = False
-            # for input in inputs:
-            #     address = input.get('address')
-            #     if address == contract.address:
-            #         sender_is_contract = True
-            #         break
             
             if contract.address not in input_addresses:
                 raise TxnVerificationError(f'Expected contract address {contract.address} not found in input_addresses: {input_addresses}')
-
-            # # Set valid=False if contract address is not in transaction inputs and return
-            # if sender_is_contract == False:
-            #     valid = False
-            #     error = 'Contract address not in transaction inputs'
-            #     return valid, error, outputs
             
             # Retrieve expected transaction output addresses
-            # expected_addresses = get_order_members_addresses(contract.id)
             contract_members = contract.get_members()
             expected_addresses = {
                 'arbiter': contract_members['arbiter'].address,
@@ -297,9 +284,6 @@ def verify_txn(action, contract: Contract, txn: Dict):
             expected_transfer_amount = contract.order.amount
             if expected_transfer_amount is None:
                 expected_transfer_amount = contract.order.crypto_amount * SATS_PER_BCH
-
-            logger.warning(f'expected_addresses: {expected_addresses}')
-            logger.warning(f'expected_transfer_amount: {expected_transfer_amount} | expected_arbitration_fee: {expected_arbitration_fee} | expected_service_fee: {expected_service_fee}')
 
             if len(outputs) >= 3:
                 transferred_amount = int(outputs[0].get('value'))
