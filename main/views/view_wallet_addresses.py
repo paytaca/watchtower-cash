@@ -9,7 +9,7 @@ class WalletAddressesView(APIView):
     # serializer_class = WalletAddressesSerializer
 
     @swagger_auto_schema(
-        operation_description="Returns the addresses of provided wallet hash. Ordered by creation date.",
+        operation_description="Returns the addresses of provided wallet hash",
         responses={status.HTTP_200_OK: openapi.Response(
             description="List of wallet addresses",
             examples={
