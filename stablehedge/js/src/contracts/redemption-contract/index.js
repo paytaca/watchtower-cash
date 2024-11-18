@@ -10,7 +10,7 @@ import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
 
 import { toTokenAddress } from "../../utils/crypto.js"
 import { decodePriceMessage, verifyPriceMessage } from "../../utils/price-oracle.js"
-import { calculateInputSize } from "../../utils/transaction.js"
+import { calculateInputSize, satoshisToToken, tokenToSatoshis } from "../../utils/transaction.js"
 import { addPrecision, removePrecision } from "../../utils/transaction.js"
 
 export class RedemptionContract {
@@ -96,7 +96,7 @@ export class RedemptionContract {
     const releaseOutputSats = 1000n
     const totalDepositSats = opts?.depositUtxo?.satoshis - releaseOutputSats - HARDCODED_FEE
     const depositSats = isInjectLiquidity ? totalDepositSats : totalDepositSats / 2n;
-    const releaseOutputTokens = BigInt(priceData.price) * totalDepositSats
+    const releaseOutputTokens = satoshisToToken(totalDepositSat, priceData.price)
     
     const remainingReserveSupplyTokens = reserveSupplyTokens - releaseOutputTokens
     if (remainingReserveSupplyTokens < 0n) return 'Insufficient reserve tokens'
@@ -156,7 +156,7 @@ export class RedemptionContract {
 
     const EXPECTED_TX_FEE = 1000n
     const tokenAmount = opts?.redeemUtxo?.token?.amount
-    const redeemSats = tokenAmount / BigInt(priceData?.price)
+    const redeemSats = tokenToSatoshis(tokenAmount, priceData.price)
 
     if (redeemSats < 546n) return 'Redeem amount too small'
 

@@ -130,3 +130,31 @@ export function addPrecision(value, decimals=4) {
 export function removePrecision(value, decimals=4) {
   return value / (10n ** BigInt(decimals))
 }
+
+/**
+ * @param {Number | BigInt | String} satoshis 
+ * @param {Number | BigInt | String} priceValue 
+ * @returns 
+ */
+export function satoshisToToken(satoshis, priceValue) {
+  satoshis = BigInt(satoshis)
+  const tokenUnitsPerBch = BigInt(priceValue)
+
+  const tokenUnitSatsPerBch = satoshis * tokenUnitsPerBch // <sats(units per bch)> == <units(sats per bch)>
+  const satsPerBch = BigInt(10 ** 8)
+  const tokenUnits = tokenUnitSatsPerBch / satsPerBch // cancels out <sats per bch>, <units> remain
+  return tokenUnits
+}
+
+/**
+ * @param {Number | BigInt | String} tokenUnits 
+ * @param {Number | BigInt | String} priceValue 
+ * @returns 
+ */
+export function tokenToSatoshis(tokenUnits, priceValue) {
+  tokenUnits = BigInt(tokenUnits)
+  const tokenUnitsPerBch = BigInt(priceValue)
+  const satsPerBch = BigInt(10 ** 8)
+  const unitSatsPerBch = tokenUnits * satsPerBch // <units(sats per bch)> == <sats(units per bch)>
+  return unitSatsPerBch / tokenUnitsPerBch // cancels out <units per bch>, <sats> remain
+}

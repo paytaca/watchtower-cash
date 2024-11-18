@@ -14,7 +14,10 @@ contract RedemptionContract(
 
         // 1000 for tx fee and another 1000 for DUST in deposit output
         int depositSats = tx.inputs[1].value - 1000 - 1000;
-        int tokenAmount = depositSats * price;
+
+        int satsPerBch = 100000000;
+        int tokenUnitSatsPerBch = depositSats * price;
+        int tokenAmount = int(tokenUnitSatsPerBch / satsPerBch);
 
         if (!isInjectLiquidity) {
             depositSats = depositSats / 2;
@@ -36,7 +39,9 @@ contract RedemptionContract(
         require(tx.inputs[0].tokenCategory == tokenCategory);
         require(tx.inputs[1].tokenCategory == tokenCategory);
 
-        int redeemSats = int(tx.inputs[1].tokenAmount / price);
+        int satsPerBch = 100000000;
+        int tokenUnitSatsPerBch = tx.inputs[1].tokenAmount * satsPerBch;
+        int redeemSats = int(tokenUnitSatsPerBch / price);
 
         require(tx.outputs[0].tokenCategory == tokenCategory);
         require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount + tx.inputs[1].tokenAmount);
