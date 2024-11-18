@@ -12,7 +12,7 @@ class Appeal(models.Model):
     type = models.CharField(max_length=10, choices=AppealType.choices, db_index=True)
     reasons = models.TextField(blank=True, null=True)
     owner = models.ForeignKey(Peer, on_delete=models.PROTECT, related_name='created_appeals')
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='order_appeals')
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='order_appeals')
     resolved_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now=True)
 
