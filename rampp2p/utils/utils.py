@@ -125,20 +125,29 @@ def sats_to_bch(sats):
 def bch_to_sats(bch):
     return bch * SATS_PER_BCH
 
-def get_service_fee(trade_amount=None):
-    service_fee = models.ServiceFee.objects.first()
-    if service_fee:
-       service_fee = service_fee.get_fee_value(trade_amount=trade_amount)
+def get_fee(trade_amount=None, category=None):
+    fee = models.TradeFee.objects.filter(category=category).first()
+    if fee:
+       fee = fee.get_fee_value(trade_amount=trade_amount)
     else:
-       service_fee = settings.SERVICE_FEE
-    return int(service_fee)
+        if category == models.TradeFee.FeeCategory.SERVICE:
+            fee = settings.SERVICE_FEE
+        if category == models.TradeFee.FeeCategory.ARBITRATION:
+            fee = settings.ARBITRATION_FEE
+    return int(fee)
+
+def get_service_fee(trade_amount=None):
+    return get_fee(trade_amount=trade_amount, category=models.TradeFee.FeeCategory.SERVICE)
+
+def get_arbitration_fee(trade_amount=None):
+    return get_fee(trade_amount=trade_amount, category=models.TradeFee.FeeCategory.ARBITRATION)
 
 def get_trading_fees(trade_amount=None):
     # Retrieve fee values. Format must be in satoshi
     contract_fee = int(settings.CONTRACT_FEE)
-    arbitration_fee = int(settings.ARBITRATION_FEE)
     trade_amount = Decimal(trade_amount) if trade_amount else None
     service_fee = get_service_fee(trade_amount=trade_amount)
+    arbitration_fee = get_arbitration_fee(trade_amount=trade_amount)
 
     total_fee = contract_fee + arbitration_fee + service_fee
     fees = {

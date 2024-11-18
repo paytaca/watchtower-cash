@@ -19,12 +19,17 @@ class AppVersion(models.Model):
     def __str__(self):
         return f"{self.platform} - Latest: {self.latest_version}, Min Required: {self.min_required_version}"
 
-class ServiceFee(models.Model):
+class TradeFee(models.Model):
+    class FeeCategory(models.TextChoices):
+        ARBITRATION = 'Arbitration Fee'
+        SERVICE = 'Service Fee'
+
     class FeeType(models.TextChoices):
         FIXED = 'FIXED'
         FLOATING = 'FLOATING'
 
-    type = models.CharField(max_length=8, choices=FeeType.choices, default=FeeType.FLOATING.value)
+    category = models.CharField(max_length=30, choices=FeeCategory.choices, unique=True)
+    type = models.CharField(max_length=8, choices=FeeType.choices, default=FeeType.FIXED.value)
     fixed_value = models.IntegerField(default=1000, blank=True)
     floating_value = models.DecimalField(max_digits=18, decimal_places=8, default=0.5, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -43,7 +48,7 @@ class ServiceFee(models.Model):
             bch_fee = trade_amount * (self.floating_value / 100)
             # convert value to sats
             sats_fee = bch_fee * SATS_PER_BCH
-            sats_fee < DUST_LIMIT_CAP
-            sats_fee = self.fixed_value
+            if sats_fee < DUST_LIMIT_CAP:
+                sats_fee = self.fixed_value
             return int(sats_fee)
         return self.fixed_value

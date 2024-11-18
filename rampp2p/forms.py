@@ -3,13 +3,13 @@ from django.core.exceptions import ValidationError
 from decimal import Decimal
 from .models import *
 
-class ServiceFeeForm(forms.ModelForm):
+class TradeFeeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
-        super(ServiceFeeForm, self).__init__(*args, **kwargs)
+        super(TradeFeeForm, self).__init__(*args, **kwargs)
         if not self.fields['fixed_value'].initial:
-            self.fields['fixed_value'].initial = ServiceFee._meta.get_field('fixed_value').default
+            self.fields['fixed_value'].initial = TradeFee._meta.get_field('fixed_value').default
         if not self.fields['floating_value'].initial:
-            self.fields['floating_value'].initial = ServiceFee._meta.get_field('floating_value').default
+            self.fields['floating_value'].initial = TradeFee._meta.get_field('floating_value').default
 
     def validate_fixed_value(value): 
         if value < Decimal('1000'):
@@ -21,17 +21,17 @@ class ServiceFeeForm(forms.ModelForm):
 
     fixed_value = forms.DecimalField(
         required=True,
-        help_text='Enter the fixed service fee amount in satoshis',
+        help_text='Enter the fixed fee amount in satoshis',
         validators=[validate_fixed_value]
     )
     floating_value = forms.DecimalField(
         required=True,
-        help_text='Enter the service fee as a percentage of the trade amount (e.g., 5 for 5%)',
+        help_text='Enter the fee as a percentage of the trade amount (e.g., 5 for 5%)',
         validators=[validate_floating_value]
     )
 
     class Meta:
-        model = ServiceFee
+        model = TradeFee
         fields = '__all__'
 
 class FiatCurrencyForm(forms.ModelForm):

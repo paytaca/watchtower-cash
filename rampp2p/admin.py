@@ -4,17 +4,19 @@ from rampp2p.forms import *
 
 # Register your models here.
 
-class ServiceFeeAdmin(admin.ModelAdmin):
-    form = ServiceFeeForm
-    list_display = ['type', 'fixed_value', 'floating_value', 'updated_at']
+class TradeFeeAdmin(admin.ModelAdmin):
+    form = TradeFeeForm
+    list_display = ['category', 'type', 'fixed_value', 'floating_value', 'updated_at']
 
     def has_add_permission(self, request):
-        return not ServiceFee.objects.exists()
+        arbitration_fee_exists = TradeFee.objects.filter(category=TradeFee.FeeCategory.ARBITRATION).exists()
+        service_fee_exists = TradeFee.objects.filter(category=TradeFee.FeeCategory.SERVICE).exists()
+        return not (arbitration_fee_exists and service_fee_exists)
     
-    def has_delete_permission(self, request, obj = None):
-        return False
+    # def has_delete_permission(self, request, obj = None):
+    #     return False
     
-admin.site.register(ServiceFee, ServiceFeeAdmin)
+admin.site.register(TradeFee, TradeFeeAdmin)
 
 class AdAdmin(admin.ModelAdmin):
     list_display = [
@@ -58,7 +60,6 @@ class AdAdmin(admin.ModelAdmin):
             ad.save()
     
     mark_private.short_description = "Mark selected ads as private"
-
 
 admin.site.register(Ad, AdAdmin)
 
@@ -119,7 +120,6 @@ class OrderAdmin(admin.ModelAdmin):
             return obj.ad_snapshot.trade_type
         return None
 
-
 admin.site.register(Order, OrderAdmin)
 
 class MarketRateAdmin(admin.ModelAdmin):
@@ -152,7 +152,7 @@ class ArbiterAdmin(admin.ModelAdmin):
 admin.site.register(Arbiter, ArbiterAdmin)
 
 class ContractAdmin(admin.ModelAdmin):
-    readonly_fields = ['contract_fee', 'arbitration_fee', 'service_fee']
+    readonly_fields = ['order', 'address', 'version', 'contract_fee', 'arbitration_fee', 'service_fee']
     list_display = [
         'order',
         'address',
