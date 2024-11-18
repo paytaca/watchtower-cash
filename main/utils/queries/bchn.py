@@ -96,12 +96,12 @@ class BCHN(object):
         return txn
 
     @retry(max_retries=3)
-    def get_transaction(self, tx_hash, include_hex=False):
+    def get_transaction(self, tx_hash, include_hex=False, include_no_address=False):
         txn = self._get_raw_transaction(tx_hash)
         if txn:
-            return self._parse_transaction(txn, include_hex=include_hex)
+            return self._parse_transaction(txn, include_hex=include_hex, include_no_address=include_no_address)
 
-    def _parse_transaction(self, txn, include_hex=False):
+    def _parse_transaction(self, txn, include_hex=False, include_no_address=False):
         tx_hash = txn['hash']
         
         # NOTE: very new transactions doesnt have timestamp
@@ -138,16 +138,21 @@ class BCHN(object):
                 if 'address' in scriptPubKey.keys():
                     input_address = scriptPubKey['address']
                 else:
+                    _input_details = self.get_input_details(input_txid, tx_input['vout'])
                     # for multisig input prevouts (no address given on data)
-                    input_address = self.get_input_details(input_txid, tx_input['vout'])['address']
+                    input_address = _input_details.get('address')
 
                 if 'tokenData' in prevout.keys():
                     input_token_data = prevout['tokenData']
             else:
                 _input_details = self.get_input_details(input_txid, tx_input['vout'])
-                value = round(_input_details['value'] * (10 ** 8))
+                value = _input_details.get('value')
                 input_token_data = _input_details.get('tokenData')
-                input_address = _input_details['address']
+                input_address = _input_details.get('address')
+
+            if not include_no_address and not input_address:
+                continue
+
             input_txid = tx_input['txid']
             data = {
                 'txid': input_txid,
@@ -162,21 +167,37 @@ class BCHN(object):
         outputs = txn['vout']
 
         for tx_output in outputs:
-            if 'value' in tx_output.keys() and 'addresses' in tx_output['scriptPubKey'].keys():
-                sats_value = round(tx_output['value'] * (10 ** 8))
-                data = {
-                    'address': tx_output['scriptPubKey']['addresses'][0],
-                    'value': sats_value,
-                    'index': tx_output['n'],
-                    'token_data': None
-                }
-                if 'tokenData' in tx_output.keys():
-                    data['token_data'] = tx_output['tokenData']
-                transaction['outputs'].append(data)
+            data = self._parse_output(tx_output)
+            if not include_no_address and not data.get('address'):
+                continue
+            transaction['outputs'].append(data)
 
         if 'fee' in txn:
             transaction['tx_fee'] = round(txn['fee'] * (10 ** 8))
         return transaction
+
+    def _parse_output(self, tx_output):
+        details = {
+            'index': tx_output['n'],
+            'token_data': None,
+        }
+        if 'value' in tx_output.keys():
+            details['value'] = round(tx_output['value'] * (10 ** 8))
+            
+        if 'scriptPubKey' in tx_output.keys():
+            script_pubkey = tx_output['scriptPubKey']
+            if 'addresses' in script_pubkey.keys():
+                details['address'] = script_pubkey['addresses'][0]
+            elif script_pubkey.get('type') == 'nulldata':
+                # remove first characters '6a'
+                details['op_return'] = script_pubkey['hex'][:2]
+            else:
+                details['script'] = script_pubkey.get('hex')
+
+        if 'tokenData' in tx_output.keys():
+            details['token_data'] = tx_output['tokenData']
+
+        return details
 
     @retry(max_retries=3)
     def test_mempool_accept(self, hex_str):
@@ -190,13 +211,7 @@ class BCHN(object):
         previous_tx = self._get_raw_transaction(txid)
         if previous_tx:
             previous_out = previous_tx['vout'][vout_index]
-            details = {
-                'address': previous_out['scriptPubKey']['addresses'][0],
-                'value': previous_out['value']
-            }
-            if 'tokenData' in previous_out.keys():
-                details['tokenData'] = previous_out['tokenData']
-            return details
+            return self._parse_output(previous_out)
     
     def _recvall(self, sock):
         BUFF_SIZE = 4096
