@@ -90,10 +90,10 @@ def utxo_data_to_cashscript(data:dict):
     response = dict(
         txid=data["txid"],
         vout=data["vout"],
-        satoshis=data["satoshis"],
+        satoshis=str(data["satoshis"]),
     )
     if "category" in data:
-        response["token"] = dict(category = data["category"], amount = data["amount"])
+        response["token"] = dict(category = data["category"], amount = str(data["amount"]))
 
         if "commitment" in data:
             response["token"]["nft"] = dict(
@@ -130,14 +130,14 @@ def tx_model_to_cashscript(obj:main_models.Transaction):
     response = dict(
         txid= obj.txid,
         vout= obj.index,
-        satoshis= obj.value,
+        satoshis=str(obj.value),
     )
     if obj.cashtoken_ft_id:
-        response["token"] = dict(category=obj.cashtoken_ft.category, amount=obj.amount)
+        response["token"] = dict(category=obj.cashtoken_ft.category, amount=str(obj.amount))
     if obj.cashtoken_nft:
         response["token"] = dict(
             category=obj.cashtoken_nft.category,
-            amount=obj.amount,
+            amount=str(obj.amount),
             nft=dict(
                 capability=obj.cashtoken_nft.capability,
                 commitment=obj.cashtoken_nft.commitment,

@@ -96,7 +96,7 @@ export class RedemptionContract {
     const releaseOutputSats = 1000n
     const totalDepositSats = opts?.depositUtxo?.satoshis - releaseOutputSats - HARDCODED_FEE
     const depositSats = isInjectLiquidity ? totalDepositSats : totalDepositSats / 2n;
-    const releaseOutputTokens = satoshisToToken(totalDepositSat, priceData.price)
+    const releaseOutputTokens = satoshisToToken(totalDepositSats, priceData.price)
     
     const remainingReserveSupplyTokens = reserveSupplyTokens - releaseOutputTokens
     if (remainingReserveSupplyTokens < 0n) return 'Insufficient reserve tokens'
