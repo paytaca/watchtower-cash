@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
+from stablehedge.consumer import StablehedgeRpcConsumer
 from stablehedge.functions.transaction import (
     RedemptionContractTransactionException,
     broadcast_transaction,
@@ -83,5 +84,13 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
     if obj.status == models.RedemptionContractTransaction.Status.SUCCESS:
         try:
             save_redemption_contract_tx_meta(obj)
+        except Exception as exception:
+            LOGGER.exception(exception)
+
+    if obj.status == models.RedemptionContractTransaction.Status.SUCCESS or \
+        obj.status == models.RedemptionContractTransaction.Status.FAILED:
+
+        try:
+            StablehedgeRpcConsumer.Events.send_redemption_contract_tx_update(obj)
         except Exception as exception:
             LOGGER.exception(exception)
