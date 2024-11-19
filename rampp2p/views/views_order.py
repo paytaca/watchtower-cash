@@ -587,7 +587,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=['get'])
     def list_status(self, request, pk):
-        queryset = Status.objects.filter(order__id=pk)
+        queryset = Status.objects.filter(order__id=pk).order_by('-created_at')
         serializer = serializers.StatusSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
