@@ -20,11 +20,10 @@ project = "watchtower"
 @task
 def chipnet(ctx):
     ctx.config.network = 'chipnet'
-    ctx.config.project_dir = f'/home/ubuntu/{project}'
+    ctx.config.project_dir = f'/root/{project}'
     ctx.config.run.env['conn'] = Connection(
         config['CHIPNET_SERVER_HOST'],
-        user=config['CHIPNET_SERVER_USER'],
-        connect_kwargs = { 'key_filename': config['SERVER_SSH_KEY'] }
+        user=config['CHIPNET_SERVER_USER']
     )
 
 
