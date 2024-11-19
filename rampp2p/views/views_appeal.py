@@ -106,7 +106,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         Requirements:
             (1) The creator of appeal must be the buyer/seller.
             (2) The order must be expired.
-            (3) The latest order status must be one of ['ESCRW', 'PD_PN', 'PD', 'CNCL']
+            (3) The latest order status must be one of ['ESCRW', 'PD_PN', 'PD']
         Restrictions:
             (1) The seller cannot appeal once they marked the order as 'PD'
             (2) The seller/buyer cannot appeal once the order is completed (i.e. 'RLS' or 'RFN')

@@ -230,6 +230,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         if filter is True:
             if params['appealable'] is True:
                 queryset = queryset.filter(Q(appealable_at__isnull=False))
+                queryset = queryset.exclude(last_status=StatusType.APPEALED)
             if params['not_appealable'] is True:
                 queryset = queryset.exclude(Q(appealable_at__isnull=False))
 
