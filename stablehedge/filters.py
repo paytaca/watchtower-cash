@@ -1,4 +1,5 @@
 import re
+from django.db.models import F
 from django_filters import rest_framework as filters
 
 
@@ -38,9 +39,11 @@ class RedemptionContractOrderingFilterField(filters.OrderingFilter):
 
         for index, field in enumerate(value):
             if self.is_valid_value_for_field("resolved_at", field):
-                queryset = queryset.annotate_last_message_timestamp()
                 if field.startswith("-"):
                     value[index] = F("resolved_at").desc(nulls_last=True)
+            if self.is_valid_value_for_field("created_at", field):
+                if field.startswith("-"):
+                    value[index] = F("created_at").desc(nulls_last=True)
 
         return super().filter(queryset, value)
 
