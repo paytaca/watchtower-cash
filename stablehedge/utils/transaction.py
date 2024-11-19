@@ -158,12 +158,14 @@ def get_tx_input_hashes(txid:str):
 def satoshis_to_token(satoshis, price_value):
     satoshis = decimal.Decimal(satoshis)
     token_units_per_bch = decimal.Decimal(price_value)
-    token_units_per_sats = token_units_per_bch / 10 ** 8
+    token_unit_sats_per_bch = satoshis * token_units_per_bch # <sats(units per bch)> == <units(sats per bch)>
 
-    return satoshis * token_units_per_sats
+    token_units = math.floor(token_unit_sats_per_bch / 10 ** 8)
+    return decimal.Decimal(token_units)
 
 def token_to_satoshis(token_units, price_value):
     token_units = decimal.Decimal(token_units)
     token_units_per_bch = decimal.Decimal(price_value)
-    token_units_per_sats = token_units_per_bch / 10 ** 8
-    return token_units / token_units_per_sats
+    token_unit_sats_per_bch = token_units * 10 ** 8 # <units(sats per bch)> == <sats(units per bch)>
+    satoshis = math.floor(token_unit_sats_per_bch / token_units_per_bch)
+    return decimal.Decimal(satoshis)
