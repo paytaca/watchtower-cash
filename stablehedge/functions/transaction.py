@@ -1,5 +1,9 @@
 import json
 from stablehedge import models
+from stablehedge.utils.blockchain import (
+    get_locktime,
+    test_transaction_accept,
+)
 from stablehedge.utils.transaction import (
     validate_utxo_data,
     tx_model_to_cashscript,
@@ -22,32 +26,6 @@ class RedemptionContractTransactionException(Exception):
     def __init__(self, *args, code=None, **kwargs):
         self.code = code
         super().__init__(*args, **kwargs)
-
-
-def get_locktime():
-    return NODE.BCH.get_latest_block()
-
-
-def test_transaction_accept(transaction):
-    test_accept = NODE.BCH.test_mempool_accept(transaction)
-    if not test_accept["allowed"]:
-        return False, test_accept["reject-reason"]
-
-    return True, test_accept["txid"]
-
-
-def broadcast_transaction(transaction):
-    valid_tx, error_or_txid = test_transaction_accept(transaction)
-    if not valid_tx:
-        return False, error_or_txid
-
-    txid = error_or_txid
-
-    txid = NODE.BCH.broadcast_transaction(transaction)
-    process_mempool_transaction_fast(txid, transaction, True)
-    send_post_broadcast_notifications(transaction)
-    return True, txid
-
 
 def create_inject_liquidity_tx(redemption_contract_tx:models.RedemptionContractTransaction):
     tx_type = redemption_contract_tx.transaction_type

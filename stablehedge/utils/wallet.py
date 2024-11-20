@@ -9,13 +9,20 @@ from cashaddress import convert
 from main import models as main_models
 
 
-def subscribe_address(address:str):
+def subscribe_address(address:str, wallet_hash:str=None):
     testnet = address.startswith("bchtest:")
     cash_address = to_cash_address(address, testnet=testnet, token=False)
     token_address = to_cash_address(address, testnet=testnet, token=True)
-    addr_obj, _ = main_models.Address.objects.get_or_create(
+
+    kwargs = {}
+    if wallet_hash:
+        wallet, _ = main_models.Wallet.objects.get_or_create(wallet_hash=wallet_hash, wallet_type="bch", version=2)
+        kwargs["wallet"] = wallet
+
+    addr_obj, _ = main_models.Address.objects.update_or_create(
         address=cash_address,
         token_address=token_address,
+        **kwargs,
     )
     _, created = main_models.Subscription.objects.get_or_create(address=addr_obj)
     return created

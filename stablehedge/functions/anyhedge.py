@@ -8,16 +8,16 @@ from django.utils import timezone
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.utils.anyhedge import get_latest_oracle_price
+from stablehedge.utils.blockchain import (
+    test_transaction_accept,
+    broadcast_transaction,
+)
 from stablehedge.utils.transaction import (
     tx_model_to_cashscript,
     get_tx_input_hashes,
 )
 from stablehedge.js.runner import ScriptFunctions
 
-from .transaction import (
-    test_transaction_accept,
-    broadcast_transaction,
-)
 from .treasury_contract import (
     get_spendable_sats,
     find_single_bch_utxo,

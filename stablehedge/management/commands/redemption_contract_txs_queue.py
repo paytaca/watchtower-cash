@@ -5,9 +5,9 @@ from django.utils import timezone
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.consumer import StablehedgeRpcConsumer
+from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.functions.transaction import (
     RedemptionContractTransactionException,
-    broadcast_transaction,
     create_inject_liquidity_tx,
     create_deposit_tx,
     create_redeem_tx,

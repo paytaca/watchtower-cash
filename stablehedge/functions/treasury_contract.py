@@ -6,10 +6,10 @@ from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif
+from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.transaction import tx_model_to_cashscript
 from stablehedge.utils.encryption import encrypt_str, decrypt_str
 
-from .transaction import broadcast_transaction
 
 from anyhedge.utils.contract import AnyhedgeException
 

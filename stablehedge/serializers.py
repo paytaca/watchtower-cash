@@ -7,7 +7,7 @@ from drf_yasg.utils import swagger_serializer_method
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
-from stablehedge.functions.transaction import get_locktime
+from stablehedge.utils.blockchain import get_locktime
 from stablehedge.utils.transaction import (
     validate_utxo_data,
     utxo_data_to_cashscript,
@@ -175,7 +175,7 @@ class PriceMessageSerializer(serializers.Serializer):
         price_data = parse_result["priceData"]
         msg_timestamp = timezone.datetime.fromtimestamp(price_data["timestamp"])
         msg_timestamp = timezone.make_aware(msg_timestamp)
-            
+
         data["message_timestamp"] = msg_timestamp
         data["price_value"] = price_data["price"]
         data["price_sequence"] = price_data["dataSequence"]

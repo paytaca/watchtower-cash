@@ -41,12 +41,12 @@ from anyhedge import serializers as anyhedge_serializers
 
 from django.utils import timezone
 from stablehedge.functions.transaction import (
-    test_transaction_accept,
     RedemptionContractTransactionException,
     create_inject_liquidity_tx,
     create_deposit_tx,
     create_redeem_tx,
 )
+from stablehedge.utils.blockchain import test_transaction_accept
 from main.tasks import _process_mempool_transaction
 from main.tasks import NODE
 
