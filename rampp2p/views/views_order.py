@@ -230,6 +230,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         if filter is True:
             if params['appealable'] is True:
                 queryset = queryset.filter(Q(appealable_at__isnull=False))
+                queryset = queryset.exclude(last_status=StatusType.APPEALED)
             if params['not_appealable'] is True:
                 queryset = queryset.exclude(Q(appealable_at__isnull=False))
 
@@ -586,7 +587,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=['get'])
     def list_status(self, request, pk):
-        queryset = Status.objects.filter(order__id=pk)
+        queryset = Status.objects.filter(order__id=pk).order_by('-created_at')
         serializer = serializers.StatusSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
