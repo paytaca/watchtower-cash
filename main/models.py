@@ -846,7 +846,9 @@ class AppVersion(models.Model):
 
 
 class WalletAddressApp(models.Model):
-
+    '''
+    Stores wallet address and (D)apps it connected to.
+    '''
     app_name = models.TextField(blank=True, null=True, help_text='Name of the App/Dapp where the wallet_address was connected to')
     app_url  = models.TextField(blank=True, null=True, help_text='URL of the App/Dapp where the wallet_address was connected to')
     wallet_address  = models.CharField(max_length=100)
