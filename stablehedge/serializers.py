@@ -231,6 +231,24 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
         if valid_utxo_data is not True:
             raise serializers.ValidationError(dict(utxo=valid_utxo_data))
 
+        tx_obj = main_models.Transaction.objects.filter(
+            txid=utxo_data["txid"], index=utxo_data["vout"]).first()
+
+        if tx_obj and tx_obj.spent:
+            raise serializers.ValidationError("UTXO spent")
+
+        redemption_contract_tx_obj = models.RedemptionContractTransaction.objects.filter(
+            status=models.RedemptionContractTransaction.Status.PENDING,
+            utxo__txid=utxo_data["txid"],
+            utxo__vout=utxo_data["vout"],
+        ).first()
+
+        if redemption_contract_tx_obj:
+            if not self.instance or self.instance.id != redemption_contract_tx_obj.id:
+                raise serializers.ValidationError(
+                    f"UTXO in use by tx#{redemption_contract_tx_obj.id}"
+                )
+
         if transaction_type == models.RedemptionContractTransaction.Type.REDEEM:
             if utxo_data["category"] != redemption_contract.fiat_token.category:
                 raise serializers.ValidationError("Utxo category does not match with redemption contract")
