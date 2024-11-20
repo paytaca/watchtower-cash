@@ -89,8 +89,13 @@ class BCHN(object):
             tx_fee = txn['size'] * settings.TX_FEE_RATE
         for i, tx_input in enumerate(txn['vin']):
             _input_details = self.get_input_details(tx_input['txid'], tx_input['vout'])
-            txn['vin'][i]['value'] = _input_details['value']
-            txn['vin'][i]['address'] = _input_details['address']
+
+            if 'value' in _input_details:
+                txn['vin'][i]['value'] = _input_details['value'] / 10 ** 8
+
+            if 'address' in _input_details:
+                txn['vin'][i]['address'] = _input_details['address']
+
         txn['tx_fee'] = tx_fee
         txn['timestamp'] = None
         return txn
