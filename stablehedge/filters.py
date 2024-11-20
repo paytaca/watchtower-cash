@@ -15,10 +15,14 @@ class FiatTokenFilter(filters.FilterSet):
 
 
 class RedemptionContractFilter(filters.FilterSet):
+    categories = filters.CharFilter(method="categories_filter")
     currencies = filters.CharFilter(method="currencies_filter")
     auth_token_id = filters.CharFilter()
     price_oracle_pubkey = filters.CharFilter()
     token_category = filters.CharFilter(field_name="fiat_token__category")
+
+    def categories_filter(self, queryset, name, value):
+        return queryset.filter(fiat_token__category__in=str(value).split(","))
 
     def currencies_filter(self, queryset, name, value):
         return queryset.filter(fiat_token__currency__in=str(value).split(","))
@@ -38,6 +42,9 @@ class RedemptionContractOrderingFilterField(filters.OrderingFilter):
         if not value: return queryset
 
         for index, field in enumerate(value):
+            if self.is_valid_value_for_field("status", field):
+                if field.startswith("-"):
+                    value[index] = F("status").desc(nulls_last=True)
             if self.is_valid_value_for_field("resolved_at", field):
                 if field.startswith("-"):
                     value[index] = F("resolved_at").desc(nulls_last=True)
@@ -53,9 +60,11 @@ class RedemptionContractTransactionFilter(filters.FilterSet):
     transaction_types = filters.CharFilter(method="transaction_types_filter")
     redemption_contract_address = filters.CharFilter(field_name="redemption_contract__address")
     resolved = filters.BooleanFilter(field_name='resolved_at', lookup_expr='isnull', exclude=True)
+    categories = filters.CharFilter(method="categories_filter")
     ordering = RedemptionContractOrderingFilterField(
         fields=(
             ('id', 'id'),
+            ('status', 'status'),
             ('resolved_at', 'resolved_at'),
             ('created_at', 'created_at'),
         )
@@ -69,3 +78,6 @@ class RedemptionContractTransactionFilter(filters.FilterSet):
 
     def transaction_types_filter(self, queryset, name, value):
         return queryset.filter(transaction_type__in=str(value).split(","))
+
+    def categories_filter(self, queryset, name, value):
+        return queryset.filter(redemption_contract__fiat_token__category__in=str(value).split(","))
