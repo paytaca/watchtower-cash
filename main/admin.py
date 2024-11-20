@@ -409,7 +409,7 @@ admin.site.register(WalletNftToken, WalletNftTokenAdmin)
 admin.site.register(TransactionBroadcast, TransactionBroadcastAdmin)
 
 class AppVersionAdmin(admin.ModelAdmin):
-    list_display = ('platform', 'latest_version', 'min_required_version', 'release_date')
-    fields = ('platform', 'latest_version', 'min_required_version', 'notes')
+    list_display = ('latest_version', 'min_required_version', 'platform', 'release_date')
+    fields = ('platform', 'latest_version', 'min_required_version', 'release_date', 'notes')
 
 admin.site.register(AppVersion, AppVersionAdmin)
