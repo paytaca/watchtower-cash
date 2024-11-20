@@ -8,7 +8,7 @@ services:
   bchn:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
-      - /home/ubuntu/.ssh:/root/ssh:ro
+      - /root/.ssh:/root/ssh:ro
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-chipnet
@@ -18,7 +18,7 @@ services:
   zmq:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
-      - /home/ubuntu/.ssh:/root/ssh:ro
+      - /root/.ssh:/root/ssh:ro
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-chipnet
@@ -28,7 +28,7 @@ services:
   fulcrum:
     image: cagataygurturk/docker-ssh-tunnel
     volumes:
-      - /home/ubuntu/.ssh:/root/ssh:ro
+      - /root/.ssh:/root/ssh:ro
     environment:
       SSH_DEBUG: "-v"
       TUNNEL_HOST: bchn-chipnet
@@ -40,19 +40,19 @@ services:
     volumes:
       - watchtower_db_data:/var/lib/postgresql/data
     env_file:
-      - /home/ubuntu/watchtower/compose/.env_chipnet
+      - /root/watchtower/compose/.env_chipnet
     expose:
       - "5432"
   redis:
     image: "redis:alpine"
     env_file:
-      - /home/ubuntu/watchtower/compose/.env_chipnet
+      - /root/watchtower/compose/.env_chipnet
   backend:
     container_name: watchtower_backend
-    build: /home/ubuntu/watchtower
+    build: /root/watchtower
     image: watchtower_web
     command: [ "supervisord", "-c", "/code/supervisord.conf", "--nodaemon" ]
-    env_file: /home/ubuntu/watchtower/compose/.env_chipnet
+    env_file: /root/watchtower/compose/.env_chipnet
     volumes:
       - /var/www/images:/images
       - /code/anyhedge/js/node_modules

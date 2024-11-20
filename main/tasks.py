@@ -756,7 +756,7 @@ def save_transaction(tx, block_id=None):
         return
     
     txid = tx['txid']
-    if 'coinbase' in tx['inputs'][0].keys():
+    if len(tx['inputs']) and 'coinbase' in tx['inputs'][0].keys():
         return
 
     for output in tx['outputs']:
