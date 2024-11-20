@@ -5,7 +5,9 @@ import {
     CashAddressType,
     CashAddressNetworkPrefix,
 } from '@bitauth/libauth'
+import { Wallet as MainnetWallet, TestNetWallet } from 'mainnet-js';
 import ElectrumCashProvider from './utils/electrum-cash-provider.js'
+
 
 
 function validateAddress(address, isTokenAddress=false) {
@@ -99,6 +101,21 @@ app.get('/get-transactions/:address', async (req, res) => {
     const response = await getTransactions(req.params.address, network)
     res.send(response)
 })
+
+app.post('/verify-signature', async (req, res) => {
+    try {
+      let Wallet = MainnetWallet
+      if (req.body.bch_address.startsWith('bchtest')) {
+        Wallet = TestNetWallet
+      }
+      let wallet = await Wallet.watchOnly(req.body.bch_address)
+      const verifyResult = await wallet.verify(req.body.message, req.body.signature)  
+      res.send(verifyResult)
+    } catch (error) {
+      console.log('@jsserver /verify-signature: ', error)
+      res.send(error)
+    }
+  })
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)

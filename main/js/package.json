@@ -2,7 +2,8 @@
     "dependencies": {
         "@bitauth/libauth": "^2.0.0-alpha.8",
         "electrum-cash": "^3.1.1",
-        "express": "^4.18.2"
+        "express": "^4.18.2",
+        "mainnet-js": "^2.5.0"
     },
     "type": "module"
 }
