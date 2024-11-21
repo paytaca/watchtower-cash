@@ -1,5 +1,6 @@
 
 import requests
+import base64
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -9,12 +10,10 @@ from drf_yasg.utils import swagger_auto_schema
 from django.utils.crypto import get_random_string
 from django.core.cache import cache
 from django.forms import model_to_dict
+from coincurve import PublicKey
+from bitcash import format
+
 from main.models import 
-
-main_jsserver_base_url='http://localhost:3000'
-
-def verify_signature(bch_address, message, signature):
-        return requests.post(f'{main_jsserver_base_url}/verify-signature', json={'bch_address': bch_address, 'message': message, 'signature': signature})
 
 class WalletAddressAppView(APIView):
 
@@ -61,6 +60,64 @@ class WalletAddressAppView(APIView):
                 })
 
         return Response({'success': False, 'error': 'Failed saving, post data', 'data': request.data }, status=status.HTTP_401_UNAUTHORIZED)
+
+class WalletAddressAppPyView(APIView):
+
+    permission_classes = (AllowAny, )
+
+    def post(self, request, *args, **kwargs):
+
+        public_key_hex = request.data.get('public_key')
+        signature_hex = request.data.get('signature')
+        # message = { 'nonce': str, 'app_name': str, 'app_url': str, 'signer_address': str }
+        message = request.data.get('message')
+        parsed_message = json.loads(message)
+        nonce = parsed_message['nonce']
+        app_name = parsed_message['app_name']
+        app_url  = parsed_message['app_url']
+        wallet_address = parsed_message['signer_address']
+
+        if not all(nonce, app_name, app_url, signer_address):
+            return Response({'success': False,  'error': 'Incomplete message object. nonce, app_name, app_url, signer_address required. '}, status=status.HTTP_400_BAD_REQUEST)
+        if not cache.get(nonce):
+            return Response({'success': False,  'error': 'Unauthorized, invalid nonce'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # If signature is base64
+        # decoded_bytes = base64.b64decode(base64_string)
+        # hex_string = decoded_bytes.hex()
+
+        public_key_bytes = bytearray.fromhex(public_key_hex)
+        signature_bytes = bytearray.fromhex(signature_hex)
+        message_bytes = message.encode('utf-8')
+        # Ref: https://github.com/pybitcash/bitcash/blob/master/bitcash/format.py#L117
+        network = 'test' if settings.BCH_NETWORK == 'chipnet' else 'main' 
+        cash_address_from_public_key = format.public_key_to_address(public_key_bytes, network)
+        cash_address_from_signed_message = wallet_address
+
+        if cash_address_from_public_key != cash_address_from_signed_message:
+            return Response({'success': False, 'error': 'Address and public key doesn\'t match', 'data': request.data }, status=status.HTTP_400_BAD_REQUEST)
+
+        coincurve_public_key = PublicKey(public_key_bytes)
+        if coincurve_public_key.verify(signature_bytes, message_bytes):
+            wallet_address_app, created = WalletAddressAppView.get_or_create(
+                wallet_address=wallet_address,
+                app_name=app_name,
+                app_url=app_url,
+                defaults = { 
+                    'app_name': app_name, 
+                    'app_url': app_url, 
+                    'wallet_address': wallet_address 
+                }
+            )
+            
+            return Response({
+                'success': True, 
+                'message': f'Signature verification ok, data processed successfully',
+                'data': model_to_dict(wallet_address_app)
+            })
+
+        return Response({'success': False, 'error': 'Failed saving, post data', 'data': request.data }, status=status.HTTP_401_UNAUTHORIZED)
+
 
 
 class WalletAddressAppRecordExistsView(APIView):
