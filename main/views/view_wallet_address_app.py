@@ -44,8 +44,8 @@ class WalletAddressAppView(APIView):
         signature_bytes = bytes.fromhex(signature_hex)
         
         # Ref: https://github.com/pybitcash/bitcash/blob/master/bitcash/format.py#L117
-        # network = 'test' if settings.BCH_NETWORK == 'chipnet' else 'main' 
-        cash_address_from_public_key = format.public_key_to_address(public_key_bytes, 'test')
+        address_version = 'test' if (settings.BCH_NETWORK or '').lower() == 'chipnet' else 'main' 
+        cash_address_from_public_key = format.public_key_to_address(public_key_bytes, address_version)
         cash_address_from_signed_message = signer_address
 
         if cash_address_from_public_key != cash_address_from_signed_message:
