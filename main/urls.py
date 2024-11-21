@@ -81,7 +81,10 @@ main_urls += [
     path('wallet/shard/get/', views.WalletShardViewSet.as_view({'get': 'get_first_shard'}), name='wallet-shard-get-shard'),
     
     # App version
-    path('version/check/<str:platform>/', views.check_app_version)
+    path('version/check/<str:platform>/', views.check_app_version),
+    path('nonce/', views.NonceAPIView.as_view()),
+    path('wallet-address-app/', views.WalletAddressAppView.as_view()),
+    path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view())
 ]
 
 test_urls = [
