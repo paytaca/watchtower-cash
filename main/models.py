@@ -828,7 +828,6 @@ class WalletShard(PostgresModel):
     first_identifier = models.CharField(max_length=64)
     second_identifier = models.CharField(max_length=64)
 
-
 class AppVersion(models.Model):
     PLATFORM_CHOICES = [
         ('ios', 'iOS'),
@@ -839,20 +838,18 @@ class AppVersion(models.Model):
     platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES)
     latest_version = models.CharField(max_length=10)
     min_required_version = models.CharField(max_length=10)
-    release_date = models.DateField(auto_now_add=True)
+    release_date = models.DateField(default=date.today)
     notes = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.platform} - Latest: {self.latest_version}, Min Required: {self.min_required_version}"
-
-
-
+    
+    class Meta:
+        unique_together = ('platform', 'latest_version', 'min_required_version')
 
 
 class WalletAddressApp(models.Model):
-    '''
-    Stores wallet address and (D)apps it connected to.
-    '''
+
     app_name = models.TextField(blank=True, null=True, help_text='Name of the App/Dapp where the wallet_address was connected to')
     app_url  = models.TextField(blank=True, null=True, help_text='URL of the App/Dapp where the wallet_address was connected to')
     wallet_address  = models.CharField(max_length=100)
