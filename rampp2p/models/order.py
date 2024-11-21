@@ -1,9 +1,12 @@
 from django.db import models
+from django.apps import apps
+from django.utils import timezone
+from datetime import datetime
+
 from .ad import AdSnapshot, TradeType
 from .peer import Peer
 from .arbiter import Arbiter
 from .payment import PaymentMethod, PaymentType
-from django.apps import apps
 
 class Order(models.Model):
     tracking_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
@@ -38,6 +41,48 @@ class Order(models.Model):
     @property
     def currency(self):
         return self.ad_snapshot.fiat_currency
+    
+    def is_appealable(self):
+        time_now = timezone.make_aware(datetime.now())
+        return time_now >= self.appealable_at, self.appealable_at
+    
+    def get_members(self):
+        OrderMember = apps.get_model('rampp2p', 'OrderMember')
+        members = OrderMember.objects.filter(order__id=self.id)
+        arbiter, seller, buyer = None, None, None
+        for member in members:
+            type = member.type
+            if (type == OrderMember.MemberType.ARBITER):
+                arbiter = member
+            if (type == OrderMember.MemberType.SELLER):
+                seller = member
+            if (type == OrderMember.MemberType.BUYER):
+                buyer = member
+
+        return {
+            'arbiter': arbiter,
+            'seller': seller,
+            'buyer': buyer
+        }
+    
+    def is_seller(self, wallet_hash):
+        seller = self.owner
+        if self.ad_snapshot.trade_type == 'SELL':
+            seller = self.ad_snapshot.ad.owner
+        if wallet_hash == seller.wallet_hash:
+            return True
+        return False
+
+    def is_buyer(self, wallet_hash):
+        buyer = self.owner
+        if self.ad_snapshot.trade_type == 'BUY':
+            buyer = self.ad_snapshot.ad.owner
+        if wallet_hash == buyer.wallet_hash:
+            return True
+        return False
+    
+    def is_arbiter(self, wallet_hash):
+        return wallet_hash == self.arbiter.wallet_hash
 
 
 class OrderPayment(models.Model):

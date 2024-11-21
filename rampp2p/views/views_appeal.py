@@ -13,7 +13,7 @@ import rampp2p.serializers as serializers
 import rampp2p.utils.websocket as websocket
 
 from rampp2p.validators import *
-from rampp2p.utils.utils import is_appealable, get_trading_fees
+from rampp2p.utils.fees import get_trading_fees
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
@@ -117,7 +117,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         try:
             order = models.Order.objects.get(id=order_id)
             if not order.is_cash_in:
-                appealable, appealable_at = is_appealable(order_id)
+                appealable, appealable_at = order.is_appealable()
                 if not appealable:
                     response_data = {
                         'error': 'order is not appealable now',

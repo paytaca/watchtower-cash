@@ -594,8 +594,8 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
     @action(detail=True, methods=['patch'])
     def read_status(self, request, pk):
         try:
-            # check edit permission
-            member = self._check_status_edit_permissions(pk, request.user.wallet_hash)
+            order = models.Order.objects.get(id=pk)
+            member = self._check_status_edit_permissions(order, request.user.wallet_hash)
             statuses = models.Status.objects.filter(order__id=pk)
 
             status_id = request.data.get('status_id')
@@ -609,7 +609,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                     status_obj.buyer_read_at = timezone.now()
                 status_obj.save()
             return Response(status=status.HTTP_200_OK)
-        except ValidationError as err:
+        except (ValidationError, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['patch'])
@@ -912,10 +912,10 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         except (ValidationError, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
-    def _check_status_edit_permissions(self, order_pk, wallet_hash):
+    def _check_status_edit_permissions(self, order, wallet_hash):
         '''Throws an error if wallet_hash is not a participant of status's order'''
         
-        members = utils.get_order_members(order_pk)
+        members = order.get_members()
         if wallet_hash == members['seller'].peer.wallet_hash:
             return members['seller']
         if wallet_hash == members['buyer'].peer.wallet_hash:

@@ -659,6 +659,9 @@ ENV = config('ENV', 'prod')
 DEBUG = config('ENV', 'prod') != 'prod'
 ENV = config('ENV', 'prod')
 
+SATOSHI_PER_BCH = 10 ** 8 # 100,000,000 sats = 1 BCH
+DUST_LIMIT_CAP = 1000 # dust limit is 546 sats
+
 # P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_PK = config('SERVICER_PK', '')

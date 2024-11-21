@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.apps import apps
+from django.conf import settings
 
 from datetime import timedelta
 
@@ -30,11 +31,14 @@ class Ad(models.Model):
     crypto_currency = models.ForeignKey(CryptoCurrency, on_delete=models.PROTECT)
     fixed_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     floating_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
+    
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_limits_in_fiat = models.BooleanField(default=False)
+    
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
+    
     appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices, default=CooldownChoices.SIXTY)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
     is_public = models.BooleanField(default=True)
@@ -67,6 +71,15 @@ class Ad(models.Model):
             market_price = market_price.price
             return market_price * (self.floating_price/100)
         return None
+    
+    # def get_trade_floor(self):
+    #     trade_floor = self.trade_floor
+    #     if self.trade_limits_in_fiat:
+    #         # convert to satoshi to bch
+    #         trade_floor = trade_floor / settings.SATS
+    #         # convert bch to fiat
+
+        
 
 '''A snapshot of the ad is created everytime an order is created.'''
 class AdSnapshot(models.Model):

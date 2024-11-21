@@ -6,11 +6,11 @@ from django.http import Http404
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
-from decimal import Decimal
 
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
 
+from rampp2p.utils.fees import get_trading_fees
 import rampp2p.utils as utils
 import rampp2p.models as models
 import rampp2p.serializers as serializers
@@ -71,7 +71,7 @@ class ContractViewSet(viewsets.GenericViewSet):
             order = models.Order.objects.get(pk=order_pk)
 
             # Require that user is seller
-            if not utils.is_seller(order, request.user.wallet_hash):
+            if not order.is_seller(request.user.wallet_hash):
                 raise ValidationError('Buyer not allowed to perform this action')
 
             arbiter = models.Arbiter.objects.get(pk=arbiter_pk)
@@ -95,7 +95,7 @@ class ContractViewSet(viewsets.GenericViewSet):
                     contract.version = settings.SMART_CONTRACT_VERSION
                     contract.address = None
                     
-                    _, fees = utils.get_trading_fees(trade_amount=order.crypto_amount)
+                    _, fees = get_trading_fees(trade_amount=order.crypto_amount)
                     contract.arbitration_fee = fees['arbitration_fee']
                     contract.service_fee = fees['service_fee']
                     contract.contract_fee = fees['contract_fee']
@@ -192,7 +192,7 @@ class ContractViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'])
     def fees(self, request):
-        total_fee, breakdown = utils.get_trading_fees()
+        total_fee, breakdown = get_trading_fees()
         response = { 'total': total_fee, 'breakdown': breakdown }
         return Response(response, status=status.HTTP_200_OK)
     
@@ -200,8 +200,8 @@ class ContractViewSet(viewsets.GenericViewSet):
     def contract_fees(self, request, pk):
         try:
             order = models.Order.objects.get(id=pk)
-            contract = models.Contract.objects.get(order__id=pk)
-            _, breakdown = utils.get_trading_fees(trade_amount=order.crypto_amount)
+            contract = models.Contract.objects.get(order__id=order.id)
+            _, breakdown = get_trading_fees(trade_amount=order.crypto_amount)
             contract_fee = breakdown['contract_fee']
             service_fee = contract.service_fee
             arbitration_fee = contract.arbitration_fee
@@ -435,7 +435,7 @@ class ContractViewSet(viewsets.GenericViewSet):
     
     def _check_escrow_permissions(self, wallet_hash, order):
         '''Only sellers can verify the ESCROW status of order.'''
-        if not utils.is_seller(order, wallet_hash):
+        if not order.is_seller(wallet_hash):
             raise ValidationError('Caller is not seller')
 
     def _check_release_permissions(self, wallet_hash, order):
@@ -443,7 +443,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         (2) the order's current status is RELEASE_PENDING or PAID.
         '''
         # Check if user is arbiter or seller
-        if not (utils.is_arbiter(order, wallet_hash)) and not (utils.is_seller(order, wallet_hash)):
+        if not (order.is_arbiter(wallet_hash)) and not (order.is_seller(wallet_hash)):
             raise ValidationError('Caller is not seller nor arbiter')
         
         # Check if status is RELEASE_PENDING or PAID
@@ -453,5 +453,5 @@ class ContractViewSet(viewsets.GenericViewSet):
 
     def _check_refund_permissions(self, wallet_hash, order):
         '''Throws an error if user is not order's arbiter.'''
-        if not utils.is_arbiter(order, wallet_hash):
+        if not order.is_arbiter(wallet_hash):
             raise ValidationError(f'Caller must be order arbiter.')

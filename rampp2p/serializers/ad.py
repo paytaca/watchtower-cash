@@ -1,7 +1,9 @@
 from rest_framework import serializers
-from rampp2p.utils.utils import get_trading_fees
-from django.db.models import Q, Subquery, OuterRef, F
+from django.db.models import Q, Subquery, OuterRef
+from rampp2p.utils.fees import get_trading_fees
+
 import rampp2p.models as models
+
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
 

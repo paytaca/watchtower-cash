@@ -384,8 +384,7 @@ class AdViewSet(viewsets.GenericViewSet):
             time_limits = request.query_params.getlist('time_limits')
             price_order = request.query_params.get('price_order')
             query_name = request.query_params.get('query_name')
-            owned = request.query_params.get('owned', False)
-            owned = owned == 'true'
+            owned = request.query_params.get('owned') == 'true'
 
             try:
                 limit = int(request.query_params.get('limit', 0))
@@ -443,9 +442,9 @@ class AdViewSet(viewsets.GenericViewSet):
             if query_name:
                 queryset = queryset.filter(owner__name__icontains=query_name)
 
-            # Order ads by price (if store listings) or created_at (if owned ads)
-            # Default order: ascending, descending if trade type is BUY, 
-            # `price_order` filter overrides this order
+            ''' Orders ads by price (if owned=True) or by created_at (if owned=False).
+                Default order is ascending, descending if trade type is BUY. 
+                price_order filter overrides this order '''
             if not owned:            
                 order_field = 'price'
                 if trade_type == rampp2p_models.TradeType.BUY: 

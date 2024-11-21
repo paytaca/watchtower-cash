@@ -1,13 +1,13 @@
 from celery import shared_task
 from typing import Dict
-from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+
+from rampp2p.utils import bch_to_satoshi
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
-from rampp2p.utils.utils import get_order_members_addresses, get_trading_fees
 import rampp2p.utils.websocket as websocket
 
 from rampp2p.serializers import RecipientSerializer
@@ -25,8 +25,6 @@ import re
 
 import logging
 logger = logging.getLogger(__name__)
-
-SATS_PER_BCH = 100000000
 
 @shared_task(queue='rampp2p__contract_execution')
 def execute_subprocess(command):
@@ -241,7 +239,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
             
             expected_amount = contract.order.amount
             if expected_amount is None:
-                expected_amount = contract.order.crypto_amount * SATS_PER_BCH
+                expected_amount = bch_to_satoshi(contract.order.crypto_amount)
             expected_amount_with_fees = expected_amount + total_fees
 
             if len(outputs) >= 1:
@@ -283,7 +281,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
             expected_service_fee = contract.service_fee
             expected_transfer_amount = contract.order.amount
             if expected_transfer_amount is None:
-                expected_transfer_amount = contract.order.crypto_amount * SATS_PER_BCH
+                expected_transfer_amount = bch_to_satoshi(contract.order.crypto_amount)
 
             if len(outputs) >= 3:
                 transferred_amount = int(outputs[0].get('value'))

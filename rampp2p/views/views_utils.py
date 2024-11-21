@@ -8,7 +8,7 @@ from django.http import FileResponse
 from django.http import HttpResponse, JsonResponse
 
 from main.utils.subscription import save_subscription
-from rampp2p.utils import get_trading_fees
+from rampp2p.utils.fees import get_trading_fees
 
 from rampp2p.models import MarketRate, AppVersion
 from rampp2p.serializers import MarketRateSerializer

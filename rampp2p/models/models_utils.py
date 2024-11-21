@@ -1,8 +1,7 @@
 from django.db import models
 from datetime import date
-
-SATS_PER_BCH = 100000000 # 100,000,000 sats = 1 BCH
-DUST_LIMIT_CAP = 1000 # dust limit is 546 sats
+from django.conf import settings
+from rampp2p.utils import bch_to_satoshi
 
 class AppVersion(models.Model):
     PLATFORM_CHOICES = [
@@ -51,8 +50,8 @@ class TradeFee(models.Model):
         if self.type == self.FeeType.FLOATING and trade_amount:
             bch_fee = trade_amount * (self.floating_value / 100)
             # convert value to sats
-            sats_fee = bch_fee * SATS_PER_BCH
-            if sats_fee < DUST_LIMIT_CAP:
+            sats_fee = bch_to_satoshi(bch_fee)
+            if sats_fee < settings.DUST_LIMIT_CAP:
                 sats_fee = self.fixed_value
             return int(sats_fee)
         return self.fixed_value

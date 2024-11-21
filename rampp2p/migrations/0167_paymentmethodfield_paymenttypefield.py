@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rampp2p', '0166_update_chat_session_ref_20240626_0641'),
+        ('rampp2p', '0165_auto_20240619_0740'),
     ]
 
     operations = [

@@ -5,7 +5,6 @@ from django.db.models import Q
 from .ad import SubsetAdSnapshotSerializer
 from .payment import SubsetPaymentMethodSerializer
 from .transaction import TransactionSerializer
-from rampp2p.utils.utils import is_seller
 import rampp2p.models as models
 
 import logging
@@ -188,7 +187,7 @@ class OrderSerializer(serializers.ModelSerializer):
         wallet_hash = self.context.get('wallet_hash')
         statuses = models.Status.objects.filter(order__id=obj.id)
         has_unread = False
-        if is_seller(obj, wallet_hash):
+        if obj.is_seller(wallet_hash):
             has_unread = statuses.filter(seller_read_at__isnull=True).exists()
         else:
             has_unread = statuses.filter(buyer_read_at__isnull=True).exists()
