@@ -87,7 +87,7 @@ class WalletAddressAppView(APIView):
         r = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
         public_key_hex = request.data.get('public_key')
         signature_hex = request.data.get('signature')
-        # message = pipe separated strings '<nonce>|<signer_address>|<app_name>|<app_url>'
+        # message = pipe separated strings '<nonce get from api/nonce endpoint (NonceAPIView) >|<signer_address>|<app_name>|<app_url>'
         # example: abcdNonce|bchtest:qr244vwpanvv5hvy2gl9schhpe9a22ytq5m0kja3rv|CashTokens Studio|https://cashtokens.studio.cash
 
         message = request.data.get('message')
