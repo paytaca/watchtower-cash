@@ -86,8 +86,8 @@ class WalletAddressAppPyView(APIView):
         # decoded_bytes = base64.b64decode(base64_string)
         # hex_string = decoded_bytes.hex()
 
-        public_key_bytes = bytearray.fromhex(public_key_hex)
-        signature_bytes = bytearray.fromhex(signature_hex)
+        public_key_bytes = bytes.fromhex(public_key_hex)
+        signature_bytes = bytes.fromhex(signature_hex)
         message_bytes = message.encode('utf-8')
         # Ref: https://github.com/pybitcash/bitcash/blob/master/bitcash/format.py#L117
         network = 'test' if settings.BCH_NETWORK == 'chipnet' else 'main' 
