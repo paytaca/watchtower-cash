@@ -828,6 +828,7 @@ class WalletShard(PostgresModel):
     first_identifier = models.CharField(max_length=64)
     second_identifier = models.CharField(max_length=64)
 
+
 class AppVersion(models.Model):
     PLATFORM_CHOICES = [
         ('ios', 'iOS'),
@@ -843,6 +844,9 @@ class AppVersion(models.Model):
 
     def __str__(self):
         return f"{self.platform} - Latest: {self.latest_version}, Min Required: {self.min_required_version}"
+    
+    class Meta:
+        unique_together = ('platform', 'latest_version', 'min_required_version')
 
 
 class WalletAddressApp(models.Model):
