@@ -8,7 +8,6 @@ import {
 import ElectrumCashProvider from './utils/electrum-cash-provider.js'
 
 
-
 function validateAddress(address, isTokenAddress=false) {
     const result = { valid: false }
     try {
@@ -78,6 +77,7 @@ function getTransactions(address, network=''){
             return []
         })
 }
+
 
 const app = express()
 const port = 3000
