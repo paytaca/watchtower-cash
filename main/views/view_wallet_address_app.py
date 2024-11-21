@@ -6,21 +6,83 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import AllowAny
+from rest_framework import pagination, response
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from django.utils.crypto import get_random_string
-# from django.core.cache import cache
+from collections import OrderedDict
 from django.forms import model_to_dict
 from django.conf import settings
 from coincurve import PublicKey
 from bitcash import format
 
 from main.models import WalletAddressApp
+from main.serializers import WalletAddressAppSerializer
+
+class CustomLimitOffsetPagination(pagination.LimitOffsetPagination):
+    default_limit = 10
+    max_limit = 50
+
+    def get_paginated_response(self, data):
+        return response.Response(OrderedDict([
+            ('count', self.count),
+            ('limit', self.limit),
+            ('offset', self.offset),
+            ('next', self.get_next_link()),
+            ('previous', self.get_previous_link()),
+            ('results', data)
+        ]))
+
+    def get_paginated_response_schema(self, schema):
+        return {
+            'type': 'object',
+            'properties': {
+                'count': {
+                    'type': 'integer',
+                    'example': 123,
+                },
+                'limit': {
+                    'type': 'integer',
+                    'example': 10,
+                },
+                'offset': {
+                    'type': 'integer',
+                    'example': 0,
+                },
+                'next': {
+                    'type': 'string',
+                    'nullable': True,
+                },
+                'previous': {
+                    'type': 'string',
+                    'nullable': True,
+                },
+                'results': schema,
+            },
+        }
 
 class WalletAddressAppView(APIView):
 
     permission_classes = (AllowAny, )
+    pagination_class = CustomLimitOffsetPagination
+    serializer_class = WalletAddressAppSerializer
 
+    def get(self, request, *args, **kwargs):
+        wallet_address = self.request.query_params.get('wallet_address')
+
+        queryset = WalletAddressApp.objects.order_by('-created_at')
+
+        if wallet_address:
+            queryset = querset.filter(wallet_address=wallet_address)
+
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        if page is not None:
+            serializer = self.serializer_class(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        serializer = self.serializer_class(queryset, many=True)
+        return Response(serializer.data)
+        
     def post(self, request, *args, **kwargs):
         r = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
         public_key_hex = request.data.get('public_key')
@@ -94,7 +156,7 @@ class WalletAddressAppRecordExistsView(APIView):
     def get(self, request, *args, **kwargs):
         wallet_address = request.query_params.get('wallet_address', '')
         app_name = request.query_params.get('app_name', '')
-        queryset = WalletAddressConnectedApp.objects.filter(wallet_address=wallet_address)
+        queryset = WalletAddressApp.objects.filter(wallet_address=wallet_address)
         
         if app_name:
             queryset = queryset.filter(app_name=app_name)
