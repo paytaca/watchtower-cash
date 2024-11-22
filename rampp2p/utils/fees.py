@@ -8,7 +8,6 @@ def get_trading_fees(trade_amount=None):
     ''' Retrieves the contract fees, format is in satoshi '''
     
     contract_fee = int(settings.CONTRACT_FEE)
-    trade_amount = Decimal(trade_amount) if trade_amount else None
     service_fee = _get_service_fee(trade_amount=trade_amount)
     arbitration_fee = _get_arbitration_fee(trade_amount=trade_amount)
 

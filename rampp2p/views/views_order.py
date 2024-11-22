@@ -281,14 +281,13 @@ class OrderViewSet(viewsets.GenericViewSet):
         wallet_hash = request.user.wallet_hash
         try:
             is_cash_in = request.data.get('is_cash_in', False)
-            crypto_amount = request.data.get('crypto_amount')
-            if crypto_amount is None or crypto_amount == 0:
-                raise ValidationError('crypto_amount field is required')
+            trade_amount = request.data.get('trade_amount')
+            if trade_amount == None or trade_amount == 0:
+                raise ValidationError('trade_amount field is required')
 
             ad = models.Ad.objects.get(pk=request.data.get('ad'))
             owner = models.Peer.objects.get(wallet_hash=wallet_hash)
             payment_method_ids = request.data.get('payment_methods', [])
-            crypto_amount = Decimal(crypto_amount)
 
             # require payment methods if creating a SELL order
             if ad.trade_type == models.TradeType.BUY:
@@ -327,9 +326,9 @@ class OrderViewSet(viewsets.GenericViewSet):
                     fixed_price = ad.fixed_price,
                     floating_price = ad.floating_price,
                     market_price = market_price.price,
-                    trade_floor = ad.trade_floor,
-                    trade_ceiling = ad.trade_ceiling,
-                    trade_amount = ad.trade_amount,
+                    trade_floor_sats = ad.trade_floor_sats,
+                    trade_ceiling_sats = ad.trade_ceiling_sats,
+                    trade_amount_sats = ad.trade_amount_sats,
                     appeal_cooldown_choice = ad.appeal_cooldown_choice,
                     trade_amount_in_fiat = ad.trade_amount_in_fiat,
                     trade_limits_in_fiat = ad.trade_limits_in_fiat
@@ -347,18 +346,18 @@ class OrderViewSet(viewsets.GenericViewSet):
                     'owner': owner.id,
                     'ad_snapshot': ad_snapshot.id,
                     'payment_methods': payment_method_ids,
-                    'crypto_amount': crypto_amount,
+                    'trade_amount': trade_amount,
                     'is_cash_in': is_cash_in,
                     'tracking_id': tracking_id
                 }
                 # Calculate the locked ad price
-                price = None
-                if ad_snapshot.price_type == models.PriceType.FLOATING:
-                    market_price = market_price.price
-                    price = market_price * (ad_snapshot.floating_price/100)
-                else:
-                    price = ad_snapshot.fixed_price
-                data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                # price = None
+                # if ad_snapshot.price_type == models.PriceType.FLOATING:
+                #     market_price = market_price.price
+                #     price = market_price * (ad_snapshot.floating_price/100)
+                # else:
+                #     price = ad_snapshot.fixed_price
+                # data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                 serialized_order = serializers.WriteOrderSerializer(data=data)
 
                 # Raise error if order isn't valid
@@ -652,42 +651,35 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 order.save()
 
                 # Decrease the Ad's trade amount and ceiling
-                # If amounts are in fiat, convert order crypto_amount
-                # to fiat and decrement this from ad's current trade_amount
-                amount_to_dec = order.crypto_amount
-                if order.ad_snapshot.ad.trade_amount_in_fiat:
-                    amount_to_dec = order.crypto_amount * order.locked_price # convert to fiat
-                trade_amount = order.ad_snapshot.ad.trade_amount - amount_to_dec
-
-                if trade_amount < 0:
-                    raise ValidationError('crypto_amount exceeds ad remaining trade_amount')
+                trade_amount_sats = order.ad_snapshot.ad.trade_amount_sats - order.trade_amount
+                if trade_amount_sats < 0:
+                    raise ValidationError('order amount exceeds ad remaining trade quantity')
                 
                 ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
-                ad.trade_amount = trade_amount
-                
-                trade_amount_lt_ceiling = ad.trade_amount < ad.trade_ceiling
-
-                # If trade_amount and trade_ceiling do NOT have the same currency
-                if ad.trade_amount_in_fiat ^ ad.trade_limits_in_fiat:
-                    # convert trade_ceiling to the currency 
-                    # of trade_amount for comparison
-                    eq_trade_amount = trade_amount
-                    comp_trade_ceil = ad.trade_ceiling
-                    if ad.trade_amount_in_fiat and not ad.trade_limits_in_fiat:
-                        comp_trade_ceil = ad.trade_ceiling * order.locked_price
-                        eq_trade_amount = trade_amount / order.locked_price
-                    if not ad.trade_amount_in_fiat and ad.trade_limits_in_fiat:
-                        comp_trade_ceil = ad.trade_ceiling / order.locked_price
-                        eq_trade_amount = trade_amount * order.locked_price
+                ad.trade_amount_sats = trade_amount_sats
+            
+                # trade_amount_lt_ceiling = ad.trade_amount_sats < ad.trade_ceiling_sats
+                # # If trade_amount and trade_ceiling do NOT have the same currency
+                # if ad.trade_amount_in_fiat ^ ad.trade_limits_in_fiat:
+                #     # convert trade_ceiling to the currency 
+                #     # of trade_amount for comparison
+                #     eq_trade_amount = trade_amount
+                #     comp_trade_ceil = ad.trade_ceiling
+                #     if ad.trade_amount_in_fiat and not ad.trade_limits_in_fiat:
+                #         comp_trade_ceil = ad.trade_ceiling * order.locked_price
+                #         eq_trade_amount = trade_amount / order.locked_price
+                #     if not ad.trade_amount_in_fiat and ad.trade_limits_in_fiat:
+                #         comp_trade_ceil = ad.trade_ceiling / order.locked_price
+                #         eq_trade_amount = trade_amount * order.locked_price
                     
-                    trade_amount_lt_ceiling = ad.trade_amount < comp_trade_ceil
+                #     trade_amount_lt_ceiling = ad.trade_amount < comp_trade_ceil
                     
-                    logger.warning(f'eq_trade_amount: {eq_trade_amount} | trade_amount_lt_ceiling: {trade_amount_lt_ceiling}')
-                    # Set the trade_amount in its equivalent amount in trade_ceiling's currency
-                    trade_amount = eq_trade_amount 
+                #     logger.warning(f'eq_trade_amount: {eq_trade_amount} | trade_amount_lt_ceiling: {trade_amount_lt_ceiling}')
+                #     # Set the trade_amount in its equivalent amount in trade_ceiling's currency
+                #     trade_amount = eq_trade_amount 
 
-                if trade_amount_lt_ceiling:
-                  ad.trade_ceiling = trade_amount
+                if ad.trade_amount_sats < ad.trade_ceiling_sats:
+                  ad.trade_ceiling_sats = trade_amount_sats
 
                 ad.save()
 

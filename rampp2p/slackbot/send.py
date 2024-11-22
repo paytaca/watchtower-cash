@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from rampp2p.utils import satoshi_to_bch, bch_to_fiat
 
 from . import block_kit
 from . import block_kit_helpers
@@ -222,8 +223,9 @@ class OrderSummaryMessage(MessageBase):
         currency = order.currency.symbol
         ad_owner = order.ad_snapshot.owner.name
         ad_price = order.ad_snapshot.price
-        trade_amount = '{:.10f}'.format(float(str(order.crypto_amount))).rstrip('0').rstrip('.')
-        fiat_trade_amount = '{:.2f}'.format(order.crypto_amount * ad_price)
+        bch_amount = satoshi_to_bch(order.trade_amount)
+        trade_amount = '{:.10f}'.format(float(str(bch_amount))).rstrip('0').rstrip('.')
+        fiat_trade_amount = '{:.2f}'.format(bch_to_fiat(bch_amount, ad_price))
 
         blocks = [
             block_kit.SectionBlock(

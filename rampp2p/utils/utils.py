@@ -1,7 +1,7 @@
 from django.db.models import Q
 from django.conf import settings
 from django.apps import apps
-
+from decimal import Decimal
 from datetime import datetime
 from asgiref.sync import sync_to_async
 
@@ -51,6 +51,12 @@ def satoshi_to_bch(satoshi):
 
 def bch_to_satoshi(bch):
     return bch * settings.SATOSHI_PER_BCH
+
+def bch_to_fiat(bch_amount, fiat_price):
+    return Decimal(bch_amount) * Decimal(fiat_price)
+
+def fiat_to_bch(fiat_amount, fiat_price):
+    return Decimal(fiat_amount) / Decimal(fiat_price)
 
 def check_has_cashin_alerts(wallet_hash):
     Order = apps.get_model('rampp2p', 'Order')

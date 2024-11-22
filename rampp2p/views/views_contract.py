@@ -95,7 +95,7 @@ class ContractViewSet(viewsets.GenericViewSet):
                     contract.version = settings.SMART_CONTRACT_VERSION
                     contract.address = None
                     
-                    _, fees = get_trading_fees(trade_amount=order.crypto_amount)
+                    _, fees = get_trading_fees(trade_amount=order.trade_amount)
                     contract.arbitration_fee = fees['arbitration_fee']
                     contract.service_fee = fees['service_fee']
                     contract.contract_fee = fees['contract_fee']
@@ -201,7 +201,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         try:
             order = models.Order.objects.get(id=pk)
             contract = models.Contract.objects.get(order__id=order.id)
-            _, breakdown = get_trading_fees(trade_amount=order.crypto_amount)
+            _, breakdown = get_trading_fees(trade_amount=order.trade_amount)
             contract_fee = breakdown['contract_fee']
             service_fee = contract.service_fee
             arbitration_fee = contract.arbitration_fee

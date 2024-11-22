@@ -101,6 +101,11 @@ class AdListSerializer(serializers.ModelSerializer):
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     price = serializers.SerializerMethodField(required=False)
+    
+    trade_amount = serializers.SerializerMethodField()
+    trade_floor = serializers.SerializerMethodField()
+    trade_ceiling = serializers.SerializerMethodField()
+
     payment_methods = serializers.SerializerMethodField()
     trade_count = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
@@ -157,6 +162,15 @@ class AdListSerializer(serializers.ModelSerializer):
     
     def get_price(self, instance: models.Ad):
         return instance.get_price()
+    
+    def get_trade_amount(self, obj):
+        return obj.get_trade_amount()
+    
+    def get_trade_floor(self, obj):
+        return obj.get_trade_floor()
+    
+    def get_trade_ceiling(self, obj):
+        return obj.get_trade_ceiling()
     
     def get_trade_count(self, instance: models.Ad):
         return models.Order.objects.filter(Q(ad_snapshot__ad__id=instance.id)).count()
@@ -231,45 +245,20 @@ class AdDetailSerializer(AdListSerializer):
 class AdOwnerSerializer(AdDetailSerializer):
     payment_methods = PaymentMethodSerializer(many=True)
 
-class AdCreateSerializer(serializers.ModelSerializer):
-    owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
-    fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all())
-    crypto_currency = serializers.PrimaryKeyRelatedField(queryset=models.CryptoCurrency.objects.all())
-    payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True)
-    appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices,required=True)
-    class Meta:
-        model = models.Ad
-        fields = [
-            'id',
-            'owner',
-            'trade_type',
-            'price_type',
-            'fiat_currency',
-            'crypto_currency',
-            'fixed_price',
-            'floating_price',
-            'trade_floor',
-            'trade_ceiling',
-            'trade_amount',
-            'trade_limits_in_fiat',
-            'trade_amount_in_fiat',
-            'appeal_cooldown_choice',
-            'payment_methods',
-            'is_public',
-            'modified_at',
-        ]
     
 class AdSerializer(serializers.ModelSerializer):
+    owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all(), required=False)
     trade_type = serializers.ChoiceField(choices=models.TradeType.choices, required=False)
     price_type = serializers.ChoiceField(choices=models.PriceType.choices, required=False)
     fixed_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
     floating_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
-    trade_floor = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
-    trade_ceiling = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
-    trade_amount = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_floor_sats = serializers.IntegerField(required=False)
+    trade_ceiling_sats = serializers.IntegerField(required=False)
+    trade_amount_sats = serializers.IntegerField(required=False)
     trade_limits_in_fiat = serializers.BooleanField(required=False)
     trade_amount_in_fiat = serializers.BooleanField(required=False)
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all(), required=False)
+    crypto_currency = serializers.PrimaryKeyRelatedField(queryset=models.CryptoCurrency.objects.all(), required=False)
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True, required=False)
     appeal_cooldown_choice = serializers.ChoiceField(choices=models.CooldownChoices.choices, required=False)
     is_public = serializers.BooleanField(required=False)
@@ -279,16 +268,18 @@ class AdSerializer(serializers.ModelSerializer):
         model = models.Ad
         fields = [
             'id',
+            'owner',
             'trade_type',
             'price_type',
             'fixed_price',
             'floating_price',
-            'trade_floor',
-            'trade_ceiling',
-            'trade_amount',
+            'trade_floor_sats',
+            'trade_ceiling_sats',
+            'trade_amount_sats',
             'trade_limits_in_fiat',
             'trade_amount_in_fiat',
             'fiat_currency',
+            'crypto_currency',
             'appeal_cooldown_choice',
             'payment_methods',
             'is_public',

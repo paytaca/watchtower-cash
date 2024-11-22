@@ -237,7 +237,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
             if total_fees is None:
                 raise TxnVerificationError(f'Failed to fetch correct total_fees expected an int got {total_fees}')
             
-            expected_amount = contract.order.amount
+            expected_amount = contract.order.trade_amount
             if expected_amount is None:
                 expected_amount = bch_to_satoshi(contract.order.crypto_amount)
             expected_amount_with_fees = expected_amount + total_fees
@@ -279,7 +279,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
             # Get expected transaction amount and fees
             expected_arbitration_fee = contract.arbitration_fee
             expected_service_fee = contract.service_fee
-            expected_transfer_amount = contract.order.amount
+            expected_transfer_amount = contract.order.trade_amount
             if expected_transfer_amount is None:
                 expected_transfer_amount = bch_to_satoshi(contract.order.crypto_amount)
 

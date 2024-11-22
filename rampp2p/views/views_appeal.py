@@ -294,7 +294,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
         serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
 
-        total_fee, fees = get_trading_fees(appeal.order.crypto_amount)
+        total_fee, fees = get_trading_fees(appeal.order.trade_amount)
         response = {
             'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data,
             'order': serialized_order.data,

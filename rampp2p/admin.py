@@ -107,7 +107,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = [
         'id',
         'ad_snapshot__trade_type',
-        'crypto_amount',
+        'trade_amount',
         'owner',
         'created_at'
     ]

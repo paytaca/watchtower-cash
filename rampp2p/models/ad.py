@@ -1,8 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.apps import apps
-from django.conf import settings
-
+from rampp2p.utils import satoshi_to_bch, bch_to_fiat
 from datetime import timedelta
 
 from .peer import Peer
@@ -32,10 +31,13 @@ class Ad(models.Model):
     fixed_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     floating_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     
+    trade_floor_sats = models.BigIntegerField(null=True)
+    trade_ceiling_sats = models.BigIntegerField(null=True)
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_limits_in_fiat = models.BooleanField(default=False)
     
+    trade_amount_sats = models.BigIntegerField(null=True)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
     
@@ -65,20 +67,50 @@ class Ad(models.Model):
             return self.fixed_price
         
         MarketRate = apps.get_model('rampp2p', 'MarketRate')
-        currency = self.fiat_currency.symbol
-        market_price = MarketRate.objects.filter(currency=currency).first()
+        market_price = MarketRate.objects.filter(currency=self.fiat_currency.symbol).first()
         if market_price:
             market_price = market_price.price
             return market_price * (self.floating_price/100)
         return None
     
-    # def get_trade_floor(self):
-    #     trade_floor = self.trade_floor
-    #     if self.trade_limits_in_fiat:
-    #         # convert to satoshi to bch
-    #         trade_floor = trade_floor / settings.SATS
-    #         # convert bch to fiat
+    def get_trade_floor(self):
+        trade_floor = self.trade_floor_sats
 
+        # convert to satoshi to bch
+        trade_floor = satoshi_to_bch(trade_floor)
+        
+        if self.trade_limits_in_fiat:
+            # convert bch to fiat
+            ad_price = self.get_price()
+            trade_floor = bch_to_fiat(trade_floor, ad_price)
+        
+        return trade_floor
+
+    def get_trade_ceiling(self):
+        trade_ceiling = self.trade_ceiling_sats
+
+        # convert to satoshi to bch
+        trade_ceiling = satoshi_to_bch(trade_ceiling)
+        
+        if self.trade_limits_in_fiat:
+            # convert bch to fiat
+            ad_price = self.get_price()
+            trade_ceiling = bch_to_fiat(trade_ceiling, ad_price)
+        
+        return trade_ceiling
+    
+    def get_trade_amount(self):
+        trade_amount = self.trade_amount_sats
+
+        # convert to satoshi to bch
+        trade_amount = satoshi_to_bch(trade_amount)
+        
+        if self.trade_amount_in_fiat:
+            # convert bch to fiat
+            ad_price = self.get_price()
+            trade_amount = bch_to_fiat(trade_amount, ad_price)
+        
+        return trade_amount
         
 
 '''A snapshot of the ad is created everytime an order is created.'''
@@ -91,11 +123,17 @@ class AdSnapshot(models.Model):
     fixed_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     floating_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     market_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
+    
+    trade_floor_sats = models.BigIntegerField(null=True)
+    trade_ceiling_sats = models.BigIntegerField(null=True)
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_limits_in_fiat = models.BooleanField(default=False)
+    
+    trade_amount_sats = models.BigIntegerField(null=True)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
+    
     appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices)
     payment_types = models.ManyToManyField(PaymentType, related_name='ad_snapshots')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -118,3 +156,42 @@ class AdSnapshot(models.Model):
         if self.price_type == PriceType.FIXED:
             return self.fixed_price
         return self.market_price * (self.floating_price/100)
+    
+    def get_trade_floor(self):
+        trade_floor = self.trade_floor_sats
+
+        # convert to satoshi to bch
+        trade_floor = satoshi_to_bch(trade_floor)
+        
+        if self.trade_limits_in_fiat:
+            # convert bch to fiat
+            ad_price = self.get_price()
+            trade_floor = bch_to_fiat(trade_floor, ad_price)
+        
+        return trade_floor
+
+    def get_trade_ceiling(self):
+        trade_ceiling = self.trade_ceiling_sats
+
+        # convert to satoshi to bch
+        trade_ceiling = satoshi_to_bch(trade_ceiling)
+        
+        if self.trade_limits_in_fiat:
+            # convert bch to fiat
+            ad_price = self.get_price()
+            trade_ceiling = bch_to_fiat(trade_ceiling, ad_price)
+        
+        return trade_ceiling
+    
+    def get_trade_amount(self):
+        trade_amount = self.trade_amount_sats
+
+        # convert to satoshi to bch
+        trade_amount = satoshi_to_bch(trade_amount)
+        
+        if self.trade_amount_in_fiat:
+            # convert bch to fiat
+            ad_price = self.get_price()
+            trade_amount = bch_to_fiat(trade_amount, ad_price)
+        
+        return trade_amount

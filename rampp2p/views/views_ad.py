@@ -515,7 +515,7 @@ class AdViewSet(viewsets.GenericViewSet):
         if self.ad_count(wallet_hash, data['fiat_currency'], data['trade_type']) >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = rampp2p_serializers.AdCreateSerializer(data=data)
+        serializer = rampp2p_serializers.AdSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -540,8 +540,11 @@ class AdViewSet(viewsets.GenericViewSet):
         currency_public_ad_count = self.public_ad_count(wallet_hash, ad.fiat_currency.id, ad.trade_type)
         if is_public == True and exceeds_ad_limit and currency_public_ad_count >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
-            
-        serializer = rampp2p_serializers.AdSerializer(ad, data=request.data)
+        
+        data = request.data.copy()
+        data.pop('crypto_currency', None)
+
+        serializer = rampp2p_serializers.AdSerializer(ad, data=data)
         if serializer.is_valid():
             ad = serializer.save()
             context = { 'wallet_hash': wallet_hash }

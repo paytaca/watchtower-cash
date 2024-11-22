@@ -48,9 +48,7 @@ class TradeFee(models.Model):
     
     def get_fee_value(self, trade_amount=None):
         if self.type == self.FeeType.FLOATING and trade_amount:
-            bch_fee = trade_amount * (self.floating_value / 100)
-            # convert value to sats
-            sats_fee = bch_to_satoshi(bch_fee)
+            sats_fee = trade_amount * (self.floating_value / 100)
             if sats_fee < settings.DUST_LIMIT_CAP:
                 sats_fee = self.fixed_value
             return int(sats_fee)

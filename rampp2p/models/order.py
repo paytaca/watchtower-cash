@@ -16,7 +16,7 @@ class Order(models.Model):
     arbiter = models.ForeignKey(Arbiter, on_delete=models.PROTECT, blank=True, null=True, related_name="arbitrated_orders")
     locked_price = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
     crypto_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, null=True, editable=False) # order trade amount in BCH (to be deprecated)
-    amount = models.IntegerField(editable=False, null=True) # order trade amount in satoshis
+    trade_amount = models.BigIntegerField(null=True) # order trade amount in satoshis
     payment_methods = models.ManyToManyField(PaymentMethod)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     appealable_at = models.DateTimeField(null=True)
