@@ -170,6 +170,13 @@ class RedemptionContractTransactionViewSet(
     def history(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
+    @decorators.action(
+        detail=True, methods=["get"],
+        serializer_class=serializers.RedemptionContractTransactionHistorySerializer,
+    )
+    def history_detail(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
     @swagger_auto_schema(
         method="get",
         manual_parameters=[

@@ -284,6 +284,7 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
     satoshis = serializers.SerializerMethodField()
     amount = serializers.SerializerMethodField()
     category = serializers.CharField(source="redemption_contract.fiat_token.category", read_only=True)
+    price_value = serializers.CharField(source="price_oracle_message.price_value", read_only=True)
 
     class Meta:
         model = models.RedemptionContractTransaction
@@ -294,6 +295,7 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
             "status",
             "txid",
             "category",
+            "price_value",
             "satoshis",
             "amount",
             "result_message",
