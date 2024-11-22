@@ -182,7 +182,7 @@ class NonceAPIView(APIView):
             try_again -= 1
 
         if not nonce:
-            return Response({'status':'error', 'message': 'Please try again.'})   
+            return Response({'success': False, 'error': 'Unable to generate nonce. Please try again later!'})   
         r.setex(nonce, 60 * 15, 1) # a-nonce-as-key, 15 minutes expiry, a-nonce-value-irrelevant 
-        return Response({'status': 'success', 'data': { 'nonce': nonce }})
+        return Response({'success': True, 'data': { 'nonce': nonce }})
 
