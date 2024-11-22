@@ -35,14 +35,6 @@ def check_app_version(request, platform=None):
     
     return JsonResponse(response_data)
 
-from rampp2p.slackbot.send import OrderSummaryMessage
-def test_send_to_slack(request):
-    text = 'Hello world!'
-    logger.warning(f'test_send_to_slack: {text}')
-    order = Order.objects.all().first()
-    OrderSummaryMessage.send_safe(order.id)
-    return JsonResponse({'success': True })
-
 class MarketRates(APIView):
     def get(self, request):
         queryset = MarketRate.objects.all()
