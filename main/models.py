@@ -846,3 +846,14 @@ class AppVersion(models.Model):
     
     class Meta:
         unique_together = ('platform', 'latest_version', 'min_required_version')
+
+
+class WalletAddressApp(models.Model):
+
+    app_name = models.TextField(blank=True, null=True, help_text='Name of the App/Dapp where the wallet_address was connected to')
+    app_url  = models.TextField(blank=True, null=True, help_text='URL of the App/Dapp where the wallet_address was connected to')
+    wallet_address  = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.address} -> {self.app_url}"
