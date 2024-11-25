@@ -1,4 +1,5 @@
 
+import time
 import requests
 import base64
 import redis
@@ -16,8 +17,10 @@ from django.conf import settings
 from coincurve import PublicKey
 from bitcash import format
 
-from main.models import WalletAddressApp
+from main.models import WalletAddressApp, Address
 from main.serializers import WalletAddressAppSerializer
+
+nonce_cache = settings.REDISKV
 
 class CustomLimitOffsetPagination(pagination.LimitOffsetPagination):
     default_limit = 10
@@ -68,12 +71,14 @@ class WalletAddressAppView(APIView):
     serializer_class = WalletAddressAppSerializer
 
     def get(self, request, *args, **kwargs):
+        wallet_hash = self.request.query_params.get('wallet_hash')
         wallet_address = self.request.query_params.get('wallet_address')
+        queryset = WalletAddressApp.objects.order_by('-updated_at')
 
-        queryset = WalletAddressApp.objects.order_by('-created_at')
-
+        if wallet_hash:
+            queryset = queryset.filter(wallet_hash=wallet_hash)
         if wallet_address:
-            queryset = querset.filter(wallet_address=wallet_address)
+            queryset = queryset.filter(wallet_address=wallet_address)
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request)
@@ -84,7 +89,7 @@ class WalletAddressAppView(APIView):
         return Response(serializer.data)
         
     def post(self, request, *args, **kwargs):
-        r = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
+        
         public_key_hex = request.data.get('public_key')
         signature_hex = request.data.get('signature')
         # message = pipe separated strings '<nonce get from api/nonce endpoint (NonceAPIView) >|<signer_address>|<app_name>|<app_url>'
@@ -95,7 +100,7 @@ class WalletAddressAppView(APIView):
 
         if not all([nonce, app_name, app_url, signer_address]):
             return Response({'success': False,  'error': 'Incomplete message object. nonce, app_name, app_url, signer_address required. '}, status=status.HTTP_400_BAD_REQUEST)
-        if not r.get(nonce):
+        if not nonce_cache.get(nonce):
             return Response({'success': False,  'error': 'Unauthorized, invalid nonce'}, status=status.HTTP_401_UNAUTHORIZED)
 
         # If signature is base64
@@ -120,17 +125,22 @@ class WalletAddressAppView(APIView):
         coincurve_public_key = PublicKey(public_key_bytes)
         message_bytes = message.encode('utf-8')  # encode message first
         if coincurve_public_key.verify(signature_bytes, message_bytes):
-            wallet_address_app, created = WalletAddressApp.objects.get_or_create(
+            address = Address.objects.filter(address=signer_address).first()
+            wallet_hash = None
+            if address and address.wallet:
+                wallet_hash = address.wallet.wallet_hash
+            wallet_address_app, created = WalletAddressApp.objects.update_or_create(
                 wallet_address=signer_address,
                 app_name=app_name,
                 app_url=app_url,
                 defaults = { 
                     'app_name': app_name, 
                     'app_url': app_url, 
-                    'wallet_address': signer_address 
+                    'wallet_address': signer_address,
+                    'wallet_hash': wallet_hash
                 }
             )
-            r.delete(nonce)
+            nonce_cache.delete(nonce)
             return Response({
                 'success': True, 
                 'message': f'Signature verification ok, data processed successfully',
@@ -171,18 +181,17 @@ class NonceAPIView(APIView):
     permission_classes = (AllowAny, )
 
     def get(self, request):
-        r = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
-
+        time.sleep(1)
         try_again = 100
         nonce = None
         while not nonce and try_again:
             nonce = get_random_string(10)
-            if not r.get(nonce):
+            if not nonce_cache.get(nonce):
                 break
             try_again -= 1
 
         if not nonce:
             return Response({'success': False, 'error': 'Unable to generate nonce. Please try again later!'})   
-        r.setex(nonce, 60 * 15, 1) # a-nonce-as-key, 15 minutes expiry, a-nonce-value-irrelevant 
+        nonce_cache.setex(nonce, 60 * 3, 1) # a-nonce-as-key, 3 minutes expiry, a-nonce-value-irrelevant 
         return Response({'success': True, 'data': { 'nonce': nonce }})
 
