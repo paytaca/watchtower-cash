@@ -1,4 +1,5 @@
 
+import time
 import requests
 import base64
 import redis
@@ -173,6 +174,7 @@ class NonceAPIView(APIView):
     permission_classes = (AllowAny, )
 
     def get(self, request):
+        time.sleep(1)
         try_again = 100
         nonce = None
         while not nonce and try_again:
@@ -183,6 +185,6 @@ class NonceAPIView(APIView):
 
         if not nonce:
             return Response({'success': False, 'error': 'Unable to generate nonce. Please try again later!'})   
-        nonce_cache.setex(nonce, 60 * 6, 1) # a-nonce-as-key,6 minutes expiry, a-nonce-value-irrelevant 
+        nonce_cache.setex(nonce, 60 * 3, 1) # a-nonce-as-key, 3 minutes expiry, a-nonce-value-irrelevant 
         return Response({'success': True, 'data': { 'nonce': nonce }})
 
