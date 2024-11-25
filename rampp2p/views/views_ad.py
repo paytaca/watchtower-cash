@@ -384,7 +384,8 @@ class AdViewSet(viewsets.GenericViewSet):
             time_limits = request.query_params.getlist('time_limits')
             price_order = request.query_params.get('price_order')
             query_name = request.query_params.get('query_name')
-            owned = request.query_params.get('owned') == 'true'
+            owned = request.query_params.get('owned', False)
+            owned = owned == 'true'
 
             try:
                 limit = int(request.query_params.get('limit', 0))
@@ -400,7 +401,7 @@ class AdViewSet(viewsets.GenericViewSet):
             
             if not owned:
                 # If not fetching owned ads: fetch only public ads and those with trade amount > 0
-                queryset = queryset.filter(Q(is_public=True) & Q(trade_amount__gt=0))
+                queryset = queryset.filter(Q(is_public=True) & Q(trade_amount_sats__gte=1000))
             
             # filters
             if owner_id is not None:
