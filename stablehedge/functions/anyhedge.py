@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
+from stablehedge.exceptions import StablehedgeException
 from stablehedge.utils.anyhedge import get_latest_oracle_price
 from stablehedge.utils.blockchain import (
     test_transaction_accept,
@@ -448,14 +449,14 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
 
     if not build_result["success"]:
         error_msg = build_result.get("success") or "Failed to build transaction"
-        raise AnyhedgeException(error_msg, code="build_failed")
+        raise StablehedgeException(error_msg, code="build_failed")
 
     tx_hex = build_result["tx_hex"]
     valid_tx, error_or_txid = test_transaction_accept(tx_hex)
     LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX BUILD | {treasury_contract_address} | {error_or_txid} | {tx_hex}")
 
     if not valid_tx:
-        raise AnyhedgeException("Invalid transaction", code=error_or_txid)
+        raise StablehedgeException("Invalid transaction", code=error_or_txid)
 
     return dict(tx_hex=tx_hex, txid=error_or_txid)
 
@@ -537,7 +538,7 @@ def complete_short_proposal(treasury_contract_address:str):
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
 
     if not short_proposal_data:
-        raise AnyhedgeException("No short proposal")
+        raise StablehedgeException("No short proposal")
 
     data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
     LOGGER.info(f"SHORT PROPOSAL | COMPLETE | {treasury_contract_address} | {data_str}")
@@ -555,7 +556,7 @@ def complete_short_proposal(treasury_contract_address:str):
     if funding_utxo_tx_hex:
         success, error_or_txid = broadcast_transaction(funding_utxo_tx_hex)
         if not success:
-            raise AnyhedgeException("Invalid funding utxo tx", code="invalid_transaction")
+            raise StablehedgeException("Invalid funding utxo tx", code="invalid_transaction")
         short_proposal_data["funding_utxo_tx"]["txid"] = error_or_txid
         save_short_proposal_data(
             treasury_contract_address,

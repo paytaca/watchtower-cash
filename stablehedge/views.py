@@ -7,6 +7,7 @@ from drf_yasg.utils import swagger_auto_schema
 from stablehedge import models
 from stablehedge import serializers
 
+from stablehedge.exceptions import StablehedgeException
 from stablehedge.functions.treasury_contract import (
     get_spendable_sats,
     sweep_funding_wif,
@@ -305,7 +306,7 @@ class TreasuryContractViewSet(
                 sig_index=index,
             )
             return Response(result)
-        except AnyhedgeException as exception:
+        except (AnyhedgeException, StablehedgeException) as exception:
             result = {
                 "detail": str(exception),
                 "code": str(exception.code),
@@ -327,7 +328,7 @@ class TreasuryContractViewSet(
             hedge_pos_obj = complete_short_proposal(instance.address)
             serializer = anyhedge_serializers.HedgePositionSerializer(hedge_pos_obj)
             return Response(serializer.data)
-        except AnyhedgeException as exception:
+        except (AnyhedgeException, StablehedgeException) as exception:
             result = {
                 "detail": str(exception),
                 "code": str(exception.code),

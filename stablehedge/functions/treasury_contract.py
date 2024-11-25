@@ -5,13 +5,12 @@ from django.db.models import Sum
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
+from stablehedge.exception import StablehedgeException
 from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.transaction import tx_model_to_cashscript
 from stablehedge.utils.encryption import encrypt_str, decrypt_str
 
-
-from anyhedge.utils.contract import AnyhedgeException
 
 from main import models as main_models
 
@@ -31,11 +30,11 @@ def save_signature_to_tx(
 
     if not verify_result.get("valid"):
         logging.exception(f"verify_result | {treasury_contract_address.address} | {verify_result}")
-        raise AnyhedgeException("Invalid signature/s", code="invalid_signature")
+        raise StablehedgeException("Invalid signature/s", code="invalid_signature")
 
     sig_index = int(sig_index)
     if sig_index < 1 or sig_index > 3:
-        raise AnyhedgeException("Invalid index for signature", code="invalid_sig_index")
+        raise StablehedgeException("Invalid index for signature", code="invalid_sig_index")
     tx_data[f"sig{sig_index}"] = sig
 
     return tx_data
@@ -158,7 +157,7 @@ def sweep_funding_wif(treasury_contract_address:str):
         cashscript_utxos.append(cashscript_utxo)
 
     if not len(cashscript_utxos):
-        raise Exception("No UTXOs found in funding wif")
+        raise StablehedgeException("No UTXOs found in funding wif")
 
     tx_result = ScriptFunctions.sweepUtxos(dict(
         recipientAddress=treasury_contract_address,
@@ -167,7 +166,7 @@ def sweep_funding_wif(treasury_contract_address:str):
     ))
 
     if not tx_result["success"]:
-        raise Exception(tx_result["error"])
+        raise StablehedgeException(tx_result["error"])
 
     transaction = tx_result["transaction"]
     success, error_or_txid = broadcast_transaction(transaction)
@@ -175,6 +174,6 @@ def sweep_funding_wif(treasury_contract_address:str):
     LOGGER.info(f"SWEEP FUNDING WIF | {treasury_contract_address} | {error_or_txid}")
 
     if not success:
-        raise Exception(error_or_txid)
+        raise StablehedgeException(error_or_txid)
 
     return error_or_txid
