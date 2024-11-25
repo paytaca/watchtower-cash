@@ -1,8 +1,11 @@
+import logging
+import decimal
 import json
 from stablehedge import models
 from stablehedge.utils.blockchain import (
     get_locktime,
     test_transaction_accept,
+    resolve_spending_txid,
 )
 from stablehedge.utils.transaction import (
     validate_utxo_data,
@@ -177,6 +180,104 @@ def create_redeem_tx(redemption_contract_tx:models.RedemptionContractTransaction
         result["error"] = error_or_txid
 
     return result
+
+def resolve_failed_redemption_tx(obj:models.RedemptionContractTransaction):
+    if obj.status != models.RedemptionContractTransaction.Status.FAILED:
+        return
+
+    # since there 2 inputs only, if deposit/redeem utxo is unspent,
+    # the missing input is the reserve utxo, which we can try to rerun
+    if obj.result_message == "missing-inputs" and \ 
+        obj.utxo and obj.utxo.get("txid") and \
+        NODE.BCH.rpc_connection.gettxout(obj.utxo["txid"], obj.utxo["vout"]):
+
+        obj.status = models.RedemptionContractTransaction.Status.PENDING
+        obj.save()
+
+    if obj.result_message in ["18: txn-already-in-mempool", "missing-inputs"]:
+        check_existing_txid_for_redemption_contract_tx(obj)
+
+
+def check_existing_txid_for_redemption_contract_tx(obj:models.RedemptionContractTransaction, force=False):
+    if obj.txid and not force:
+        return dict(success=True, txid=obj.txid, result="resolved-txid")
+
+    txid = obj.utxo["txid"]
+    vout = obj.utxo["vout"]
+    spending_txid = resolve_spending_txid(txid, vout)
+    if not spending_txid:
+        return dict(success=True, result="unspent-or-missing")
+
+    data = check_transaction_for_redemption_contract_tx(spending_txid)
+    if not data:
+        return dict(success=False, result="no-data")
+
+    if obj.redemption_contract.address != data["redemption_contract_address"]:
+        return dict(success=False, result="contract-mismatch")
+    
+    if obj.transaction_type != data["tx_type"]:
+        return dict(success=False, result="tx-type-mismatch")
+
+    obj.txid = spending_txid
+    obj.status = models.RedemptionContractTransaction.Status.SUCCESS
+    obj.save()
+    return dict(success=True, txid=obj.txid)
+
+
+def check_transaction_for_redemption_contract_tx(txid:str):
+    tx_data = NODE.BCH.get_transaction(txid)
+
+    if not tx_data: return
+    if len(tx_data["inputs"]) < 2 or len(tx_data["outputs"]) < 2: return
+
+    input_0 = tx_data["inputs"][0]
+    output_0 = tx_data["outputs"][0]
+
+    input_1 = tx_data["inputs"][1]
+    output_1 = tx_data["outputs"][1]
+
+    try:
+        if not input_0["address"] or input_0["address"] != output_0["address"]:
+            return
+        elif input_0["token_data"]["category"] != output_0["token_data"]["category"]:
+            return
+
+        reserve_sats_diff = output_0["value"] - input_0["value"]
+        reserve_token_diff = decimal.Decimal(output_0["token_data"]["amount"]) - decimal.Decimal(input_0["token_data"]["amount"])
+
+        input_sats = input_1["value"]
+        input_tokens = decimal.Decimal(input_1["token_data"]["amount"]) if input_1.get("token_data") else None
+
+        output_sats = output_1["value"]
+        output_tokens = decimal.Decimal(output_1["token_data"]["amount"]) if output_1.get("token_data") else None
+    except (KeyError, TypeError) as exception:
+        logging.exception(exception)
+        return
+
+    tx_type = None
+    if reserve_token_diff > 0:
+        tx_type = models.RedemptionContractTransaction.Type.REDEEM
+    elif reserve_token_diff < 0:
+        if input_sats - 2000 == reserve_sats_diff:
+            tx_type = models.RedemptionContractTransaction.Type.INJECT
+        else:
+            tx_type = models.RedemptionContractTransaction.Type.DEPOSIT
+
+    utxo=dict(
+        txid=input_1["txid"],
+        vout=input_1["spent_index"],
+        satoshis=input_1["value"],
+    )
+    if input_1.get("token_data"):
+        utxo["category"] = input_1["token_data"]["category"]
+        utxo["amount"] = input_1["token_data"]["amount"]
+
+    return dict(
+        redemption_contract_address=input_0["address"],
+        tx_type=tx_type,
+        utxo=utxo,
+    )
+
 
 def get_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionContractTransaction):
     if not redemption_contract_tx.txid:

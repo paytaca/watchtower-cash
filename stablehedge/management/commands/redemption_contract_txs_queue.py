@@ -11,6 +11,7 @@ from stablehedge.functions.transaction import (
     create_inject_liquidity_tx,
     create_deposit_tx,
     create_redeem_tx,
+    resolve_failed_redemption_tx,
     save_redemption_contract_tx_meta,
 )
 
@@ -86,6 +87,9 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
             save_redemption_contract_tx_meta(obj)
         except Exception as exception:
             LOGGER.exception(exception)
+
+    if obj.status == models.RedemptionContractTransaction.Status.FAILED:
+        resolve_failed_redemption_tx(obj)
 
     if obj.status == models.RedemptionContractTransaction.Status.SUCCESS or \
         obj.status == models.RedemptionContractTransaction.Status.FAILED:
