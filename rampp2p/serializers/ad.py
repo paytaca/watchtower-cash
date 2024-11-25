@@ -11,6 +11,9 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
+    trade_floor = serializers.SerializerMethodField()
+    trade_ceiling = serializers.SerializerMethodField()
+    trade_amount = serializers.SerializerMethodField()
     payment_types = serializers.SlugRelatedField(slug_field="short_name", queryset=models.PaymentType.objects.all(), many=True)
     payment_methods = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
@@ -40,10 +43,17 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             'created_at'
         ]
 
+    def get_trade_amount(self, obj):
+        return obj.get_trade_amount()
+    
+    def get_trade_floor(self, obj):
+        return obj.get_trade_floor()
+    
+    def get_trade_ceiling(self, obj):
+        return obj.get_trade_ceiling()
+
     def get_price(self, instance: models.AdSnapshot):
-        if instance.price_type == models.PriceType.FIXED:
-            return instance.fixed_price
-        return instance.market_price * (instance.floating_price/100)
+        return instance.price
     
     def get_payment_methods(self, obj: models.AdSnapshot):
         payment_type_ids = obj.payment_types.values_list('id')
@@ -252,9 +262,15 @@ class AdSerializer(serializers.ModelSerializer):
     price_type = serializers.ChoiceField(choices=models.PriceType.choices, required=False)
     fixed_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
     floating_price = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    
     trade_floor_sats = serializers.IntegerField(required=False)
     trade_ceiling_sats = serializers.IntegerField(required=False)
     trade_amount_sats = serializers.IntegerField(required=False)
+
+    trade_floor_fiat = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_ceiling_fiat = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+    trade_amount_fiat = serializers.DecimalField(max_digits=18, decimal_places=8, required=False)
+
     trade_limits_in_fiat = serializers.BooleanField(required=False)
     trade_amount_in_fiat = serializers.BooleanField(required=False)
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all(), required=False)
@@ -276,6 +292,9 @@ class AdSerializer(serializers.ModelSerializer):
             'trade_floor_sats',
             'trade_ceiling_sats',
             'trade_amount_sats',
+            'trade_floor_fiat',
+            'trade_ceiling_fiat',
+            'trade_amount_fiat',
             'trade_limits_in_fiat',
             'trade_amount_in_fiat',
             'fiat_currency',

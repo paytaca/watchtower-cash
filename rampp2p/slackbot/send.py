@@ -193,7 +193,7 @@ class OrderSummaryMessage(MessageBase):
     
     @classmethod
     def resolve_color_from_status(cls, order:models.Order):
-        return block_kit_helpers.resolve_color_from_order_status(order.status)
+        return block_kit_helpers.resolve_color_from_order_status(order.status.status)
 
     @classmethod
     def get_message_header_block(cls, order:models.Order):
@@ -384,7 +384,7 @@ class AppealSummaryMessage(MessageBase):
 
         text=f"Appeal #{appeal.id} Summary"
         attachments = [
-            block_kit.Blocks(*blocks),
+            block_kit.Blocks(*blocks, color=cls.resolve_color_from_status(appeal)),
         ]
         msg_logs = models.SlackMessageLog.objects.filter(
             topic=models.SlackMessageLog.Topic.APPEAL_SUMMARY,
@@ -428,6 +428,10 @@ class AppealSummaryMessage(MessageBase):
             )
 
         return results
+    
+    @classmethod
+    def resolve_color_from_status(cls, appeal:models.Appeal):
+        return block_kit_helpers.resolve_color_from_appeal_status(appeal)
     
     @classmethod
     def resolve_status(cls, appeal:models.Appeal):
@@ -659,22 +663,15 @@ class AdSummaryMessage(MessageBase):
             floating_price = '{:f}'.format(Decimal(ad.floating_price).normalize())
             price_type = f'{price_type} ({floating_price}%)'
 
-        trade_amount = satoshi_to_bch(ad.trade_amount_sats)
-        if ad.trade_amount_in_fiat:
-            trade_amount = bch_to_fiat(trade_amount, ad.get_price())
-        
+        trade_amount = ad.get_trade_amount()
         trade_amount = '{:f}'.format(Decimal(trade_amount).normalize())
         if ad.trade_amount_in_fiat:
             trade_amount = f'{trade_amount} {ad.fiat_currency.symbol}'
         else:
             trade_amount = f'{trade_amount} {ad.crypto_currency.symbol}'
 
-        trade_floor = satoshi_to_bch(ad.trade_floor_sats)
-        trade_ceiling = satoshi_to_bch(ad.trade_ceiling_sats)
-        if ad.trade_limits_in_fiat:
-            trade_floor = bch_to_fiat(trade_floor, ad.get_price())
-            trade_ceiling = bch_to_fiat(trade_ceiling, ad.get_price())
-
+        trade_floor = ad.get_trade_floor()
+        trade_ceiling = ad.get_trade_ceiling()
         trade_floor = '{:f}'.format(Decimal(trade_floor).normalize())
         trade_ceiling = '{:f}'.format(Decimal(trade_ceiling).normalize())
         if ad.trade_limits_in_fiat:
@@ -895,6 +892,12 @@ class AdUpdateMessage(MessageBase):
             return f"Ad #{ad.id} updated trade ceiling from {old_value} {old_currency} to {new_value} {new_currency}"
         elif update_type == AdUpdateType.TRADE_AMOUNT:
             return f"Ad #{ad.id} updated trade quantity from {old_value} {old_currency} to {new_value} {new_currency}"
+        elif update_type == AdUpdateType.TRADE_AMOUNT_IN_FIAT:
+            currency = f'{ad.fiat_currency.symbol}' if new_value == True else 'BCH'
+            return f"Ad #{ad.id} trade quantity currency set to {currency}"
+        elif update_type == AdUpdateType.TRADE_LIMITS_IN_FIAT:
+            currency = f'{ad.fiat_currency.symbol}' if new_value == True else 'BCH'
+            return f"Ad #{ad.id} trade limits currency set to {currency}"
         elif update_type == AdUpdateType.APPEAL_COOLDOWN:
             old_value = models.CooldownChoices(old_value).label
             new_value = models.CooldownChoices(new_value).label

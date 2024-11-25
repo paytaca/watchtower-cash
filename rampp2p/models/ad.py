@@ -31,12 +31,18 @@ class Ad(models.Model):
     fixed_price = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     floating_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     
+    # for storing fixed value trade floor and ceiling 
+    # (as storing them in satoshi will fluctuate their values based on ad price)
+    trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_floor_sats = models.BigIntegerField(null=True)
     trade_ceiling_sats = models.BigIntegerField(null=True)
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_limits_in_fiat = models.BooleanField(default=False)
     
+    # for storing fixed value trade amount
+    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_sats = models.BigIntegerField(null=True)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
@@ -74,41 +80,29 @@ class Ad(models.Model):
         return None
     
     def get_trade_floor(self):
-        trade_floor = self.trade_floor_sats
-
-        # convert to satoshi to bch
-        trade_floor = satoshi_to_bch(trade_floor)
-        
         if self.trade_limits_in_fiat:
-            # convert bch to fiat
-            ad_price = self.get_price()
-            trade_floor = bch_to_fiat(trade_floor, ad_price)
+            return self.trade_floor_fiat
+        
+        trade_floor = self.trade_floor_sats
+        trade_floor = satoshi_to_bch(trade_floor)
         
         return trade_floor
 
     def get_trade_ceiling(self):
-        trade_ceiling = self.trade_ceiling_sats
-
-        # convert to satoshi to bch
-        trade_ceiling = satoshi_to_bch(trade_ceiling)
-        
         if self.trade_limits_in_fiat:
-            # convert bch to fiat
-            ad_price = self.get_price()
-            trade_ceiling = bch_to_fiat(trade_ceiling, ad_price)
+            return self.trade_ceiling_fiat
+        
+        trade_ceiling = self.trade_ceiling_sats
+        trade_ceiling = satoshi_to_bch(trade_ceiling)
         
         return trade_ceiling
     
     def get_trade_amount(self):
-        trade_amount = self.trade_amount_sats
-
-        # convert to satoshi to bch
-        trade_amount = satoshi_to_bch(trade_amount)
-        
         if self.trade_amount_in_fiat:
-            # convert bch to fiat
-            ad_price = self.get_price()
-            trade_amount = bch_to_fiat(trade_amount, ad_price)
+            return self.trade_amount_fiat
+        
+        trade_amount = self.trade_amount_sats
+        trade_amount = satoshi_to_bch(trade_amount)
         
         return trade_amount
         
@@ -124,12 +118,18 @@ class AdSnapshot(models.Model):
     floating_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     market_price = models.DecimalField(max_digits=18, decimal_places=8, default=1)
     
+    # for storing fixed value trade floor and ceiling 
+    # (as storing them in satoshi will fluctuate their values based on ad price)
+    trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_floor_sats = models.BigIntegerField(null=True)
     trade_ceiling_sats = models.BigIntegerField(null=True)
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_limits_in_fiat = models.BooleanField(default=False)
-    
+
+    # for storing fixed value trade amount
+    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_sats = models.BigIntegerField(null=True)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
@@ -158,40 +158,27 @@ class AdSnapshot(models.Model):
         return self.market_price * (self.floating_price/100)
     
     def get_trade_floor(self):
-        trade_floor = self.trade_floor_sats
-
-        # convert to satoshi to bch
-        trade_floor = satoshi_to_bch(trade_floor)
-        
         if self.trade_limits_in_fiat:
-            # convert bch to fiat
-            ad_price = self.get_price()
-            trade_floor = bch_to_fiat(trade_floor, ad_price)
-        
+            return self.trade_floor_fiat
+       
+        trade_floor = self.trade_floor_sats
+        trade_floor = satoshi_to_bch(trade_floor)        
         return trade_floor
 
     def get_trade_ceiling(self):
-        trade_ceiling = self.trade_ceiling_sats
-
-        # convert to satoshi to bch
-        trade_ceiling = satoshi_to_bch(trade_ceiling)
-        
         if self.trade_limits_in_fiat:
-            # convert bch to fiat
-            ad_price = self.get_price()
-            trade_ceiling = bch_to_fiat(trade_ceiling, ad_price)
+            return self.trade_ceiling_fiat
+    
+        trade_ceiling = self.trade_ceiling_sats
+        trade_ceiling = satoshi_to_bch(trade_ceiling)
         
         return trade_ceiling
     
     def get_trade_amount(self):
-        trade_amount = self.trade_amount_sats
-
-        # convert to satoshi to bch
-        trade_amount = satoshi_to_bch(trade_amount)
-        
         if self.trade_amount_in_fiat:
-            # convert bch to fiat
-            ad_price = self.get_price()
-            trade_amount = bch_to_fiat(trade_amount, ad_price)
+            return self.trade_amount_fiat
+        
+        trade_amount = self.trade_amount_sats
+        trade_amount = satoshi_to_bch(trade_amount)
         
         return trade_amount
