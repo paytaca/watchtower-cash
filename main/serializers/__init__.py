@@ -17,3 +17,4 @@ from main.serializers.serializer_webhook import *
 from main.serializers.serializer_wallet_shard import *
 from main.serializers.serializer_live_updates import *
 from main.serializers.serializer_wallet_addresses import *
+from main.serializers.serializer_wallet_address_app import *
