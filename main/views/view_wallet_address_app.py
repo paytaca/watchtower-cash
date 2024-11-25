@@ -177,7 +177,7 @@ class NonceAPIView(APIView):
         nonce = None
         while not nonce and try_again:
             nonce = get_random_string(10)
-            if not r.get(nonce):
+            if not nonce_cache.get(nonce):
                 break
             try_again -= 1
 
