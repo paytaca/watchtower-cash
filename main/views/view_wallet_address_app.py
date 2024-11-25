@@ -71,12 +71,14 @@ class WalletAddressAppView(APIView):
     serializer_class = WalletAddressAppSerializer
 
     def get(self, request, *args, **kwargs):
+        wallet_hash = self.request.query_params.get('wallet_hash')
         wallet_address = self.request.query_params.get('wallet_address')
+        queryset = WalletAddressApp.objects.order_by('-updated_at')
 
-        queryset = WalletAddressApp.objects.order_by('-created_at')
-
+        if wallet_hash:
+            queryset = queryset.filter(wallet_hash=wallet_hash)
         if wallet_address:
-            queryset = querset.filter(wallet_address=wallet_address)
+            queryset = queryset.filter(wallet_address=wallet_address)
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request)
