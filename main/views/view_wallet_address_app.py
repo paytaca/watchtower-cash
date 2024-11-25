@@ -183,6 +183,6 @@ class NonceAPIView(APIView):
 
         if not nonce:
             return Response({'success': False, 'error': 'Unable to generate nonce. Please try again later!'})   
-        nonce_cache.setex(nonce, 60 * 15, 1) # a-nonce-as-key, 15 minutes expiry, a-nonce-value-irrelevant 
+        nonce_cache.setex(nonce, 60 * 6, 1) # a-nonce-as-key,6 minutes expiry, a-nonce-value-irrelevant 
         return Response({'success': True, 'data': { 'nonce': nonce }})
 
