@@ -17,7 +17,7 @@ from django.conf import settings
 from coincurve import PublicKey
 from bitcash import format
 
-from main.models import WalletAddressApp
+from main.models import WalletAddressApp, Address
 from main.serializers import WalletAddressAppSerializer
 
 nonce_cache = settings.REDISKV
@@ -123,14 +123,19 @@ class WalletAddressAppView(APIView):
         coincurve_public_key = PublicKey(public_key_bytes)
         message_bytes = message.encode('utf-8')  # encode message first
         if coincurve_public_key.verify(signature_bytes, message_bytes):
-            wallet_address_app, created = WalletAddressApp.objects.get_or_create(
+            address = Address.objects.filter(address=signer_address).first()
+            wallet_hash = None
+            if address and address.wallet:
+                wallet_hash = address.wallet.wallet_hash
+            wallet_address_app, created = WalletAddressApp.objects.update_or_create(
                 wallet_address=signer_address,
                 app_name=app_name,
                 app_url=app_url,
                 defaults = { 
                     'app_name': app_name, 
                     'app_url': app_url, 
-                    'wallet_address': signer_address 
+                    'wallet_address': signer_address,
+                    'wallet_hash': wallet_hash
                 }
             )
             nonce_cache.delete(nonce)
