@@ -856,4 +856,4 @@ class WalletAddressApp(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.address} -> {self.app_url}"
+        return f"{self.wallet_address} -> {self.app_url}"
