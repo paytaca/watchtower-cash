@@ -19,6 +19,8 @@ from bitcash import format
 from main.models import WalletAddressApp
 from main.serializers import WalletAddressAppSerializer
 
+nonce_cache = settings.REDISKV
+
 class CustomLimitOffsetPagination(pagination.LimitOffsetPagination):
     default_limit = 10
     max_limit = 50
@@ -84,7 +86,7 @@ class WalletAddressAppView(APIView):
         return Response(serializer.data)
         
     def post(self, request, *args, **kwargs):
-        r = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
+        
         public_key_hex = request.data.get('public_key')
         signature_hex = request.data.get('signature')
         # message = pipe separated strings '<nonce get from api/nonce endpoint (NonceAPIView) >|<signer_address>|<app_name>|<app_url>'
@@ -95,7 +97,7 @@ class WalletAddressAppView(APIView):
 
         if not all([nonce, app_name, app_url, signer_address]):
             return Response({'success': False,  'error': 'Incomplete message object. nonce, app_name, app_url, signer_address required. '}, status=status.HTTP_400_BAD_REQUEST)
-        if not r.get(nonce):
+        if not nonce_cache.get(nonce):
             return Response({'success': False,  'error': 'Unauthorized, invalid nonce'}, status=status.HTTP_401_UNAUTHORIZED)
 
         # If signature is base64
@@ -130,7 +132,7 @@ class WalletAddressAppView(APIView):
                     'wallet_address': signer_address 
                 }
             )
-            r.delete(nonce)
+            nonce_cache.delete(nonce)
             return Response({
                 'success': True, 
                 'message': f'Signature verification ok, data processed successfully',
@@ -171,8 +173,6 @@ class NonceAPIView(APIView):
     permission_classes = (AllowAny, )
 
     def get(self, request):
-        r = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
-
         try_again = 100
         nonce = None
         while not nonce and try_again:
@@ -183,6 +183,6 @@ class NonceAPIView(APIView):
 
         if not nonce:
             return Response({'success': False, 'error': 'Unable to generate nonce. Please try again later!'})   
-        r.setex(nonce, 60 * 15, 1) # a-nonce-as-key, 15 minutes expiry, a-nonce-value-irrelevant 
+        nonce_cache.setex(nonce, 60 * 15, 1) # a-nonce-as-key, 15 minutes expiry, a-nonce-value-irrelevant 
         return Response({'success': True, 'data': { 'nonce': nonce }})
 
