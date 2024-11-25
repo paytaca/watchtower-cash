@@ -1,7 +1,7 @@
 from django.db.models import Q
 from django.conf import settings
 from django.apps import apps
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 from asgiref.sync import sync_to_async
 
@@ -13,8 +13,8 @@ def update_user_active_status(wallet_hash, is_online):
     Arbiter = apps.get_model('rampp2p', 'Arbiter')
     try:
         user = Peer.objects.get(wallet_hash=wallet_hash)
-        arbiter = Arbiter.objects.get(wallet_hash=wallet_hash)
-        if arbiter and not arbiter.is_disabled:
+        arbiter = Arbiter.objects.filter(wallet_hash=wallet_hash)
+        if arbiter.exists() and not arbiter.first().is_disabled:
             user = arbiter.first()
 
         user.is_online = is_online
@@ -47,7 +47,7 @@ async def unread_orders_count(wallet_hash):
     return count
 
 def satoshi_to_bch(satoshi):
-    return satoshi / settings.SATOSHI_PER_BCH
+    return Decimal(satoshi / settings.SATOSHI_PER_BCH).quantize(Decimal('0.00000001'), rounding=ROUND_DOWN) # truncate to 8 decimals
 
 def bch_to_satoshi(bch):
     return bch * settings.SATOSHI_PER_BCH

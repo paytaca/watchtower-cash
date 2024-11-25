@@ -146,7 +146,7 @@ class OrderSummaryMessage(MessageBase):
         if order.is_cash_in:
             text = f"Cash In {text}"
         attachments = [
-            block_kit.Blocks(*blocks),
+            block_kit.Blocks(*blocks, color=cls.resolve_color_from_status(order)),
         ]
         msg_logs = models.SlackMessageLog.objects.filter(
             topic=models.SlackMessageLog.Topic.ORDER_SUMMARY,
@@ -190,6 +190,10 @@ class OrderSummaryMessage(MessageBase):
             )
 
         return results
+    
+    @classmethod
+    def resolve_color_from_status(cls, order:models.Order):
+        return block_kit_helpers.resolve_color_from_order_status(order.status)
 
     @classmethod
     def get_message_header_block(cls, order:models.Order):
@@ -655,14 +659,24 @@ class AdSummaryMessage(MessageBase):
             floating_price = '{:f}'.format(Decimal(ad.floating_price).normalize())
             price_type = f'{price_type} ({floating_price}%)'
 
-        trade_amount = '{:f}'.format(Decimal(ad.trade_amount).normalize())
+        trade_amount = satoshi_to_bch(ad.trade_amount_sats)
+        if ad.trade_amount_in_fiat:
+            trade_amount = bch_to_fiat(trade_amount, ad.get_price())
+        
+        trade_amount = '{:f}'.format(Decimal(trade_amount).normalize())
         if ad.trade_amount_in_fiat:
             trade_amount = f'{trade_amount} {ad.fiat_currency.symbol}'
         else:
             trade_amount = f'{trade_amount} {ad.crypto_currency.symbol}'
 
-        trade_floor = '{:f}'.format(Decimal(ad.trade_floor).normalize())
-        trade_ceiling = '{:f}'.format(Decimal(ad.trade_ceiling).normalize())
+        trade_floor = satoshi_to_bch(ad.trade_floor_sats)
+        trade_ceiling = satoshi_to_bch(ad.trade_ceiling_sats)
+        if ad.trade_limits_in_fiat:
+            trade_floor = bch_to_fiat(trade_floor, ad.get_price())
+            trade_ceiling = bch_to_fiat(trade_ceiling, ad.get_price())
+
+        trade_floor = '{:f}'.format(Decimal(trade_floor).normalize())
+        trade_ceiling = '{:f}'.format(Decimal(trade_ceiling).normalize())
         if ad.trade_limits_in_fiat:
             trade_floor = f'{trade_floor} {ad.fiat_currency.symbol}'
             trade_ceiling = f'{trade_ceiling} {ad.fiat_currency.symbol}' 
@@ -847,13 +861,25 @@ class AdUpdateMessage(MessageBase):
             old_currency = currency.get('old')
             new_currency = currency.get('new')
 
-        if (update_type == AdUpdateType.FIXED_PRICE or
-            update_type == AdUpdateType.FLOATING_PRICE or
-            update_type == AdUpdateType.TRADE_AMOUNT or
+        if (update_type == AdUpdateType.TRADE_AMOUNT or
             update_type == AdUpdateType.TRADE_FLOOR or
             update_type == AdUpdateType.TRADE_CEILING):
-            old_value = '{:f}'.format(Decimal(old_value.normalize())) if old_currency == 'BCH' else '{:.2f}'.format(Decimal(old_value.normalize()))
-            new_value = '{:f}'.format(Decimal(new_value.normalize())) if new_currency == 'BCH' else '{:.2f}'.format(Decimal(new_value.normalize()))
+            old_value = satoshi_to_bch(old_value)
+            new_value = satoshi_to_bch(new_value)
+
+            if old_currency != 'BCH':
+                old_value = bch_to_fiat(old_value, ad.get_price())
+
+            if new_currency != 'BCH':
+                new_value = bch_to_fiat(new_value, ad.get_price())
+
+            old_value = '{:f}'.format(old_value.normalize()) if old_currency == 'BCH' else '{:.2f}'.format(old_value.normalize())
+            new_value = '{:f}'.format(new_value.normalize()) if new_currency == 'BCH' else '{:.2f}'.format(new_value.normalize())
+
+        if (update_type == AdUpdateType.FIXED_PRICE or
+            update_type == AdUpdateType.FLOATING_PRICE):
+            old_value = '{:.2f}'.format(old_value)
+            new_value = '{:.2f}'.format(new_value)
 
         if update_type == AdUpdateType.CURRENCY:
             return f"Ad #{ad.id} updated currency from {old_value} to {new_value}"

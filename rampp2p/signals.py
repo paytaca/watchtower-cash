@@ -80,11 +80,11 @@ def resolve_updated_ad_fields(instance: models.Ad):
                         'new': new_value
                     }
 
-                    if (field_name == 'trade_amount' or
-                        field_name == 'trade_floor' or
-                        field_name == 'trade_ceiling'):
+                    if (field_name == 'trade_amount_sats' or
+                        field_name == 'trade_floor_sats' or
+                        field_name == 'trade_ceiling_sats'):
                         in_fiat_name = 'trade_limits_in_fiat'
-                        if field_name == 'trade_amount':
+                        if field_name == 'trade_amount_sats':
                             in_fiat_name = 'trade_amount_in_fiat'
 
                         old_trade_amount_in_fiat = getattr(instance._previous_state, in_fiat_name)
@@ -119,11 +119,11 @@ def send_ad_update_message(ad_id, field_name, context=None):
         update_type = AdUpdateType.FIXED_PRICE
     elif field_name == 'floating_price':
         update_type = AdUpdateType.FLOATING_PRICE
-    elif field_name == 'trade_floor':
+    elif field_name == 'trade_floor_sats':
         update_type = AdUpdateType.TRADE_FLOOR
-    elif field_name == 'trade_ceiling':
+    elif field_name == 'trade_ceiling_sats':
         update_type = AdUpdateType.TRADE_CEILING
-    elif field_name == 'trade_amount':
+    elif field_name == 'trade_amount_sats':
         update_type = AdUpdateType.TRADE_AMOUNT
     elif field_name == 'trade_amount_in_fiat':
         update_type = AdUpdateType.TRADE_AMOUNT_IN_FIAT
