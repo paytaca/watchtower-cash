@@ -29,6 +29,7 @@ from stablehedge.filters import (
     FiatTokenFilter,
     RedemptionContractFilter,
     RedemptionContractTransactionFilter,
+    TreasuryContractFilter,
 )
 from stablehedge.utils import response_serializers
 from stablehedge.utils.anyhedge import get_fiat_token_price_messages
@@ -212,6 +213,10 @@ class TreasuryContractViewSet(
 ):
     lookup_field = "address"
     serializer_class = serializers.TreasuryContractSerializer
+
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = TreasuryContractFilter
+    pagination_class = CustomLimitOffsetPagination
 
     def get_queryset(self):
         return models.TreasuryContract.objects \

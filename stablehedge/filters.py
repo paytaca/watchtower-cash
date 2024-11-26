@@ -1,5 +1,5 @@
 import re
-from django.db.models import F
+from django.db.models import F, Q
 from django_filters import rest_framework as filters
 
 
@@ -81,3 +81,17 @@ class RedemptionContractTransactionFilter(filters.FilterSet):
 
     def categories_filter(self, queryset, name, value):
         return queryset.filter(redemption_contract__fiat_token__category__in=str(value).split(","))
+
+
+class TreasuryContractFilter(filters.FilterSet):
+    pubkeys = filters.CharFilter(method="pubkeys_filter")
+    def pubkeys_filter(self, queryset, name, value):
+        pubkeys = str(value).split(",")
+
+        return queryset.filter(
+            Q(pubkey1__in=pubkeys) |
+            Q(pubkey2__in=pubkeys) |
+            Q(pubkey3__in=pubkeys) |
+            Q(pubkey4__in=pubkeys) |
+            Q(pubkey5__in=pubkeys)
+        )
