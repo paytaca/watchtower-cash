@@ -165,16 +165,17 @@ class WalletAddressAppRecordExistsView(APIView):
     )
     def get(self, request, *args, **kwargs):
         wallet_address = request.query_params.get('wallet_address', '')
+        wallet_hash = request.query_params.get('wallet_hash', '')
         app_name = request.query_params.get('app_name', '')
-        queryset = WalletAddressApp.objects.filter(wallet_address=wallet_address)
-        
+        queryset = WalletAddressApp.objects.all()
+        if wallet_hash:
+            queryset = queryset.filter(wallet_hash=wallet_hash)
+        if wallet_address:
+            queryset = queryset.filter(wallet_address=wallet_address)
         if app_name:
             queryset = queryset.filter(app_name=app_name)
+        return Response({ 'exists': queryset.exists() })
 
-        if not queryset.exists():
-            return Response({ 'exists': False })
-
-        return Response({ 'exists': True })
         
 class NonceAPIView(APIView):
 
