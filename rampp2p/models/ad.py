@@ -33,8 +33,8 @@ class Ad(models.Model):
     
     # for storing fixed value trade floor and ceiling 
     # (as storing them in satoshi will fluctuate their values based on ad price)
-    trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     trade_floor_sats = models.BigIntegerField(null=True)
     trade_ceiling_sats = models.BigIntegerField(null=True)
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
@@ -42,7 +42,7 @@ class Ad(models.Model):
     trade_limits_in_fiat = models.BooleanField(default=False)
     
     # for storing fixed value trade amount
-    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     trade_amount_sats = models.BigIntegerField(null=True)
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
@@ -98,7 +98,7 @@ class Ad(models.Model):
         return trade_ceiling
     
     def get_trade_amount(self):
-        if self.trade_amount_in_fiat:
+        if self.trade_limits_in_fiat:
             return self.trade_amount_fiat
         
         trade_amount = self.trade_amount_sats
@@ -120,17 +120,20 @@ class AdSnapshot(models.Model):
     
     # for storing fixed value trade floor and ceiling 
     # (as storing them in satoshi will fluctuate their values based on ad price)
-    trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    
     trade_floor_sats = models.BigIntegerField(null=True)
     trade_ceiling_sats = models.BigIntegerField(null=True)
+    
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_limits_in_fiat = models.BooleanField(default=False)
 
     # for storing fixed value trade amount
-    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=8, default=0)
+    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     trade_amount_sats = models.BigIntegerField(null=True)
+    
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
     
@@ -175,7 +178,7 @@ class AdSnapshot(models.Model):
         return trade_ceiling
     
     def get_trade_amount(self):
-        if self.trade_amount_in_fiat:
+        if self.trade_limits_in_fiat:
             return self.trade_amount_fiat
         
         trade_amount = self.trade_amount_sats

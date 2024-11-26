@@ -9,9 +9,9 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q, OuterRef, Subquery, Case, When, Value, BooleanField, CharField
 
+from decimal import Decimal
 from datetime import datetime, time, timedelta
 from typing import List
-from decimal import Decimal, ROUND_HALF_UP
 import math
 
 from authentication.token import TokenAuthentication
@@ -21,6 +21,7 @@ import rampp2p.models as models
 import rampp2p.serializers as serializers
 import rampp2p.utils.utils as utils
 import rampp2p.utils.websocket as websocket
+from rampp2p.utils import satoshi_to_bch, bch_to_fiat
 
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
@@ -326,9 +327,15 @@ class OrderViewSet(viewsets.GenericViewSet):
                     fixed_price = ad.fixed_price,
                     floating_price = ad.floating_price,
                     market_price = market_price.price,
+                    
                     trade_floor_sats = ad.trade_floor_sats,
                     trade_ceiling_sats = ad.trade_ceiling_sats,
                     trade_amount_sats = ad.trade_amount_sats,
+
+                    trade_floor_fiat = ad.trade_floor_fiat,
+                    trade_ceiling_fiat = ad.trade_ceiling_fiat,
+                    trade_amount_fiat = ad.trade_amount_fiat,
+                    
                     appeal_cooldown_choice = ad.appeal_cooldown_choice,
                     trade_amount_in_fiat = ad.trade_amount_in_fiat,
                     trade_limits_in_fiat = ad.trade_limits_in_fiat
@@ -350,14 +357,7 @@ class OrderViewSet(viewsets.GenericViewSet):
                     'is_cash_in': is_cash_in,
                     'tracking_id': tracking_id
                 }
-                # Calculate the locked ad price
-                # price = None
-                # if ad_snapshot.price_type == models.PriceType.FLOATING:
-                #     market_price = market_price.price
-                #     price = market_price * (ad_snapshot.floating_price/100)
-                # else:
-                #     price = ad_snapshot.fixed_price
-                # data['locked_price'] = Decimal(price).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
                 serialized_order = serializers.WriteOrderSerializer(data=data)
 
                 # Raise error if order isn't valid
@@ -651,35 +651,36 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 order.save()
 
                 # Decrease the Ad's trade amount and ceiling
-                trade_amount_sats = order.ad_snapshot.ad.trade_amount_sats - order.trade_amount
-                if trade_amount_sats < 0:
-                    raise ValidationError('order amount exceeds ad remaining trade quantity')
-                
-                ad = models.Ad.objects.get(pk=order.ad_snapshot.ad.id)
-                ad.trade_amount_sats = trade_amount_sats
-            
-                # trade_amount_lt_ceiling = ad.trade_amount_sats < ad.trade_ceiling_sats
-                # # If trade_amount and trade_ceiling do NOT have the same currency
-                # if ad.trade_amount_in_fiat ^ ad.trade_limits_in_fiat:
-                #     # convert trade_ceiling to the currency 
-                #     # of trade_amount for comparison
-                #     eq_trade_amount = trade_amount
-                #     comp_trade_ceil = ad.trade_ceiling
-                #     if ad.trade_amount_in_fiat and not ad.trade_limits_in_fiat:
-                #         comp_trade_ceil = ad.trade_ceiling * order.locked_price
-                #         eq_trade_amount = trade_amount / order.locked_price
-                #     if not ad.trade_amount_in_fiat and ad.trade_limits_in_fiat:
-                #         comp_trade_ceil = ad.trade_ceiling / order.locked_price
-                #         eq_trade_amount = trade_amount * order.locked_price
-                    
-                #     trade_amount_lt_ceiling = ad.trade_amount < comp_trade_ceil
-                    
-                #     logger.warning(f'eq_trade_amount: {eq_trade_amount} | trade_amount_lt_ceiling: {trade_amount_lt_ceiling}')
-                #     # Set the trade_amount in its equivalent amount in trade_ceiling's currency
-                #     trade_amount = eq_trade_amount 
+                # TODO: Test what happens if the ad is deleted before the order is confirmed?
+                # TODO: If an ad is deleted before the order is confirmed, and order trade 
+                # amount exceeds ad's limits, what happens to this order?
+                ad = order.ad_snapshot.ad
+                if order.ad_snapshot.trade_limits_in_fiat:
+                    order_amount_fiat = bch_to_fiat(satoshi_to_bch(order.trade_amount), order.ad_snapshot.price)
+                    ad_quantity_fiat = Decimal(order.ad_snapshot.trade_amount_fiat)
+                    new_ad_quantity_fiat = ad_quantity_fiat - order_amount_fiat
 
-                if ad.trade_amount_sats < ad.trade_ceiling_sats:
-                  ad.trade_ceiling_sats = trade_amount_sats
+                    logger.warning(f'order.trade_amount: {order.trade_amount} | order_amount_fiat: {order_amount_fiat} | ad_quantity_fiat: {ad_quantity_fiat} | new_ad_quantity_fiat: {new_ad_quantity_fiat}')
+                    
+                    if new_ad_quantity_fiat < 0:
+                        raise ValidationError('order amount exceeds ad remaining trade quantity')
+                    
+                    ad.trade_amount_fiat = new_ad_quantity_fiat
+                    if ad.trade_amount_fiat < ad.trade_ceiling_fiat:
+                        ad.trade_ceiling_fiat = new_ad_quantity_fiat
+                else:
+                    order_amount_sats = order.trade_amount
+                    ad_quantity_sats = order.ad_snapshot.ad.trade_amount_sats
+                    new_ad_quantity_sats = ad_quantity_sats - order_amount_sats
+    
+                    logger.warning(f'order_amount_sats: {order_amount_sats} | ad_quantity_sats: {ad_quantity_sats} | new_ad_quantity_sats: {new_ad_quantity_sats}')
+                    
+                    if new_ad_quantity_sats < 0:
+                        raise ValidationError('order amount exceeds ad remaining trade quantity')
+                    
+                    ad.trade_amount_sats = new_ad_quantity_sats
+                    if ad.trade_amount_sats < ad.trade_ceiling_sats:
+                        ad.trade_ceiling_sats = new_ad_quantity_sats
 
                 ad.save()
 

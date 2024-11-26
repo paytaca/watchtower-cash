@@ -407,7 +407,7 @@ class AdViewSet(viewsets.GenericViewSet):
 
             if not owned:
                 # If not fetching owned ads: fetch only public ads and those with trade amount > 0
-                queryset = queryset.filter(Q(is_public=True) & Q(trade_amount_sats__gte=1000))
+                queryset = queryset.filter(Q(is_public=True) & (Q(trade_amount_sats__gte=1000) | Q(trade_amount_fiat__gt=0)))
             
             # filters
             if owner_id is not None:
@@ -532,6 +532,21 @@ class AdViewSet(viewsets.GenericViewSet):
         data = request.data.copy()
         data['owner'] = caller.id
 
+        # make sure trade limits are correct
+        trade_limits_in_fiat = data.get('trade_limits_in_fiat')
+        if trade_limits_in_fiat == True:
+            # fiat trade limits should not be empty
+            if (data.get('trade_amount_fiat') == None or 
+                data.get('trade_floor_fiat') == None or
+                data.get('trade_ceiling_fiat') == None):
+                return Response({'error': 'trade_amount_fiat, trade_floor_fiat, and trade_ceiling_fiat are required'}, status=status.HTTP_400_BAD_REQUEST)
+        if trade_limits_in_fiat == False:
+            # sats trade limits should not be empty
+            if (data.get('trade_amount_sats') == None or
+                data.get('trade_floor_sats') == None or
+                data.get('trade_ceiling_sats') == None):
+                return Response({'error': 'trade_amount_sats, trade_floor_sats, and trade_ceiling_sats are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
             crypto = data['crypto_currency']
             data['crypto_currency'] = rampp2p_models.CryptoCurrency.objects.get(symbol=crypto).id

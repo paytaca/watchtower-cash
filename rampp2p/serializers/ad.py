@@ -156,6 +156,7 @@ class AdListSerializer(serializers.ModelSerializer):
     def get_owner(self, instance: models.Ad):
         return {
             'id': instance.owner.id,
+            'chat_identity_id': instance.owner.chat_identity_id,
             'name': instance.owner.name,
             'rating':  instance.owner.average_rating()
         }
