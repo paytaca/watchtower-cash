@@ -9,7 +9,7 @@ urlpatterns = [
     path('ad/<int:pk>/', AdViewSet.as_view({'get': 'retrieve', 'put': 'partial_update', 'delete': 'destroy'})),
     path('ad/check/limit/', AdViewSet.as_view({'get': 'check_ad_limit'})),
     path('ad/currency/', AdViewSet.as_view({'get': 'retrieve_currencies'})),
-    path('ad/snapshot/', AdSnapshotView.as_view()),
+    path('ad/snapshot/<int:pk>/', AdSnapshotViewSet.as_view({'get': 'retrieve'})),
     path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
 
     path('cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_presets'})),
@@ -32,6 +32,7 @@ urlpatterns = [
     # Orders
     path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
     path('order/<int:pk>/', OrderViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}), name='order-detail-edit'),
+    path('order/<int:pk>/ad/snapshot/', AdSnapshotViewSet.as_view({'get': 'retrieve_by_order'})),
     path('order/<int:pk>/members/', OrderViewSet.as_view({'get': 'members', 'patch': 'members'}), name='order-members'),
     path('order/<int:pk>/status/', OrderStatusViewSet.as_view({'get': 'list_status', 'patch': 'read_status'}), name='order-list-edit-status'),
     path('order/<int:pk>/cancel/', OrderStatusViewSet.as_view({'post': 'cancel'}), name='order-cancel'),

@@ -161,27 +161,33 @@ class AdSnapshot(models.Model):
         return self.market_price * (self.floating_price/100)
     
     def get_trade_floor(self):
+        trade_floor = self.trade_floor
+        
         if self.trade_limits_in_fiat:
-            return self.trade_floor_fiat
-       
-        trade_floor = self.trade_floor_sats
-        trade_floor = satoshi_to_bch(trade_floor)        
+            trade_floor = self.trade_floor_fiat
+        else:
+            trade_floor = self.trade_floor_sats
+            trade_floor = satoshi_to_bch(trade_floor)        
         return trade_floor
 
     def get_trade_ceiling(self):
+        trade_ceiling = self.trade_ceiling
+
         if self.trade_limits_in_fiat:
-            return self.trade_ceiling_fiat
-    
-        trade_ceiling = self.trade_ceiling_sats
-        trade_ceiling = satoshi_to_bch(trade_ceiling)
+            trade_ceiling = self.trade_ceiling_fiat
+        else:
+            trade_ceiling = self.trade_ceiling_sats
+            trade_ceiling = satoshi_to_bch(trade_ceiling)
         
         return trade_ceiling
     
     def get_trade_amount(self):
+        trade_amount = self.trade_amount
+
         if self.trade_limits_in_fiat:
-            return self.trade_amount_fiat
-        
-        trade_amount = self.trade_amount_sats
-        trade_amount = satoshi_to_bch(trade_amount)
+            trade_amount = self.trade_amount_fiat
+        else:
+            trade_amount = self.trade_amount_sats
+            trade_amount = satoshi_to_bch(trade_amount)
         
         return trade_amount

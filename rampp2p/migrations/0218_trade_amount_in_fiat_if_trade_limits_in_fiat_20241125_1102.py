@@ -25,11 +25,12 @@ def trade_amount_in_fiat_if_trade_limits_in_fiat(apps, schema_editor):
     ads = Ad.objects.filter(Q(deleted_at__isnull=True) & Q(trade_limits_in_fiat=True) & Q(trade_amount_in_fiat=False))
 
     for ad in ads:
-        ad.trade_amount_in_fiat = True
-        ad.trade_amount_fiat = bch_to_fiat(satoshi_to_bch(ad.trade_amount_sats), get_price(ad))
-        ad.save()
+        if ad.trade_amount_sats:
+            ad.trade_amount_in_fiat = True
+            ad.trade_amount_fiat = bch_to_fiat(satoshi_to_bch(ad.trade_amount_sats), get_price(ad))
+            ad.save()
 
-        logger.warning(f'Updated Ad#{ad.id} | trade_amount: {ad.trade_amount_fiat}')
+            logger.warning(f'Updated Ad#{ad.id} | trade_amount: {ad.trade_amount_fiat}')
 
 class Migration(migrations.Migration):
 

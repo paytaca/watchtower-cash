@@ -658,21 +658,23 @@ class AdViewSet(viewsets.GenericViewSet):
     
     def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
         return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, is_public=True, deleted_at__isnull=True).count()
-        
-class AdSnapshotView(APIView):
-    authentication_classes = [TokenAuthentication]
-    def get(self, request):
-        ad_snapshot_id = request.query_params.get('ad_snapshot_id')
-        order_id = request.query_params.get('order_id')
-        
-        ad = None
-        try:
-            if ad_snapshot_id is not None:
-                ad = rampp2p_models.AdSnapshot.objects.get(pk=ad_snapshot_id)
-            elif order_id is not None:
-                ad = rampp2p_models.Order.objects.get(pk=order_id).ad_snapshot
-        except (rampp2p_models.AdSnapshot.DoesNotExist, rampp2p_models.Order.DoesNotExist):
-            raise Http404
 
-        serializer = rampp2p_serializers.AdSnapshotSerializer(ad)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+class AdSnapshotViewSet(viewsets.GenericViewSet):
+    authentication_classes = [TokenAuthentication]
+
+    def retrieve(self, _, pk):
+        try:
+            ad_snapshot = rampp2p_models.AdSnapshot.objects.get(pk=pk)
+            serializer = rampp2p_serializers.AdSnapshotSerializer(ad_snapshot)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except rampp2p_models.AdSnapshot.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(method='get', detail=True)
+    def retrieve_by_order(self, _, pk):
+        try:
+            ad_snapshot = rampp2p_models.Order.objects.get(pk=pk).ad_snapshot
+            serializer = rampp2p_serializers.AdSnapshotSerializer(ad_snapshot)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except rampp2p_models.Order.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
