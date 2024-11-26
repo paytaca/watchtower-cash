@@ -20,7 +20,7 @@ class MarketRateConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 
@@ -43,7 +43,7 @@ class OrderUpdatesConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 
@@ -77,7 +77,7 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
 
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 
@@ -109,7 +109,7 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
 
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 
