@@ -1,7 +1,6 @@
 from django.db import models
 from datetime import date
 from django.conf import settings
-from rampp2p.utils import bch_to_satoshi
 
 class AppVersion(models.Model):
     PLATFORM_CHOICES = [
