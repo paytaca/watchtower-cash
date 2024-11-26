@@ -7,7 +7,10 @@ from django.utils import timezone
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import (Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery)
+from django.db.models import (
+    Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery, IntegerField
+)
+from django.conf import settings
 
 import math
 from datetime import timedelta
@@ -17,6 +20,7 @@ from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.serializers as rampp2p_serializers
 import rampp2p.models as rampp2p_models
+from rampp2p.utils import bch_to_satoshi
 
 import logging
 logger = logging.getLogger(__name__)
@@ -384,6 +388,8 @@ class AdViewSet(viewsets.GenericViewSet):
             time_limits = request.query_params.getlist('time_limits')
             price_order = request.query_params.get('price_order')
             query_name = request.query_params.get('query_name')
+            order_amount = request.query_params.get('order_amount')
+            order_amount_currency = request.query_params.get('order_amount_currency')
             owned = request.query_params.get('owned', False)
             owned = owned == 'true'
 
@@ -398,7 +404,7 @@ class AdViewSet(viewsets.GenericViewSet):
             
             if page < 1:
                 raise ValidationError('invalid page number')
-            
+
             if not owned:
                 # If not fetching owned ads: fetch only public ads and those with trade amount > 0
                 queryset = queryset.filter(Q(is_public=True) & Q(trade_amount_sats__gte=1000))
@@ -438,6 +444,29 @@ class AdViewSet(viewsets.GenericViewSet):
                     output_field=DecimalField()
                 )
             )
+
+            if order_amount and order_amount_currency:
+                if order_amount_currency == 'BCH':
+                    order_amount_sats = bch_to_satoshi(order_amount)
+                    queryset = queryset.annotate(
+                        order_amount_fiat=ExpressionWrapper(
+                            order_amount * F('price'),
+                            output_field=DecimalField()
+                        )
+                    ).filter(
+                        (Q(trade_limits_in_fiat=False) & Q(trade_floor_sats__lte=order_amount_sats) & Q(trade_ceiling_sats__gte=order_amount_sats)) | 
+                        (Q(trade_limits_in_fiat=True) & Q(trade_floor_fiat__lte=F('order_amount_fiat')) & Q(trade_ceiling_fiat__gte=F('order_amount_fiat')))
+                    )
+                else:
+                    queryset = queryset.annotate(
+                        order_amount_sats=ExpressionWrapper(
+                            (order_amount / F('price')) *  settings.SATOSHI_PER_BCH,
+                            output_field=IntegerField()
+                        )
+                    ).filter(
+                        (Q(trade_limits_in_fiat=True) & Q(trade_floor_fiat__lte=order_amount) & Q(trade_ceiling_fiat__gte=order_amount)) | 
+                        (Q(trade_limits_in_fiat=False) & Q(trade_floor_sats__lte=F('order_amount_sats')) & Q(trade_ceiling_sats__gte=F('order_amount_sats')))
+                    )
 
             # search for ads with specific owner name
             if query_name:
