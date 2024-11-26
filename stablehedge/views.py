@@ -69,14 +69,20 @@ class FiatTokenViewSet(
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter('categories', openapi.IN_QUERY, description="Categories separated by comma", type=openapi.TYPE_STRING),
+            openapi.Parameter('max_age', openapi.IN_QUERY, description="Filter the price if it older than set max age (in seconds)", type=openapi.TYPE_NUMBER),
         ],
         responses={ 200:response_serializers.FiatTokenPrice(many=True) },
     )
     @decorators.action(methods=["get"], detail=False)
     def latest_prices(self, request, *args, **kwargs):
         categories = request.query_params.get("categories", "").split(",")
+        try:
+            max_age = int(request.query_params.get("max_age", ""))
+        except (TypeError, ValueError):
+            max_age = 60
+
         categories = [category for category in categories if category]
-        results = get_fiat_token_price_messages(categories)
+        results = get_fiat_token_price_messages(categories, max_age=max_age)
         serializer = response_serializers.FiatTokenPrice(results, many=True)
         return Response(serializer.data)
 
