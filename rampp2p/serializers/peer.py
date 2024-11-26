@@ -45,35 +45,14 @@ class PeerSerializer(serializers.ModelSerializer):
             'last_online_at'
         ]
 
-    def get_rating(self, instance: Peer):
-        return instance.average_rating()
+    def get_rating(self, obj: Peer):
+        return obj.average_rating()
     
-    def get_trade_count(self, instance: Peer):
-        # Count the number of trades (orders) related to ad owner
-        return Order.objects.filter(Q(ad_snapshot__ad__owner__id=instance.id) | Q(owner__id=instance.id)).count()
+    def get_trade_count(self, obj: Peer):
+        return obj.get_trade_count()
     
-    def get_completion_rate(self, instance: Peer):
-        ''' 
-        completion_rate = released_count / (released_count + canceled_count + refunded_count)
-        '''
-        released_count, completed_count = self.get_completed_orders_count(instance.id)
-        completion_rate = 0
-        if completed_count > 0:
-            completion_rate = released_count / completed_count * 100
-        return completion_rate
-    
-    def get_completed_orders_count(self, peer_id: int):
-        # Subquery to get the latest status for each order
-        latest_status_subquery = Status.objects.filter(order_id=OuterRef('id')).order_by('-created_at').values('status')[:1]
-        
-        user_orders = Order.objects.filter(Q(ad_snapshot__ad__owner__id=peer_id) | Q(owner__id=peer_id)).annotate(
-            latest_status = Subquery(latest_status_subquery)
-        )
-
-        completed_statuses = [StatusType.RELEASED.value, StatusType.CANCELED.value, StatusType.REFUNDED.value]
-        completed_orders_count = user_orders.filter(status__status__in=completed_statuses).count()
-        release_orders_count = user_orders.filter(status__status=StatusType.RELEASED).count()
-        return release_orders_count, completed_orders_count
+    def get_completion_rate(self, obj: Peer):
+        return obj.get_completion_rate()
 
 class PeerCreateSerializer(serializers.ModelSerializer):
     class Meta:

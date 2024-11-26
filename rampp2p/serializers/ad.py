@@ -7,6 +7,9 @@ import rampp2p.models as models
 from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
 from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
 
+import logging
+logger = logging.getLogger(__name__)
+
 class AdSnapshotSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
@@ -173,40 +176,20 @@ class AdListSerializer(serializers.ModelSerializer):
     def get_price(self, instance: models.Ad):
         return instance.get_price()
     
-    def get_trade_amount(self, obj):
+    def get_trade_amount(self, obj: models.Ad):
         return obj.get_trade_amount()
     
-    def get_trade_floor(self, obj):
+    def get_trade_floor(self, obj: models.Ad):
         return obj.get_trade_floor()
     
-    def get_trade_ceiling(self, obj):
+    def get_trade_ceiling(self, obj: models.Ad):
         return obj.get_trade_ceiling()
     
-    def get_trade_count(self, instance: models.Ad):
-        return models.Order.objects.filter(Q(ad_snapshot__ad__id=instance.id)).count()
+    def get_trade_count(self, obj: models.Ad):
+        return obj.get_trade_count()
 
-    def get_completion_rate(self, instance: models.Ad):
-        ''' 
-        completion_rate = released_count / (released_count + canceled_count + refunded_count)
-        '''
-        released_count, completed_count = self.get_completed_orders_count(instance.id)
-        completion_rate = 0
-        if completed_count > 0:
-            completion_rate = released_count / completed_count * 100
-        return completion_rate
-    
-    def get_completed_orders_count(self, ad_id: int):
-        # Subquery to get the latest status for each order
-        latest_status_subquery = models.Status.objects.filter(order_id=OuterRef('id')).order_by('-created_at').values('status')[:1]
-        
-        user_orders = models.Order.objects.filter(Q(ad_snapshot__ad__id=ad_id)).annotate(
-            latest_status = Subquery(latest_status_subquery)
-        )
-
-        completed_statuses = [models.StatusType.RELEASED.value, models.StatusType.CANCELED.value, models.StatusType.REFUNDED.value]
-        completed_orders_count = user_orders.filter(status__status__in=completed_statuses).count()
-        release_orders_count = user_orders.filter(status__status=models.StatusType.RELEASED).count()
-        return release_orders_count, completed_orders_count
+    def get_completion_rate(self, obj: models.Ad):
+        return obj.get_completion_rate()
 
 class CashinAdSerializer(AdListSerializer):
     is_online = serializers.SerializerMethodField()

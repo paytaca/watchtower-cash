@@ -24,6 +24,41 @@ class Peer(models.Model):
         Feedback = apps.get_model('rampp2p', 'Feedback')
         avg_rating = Feedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']
         return avg_rating
+    
+    def get_orders(self):
+        Order = apps.get_model('rampp2p', 'Order')
+        return Order.objects.filter(models.Q(ad_snapshot__ad__owner__id=self.id) | models.Q(owner__id=self.id)) 
+    
+    def get_trade_count(self):
+        return self.get_orders().count()
+    
+    def count_orders_by_status(self, status: str):
+        Status = apps.get_model('rampp2p', 'Status')
+        latest_status_subquery = Status.objects.filter(order_id=models.OuterRef('id')).order_by('-created_at').values('status')[:1]
+        user_orders = self.get_orders().annotate(latest_status=models.Subquery(latest_status_subquery))
+
+        return user_orders.filter(status__status=status).count()
+    
+    def count_completed_orders(self):
+        completed_statuses = ['RLS', 'CNCL', 'RFN']
+        total_count = 0
+        for status in completed_statuses:
+            total_count += self.count_orders_by_status(status)
+
+        return total_count
+    
+    def count_released_orders(self):
+        return self.count_orders_by_status('RLS')
+    
+    def get_completion_rate(self):
+        # completion_rate = released_count / (released_count + canceled_count + refunded_count)
+        completed_count = self.count_completed_orders()
+        released_count = self.count_released_orders()
+        completion_rate = 0
+        if completed_count > 0:
+            completion_rate = released_count / completed_count * 100
+        return completion_rate
+        
 
 class ReservedName(models.Model):
     peer = models.ForeignKey(Peer, on_delete=models.CASCADE, null=True, blank=True)
