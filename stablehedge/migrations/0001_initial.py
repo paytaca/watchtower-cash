@@ -43,6 +43,7 @@ class Migration(migrations.Migration):
                 ('txid', models.CharField(blank=True, max_length=64, null=True)),
                 ('utxo', django.contrib.postgres.fields.jsonb.JSONField()),
                 ('result_message', models.CharField(blank=True, max_length=100, null=True)),
+                ('retry_count', models.IntegerField(default=0)),
                 ('resolved_at', models.DateTimeField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('price_oracle_message', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='transactions', to='anyhedge.PriceOracleMessage')),

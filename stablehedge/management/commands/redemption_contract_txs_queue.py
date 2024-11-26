@@ -89,7 +89,11 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
             LOGGER.exception(exception)
 
     if obj.status == models.RedemptionContractTransaction.Status.FAILED:
-        resolve_failed_redemption_tx(obj)
+        try:
+            result = resolve_failed_redemption_tx(obj)
+            LOGGER.info(f"RedemptionContractTransaction#{obj.id} | RECOVERY | {result}")
+        except Exception as exception:
+            LOGGER.exception(exception)
 
     if obj.status == models.RedemptionContractTransaction.Status.SUCCESS or \
         obj.status == models.RedemptionContractTransaction.Status.FAILED:

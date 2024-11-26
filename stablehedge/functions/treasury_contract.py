@@ -5,7 +5,7 @@ from django.db.models import Sum
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
-from stablehedge.exception import StablehedgeException
+from stablehedge.exceptions import StablehedgeException
 from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.transaction import tx_model_to_cashscript

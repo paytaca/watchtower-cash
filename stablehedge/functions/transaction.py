@@ -1,7 +1,9 @@
-import logging
+import re
 import decimal
 import json
+
 from stablehedge import models
+from stablehedge.apps import LOGGER
 from stablehedge.utils.blockchain import (
     get_locktime,
     test_transaction_accept,
@@ -187,41 +189,50 @@ def resolve_failed_redemption_tx(obj:models.RedemptionContractTransaction):
 
     # since there 2 inputs only, if deposit/redeem utxo is unspent,
     # the missing input is the reserve utxo, which we can try to rerun
-    if obj.result_message == "missing-inputs" and \ 
+    if obj.result_message == "missing-inputs" and \
         obj.utxo and obj.utxo.get("txid") and \
         NODE.BCH.rpc_connection.gettxout(obj.utxo["txid"], obj.utxo["vout"]):
 
-        obj.status = models.RedemptionContractTransaction.Status.PENDING
-        obj.save()
+        if obj.retry_count < 3:
+            obj.retry_count += 1
+            obj.status = models.RedemptionContractTransaction.Status.PENDING
+            obj.save()
+            return "retry"
+        else:
+            return "max-retries-reached"
 
-    if obj.result_message in ["18: txn-already-in-mempool", "missing-inputs"]:
-        check_existing_txid_for_redemption_contract_tx(obj)
+    if obj.result_message in ["18: txn-already-in-mempool", "missing-inputs"] or \
+        re.match("(insufficient|not enough).*(BCH)?.*(balance|funds)", obj.result_message, re.IGNORECASE):
+        result = check_existing_txid_for_redemption_contract_tx(obj)
+        return result["message"]
 
 
 def check_existing_txid_for_redemption_contract_tx(obj:models.RedemptionContractTransaction, force=False):
+    LOGGER.debug(f"RedemptionContractTransaction#{obj.id} | CHECKING EXISTING TX")
     if obj.txid and not force:
-        return dict(success=True, txid=obj.txid, result="resolved-txid")
+        return dict(success=True, txid=obj.txid, message="resolved-txid")
 
     txid = obj.utxo["txid"]
     vout = obj.utxo["vout"]
     spending_txid = resolve_spending_txid(txid, vout)
     if not spending_txid:
-        return dict(success=True, result="unspent-or-missing")
+        return dict(success=True, message="utxo-unspent-or-missing")
 
     data = check_transaction_for_redemption_contract_tx(spending_txid)
+    LOGGER.debug(f"RedemptionContractTransaction#{obj.id} | SPENDING TX DATA | {data}")
     if not data:
-        return dict(success=False, result="no-data")
+        return dict(success=False, message="no-tx-data")
 
     if obj.redemption_contract.address != data["redemption_contract_address"]:
-        return dict(success=False, result="contract-mismatch")
+        return dict(success=False, message="contract-mismatch")
     
     if obj.transaction_type != data["tx_type"]:
-        return dict(success=False, result="tx-type-mismatch")
+        return dict(success=False, message="tx-type-mismatch")
 
     obj.txid = spending_txid
     obj.status = models.RedemptionContractTransaction.Status.SUCCESS
     obj.save()
-    return dict(success=True, txid=obj.txid)
+    return dict(success=True, txid=obj.txid, message="resolved-existing-tx")
 
 
 def check_transaction_for_redemption_contract_tx(txid:str):
@@ -251,7 +262,7 @@ def check_transaction_for_redemption_contract_tx(txid:str):
         output_sats = output_1["value"]
         output_tokens = decimal.Decimal(output_1["token_data"]["amount"]) if output_1.get("token_data") else None
     except (KeyError, TypeError) as exception:
-        logging.exception(exception)
+        LOGGER.exception(exception)
         return
 
     tx_type = None
@@ -273,6 +284,7 @@ def check_transaction_for_redemption_contract_tx(txid:str):
         utxo["amount"] = input_1["token_data"]["amount"]
 
     return dict(
+        txid=txid,
         redemption_contract_address=input_0["address"],
         tx_type=tx_type,
         utxo=utxo,

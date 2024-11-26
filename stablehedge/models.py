@@ -138,6 +138,7 @@ class RedemptionContractTransaction(models.Model):
     utxo = JSONField()
     result_message = models.TextField(null=True, blank=True)
 
+    retry_count = models.IntegerField(default=0)
     resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
