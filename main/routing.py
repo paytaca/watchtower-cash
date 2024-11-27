@@ -9,6 +9,8 @@ websocket_urlpatterns = [
     re_path(r'ws/watch/slp/(?P<address>[\w+:]+)/$', Consumer.as_asgi()),
     re_path(r'ws/watch/slp/(?P<address>[\w+:]+)/(?P<tokenid>[\w+]+)/', Consumer.as_asgi()),
 
+    re_path(r'ws/watch/wallet/(?P<wallet_hash>[\w+:]+)/$', Consumer.as_asgi()),
+
     re_path(
         r'ws/watch/smartbch/(?P<address>[\w+:]+)/$',
         TransactionTransferUpdatesConsumer.as_asgi(),
