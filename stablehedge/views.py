@@ -377,6 +377,31 @@ class TreasuryContractViewSet(
         txid = sweep_funding_wif(instance.address)
         return Response({ "txid": txid })
 
+    @swagger_auto_schema(
+        method="post",
+        responses={200: anyhedge_serializers.HedgePositionSerializer},
+    )
+    @decorators.action(
+        methods=["post"],
+        detail=True,
+        url_path=f"short_position/create",
+        serializer_class=serializers.TreasuryContractShortProposal,
+    )
+    def create_short_position(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            hedge_pos_obj = serializer.save()
+            serializer = anyhedge_serializers.HedgePositionSerializer(hedge_pos_obj)
+            return Response(serializer.data)
+        except (AnyhedgeException, StablehedgeException) as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
+
 
 class TestUtilsViewSet(viewsets.GenericViewSet):
     @swagger_auto_schema(

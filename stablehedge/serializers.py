@@ -6,6 +6,7 @@ from drf_yasg.utils import swagger_serializer_method
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
+from stablehedge.functions.anyhedge import place_short_proposal
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.blockchain import get_locktime
 from stablehedge.utils.transaction import (
@@ -22,6 +23,7 @@ from stablehedge.utils.wallet import (
 )
 
 from anyhedge import models as anyhedge_models
+from anyhedge import serializers as anyhedge_serializers
 from main import models as main_models
 
 
@@ -424,3 +426,24 @@ class SweepTreasuryContractSerializer(serializers.Serializer):
             recipientAddress=validated_data["recipient_address"],
             authKeyRecipient=validated_data["auth_key_recipient_address"],
         ))
+
+class ShortProposalSettlementServiceData(anyhedge_serializers.SettlementServiceSerializer):
+    pubkey = serializers.CharField()
+
+    class Meta:
+        ParentMeta = anyhedge_serializers.SettlementServiceSerializer.Meta
+        model = ParentMeta.model
+        fields = [
+            *ParentMeta.fields,
+            "pubkey",
+        ]
+
+class TreasuryContractShortProposal(serializers.Serializer):
+    treasury_contract_address = serializers.CharField()
+    short_contract_address = serializers.CharField()
+    settlement_service = ShortProposalSettlementServiceData()
+    funding_utxo_tx_hex = serializers.CharField()
+
+    def save(self):
+        validated_data = {**self.valdiated_data}
+        return place_short_proposal(**validated_data)

@@ -682,6 +682,133 @@ def complete_short_proposal(treasury_contract_address:str):
 
     return hedge_pos_obj
 
+@transaction.atomic
+def place_short_proposal(
+    treasury_contract_address:str="",
+    short_contract_address:str="",
+    settlement_service:dict=None,
+    funding_utxo_tx_hex:str="",
+):
+    settlement_service_str = GP_LP.json_parser.dumps(settlement_service, indent=2)
+    LOGGER.info(f"SHORT | {treasury_contract_address} | address={short_contract_address} | settlement_service = {settlement_service_str} | {funding_utxo_tx_hex}")
+
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+    contract_data = get_contract_status(
+        short_contract_address,
+        settlement_service["pubkey"],
+        settlement_service["short_signature"],
+        settlement_service_scheme=settlement_service["scheme"],
+        settlement_service_domain=settlement_service["host"],
+        settlement_service_port=settlement_service["port"],
+        authentication_token=settlement_service.get("auth_token", None),
+    )
+    contract_data_str = GP_LP.json_parser.dumps(contract_data, indent=2)
+    LOGGER.info(f"SHORT | {treasury_contract_address} | contract_data={contract_data}")
+
+    funding_amounts = calculate_funding_amounts(
+        contract_data,
+        position=contract_data["metadata"]["takerSide"],
+    )
+    funding_amounts_str = GP_LP.json_parser.dumps(funding_amounts, indent=2)
+    LOGGER.info(f"SHORT | {treasury_contract_address} | funding_amounts={funding_amounts_str}")
+
+    valid_tx, error_or_txid = test_transaction_accept(funding_utxo_tx_hex)
+    if not valid_tx:
+        raise StablehedgeException("Invalid funding utxo transaction", code="invalid-funding-utxo-tx")
+
+    proxy_funder_address = get_funding_wif_address(treasury_contract_address)
+    proxy_funder_wif = get_funding_wif(treasury_contract_address)
+    funding_utxo_tx = NODE.BCH.build_tx_from_hex(funding_utxo_tx_hex)
+
+    funding_utxo_tx_str = GP_LP.json_parser.dumps(funding_utxo_tx, indent=2)
+    LOGGER.info(f"SHORT | {treasury_contract_address} | proxy_funder_address={proxy_funder_address} | funding_utxo_tx={funding_utxo_tx_str}")
+
+    if funding_utxo_tx["vout"][0]["address"] != proxy_funder_address:
+        raise StablehedgeException("Invalid funding utxo address", code="invalid-funding-utxo-address")
+
+    if funding_utxo_tx["vout"][0]["value"] != funding_amounts["short"]:
+        raise StablehedgeException(
+            f"Invalid funding utxo amount, got {funding_utxo_tx['vout'][0]['value']}, expected {funding_amounts['short']}",
+            code="invalid-funding-utxo-amount",
+        )
+
+    funding_utxo = dict(
+        txid=error_or_txid,
+        vout=0,
+        satoshis=funding_utxo_tx["vout"][0]["value"],
+        # wif=proxy_funding_wif,
+        # hashType=1 | 128, # SIGHASH_ALL | SIGHASH_ANYONECANPAY
+    )
+    funding_proposal_signature = AnyhedgeFunctions.signFundingUtxo(
+        contract_data, funding_utxo, proxy_funder_wif,
+    )
+
+    script_sig = funding_proposal_signature["signature"]
+    script_sig_pubkey = funding_proposal_signature["publicKey"]
+    input_tx_hashes = [inp["txid"] for inp in funding_utxo_tx["vin"]]
+
+    funding_proposal = dict(
+        txHash=funding_utxo["txid"],
+        txIndex=funding_utxo["vout"],
+        txValue=funding_utxo["satoshis"],
+        scriptSig=script_sig,
+        # publicKey=contract_data["parameters"]["shortMutualRedeemPublicKey"],
+        publicKey=script_sig_pubkey,
+        inputTxHashes=input_tx_hashes,
+    )
+    position = contract_data["metadata"]["takerSide"]
+    if position == "long":
+        funding_proposal["publicKey"] = contract_data["parameters"]["longMutualRedeemPublicKey"]
+
+    funding_proposal_str = GP_LP.json_parser.dumps(funding_proposal, indent=2)
+    LOGGER.info(f"SHORT | {treasury_contract_address} | funding_proposal={funding_proposal_str}")
+
+    oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
+    hedge_pos_obj = save_contract_data(contract_data, settlement_service_data=settlement_service)
+
+    """
+    - `broadcast_transaction` and `fund_hedge_position` are made last
+        since they involve broadcasting transactions
+    - Succeeding steps must not cause errors or atleast fail silently to not lose the saved hedge position data
+    """
+    success, error_or_txid = broadcast_transaction(funding_utxo_tx_hex)
+    if not success:
+        raise StablehedgeException("Funding utxo tx failed", code="funding-utxo-tx-failed")
+
+    funding_response = fund_hedge_position(
+        contract_data,
+        funding_proposal,
+        oracle_message_sequence,
+        position=contract_data["metadata"]["takerSide"],
+    )
+
+    try:
+        data_str = GP_LP.json_parser.dumps(funding_response, indent=2)
+        LOGGER.info(f"GP LP FUNDING RESPONSE | {treasury_contract_address} | {data_str}")
+    except Exception as exception:
+        LOGGER.exception(exception)
+
+    if not funding_response.get("success"):
+        sweep_funding_wif(treasury_contract_address)
+        raise AnyhedgeException(funding_response["error"], code="funding_error")
+
+    hedge_pos_obj.funding_tx_hash = funding_response["fundingTransactionHash"]
+    hedge_pos_obj.save()
+
+    # encasing the following steps in try catch since
+    # previous 2 steps must complete & not rollback db transactions; and
+    # the following steps are not that critical
+    try:
+        validate_contract_funding.delay(hedge_pos_obj.address)
+    except Exception as exception:
+        LOGGER.exception(exception)
+
+    try:
+        _process_mempool_transaction(hedge_pos_obj.funding_tx_hash, force=True)
+    except Exception as exception:
+        LOGGER.exception(exception)
+
+    return hedge_pos_obj
 
 # ============================================================================= #
 # """""""""""""""""""""""""""""""""Monitoring"""""""""""""""""""""""""""""""""" #
