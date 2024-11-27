@@ -75,7 +75,7 @@ def validate_utxo_data(data, require_cashtoken=False, require_nft_token=False,re
                 raise InvalidUtxoException("Invalid amount")
 
         if require_cashtoken and require_nft_token:
-            if not is_hex_string(data["commitment"]) or not len(data["commitment"]) < 40:
+            if not is_hex_string(data["commitment"]) or len(data["commitment"]) > 80:
                 raise InvalidUtxoException("Invalid commitment")
             if data["capability"] not in ["none", "mutable", "minting"]:
                 raise InvalidUtxoException("Invalid capability")
@@ -109,7 +109,10 @@ def utxo_data_to_cashscript(data:dict):
 
 
 def numlike(value, no_decimal=False):
-    if not isinstance(value, (decimal.Decimal, int)):
+    if not isinstance(value, (decimal.Decimal, int, str)):
+        return False
+
+    if isinstance(value, str) and not re.match("^\d+(\.\d+)?$", value):
         return False
 
     if no_decimal and value % 1 != 0:
