@@ -147,7 +147,8 @@ class AppealViewSet(viewsets.GenericViewSet):
                 appeal = serialized_appeal.save()
                 serialized_status = serializers.StatusSerializer(data={
                     'status': StatusType.APPEALED,
-                    'order': order_id
+                    'order': order_id,
+                    'created_by': wallet_hash
                 })
 
                 if not serialized_status.is_valid():
@@ -218,7 +219,7 @@ class AppealViewSet(viewsets.GenericViewSet):
 
             with transaction.atomic():
                 # Update status to RELEASE_PENDING
-                serialized_status = update_order_status(appeal.order.id, status_type)
+                serialized_status = update_order_status(appeal.order.id, status_type, wallet_hash=wallet_hash)
 
                 contract = models.Contract.objects.get(order__id=appeal.order.id)
                 _, _ = models.Transaction.objects.get_or_create(
@@ -256,7 +257,7 @@ class AppealViewSet(viewsets.GenericViewSet):
 
             with transaction.atomic():
                 # Update status to REFUND_PENDING
-                serialized_status = update_order_status(appeal.order.id, status_type)
+                serialized_status = update_order_status(appeal.order.id, status_type, wallet_hash=wallet_hash)
 
                 contract = models.Contract.objects.get(order__id=appeal.order.id)
                 _, _ = models.Transaction.objects.get_or_create(

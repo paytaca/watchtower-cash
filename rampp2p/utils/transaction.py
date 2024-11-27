@@ -30,7 +30,7 @@ def process_transaction(txid, output_address, inputs=None):
     except Exception:
         pass
 
-def validate_transaction(txid, action, contract_id):
+def validate_transaction(txid, action, contract_id, wallet_hash=None):
     '''
     Validates if a transaction is valid based on the requirements of its contract.
     '''

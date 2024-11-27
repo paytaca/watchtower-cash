@@ -32,10 +32,13 @@ class Peer(models.Model):
     def get_trade_count(self):
         return self.get_orders().count()
     
-    def count_orders_by_status(self, status: str):
+    def count_orders_by_status(self, status: str, owned_only=False):
         Status = apps.get_model('rampp2p', 'Status')
-        latest_status_subquery = Status.objects.filter(order_id=models.OuterRef('id')).order_by('-created_at').values('status')[:1]
-        user_orders = self.get_orders().annotate(latest_status=models.Subquery(latest_status_subquery))
+        subquery = Status.objects.filter(order_id=models.OuterRef('id'))
+        if owned_only:
+            subquery = subquery.filter(created_by=self.wallet_hash)
+        subquery = subquery.order_by('-created_at').values('status')[:1]
+        user_orders = self.get_orders().annotate(latest_status=models.Subquery(subquery))
 
         return user_orders.filter(status__status=status).count()
     
@@ -43,7 +46,8 @@ class Peer(models.Model):
         completed_statuses = ['RLS', 'CNCL', 'RFN']
         total_count = 0
         for status in completed_statuses:
-            total_count += self.count_orders_by_status(status)
+            owned_only = status == 'CNCL'
+            total_count += self.count_orders_by_status(status, owned_only=owned_only)
 
         return total_count
     

@@ -244,7 +244,11 @@ class ContractViewSet(viewsets.GenericViewSet):
             contract = models.Contract.objects.get(order__id=pk)
             
             # Create ESCROW_PENDING status for order
-            status_serializer = serializers.StatusSerializer(data={'status': StatusType.ESCROW_PENDING, 'order': pk})
+            status_serializer = serializers.StatusSerializer(data={
+                'status': StatusType.ESCROW_PENDING, 
+                'order': pk,
+                'created_by': wallet_hash
+            })
             if status_serializer.is_valid():
                 status_serializer = serializers.StatusReadSerializer(status_serializer.save())
             else: 

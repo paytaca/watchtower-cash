@@ -62,10 +62,12 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
         payment_types = obj.ad.payment_methods.filter(payment_type__in=payment_type_ids)
         return SubsetPaymentMethodSerializer(payment_types, many=True).data
     
-    def get_owner(self, obj):
+    def get_owner(self, obj: models.AdSnapshot):
         return {
             'id': obj.ad.owner.id,
-            'name': obj.ad.owner.name
+            'chat_identity_id': obj.ad.owner.chat_identity_id,
+            'name': obj.ad.owner.name,
+            'rating':  obj.ad.owner.average_rating(),
         }
 
 class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
@@ -112,7 +114,7 @@ class AdListSerializer(serializers.ModelSerializer):
     owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
-    price = serializers.SerializerMethodField(required=False)
+    price = serializers.SerializerMethodField()
     
     trade_amount = serializers.SerializerMethodField()
     trade_floor = serializers.SerializerMethodField()
@@ -155,26 +157,26 @@ class AdListSerializer(serializers.ModelSerializer):
     def get_appeal_cooldown(self, instance: models.Ad):
         return models.CooldownChoices(instance.appeal_cooldown_choice).value
     
-    def get_owner(self, instance: models.Ad):
+    def get_owner(self, obj: models.Ad):
+        trade_count = obj.owner.get_trade_count()
+        completion_rate = obj.owner.get_completion_rate()
         return {
-            'id': instance.owner.id,
-            'chat_identity_id': instance.owner.chat_identity_id,
-            'name': instance.owner.name,
-            'rating':  instance.owner.average_rating()
+            'id': obj.owner.id,
+            'chat_identity_id': obj.owner.chat_identity_id,
+            'name': obj.owner.name,
+            'rating':  obj.owner.average_rating(),
+            'trade_count': trade_count,
+            'completion_rate': completion_rate
         }
     
-    def get_is_owned(self, instance: models.Ad):
-        wallet_hash = ''
-        try:
-            wallet_hash = self.context['wallet_hash']
-        except KeyError:
-            pass
-        if instance.owner.wallet_hash == wallet_hash:
+    def get_is_owned(self, obj: models.Ad):
+        wallet_hash = self.context.get('wallet_hash')
+        if obj.owner.wallet_hash == wallet_hash:
             return True
         return False
     
-    def get_price(self, instance: models.Ad):
-        return instance.get_price()
+    def get_price(self, obj: models.Ad):
+        return obj.get_price()
     
     def get_trade_amount(self, obj: models.Ad):
         return obj.get_trade_amount()

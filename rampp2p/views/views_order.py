@@ -371,7 +371,11 @@ class OrderViewSet(viewsets.GenericViewSet):
                 order.expires_at = expiration
 
                 # Create SUBMITTED status for order
-                submitted_status = serializers.StatusSerializer(data={'status': StatusType.SUBMITTED, 'order': order.id})
+                submitted_status = serializers.StatusSerializer(data={
+                    'status': StatusType.SUBMITTED, 
+                    'order': order.id,
+                    'created_by': wallet_hash
+                })
                 submitted_status.is_valid(raise_exception=True)
                 submitted_status = serializers.StatusSerializer(submitted_status.save()).data
                 
@@ -689,7 +693,8 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 
         serialized_status = serializers.StatusSerializer(data={
             'status': StatusType.CONFIRMED,
-            'order': pk
+            'order': pk,
+            'created_by': wallet_hash
         })
 
         if not serialized_status.is_valid():
@@ -728,7 +733,11 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
 
             with transaction.atomic():
                 # Create CANCELED status for order
-                serializer = serializers.StatusSerializer(data={'status': StatusType.CANCELED, 'order': pk})
+                serializer = serializers.StatusSerializer(data={
+                    'status': StatusType.CANCELED, 
+                    'order': pk,
+                    'created_by': wallet_hash
+                })
                 if not serializer.is_valid():
                     raise ValidationError(serializer.errors)
                 serialized_status = serializers.StatusReadSerializer(serializer.save())
@@ -772,7 +781,11 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
             contract = models.Contract.objects.get(order__id=pk)
             
             # Create ESCROW_PENDING status for order
-            status_serializer = serializers.StatusSerializer(data={'status': StatusType.ESCROW_PENDING, 'order': pk})
+            status_serializer = serializers.StatusSerializer(data={
+                'status': StatusType.ESCROW_PENDING, 
+                'order': pk,
+                'created_by': wallet_hash
+            })
             if status_serializer.is_valid():
                 status_serializer = serializers.StatusReadSerializer(status_serializer.save())
             else: 
@@ -856,7 +869,8 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
             # Create PAID_PENDING status for order
             serialized_status = serializers.StatusSerializer(data={
                 'status': StatusType.PAID_PENDING,
-                'order': pk
+                'order': pk,
+                'created_by': wallet_hash
             })
 
             if not serialized_status.is_valid():            
@@ -889,7 +903,11 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
             validate_status_progression(StatusType.PAID, pk)
 
             # Create PAID status for order
-            serialized_status = serializers.StatusSerializer(data={'status': StatusType.PAID, 'order': pk})
+            serialized_status = serializers.StatusSerializer(data={
+                'status': StatusType.PAID, 
+                'order': pk,
+                'created_by': wallet_hash
+            })
             if not serialized_status.is_valid():
                 raise ValidationError(serialized_status.errors)
             serialized_status = serializers.StatusReadSerializer(serialized_status.save())
