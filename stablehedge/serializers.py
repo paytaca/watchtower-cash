@@ -15,6 +15,11 @@ from stablehedge.utils.transaction import (
     token_to_satoshis,
     satoshis_to_token,
 )
+from stablehedge.utils.encryption import decrypt_str_safe
+from stablehedge.utils.wallet import (
+    is_valid_wif,
+    wif_to_pubkey,
+)
 
 from anyhedge import models as anyhedge_models
 from main import models as main_models
@@ -343,6 +348,7 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
         queryset=models.RedemptionContract.objects,
         slug_field="address", source="redemption_contract",
     )
+    funding_wif_pubkey = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = models.TreasuryContract
@@ -355,12 +361,25 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
             "pubkey3",
             "pubkey4",
             "pubkey5",
+            "funding_wif_pubkey",
         ]
 
         extra_kwargs = dict(
             address=dict(read_only=True),
         )
 
+    @swagger_serializer_method(serializer_or_field=serializers.CharField)
+    def get_funding_wif_pubkey(self, obj):
+        wif = None
+        if is_valid_wif(obj.encrypted_funding_wif):
+            wif = obj.encrypted_funding_wif
+        elif obj.encrypted_funding_wif:
+            wif = decrypt_str_safe(obj.encrypted_funding_wif)
+
+        if not wif:
+            return
+
+        return wif_to_pubkey(wif)
 
     def validate(self, data):
         compile_data = ScriptFunctions.compileTreasuryContract(dict(
