@@ -18,6 +18,7 @@ from stablehedge.functions.anyhedge import (
     get_or_create_short_proposal,
     update_short_proposal_access_keys,
     update_short_proposal_funding_utxo_tx_sig,
+    update_short_proposal_funding_utxo_tx_auth_key,
     complete_short_proposal,
     get_total_short_value,
 )
@@ -315,6 +316,26 @@ class TreasuryContractViewSet(
             result = update_short_proposal_funding_utxo_tx_sig(
                 instance.address, sig,
                 sig_index=index,
+            )
+            return Response(result)
+        except (AnyhedgeException, StablehedgeException) as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
+
+    @decorators.action(
+        methods=["post"],
+        detail=True,
+        url_path="short_proposal/funding_utxo_tx/auth_key",
+        serializer_class=serializers.UtxoSerializer,
+    )
+    def short_proposal_funding_utxo_tx_auth_key(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            result = update_short_proposal_funding_utxo_tx_auth_key(
+                instance.address, utxo_data=request.data,
             )
             return Response(result)
         except (AnyhedgeException, StablehedgeException) as exception:

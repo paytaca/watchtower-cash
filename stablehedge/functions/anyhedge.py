@@ -14,6 +14,8 @@ from stablehedge.utils.blockchain import (
     broadcast_transaction,
 )
 from stablehedge.utils.transaction import (
+    validate_utxo_data,
+    utxo_data_to_cashscript,
     tx_model_to_cashscript,
     get_tx_input_hashes,
 )
@@ -93,6 +95,7 @@ def save_short_proposal_data(
     )
     REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
 
+    LOGGER.debug(f"SHORT PROPOSAL | SAVE | {treasury_contract_address} | ttl={ttl}")
     REDIS_STORAGE.set(REDIS_KEY, GP_LP.json_parser.dumps(short_proposal_data), ex=ttl)
     return ttl
 
@@ -240,11 +243,17 @@ def short_funds(treasury_contract_address:str, pubkey1_wif=""):
 
     contract_proposal_data = GP_LP.contract_data_to_proposal(contract_data)
 
+    data_str = GP_LP.json_parser.dumps(contract_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | PROPOSAL DATA | {treasury_contract_address} | {data_str}")
+
     service_fee_estimate = GP_LP.estimate_service_fee(
         contract_proposal_data,
         settlement_service=settlement_service,
     )
     proposal_data = GP_LP.propose_contract(contract_proposal_data)
+
+    data_str = GP_LP.json_parser.dumps(proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | PROPOSAL RESULT | {treasury_contract_address} | {data_str}")
 
     lp_fee = proposal_data["liquidityProviderFeeInSatoshis"]
     lp_timeout = proposal_data["renegotiateAfterTimestamp"]
@@ -382,7 +391,7 @@ def get_and_validate_price_message(oracle_public_key:str, price_obj:anyhedge_mod
 # """"""""""""""""""""""""""""""Funding functions"""""""""""""""""""""""""""""" #
 # ============================================================================= #
 
-def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
+def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int, for_multisig=False):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
     # added 1000 to ensure change amount dont end up as transaction fee due to min dust
     utxos = get_bch_utxos(treasury_contract_address, satoshis=satoshis + 1000)
@@ -390,17 +399,27 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int):
     if not len(utxos):
         raise Exception("No utxo/s found")
 
-    cashcsript_utxos = [tx_model_to_cashscript(utxo) for utxo in utxos]
+    inputs = [tx_model_to_cashscript(utxo) for utxo in utxos]
     funding_address = get_funding_wif_address(treasury_contract.address, token=False)
+    outputs = [dict(
+        to=funding_address,
+        amount=satoshis,
+    )]
+
+    if not for_multisig:
+        token_data = dict(category=treasury_contract.auth_token_id, amount=0, nft=dict(capability="none", commitment="0" * 40))
+        inputs.insert(1, dict(txid="0" * 64, vout=-1, satoshis= -1, token=token_data))
+        outputs.insert(1, dict(to="", amount=0, token=token_data))
+
     result = ScriptFunctions.constructTreasuryContractTx(dict(
+        locktime = 0,
+        multiSig = for_multisig,
         contractOpts = treasury_contract.contract_opts,
-        inputs = cashcsript_utxos,
-        outputs = [dict(
-            to=funding_address,
-            amount=satoshis,
-        )]
+        inputs = inputs,
+        outputs = outputs,
     ))
 
+    result["is_multisig"] = for_multisig
     result["locktime"] = 0
     result["funding_utxo_index"] = 0
 
@@ -412,6 +431,9 @@ def update_short_proposal_funding_utxo_tx_sig(treasury_contract_address:str, sig
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
 
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    if not short_proposal_data["funding_utxo_tx"].get("is_multisig"):
+        raise StablehedgeException("Transaction is not for multisig", code="invalid-tx-type")
+
     short_proposal_data["funding_utxo_tx"] = save_signature_to_tx(
         treasury_contract,
         short_proposal_data["funding_utxo_tx"],
@@ -429,6 +451,51 @@ def update_short_proposal_funding_utxo_tx_sig(treasury_contract_address:str, sig
     return short_proposal_data
 
 
+def update_short_proposal_funding_utxo_tx_auth_key(treasury_contract_address:str, utxo_data:dict):
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING UTXO TX AUTH KEY | {treasury_contract_address} | {utxo_data}")
+
+    utxo_data_validation = validate_utxo_data(
+        utxo_data,
+        require_cashtoken=True,
+        require_nft_token=True,
+        require_unlock=True,
+        raise_error=False,
+    )
+    if isinstance(utxo_data_validation, str):
+        raise StablehedgeException(f"Invalid utxo: {utxo_data_validation}", code="invalid-utxo")
+
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
+
+    if funding_utxo_tx.get("is_multisig"):
+        raise StablehedgeException("Transaction is for multisig", code="invalid-tx-type")
+
+    if treasury_contract.auth_token_id != funding_utxo_tx["inputs"][1]["token"]["category"]:
+        raise StablehedgeException("Auth key input's token category does not match", code="invalid-authkey")
+
+    if treasury_contract.auth_token_id != utxo_data["category"]:
+        raise StablehedgeException("Utxo token category invalid", code="invalid-authkey")
+
+    cashscript_utxo = utxo_data_to_cashscript(utxo_data)
+    funding_utxo_tx["inputs"][1] = cashscript_utxo
+    funding_utxo_tx["outputs"][1] = dict(
+        to=cashscript_utxo["lockingBytecode"],
+        amount=cashscript_utxo["satoshis"],
+        token=cashscript_utxo["token"],
+    )
+    short_proposal_data["funding_utxo_tx"] = funding_utxo_tx
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX AUTH KEY | {treasury_contract_address} | {data_str}")
+    return short_proposal_data
+
+
 def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
     funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
@@ -437,15 +504,24 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     funding_utxo_tx_str = GP_LP.json_parser.dumps(funding_utxo_tx, indent=2)
     LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO TX BUILD | {treasury_contract_address} | {funding_utxo_tx_str}")
 
-    build_result = ScriptFunctions.unlockTreasuryContractWithMultiSig(dict(
-        contractOpts=treasury_contract.contract_opts,
-        sig1=funding_utxo_tx["sig1"],
-        sig2=funding_utxo_tx["sig2"],
-        sig3=funding_utxo_tx["sig3"],
-        locktime=funding_utxo_tx.get("locktime") or 0,
-        inputs=funding_utxo_tx["inputs"],
-        outputs=funding_utxo_tx["outputs"],
-    ))
+    if funding_utxo_tx.get("is_multisig"):
+        build_result = ScriptFunctions.unlockTreasuryContractWithMultiSig(dict(
+            contractOpts=treasury_contract.contract_opts,
+            sig1=funding_utxo_tx["sig1"],
+            sig2=funding_utxo_tx["sig2"],
+            sig3=funding_utxo_tx["sig3"],
+            locktime=funding_utxo_tx.get("locktime") or 0,
+            inputs=funding_utxo_tx["inputs"],
+            outputs=funding_utxo_tx["outputs"],
+        ))
+    else:
+        build_result = ScriptFunctions.unlockTreasuryContractWithNft(dict(
+            contractOpts=treasury_contract.contract_opts,
+            keepGuarded=False,
+            locktime=funding_utxo_tx.get("locktime") or 0,
+            inputs=funding_utxo_tx["inputs"],
+            outputs=funding_utxo_tx["outputs"],
+        ))
 
     if not build_result["success"]:
         error_msg = build_result.get("success") or "Failed to build transaction"
@@ -630,7 +706,6 @@ def get_total_short_value(treasury_contract_address:str):
 
     decimals = asset_data["asset_decimals"]
     currency = asset_data["asset_currency"]
-
 
     asset_multiplier = decimal.Decimal(10 ** decimals)
     sats_per_bch = decimal.Decimal(10 ** 8)

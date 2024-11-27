@@ -12,9 +12,11 @@ from .transaction import (
 
 
 class TreasuryContractMultiSigTx(TransactionData):
+    funding_utxo_index = serializers.IntegerField(default=0)
+    is_multisig = serializers.BooleanField(default=False)
     sig1 = SignatureData(many=True, read_only=True)
-    sig1 = SignatureData(many=True, read_only=True)
-    sig1 = SignatureData(many=True, read_only=True)
+    sig2 = SignatureData(many=True, read_only=True)
+    sig3 = SignatureData(many=True, read_only=True)
 
 
 class ShortProposalData(serializers.Serializer):

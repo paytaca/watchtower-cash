@@ -104,6 +104,8 @@ export async function unlockTreasuryContractWithNft(opts) {
 /**
  * @param {Object} opts
  * @param {Object} opts.contractOpts 
+ * @param {Boolean} [opts.multiSig=false]
+ * @param {Number} [opts.locktime=0]
  * @param {import('cashscript').Utxo[]} opts.inputs
  * @param {import('cashscript').Output[]} opts.outputs
  */
@@ -112,14 +114,23 @@ export async function constructTreasuryContractTx(opts) {
 
   const inputs = opts?.inputs?.map(parseUtxo)
   const outputs = opts?.outputs?.map(parseCashscriptOutput)
-  const transaction = await treasuryContract.unlockWithMultiSig({
-    inputs, outputs,
-    locktime: 0,
-    sig1: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
-    sig2: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
-    sig3: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
-  })
 
+  let transaction 
+  if (opts?.multiSig) {
+    transaction = await treasuryContract.unlockWithMultiSig({
+      inputs, outputs,
+      locktime: Number.isSafeInteger(opts?.locktime) ? opts?.locktime : 0,
+      sig1: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+      sig2: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+      sig3: new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+    })
+  } else {
+    transaction = await treasuryContract.unlockWithNft({
+      inputs, outputs,
+      locktime: Number.isSafeInteger(opts?.locktime) ? opts?.locktime : 0,
+      keepGuarded: false,
+    })
+  }
   transaction.setInputsAndOutputs();
 
   return {
