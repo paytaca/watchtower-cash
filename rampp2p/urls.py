@@ -20,6 +20,12 @@ urlpatterns = [
 
     path('user/', UserProfileView.as_view(), name='user-profile'),
     path('peer/', PeerView.as_view(), name='peer-create-edit'),
+   
+    ###### TODO: temporary endpoints to handle app v0.20.1 incompatibility, remove on next app release
+    path('user/detail', UserProfileView.as_view()),
+    path('peer/detail', PeerView.as_view()),
+    
+   
     path('peer/<int:pk>/', PeerView.as_view(), name='peer-detail'),
     path('arbiter/', ArbiterView.as_view(), name='arbiter-list-create-edit'),
     path('arbiter/<str:wallet_hash>/', ArbiterView.as_view(), name='arbiter-detail'),
