@@ -244,7 +244,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'message': message,
             'wallet_hash': wallet_hashes,
             'notif_type': 'TR',
-            'extra_url': extra['payment_url'],
+            'extra_data': extra['payment_url'],
             'date_posted': timezone.now().isoformat()
         })
 
