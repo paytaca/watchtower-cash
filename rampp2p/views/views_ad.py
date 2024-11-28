@@ -186,7 +186,10 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             if not by_fiat:
                 bch = rampp2p_models.CryptoCurrency.objects.get(symbol="BCH")
                 presets = bch.get_cashin_presets() or ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
-                amounts = presets 
+                sat_presets = []
+                for preset in presets:
+                    sat_presets.append(bch_to_satoshi(preset))
+                amounts = sat_presets
 
             if presets:
                 for index, amount in enumerate(amounts):
