@@ -137,12 +137,16 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                     return result
     
         # Update order status
+        order_members = contract.order.get_members()
+        status_created_by = None
         status_type = None
         if action == Transaction.ActionType.REFUND:
+            status_created_by = order_members['arbiter'].wallet_hash
             status_type = StatusType.REFUNDED
         if action == Transaction.ActionType.RELEASE:
             status_type = StatusType.RELEASED
         if action == Transaction.ActionType.ESCROW:
+            status_created_by = order_members['seller'].wallet_hash
             status_type = StatusType.ESCROWED
 
         try:
@@ -162,13 +166,13 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                 contract.order.save()
 
             # Update order status
-            status = update_order_status(contract.order.id, status_type).data
+            status = update_order_status(contract.order.id, status_type, wallet_hash=status_created_by).data
             if contract.order.is_cash_in:
                 websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': contract.order.id}, contract.order.owner.wallet_hash)
 
             # Remove subscription once order is complete
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
-                logger.warn(f'Removing subscription to contract {transaction.contract.address}')
+                logger.info(f'Removing subscription to contract {transaction.contract.address}')
                 remove_subscription(transaction.contract.address, transaction.contract.id)
 
             # Send push notifications to contract parties

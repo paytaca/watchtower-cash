@@ -122,6 +122,13 @@ class OrderMember(models.Model):
            return self.peer.name
         elif self.arbiter:
             return self.arbiter.name
+    
+    @property
+    def wallet_hash(self):
+        if self.peer:
+            return self.peer.wallet_hash
+        elif self.arbiter:
+            return self.arbiter.wallet_hash
 
     class Meta:
          constraints = [
@@ -136,3 +143,4 @@ class OrderMember(models.Model):
                 name='unique_arbiter_order'
             ),
         ]
+
