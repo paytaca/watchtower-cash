@@ -50,7 +50,7 @@ def satoshi_to_bch(satoshi):
     return Decimal(satoshi / settings.SATOSHI_PER_BCH).quantize(Decimal('0.00000001'), rounding=ROUND_DOWN) # truncate to 8 decimals
 
 def bch_to_satoshi(bch):
-    return Decimal(bch) * settings.SATOSHI_PER_BCH
+    return int(Decimal(bch) * settings.SATOSHI_PER_BCH)
 
 def bch_to_fiat(bch_amount, fiat_price):
     return Decimal(bch_amount) * Decimal(fiat_price)

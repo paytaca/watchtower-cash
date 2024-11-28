@@ -1,5 +1,4 @@
 from rest_framework import status, viewsets
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
@@ -14,13 +13,12 @@ from django.conf import settings
 
 import math
 from datetime import timedelta
-from decimal import Decimal, ROUND_DOWN
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.serializers as rampp2p_serializers
 import rampp2p.models as rampp2p_models
-from rampp2p.utils import bch_to_satoshi
+from rampp2p.utils import bch_to_satoshi, fiat_to_bch
 
 import logging
 logger = logging.getLogger(__name__)
@@ -192,7 +190,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
 
             if presets:
                 for index, amount in enumerate(amounts):
-                    ads = queryset.filter(Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount))
+                    ads = queryset.filter(Q(trade_floor_sats__lte=amount) & Q(trade_amount_sats__gte=amount) & Q(trade_ceiling_sats__gte=amount))
                     serialized_ads = rampp2p_serializers.CashinAdSerializer(ads, many=True)
                     key = presets[index]
                     if key is None:
@@ -213,7 +211,8 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             Q(deleted_at__isnull=True) & 
             Q(trade_type=trade_type) & 
             Q(is_public=True) & 
-            Q(trade_amount__gt=0) &
+            (Q(trade_amount_sats__gte=1000) |
+            Q(trade_amount_fiat__gt=0)) &
             Q(fiat_currency__symbol=currency.symbol)) 
        
         # Exclude ads owned by caller
@@ -232,39 +231,6 @@ class CashInAdViewSet(viewsets.GenericViewSet):
                 output_field=DecimalField()
             )
         )
-
-        queryset = queryset.annotate(
-            bch_trade_amount=ExpressionWrapper(
-                Case(When(
-                    trade_amount_in_fiat=True,
-                    then=(F('trade_amount') / F('price'))),
-                    default=F('trade_amount'),
-                    output_field=DecimalField()),
-                output_field=DecimalField()
-            )
-        ).annotate(rounded_bch_trade_amount=Round('bch_trade_amount', output_field=DecimalField(max_digits=18, decimal_places=8)))
-        
-        queryset = queryset.annotate(
-            bch_trade_floor=ExpressionWrapper(
-                Case(When(
-                    trade_limits_in_fiat=True,
-                    then=(F('trade_floor') / F('price'))),
-                    default=F('trade_floor'),
-                    output_field=DecimalField()),
-                output_field=DecimalField()
-            )
-        ).annotate(rounded_bch_trade_floor=Round('bch_trade_floor', output_field=DecimalField(max_digits=18, decimal_places=8)))
-        
-        queryset = queryset.annotate(
-            bch_trade_ceiling=ExpressionWrapper(
-                Case(When(
-                    trade_limits_in_fiat=True,
-                    then=(F('trade_ceiling') / F('price'))),
-                    default=F('trade_ceiling'),
-                    output_field=DecimalField()),
-                output_field=DecimalField()
-            )
-        ).annotate(rounded_bch_trade_ceiling=Round('bch_trade_ceiling', output_field=DecimalField(max_digits=18, decimal_places=8)))
 
         # Filter recently online ads
         queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
@@ -287,36 +253,37 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         return queryset
     
     def get_bch_preset_amounts(self, currency):
-        ''' Retrives a currency's fiat preset amounts then converts it to BCH. If preset is not set,
+        ''' Retrieves a currency's fiat preset amounts then converts it to BCH. If preset is not set,
          returns the crypto currency's set preset amounts or the hard coded preset amounts: ['0.02', '0.04', '0.1', '0.25', '0.5', '1'].'''
 
         # Use currency presets by default
         cashin_presets = currency.get_cashin_presets()
-        convert_to_bch = True
 
         # Use bch presets if currency's cash-in presets are not set
         if cashin_presets is None:
-            convert_to_bch = False
             bch_presets = rampp2p_models.CryptoCurrency.objects.get(symbol='BCH').get_cashin_presets()
-            if bch_presets:
-                cashin_presets = bch_presets
-            else:
+            if bch_presets is None:
                 # Use hard coded presets if cryptocurrency cash-in presets are not set
-                cashin_presets = ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
-        
-        # Convert to BCH using market price
-        if convert_to_bch:
-            bch_amounts = []
-            market_rate_obj = rampp2p_models.MarketRate.objects.filter(currency=currency.symbol)
-            market_price = None
-            if market_rate_obj.exists:
-                market_price = market_rate_obj.first().price
-                
+                bch_presets = ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
+            
+            if bch_presets:
+                # convert to satoshi
+                satoshi_presets = []
+                for preset in bch_presets:
+                    satoshi_presets.append(bch_to_satoshi(preset))
+                cashin_presets = satoshi_presets
+        else:
+            price_obj = rampp2p_models.MarketRate.objects.filter(currency=currency.symbol)
+            price = None
+            if price_obj.exists():
+                price = price_obj.first().price
+
+            sat_amounts = []   
             for preset in cashin_presets:
-                amount = (preset/market_price).quantize(Decimal('0.00000001'), rounding=ROUND_DOWN) # truncate to 8 decimals
-                bch_amounts.append(str(amount))
-            cashin_presets = bch_amounts
-        
+                sat_amounts.append(bch_to_satoshi(fiat_to_bch(preset, price)))
+            
+            cashin_presets = sat_amounts
+    
         return cashin_presets
 
     def filter_preset_available_ads(self, queryset, currency):
@@ -324,8 +291,10 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         amounts = self.get_bch_preset_amounts(currency)
         combined_query = Q()
         for amount in amounts:
-            combined_query |= Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount)
-        return queryset.filter(combined_query)
+            combined_query |= Q(trade_floor_sats__lte=amount) & Q(trade_amount_sats__gte=amount) & Q(trade_ceiling_sats__gte=amount)
+        queryset = queryset.filter(combined_query)
+        
+        return queryset
     
     def get_paymenttypes(self, queryset, payment_types):
         ''' [Deprecated] Retrieves the list of unique payment types from cash-in available ads. '''
