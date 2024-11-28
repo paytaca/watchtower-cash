@@ -583,7 +583,8 @@ class AdViewSet(viewsets.GenericViewSet):
 
         exceeds_ad_limit = self.ad_count(wallet_hash, ad.fiat_currency.id, ad.trade_type) > 1
         currency_public_ad_count = self.public_ad_count(wallet_hash, ad.fiat_currency.id, ad.trade_type)
-        if is_public == True and exceeds_ad_limit and currency_public_ad_count >= 1:
+        private_to_public = not ad.is_public and is_public
+        if private_to_public and exceeds_ad_limit and currency_public_ad_count >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
         
         data = request.data.copy()
