@@ -229,6 +229,16 @@ def client_acknowledgement(self, txid):
                         }
                     )
 
+                    if address.wallet:
+                        channel_layer = get_channel_layer()
+                        async_to_sync(channel_layer.group_send)(
+                            f"{address.wallet.wallet_hash}", 
+                            {
+                                "type": "send_update",
+                                "data": data
+                            }
+                        )
+
     return third_parties
 
 

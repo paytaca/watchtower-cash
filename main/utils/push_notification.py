@@ -47,6 +47,7 @@ def send_wallet_history_push_notification(wallet_history_obj):
             'message': message,
             'wallet_hash': wallet_history_obj.wallet.wallet_hash,
             'notif_type': 'TR',
+            'extra_data': f"{extra['txid']};{extra['token_id']}",
             'date_posted': timezone.now().isoformat()
         })
 

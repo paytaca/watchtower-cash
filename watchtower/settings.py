@@ -377,26 +377,26 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.fetch_latest_usd_price',
         'schedule': 60 * 2,
     },
-    'preload_smartbch_blocks': {
-        'task': 'smartbch.tasks.preload_new_blocks_task',
-        'schedule': 20,
-    },
-    'parse_new_smartbch_blocks': {
-        'task': 'smartbch.tasks.parse_blocks_task',
-        'schedule': 30,
-    },
-    'parse_token_contract_metadata': {
-        'task': 'smartbch.tasks.parse_token_contract_metadata_task',
-        'schedule': 300,
-    },
-    'save_token_icons': {
-        'task': 'smartbch.tasks.save_token_icons_task',
-        'schedule': 300,
-    },
-    'parse_missing_records': {
-        'task': 'smartbch.tasks.parse_missed_records_task',
-        'schedule': 60 * 20 # run every 20 minutes.
-    },
+    # 'preload_smartbch_blocks': {
+    #     'task': 'smartbch.tasks.preload_new_blocks_task',
+    #     'schedule': 20,
+    # },
+    # 'parse_new_smartbch_blocks': {
+    #     'task': 'smartbch.tasks.parse_blocks_task',
+    #     'schedule': 30,
+    # },
+    # 'parse_token_contract_metadata': {
+    #     'task': 'smartbch.tasks.parse_token_contract_metadata_task',
+    #     'schedule': 300,
+    # },
+    # 'save_token_icons': {
+    #     'task': 'smartbch.tasks.save_token_icons_task',
+    #     'schedule': 300,
+    # },
+    # 'parse_missing_records': {
+    #     'task': 'smartbch.tasks.parse_missed_records_task',
+    #     'schedule': 60 * 20 # run every 20 minutes.
+    # },
     'update_shift_status': {
         'task': 'ramp.tasks.update_shift_status',
         'schedule': 60
