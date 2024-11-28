@@ -92,9 +92,9 @@ class WalletAddressAppView(APIView):
         
         public_key_hex = request.data.get('public_key')
         signature_hex = request.data.get('signature')
+        app_icon = request.data.get('extra', {}).get('appIcon', '')
         # message = pipe separated strings '<nonce get from api/nonce endpoint (NonceAPIView) >|<signer_address>|<app_name>|<app_url>'
         # example: abcdNonce|bchtest:qr244vwpanvv5hvy2gl9schhpe9a22ytq5m0kja3rv|CashTokens Studio|https://cashtokens.studio.cash
-
         message = request.data.get('message')
         nonce, signer_address, app_name, app_url, *discard = message.split('|')
 
@@ -136,8 +136,10 @@ class WalletAddressAppView(APIView):
                 defaults = { 
                     'app_name': app_name, 
                     'app_url': app_url, 
+                    'app_icon': app_icon,
                     'wallet_address': signer_address,
-                    'wallet_hash': wallet_hash
+                    'wallet_hash': wallet_hash,
+
                 }
             )
             nonce_cache.delete(nonce)
