@@ -168,7 +168,9 @@ class AdListSerializer(serializers.ModelSerializer):
             'name': obj.owner.name,
             'rating':  obj.owner.average_rating(),
             'trade_count': trade_count,
-            'completion_rate': completion_rate
+            'completion_rate': completion_rate,
+            'is_online': obj.owner.is_online,
+            'last_online_at': obj.owner.last_online_at
         }
     
     def get_is_owned(self, obj: models.Ad):

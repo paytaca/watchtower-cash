@@ -100,7 +100,9 @@ class OrderSerializer(serializers.ModelSerializer):
                     'name': member.name,
                     'address': member.address,
                     'rating': member.average_rating(),
-                    'is_ad_owner': member.wallet_hash == ad_owner.wallet_hash
+                    'is_ad_owner': member.wallet_hash == ad_owner.wallet_hash,
+                    'is_online': member.is_online,
+                    'last_online_at': member.last_online_at
                 }
         return members
          
