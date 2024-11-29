@@ -108,7 +108,9 @@ class OrderSerializer(serializers.ModelSerializer):
         return {
             'id': obj.owner.id,
             'name': obj.owner.name,
-            'rating': obj.owner.average_rating()
+            'rating': obj.owner.average_rating(),
+            'is_online': obj.owner.is_online,
+            'last_online_at': obj.owner.last_online_at
         }
 
     def get_contract(self, obj):

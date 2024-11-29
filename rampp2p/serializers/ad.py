@@ -68,6 +68,8 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
             'chat_identity_id': obj.ad.owner.chat_identity_id,
             'name': obj.ad.owner.name,
             'rating':  obj.ad.owner.average_rating(),
+            'is_online': obj.ad.owner.is_online,
+            'last_online_at': obj.ad.owner.last_online_at
         }
 
 class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
