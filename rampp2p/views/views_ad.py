@@ -10,11 +10,14 @@ from django.db.models import (
     Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery, IntegerField
 )
 from django.conf import settings
+from django.views import View
+from django.shortcuts import render
 
 import math
 from datetime import timedelta
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
+from decimal import Decimal
 
 import rampp2p.serializers as rampp2p_serializers
 import rampp2p.models as rampp2p_models
@@ -631,6 +634,29 @@ class AdViewSet(viewsets.GenericViewSet):
     
     def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
         return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, is_public=True, deleted_at__isnull=True).count()
+
+class AdShareLinkView(View):
+    def get(self, request):
+        ad_id = request.GET.get('id', '')
+        ad = rampp2p_models.Ad.objects.filter(pk=ad_id)
+        exists, trade_type, price, fiat_currency = False, '', None, None
+        if ad.exists():
+            exists = True
+            ad = ad.first()
+            trade_type = ad.trade_type.lower()
+            price = f"{Decimal(ad.get_price()).quantize(Decimal('1.00')):,}"
+            fiat_currency = ad.fiat_currency.symbol
+
+        context = {
+            "ad_id": ad_id,
+            "exists": exists,
+            "trade_type": f"{trade_type}s",
+            "price": price,
+            "fiat_currency": fiat_currency,
+            "title": f"This link opens a {trade_type} BCH ad!",
+            "description": f"This link opens a {trade_type} Bitcoin Cash (BCH) ad for {price} {fiat_currency} per BCH. You can order using the Paytaca wallet app."
+        }
+        return render(request, "ad.html", context=context)
 
 class AdSnapshotViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]

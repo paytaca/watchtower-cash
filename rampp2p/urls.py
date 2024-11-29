@@ -11,6 +11,7 @@ urlpatterns = [
     path('ad/currency/', AdViewSet.as_view({'get': 'retrieve_currencies'})),
     path('ad/snapshot/<int:pk>/', AdSnapshotViewSet.as_view({'get': 'retrieve'})),
     path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
+    path('ad/share/', AdShareLinkView.as_view(), name='adview'),
 
     path('cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_presets'})),
     path('cash-in/ad/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
