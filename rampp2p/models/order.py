@@ -17,7 +17,7 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     appealable_at = models.DateTimeField(null=True)
     expires_at = models.DateTimeField(null=True)
-    is_cash_in = models.BooleanField(default=False)
+    is_cash_in = models.BooleanField(default=False, db_index=True)
 
     def __str__(self):
         return f'{self.id}'
