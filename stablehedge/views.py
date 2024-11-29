@@ -246,6 +246,7 @@ class TreasuryContractViewSet(
         result = serializer.save()
         return Response(result)
 
+    @swagger_auto_schema(method="get", responses={200:response_serializers.TreasuryContractBalance})
     @decorators.action(methods=["get"], detail=True)
     def balance(self, request, *args, **kwargs):
         instance = self.get_object()

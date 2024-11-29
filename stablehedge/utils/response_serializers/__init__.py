@@ -8,3 +8,4 @@ from .fiat_token import *
 from .redemption_contract import *
 from .short_proposal import *
 from .transaction import *
+from .treasury_contract import *

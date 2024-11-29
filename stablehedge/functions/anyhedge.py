@@ -3,6 +3,7 @@ import json
 import decimal
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from stablehedge.apps import LOGGER
@@ -18,6 +19,7 @@ from stablehedge.utils.transaction import (
     utxo_data_to_cashscript,
     tx_model_to_cashscript,
     get_tx_input_hashes,
+    satoshis_to_token,
 )
 from stablehedge.js.runner import ScriptFunctions
 
@@ -33,9 +35,12 @@ from .treasury_contract import (
 
 from anyhedge import models as anyhedge_models
 from anyhedge.js.runner import AnyhedgeFunctions
-from anyhedge.tasks import validate_contract_funding
+from anyhedge.tasks import parse_contract_liquidity_fee
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
-from anyhedge.utils.liquidity import fund_hedge_position
+from anyhedge.utils.liquidity import (
+    fund_hedge_position,
+    resolve_liquidity_fee,
+)
 from anyhedge.utils.funding import calculate_funding_amounts
 from anyhedge.utils.contract import (
     AnyhedgeException,
@@ -666,7 +671,7 @@ def complete_short_proposal(treasury_contract_address:str):
     # previous 2 steps must complete & not rollback db transactions; and
     # the following steps are not that critical
     try:
-        validate_contract_funding.delay(hedge_pos_obj.address)
+        parse_contract_liquidity_fee.delay(hedge_pos_obj.address)
     except Exception as exception:
         LOGGER.exception(exception)
 
@@ -799,7 +804,7 @@ def place_short_proposal(
     # previous 2 steps must complete & not rollback db transactions; and
     # the following steps are not that critical
     try:
-        validate_contract_funding.delay(hedge_pos_obj.address)
+        parse_contract_liquidity_fee.delay(hedge_pos_obj.address)
     except Exception as exception:
         LOGGER.exception(exception)
 
@@ -818,40 +823,31 @@ def get_total_short_value(treasury_contract_address:str):
     ongoing_short_positions = anyhedge_models.HedgePosition.objects.filter(
         short_address=treasury_contract_address,
         funding_tx_hash__isnull=False,
-        settlements__isnull=True,
+        # settlements__isnull=True,
     )
+    if ongoing_short_positions.filter(metadata__total_short_funding_sats__isnull=True).exists():
+        for short_position in ongoing_short_position:
+            resolve_liquidity_fee(short_position, hard_update=True)
 
-    nominal_unit_sats = ongoing_short_positions.annotate(
-        nominal_unit_sats = ongoing_short_positions.Annotations.nominal_unit_sats
-    ).values_list("nominal_unit_sats", flat=True)
+    short_position_values = ongoing_short_positions \
+        .annotate(short_funding_sats = F("metadata__total_short_funding_sats")) \
+        .values(
+            "start_price",
+            "short_funding_sats",
+        )
 
-    oracle_pubkey = ongoing_short_positions \
-        .values_list("oracle_pubkey", flat=True).first()
+    total_sats = decimal.Decimal(0)
+    total_unit_value = decimal.Decimal(0)
+    for data in short_position_values:
+        funding_sats = decimal.Decimal(data["short_funding_sats"])
+        start_price = decimal.Decimal(data["start_price"])
+        token_units = satoshis_to_token(funding_sats, start_price)
 
-    asset_data = anyhedge_models.Oracle.objects.filter(pubkey=oracle_pubkey) \
-        .values("asset_decimals", "asset_currency").first()
-
-    decimals = asset_data["asset_decimals"]
-    currency = asset_data["asset_currency"]
-
-    asset_multiplier = decimal.Decimal(10 ** decimals)
-    sats_per_bch = decimal.Decimal(10 ** 8)
-
-    total_nominal_unit_sats = decimal.Decimal(sum(nominal_unit_sats))
-    total_nominal_units = total_nominal_unit_sats / sats_per_bch
-    total_nominal_value = total_nominal_units / asset_multiplier
-
-    latest_price = get_latest_oracle_price(oracle_pubkey)
-    total_short_values_in_satoshis = None
-    if latest_price:
-        latest_price = latest_price / asset_multiplier
-        total_short_values_in_bch = total_nominal_value / latest_price
-        total_short_values_in_satoshis = round(total_short_values_in_bch * sats_per_bch)
+        total_sats += funding_sats
+        total_unit_value += token_units
 
     return dict(
-        nominal_value=total_nominal_value,
-        count=len(nominal_unit_sats),
-        currency=currency,
-        current_price=latest_price,
-        value_in_satoshis=total_short_values_in_satoshis,
+        count=len(short_position_values),
+        satoshis=total_sats,
+        unit_value=total_unit_value,
     )
