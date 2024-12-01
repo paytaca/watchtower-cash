@@ -1351,6 +1351,12 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
 @shared_task(bind=True, queue='wallet_history_1')
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[], proceed_with_zero_amount=False):
     wallet_hash = wallet_handle.split('|')[1]
+    
+    # delete cached wallet balance
+    cache = settings.REDISKV
+    cache_key = f'wallet:balance:bch:{wallet_hash}'
+    cache.delete(cache_key)
+    
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
     # Do not record wallet history record if all senders and recipients are from the same wallet (i.e. UTXO consolidation txs)
