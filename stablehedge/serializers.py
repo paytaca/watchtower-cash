@@ -374,7 +374,7 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
     def get_funding_wif_pubkey(self, obj):
         wif = None
         if is_valid_wif(obj.encrypted_funding_wif):
-            wif = obj.encrypted_funding_wif
+            wif = obj.encrypted_funding_wif.replace("bch-wif:", "")
         elif obj.encrypted_funding_wif:
             wif = decrypt_str_safe(obj.encrypted_funding_wif)
 
