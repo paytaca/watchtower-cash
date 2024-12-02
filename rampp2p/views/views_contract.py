@@ -206,16 +206,15 @@ class ContractViewSet(viewsets.GenericViewSet):
             service_fee = contract.service_fee
             arbitration_fee = contract.arbitration_fee
 
-            logger.warning(f'hardcoded: {contract_fee} | service: {service_fee} | arbitration: {arbitration_fee}')
             total_fee = contract_fee + service_fee + arbitration_fee
-            logger.warning(f'total_fee: {total_fee}')
+
             breakdown = {
                 'contract_fee': contract_fee,
                 'service_fee': service_fee,
                 'arbitration_fee': arbitration_fee
             }
             response = { 'total': total_fee, 'breakdown':  breakdown }
-            logger.warning(f'response: {response}')
+
             return Response(response, status=status.HTTP_200_OK)
         except (models.Order.DoesNotExist, models.Contract.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

@@ -83,6 +83,16 @@ class Order(models.Model):
     
     def is_arbiter(self, wallet_hash):
         return wallet_hash == self.arbiter.wallet_hash
+    
+    def get_seller(self):
+        if self.ad_snapshot.trade_type == TradeType.SELL:
+            return self.ad_snapshot.ad.owner
+        return self.owner
+    
+    def get_buyer(self):
+        if self.ad_snapshot.trade_type == TradeType.BUY:
+            return self.ad_snapshot.ad.owner
+        return self.owner
 
 
 class OrderPayment(models.Model):
@@ -115,20 +125,22 @@ class OrderMember(models.Model):
 
     def __str__(self) -> str:
         return f'{self.id}'
-
+    
+    @property
+    def user(self):
+        if self.arbiter:
+            return self.arbiter
+        return self.peer
+        
     @property
     def name(self):
-        if self.peer:
-           return self.peer.name
-        elif self.arbiter:
-            return self.arbiter.name
+        user = self.user
+        if user:
+            return user.name
     
     @property
     def wallet_hash(self):
-        if self.peer:
-            return self.peer.wallet_hash
-        elif self.arbiter:
-            return self.arbiter.wallet_hash
+        return self.user.wallet_hash
 
     class Meta:
          constraints = [

@@ -579,7 +579,6 @@ class OrderViewSet(viewsets.GenericViewSet):
             latest_status = Subquery(latest_status.values('status')[:1], output_field=CharField())
         )
         queryset = queryset.filter(Q(latest_status=StatusType.SUBMITTED) | Q(latest_status=StatusType.CONFIRMED)).values_list('id', flat=True)
-        logger.warning(f'queryset: {queryset}')
         return queryset
 
 class OrderStatusViewSet(viewsets.GenericViewSet):
@@ -655,16 +654,11 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 order.save()
 
                 # Decrease the Ad's trade amount and ceiling
-                # TODO: Test what happens if the ad is deleted before the order is confirmed?
-                # TODO: If an ad is deleted before the order is confirmed, and order trade 
-                # amount exceeds ad's limits, what happens to this order?
                 ad = order.ad_snapshot.ad
                 if order.ad_snapshot.trade_limits_in_fiat:
                     order_amount_fiat = bch_to_fiat(satoshi_to_bch(order.trade_amount), order.ad_snapshot.price)
                     ad_quantity_fiat = Decimal(order.ad_snapshot.trade_amount_fiat)
                     new_ad_quantity_fiat = ad_quantity_fiat - order_amount_fiat
-
-                    logger.warning(f'order.trade_amount: {order.trade_amount} | order_amount_fiat: {order_amount_fiat} | ad_quantity_fiat: {ad_quantity_fiat} | new_ad_quantity_fiat: {new_ad_quantity_fiat}')
                     
                     if new_ad_quantity_fiat < 0:
                         raise ValidationError('order amount exceeds ad remaining trade quantity')
@@ -676,8 +670,6 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                     order_amount_sats = order.trade_amount
                     ad_quantity_sats = order.ad_snapshot.ad.trade_amount_sats
                     new_ad_quantity_sats = ad_quantity_sats - order_amount_sats
-    
-                    logger.warning(f'order_amount_sats: {order_amount_sats} | ad_quantity_sats: {ad_quantity_sats} | new_ad_quantity_sats: {new_ad_quantity_sats}')
                     
                     if new_ad_quantity_sats < 0:
                         raise ValidationError('order amount exceeds ad remaining trade quantity')
@@ -747,6 +739,12 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 for member in members:
                     member.read_at = timezone.now()
                     member.save()
+
+                counterparty = order.get_buyer()
+                if counterparty.wallet_hash == wallet_hash:
+                    counterparty = order.get_seller()
+
+                send_push_notification([counterparty.wallet_hash], f"Order #{order.id} cancelled", extra={'order_id': order.id})
 
                 # Send WebSocket update
                 websocket.send_order_update({'success' : True, 'status': serialized_status.data}, pk)
@@ -867,14 +865,11 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
             response["order"] = serialized_order.data
             
             # Create PAID_PENDING status for order
-            serialized_status = serializers.StatusSerializer(data={
-                'status': StatusType.PAID_PENDING,
-                'order': pk,
-                'created_by': wallet_hash
-            })
-
+            serialized_status = serializers.StatusSerializer(data={'status': StatusType.PAID_PENDING, 'order': pk})
             if not serialized_status.is_valid():            
                 raise ValidationError(serialized_status.errors)
+            
+            send_push_notification([order.get_seller().wallet_hash], f"Order #{order.id} payment pending confirmation", extra={'order_id': order.id})
             
             serialized_status = serializers.StatusReadSerializer(serialized_status.save())
             websocket.send_order_update({'success' : True, 'status': serialized_status.data}, pk)
@@ -916,7 +911,8 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
             contract = models.Contract.objects.get(order__id=pk)
             _, _ = models.Transaction.objects.get_or_create(contract=contract, action=models.Transaction.ActionType.RELEASE)
 
-            # Send WebSocket update
+            # Send push notif and WebSocket update
+            send_push_notification([order.get_buyer().wallet_hash], f"Order #{order.id} payment confirmed", extra={'order_id': order.id})
             websocket.send_order_update({'success' : True, 'status': serialized_status.data}, pk)
             return Response(serialized_status.data, status=status.HTTP_200_OK)
 
