@@ -448,6 +448,18 @@ def save_contract_data(contract_data:dict, settlement_service_data:dict=None):
         hedge_pos_obj.funding_tx_hash_validated = funding_obj.validated
         hedge_pos_obj.save()
 
+    try:
+        position_taker = contract_data["metadata"]["takerSide"]
+    except (TypeError, KeyError): 
+        position_taker = None
+    if position_taker in ["long", "short"]:
+        HedgePositionMetadata.objects.update_or_create(
+            hedge_position=hedge_pos_obj,
+            defaults=dict(
+                position_taker=position_taker,
+            )
+        )
+
     return hedge_pos_obj
 
 
