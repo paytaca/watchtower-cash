@@ -818,15 +818,17 @@ def place_short_proposal(
 # ============================================================================= #
 # """""""""""""""""""""""""""""""""Monitoring"""""""""""""""""""""""""""""""""" #
 # ============================================================================= #
-
-def get_total_short_value(treasury_contract_address:str):
-    ongoing_short_positions = anyhedge_models.HedgePosition.objects.filter(
+def get_ongoing_short_positions(treasury_contract_address:str):
+    return anyhedge_models.HedgePosition.objects.filter(
         short_address=treasury_contract_address,
         funding_tx_hash__isnull=False,
-        # settlements__isnull=True,
+        settlements__isnull=True,
     )
+
+def get_total_short_value(treasury_contract_address:str):
+    ongoing_short_positions = get_ongoing_short_positions(treasury_contract_address)
     if ongoing_short_positions.filter(metadata__total_short_funding_sats__isnull=True).exists():
-        for short_position in ongoing_short_position:
+        for short_position in ongoing_short_positions:
             resolve_liquidity_fee(short_position, hard_update=True)
 
     short_position_values = ongoing_short_positions \
