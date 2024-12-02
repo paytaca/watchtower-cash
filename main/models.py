@@ -28,7 +28,7 @@ class Token(PostgresModel):
         MINTING = 'minting'
         NONE = 'none'  # immutable
 
-    name = models.CharField(max_length=200, blank=True)
+    name = models.CharField(max_length=200, blank=True, db_index=True)
     tokenid = models.CharField(
         max_length=70,
         blank=True,
@@ -385,8 +385,8 @@ class CashNonFungibleToken(models.Model):
         blank=True,
         null=True
     )
-    current_txid = models.CharField(max_length=70)
-    current_index = models.PositiveIntegerField()
+    current_txid = models.CharField(max_length=70, db_index=True)
+    current_index = models.PositiveIntegerField(db_index=True)
 
     class Meta:
         verbose_name_plural = 'CashToken NFTs'
@@ -644,7 +644,7 @@ class WalletHistory(PostgresModel):
         db_index=True,
         choices=RECORD_TYPE_OPTIONS
     )
-    amount = models.FloatField(default=0)
+    amount = models.FloatField(default=0, db_index=True)
     token = models.ForeignKey(
         Token,
         related_name='wallet_history_records',

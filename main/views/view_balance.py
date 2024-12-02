@@ -248,18 +248,26 @@ class Balance(APIView):
                     query = Q(wallet=wallet) & Q(spent=False)
                 
                 if is_bch:
-                    qs_balance, qs_count = _get_bch_balance(query)
-                    bch_balance = qs_balance['balance'] or 0
-                    bch_balance = bch_balance / (10 ** 8)
+                    cache = settings.REDISKV
+                    cache_key = f'wallet:balance:bch:{wallet_hash}'
+                    cached_data = cache.get(cache_key)
+                    if cached_data:
+                        data = json.loads(cached_data)
+                    else:
+                        qs_balance, qs_count = _get_bch_balance(query)
+                        bch_balance = qs_balance['balance'] or 0
+                        bch_balance = bch_balance / (10 ** 8)
 
-                    data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
-                    data['spendable'] = satoshi_to_bch(data['spendable'])
-                    data['spendable'] = max(data['spendable'], 0)
-                    data['spendable'] = self.truncate(data['spendable'], 8)
+                        data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+                        data['spendable'] = satoshi_to_bch(data['spendable'])
+                        data['spendable'] = max(data['spendable'], 0)
+                        data['spendable'] = self.truncate(data['spendable'], 8)
 
-                    data['balance'] = self.truncate(bch_balance, 8)
-                    data['yield'] = None # compute_wallet_yield(wallet_hash)
-                    data['valid'] = True
+                        data['balance'] = self.truncate(bch_balance, 8)
+                        data['yield'] = None # compute_wallet_yield(wallet_hash)
+                        data['valid'] = True
+
+                        cache.set(cache_key, json.dumps(data))
                 else:
                     if is_cashtoken_nft:
                         token = CashNonFungibleToken.objects.get(
