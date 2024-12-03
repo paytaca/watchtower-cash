@@ -1,9 +1,12 @@
 from django.db import models
+from django.apps import apps
+from django.utils import timezone
+from datetime import datetime
+
 from .ad import AdSnapshot, TradeType
 from .peer import Peer
 from .arbiter import Arbiter
 from .payment import PaymentMethod, PaymentType
-from django.apps import apps
 
 class Order(models.Model):
     tracking_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
@@ -12,7 +15,8 @@ class Order(models.Model):
     chat_session_ref = models.CharField(max_length=100, null=True, blank=True)
     arbiter = models.ForeignKey(Arbiter, on_delete=models.PROTECT, blank=True, null=True, related_name="arbitrated_orders")
     locked_price = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
-    crypto_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, editable=False)
+    crypto_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0, null=True, editable=False) # order trade amount in BCH (to be deprecated)
+    trade_amount = models.BigIntegerField(null=True) # order trade amount in satoshis
     payment_methods = models.ManyToManyField(PaymentMethod)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     appealable_at = models.DateTimeField(null=True)
@@ -37,6 +41,58 @@ class Order(models.Model):
     @property
     def currency(self):
         return self.ad_snapshot.fiat_currency
+    
+    def is_appealable(self):
+        time_now = timezone.make_aware(datetime.now())
+        return time_now >= self.appealable_at, self.appealable_at
+    
+    def get_members(self):
+        OrderMember = apps.get_model('rampp2p', 'OrderMember')
+        members = OrderMember.objects.filter(order__id=self.id)
+        arbiter, seller, buyer = None, None, None
+        for member in members:
+            type = member.type
+            if (type == OrderMember.MemberType.ARBITER):
+                arbiter = member
+            if (type == OrderMember.MemberType.SELLER):
+                seller = member
+            if (type == OrderMember.MemberType.BUYER):
+                buyer = member
+
+        return {
+            'arbiter': arbiter,
+            'seller': seller,
+            'buyer': buyer
+        }
+    
+    def is_seller(self, wallet_hash):
+        seller = self.owner
+        if self.ad_snapshot.trade_type == 'SELL':
+            seller = self.ad_snapshot.ad.owner
+        if wallet_hash == seller.wallet_hash:
+            return True
+        return False
+
+    def is_buyer(self, wallet_hash):
+        buyer = self.owner
+        if self.ad_snapshot.trade_type == 'BUY':
+            buyer = self.ad_snapshot.ad.owner
+        if wallet_hash == buyer.wallet_hash:
+            return True
+        return False
+    
+    def is_arbiter(self, wallet_hash):
+        return wallet_hash == self.arbiter.wallet_hash
+    
+    def get_seller(self):
+        if self.ad_snapshot.trade_type == TradeType.SELL:
+            return self.ad_snapshot.ad.owner
+        return self.owner
+    
+    def get_buyer(self):
+        if self.ad_snapshot.trade_type == TradeType.BUY:
+            return self.ad_snapshot.ad.owner
+        return self.owner
 
 
 class OrderPayment(models.Model):
@@ -69,13 +125,22 @@ class OrderMember(models.Model):
 
     def __str__(self) -> str:
         return f'{self.id}'
-
+    
+    @property
+    def user(self):
+        if self.arbiter:
+            return self.arbiter
+        return self.peer
+        
     @property
     def name(self):
-        if self.peer:
-           return self.peer.name
-        elif self.arbiter:
-            return self.arbiter.name
+        user = self.user
+        if user:
+            return user.name
+    
+    @property
+    def wallet_hash(self):
+        return self.user.wallet_hash
 
     class Meta:
          constraints = [
@@ -90,3 +155,4 @@ class OrderMember(models.Model):
                 name='unique_arbiter_order'
             ),
         ]
+

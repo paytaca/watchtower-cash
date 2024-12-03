@@ -431,7 +431,8 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "wallet-hash",
     "signature",
     "timestamp",
-    "public-key"
+    "public-key",
+    "version"
 ]
 
 REST_FRAMEWORK = {
@@ -658,13 +659,16 @@ ENV = config('ENV', 'prod')
 DEBUG = config('ENV', 'prod') != 'prod'
 ENV = config('ENV', 'prod')
 
+SATOSHI_PER_BCH = 10 ** 8 # 100,000,000 sats = 1 BCH
+DUST_LIMIT_CAP = 1000 # dust limit is 546 sats
+
 # P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_PK = config('SERVICER_PK', '')
 SERVICER_ADDR = config('SERVICER_ADDR', '')
 SERVICE_FEE = config('SERVICE_FEE', 1000)
 ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
-HARDCODED_FEE = config('HARDCODED_FEE', 1000)
+CONTRACT_FEE = config('CONTRACT_FEE', 1000)
 SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
 from requests.compat import urljoin

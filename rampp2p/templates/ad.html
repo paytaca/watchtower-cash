@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <!-- HTML Meta Tags -->
+        <title>{{ title }}</title>
+        <meta name="description" content="{{ description }}">
+                
+    </head>
+
+    <body>
+        <div class="md:pt-12 max-w-full md:h-screen md:bg-gray-100">
+            <div class="grid md:grid-cols-6 grid-rows-1 pt-4">
+                    <div class="md:col-start-2 md:col-span-4 md:drop-shadow-lg md:rounded-2xl bg-white">
+                        {% if exists %}
+                            <div class="grid gap-2 md:grid-cols-2 grid-rows-1">
+                                <div class="w-fit m-auto p-4 md:p-12 pb-16">
+                                    <h1 class="text-center text-3xl font-semibold text-red-600">You are about to open an Ad that {{ trade_type }}</h1>
+                                    <div class="mt-2">
+                                        <h1 class="text-center text-4xl font-semibold">
+                                            <img style="display: inline-block; margin-top: -5px;" src="/static/bch-logo.png" width="40"/> 
+                                            <span style="font-style: italic;">Bitcoin</span><span style="color: #9ac360; font-style: italic;">Cash</span>
+                                        </h1>
+                                    </div>
+                                    <p class="text-center pt-6">This ad {{ trade_type }} for <strong>{{ price }} {{ fiat_currency }}</strong> per BCH. Follow the instructions to create an order.</p>
+                                </div>
+                                <div class="p-6 md:pt-7 bg-bottom bg-blue-800 md:rounded-r-2xl">
+                                    <p class="text-2xl text-white">Create an order now!</p>
+                                    <!-- <p class="text-1xl text-white pt-2">Method 1</p> -->
+                                    <ol class="pt-3 list-decimal pl-10 text-white">
+                                        <li>Open this URL in your native mobile browser</li>
+                                        <li>It will automatically redirect to the installed Paytaca app and to Peer-to-Peer Exchange</li>
+                                        <li>You will be asked to register if you don't have an existing P2P Exchange account yet</li>
+                                        <li>The app will then open the order form for the Ad</li>
+                                    </ol>
+                                    <p class="text-2xl pt-7 text-white">Don't have Paytaca yet?</p>
+                                    <p class="pt-3 text-white">Download & install from <a style="text-decoration: underline;" href="https://www.paytaca.com/#wallet" target="_blank">https://www.paytaca.com</a></p>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="p-2">
+                                <h1 class="text-center text-3xl font-semibold text-red-600">The Ad in this link does not exist or has been deleted.</h1>
+                            </div>
+                        {% endif %}
+                    </div>
+            </div>
+        </div>
+    </body>
+</html>

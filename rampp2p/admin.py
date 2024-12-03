@@ -4,6 +4,25 @@ from rampp2p.forms import *
 
 # Register your models here.
 
+class FeatureToggleAdmin(admin.ModelAdmin):
+    list_display = ['feature_name', 'is_enabled']
+
+admin.site.register(FeatureToggle, FeatureToggleAdmin)
+
+class TradeFeeAdmin(admin.ModelAdmin):
+    form = TradeFeeForm
+    list_display = ['category', 'type', 'fixed_value', 'floating_value', 'updated_at']
+
+    def has_add_permission(self, request):
+        arbitration_fee_exists = TradeFee.objects.filter(category=TradeFee.FeeCategory.ARBITRATION).exists()
+        service_fee_exists = TradeFee.objects.filter(category=TradeFee.FeeCategory.SERVICE).exists()
+        return not (arbitration_fee_exists and service_fee_exists)
+    
+    def has_delete_permission(self, request, obj = None):
+        return False
+    
+admin.site.register(TradeFee, TradeFeeAdmin)
+
 class AdAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -46,7 +65,6 @@ class AdAdmin(admin.ModelAdmin):
             ad.save()
     
     mark_private.short_description = "Mark selected ads as private"
-
 
 admin.site.register(Ad, AdAdmin)
 
@@ -94,7 +112,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = [
         'id',
         'ad_snapshot__trade_type',
-        'crypto_amount',
+        'trade_amount',
         'owner',
         'created_at'
     ]
@@ -106,7 +124,6 @@ class OrderAdmin(admin.ModelAdmin):
         if obj.ad_snapshot:
             return obj.ad_snapshot.trade_type
         return None
-
 
 admin.site.register(Order, OrderAdmin)
 
@@ -140,6 +157,7 @@ class ArbiterAdmin(admin.ModelAdmin):
 admin.site.register(Arbiter, ArbiterAdmin)
 
 class ContractAdmin(admin.ModelAdmin):
+    readonly_fields = ['order', 'address', 'version', 'contract_fee', 'arbitration_fee', 'service_fee']
     list_display = [
         'order',
         'address',
