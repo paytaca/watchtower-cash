@@ -92,7 +92,7 @@ class WalletAddressAppView(APIView):
         
         public_key_hex = request.data.get('public_key')
         signature_hex = request.data.get('signature')
-        app_icon = request.data.get('extra', {}).get('appIcon', '')
+        app_icon = request.data.get('extra', {}).get('app_icon', '')
         # message = pipe separated strings '<nonce get from api/nonce endpoint (NonceAPIView) >|<signer_address>|<app_name>|<app_url>'
         # example: abcdNonce|bchtest:qr244vwpanvv5hvy2gl9schhpe9a22ytq5m0kja3rv|CashTokens Studio|https://cashtokens.studio.cash
         message = request.data.get('message')
