@@ -73,12 +73,19 @@ class WalletAddressAppView(APIView):
     def get(self, request, *args, **kwargs):
         wallet_hash = self.request.query_params.get('wallet_hash')
         wallet_address = self.request.query_params.get('wallet_address')
+        app_name = request.query_params.get('app_name', '')
+        app_url = request.query_params.get('app_url', '')
+        
         queryset = WalletAddressApp.objects.order_by('-updated_at')
 
         if wallet_hash:
             queryset = queryset.filter(wallet_hash=wallet_hash)
         if wallet_address:
             queryset = queryset.filter(wallet_address=wallet_address)
+        if app_name:
+            queryset = queryset.filter(app_name=app_name)
+        if app_url:
+            queryset = queryset.filter(app_url=app_url)
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(queryset, request)
@@ -169,6 +176,7 @@ class WalletAddressAppRecordExistsView(APIView):
         wallet_address = request.query_params.get('wallet_address', '')
         wallet_hash = request.query_params.get('wallet_hash', '')
         app_name = request.query_params.get('app_name', '')
+        app_url = request.query_params.get('app_url', '')
         queryset = WalletAddressApp.objects.all()
         if wallet_hash:
             queryset = queryset.filter(wallet_hash=wallet_hash)
@@ -176,6 +184,8 @@ class WalletAddressAppRecordExistsView(APIView):
             queryset = queryset.filter(wallet_address=wallet_address)
         if app_name:
             queryset = queryset.filter(app_name=app_name)
+        if app_url:
+            queryset = queryset.filter(app_url=app_url)
         return Response({ 'exists': queryset.exists() })
 
         
