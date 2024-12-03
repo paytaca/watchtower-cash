@@ -54,7 +54,12 @@ class TradeFee(models.Model):
         return self.fixed_value
 
 class FeatureToggle(models.Model):
-    feature_name = models.CharField(max_length=100, unique=True)
+    class FeatureName (models.TextChoices):
+        AdShareLink = 'AdShareLink'
+        CreateOrders = 'CreateOrders'
+        CashIn = 'CashIn'
+    
+    feature_name = models.CharField(max_length=100, unique=True, choices=FeatureName.choices)
     is_enabled = models.BooleanField(default=False)
 
     def __str__(self):
