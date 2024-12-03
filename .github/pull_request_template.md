@@ -1,5 +1,5 @@
 ## Description
-Describe your changes in detail. Why is this change required? What problem does it solve? Include link or references to relevant issues or tasks (eg. Bug ID - 1).
+Describe your changes in detail. Why is this change required? What problem does it solve? Include **link** or references to relevant issues or tasks (eg. Bug ID - 1).
 
 Acceptance criteria for the issue or task could also be included here.
 
