@@ -10,11 +10,18 @@ from django.http import HttpResponse, JsonResponse
 from main.utils.subscription import save_subscription
 from rampp2p.utils.fees import get_trading_fees
 
-from rampp2p.models import MarketRate, AppVersion
+from rampp2p.models import MarketRate, AppVersion, FeatureToggle
 from rampp2p.serializers import MarketRateSerializer
 
 import logging
 logger = logging.getLogger(__name__)
+
+def feature_toggles(request):
+    toggles = {
+        toggle.feature_name: toggle.is_enabled
+        for toggle in FeatureToggle.objects.all()
+    }
+    return JsonResponse(toggles)
     
 def check_app_version(request, platform=None):
     if platform:

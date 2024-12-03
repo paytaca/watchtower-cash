@@ -52,3 +52,10 @@ class TradeFee(models.Model):
                 sats_fee = self.fixed_value
             return int(sats_fee)
         return self.fixed_value
+
+class FeatureToggle(models.Model):
+    feature_name = models.CharField(max_length=100, unique=True)
+    is_enabled = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.feature_name

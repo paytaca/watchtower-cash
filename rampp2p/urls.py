@@ -88,4 +88,5 @@ urlpatterns = [
     path('utils/market-price/', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
+    path('feature-toggles/', feature_toggles)
 ]

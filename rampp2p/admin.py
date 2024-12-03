@@ -4,6 +4,11 @@ from rampp2p.forms import *
 
 # Register your models here.
 
+class FeatureToggleAdmin(admin.ModelAdmin):
+    list_display = ['feature_name', 'is_enabled']
+
+admin.site.register(FeatureToggle, FeatureToggleAdmin)
+
 class TradeFeeAdmin(admin.ModelAdmin):
     form = TradeFeeForm
     list_display = ['category', 'type', 'fixed_value', 'floating_value', 'updated_at']
@@ -13,8 +18,8 @@ class TradeFeeAdmin(admin.ModelAdmin):
         service_fee_exists = TradeFee.objects.filter(category=TradeFee.FeeCategory.SERVICE).exists()
         return not (arbitration_fee_exists and service_fee_exists)
     
-    # def has_delete_permission(self, request, obj = None):
-    #     return False
+    def has_delete_permission(self, request, obj = None):
+        return False
     
 admin.site.register(TradeFee, TradeFeeAdmin)
 
