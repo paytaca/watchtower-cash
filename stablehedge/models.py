@@ -231,3 +231,27 @@ class TreasuryContract(models.Model):
             self.pubkey4,
             self.pubkey5,
         ]
+
+
+class TreasuryContractKey(models.Model):
+    treasury_contract = models.OneToOneField(TreasuryContract, on_delete=models.CASCADE)
+    pubkey1_wif = models.CharField(
+        max_length=200, null=True, blank=True,
+        help_text="Add prefix 'bch-wif:', if data is not encrypted"
+    )
+    pubkey2_wif = models.CharField(
+        max_length=200, null=True, blank=True,
+        help_text="Add prefix 'bch-wif:', if data is not encrypted"
+    )
+    pubkey3_wif = models.CharField(
+        max_length=200, null=True, blank=True,
+        help_text="Add prefix 'bch-wif:', if data is not encrypted"
+    )
+    pubkey4_wif = models.CharField(
+        max_length=200, null=True, blank=True,
+        help_text="Add prefix 'bch-wif:', if data is not encrypted"
+    )
+    pubkey5_wif = models.CharField(
+        max_length=200, null=True, blank=True,
+        help_text="Add prefix 'bch-wif:', if data is not encrypted"
+    )

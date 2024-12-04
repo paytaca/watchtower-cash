@@ -25,3 +25,30 @@ class TreasuryContractForm(forms.ModelForm):
             value = encrypt_str(value)
 
         return value
+
+
+class TreasuryContractKeyForm(forms.ModelForm):
+    class Meta:
+        model = models.TreasuryContractKey
+        fields = "__all__"
+
+    def _clean_wif(self, value):
+        if value and is_valid_wif(value) and not value.startswith("bch-wif:"):
+            value = encrypt_str(value)
+
+        return value
+
+    def clean_pubkey1_wif(self):
+        return self._clean_wif(self.cleaned_data.get("pubkey1_wif"))
+
+    def clean_pubkey2_wif(self):
+        return self._clean_wif(self.cleaned_data.get("pubkey2_wif"))
+
+    def clean_pubkey3_wif(self):
+        return self._clean_wif(self.cleaned_data.get("pubkey3_wif"))
+
+    def clean_pubkey4_wif(self):
+        return self._clean_wif(self.cleaned_data.get("pubkey4_wif"))
+
+    def clean_pubkey5_wif(self):
+        return self._clean_wif(self.cleaned_data.get("pubkey5_wif"))

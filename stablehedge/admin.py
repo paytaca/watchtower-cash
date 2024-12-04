@@ -105,10 +105,18 @@ class RedemptionContractTransactionAdmin(admin.ModelAdmin):
         "status",
     ]
 
+class TreasuryContractKeyInline(admin.StackedInline):
+    model = models.TreasuryContractKey
+    extra = 0
+    form = forms.TreasuryContractKeyForm
+
 
 @admin.register(models.TreasuryContract)
 class TreasuryContractAdmin(admin.ModelAdmin):
     form = forms.TreasuryContractForm
+    inlines = [
+        TreasuryContractKeyInline,
+    ]
 
     search_fields = [
         "auth_token_id",
