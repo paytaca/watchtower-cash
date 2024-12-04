@@ -1,4 +1,4 @@
-import { binToHex, encodeTransaction } from '@bitauth/libauth'
+import { binToHex, decodePrivateKeyWif, encodeTransaction, secp256k1, sha256 } from '@bitauth/libauth'
 import { parseUtxo, toCashAddress, toTokenAddress } from '../utils/crypto.js'
 import { addPrecision, cashscriptTxToLibauth, groupUtxoAssets, removePrecision } from '../utils/transaction.js'
 import { calculateDust, getOutputSize } from 'cashscript/dist/utils.js'
@@ -108,4 +108,22 @@ export function sweepUtxos(opts) {
     success: true,
     transaction: binToHex(encodeTransaction(transaction)),
   }
+}
+
+/**
+ * @param {Object} opts
+ * @param {String} opts.wif
+ * @param {String} opts.message utf8 encoded message
+ */
+export function schnorrSign(opts) {
+  const decodedWif = decodePrivateKeyWif(opts?.wif)
+  if (typeof decodedWif === 'string') return {
+    success: false, error: decodedWif,
+  }
+
+  const privateKey = decodedWif.privateKey
+
+  const msgHash = sha256.hash(Buffer.from(opts?.message, 'utf8'))
+  const signature = secp256k1.signMessageHashSchnorr(privateKey, msgHash)
+  return { success: true, signature: binToHex(signature) }
 }

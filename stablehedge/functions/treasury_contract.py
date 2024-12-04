@@ -177,3 +177,20 @@ def sweep_funding_wif(treasury_contract_address:str):
         raise StablehedgeException(error_or_txid)
 
     return error_or_txid
+
+
+def get_wif_for_short_proposal(treasury_contract_address:str):
+    treasury_contract_keys = models.TreasuryContractKey.objects.filter(
+        treasury_contract__address=treasury_contract_address,
+    ).first()
+
+    if not treasury_contract_keys:
+        return
+
+    encrypted_funding_wif = treasury_contract_keys.pubkey1_wif
+    if is_valid_wif(encrypted_funding_wif):
+        return encrypted_funding_wif.replace("bch-wif:", "")
+
+    funding_wif = decrypt_str(encrypted_funding_wif)
+
+    return funding_wif

@@ -1,6 +1,9 @@
+import { HashType, SignatureAlgorithm, SignatureTemplate } from 'cashscript'
+import { binToHex, decodePrivateKeyWif, hash256, hexToBin, secp256k1, SigningSerializationFlag } from '@bitauth/libauth';
+import { createSighashPreimage } from 'cashscript/dist/utils.js';
+import { cashscriptTxToLibauth } from '../utils/transaction.js';
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
-import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo } from '../utils/crypto.js'
-import { SignatureAlgorithm, SignatureTemplate } from 'cashscript'
+import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo, wifToPubkey } from '../utils/crypto.js'
 
 
 export function getTreasuryContractArtifact() {
@@ -189,4 +192,54 @@ export function getMultisigTxUnlockingScripts(opts) {
   })
 
   return { success: true, scripts: scriptSigs }
+}
+
+/**
+ * @param {Object} opts 
+ * @param {Object} opts.contractOpts
+ * @param {String} opts.wif
+ * @param {Number} opts.locktime
+ * @param {Number} [opts.hashType]
+ * @param {import('cashscript').Utxo[]} opts.inputs
+ * @param {import('cashscript').Output[]} opts.outputs
+ */
+export function signMutliSigTx(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+  const contract = treasuryContract.getContract()
+  const decodedWif = decodePrivateKeyWif(opts?.wif)
+  const privateKey = decodedWif.privateKey
+  const pubkey = wifToPubkey(opts?.wif)
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+  const outputs = opts?.outputs?.map(parseCashscriptOutput)
+
+  const { sourceOutputs, transaction } = cashscriptTxToLibauth(contract.address, {
+    version: 2,
+    locktime: opts?.locktime,
+    inputs, outputs
+  })
+
+  const _hashType = opts?.hashType ? opts?.hashType : HashType.SIGHASH_ALL | HashType.SIGHASH_UTXOS;  
+  const hashType = _hashType | SigningSerializationFlag.forkId
+
+  const signatures = [].map(() => ({ sighash: '', signature: '', pubkey: '' }))
+    const bytecode = hexToBin(contract.bytecode)
+    transaction.inputs.forEach((input, index) => {
+      if (input?.unlockingBytecode?.length > 0) return
+
+      const preimage = createSighashPreimage(transaction, sourceOutputs, index, bytecode, hashType)
+      const sighash = hash256(preimage);
+      // const _signature = secp256k1.signMessageHashCompact(privateKey, sighash)
+      // const _signature = secp256k1.signMessageHashSchnorr(privateKey, sighash)
+      const _signature = secp256k1.signMessageHashDER(privateKey, sighash)
+      const signature = Uint8Array.from([..._signature, hashType])
+      const signatureHex = binToHex(signature)
+      signatures[index] = {
+        sighash: binToHex(sighash),
+        signature: signatureHex,
+        pubkey: pubkey,
+      }
+    })
+
+    return signatures
 }
