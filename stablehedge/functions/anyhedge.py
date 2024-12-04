@@ -65,9 +65,9 @@ def get_or_create_short_proposal(treasury_contract_address:str):
     return create_short_proposal(treasury_contract_address)
 
 
-def create_short_proposal(treasury_contract_address:str):
+def create_short_proposal(treasury_contract_address:str, for_multisig=False):
     LOGGER.info(f"SHORT PROPOSAL | CREATE | {treasury_contract_address}")
-    short_proposal_data = short_funds(treasury_contract_address)
+    short_proposal_data = short_funds(treasury_contract_address, for_multisig=for_multisig)
     save_short_proposal_data(
         treasury_contract_address,
         contract_data = short_proposal_data["contract_data"],
@@ -208,7 +208,7 @@ def refetch_short_proposal_contract_data(treasury_contract_address:str, pubkey="
     return short_proposal_data
 
 
-def short_funds(treasury_contract_address:str, pubkey1_wif=""):
+def short_funds(treasury_contract_address:str, for_multisig=False):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
     balance_data = get_spendable_sats(treasury_contract_address)
     spendable_sats = balance_data["spendable"]
@@ -276,6 +276,7 @@ def short_funds(treasury_contract_address:str, pubkey1_wif=""):
     funding_utxo_tx = create_tx_for_funding_utxo(
         treasury_contract_address,
         int(sats_to_fund),
+        for_multisig=for_multisig,
     )
 
     return dict(
