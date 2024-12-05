@@ -311,15 +311,18 @@ class CashFungibleToken(models.Model):
                 except (TypeError, ValueError):
                     decimals = 0
 
-                info, _ = CashTokenInfo.objects.get_or_create(
-                    name=data.get('name', f'CT-{self.category[0:4]}'),
-                    description=data.get('description', ''),
-                    symbol=data.get('token').get('symbol'),
-                    decimals=decimals,
-                    image_url=uris.get('icon')
-                )
-                self.info = info
-                self.save()
+                try:
+                    info, _ = CashTokenInfo.objects.get_or_create(
+                        name=data.get('name', f'CT-{self.category[0:4]}'),
+                        description=data.get('description', ''),
+                        symbol=data.get('token').get('symbol'),
+                        decimals=decimals,
+                        image_url=uris.get('icon')
+                    )
+                    self.info = info
+                    self.save()
+                except CashTokenInfo.MultipleObjectsReturned:
+                    pass
 
 
 class CashNonFungibleTokenQuerySet(PostgresQuerySet):
