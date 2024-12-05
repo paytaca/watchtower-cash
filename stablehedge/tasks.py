@@ -38,6 +38,7 @@ def check_and_short_funds(
     if not spendable or spendable < min_sats:
         return dict(success=True, message="Balance not met")
 
+    LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | ATTEMPT RUN")
     if background_task:
         task = short_treasury_contract_funds.delay(treasury_contract_address)
         result = dict(success=True, task_id=task.id)
@@ -80,7 +81,8 @@ def short_treasury_contract_funds(treasury_contract_address:str):
 
         if create_new:
             short_proposal = create_short_proposal(treasury_contract_address, for_multisig=True)
-
+            LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | NEW | SLEEPING FOR 5 SEC TO PREVENT LP RATE LIMIT")
+            time.sleep(5)
 
         contract_address = short_proposal["contract_data"]["address"]
 
