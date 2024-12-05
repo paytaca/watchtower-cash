@@ -40,11 +40,11 @@ def short_treasury_contract_funds(treasury_contract_address:str):
 
         # wif used for placing short positions
         # must the wif of treasury contract's pubkey1
-        wif = get_wif_for_short_proposal(treasury_contract_address)
+        wifs = get_wif_for_short_proposal(treasury_contract)
+        if len(wifs) < 3:
+            return dict(success=False, error="Not enough private keys found")
 
-        if not wif:
-            return dict(success=False, error="WIF for pubkey1 not found")
-
+        wif = wifs[0]
         wif_pubkey = wif_to_pubkey(wif)
         if wif_pubkey != treasury_contract.pubkey1:
             return dict(success=False, error="WIF used does not match pubkey1")
@@ -81,8 +81,9 @@ def short_treasury_contract_funds(treasury_contract_address:str):
 
         funding_utxo_tx = short_proposal["funding_utxo_tx"]
 
-        signatures = ScriptFunctions.signMutliSigTx(dict(
-            contractOpts=treasury_contract.contract_opts,
+        for index, _wif in enumerate(wifs[:3]):
+            signatures = ScriptFunctions.signMutliSigTx(dict(
+                contractOpts=treasury_contract.contract_opts,
             wif=wif,
             locktime=0,
             inputs=funding_utxo_tx["inputs"],

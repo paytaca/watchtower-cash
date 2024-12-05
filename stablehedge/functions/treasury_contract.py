@@ -6,10 +6,10 @@ from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.exceptions import StablehedgeException
-from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif
+from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.transaction import tx_model_to_cashscript
-from stablehedge.utils.encryption import encrypt_str, decrypt_str
+from stablehedge.utils.encryption import encrypt_str, decrypt_wif_safe
 
 
 from main import models as main_models
@@ -134,12 +134,7 @@ def get_funding_wif(treasury_contract_address:str):
     if not encrypted_funding_wif: return 
 
     # in case the saved data is not encrypted
-    if is_valid_wif(encrypted_funding_wif):
-        return encrypted_funding_wif.replace("bch-wif:", "")
-
-    funding_wif = decrypt_str(encrypted_funding_wif)
-
-    return funding_wif
+    return decrypt_wif_safe(encrypted_funding_wif)
 
 
 def sweep_funding_wif(treasury_contract_address:str):
@@ -179,7 +174,10 @@ def sweep_funding_wif(treasury_contract_address:str):
     return error_or_txid
 
 
-def get_wif_for_short_proposal(treasury_contract_address:str):
+def get_treasury_contract_wifs(treasury_contract_address:str):
+    """
+        Returns array of length 5, each index (0-4) matches pubkey 1 to 5
+    """
     treasury_contract_keys = models.TreasuryContractKey.objects.filter(
         treasury_contract__address=treasury_contract_address,
     ).first()
@@ -187,10 +185,34 @@ def get_wif_for_short_proposal(treasury_contract_address:str):
     if not treasury_contract_keys:
         return
 
-    encrypted_funding_wif = treasury_contract_keys.pubkey1_wif
-    if is_valid_wif(encrypted_funding_wif):
-        return encrypted_funding_wif.replace("bch-wif:", "")
+    wifs = [
+        treasury_contract_keys.pubkey1_wif,
+        treasury_contract_keys.pubkey2_wif,
+        treasury_contract_keys.pubkey3_wif,
+        treasury_contract_keys.pubkey4_wif,
+        treasury_contract_keys.pubkey5_wif,
+    ]
+    for index, wif in enumerate(wifs):
+        if not wif:
+            continue
+        wifs[index] = decrypt_wif_safe(wif)
 
-    funding_wif = decrypt_str(encrypted_funding_wif)
+    return wifs
 
-    return funding_wif
+
+def get_wif_for_short_proposal(treasury_contract:models.TreasuryContract):
+    wifs = get_treasury_contract_wifs(treasury_contract.address)
+    pubkeys = [
+        treasury_contract.pubkey1,
+        treasury_contract.pubkey2,
+        treasury_contract.pubkey3,
+        treasury_contract.pubkey4,
+        treasury_contract.pubkey5,
+    ]
+
+    # first wif must be from pubkey1 since it used for short proposal
+    # other wif is used for multisig
+    wif1 = wifs[0]
+    other_wifs = [_wif for _wif in wifs[1:] if _wif]
+
+    return (wif1, *other_wifs[:2])
