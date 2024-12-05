@@ -17,7 +17,7 @@ from stablehedge.utils.transaction import (
     token_to_satoshis,
     satoshis_to_token,
 )
-from stablehedge.utils.encryption import decrypt_str_safe
+from stablehedge.utils.encryption import decrypt_wif_safe
 from stablehedge.utils.wallet import (
     is_valid_wif,
     wif_to_pubkey,
@@ -379,15 +379,9 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
 
     @swagger_serializer_method(serializer_or_field=serializers.CharField)
     def get_funding_wif_pubkey(self, obj):
-        wif = None
-        if is_valid_wif(obj.encrypted_funding_wif):
-            wif = obj.encrypted_funding_wif.replace("bch-wif:", "")
-        elif obj.encrypted_funding_wif:
-            wif = decrypt_str_safe(obj.encrypted_funding_wif)
-
+        wif = decrypt_wif_safe(obj.encrypted_funding_wif)
         if not wif:
             return
-
         return wif_to_pubkey(wif)
 
     def validate(self, data):

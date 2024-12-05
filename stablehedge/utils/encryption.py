@@ -4,6 +4,9 @@ from cryptography.fernet import Fernet, InvalidToken
 from .wallet import is_valid_wif
 
 def decrypt_wif_safe(encrypted_wif:str, fernet_key:str=settings.STABLEHEDGE_FERNET_KEY):
+    if not isinstance(encrypted_wif, str):
+        return
+
     if is_valid_wif(encrypted_wif):
         return encrypted_wif.replace("bch-wif:", "")
 
