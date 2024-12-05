@@ -1,4 +1,5 @@
 from celery import shared_task
+from django.conf import settings
 
 from stablehedge import models
 from stablehedge.apps import LOGGER
@@ -17,6 +18,7 @@ from stablehedge.utils.wallet import wif_to_pubkey
 
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
 
+REDIS_STORAGE = settings.REDISKV
 GP_LP = GeneralProtocolsLP()
 
 _TASK_TIME_LIMIT = 300 # 5 minutes
@@ -24,8 +26,14 @@ _QUEUE_TREASURY_CONTRACT = "stablhedge__treasury_contract"
 
 @shared_task(queue=_QUEUE_TREASURY_CONTRACT, time_limit=_TASK_TIME_LIMIT)
 def short_treasury_contract_funds(treasury_contract_address:str):
+    REDIS_KEY = f"treasury-contract-short-pos-task-{treasury_contract_address}"
+    if REDIS_STORAGE.exists(REDIS_KEY):
+        return dict(success=False, error="Task key in use")
+
     LOGGER.info(f"SHORT TREAURY CONTRACT | {treasury_contract_address}")
     try:
+        REDIS_STORAGE.set(REDIS_KEY, "1", ex=120)
+
         treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
         if not treasury_contract:
             return dict(success=False, error="Treasury contract not found")
@@ -90,3 +98,5 @@ def short_treasury_contract_funds(treasury_contract_address:str):
         return dict(success=True, address=hedge_pos_obj.address)
     except (AnyhedgeException, StablehedgeException) as error:
         return dict(success=False, error=str(error), code=error.code)
+    finally:
+        REDIS_STORAGE.delete(REDIS_KEY)
