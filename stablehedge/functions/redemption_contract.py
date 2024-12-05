@@ -1,10 +1,16 @@
 import math
+import decimal
+from django.utils import timezone
+from django.conf import settings
 from django.db.models import Sum, F
 
+from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.utils.anyhedge import get_latest_oracle_price
 
 from main import models as main_models
+
+REDIS_STORAGE = settings.REDISKV
 
 def find_fiat_token_utxos(redemptionContractOrAddress, min_token_amount=None, min_satoshis=None):
     if isinstance(redemptionContractOrAddress, str):
@@ -82,3 +88,37 @@ def get_fiat_token_balances(wallet_hash:str, with_satoshis=False):
         data["redeemable_satoshis"] = redeemable 
 
     return token_balances
+
+
+def get_24hr_volume_sats(redemption_contract_address:str, ttl=60 * 5, force=False) -> decimal.Decimal:
+    REDIS_KEY = f"redemption-contract-24hr-volume-{redemption_contract_address}"
+
+    if not force:
+        cached_value = REDIS_STORAGE.get(REDIS_KEY)
+        if cached_value:
+            return decimal.Decimal(cached_value.decode())
+
+    data = models.RedemptionContractTransaction.objects \
+        .filter(
+            redemption_contract__address=redemption_contract_address,
+            status=models.RedemptionContractTransaction.Status.SUCCESS,
+            txid__isnull=False,
+            created_at__gte=timezone.now() - timezone.timedelta(seconds=86_400),
+        ) \
+        .values("id", "utxo", "transaction_type", "price_oracle_message__price_value")
+
+    total = decimal.Decimal(0)
+    for record in data:
+        price_value = decimal.Decimal(record["price_oracle_message__price_value"])
+        if record["transaction_type"] == models.RedemptionContractTransaction.Type.REDEEM:
+            token_amount = decimal.Decimal(record["utxo"]["satoshis"])
+            bch = token_amount / price_value
+            satoshis = bch * decimal.Decimal(10 ** 8)
+        else:
+            satoshis = decimal.Decimal(record["utxo"]["satoshis"])
+        LOGGER.debug(f"RedemptionContractTransaction #{record['id']} | VALUE | {satoshis} satoshis")
+        total += satoshis
+
+    total = round(total)
+    REDIS_STORAGE.set(REDIS_KEY, str(total), ex=ttl)
+    return total
