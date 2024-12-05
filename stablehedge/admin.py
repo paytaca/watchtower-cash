@@ -174,8 +174,8 @@ class TreasuryContractAdmin(admin.ModelAdmin):
     def subscribe_funding_wif(self, request, queryset):
         for obj in queryset.all():
             address = get_funding_wif_address(obj.address)
-            created = subscribe_address(obj.address)
-            messages.info(request, f"{obj} | new: {created}")
+            created = subscribe_address(address)
+            messages.info(request, f"{obj} | {address} | new: {created}")
 
     def update_utxos(self, request, queryset):
         for obj in queryset.all():
