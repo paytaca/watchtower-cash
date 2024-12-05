@@ -384,6 +384,9 @@ def get_and_validate_price_message(oracle_public_key:str, price_obj:anyhedge_mod
             .order_by("-message_timestamp") \
             .first()
 
+    if price_obj.message_timestamp < (timezone.now() - timezone.timedelta(seconds=60)):
+        return "Price is too old"
+
     if not price_obj:
         return "No price message found"
 
@@ -614,7 +617,6 @@ def complete_short_proposal_funding_txs(treasury_contract_address:str):
         funding_proposal=funding_proposal,   
     )
 
-@transaction.atomic
 def complete_short_proposal(treasury_contract_address:str):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
