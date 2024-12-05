@@ -18,7 +18,6 @@ from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos
 from chat.models import ChatIdentity
 
-from smartbch.tasks import save_transactions_by_address
 import logging
 import web3
 
@@ -71,8 +70,7 @@ def new_subscription(**kwargs):
             if (
                 is_bch_address(address) or 
                 is_token_address(address) or
-                is_slp_address(address) or
-                web3.Web3.isAddress(address)
+                is_slp_address(address)
             ):
                 proceed = False
                 project = None
@@ -156,8 +154,6 @@ def new_subscription(**kwargs):
                                 get_slp_utxos.delay(address)
                             elif is_bch_address(address):
                                 get_bch_utxos.delay(address)
-                            elif web3.Web3.isAddress(address):
-                                save_transactions_by_address.delay(address)
                         except Subscription.MultipleObjectsReturned:
                             pass
                         
