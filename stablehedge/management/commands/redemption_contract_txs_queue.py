@@ -110,7 +110,7 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
             obj.transaction_type == models.RedemptionContractTransaction.Type.DEPOSIT and \
             obj.redemption_contract.treasury_contract_address:
 
-            result = check_and_short_funds(obj.redemption_contract.treasury_contract_address)
+            result = check_and_short_funds(obj.redemption_contract.treasury_contract_address, background_task=True)
             LOGGER.info(f"RedemptionContractTransaction#{obj.id} | SHORT PROPOSAL | {result}")
     except Exception as exception:
         LOGGER.exception(exception)
