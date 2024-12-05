@@ -13,7 +13,10 @@ from stablehedge.functions.anyhedge import (
     update_short_proposal_funding_utxo_tx_sig,
     complete_short_proposal,
 )
-from stablehedge.functions.treasury_contract import get_wif_for_short_proposal
+from stablehedge.functions.treasury_contract import (
+    get_spendable_sats,
+    get_wif_for_short_proposal
+)
 from stablehedge.utils.wallet import wif_to_pubkey
 
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
@@ -23,6 +26,26 @@ GP_LP = GeneralProtocolsLP()
 
 _TASK_TIME_LIMIT = 300 # 5 minutes
 _QUEUE_TREASURY_CONTRACT = "stablhedge__treasury_contract"
+
+
+def check_and_short_funds(
+    treasury_contract_address:str,
+    min_sats:int=10 ** 8,
+    background_task:bool=False,
+):
+    balance_data = get_spendable_sats(treasury_contract_address)
+    spendable = balance_data["spendable"]
+    if not spendable or spendable < min_sats:
+        return dict(success=True, message="Balance not met")
+
+    if background_task:
+        task = short_treasury_contract_funds.delay(treasury_contract_address)
+        result = dict(success=True, task_id=task.id)
+    else:
+        result = short_treasury_contract_funds(treasury_contract_address)
+
+    return result
+    
 
 @shared_task(queue=_QUEUE_TREASURY_CONTRACT, time_limit=_TASK_TIME_LIMIT)
 def short_treasury_contract_funds(treasury_contract_address:str):
@@ -84,16 +107,14 @@ def short_treasury_contract_funds(treasury_contract_address:str):
         for index, _wif in enumerate(wifs[:3]):
             signatures = ScriptFunctions.signMutliSigTx(dict(
                 contractOpts=treasury_contract.contract_opts,
-            wif=wif,
-            locktime=0,
-            inputs=funding_utxo_tx["inputs"],
-            outputs=funding_utxo_tx["outputs"],
-        ))
-        data_str = GP_LP.json_parser.dumps(access_key_sign_result, indent=2)
-        LOGGER.debug(f"SHORT PROPOSAL | FUNDING UTXO SIG | {treasury_contract_address} | {data_str}")
-        update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, 1)
-        update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, 2)
-        update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, 3)
+                wif=_wif,
+                locktime=0,
+                inputs=funding_utxo_tx["inputs"],
+                outputs=funding_utxo_tx["outputs"],
+            ))
+            update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
+            update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
+            update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
 
         hedge_pos_obj = complete_short_proposal(treasury_contract_address)
         return dict(success=True, address=hedge_pos_obj.address)

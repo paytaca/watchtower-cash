@@ -14,6 +14,8 @@ from stablehedge.functions.transaction import (
     resolve_failed_redemption_tx,
     save_redemption_contract_tx_meta,
 )
+from stablehedge.tasks import check_and_short_funds
+
 
 class Command(BaseCommand):
     help = "Watches & executes transactions of redemption contract"
@@ -102,3 +104,13 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
             StablehedgeRpcConsumer.Events.send_redemption_contract_tx_update(obj)
         except Exception as exception:
             LOGGER.exception(exception)
+
+    try:
+        if obj.status == models.RedemptionContractTransaction.Status.SUCCESS and \
+            obj.transaction_type == models.RedemptionContractTransaction.Type.DEPOSIT and \
+            obj.redemption_contract.treasury_contract_address:
+
+            result = check_and_short_funds(obj.redemption_contract.treasury_contract_address)
+            LOGGER.info(f"RedemptionContractTransaction#{obj.id} | SHORT PROPOSAL | {result}")
+    except Exception as exception:
+        LOGGER.exception(exception)
