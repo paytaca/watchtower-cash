@@ -201,7 +201,7 @@ def resolve_failed_redemption_tx(obj:models.RedemptionContractTransaction):
         else:
             return "max-retries-reached"
 
-    if obj.result_message in ["18: txn-already-in-mempool", "missing-inputs"] or \
+    if obj.result_message in ["18: txn-already-in-mempool", "18: txn-mempool-conflict", "missing-inputs"] or \
         re.match("(insufficient|not enough).*(BCH)?.*(balance|funds)", obj.result_message, re.IGNORECASE):
         result = check_existing_txid_for_redemption_contract_tx(obj)
         return result["message"]
