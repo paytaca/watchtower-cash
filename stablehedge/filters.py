@@ -20,12 +20,35 @@ class RedemptionContractFilter(filters.FilterSet):
     auth_token_id = filters.CharFilter()
     price_oracle_pubkey = filters.CharFilter()
     token_category = filters.CharFilter(field_name="fiat_token__category")
+    has_treasury_contract = filters.BooleanFilter(
+        field_name="treasury_contract", lookup_expr='isnull', exclude=True,
+    )
+    min_redeemable = filters.NumberFilter(method="min_redeemable_filter")
+    max_redeemable = filters.NumberFilter(method="max_redeemable_filter")
+    min_reserve_supply = filters.NumberFilter(method="min_reserve_supply_filter")
+    max_reserve_supply = filters.NumberFilter(method="max_reserve_supply_filter")
 
     def categories_filter(self, queryset, name, value):
         return queryset.filter(fiat_token__category__in=str(value).split(","))
 
     def currencies_filter(self, queryset, name, value):
         return queryset.filter(fiat_token__currency__in=str(value).split(","))
+
+    def min_redeemable_filter(self, queryset, name, value):
+        return queryset.annotate_redeemable() \
+            .filter(redeemable__gte=value)
+
+    def max_redeemable_filter(self, queryset, name, value):
+        return queryset.annotate_redeemable() \
+            .filter(redeemable__lte=value)
+
+    def min_reserve_supply_filter(self, queryset, name, value):
+        return queryset.annotate_reserve_supply() \
+            .filter(reserve_supply__gte=value)
+
+    def max_reserve_supply_filter(self, queryset, name, value):
+        return queryset.annotate_reserve_supply() \
+            .filter(reserve_supply__lte=value)
 
 
 class RedemptionContractOrderingFilterField(filters.OrderingFilter):
