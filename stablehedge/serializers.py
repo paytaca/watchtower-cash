@@ -7,7 +7,7 @@ from drf_yasg.utils import swagger_serializer_method
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.functions.anyhedge import place_short_proposal
-from stablehedge.functions.redemption_contract import get_24hr_volume_sats
+from stablehedge.functions.redemption_contract import get_24hr_volume_data
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.blockchain import get_locktime
 from stablehedge.utils.transaction import (
@@ -67,6 +67,11 @@ class FiatTokenSerializer(serializers.ModelSerializer):
         ]
 
 
+class Volume24HourSerializer(serializers.Serializer):
+    inject = serializers.DecimalField(max_digits=18, decimal_places=0)
+    deposit = serializers.DecimalField(max_digits=18, decimal_places=0)
+    redeem = serializers.DecimalField(max_digits=18, decimal_places=0)
+
 class RedemptionContractSerializer(serializers.ModelSerializer):
     fiat_token = FiatTokenSerializer()
     redeemable = serializers.IntegerField(read_only=True)
@@ -92,9 +97,9 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
             address=dict(read_only=True),
         )
 
-    @swagger_serializer_method(serializer_or_field=serializers.DecimalField(max_digits=18, decimal_places=0))
+    @swagger_serializer_method(serializer_or_field=Volume24HourSerializer)
     def get_volume_24_hr(self, obj):
-        return get_24hr_volume_sats(obj.address)
+        return get_24hr_volume_data(obj.address)
 
     def validate(self, data):
         compile_data = ScriptFunctions.compileRedemptionContract(dict(

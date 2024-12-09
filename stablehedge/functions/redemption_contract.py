@@ -1,3 +1,4 @@
+import json
 import math
 import decimal
 from django.utils import timezone
@@ -90,13 +91,31 @@ def get_fiat_token_balances(wallet_hash:str, with_satoshis=False):
     return token_balances
 
 
-def get_24hr_volume_sats(redemption_contract_address:str, ttl=60 * 5, force=False) -> decimal.Decimal:
+def get_24hr_volume_sats(redemption_contract_address:str, ttl=60 * 5, force=False):
+    volume_24_hr = get_24hr_volume_data(redemption_contract_address, ttl=ttl, force=force)
+    LOGGER.debug(f"RedemptionContractTransaction 24 hr volume | {volume_24_hr}")
+
+    total = decimal.Decimal(0)
+    if not isinstance(volume_24_hr, dict):
+        return
+
+    for value in volume_24_hr.values():
+        total += value
+    return total
+
+
+def get_24hr_volume_data(redemption_contract_address:str, ttl=60 * 5, force=False) -> dict:
     REDIS_KEY = f"redemption-contract-24hr-volume-{redemption_contract_address}"
 
     if not force:
         cached_value = REDIS_STORAGE.get(REDIS_KEY)
         if cached_value:
-            return decimal.Decimal(cached_value.decode())
+            try:
+                data = json.loads(cached_value)
+                parsed_data = {key: decimal.Decimal(val) for key, val in data.items()}
+                return parsed_data
+            except (TypeError, AttributeError, decimal.InvalidOperation):
+                pass
 
     data = models.RedemptionContractTransaction.objects \
         .filter(
@@ -107,8 +126,13 @@ def get_24hr_volume_sats(redemption_contract_address:str, ttl=60 * 5, force=Fals
         ) \
         .values("id", "utxo", "transaction_type", "price_oracle_message__price_value")
 
-    total = decimal.Decimal(0)
+    volume_map = dict(
+        inject = decimal.Decimal(0),
+        deposit = decimal.Decimal(0),
+        redeem = decimal.Decimal(0),
+    )
     for record in data:
+        tx_type = record["transaction_type"]
         price_value = decimal.Decimal(record["price_oracle_message__price_value"])
         if record["transaction_type"] == models.RedemptionContractTransaction.Type.REDEEM:
             token_amount = decimal.Decimal(record["utxo"]["satoshis"])
@@ -117,8 +141,11 @@ def get_24hr_volume_sats(redemption_contract_address:str, ttl=60 * 5, force=Fals
         else:
             satoshis = decimal.Decimal(record["utxo"]["satoshis"])
         LOGGER.debug(f"RedemptionContractTransaction #{record['id']} | VALUE | {satoshis} satoshis")
-        total += satoshis
 
-    total = round(total)
-    REDIS_STORAGE.set(REDIS_KEY, str(total), ex=ttl)
-    return total
+        if not isinstance(volume_map.get(tx_type), decimal.Decimal):
+            volume_map[tx_type] = decimal.Decimal(0)
+
+        volume_map[tx_type] += satoshis
+
+    REDIS_STORAGE.set(REDIS_KEY, str(json.dumps(volume_map, default=str)), ex=ttl)
+    return volume_map
