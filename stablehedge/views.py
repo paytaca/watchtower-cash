@@ -100,6 +100,7 @@ class RedemptionContractViewSet(
 
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = RedemptionContractFilter
+    pagination_class = CustomLimitOffsetPagination
 
     def get_queryset(self):
         return models.RedemptionContract.objects \
