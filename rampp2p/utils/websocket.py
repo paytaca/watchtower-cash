@@ -1,5 +1,6 @@
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
 import decimal
 import datetime
 
@@ -30,17 +31,17 @@ def send_message(data, room_name):
     )
 
 def send_order_update(data, order_id):
-    room_name = f'ramp-p2p-subscribe-order-{order_id}'
+    room_name = f'p2pxchange_order_{order_id}'
     send_message(data, room_name)
 
 def send_market_price(data, currency):
-    room_name = f'ramp-p2p-subscribe-market-price-{currency}'
+    room_name = f'p2pxchange_market_price_{currency}'
     send_message(data, room_name)
 
 def send_general_update(data, wallet_hash):
-    room_name = f'ramp-p2p-subscribe-general-{wallet_hash}'
+    room_name = f'p2pxchange_{wallet_hash[:8]}'
     send_message(data, room_name)
 
 def send_cashin_order_alert(data, wallet_hash):
-    room_name = f'ramp-p2p-subscribe-cashin-alerts-{wallet_hash}'
+    room_name = f'p2pxchange_cashin_{wallet_hash[:8]}'
     send_message(data, room_name)

@@ -13,7 +13,7 @@ class FiatCurrencyViewSet(viewsets.GenericViewSet):
     queryset = FiatCurrency.objects.all()
 
     def list(self, request):
-        queryset = self.get_queryset().annotate(paymenttypes_count=Count('payment_types')).filter(paymenttypes_count__gte=1)
+        queryset = self.get_queryset().prefetch_related('payment_types').annotate(paymenttypes_count=Count('payment_types')).filter(paymenttypes_count__gte=1)
         serializer = FiatCurrencySerializer(queryset, many=True)
         return Response(serializer.data, status.HTTP_200_OK)
 

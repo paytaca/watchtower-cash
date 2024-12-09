@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rampp2p', '0137_update_chat_session_refs_20240405_0812'),
+        ('rampp2p', '0136_order_chat_session_ref'),
     ]
 
     operations = [

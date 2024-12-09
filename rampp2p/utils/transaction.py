@@ -1,4 +1,4 @@
-from rampp2p.tasks.transaction_tasks import execute_subprocess, handle_transaction_validation
+from rampp2p.tasks.transaction_tasks import handle_transaction_validation
 from django.conf import settings
 from rampp2p.models import Transaction
 from main.utils.queries.node import Node
@@ -30,7 +30,7 @@ def process_transaction(txid, output_address, inputs=None):
     except Exception:
         pass
 
-def validate_transaction(txid, action, contract_id):
+def validate_transaction(txid, action, contract_id, wallet_hash=None):
     '''
     Validates if a transaction is valid based on the requirements of its contract.
     '''
@@ -48,20 +48,30 @@ def get_transaction_details(txid):
     }
 
     if txid:
-        node = Node()
-        txn = node.BCH.get_transaction(txid)
+        txn = fetch_txn_from_bchn(txid)
 
         # Alternative fetching of transaction in debug mode
         if settings.DEBUG:
-            if txn is None:
-                try:
-                    url = f'https://watchtower.cash/api/transactions/{txid}/' 
-                    txn = (requests.get(url)).json().get('details')
-                except Exception as err:
-                    logger.warning(f'err: {err.args[0]}')
+            if txn is None: 
+                txn = fetch_txn_from_watchtower(txid)
         
         if txn != None:
             response['valid'] = True
             response['details'] = txn
     
     return response
+    
+def fetch_txn_from_watchtower(txid):
+    try:
+        url = f'https://watchtower.cash/api/transactions/{txid}/' 
+        txn = (requests.get(url)).json().get('details')
+        logger.info(f'Fetch txn from watchtower: {txn}')
+    except Exception as err:
+        logger.warning(f'err: {err.args[0]}')
+    return txn
+
+def fetch_txn_from_bchn(txid):
+    node = Node()
+    txn = node.BCH.get_transaction(txid)
+    logger.info(f'Fetch txn from bchn: {txn}')
+    return txn

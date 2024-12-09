@@ -1,5 +1,4 @@
 from rest_framework import status, viewsets
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
@@ -7,16 +6,22 @@ from django.utils import timezone
 from django.db.models import Q
 from django.http import Http404
 from django.core.exceptions import ValidationError
-from django.db.models import (Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery)
+from django.db.models import (
+    Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery, IntegerField
+)
+from django.conf import settings
+from django.views import View
+from django.shortcuts import render
 
 import math
 from datetime import timedelta
-from decimal import Decimal, ROUND_DOWN
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
+from decimal import Decimal
 
 import rampp2p.serializers as rampp2p_serializers
 import rampp2p.models as rampp2p_models
+from rampp2p.utils import bch_to_satoshi, fiat_to_bch
 
 import logging
 logger = logging.getLogger(__name__)
@@ -184,11 +189,14 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             if not by_fiat:
                 bch = rampp2p_models.CryptoCurrency.objects.get(symbol="BCH")
                 presets = bch.get_cashin_presets() or ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
-                amounts = presets 
+                sat_presets = []
+                for preset in presets:
+                    sat_presets.append(bch_to_satoshi(preset))
+                amounts = sat_presets
 
             if presets:
                 for index, amount in enumerate(amounts):
-                    ads = queryset.filter(Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount))
+                    ads = queryset.filter(Q(trade_floor_sats__lte=amount) & Q(trade_amount_sats__gte=amount) & Q(trade_ceiling_sats__gte=amount))
                     serialized_ads = rampp2p_serializers.CashinAdSerializer(ads, many=True)
                     key = presets[index]
                     if key is None:
@@ -209,7 +217,8 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             Q(deleted_at__isnull=True) & 
             Q(trade_type=trade_type) & 
             Q(is_public=True) & 
-            Q(trade_amount__gt=0) &
+            (Q(trade_amount_sats__gte=1000) |
+            Q(trade_amount_fiat__gt=0)) &
             Q(fiat_currency__symbol=currency.symbol)) 
        
         # Exclude ads owned by caller
@@ -228,39 +237,6 @@ class CashInAdViewSet(viewsets.GenericViewSet):
                 output_field=DecimalField()
             )
         )
-
-        queryset = queryset.annotate(
-            bch_trade_amount=ExpressionWrapper(
-                Case(When(
-                    trade_amount_in_fiat=True,
-                    then=(F('trade_amount') / F('price'))),
-                    default=F('trade_amount'),
-                    output_field=DecimalField()),
-                output_field=DecimalField()
-            )
-        ).annotate(rounded_bch_trade_amount=Round('bch_trade_amount', output_field=DecimalField(max_digits=18, decimal_places=8)))
-        
-        queryset = queryset.annotate(
-            bch_trade_floor=ExpressionWrapper(
-                Case(When(
-                    trade_limits_in_fiat=True,
-                    then=(F('trade_floor') / F('price'))),
-                    default=F('trade_floor'),
-                    output_field=DecimalField()),
-                output_field=DecimalField()
-            )
-        ).annotate(rounded_bch_trade_floor=Round('bch_trade_floor', output_field=DecimalField(max_digits=18, decimal_places=8)))
-        
-        queryset = queryset.annotate(
-            bch_trade_ceiling=ExpressionWrapper(
-                Case(When(
-                    trade_limits_in_fiat=True,
-                    then=(F('trade_ceiling') / F('price'))),
-                    default=F('trade_ceiling'),
-                    output_field=DecimalField()),
-                output_field=DecimalField()
-            )
-        ).annotate(rounded_bch_trade_ceiling=Round('bch_trade_ceiling', output_field=DecimalField(max_digits=18, decimal_places=8)))
 
         # Filter recently online ads
         queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
@@ -283,36 +259,37 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         return queryset
     
     def get_bch_preset_amounts(self, currency):
-        ''' Retrives a currency's fiat preset amounts then converts it to BCH. If preset is not set,
+        ''' Retrieves a currency's fiat preset amounts then converts it to BCH. If preset is not set,
          returns the crypto currency's set preset amounts or the hard coded preset amounts: ['0.02', '0.04', '0.1', '0.25', '0.5', '1'].'''
 
         # Use currency presets by default
         cashin_presets = currency.get_cashin_presets()
-        convert_to_bch = True
 
         # Use bch presets if currency's cash-in presets are not set
         if cashin_presets is None:
-            convert_to_bch = False
             bch_presets = rampp2p_models.CryptoCurrency.objects.get(symbol='BCH').get_cashin_presets()
-            if bch_presets:
-                cashin_presets = bch_presets
-            else:
+            if bch_presets is None:
                 # Use hard coded presets if cryptocurrency cash-in presets are not set
-                cashin_presets = ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
-        
-        # Convert to BCH using market price
-        if convert_to_bch:
-            bch_amounts = []
-            market_rate_obj = rampp2p_models.MarketRate.objects.filter(currency=currency.symbol)
-            market_price = None
-            if market_rate_obj.exists:
-                market_price = market_rate_obj.first().price
-                
+                bch_presets = ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
+            
+            if bch_presets:
+                # convert to satoshi
+                satoshi_presets = []
+                for preset in bch_presets:
+                    satoshi_presets.append(bch_to_satoshi(preset))
+                cashin_presets = satoshi_presets
+        else:
+            price_obj = rampp2p_models.MarketRate.objects.filter(currency=currency.symbol)
+            price = None
+            if price_obj.exists():
+                price = price_obj.first().price
+
+            sat_amounts = []   
             for preset in cashin_presets:
-                amount = (preset/market_price).quantize(Decimal('0.00000001'), rounding=ROUND_DOWN) # truncate to 8 decimals
-                bch_amounts.append(str(amount))
-            cashin_presets = bch_amounts
-        
+                sat_amounts.append(bch_to_satoshi(fiat_to_bch(preset, price)))
+            
+            cashin_presets = sat_amounts
+    
         return cashin_presets
 
     def filter_preset_available_ads(self, queryset, currency):
@@ -320,8 +297,10 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         amounts = self.get_bch_preset_amounts(currency)
         combined_query = Q()
         for amount in amounts:
-            combined_query |= Q(rounded_bch_trade_floor__lte=amount) & Q(rounded_bch_trade_amount__gte=amount) & Q(rounded_bch_trade_ceiling__gte=amount)
-        return queryset.filter(combined_query)
+            combined_query |= Q(trade_floor_sats__lte=amount) & Q(trade_amount_sats__gte=amount) & Q(trade_ceiling_sats__gte=amount)
+        queryset = queryset.filter(combined_query)
+        
+        return queryset
     
     def get_paymenttypes(self, queryset, payment_types):
         ''' [Deprecated] Retrieves the list of unique payment types from cash-in available ads. '''
@@ -384,6 +363,8 @@ class AdViewSet(viewsets.GenericViewSet):
             time_limits = request.query_params.getlist('time_limits')
             price_order = request.query_params.get('price_order')
             query_name = request.query_params.get('query_name')
+            order_amount = request.query_params.get('order_amount')
+            order_amount_currency = request.query_params.get('order_amount_currency')
             owned = request.query_params.get('owned', False)
             owned = owned == 'true'
 
@@ -398,10 +379,10 @@ class AdViewSet(viewsets.GenericViewSet):
             
             if page < 1:
                 raise ValidationError('invalid page number')
-            
+
             if not owned:
                 # If not fetching owned ads: fetch only public ads and those with trade amount > 0
-                queryset = queryset.filter(Q(is_public=True) & Q(trade_amount__gt=0))
+                queryset = queryset.filter(Q(is_public=True) & (Q(trade_amount_sats__gte=1000) | Q(trade_amount_fiat__gt=0)))
             
             # filters
             if owner_id is not None:
@@ -439,13 +420,36 @@ class AdViewSet(viewsets.GenericViewSet):
                 )
             )
 
+            if order_amount and order_amount_currency:
+                if order_amount_currency == 'BCH':
+                    order_amount_sats = bch_to_satoshi(order_amount)
+                    queryset = queryset.annotate(
+                        order_amount_fiat=ExpressionWrapper(
+                            order_amount * F('price'),
+                            output_field=DecimalField()
+                        )
+                    ).filter(
+                        (Q(trade_limits_in_fiat=False) & Q(trade_floor_sats__lte=order_amount_sats) & Q(trade_ceiling_sats__gte=order_amount_sats)) | 
+                        (Q(trade_limits_in_fiat=True) & Q(trade_floor_fiat__lte=F('order_amount_fiat')) & Q(trade_ceiling_fiat__gte=F('order_amount_fiat')))
+                    )
+                else:
+                    queryset = queryset.annotate(
+                        order_amount_sats=ExpressionWrapper(
+                            (order_amount / F('price')) *  settings.SATOSHI_PER_BCH,
+                            output_field=IntegerField()
+                        )
+                    ).filter(
+                        (Q(trade_limits_in_fiat=True) & Q(trade_floor_fiat__lte=order_amount) & Q(trade_ceiling_fiat__gte=order_amount)) | 
+                        (Q(trade_limits_in_fiat=False) & Q(trade_floor_sats__lte=F('order_amount_sats')) & Q(trade_ceiling_sats__gte=F('order_amount_sats')))
+                    )
+
             # search for ads with specific owner name
             if query_name:
                 queryset = queryset.filter(owner__name__icontains=query_name)
 
-            # Order ads by price (if store listings) or created_at (if owned ads)
-            # Default order: ascending, descending if trade type is BUY, 
-            # `price_order` filter overrides this order
+            ''' Orders ads by price (if owned=True) or by created_at (if owned=False).
+                Default order is ascending, descending if trade type is BUY. 
+                price_order filter overrides this order '''
             if not owned:            
                 order_field = 'price'
                 if trade_type == rampp2p_models.TradeType.BUY: 
@@ -503,6 +507,21 @@ class AdViewSet(viewsets.GenericViewSet):
         data = request.data.copy()
         data['owner'] = caller.id
 
+        # make sure trade limits are correct
+        trade_limits_in_fiat = data.get('trade_limits_in_fiat')
+        if trade_limits_in_fiat == True:
+            # fiat trade limits should not be empty
+            if (data.get('trade_amount_fiat') == None or 
+                data.get('trade_floor_fiat') == None or
+                data.get('trade_ceiling_fiat') == None):
+                return Response({'error': 'trade_amount_fiat, trade_floor_fiat, and trade_ceiling_fiat are required'}, status=status.HTTP_400_BAD_REQUEST)
+        if trade_limits_in_fiat == False:
+            # sats trade limits should not be empty
+            if (data.get('trade_amount_sats') == None or
+                data.get('trade_floor_sats') == None or
+                data.get('trade_ceiling_sats') == None):
+                return Response({'error': 'trade_amount_sats, trade_floor_sats, and trade_ceiling_sats are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
             crypto = data['crypto_currency']
             data['crypto_currency'] = rampp2p_models.CryptoCurrency.objects.get(symbol=crypto).id
@@ -516,7 +535,7 @@ class AdViewSet(viewsets.GenericViewSet):
         if self.ad_count(wallet_hash, data['fiat_currency'], data['trade_type']) >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = rampp2p_serializers.AdCreateSerializer(data=data)
+        serializer = rampp2p_serializers.AdSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -539,10 +558,14 @@ class AdViewSet(viewsets.GenericViewSet):
 
         exceeds_ad_limit = self.ad_count(wallet_hash, ad.fiat_currency.id, ad.trade_type) > 1
         currency_public_ad_count = self.public_ad_count(wallet_hash, ad.fiat_currency.id, ad.trade_type)
-        if is_public == True and exceeds_ad_limit and currency_public_ad_count >= 1:
+        private_to_public = not ad.is_public and is_public
+        if private_to_public and exceeds_ad_limit and currency_public_ad_count >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
-            
-        serializer = rampp2p_serializers.AdSerializer(ad, data=request.data)
+        
+        data = request.data.copy()
+        data.pop('crypto_currency', None)
+
+        serializer = rampp2p_serializers.AdSerializer(ad, data=data)
         if serializer.is_valid():
             ad = serializer.save()
             context = { 'wallet_hash': wallet_hash }
@@ -611,21 +634,46 @@ class AdViewSet(viewsets.GenericViewSet):
     
     def public_ad_count(self, user_wallet_hash, fiat_currency_id, trade_type):
         return rampp2p_models.Ad.objects.filter(owner__wallet_hash=user_wallet_hash, fiat_currency__id=fiat_currency_id, trade_type=trade_type, is_public=True, deleted_at__isnull=True).count()
-        
-class AdSnapshotView(APIView):
-    authentication_classes = [TokenAuthentication]
-    def get(self, request):
-        ad_snapshot_id = request.query_params.get('ad_snapshot_id')
-        order_id = request.query_params.get('order_id')
-        
-        ad = None
-        try:
-            if ad_snapshot_id is not None:
-                ad = rampp2p_models.AdSnapshot.objects.get(pk=ad_snapshot_id)
-            elif order_id is not None:
-                ad = rampp2p_models.Order.objects.get(pk=order_id).ad_snapshot
-        except (rampp2p_models.AdSnapshot.DoesNotExist, rampp2p_models.Order.DoesNotExist):
-            raise Http404
 
-        serializer = rampp2p_serializers.AdSnapshotSerializer(ad)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+class AdShareLinkView(View):
+    def get(self, request):
+        ad_id = request.GET.get('id', '')
+        ad = rampp2p_models.Ad.objects.filter(pk=ad_id)
+        exists, trade_type, price, fiat_currency = False, '', None, None
+        if ad.exists():
+            exists = True
+            ad = ad.first()
+            trade_type = ad.trade_type.lower()
+            price = f"{Decimal(ad.get_price()).quantize(Decimal('1.00')):,}"
+            fiat_currency = ad.fiat_currency.symbol
+
+        context = {
+            "ad_id": ad_id,
+            "exists": exists,
+            "trade_type": f"{trade_type}s",
+            "price": price,
+            "fiat_currency": fiat_currency,
+            "title": f"This link opens a {trade_type} BCH ad!",
+            "description": f"This link opens a {trade_type} Bitcoin Cash (BCH) ad for {price} {fiat_currency} per BCH. You can order using the Paytaca wallet app."
+        }
+        return render(request, "ad.html", context=context)
+
+class AdSnapshotViewSet(viewsets.GenericViewSet):
+    authentication_classes = [TokenAuthentication]
+
+    def retrieve(self, _, pk):
+        try:
+            ad_snapshot = rampp2p_models.AdSnapshot.objects.get(pk=pk)
+            serializer = rampp2p_serializers.AdSnapshotSerializer(ad_snapshot)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except rampp2p_models.AdSnapshot.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(method='get', detail=True)
+    def retrieve_by_order(self, _, pk):
+        try:
+            ad_snapshot = rampp2p_models.Order.objects.get(pk=pk).ad_snapshot
+            serializer = rampp2p_serializers.AdSnapshotSerializer(ad_snapshot)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except rampp2p_models.Order.DoesNotExist as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

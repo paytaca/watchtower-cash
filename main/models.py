@@ -28,7 +28,7 @@ class Token(PostgresModel):
         MINTING = 'minting'
         NONE = 'none'  # immutable
 
-    name = models.CharField(max_length=200, blank=True)
+    name = models.CharField(max_length=200, blank=True, db_index=True)
     tokenid = models.CharField(
         max_length=70,
         blank=True,
@@ -311,15 +311,18 @@ class CashFungibleToken(models.Model):
                 except (TypeError, ValueError):
                     decimals = 0
 
-                info, _ = CashTokenInfo.objects.get_or_create(
-                    name=data.get('name', f'CT-{self.category[0:4]}'),
-                    description=data.get('description', ''),
-                    symbol=data.get('token').get('symbol'),
-                    decimals=decimals,
-                    image_url=uris.get('icon')
-                )
-                self.info = info
-                self.save()
+                try:
+                    info, _ = CashTokenInfo.objects.get_or_create(
+                        name=data.get('name', f'CT-{self.category[0:4]}'),
+                        description=data.get('description', ''),
+                        symbol=data.get('token').get('symbol'),
+                        decimals=decimals,
+                        image_url=uris.get('icon')
+                    )
+                    self.info = info
+                    self.save()
+                except CashTokenInfo.MultipleObjectsReturned:
+                    pass
 
 
 class CashNonFungibleTokenQuerySet(PostgresQuerySet):
@@ -385,8 +388,8 @@ class CashNonFungibleToken(models.Model):
         blank=True,
         null=True
     )
-    current_txid = models.CharField(max_length=70)
-    current_index = models.PositiveIntegerField()
+    current_txid = models.CharField(max_length=70, db_index=True)
+    current_index = models.PositiveIntegerField(db_index=True)
 
     class Meta:
         verbose_name_plural = 'CashToken NFTs'
@@ -644,7 +647,7 @@ class WalletHistory(PostgresModel):
         db_index=True,
         choices=RECORD_TYPE_OPTIONS
     )
-    amount = models.FloatField(default=0)
+    amount = models.FloatField(default=0, db_index=True)
     token = models.ForeignKey(
         Token,
         related_name='wallet_history_records',
@@ -846,3 +849,17 @@ class AppVersion(models.Model):
     
     class Meta:
         unique_together = ('platform', 'latest_version', 'min_required_version')
+
+
+class WalletAddressApp(models.Model):
+
+    app_name = models.TextField(blank=True, null=True, help_text='Name of the App/Dapp where the wallet_address was connected to')
+    app_url  = models.TextField(blank=True, null=True, help_text='URL of the App/Dapp where the wallet_address was connected to')
+    app_icon = models.TextField(blank=True, null=True, help_text='URL of the App/Dapp Icon')
+    wallet_address = models.CharField(max_length=100)
+    wallet_hash = models.CharField(max_length=70, blank=True, null=True, help_text='Helps group wallet addresses')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.wallet_address} -> {self.app_url}"

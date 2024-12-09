@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from authentication.token import TokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
 
+from rampp2p.utils.fees import get_trading_fees
 import rampp2p.utils as utils
 import rampp2p.models as models
 import rampp2p.serializers as serializers
@@ -50,6 +51,16 @@ class ContractViewSet(viewsets.GenericViewSet):
 
     def create(self, request):
         try:
+            
+            min_version = models.AppVersion.objects.last()
+            if not min_version:
+                return Response({'error': 'Service unavailable at this time'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+            min_version = min_version.min_required_version
+            version = request.headers.get('version')
+            if version != min_version:
+                return Response({ 'error' : f'Invalid app version {version}. Min required version is {min_version}.' }, status=status.HTTP_400_BAD_REQUEST )
+
             order_pk = request.data.get('order_id')
             arbiter_pk = request.data.get('arbiter_id')
             if order_pk is None or arbiter_pk is None:
@@ -60,7 +71,7 @@ class ContractViewSet(viewsets.GenericViewSet):
             order = models.Order.objects.get(pk=order_pk)
 
             # Require that user is seller
-            if not utils.is_seller(order, request.user.wallet_hash):
+            if not order.is_seller(request.user.wallet_hash):
                 raise ValidationError('Buyer not allowed to perform this action')
 
             arbiter = models.Arbiter.objects.get(pk=arbiter_pk)
@@ -83,6 +94,11 @@ class ContractViewSet(viewsets.GenericViewSet):
                     contract.order.arbiter.id != arbiter.id):
                     contract.version = settings.SMART_CONTRACT_VERSION
                     contract.address = None
+                    
+                    _, fees = get_trading_fees(trade_amount=order.trade_amount)
+                    contract.arbitration_fee = fees['arbitration_fee']
+                    contract.service_fee = fees['service_fee']
+                    contract.contract_fee = fees['contract_fee']
                     contract.save()
                     
                     # Execute subprocess (generate the contract)
@@ -91,7 +107,9 @@ class ContractViewSet(viewsets.GenericViewSet):
                         arbiter_pubkey=contract_params['arbiter']['pubkey'], 
                         seller_pubkey=contract_params['seller']['pubkey'], 
                         buyer_pubkey=contract_params['buyer']['pubkey'],
-                        timestamp=timestamp
+                        timestamp=timestamp,
+                        service_fee=fees['service_fee'],
+                        arbitration_fee=fees['arbitration_fee']
                     )
                 else:
                     address = contract.address
@@ -174,9 +192,32 @@ class ContractViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'])
     def fees(self, request):
-        total_fee, breakdown = utils.get_trading_fees()
+        total_fee, breakdown = get_trading_fees()
         response = { 'total': total_fee, 'breakdown': breakdown }
         return Response(response, status=status.HTTP_200_OK)
+    
+    @action(detail=True, method='get')
+    def contract_fees(self, request, pk):
+        try:
+            order = models.Order.objects.get(id=pk)
+            contract = models.Contract.objects.get(order__id=order.id)
+            _, breakdown = get_trading_fees(trade_amount=order.trade_amount)
+            contract_fee = breakdown['contract_fee']
+            service_fee = contract.service_fee
+            arbitration_fee = contract.arbitration_fee
+
+            total_fee = contract_fee + service_fee + arbitration_fee
+
+            breakdown = {
+                'contract_fee': contract_fee,
+                'service_fee': service_fee,
+                'arbitration_fee': arbitration_fee
+            }
+            response = { 'total': total_fee, 'breakdown':  breakdown }
+
+            return Response(response, status=status.HTTP_200_OK)
+        except (models.Order.DoesNotExist, models.Contract.DoesNotExist) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'])
     def pending_escrow(self, request, pk):
@@ -202,7 +243,11 @@ class ContractViewSet(viewsets.GenericViewSet):
             contract = models.Contract.objects.get(order__id=pk)
             
             # Create ESCROW_PENDING status for order
-            status_serializer = serializers.StatusSerializer(data={'status': StatusType.ESCROW_PENDING, 'order': pk})
+            status_serializer = serializers.StatusSerializer(data={
+                'status': StatusType.ESCROW_PENDING, 
+                'order': pk,
+                'created_by': wallet_hash
+            })
             if status_serializer.is_valid():
                 status_serializer = serializers.StatusReadSerializer(status_serializer.save())
             else: 
@@ -393,7 +438,7 @@ class ContractViewSet(viewsets.GenericViewSet):
     
     def _check_escrow_permissions(self, wallet_hash, order):
         '''Only sellers can verify the ESCROW status of order.'''
-        if not utils.is_seller(order, wallet_hash):
+        if not order.is_seller(wallet_hash):
             raise ValidationError('Caller is not seller')
 
     def _check_release_permissions(self, wallet_hash, order):
@@ -401,7 +446,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         (2) the order's current status is RELEASE_PENDING or PAID.
         '''
         # Check if user is arbiter or seller
-        if not (utils.is_arbiter(order, wallet_hash)) and not (utils.is_seller(order, wallet_hash)):
+        if not (order.is_arbiter(wallet_hash)) and not (order.is_seller(wallet_hash)):
             raise ValidationError('Caller is not seller nor arbiter')
         
         # Check if status is RELEASE_PENDING or PAID
@@ -411,5 +456,5 @@ class ContractViewSet(viewsets.GenericViewSet):
 
     def _check_refund_permissions(self, wallet_hash, order):
         '''Throws an error if user is not order's arbiter.'''
-        if not utils.is_arbiter(order, wallet_hash):
+        if not order.is_arbiter(wallet_hash):
             raise ValidationError(f'Caller must be order arbiter.')

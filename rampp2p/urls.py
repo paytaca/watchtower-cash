@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from rampp2p.views import *
 
 urlpatterns = [
@@ -9,8 +9,9 @@ urlpatterns = [
     path('ad/<int:pk>/', AdViewSet.as_view({'get': 'retrieve', 'put': 'partial_update', 'delete': 'destroy'})),
     path('ad/check/limit/', AdViewSet.as_view({'get': 'check_ad_limit'})),
     path('ad/currency/', AdViewSet.as_view({'get': 'retrieve_currencies'})),
-    path('ad/snapshot/', AdSnapshotView.as_view()),
+    path('ad/snapshot/<int:pk>/', AdSnapshotViewSet.as_view({'get': 'retrieve'})),
     path('ad/cash-in/', CashInAdViewSet.as_view({'get': 'list'})),
+    re_path(r'^ad/share/$', AdShareLinkView.as_view(), name='adview'),
 
     path('cash-in/presets/', CashInAdViewSet.as_view({'get': 'list_presets'})),
     path('cash-in/ad/payment-types/', CashInAdViewSet.as_view({'get': 'retrieve_ad_count_by_payment_types'})),
@@ -20,6 +21,12 @@ urlpatterns = [
 
     path('user/', UserProfileView.as_view(), name='user-profile'),
     path('peer/', PeerView.as_view(), name='peer-create-edit'),
+   
+    ###### TODO: temporary endpoints to handle app v0.20.1 incompatibility, remove on next app release
+    path('user/detail', UserProfileView.as_view()),
+    path('peer/detail', PeerView.as_view()),
+    
+   
     path('peer/<int:pk>/', PeerView.as_view(), name='peer-detail'),
     path('arbiter/', ArbiterView.as_view(), name='arbiter-list-create-edit'),
     path('arbiter/<str:wallet_hash>/', ArbiterView.as_view(), name='arbiter-detail'),
@@ -32,6 +39,7 @@ urlpatterns = [
     # Orders
     path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
     path('order/<int:pk>/', OrderViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}), name='order-detail-edit'),
+    path('order/<int:pk>/ad/snapshot/', AdSnapshotViewSet.as_view({'get': 'retrieve_by_order'})),
     path('order/<int:pk>/members/', OrderViewSet.as_view({'get': 'members', 'patch': 'members'}), name='order-members'),
     path('order/<int:pk>/status/', OrderStatusViewSet.as_view({'get': 'list_status', 'patch': 'read_status'}), name='order-list-edit-status'),
     path('order/<int:pk>/cancel/', OrderStatusViewSet.as_view({'post': 'cancel'}), name='order-cancel'),
@@ -42,6 +50,7 @@ urlpatterns = [
 
     # Contract
     path('order/<int:pk>/contract/', ContractViewSet.as_view({'get': 'retrieve_by_order'}), name='order-contract-detail'),
+    path('order/<int:pk>/contract/fees/', ContractViewSet.as_view({'get': 'contract_fees'}), name='order-contract-fees'),
     path('order/<int:pk>/contract/transactions/', ContractViewSet.as_view({'get': 'transactions_by_order'}), name='order-contract-tx'),
     path('order/<int:pk>/verify-escrow/', ContractViewSet.as_view({'post': 'verify_escrow'}), name='verify-escrow'),
     path('order/<int:pk>/verify-release/', ContractViewSet.as_view({'post': 'verify_release'}), name='verify-release'),
@@ -49,7 +58,7 @@ urlpatterns = [
     path('order/contract/', ContractViewSet.as_view({'post': 'create'}), name='contract-create'),
     path('order/contract/<int:pk>/', ContractViewSet.as_view({'get': 'retrieve'}), name='contract-detail'),
     path('order/contract/<int:pk>/transactions/', ContractViewSet.as_view({'get': 'transactions'}), name='contract-tx'),
-    path('order/contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
+    path('contract/fees/', ContractViewSet.as_view({'get': 'fees'}), name='contract-fees'),
     
     path('order/cash-in/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
     path('order/cash-in/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
@@ -75,7 +84,9 @@ urlpatterns = [
     path('order/feedback/peer/', PeerFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='peer-feedback-list-create'),
 
     # Utils
+    path('utils/contract-fees/', ContractFees.as_view()),
     path('utils/market-price/', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
+    path('feature-toggles/', feature_toggles)
 ]

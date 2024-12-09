@@ -5,7 +5,6 @@ from django.db.models import Q
 from .ad import SubsetAdSnapshotSerializer
 from .payment import SubsetPaymentMethodSerializer
 from .transaction import TransactionSerializer
-from rampp2p.utils.utils import is_seller
 import rampp2p.models as models
 
 import logging
@@ -31,6 +30,7 @@ class OrderSerializer(serializers.ModelSerializer):
     contract  = serializers.SerializerMethodField()
     transactions = serializers.SerializerMethodField()
     arbiter = OrderArbiterSerializer()
+    price = serializers.SerializerMethodField()
     trade_type = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     payment_method_opts = serializers.SerializerMethodField()
@@ -54,8 +54,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'arbiter',
             'payment_method_opts',
             'payment_methods_selected',
-            'crypto_amount',
-            'locked_price',
+            'trade_amount',
+            'price',
             'trade_type',
             'status',
             'is_ad_owner',
@@ -70,6 +70,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'has_unread_status'
         ]
     
+    def get_price(self, obj):
+        return obj.ad_snapshot.price
+
     def get_ad(self, obj):
         serialized_ad_snapshot = SubsetAdSnapshotSerializer(obj.ad_snapshot)
         return serialized_ad_snapshot.data
@@ -97,7 +100,9 @@ class OrderSerializer(serializers.ModelSerializer):
                     'name': member.name,
                     'address': member.address,
                     'rating': member.average_rating(),
-                    'is_ad_owner': member.wallet_hash == ad_owner.wallet_hash
+                    'is_ad_owner': member.wallet_hash == ad_owner.wallet_hash,
+                    'is_online': member.is_online,
+                    'last_online_at': member.last_online_at
                 }
         return members
          
@@ -105,7 +110,9 @@ class OrderSerializer(serializers.ModelSerializer):
         return {
             'id': obj.owner.id,
             'name': obj.owner.name,
-            'rating': obj.owner.average_rating()
+            'rating': obj.owner.average_rating(),
+            'is_online': obj.owner.is_online,
+            'last_online_at': obj.owner.last_online_at
         }
 
     def get_contract(self, obj):
@@ -188,7 +195,7 @@ class OrderSerializer(serializers.ModelSerializer):
         wallet_hash = self.context.get('wallet_hash')
         statuses = models.Status.objects.filter(order__id=obj.id)
         has_unread = False
-        if is_seller(obj, wallet_hash):
+        if obj.is_seller(wallet_hash):
             has_unread = statuses.filter(seller_read_at__isnull=True).exists()
         else:
             has_unread = statuses.filter(buyer_read_at__isnull=True).exists()
@@ -212,8 +219,8 @@ class WriteOrderSerializer(serializers.ModelSerializer):
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
     arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
-    locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
-    crypto_amount = serializers.DecimalField(max_digits=10, decimal_places=8, required=True)
+    # locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
+    trade_amount = serializers.IntegerField(required=True)
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), required=False, many=True)
     is_cash_in = serializers.BooleanField(required=True)
 
@@ -224,8 +231,8 @@ class WriteOrderSerializer(serializers.ModelSerializer):
             'ad_snapshot', 
             'owner',
             'arbiter',
-            'locked_price',
-            'crypto_amount',
+            # 'locked_price',
+            'trade_amount',
             'payment_methods',
             'chat_session_ref',
             'is_cash_in'

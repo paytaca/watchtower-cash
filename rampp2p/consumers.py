@@ -6,21 +6,27 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
-class MarketRateConsumer(AsyncWebsocketConsumer):
+class MarketPriceConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.currency = self.scope['url_route']['kwargs']['currency']
-        self.room_name = f'ramp-p2p-subscribe-market-price-{self.currency}'
+        self.room_name = f'p2pxchange_market_price_{self.currency}'
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name
         )
         await self.accept()
-        data = { 'message': f"Subscribed to '{self.room_name}'" }
+        data = { 
+            'success': True,
+            'type': 'ConnectionMessage',
+            'extra': {
+                'message': f"Subscribed to '{self.room_name}'" 
+            }
+        }
         await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 
@@ -32,18 +38,24 @@ class MarketRateConsumer(AsyncWebsocketConsumer):
 class OrderUpdatesConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.order_id = self.scope['url_route']['kwargs']['order_id']
-        self.room_name = f'ramp-p2p-subscribe-order-{self.order_id}'
+        self.room_name = f'p2pxchange_order_{self.order_id}'
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name
         )
         await self.accept()
-        data = { 'message': f"Subscribed to '{self.room_name}'" }
+        data = { 
+            'success': True,
+            'type': 'ConnectionMessage',
+            'extra': {
+                'message': f"Subscribed to '{self.room_name}'" 
+            }
+        }
         await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 
@@ -54,7 +66,7 @@ class OrderUpdatesConsumer(AsyncWebsocketConsumer):
 class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.wallet_hash = self.scope['url_route']['kwargs']['wallet_hash']
-        self.room_name = f'ramp-p2p-subscribe-general-{self.wallet_hash}'
+        self.room_name = f'p2pxchange_{self.wallet_hash[:8]}'
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name
@@ -64,6 +76,7 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
         unread_count = await unread_orders_count(self.wallet_hash)
         data = { 
+            'success': True,
             'type': 'ConnectionMessage',
             'extra': {
                 'message': f"Subscribed to '{self.room_name}'", 
@@ -75,9 +88,8 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         is_online = False
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
-
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 
@@ -88,15 +100,17 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
 class CashinAlertsConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.wallet_hash = self.scope['url_route']['kwargs']['wallet_hash']
-        self.room_name = f'ramp-p2p-subscribe-cashin-alerts-{self.wallet_hash}'
+        self.room_name = f'p2pxchange_cashin_{self.wallet_hash[:8]}'
         await self.channel_layer.group_add(
             self.room_name,
             self.channel_name
         )
         await self.accept()
+
         is_online = True
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
         data = { 
+            'success': True,
             'type': 'ConnectionMessage',
             'extra': {
                 'message': f"Subscribed to '{self.room_name}'", 
@@ -107,9 +121,8 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         is_online = False
         await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
-
         await self.channel_layer.group_discard(
-            self.channel_name,
+            self.room_name,
             self.channel_name
         )
 

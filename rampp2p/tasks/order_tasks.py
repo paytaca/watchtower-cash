@@ -18,7 +18,8 @@ def cancel_expired_orders():
     ).order_by('-created_at').values('status')[:1]
     annotated_orders = Order.objects.annotate(latest_status = Subquery(latest_status_subquery))
     submitted_orders = annotated_orders.filter(latest_status=StatusType.SUBMITTED)
-    logger.warn(f'{len(submitted_orders)} submitted orders')
+    logger.warning(f'{len(submitted_orders)} submitted orders')
+    
     # cancel expired orders
     for order in submitted_orders:
         # initialize expires_at if null
@@ -36,7 +37,8 @@ def cancel_expired_orders():
             # create canceled status
             status = StatusSerializer(data={
                 'status': StatusType.CANCELED,
-                'order': order.id
+                'order': order.id,
+                'created_by': 'SYSTEM_AUTOMATED'
             })
             try:
                 validate_status_inst_count(StatusType.CANCELED, order.id)
@@ -44,6 +46,6 @@ def cancel_expired_orders():
                 if status.is_valid():
                     status.save()
             except Exception as err:
-                logger.warn(f'error: {err}')
+                logger.warning(f'error: {err}')
             
             order.save()

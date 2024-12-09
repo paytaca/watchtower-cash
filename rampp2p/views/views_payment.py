@@ -227,6 +227,7 @@ class OrderPaymentViewSet(viewsets.GenericViewSet):
     def _validate_awaiting_payment(self, order):
         '''Validates that `order` is awaiting fiat payment. Raises ValidationError 
         when order's last status is not ESCRW nor PD_PN'''
-        last_status = rampp2putils.get_last_status(order.id)
+        
+        last_status = order.status
         if last_status.status != models.StatusType.ESCROWED and last_status.status != models.StatusType.PAID_PENDING:
             raise ValidationError({ 'order': _(f'Invalid action for {last_status.status} order')})

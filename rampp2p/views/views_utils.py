@@ -8,12 +8,20 @@ from django.http import FileResponse
 from django.http import HttpResponse, JsonResponse
 
 from main.utils.subscription import save_subscription
+from rampp2p.utils.fees import get_trading_fees
 
-from rampp2p.models import MarketRate, AppVersion, Order
+from rampp2p.models import MarketRate, AppVersion, FeatureToggle
 from rampp2p.serializers import MarketRateSerializer
 
 import logging
 logger = logging.getLogger(__name__)
+
+def feature_toggles(request):
+    toggles = {
+        toggle.feature_name: toggle.is_enabled
+        for toggle in FeatureToggle.objects.all()
+    }
+    return JsonResponse(toggles)
     
 def check_app_version(request, platform=None):
     if platform:
@@ -34,6 +42,12 @@ def check_app_version(request, platform=None):
         }
     
     return JsonResponse(response_data)
+
+class ContractFees(APIView):
+    def get(self, request):
+        trade_amount = request.query_params.get('trade_amount', None)
+        _, fees = get_trading_fees(trade_amount=trade_amount)
+        return Response(fees, status=status.HTTP_200_OK)
 
 class MarketRates(APIView):
     def get(self, request):

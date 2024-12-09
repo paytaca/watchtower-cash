@@ -18,7 +18,7 @@ class GiftClaimView(View):
         claimed = False
         if gift:
             exists = True
-            amount = float(gift.amount)
+            amount = '{:.8f}'.format(gift.amount).rstrip('0')
             if gift.date_claimed:
                 claimed = True
 

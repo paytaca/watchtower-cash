@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from rampp2p.utils import satoshi_to_bch, bch_to_fiat
 
 from . import block_kit
 from . import block_kit_helpers
@@ -145,7 +146,7 @@ class OrderSummaryMessage(MessageBase):
         if order.is_cash_in:
             text = f"Cash In {text}"
         attachments = [
-            block_kit.Blocks(*blocks),
+            block_kit.Blocks(*blocks, color=cls.resolve_color_from_status(order)),
         ]
         msg_logs = models.SlackMessageLog.objects.filter(
             topic=models.SlackMessageLog.Topic.ORDER_SUMMARY,
@@ -189,6 +190,10 @@ class OrderSummaryMessage(MessageBase):
             )
 
         return results
+    
+    @classmethod
+    def resolve_color_from_status(cls, order:models.Order):
+        return block_kit_helpers.resolve_color_from_order_status(order.status.status)
 
     @classmethod
     def get_message_header_block(cls, order:models.Order):
@@ -222,8 +227,9 @@ class OrderSummaryMessage(MessageBase):
         currency = order.currency.symbol
         ad_owner = order.ad_snapshot.owner.name
         ad_price = order.ad_snapshot.price
-        trade_amount = '{:.10f}'.format(float(str(order.crypto_amount))).rstrip('0').rstrip('.')
-        fiat_trade_amount = '{:.2f}'.format(order.crypto_amount * ad_price)
+        bch_amount = satoshi_to_bch(order.trade_amount)
+        trade_amount = '{:.10f}'.format(float(str(bch_amount))).rstrip('0').rstrip('.')
+        fiat_trade_amount = '{:.2f}'.format(bch_to_fiat(bch_amount, ad_price))
 
         blocks = [
             block_kit.SectionBlock(
@@ -378,7 +384,7 @@ class AppealSummaryMessage(MessageBase):
 
         text=f"Appeal #{appeal.id} Summary"
         attachments = [
-            block_kit.Blocks(*blocks),
+            block_kit.Blocks(*blocks, color=cls.resolve_color_from_status(appeal)),
         ]
         msg_logs = models.SlackMessageLog.objects.filter(
             topic=models.SlackMessageLog.Topic.APPEAL_SUMMARY,
@@ -422,6 +428,10 @@ class AppealSummaryMessage(MessageBase):
             )
 
         return results
+    
+    @classmethod
+    def resolve_color_from_status(cls, appeal:models.Appeal):
+        return block_kit_helpers.resolve_color_from_appeal_status(appeal)
     
     @classmethod
     def resolve_status(cls, appeal:models.Appeal):
@@ -653,14 +663,17 @@ class AdSummaryMessage(MessageBase):
             floating_price = '{:f}'.format(Decimal(ad.floating_price).normalize())
             price_type = f'{price_type} ({floating_price}%)'
 
-        trade_amount = '{:f}'.format(Decimal(ad.trade_amount).normalize())
+        trade_amount = ad.get_trade_amount()
+        trade_amount = '{:f}'.format(Decimal(trade_amount).normalize())
         if ad.trade_amount_in_fiat:
             trade_amount = f'{trade_amount} {ad.fiat_currency.symbol}'
         else:
             trade_amount = f'{trade_amount} {ad.crypto_currency.symbol}'
 
-        trade_floor = '{:f}'.format(Decimal(ad.trade_floor).normalize())
-        trade_ceiling = '{:f}'.format(Decimal(ad.trade_ceiling).normalize())
+        trade_floor = ad.get_trade_floor()
+        trade_ceiling = ad.get_trade_ceiling()
+        trade_floor = '{:f}'.format(Decimal(trade_floor).normalize())
+        trade_ceiling = '{:f}'.format(Decimal(trade_ceiling).normalize())
         if ad.trade_limits_in_fiat:
             trade_floor = f'{trade_floor} {ad.fiat_currency.symbol}'
             trade_ceiling = f'{trade_ceiling} {ad.fiat_currency.symbol}' 
@@ -845,13 +858,25 @@ class AdUpdateMessage(MessageBase):
             old_currency = currency.get('old')
             new_currency = currency.get('new')
 
-        if (update_type == AdUpdateType.FIXED_PRICE or
-            update_type == AdUpdateType.FLOATING_PRICE or
-            update_type == AdUpdateType.TRADE_AMOUNT or
+        if (update_type == AdUpdateType.TRADE_AMOUNT or
             update_type == AdUpdateType.TRADE_FLOOR or
             update_type == AdUpdateType.TRADE_CEILING):
-            old_value = '{:f}'.format(Decimal(old_value.normalize())) if old_currency == 'BCH' else '{:.2f}'.format(Decimal(old_value.normalize()))
-            new_value = '{:f}'.format(Decimal(new_value.normalize())) if new_currency == 'BCH' else '{:.2f}'.format(Decimal(new_value.normalize()))
+            old_value = satoshi_to_bch(old_value)
+            new_value = satoshi_to_bch(new_value)
+
+            if old_currency != 'BCH':
+                old_value = bch_to_fiat(old_value, ad.get_price())
+
+            if new_currency != 'BCH':
+                new_value = bch_to_fiat(new_value, ad.get_price())
+
+            old_value = '{:f}'.format(old_value.normalize()) if old_currency == 'BCH' else '{:.2f}'.format(old_value.normalize())
+            new_value = '{:f}'.format(new_value.normalize()) if new_currency == 'BCH' else '{:.2f}'.format(new_value.normalize())
+
+        if (update_type == AdUpdateType.FIXED_PRICE or
+            update_type == AdUpdateType.FLOATING_PRICE):
+            old_value = '{:.2f}'.format(old_value)
+            new_value = '{:.2f}'.format(new_value)
 
         if update_type == AdUpdateType.CURRENCY:
             return f"Ad #{ad.id} updated currency from {old_value} to {new_value}"
@@ -867,6 +892,12 @@ class AdUpdateMessage(MessageBase):
             return f"Ad #{ad.id} updated trade ceiling from {old_value} {old_currency} to {new_value} {new_currency}"
         elif update_type == AdUpdateType.TRADE_AMOUNT:
             return f"Ad #{ad.id} updated trade quantity from {old_value} {old_currency} to {new_value} {new_currency}"
+        elif update_type == AdUpdateType.TRADE_AMOUNT_IN_FIAT:
+            currency = f'{ad.fiat_currency.symbol}' if new_value == True else 'BCH'
+            return f"Ad #{ad.id} trade quantity currency set to {currency}"
+        elif update_type == AdUpdateType.TRADE_LIMITS_IN_FIAT:
+            currency = f'{ad.fiat_currency.symbol}' if new_value == True else 'BCH'
+            return f"Ad #{ad.id} trade limits currency set to {currency}"
         elif update_type == AdUpdateType.APPEAL_COOLDOWN:
             old_value = models.CooldownChoices(old_value).label
             new_value = models.CooldownChoices(new_value).label

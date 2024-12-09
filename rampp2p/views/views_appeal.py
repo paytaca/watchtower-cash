@@ -13,7 +13,7 @@ import rampp2p.serializers as serializers
 import rampp2p.utils.websocket as websocket
 
 from rampp2p.validators import *
-from rampp2p.utils.utils import is_appealable, get_trading_fees
+from rampp2p.utils.fees import get_trading_fees
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
@@ -106,7 +106,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         Requirements:
             (1) The creator of appeal must be the buyer/seller.
             (2) The order must be expired.
-            (3) The latest order status must be one of ['ESCRW', 'PD_PN', 'PD', 'CNCL']
+            (3) The latest order status must be one of ['ESCRW', 'PD_PN', 'PD']
         Restrictions:
             (1) The seller cannot appeal once they marked the order as 'PD'
             (2) The seller/buyer cannot appeal once the order is completed (i.e. 'RLS' or 'RFN')
@@ -117,7 +117,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         try:
             order = models.Order.objects.get(id=order_id)
             if not order.is_cash_in:
-                appealable, appealable_at = is_appealable(order_id)
+                appealable, appealable_at = order.is_appealable()
                 if not appealable:
                     response_data = {
                         'error': 'order is not appealable now',
@@ -147,7 +147,8 @@ class AppealViewSet(viewsets.GenericViewSet):
                 appeal = serialized_appeal.save()
                 serialized_status = serializers.StatusSerializer(data={
                     'status': StatusType.APPEALED,
-                    'order': order_id
+                    'order': order_id,
+                    'created_by': wallet_hash
                 })
 
                 if not serialized_status.is_valid():
@@ -218,7 +219,7 @@ class AppealViewSet(viewsets.GenericViewSet):
 
             with transaction.atomic():
                 # Update status to RELEASE_PENDING
-                serialized_status = update_order_status(appeal.order.id, status_type)
+                serialized_status = update_order_status(appeal.order.id, status_type, wallet_hash=wallet_hash)
 
                 contract = models.Contract.objects.get(order__id=appeal.order.id)
                 _, _ = models.Transaction.objects.get_or_create(
@@ -256,7 +257,7 @@ class AppealViewSet(viewsets.GenericViewSet):
 
             with transaction.atomic():
                 # Update status to REFUND_PENDING
-                serialized_status = update_order_status(appeal.order.id, status_type)
+                serialized_status = update_order_status(appeal.order.id, status_type, wallet_hash=wallet_hash)
 
                 contract = models.Contract.objects.get(order__id=appeal.order.id)
                 _, _ = models.Transaction.objects.get_or_create(
@@ -276,7 +277,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         except (ValidationError, models.Appeal.DoesNotExist, models.Contract.DoesNotExist) as err:
             return Response({"success": False, "error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-    def _retrieve(self, request, appeal):
+    def _retrieve(self, request, appeal: models.Appeal):
         wallet_hash = request.user.wallet_hash
         serialized_appeal = None            
 
@@ -294,7 +295,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
         serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
 
-        total_fee, fees = get_trading_fees()
+        total_fee, fees = get_trading_fees(appeal.order.trade_amount)
         response = {
             'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data,
             'order': serialized_order.data,

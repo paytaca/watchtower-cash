@@ -379,26 +379,26 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'main.tasks.fetch_latest_usd_price',
         'schedule': 60 * 2,
     },
-    'preload_smartbch_blocks': {
-        'task': 'smartbch.tasks.preload_new_blocks_task',
-        'schedule': 20,
-    },
-    'parse_new_smartbch_blocks': {
-        'task': 'smartbch.tasks.parse_blocks_task',
-        'schedule': 30,
-    },
-    'parse_token_contract_metadata': {
-        'task': 'smartbch.tasks.parse_token_contract_metadata_task',
-        'schedule': 300,
-    },
-    'save_token_icons': {
-        'task': 'smartbch.tasks.save_token_icons_task',
-        'schedule': 300,
-    },
-    'parse_missing_records': {
-        'task': 'smartbch.tasks.parse_missed_records_task',
-        'schedule': 60 * 20 # run every 20 minutes.
-    },
+    # 'preload_smartbch_blocks': {
+    #     'task': 'smartbch.tasks.preload_new_blocks_task',
+    #     'schedule': 20,
+    # },
+    # 'parse_new_smartbch_blocks': {
+    #     'task': 'smartbch.tasks.parse_blocks_task',
+    #     'schedule': 30,
+    # },
+    # 'parse_token_contract_metadata': {
+    #     'task': 'smartbch.tasks.parse_token_contract_metadata_task',
+    #     'schedule': 300,
+    # },
+    # 'save_token_icons': {
+    #     'task': 'smartbch.tasks.save_token_icons_task',
+    #     'schedule': 300,
+    # },
+    # 'parse_missing_records': {
+    #     'task': 'smartbch.tasks.parse_missed_records_task',
+    #     'schedule': 60 * 20 # run every 20 minutes.
+    # },
     'update_shift_status': {
         'task': 'ramp.tasks.update_shift_status',
         'schedule': 60
@@ -433,7 +433,8 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "wallet-hash",
     "signature",
     "timestamp",
-    "public-key"
+    "public-key",
+    "version"
 ]
 
 REST_FRAMEWORK = {
@@ -665,13 +666,16 @@ ENV = config('ENV', 'prod')
 DEBUG = config('ENV', 'prod') != 'prod'
 ENV = config('ENV', 'prod')
 
+SATOSHI_PER_BCH = 10 ** 8 # 100,000,000 sats = 1 BCH
+DUST_LIMIT_CAP = 1000 # dust limit is 546 sats
+
 # P2P Exchange Config
 BCHJS_TOKEN = config('BCHJS_TOKEN', '')
 SERVICER_PK = config('SERVICER_PK', '')
 SERVICER_ADDR = config('SERVICER_ADDR', '')
 SERVICE_FEE = config('SERVICE_FEE', 1000)
 ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
-HARDCODED_FEE = config('HARDCODED_FEE', 1000)
+CONTRACT_FEE = config('CONTRACT_FEE', 1000)
 SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
 
 from requests.compat import urljoin
