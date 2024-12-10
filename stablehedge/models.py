@@ -58,6 +58,8 @@ class RedemptionContract(models.Model):
     auth_token_id = models.CharField(max_length=64)
     price_oracle_pubkey = models.CharField(max_length=70)
 
+    verified = models.BooleanField(default=False)
+
     def __str__(self):
         return f"RedemptionContract#{self.id}: {self.address}"
 

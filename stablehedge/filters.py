@@ -27,6 +27,7 @@ class RedemptionContractFilter(filters.FilterSet):
     max_redeemable = filters.NumberFilter(method="max_redeemable_filter")
     min_reserve_supply = filters.NumberFilter(method="min_reserve_supply_filter")
     max_reserve_supply = filters.NumberFilter(method="max_reserve_supply_filter")
+    verified = filters.BooleanFilter()
 
     def categories_filter(self, queryset, name, value):
         return queryset.filter(fiat_token__category__in=str(value).split(","))

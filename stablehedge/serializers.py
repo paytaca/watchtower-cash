@@ -240,6 +240,10 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
         redemption_contract = data["redemption_contract"]
         utxo_data = data["utxo"]
         transaction_type = data["transaction_type"]
+
+        if redemption_contract.verified:
+            raise ValidationError("Contract is not verified")
+
         require_cashtoken = transaction_type == models.RedemptionContractTransaction.Type.REDEEM
         valid_utxo_data = validate_utxo_data(
             utxo_data,
