@@ -32,6 +32,8 @@ class FiatTokenAdmin(admin.ModelAdmin):
 
 @admin.register(models.RedemptionContract)
 class RedemptionContractAdmin(admin.ModelAdmin):
+    form = forms.RedemptionContractForm
+
     search_fields = [
         "address",
         "auth_token_id",
@@ -121,6 +123,7 @@ class TreasuryContractKeyInline(admin.StackedInline):
 @admin.register(models.TreasuryContract)
 class TreasuryContractAdmin(admin.ModelAdmin):
     form = forms.TreasuryContractForm
+
     inlines = [
         TreasuryContractKeyInline,
     ]
