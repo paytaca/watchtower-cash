@@ -107,8 +107,6 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         )
         await self.accept()
 
-        is_online = True
-        await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
         data = { 
             'success': True,
             'type': 'ConnectionMessage',
@@ -119,8 +117,6 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
-        is_online = False
-        await sync_to_async(update_user_active_status)(self.wallet_hash, is_online)
         await self.channel_layer.group_discard(
             self.room_name,
             self.channel_name
