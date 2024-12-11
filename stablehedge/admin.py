@@ -8,6 +8,7 @@ from stablehedge.functions.treasury_contract import (
     get_funding_wif_address,
     sweep_funding_wif,
 )
+from stablehedge.functions.redemption_contract import get_24hr_volume_data
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.wallet import subscribe_address
 
@@ -50,6 +51,7 @@ class RedemptionContractAdmin(admin.ModelAdmin):
         "recompile",
         "subscribe",
         "update_utxos",
+        "recalculate_24hr_volume",
     ]
 
     def get_queryset(self, request):
@@ -87,6 +89,11 @@ class RedemptionContractAdmin(admin.ModelAdmin):
             messages.info(request, f"Queued | {obj}")
     update_utxos.short_description = "Update UTXOS"
 
+    def recalculate_24hr_volume(self, request, queryset):
+        for obj in queryset.all():
+            result = get_24hr_volume_data(obj.address, force=True)
+            messages.info(request, f"{obj.address} | {result}")
+    recalculate_24hr_volume.short_description = "Recalculate 24 volume data"
 
 @admin.register(models.RedemptionContractTransaction)
 class RedemptionContractTransactionAdmin(admin.ModelAdmin):
