@@ -21,7 +21,7 @@ class Command(BaseCommand):
     help = "Watches & executes transactions of redemption contract"
 
     def handle(self, *args, **options):
-        LOG_RUNNING_INTERVAL = 5
+        LOG_RUNNING_INTERVAL = 30
         LOGGER.info("Running redemption contract transactions queue")
         last_log = 0
         while True:
@@ -56,6 +56,10 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
         return
 
     try:
+        min_price_message = timezone.now() - timezone.timedelta(seconds=120)
+        if obj.price_oracle_message.message_timestamp < min_price_message:
+            raise RedemptionContractTransactionException("Oracle price message is old")
+
         if obj.transaction_type == models.RedemptionContractTransaction.Type.INJECT:
             result = create_inject_liquidity_tx(obj)
         elif obj.transaction_type == models.RedemptionContractTransaction.Type.DEPOSIT:
