@@ -47,7 +47,9 @@ class HedgePositionFilter(filters.FilterSet):
     class Meta:
         model = HedgePosition
         fields = [
+            "short_address",
             "short_wallet_hash",
+            "long_address",
             "long_wallet_hash",
             "settled",
             "funding",

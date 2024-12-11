@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import requests
 from subprocess import run, PIPE
 
 # This class gets populated with functions in the javascript after loading this file
@@ -44,6 +45,19 @@ def generate_func(func_name):
             "function": func_name,
             "params": args,
         }
+
+        try:
+            response = requests.post('http://localhost:3020/', data=json.dumps(_input))
+            if response.ok:
+                try:
+                    return response.json()
+                except json.JSONDecodeError:
+                    return response.content
+            else:
+               raise Exception(response.content.decode())
+        except requests.exceptions.ConnectionError:
+            pass
+
         process = run(['node', './anyhedge/js/src/main.js'], input=json.dumps(_input).encode(), stdout=PIPE, stderr=PIPE)
         result = None
 

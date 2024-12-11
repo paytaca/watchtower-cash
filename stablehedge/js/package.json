@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "@bitauth/libauth": "^2.1.0",
+    "cashc": "^0.8.0",
+    "cashscript": "^0.10.2"
+  },
+  "overrides": {
+    "@cashscript/utils": {
+      "@bitauth/libauth": "2.0.0-alpha.8"
+    }
+  },
+  "type": "module"
+}

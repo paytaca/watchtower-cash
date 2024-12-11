@@ -12,6 +12,7 @@ import { AnyHedgeManager as AnyHedgeManagerOld } from '@generalprotocols/anyhedg
  * @param {Number} intent.lowPriceMult - The USD/BCH price drop percentage to trigger liquidation
  * @param {Number} intent.highPriceMult - The USD/BCH price increase percentage to trigger liquidation
  * @param {Number} intent.duration - The number of seconds from the starting time of the hedge position
+ * @param {Boolean} intent.isSimpleHedge - A simple hedge or a short position
  * @param {'short' | 'long'} intent.takerSide - Taker of contract
  * @param {Object} pubkeys - Necessary credentials for hedge and short
  * @param {String} pubkeys.longAddress - Destination address of hedger's funds on maturity/liquidation
@@ -72,7 +73,7 @@ export async function create(intent, pubkeys, startingOracleMessage, priceMessag
       shortMutualRedeemPublicKey: pubkeys.shortPubkey,
       longMutualRedeemPublicKey: pubkeys.longPubkey,
       enableMutualRedemption: 1n,
-      isSimpleHedge: 1n,
+      isSimpleHedge: intent.isSimpleHedge ? 1n : 0n,
     }
 
     const resp = await compileContract(contractCreationParameters)
