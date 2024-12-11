@@ -135,11 +135,11 @@ def get_24hr_volume_data(redemption_contract_address:str, ttl=60 * 5, force=Fals
         tx_type = record["transaction_type"]
         price_value = decimal.Decimal(record["price_oracle_message__price_value"])
         if record["transaction_type"] == models.RedemptionContractTransaction.Type.REDEEM:
-            token_amount = decimal.Decimal(record["utxo"]["satoshis"])
+            token_amount = decimal.Decimal(record["utxo"]["amount"])
             bch = token_amount / price_value
-            satoshis = bch * decimal.Decimal(10 ** 8)
+            satoshis = round(bch * decimal.Decimal(10 ** 8))
         else:
-            satoshis = decimal.Decimal(record["utxo"]["satoshis"])
+            satoshis = decimal.Decimal(record["utxo"]["satoshis"] - 2000)
         LOGGER.debug(f"RedemptionContractTransaction #{record['id']} | VALUE | {satoshis} satoshis")
 
         if not isinstance(volume_map.get(tx_type), decimal.Decimal):
