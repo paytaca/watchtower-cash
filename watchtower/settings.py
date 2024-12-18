@@ -432,7 +432,8 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "signature",
     "timestamp",
     "public-key",
-    "version"
+    "version",
+    "platform"
 ]
 
 REST_FRAMEWORK = {

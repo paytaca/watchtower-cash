@@ -51,15 +51,11 @@ class ContractViewSet(viewsets.GenericViewSet):
 
     def create(self, request):
         try:
-            
-            min_version = models.AppVersion.objects.last()
-            if not min_version:
-                return Response({'error': 'Service unavailable at this time'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            
-            min_version = min_version.min_required_version
             version = request.headers.get('version')
-            if version != min_version:
-                return Response({ 'error' : f'Invalid app version {version}. Min required version is {min_version}.' }, status=status.HTTP_400_BAD_REQUEST )
+            platform = request.headers.get('platform', 'web')
+            in_range, min_required_version = utils.version_in_range(version, platform=platform)
+            if not in_range:
+                return Response({ 'error' : f'Invalid app version {version}. Min required version is {min_required_version}.' }, status=status.HTTP_400_BAD_REQUEST )
 
             order_pk = request.data.get('order_id')
             arbiter_pk = request.data.get('arbiter_id')
