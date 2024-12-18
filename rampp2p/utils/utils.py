@@ -4,6 +4,7 @@ from django.apps import apps
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime
 from asgiref.sync import sync_to_async
+from packaging.version import Version
 
 import logging
 logger = logging.getLogger(__name__)
@@ -76,3 +77,19 @@ def check_has_cashin_alerts(wallet_hash):
         if has_cashin_alerts:
             break
     return has_cashin_alerts
+
+def version_in_range(version, platform='web'):
+    version_to_check = Version(version)
+
+    AppVersion = apps.get_model('rampp2p', 'AppVersion')
+    current_version = AppVersion.objects.filter(platform=platform).last()
+    if not current_version:
+       return False, None
+    
+    lower_bound = Version(current_version.min_required_version)
+    upper_bound = Version(current_version.latest_version)
+
+    is_in_range = lower_bound <= version_to_check <= upper_bound
+    logger.info(f"Is {version_to_check} within the range {lower_bound} and {upper_bound}? {is_in_range}")
+    
+    return is_in_range, lower_bound
