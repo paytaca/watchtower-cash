@@ -249,8 +249,22 @@ class BCHN(object):
         return data
 
     def get_utxos(self, address):
-        data = '{ "id": 194, "method": "blockchain.address.listunspent",'
+        data = '{ "id": 0, "method": "blockchain.address.listunspent",'
         data += '"params": ["%s", "include_tokens"] }' % (address)
+
+        with socket.create_connection((
+            self.fulcrum['host'],
+            self.fulcrum['port']
+        )) as sock:
+            sock.send(data.encode('utf-8')+b'\n')
+            response_byte = self._recvall(sock)
+            response = response_byte.decode()
+            response = json.loads(response.strip())
+            return response['result']
+        
+    def get_address_transactions(self, address, limit=None, offset=None):
+        data = '{ "id": 0, "method": "blockchain.address.get_history",'
+        data += '"params": ["%s"] }' % (address)
 
         with socket.create_connection((
             self.fulcrum['host'],

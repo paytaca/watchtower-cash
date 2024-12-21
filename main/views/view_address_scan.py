@@ -9,9 +9,11 @@ from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 
 from main.utils.subscription import new_subscription
-from main.utils.queries.bchd import BCHDQuery
+from main.utils.queries.node import Node
 from main import serializers
 
+
+NODE = Node()
 
 class WalletAddressScanViewSet(viewsets.GenericViewSet):
     serializer_class = serializers.WalletAddressScanSerializer
@@ -34,17 +36,16 @@ class WalletAddressScanViewSet(viewsets.GenericViewSet):
         sorted_address_sets = serializer.sorted_address_sets()
         sorted_address_sets.reverse() # sorted by address index in descending order
 
-        bchd = BCHDQuery()
         address_sets_to_subscribe = []
         for i in range(len(sorted_address_sets)):
             address_set = sorted_address_sets[i]
 
-            txs = bchd.get_address_transactions(address_set["addresses"]["receiving"], limit=1)
-            has_transaction = len(txs.unconfirmed_transactions) or len(txs.confirmed_transactions)
+            txs = NODE.BCH.get_address_transactions(address_set["addresses"]["receiving"], limit=1)
+            has_transaction = len(txs)
 
             if not has_transaction:
-                txs = bchd.get_address_transactions(address_set["addresses"]["change"], limit=1)
-                has_transaction = len(txs.unconfirmed_transactions) or len(txs.confirmed_transactions)
+                txs = NODE.BCH.get_address_transactions(address_set["addresses"]["change"], limit=1)
+                has_transaction = len(txs)
 
             if has_transaction:
                 address_sets_to_subscribe = sorted_address_sets[i:]
