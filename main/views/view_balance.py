@@ -214,6 +214,8 @@ class Balance(APIView):
                     data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
+
+                cache = settings.REDISKV
                 
                 # Execute UTXO scanning if conditions are met
                 execute_utxo_scan = False
@@ -228,29 +230,32 @@ class Balance(APIView):
                 if execute_utxo_scan:
                     rescan_utxos.delay(wallet_hash, full=True)
 
-                if tokenid_or_category or category:
+                _category = tokenid_or_category or category
+                if _category:
                     is_bch = False
                     query = Q(wallet=wallet) & Q(spent=False)
 
                     if is_cashtoken_nft:
                         query = (
                             query &
-                            Q(cashtoken_nft__category=category) &
+                            Q(cashtoken_nft__category=_category) &
                             Q(cashtoken_nft__current_index=index) &
                             Q(cashtoken_nft__current_txid=txid)
                         )
                     else:
-                        query = query & Q(cashtoken_ft__category=tokenid_or_category)
+                        query = query & Q(cashtoken_ft__category=_category)
 
-                    qs_balance = _get_ct_balance(query, multiple_tokens=False)
+                    ct_cache_key = f'wallet:balance:token:{wallet_hash}:{_category}'
+                    cached_data = cache.get(ct_cache_key)
+                    if not cached_data:
+                        qs_balance = _get_ct_balance(query, multiple_tokens=False)
                 else:
                     is_bch = True
                     query = Q(wallet=wallet) & Q(spent=False)
                 
                 if is_bch:
-                    cache = settings.REDISKV
-                    cache_key = f'wallet:balance:bch:{wallet_hash}'
-                    cached_data = cache.get(cache_key)
+                    bch_cache_key = f'wallet:balance:bch:{wallet_hash}'
+                    cached_data = cache.get(bch_cache_key)
                     if cached_data:
                         data = json.loads(cached_data)
                     else:
@@ -267,33 +272,40 @@ class Balance(APIView):
                         data['yield'] = None # compute_wallet_yield(wallet_hash)
                         data['valid'] = True
 
-                        cache.set(cache_key, json.dumps(data))
+                        cache.set(bch_cache_key, json.dumps(data))
                 else:
-                    if is_cashtoken_nft:
-                        token = CashNonFungibleToken.objects.get(
-                            category=category,
-                            current_index=index,
-                            current_txid=txid
-                        )
+                    ct_cache_key = f'wallet:balance:token:{wallet_hash}:{_category}'
+                    cached_data = cache.get(ct_cache_key)
+                    if cached_data:
+                        data = json.loads(cached_data) 
                     else:
-                        token = CashFungibleToken.objects.get(category=tokenid_or_category)
+                        if is_cashtoken_nft:
+                            token = CashNonFungibleToken.objects.get(
+                                category=category,
+                                current_index=index,
+                                current_txid=txid
+                            )
+                        else:
+                            token = CashFungibleToken.objects.get(category=_category)
 
-                    balance = qs_balance['amount__sum'] or 0
-                    decimals = 0
-                    if token.info:
-                        decimals = token.info.decimals
+                        balance = qs_balance['amount__sum'] or 0
+                        decimals = 0
+                        if token.info:
+                            decimals = token.info.decimals
 
-                    if balance > 0:
-                        balance = self.truncate(balance, decimals)
+                        if balance > 0:
+                            balance = self.truncate(balance, decimals)
 
-                    data['balance'] = balance
-                    data['spendable'] = balance
-                    data['token_id'] = tokenid_or_category or category
-                    data['valid'] = True
-                    
-                    if is_cashtoken_nft:
-                        data['commitment'] = token.commitment
-                        data['capability'] = token.capability
+                        data['balance'] = balance
+                        data['spendable'] = balance
+                        data['token_id'] = _category
+                        data['valid'] = True
+                        
+                        if is_cashtoken_nft:
+                            data['commitment'] = token.commitment
+                            data['capability'] = token.capability
+
+                        cache.set(ct_cache_key, json.dumps(data))
 
             # Update last_balance_check timestamp
             wallet.last_balance_check = timezone.now()
