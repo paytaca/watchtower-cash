@@ -4,6 +4,7 @@ from django.apps import apps
 from django.conf import settings
 from django.db import transaction as trans
 from django.db.models import Q
+from main.mqtt import publish_message
 from main.utils.recipient_handler import RecipientHandler
 from django.db import IntegrityError
 from main.utils.address_validator import *
@@ -213,7 +214,7 @@ def publish_subscribed_addresses_to_mqtt(addresses:list):
             address_data["pos"] = pos_data
         data.append(address_data)
 
-    return mqtt.publish_message("address", data)
+    return publish_message("address", data)
 
 
 def resolve_pos_data(wallet_hash, address_path):

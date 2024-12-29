@@ -7,6 +7,7 @@ from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from celery import shared_task
 from celery_heimdall import HeimdallTask, RateLimit
+from main.mqtt import publish_message
 from watchtower.celery import app as celery_app
 from main.models import *
 from main.utils.address_validator import *
@@ -2299,10 +2300,6 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             "outpoint_index": index,
                         })
 
-        from main.mqtt import connect_to_mqtt
-        mqtt_client = connect_to_mqtt()
-        mqtt_client.loop_start()
-
         for output in outputs:
             scriptPubKey = output['scriptPubKey']
 
@@ -2386,8 +2383,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                                 data['nft'] = output['tokenData']['nft']
 
                             LOGGER.info('Sending MQTT message: ' + str(data))
-                            msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1, retain=True)
-                            LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
+                            publish_message(f"transactions/{bchaddress}", data, qos=1)
 
                         LOGGER.info(data)
                         
@@ -2396,7 +2392,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                         except:
                             LOGGER.error('Failed to send client acknowledgement for txid:' + str(tx_hash))
         
-        mqtt_client.loop_stop()
+        # mqtt_client.loop_stop()
 
         if save_histories:
             LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
