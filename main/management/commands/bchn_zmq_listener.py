@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # Copyright (c) 2014-2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -6,30 +6,14 @@
 
 from django.core.management.base import BaseCommand
 from django.conf import settings
-
-from main.utils.queries.node import Node
-
+from main.mqtt import publish_message
 from bitcash import transaction
 import logging
 import binascii
 import zmq
-import json
-import paho.mqtt.client as mqtt
-
-
-client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-publisher"
-if settings.BCH_NETWORK == 'mainnet':
-    mqtt_client = mqtt.Client(transport='websockets', client_id=client_id, clean_session=False)
-    mqtt_client.tls_set()
-else:
-    mqtt_client = mqtt.Client(client_id=client_id)
-
-mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
-mqtt_client.loop_start()
 
 
 LOGGER = logging.getLogger(__name__)
-node = Node()
 
 class ZMQHandler():
 
@@ -59,7 +43,7 @@ class ZMQHandler():
                         'txid': txid,
                         'tx_hex': tx_hex
                     }
-                    msg = mqtt_client.publish('mempool', json.dumps(data), qos=1, retain=True)
+                    publish_message('mempool', data, qos=1, message_type='mempool')
                     LOGGER.info('New mempool tx pushed to MQTT: ' + txid)
 
         except KeyboardInterrupt:
