@@ -1801,6 +1801,19 @@ def rescan_utxos(wallet_hash, full=False):
     else:
         addresses = wallet.addresses.filter(transactions__spent=False)
 
+    # delete cached bch balance
+    cache = settings.REDISKV
+    bch_cache_key = f'wallet:balance:bch:{wallet_hash}'
+    cache.delete(bch_cache_key)
+
+    # delete cached token balance
+    ct_cache_key = f'wallet:balance:token:{wallet_hash}:*'
+    cache.delete(*ct_cache_key)
+
+    # delete cached wallet history
+    history_cache_keys = f'wallet:history:{wallet_hash}:*'
+    cache.delete(*history_cache_keys)
+
     try:
         for address in addresses:
             if wallet.wallet_type == 'bch':
