@@ -72,8 +72,9 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
 
         # delete cached wallet history
         asset_key = category or 'bch'
-        history_cache_keys = f'wallet:history:{wallet_hash}:{asset_key}:*'
-        cache.delete(*history_cache_keys)
+        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
+        if history_cache_keys:
+            cache.delete(*history_cache_keys)
 
     # Trigger the transaction post-save task
     transaction.on_commit(

@@ -1807,12 +1807,14 @@ def rescan_utxos(wallet_hash, full=False):
     cache.delete(bch_cache_key)
 
     # delete cached token balance
-    ct_cache_key = f'wallet:balance:token:{wallet_hash}:*'
-    cache.delete(*ct_cache_key)
+    ct_cache_keys = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
+    if ct_cache_keys:
+        cache.delete(*ct_cache_keys)
 
     # delete cached wallet history
-    history_cache_keys = f'wallet:history:{wallet_hash}:*'
-    cache.delete(*history_cache_keys)
+    history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+    if history_cache_keys:
+        cache.delete(*history_cache_keys)
 
     try:
         for address in addresses:
