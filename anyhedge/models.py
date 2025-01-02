@@ -1,5 +1,23 @@
+import decimal
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
+
+
+def custom_round(value, ndigits=0):
+    """
+        Custom round since;
+        built in round uses "banker's rounding" which
+        rounds to the nearest even number when the value is at 0.5,
+    """
+
+    multiplier = decimal.Decimal(10 ** ndigits)
+    _value = decimal.Decimal(value) * multiplier
+    _value += decimal.Decimal(0.01)
+    _value = _value.to_integral_value(decimal.ROUND_HALF_UP)
+    if isinstance(value, float) and _value % 1 == 0:
+        return int(_value / multiplier)
+    return type(value)(_value / multiplier)
+
 
 # Create your models here.
 class HedgePositionQuerySet(models.QuerySet):
@@ -90,6 +108,7 @@ class HedgePosition(models.Model):
         null=True, blank=True,
     )
 
+    is_simple_hedge = models.BooleanField(default=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancelled_by = models.CharField(max_length=5, null=True, blank=True)
 
@@ -101,15 +120,25 @@ class HedgePosition(models.Model):
 
     @property
     def low_liquidation_price(self):
-        return round(self.start_price * self.low_liquidation_multiplier)
+        return custom_round(self.start_price * self.low_liquidation_multiplier)
 
     @property
     def high_liquidation_price(self):
-        return round(self.start_price * self.high_liquidation_multiplier)
+        return custom_round(self.start_price * self.high_liquidation_multiplier)
+
+    @property
+    def sats_at_high_liquidation_price(self):
+        if self.is_simple_hedge:
+            return 0
+        return int((self.nominal_units * 10 ** 8) /self.high_liquidation_price)
+    
+    @property
+    def sats_at_low_liquidation_price(self):
+        return int((self.nominal_units * 10 ** 8) / self.low_liquidation_price)
 
     @property
     def total_sats(self):
-        return round(round(self.satoshis * self.start_price) / self.low_liquidation_price)
+        return self.sats_at_low_liquidation_price - self.sats_at_high_liquidation_price
 
     @property
     def total_sats_with_fee(self):
@@ -119,8 +148,16 @@ class HedgePosition(models.Model):
         return total_sats
 
     @property
+    def short_input_sats(self):
+        if self.is_simple_hedge:
+            return self.satoshis
+        else:
+            sats_for_high_liquidation = int((self.nominal_units * 10 ** 8) /self.high_liquidation_price)
+            return self.satoshis - sats_for_high_liquidation
+
+    @property
     def long_input_sats(self):
-        return self.total_sats - self.satoshis
+        return self.total_sats - self.short_input_sats
 
     @property
     def nominal_units(self):

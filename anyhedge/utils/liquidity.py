@@ -250,7 +250,7 @@ def resolve_liquidity_fee(hedge_pos_obj, hard_update=False):
         hedge_pos_obj.funding_tx_hash_validated = True
         hedge_pos_obj.save()
 
-    short_sats = hedge_pos_obj.satoshis
+    short_sats = hedge_pos_obj.short_input_sats
     long_sats = hedge_pos_obj.long_input_sats
     total_payout_sats = short_sats + long_sats
     network_fee = total_input - total_output

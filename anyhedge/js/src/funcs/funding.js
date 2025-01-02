@@ -1,4 +1,6 @@
 import { AnyHedgeManager} from '@generalprotocols/anyhedge'
+import { constructFundingOutputs } from '@generalprotocols/anyhedge/build/lib/util/funding-util.js'
+import { binToHex, lockingBytecodeToCashAddress } from '@bitauth/libauth'
 import { castBigIntSafe, parseContractData } from '../utils.js'
 
 export const LIQUIDITY_FEE_NAME = 'Liquidity premium'
@@ -108,4 +110,60 @@ export async function completeFundingProposal(contractData, fundingProposal1, fu
     response.error = error?.message || 'Error completing funding proposal'
   }
   return response
+}
+
+/**
+ * @param {import('@generalprotocols/anyhedge').ContractDataV2} contractData 
+ */
+export async function createFundingTransactionOutputs(contractData) {
+  contractData = parseContractData(contractData)
+  const fundingOutputs = constructFundingOutputs(contractData)
+  const cashscriptOutputs = fundingOutputs.map(output => {
+    const cashAddress = lockingBytecodeToCashAddress(
+      output.lockingBytecode,
+      contractData.address.startsWith('bchtest') ? 'bchtest' : 'bitcoincash',
+      { tokenSupport: Boolean(output.token) },
+    )
+
+    if (cashAddress.error) throw new Error(cashAddress.error)
+
+    return {
+      to: cashAddress,
+      amount: Number(output.valueSatoshis),
+      token: !output.token ? undefined : {
+        category: binToHex(output.token.category),
+        amount: Number(output.token.amount),
+        nft: !output.token.nft ? undefined : {
+          capability: output.token.nft.capability,
+          commitment: binToHex(output.token.nft.commitment),
+        }
+      }
+    }
+  })
+
+  return { success: true, outputs: cashscriptOutputs }
+}
+
+/**
+ * @param {Object} contractData 
+ * @param {Object} fundingUtxo 
+ * @param {String} fundingUtxo.txid
+ * @param {Number} fundingUtxo.vout
+ * @param {Number} fundingUtxo.satoshis
+ * @param {String} wif
+ */
+export async function signFundingUtxo(contractData, fundingUtxo, wif) {
+  contractData = parseContractData(contractData)
+  const manager = new AnyHedgeManager({ contractVersion:contractData?.version });
+  const fundingProposal = manager.createFundingProposal(
+    contractData,
+    fundingUtxo.txid,
+    fundingUtxo.vout,
+    castBigIntSafe(fundingUtxo.satoshis),
+  )
+  const signedFundingProposal = await manager.signFundingProposal(wif, fundingProposal)
+  return {
+    signature: signedFundingProposal.signature,
+    publicKey: signedFundingProposal.publicKey,
+  }
 }

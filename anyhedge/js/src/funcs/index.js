@@ -1,10 +1,10 @@
 import { getSettlementServiceAuthToken } from './authToken.js'
 import { compileContract, create } from './create.js'
-import { calculateFundingAmounts, completeFundingProposal } from './funding.js'
+import { calculateFundingAmounts, completeFundingProposal, createFundingTransactionOutputs, signFundingUtxo } from './funding.js'
 import { completeMutualRedemption } from './mutual-settlement.js'
 import { parseOracleMessage, getPriceMessages } from './price.js'
 import { parseSettlementTransactions, settleContractMaturity, liquidateContract } from './settlement.js'
-import { getContractStatus } from './status.js'
+import { getContractStatus, getContractAccessKeys } from './status.js'
 import { sum, asyncSum } from './test.js'
 
 const funcs = {
@@ -14,12 +14,15 @@ const funcs = {
     calculateFundingAmounts,
     completeFundingProposal,
     completeMutualRedemption,
+    createFundingTransactionOutputs,
+    signFundingUtxo,
     parseOracleMessage,
     getPriceMessages,
     parseSettlementTransactions,
     settleContractMaturity,
     liquidateContract,
     getContractStatus,
+    getContractAccessKeys,
     sum,
     asyncSum,
 }

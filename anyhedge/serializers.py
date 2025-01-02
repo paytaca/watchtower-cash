@@ -550,6 +550,7 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             "funding_tx_hash_validated",
             "short_funding_proposal",
             "long_funding_proposal",
+            "is_simple_hedge",
             "cancelled_at",
             "cancelled_by",
 
@@ -589,6 +590,9 @@ class HedgePositionSerializer(serializers.ModelSerializer):
             },
             "funding_tx_hash_validated": {
                 "read_only": True
+            },
+            "is_simple_hedge": {
+                "read_only": True,
             },
             "cancelled_by": {
                 "read_only": True,
@@ -1243,6 +1247,9 @@ class FundGeneralProcotolLPContractSerializer(serializers.Serializer):
         #       remove handling old one after stable
         if "shortInputInSatoshis" in contract_metadata:
             satoshis = int(contract_metadata["shortInputInSatoshis"])
+            if int(contract_metadata["isSimpleHedge"]):
+                satoshis = int(int(contract_parameters["nominalUnitsXSatsPerBch"]) / int(contract_metadata["startPrice"]))
+
             maturity_timestamp = int(contract_parameters["maturityTimestamp"])
 
             short_address = contract_metadata["shortPayoutAddress"]

@@ -90,7 +90,8 @@ INSTALLED_APPS=[
     'ramp',
     'rampp2p',
     'cts',
-    'authentication'
+    'authentication',
+    'stablehedge',
 ]
 
 MIDDLEWARE=[
@@ -275,6 +276,7 @@ CELERY_IMPORTS = (
     'rampp2p.tasks.market_rate_tasks',
     'rampp2p.tasks.transaction_tasks',
     'rampp2p.tasks.order_tasks',
+    'stablehedge.tasks',
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -553,6 +555,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False    
+        },
+        'stablehedge': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
         }
     },
 }
@@ -711,6 +718,13 @@ Address.VERSION_MAP["legacy"] += [
 Address.VERSION_MAP["cash"] += [
     ('P2SH32', 11, False),
     ('P2SH32-TESTNET', 11, True),
+
+    ('CT-P2SH', 24, False),
+    ('CT-P2SH32', 27, False),
+    ('CT-P2PKH', 16, False),
+    ('CT-P2SH-TESTNET', 24, True),
+    ('CT-P2SH32-TESTNET', 27, True),
+    ('CT-P2PKH-TESTNET', 16, True),
 ]
 
 # hack-ish way to for updating Addre
@@ -725,3 +739,7 @@ def new_init(self, *args, **kwargs):
 
     return response
 Address.__init__ = new_init
+
+
+# stablehedge configs
+STABLEHEDGE_FERNET_KEY = config('STABLEHEDGE_FERNET_KEY')
