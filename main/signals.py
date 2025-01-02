@@ -55,6 +55,27 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
     if instance.blockheight:
         blockheight_id = instance.blockheight.id
 
+    if instance.address.wallet:
+        wallet_hash = instance.address.wallet.wallet_hash
+
+        # delete cached bch balance
+        cache = settings.REDISKV
+        bch_cache_key = f'wallet:balance:bch:{wallet_hash}'
+        cache.delete(bch_cache_key)
+
+        # delete cached token balance
+        category = None
+        if instance.cashtoken_ft:
+            category = instance.cashtoken_ft.category
+            ct_cache_key = f'wallet:balance:token:{wallet_hash}:{category}'
+            cache.delete(ct_cache_key)
+
+        # delete cached wallet history
+        asset_key = category or 'bch'
+        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
+        if history_cache_keys:
+            cache.delete(*history_cache_keys)
+
     # Trigger the transaction post-save task
     transaction.on_commit(
         lambda: transaction_post_save_task.delay(address, instance.id, blockheight_id)

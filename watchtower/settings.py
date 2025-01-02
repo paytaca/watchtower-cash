@@ -434,7 +434,8 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "signature",
     "timestamp",
     "public-key",
-    "version"
+    "version",
+    "platform"
 ]
 
 REST_FRAMEWORK = {
@@ -629,7 +630,7 @@ BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@{BCHN_HOST}:8332'
 
 # BCHD_RPC_PASSWORD = decipher(config('BCHD_RPC_PASSWORD'))
 # BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@bchd:18334'
-BCHD_NODE = 'bchd.paytaca.com:8335'
+BCHD_NODE = 'bchd.greyh.at:8335'
 
 WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
 

@@ -35,7 +35,7 @@ def send_order_update(data, order_id):
     send_message(data, room_name)
 
 def send_market_price(data, currency):
-    room_name = f'p2pxchange_market_price_{currency}'
+    room_name = f'p2pxchange_market_price_{currency.upper()}'
     send_message(data, room_name)
 
 def send_general_update(data, wallet_hash):

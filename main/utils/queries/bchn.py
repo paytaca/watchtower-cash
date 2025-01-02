@@ -8,6 +8,26 @@ from django.utils import timezone
 import socket
 import time
 import json
+from functools import wraps
+
+# Connect to Redis
+redis_client = settings.REDISKV
+
+def redis_cache(expiration_seconds=3600):  # Add expiration as a parameter
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args):
+            key = f"{func.__name__}:{args}"
+            cached_value = redis_client.get(key)
+            
+            if cached_value:
+                return json.loads(cached_value)  # Return cached value
+            
+            result = func(*args)  # Call the function if not cached
+            redis_client.set(key, json.dumps(result), ex=expiration_seconds)  # Auto-expire after X seconds
+            return result
+        return wrapper
+    return decorator
 
 
 def retry(max_retries):
@@ -61,7 +81,7 @@ class BCHN(object):
         return self.rpc_connection.getblockstats(block_number_or_hash, stats)
 
     # Cache to prevent multiple requests when parsing transaction in '._parse_transaction()'
-    @lru_cache(maxsize=128)
+    @redis_cache(expiration_seconds=900)
     def _get_raw_transaction(self, txid):
         retries = 0
         while retries < self.max_retries:
@@ -229,8 +249,22 @@ class BCHN(object):
         return data
 
     def get_utxos(self, address):
-        data = '{ "id": 194, "method": "blockchain.address.listunspent",'
+        data = '{ "id": 0, "method": "blockchain.address.listunspent",'
         data += '"params": ["%s", "include_tokens"] }' % (address)
+
+        with socket.create_connection((
+            self.fulcrum['host'],
+            self.fulcrum['port']
+        )) as sock:
+            sock.send(data.encode('utf-8')+b'\n')
+            response_byte = self._recvall(sock)
+            response = response_byte.decode()
+            response = json.loads(response.strip())
+            return response['result']
+        
+    def get_address_transactions(self, address, limit=None, offset=None):
+        data = '{ "id": 0, "method": "blockchain.address.get_history",'
+        data += '"params": ["%s"] }' % (address)
 
         with socket.create_connection((
             self.fulcrum['host'],

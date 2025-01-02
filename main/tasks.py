@@ -7,6 +7,7 @@ from django.db import models
 from watchtower.settings import MAX_RESTB_RETRIES
 from celery import shared_task
 from celery_heimdall import HeimdallTask, RateLimit
+from main.mqtt import publish_message
 from watchtower.celery import app as celery_app
 from main.models import *
 from main.utils.address_validator import *
@@ -1352,11 +1353,6 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[], proceed_with_zero_amount=False):
     wallet_hash = wallet_handle.split('|')[1]
     
-    # delete cached wallet balance
-    cache = settings.REDISKV
-    cache_key = f'wallet:balance:bch:{wallet_hash}'
-    cache.delete(cache_key)
-    
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
     # Do not record wallet history record if all senders and recipients are from the same wallet (i.e. UTXO consolidation txs)
@@ -1814,6 +1810,21 @@ def rescan_utxos(wallet_hash, full=False):
         addresses = wallet.addresses.all()
     else:
         addresses = wallet.addresses.filter(transactions__spent=False)
+
+    # delete cached bch balance
+    cache = settings.REDISKV
+    bch_cache_key = f'wallet:balance:bch:{wallet_hash}'
+    cache.delete(bch_cache_key)
+
+    # delete cached token balance
+    ct_cache_keys = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
+    if ct_cache_keys:
+        cache.delete(*ct_cache_keys)
+
+    # delete cached wallet history
+    history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+    if history_cache_keys:
+        cache.delete(*history_cache_keys)
 
     try:
         for address in addresses:
@@ -2314,10 +2325,6 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             "outpoint_index": index,
                         })
 
-        from main.mqtt import connect_to_mqtt
-        mqtt_client = connect_to_mqtt()
-        mqtt_client.loop_start()
-
         for output in outputs:
             scriptPubKey = output['scriptPubKey']
 
@@ -2402,10 +2409,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                         try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
-                            msg = mqtt_client.publish(f"transactions/{bchaddress}", json.dumps(data), qos=1, retain=True)
-                            LOGGER.info('MQTT message is published: ' + str(msg.is_published()))
-                        except:
-                            LOGGER.error(f"Failed to send mqtt for tx | {tx_hash} | {bchaddress}")
+                            publish_message(f"transactions/{bchaddress}", data, qos=1)
 
                         LOGGER.info(data)
                         
@@ -2414,7 +2418,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                         except:
                             LOGGER.error('Failed to send client acknowledgement for txid:' + str(tx_hash))
 
-        mqtt_client.loop_stop()
+        # mqtt_client.loop_stop()
 
         if save_histories:
             LOGGER.info(f"Parsing wallet history of tx({tx_hash})")
