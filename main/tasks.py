@@ -2410,9 +2410,9 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                         try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
                             publish_message(f"transactions/{bchaddress}", data, qos=1)
+                        except:
+                            LOGGER.error(f"Failed to send mqtt for tx | {tx_hash} | {bchaddress}")
 
-                        LOGGER.info(data)
-                        
                         try:
                             client_acknowledgement(obj_id)
                         except:
