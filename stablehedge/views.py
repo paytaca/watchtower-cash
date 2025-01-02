@@ -93,7 +93,7 @@ class RedemptionContractViewSet(
     viewsets.GenericViewSet,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
+    # mixins.CreateModelMixin,
 ):
     lookup_field = "address"
     serializer_class = serializers.RedemptionContractSerializer
@@ -211,7 +211,7 @@ class TreasuryContractViewSet(
     viewsets.GenericViewSet,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
+    # mixins.CreateModelMixin,
 ):
     lookup_field = "address"
     serializer_class = serializers.TreasuryContractSerializer
