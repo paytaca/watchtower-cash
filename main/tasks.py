@@ -48,6 +48,7 @@ from main.utils.queries.parse_utils import (
     parse_utxo_to_tuple,
     extract_tx_utxos,
 )
+from Crypto.Hash import SHA256  # pycryptodome
 import paho.mqtt.client as mqtt
 from PIL import Image, ImageFile
 from io import BytesIO 
@@ -2395,6 +2396,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             'amount': amount,
                             'value': value
                         }
+                        addr_obj = None
                         if token_id.startswith('ct/'):
                             # Include cashtoken address in data
                             try:
@@ -2409,7 +2411,13 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                         try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
-                            publish_message(f"transactions/{bchaddress}", data, qos=1)
+                            if addr_obj:
+                                hash_obj = SHA256.new(addr_obj.wallet.wallet_hash.encode('utf-8'))
+                                hashed_wallet_hash = hash_obj.hexdigest()
+                                topic = f"transactions/{hashed_wallet_hash}/{bchaddress}"
+                            else:
+                                topic = f"transactions/address/{bchaddress}"
+                            publish_message(topic, data, qos=1)
                         except:
                             LOGGER.error(f"Failed to send mqtt for tx | {tx_hash} | {bchaddress}")
 

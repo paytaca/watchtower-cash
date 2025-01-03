@@ -3,7 +3,7 @@ from hashlib import md5
 
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-
+from Crypto.Hash import SHA256  # pycryptodome
 from main.mqtt import publish_message
 from main.utils.queries.node import Node
 from django.apps import apps
@@ -67,7 +67,16 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
                 'device_id': device_id,
                 **extra_data
             }
-            publish_message(f"transactions/{address}", data, qos=1)
+
+            addr_obj = Address.objects.filter(address=address).first()
+            if addr_obj:
+                hash_obj = SHA256.new(addr_obj.wallet.wallet_hash.encode('utf-8'))
+                hashed_wallet_hash = hash_obj.hexdigest()
+                topic = f"transactions/{hashed_wallet_hash}/{address}"
+            else:
+                topic = f"transactions/address/{address}"
+            
+            publish_message(topic, data, qos=1)
 
             # Send websocket notif
             channel_layer = get_channel_layer()
