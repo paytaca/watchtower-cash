@@ -4,7 +4,7 @@ from bitcoinrpc.authproxy import AuthServiceProxy
 
 from django.conf import settings
 from django.utils import timezone
-
+import math
 import socket
 import time
 import json
@@ -106,7 +106,7 @@ class BCHN(object):
     def build_tx_from_hex(self, tx_hex, tx_fee=None):
         txn = self._decode_raw_transaction(tx_hex)
         if not tx_fee:
-            tx_fee = txn['size'] * settings.TX_FEE_RATE
+            tx_fee = math.ceil(txn['size'] * settings.TX_FEE_RATE)
         for i, tx_input in enumerate(txn['vin']):
             _input_details = self.get_input_details(tx_input['txid'], tx_input['vout'])
 

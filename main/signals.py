@@ -12,6 +12,7 @@ from main.models import (
     Transaction,
     WalletPreferences,
     TransactionMetaAttribute,
+    WalletHistory,
     WalletHistoryQuerySet,
     Address,
 )
@@ -139,3 +140,14 @@ def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwar
                         "data": data
                     }
                 )
+
+
+@receiver(post_save, sender=WalletHistory, dispatch_uid='main.tasks.wallet_history_post_save')
+def wallet_history_post_save(sender, instance=None, created=False, **kwargs):
+    if created:
+        # Delete earlier wallet history records for the same txid, wallet, & record type
+        WalletHistory.objects.filter(
+            txid=instance.txid,
+            wallet=instance.wallet,
+            record_type=instance.record_type,
+        ).exclude(id=instance.id).delete()

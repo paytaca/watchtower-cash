@@ -1,5 +1,6 @@
 import logging, json, requests
 import pytz, time
+import math
 from decimal import Decimal
 from datetime import datetime
 from urllib.parse import urlparse
@@ -1889,7 +1890,7 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
     if 'tx_fee' in bch_tx.keys():
         tx_fee = bch_tx['tx_fee']
     else:
-        tx_fee = bch_tx['size'] * settings.TX_FEE_RATE
+        tx_fee = math.ceil(bch_tx['size'] * settings.TX_FEE_RATE)
 
     tx_timestamp = None
     if 'timestamp' in bch_tx.keys():
