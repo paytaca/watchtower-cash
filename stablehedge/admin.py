@@ -4,6 +4,7 @@ from django.contrib import messages
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge import forms
+from stablehedge.functions.anyhedge import StablehedgeException, AnyhedgeException
 from stablehedge.functions.treasury_contract import (
     get_funding_wif_address,
     sweep_funding_wif,
@@ -222,7 +223,11 @@ class TreasuryContractAdmin(admin.ModelAdmin):
     def short_funds(self, request, queryset):
         if queryset.count() > 1:
             messages.error(request, f"Select only 1")
+            return
 
         obj = queryset.first()
-        result = check_and_short_funds(obj.address, min_sats=0)
-        messages.info(f"{result}")
+        try:
+            result = check_and_short_funds(obj.address, min_sats=0)
+            messages.info(request, f"{result}")
+        except (StablehedgeException, AnyhedgeException) as exception:
+            messages.error(f"Error: {exception}")

@@ -79,6 +79,10 @@ def get_or_create_short_proposal(treasury_contract_address:str):
 def create_short_proposal(treasury_contract_address:str, for_multisig=False):
     LOGGER.info(f"SHORT PROPOSAL | CREATE | {treasury_contract_address}")
     short_proposal_data = short_funds(treasury_contract_address, for_multisig=for_multisig)
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.info(f"SHORT PROPOSAL | CREATE |{treasury_contract_address} | {data_str}")
+
     save_short_proposal_data(
         treasury_contract_address,
         contract_data = short_proposal_data["contract_data"],
@@ -86,9 +90,6 @@ def create_short_proposal(treasury_contract_address:str, for_multisig=False):
         funding_amounts = short_proposal_data["funding_amounts"],
         funding_utxo_tx = short_proposal_data["funding_utxo_tx"],
     )
-
-    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
-    LOGGER.info(f"SHORT PROPOSAL | CREATE |{treasury_contract_address} | {data_str}")
 
     return short_proposal_data
 
@@ -236,7 +237,7 @@ def short_funds(treasury_contract_address:str, for_multisig=False):
     )
 
     if "contract_data" not in create_result:
-        return create_result
+        raise StablehedgeException(create_result.get("error"), code="create_failed")
 
     contract_data = create_result["contract_data"]
     settlement_service = create_result["settlement_service"]
@@ -369,7 +370,7 @@ def create_short_contract(
         return dict(success=False, error="Not enough liquidity")
 
     LOGGER.debug(f"SHORT PROPOSAL | CONTRACT | {GP_LP.json_parser.dumps(contract_data, indent=2)}")
-    return dict(contract_data=contract_data, settlement_service=settlement_service)
+    return dict(success=True, contract_data=contract_data, settlement_service=settlement_service)
 
 def get_treasury_contract_oracle_pubkey(treasury_contract_address:str):
     return models.RedemptionContract.objects. \
