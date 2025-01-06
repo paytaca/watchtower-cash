@@ -8,7 +8,7 @@ from main.mqtt import publish_message
 from main.utils.queries.node import Node
 from django.apps import apps
 
-from main.models import Address
+from main.models import Address, Wallet
 
 
 NODE = Node()
@@ -38,7 +38,13 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
 
             # get device ID from wallet hash of sender_0 address
             try:
-                sender_wallet_hash = Address.objects.get(address=sender_0).wallet.wallet_hash
+
+                sender_address_obj = Address.objects.get(address=sender_0).wallet.wallet_hash
+                if sender_address_obj.wallet and sender_address_obj.wallet.wallet_hash:
+                    sender_wallet_hash = sender_address_obj.wallet.wallet_hash
+                else:
+                    continue
+
                 device_wallet_model = apps.get_model("notifications", "DeviceWallet")
                 device_wallet_check = device_wallet_model.objects.filter(wallet_hash=sender_wallet_hash)
 
@@ -69,7 +75,8 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
             }
 
             addr_obj = Address.objects.filter(address=address).first()
-            if addr_obj:
+
+            if addr_obj and addr_obj.wallet and addr_obj.wallet.wallet_hash:
                 hash_obj = SHA256.new(addr_obj.wallet.wallet_hash.encode('utf-8'))
                 hashed_wallet_hash = hash_obj.hexdigest()
                 topic = f"transactions/{hashed_wallet_hash}/{address}"
