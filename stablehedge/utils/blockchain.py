@@ -2,6 +2,8 @@ import logging
 import requests
 from functools import lru_cache
 
+from stablehedge.apps import LOGGER
+
 from main import models as main_models
 from main.tasks import NODE, process_mempool_transaction_fast
 from main.utils.broadcast import send_post_broadcast_notifications
@@ -27,7 +29,10 @@ def broadcast_transaction(transaction):
     txid = error_or_txid
     txid = NODE.BCH.broadcast_transaction(transaction)
     process_mempool_transaction_fast(txid, transaction, True)
-    send_post_broadcast_notifications(transaction)
+    try:
+        send_post_broadcast_notifications(transaction)
+    except Exception as error:
+        LOGGER.exception(error)
     return True, txid
 
 
