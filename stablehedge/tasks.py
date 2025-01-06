@@ -8,6 +8,7 @@ from stablehedge.js.runner import ScriptFunctions
 from stablehedge.functions.anyhedge import (
     AnyhedgeException,
     StablehedgeException,
+    MINIMUM_BALANCE_FOR_SHORT,
     get_short_contract_proposal,
     create_short_proposal,
     update_short_proposal_access_keys,
@@ -36,8 +37,10 @@ def check_and_short_funds(
 ):
     balance_data = get_spendable_sats(treasury_contract_address)
     spendable = balance_data["spendable"]
-    if not spendable or spendable < min_sats:
-        return dict(success=True, message="Balance not met")
+    
+    actual_min_sats = max(min_sats, MINIMUM_BALANCE_FOR_SHORT)
+    if not spendable or spendable < actual_min_sats:
+        return dict(success=True, message="Balance not met", min_sats=actual_min_sats, spendable=spendable)
 
     LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | ATTEMPT RUN")
     if background_task:

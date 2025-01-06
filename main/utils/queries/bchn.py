@@ -172,7 +172,7 @@ class BCHN(object):
             else:
                 _input_details = self.get_input_details(input_txid, tx_input['vout'])
                 value = _input_details.get('value')
-                input_token_data = _input_details.get('tokenData')
+                input_token_data = _input_details.get('token_data')
                 input_address = _input_details.get('address')
 
             if not include_no_address and not input_address:
