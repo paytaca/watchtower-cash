@@ -56,6 +56,17 @@ from main.tasks import _process_mempool_transaction
 GP_LP = GeneralProtocolsLP()
 REDIS_STORAGE = settings.REDISKV
 
+# most preimum so far was around 1% for hedge, while 2.5% for short 
+# we set 5% for a large margin
+MAX_PREMIUM_PCTG = 0.05
+HEDGE_FUNDING_NETWORK_FEES = 2500 # sats
+SETTLEMENT_SERVICE_FEE = 3000 # sats
+
+DUST_SATS = 546
+MINIMUM_BALANCE_FOR_SHORT = DUST_SATS + (DUST_SATS / MAX_PREMIUM_PCTG) + \
+                            HEDGE_FUNDING_NETWORK_FEES + \
+                            SETTLEMENT_SERVICE_FEE
+
 
 def get_or_create_short_proposal(treasury_contract_address:str):
     existing_data = get_short_contract_proposal(treasury_contract_address)
@@ -213,12 +224,6 @@ def short_funds(treasury_contract_address:str, for_multisig=False):
     balance_data = get_spendable_sats(treasury_contract_address)
     spendable_sats = balance_data["spendable"]
     LOGGER.debug(f"SHORT PROPOSAL | BALANCE | {treasury_contract_address} | {balance_data}")
-
-    HEDGE_FUNDING_NETWORK_FEES = 2500 # sats
-    SETTLEMENT_SERVICE_FEE = 3000 # sats
-    # most preimum so far was around 1% for hedge, while 2.5% for short 
-    # we set 5% for a large margin
-    MAX_PREMIUM_PCTG = 0.05
 
     shortable_sats = (spendable_sats - HEDGE_FUNDING_NETWORK_FEES - SETTLEMENT_SERVICE_FEE) * (1-MAX_PREMIUM_PCTG)
 

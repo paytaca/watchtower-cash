@@ -257,3 +257,16 @@ class TreasuryContractKey(models.Model):
         max_length=200, null=True, blank=True,
         help_text="Add prefix 'bch-wif:', if data is not encrypted"
     )
+
+
+class TreasuryContractShortPositionRule(models.Model):
+    treasury_contract = models.OneToOneField(
+        TreasuryContract, on_delete=models.CASCADE,
+        related_name="short_position_rule",
+    )    
+
+    target_satoshis = models.BigIntegerField(
+        default=10 ** 8,
+        help_text="Short all funds when treasury contract balance reach this value",
+    )
+    # may add more columns for more complex rules

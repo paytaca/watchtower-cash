@@ -7,10 +7,12 @@ from stablehedge import forms
 from stablehedge.functions.treasury_contract import (
     get_funding_wif_address,
     sweep_funding_wif,
+    get_spendable_sats,
 )
 from stablehedge.functions.redemption_contract import get_24hr_volume_data
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.wallet import subscribe_address
+from stablehedge.tasks import check_and_short_funds
 
 from main.tasks import get_bch_utxos
 
@@ -119,6 +121,9 @@ class TreasuryContractKeyInline(admin.StackedInline):
     extra = 0
     form = forms.TreasuryContractKeyForm
 
+class TreasuryContractShortPositionRuleInline(admin.StackedInline):
+    model = models.TreasuryContractShortPositionRule
+    extra = 0
 
 @admin.register(models.TreasuryContract)
 class TreasuryContractAdmin(admin.ModelAdmin):
@@ -126,6 +131,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     inlines = [
         TreasuryContractKeyInline,
+        TreasuryContractShortPositionRuleInline,
     ]
 
     search_fields = [
@@ -143,6 +149,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         "redemption_contract",
         "auth_token_id",
         "is_subscribed",
+        "get_spendable_satoshis",
     ]
 
     actions = [
@@ -151,6 +158,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         "subscribe_funding_wif",
         "update_utxos",
         "sweep_funding_wif",
+        "short_funds",
     ]
 
     def recompile(self, request, queryset):
@@ -170,6 +178,15 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         return super().get_queryset(request) \
             .select_related("redemption_contract") \
             .annotate_is_subscribed()
+
+    def get_spendable_satoshis(self, obj):
+        balance_data = get_spendable_sats(obj.address)
+        spendable_sats = None
+        if isinstance(balance_data, dict):
+            spendable_sats = balance_data.get("spendable")
+        return spendable_sats
+
+    get_spendable_satoshis.short_description = 'Spendable satoshis'
 
     # @admin.display(ordering='is_subscribed') # for django 5.0
     def is_subscribed(self, obj):
@@ -201,3 +218,11 @@ class TreasuryContractAdmin(admin.ModelAdmin):
             except Exception as exception:
                 messages.error(request, f"Sweep | {obj} | {exception}")
                 LOGGER.exception(exception)
+
+    def short_funds(self, request, queryset):
+        if queryset.count() > 1:
+            messages.error(request, f"Select only 1")
+
+        obj = queryset.first()
+        result = check_and_short_funds(obj.address, min_sats=0)
+        messages.info(f"{result}")
