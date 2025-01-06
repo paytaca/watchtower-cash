@@ -12,6 +12,7 @@ from rampp2p.utils.fees import get_trading_fees
 
 from rampp2p.models import MarketRate, AppVersion, FeatureToggle
 from rampp2p.serializers import MarketRateSerializer
+from decimal import Decimal
 
 import logging
 logger = logging.getLogger(__name__)
@@ -43,9 +44,11 @@ def check_app_version(request, platform=None):
     
     return JsonResponse(response_data)
 
-class ContractFees(APIView):
+class ContractFeeCalculation(APIView):
     def get(self, request):
         trade_amount = request.query_params.get('trade_amount', None)
+        if trade_amount:
+            trade_amount = Decimal(trade_amount)
         _, fees = get_trading_fees(trade_amount=trade_amount)
         return Response(fees, status=status.HTTP_200_OK)
 
