@@ -2412,7 +2412,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                         try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
-                            if addr_obj:
+                            if addr_obj and addr_obj.wallet:
                                 hash_obj = SHA256.new(addr_obj.wallet.wallet_hash.encode('utf-8'))
                                 hashed_wallet_hash = hash_obj.hexdigest()
                                 topic = f"transactions/{hashed_wallet_hash}/{bchaddress}"

@@ -69,7 +69,7 @@ def send_post_broadcast_notifications(transaction, extra_data:dict=None):
             }
 
             addr_obj = Address.objects.filter(address=address).first()
-            if addr_obj:
+            if addr_obj and addr_obj.wallet:
                 hash_obj = SHA256.new(addr_obj.wallet.wallet_hash.encode('utf-8'))
                 hashed_wallet_hash = hash_obj.hexdigest()
                 topic = f"transactions/{hashed_wallet_hash}/{address}"
