@@ -46,7 +46,7 @@ def check_app_version(request, platform=None):
 
 class ContractFeeCalculation(APIView):
     def get(self, request):
-        trade_amount = request.query_params.get('trade_amount', None)
+        trade_amount = request.query_params.get('sats_trade_amount', None)
         if trade_amount:
             trade_amount = Decimal(trade_amount)
         _, fees = get_trading_fees(trade_amount=trade_amount)
