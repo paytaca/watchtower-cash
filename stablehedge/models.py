@@ -134,8 +134,8 @@ class RedemptionContractTransaction(models.Model):
 
     wallet_hash = models.CharField(max_length=70, null=True, blank=True)
 
-    transaction_type = models.CharField(max_length=15)
-    status = models.CharField(max_length=10, default=Status.PENDING)
+    transaction_type = models.CharField(max_length=15, db_index=True)
+    status = models.CharField(max_length=10, default=Status.PENDING, db_index=True)
     txid = models.CharField(max_length=64, null=True, blank=True)
     utxo = JSONField()
     result_message = models.TextField(null=True, blank=True)
@@ -143,6 +143,9 @@ class RedemptionContractTransaction(models.Model):
     retry_count = models.IntegerField(default=0)
     resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    trade_size_in_satoshis = models.BigIntegerField(null=True, blank=True)
+    trade_size_in_token_units = models.BigIntegerField(null=True, blank=True)
 
 
 class TreasuryContractQuerySet(PostgresQuerySet):

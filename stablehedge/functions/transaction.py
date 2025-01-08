@@ -2,6 +2,8 @@ import re
 import decimal
 import json
 
+from django.db.models import Q
+
 from stablehedge import models
 from stablehedge.apps import LOGGER
 from stablehedge.utils.blockchain import (
@@ -290,24 +292,56 @@ def check_transaction_for_redemption_contract_tx(txid:str):
         utxo=utxo,
     )
 
+def update_redemption_contract_tx_trade_sizes():
+    queryset = models.RedemptionContractTransaction.objects \
+        .filter(status=models.RedemptionContractTransaction.Status.SUCCESS) \
+        .filter(
+            Q(trade_size_in_satoshis__isnull=True) | Q(trade_size_in_token_units__isnull=True)
+        )
+
+    for obj in queryset:
+        update_redemption_contract_tx_trade_size(obj)
+
+    return queryset.count()
+
+
+def update_redemption_contract_tx_trade_size(
+    redemption_contract_tx:models.RedemptionContractTransaction,
+    save=True,
+):
+    price_value = decimal.Decimal(redemption_contract_tx.price_oracle_message.price_value)
+
+    if redemption_contract_tx.transaction_type == models.RedemptionContractTransaction.Type.REDEEM:
+        token_units = decimal.Decimal(redemption_contract_tx.utxo["amount"])
+        bch = token_units / price_value
+        satoshis = round(bch * decimal.Decimal(10 ** 8))
+    else:
+        satoshis = decimal.Decimal(redemption_contract_tx.utxo["satoshis"] - 2000)
+        bch = satoshis / 10 ** 8
+        token_units = round(bch / price_value)
+
+    redemption_contract_tx.trade_size_in_satoshis = satoshis
+    redemption_contract_tx.trade_size_in_token_units = token_units
+    LOGGER.info(f"{redemption_contract_tx} | satoshis={satoshis} | token_units={token_units}")
+
+    if save:
+        redemption_contract_tx.save()
+
+    return redemption_contract_tx
+
 
 def get_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionContractTransaction):
     if not redemption_contract_tx.txid:
         return dict(success=False, error="No txid")
 
+    update_redemption_contract_tx_trade_size(redemption_contract_tx)
+
     redemption_contract_address = redemption_contract_tx.redemption_contract.address
     txid = redemption_contract_tx.txid
     tx_type = redemption_contract_tx.transaction_type
-    wallet_hash = redemption_contract_tx.wallet_hash
     price_value = redemption_contract_tx.price_oracle_message.price_value
     currency = redemption_contract_tx.redemption_contract.fiat_token.currency
     decimals = redemption_contract_tx.redemption_contract.fiat_token.decimals
-
-    reserves_utxo = main_models.Transaction.objects.get(txid=txid, index=0)
-    spent_reserves_utxo = main_models.Transaction.objects.get(spending_txid=txid, index=0)
-
-    sats_diff = reserves_utxo.value - spent_reserves_utxo.value
-    token_amount_diff = reserves_utxo.amount - spent_reserves_utxo.amount
 
     data = {
         "id": redemption_contract_tx.id,
@@ -315,19 +349,9 @@ def get_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCont
         "transaction_type": tx_type,
         "price": round(price_value / 10 ** decimals, decimals),
         "currency": currency,
+        "satoshis": redemption_contract_tx.trade_size_in_satoshis,
+        "amount": redemption_contract_tx.trade_size_in_token_units,
     }
-
-    Type = models.RedemptionContractTransaction.Type
-    if tx_type == Type.DEPOSIT or tx_type == Type.INJECT:
-        data["satoshis"] = sats_diff
-        if tx_type == Type.DEPOSIT:
-            data["satoshis"] *= 2
-        data["amount"] = token_amount_diff * -1
-    elif tx_type == Type.REDEEM:
-        data["satoshis"] = sats_diff * -1
-        data["amount"] = token_amount_diff
-
-    data["amount"] = round(data["amount"] / 10 ** decimals, decimals)
 
     return dict(success=True, data=data, txid=txid)
 
