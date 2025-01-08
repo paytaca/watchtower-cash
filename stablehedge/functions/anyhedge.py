@@ -228,12 +228,17 @@ def short_funds(treasury_contract_address:str, for_multisig=False):
 
     shortable_sats = (spendable_sats - HEDGE_FUNDING_NETWORK_FEES - SETTLEMENT_SERVICE_FEE) * (1-MAX_PREMIUM_PCTG)
 
+    try:
+        duration_seconds = treasury_contract.short_position_rule.target_duration
+    except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
+        duration_seconds = 86_400 # seconds = 1 day
+
     create_result = create_short_contract(
         treasury_contract_address,
         satoshis=shortable_sats,
         low_liquidation_multiplier = 0.5,
         high_liquidation_multiplier = 5.0,
-        duration_seconds = 86400 # seconds = 1 day
+        duration_seconds = duration_seconds,
     )
 
     if "contract_data" not in create_result:

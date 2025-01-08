@@ -272,4 +272,9 @@ class TreasuryContractShortPositionRule(models.Model):
         default=10 ** 8,
         help_text="Short all funds when treasury contract balance reach this value",
     )
+
+    target_duration = models.BigIntegerField(
+        default=86_400,
+        help_text="Preferred duration, in seconds, when creating short positions. May not be followed due to LP constraints",
+    )
     # may add more columns for more complex rules
