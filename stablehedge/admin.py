@@ -11,6 +11,7 @@ from stablehedge.functions.treasury_contract import (
     get_spendable_sats,
 )
 from stablehedge.functions.redemption_contract import get_24hr_volume_data
+from stablehedge.functions.transaction import update_redemption_contract_tx_trade_size
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.wallet import subscribe_address
 from stablehedge.tasks import check_and_short_funds
@@ -111,11 +112,29 @@ class RedemptionContractTransactionAdmin(admin.ModelAdmin):
         "redemption_contract",
         "transaction_type",
         "status",
+        "trade_size_in_satoshis",
+        "trade_size_in_token_units",
     ]
     list_filter = [
         "transaction_type",
         "status",
     ]
+
+    actions = [
+        "recalculate_trade_size",
+    ]
+
+    def recalculate_trade_size(self, request, queryset):
+        count = 0
+        for obj in queryset:
+
+            updated_obj = update_redemption_contract_tx_trade_size(obj)
+            count += 1
+            if count < 10:
+                messages.info(request, f"{updated_obj} | satoshis={updated_obj.trade_size_in_satoshis} | tokens={updated_obj.trade_size_in_token_units}")
+
+        messages.info(request, f"Updated count: {count}")
+    recalculate_trade_size.short_description = "Recalculate trade size"
 
 class TreasuryContractKeyInline(admin.StackedInline):
     model = models.TreasuryContractKey
