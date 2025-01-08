@@ -88,16 +88,16 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
     except Exception as exception:
         LOGGER.exception(exception)
 
-    if obj.status == models.RedemptionContractTransaction.Status.SUCCESS:
-        try:
-            save_redemption_contract_tx_meta(obj)
-        except Exception as exception:
-            LOGGER.exception(exception)
-
     if obj.status == models.RedemptionContractTransaction.Status.FAILED:
         try:
             result = resolve_failed_redemption_tx(obj)
             LOGGER.info(f"RedemptionContractTransaction#{obj.id} | RECOVERY | {result}")
+        except Exception as exception:
+            LOGGER.exception(exception)
+
+    if obj.status == models.RedemptionContractTransaction.Status.SUCCESS:
+        try:
+            save_redemption_contract_tx_meta(obj)
         except Exception as exception:
             LOGGER.exception(exception)
 

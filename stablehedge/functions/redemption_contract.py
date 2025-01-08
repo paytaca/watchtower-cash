@@ -3,7 +3,8 @@ import math
 import decimal
 from django.utils import timezone
 from django.conf import settings
-from django.db.models import Sum, F
+from django.db.models import Sum, Count, F, Q
+from django.db.models import DecimalField
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
@@ -90,62 +91,58 @@ def get_fiat_token_balances(wallet_hash:str, with_satoshis=False):
 
     return token_balances
 
+def get_24hr_volume_data(redemption_contract_address:str, ttl=60 * 5, force=False):
+    return get_volume_data(
+        redemption_contract_address,
+        filter_args=[Q(created_at__gte=timezone.now() - timezone.timedelta(seconds=86_400))],
+        cache_key="24hr", ttl=ttl, force=force,
+    )
 
-def get_24hr_volume_sats(redemption_contract_address:str, ttl=60 * 5, force=False):
-    volume_24_hr = get_24hr_volume_data(redemption_contract_address, ttl=ttl, force=force)
-    LOGGER.debug(f"RedemptionContractTransaction 24 hr volume | {volume_24_hr}")
+def get_lifetime_volume_data(redemption_contract_address:str, ttl=60*5, force=False):
+    return get_volume_data(
+        redemption_contract_address, filter_args=[],
+        cache_key="lifetime", ttl=ttl, force=force,
+    )
 
-    total = decimal.Decimal(0)
-    if not isinstance(volume_24_hr, dict):
-        return
-
-    for value in volume_24_hr.values():
-        total += value
-    return total
-
-
-def get_24hr_volume_data(redemption_contract_address:str, ttl=60 * 5, force=False) -> dict:
-    REDIS_KEY = f"redemption-contract-24hr-volume-{redemption_contract_address}"
+def get_volume_data(
+    redemption_contract_address:str,
+    filter_args:list=[],
+    cache_key:str="",
+    ttl:int=60*5,
+    force=False,
+):
+    REDIS_KEY = f"redemption-contract-volume:{redemption_contract_address}:{cache_key}"
 
     if not force:
         cached_value = REDIS_STORAGE.get(REDIS_KEY)
         if cached_value:
+            LOGGER.debug(f"Cached volume data | {REDIS_KEY} | {cached_value}")
             try:
                 data = json.loads(cached_value)
-                parsed_data = {key: decimal.Decimal(val) for key, val in data.items()}
-                return parsed_data
-            except (TypeError, AttributeError, decimal.InvalidOperation):
-                pass
+                for index, record in enumerate(data):
+                    data[index]["satoshis"] = decimal.Decimal(record["satoshis"])
+                    data[index]["count"] = int(record["count"])
+                return data
+            except (TypeError, AttributeError, decimal.InvalidOperation) as exception:
+                LOGGER.exception(exception)
 
     data = models.RedemptionContractTransaction.objects \
         .filter(
+            *filter_args,
             redemption_contract__address=redemption_contract_address,
             status=models.RedemptionContractTransaction.Status.SUCCESS,
             txid__isnull=False,
-            created_at__gte=timezone.now() - timezone.timedelta(seconds=86_400),
         ) \
-        .values("id", "utxo", "transaction_type", "price_oracle_message__price_value")
+        .values("transaction_type") \
+        .annotate(
+            satoshis=Sum(
+                "trade_size_in_satoshis",
+                output_field=DecimalField(max_digits=15, decimal_places=0)
+            ),
+            count=Count("id"),
+        ) \
+        .values("transaction_type", "satoshis", "count").distinct()
 
-    volume_map = dict(
-        inject = decimal.Decimal(0),
-        deposit = decimal.Decimal(0),
-        redeem = decimal.Decimal(0),
-    )
-    for record in data:
-        tx_type = record["transaction_type"]
-        price_value = decimal.Decimal(record["price_oracle_message__price_value"])
-        if record["transaction_type"] == models.RedemptionContractTransaction.Type.REDEEM:
-            token_amount = decimal.Decimal(record["utxo"]["amount"])
-            bch = token_amount / price_value
-            satoshis = round(bch * decimal.Decimal(10 ** 8))
-        else:
-            satoshis = decimal.Decimal(record["utxo"]["satoshis"] - 2000)
-        LOGGER.debug(f"RedemptionContractTransaction #{record['id']} | VALUE | {satoshis} satoshis")
-
-        if not isinstance(volume_map.get(tx_type), decimal.Decimal):
-            volume_map[tx_type] = decimal.Decimal(0)
-
-        volume_map[tx_type] += satoshis
-
-    REDIS_STORAGE.set(REDIS_KEY, str(json.dumps(volume_map, default=str)), ex=ttl)
-    return volume_map
+    parsed_data = [*data]
+    REDIS_STORAGE.set(REDIS_KEY, str(json.dumps(parsed_data, default=str)), ex=ttl)
+    return parsed_data

@@ -7,7 +7,10 @@ from drf_yasg.utils import swagger_serializer_method
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.functions.anyhedge import place_short_proposal
-from stablehedge.functions.redemption_contract import get_24hr_volume_data
+from stablehedge.functions.redemption_contract import (
+    get_24hr_volume_data,
+    get_lifetime_volume_data,
+)
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.blockchain import get_locktime
 from stablehedge.utils.transaction import (
@@ -66,17 +69,15 @@ class FiatTokenSerializer(serializers.ModelSerializer):
             "decimals",
         ]
 
-
-class Volume24HourSerializer(serializers.Serializer):
-    inject = serializers.DecimalField(max_digits=18, decimal_places=0)
-    deposit = serializers.DecimalField(max_digits=18, decimal_places=0)
-    redeem = serializers.DecimalField(max_digits=18, decimal_places=0)
+class VolumeDataSerializer(serializers.Serializer):
+    transaction_type = serializers.CharField()
+    satoshis = serializers.IntegerField()
+    count = serializers.IntegerField()
 
 class RedemptionContractSerializer(serializers.ModelSerializer):
     fiat_token = FiatTokenSerializer()
     redeemable = serializers.IntegerField(read_only=True)
     reserve_supply = serializers.IntegerField(read_only=True)
-    volume_24_hr = serializers.SerializerMethodField()
     treasury_contract_address = serializers.CharField(read_only=True)
 
     class Meta:
@@ -89,17 +90,12 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
 
             "redeemable",
             "reserve_supply",
-            "volume_24_hr",
             "treasury_contract_address",
         ]
 
         extra_kwargs = dict(
             address=dict(read_only=True),
         )
-
-    @swagger_serializer_method(serializer_or_field=Volume24HourSerializer)
-    def get_volume_24_hr(self, obj):
-        return get_24hr_volume_data(obj.address)
 
     def validate(self, data):
         compile_data = ScriptFunctions.compileRedemptionContract(dict(
@@ -123,6 +119,34 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
         fiat_token.save()
         validated_data["fiat_token"] = fiat_token
         return super().create(validated_data)
+
+
+class RedemptionContractMarketInfoSerializer(serializers.ModelSerializer):
+    redeemable = serializers.IntegerField(read_only=True)
+    reserve_supply = serializers.IntegerField(read_only=True)
+
+    volume_24_hr = serializers.SerializerMethodField()
+    volume_lifetime = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.RedemptionContract
+        fields = [
+            "address",
+
+            "redeemable",
+            "reserve_supply",
+
+            "volume_24_hr",
+            "volume_lifetime",
+        ]
+
+    @swagger_serializer_method(serializer_or_field=VolumeDataSerializer(many=True))
+    def get_volume_24_hr(self, obj):
+        return get_24hr_volume_data(obj.address)
+
+    @swagger_serializer_method(serializer_or_field=VolumeDataSerializer(many=True))
+    def get_volume_lifetime(self, obj):
+        return get_lifetime_volume_data(obj.address)
 
 
 class SweepRedemptionContractSerializer(serializers.Serializer):
