@@ -318,7 +318,7 @@ def update_redemption_contract_tx_trade_size(
     else:
         satoshis = decimal.Decimal(redemption_contract_tx.utxo["satoshis"] - 2000)
         bch = satoshis / 10 ** 8
-        token_units = round(bch / price_value)
+        token_units = round(bch * price_value)
 
     redemption_contract_tx.trade_size_in_satoshis = satoshis
     redemption_contract_tx.trade_size_in_token_units = token_units
