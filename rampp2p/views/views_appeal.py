@@ -13,7 +13,6 @@ import rampp2p.serializers as serializers
 import rampp2p.utils.websocket as websocket
 
 from rampp2p.validators import *
-from rampp2p.utils.fees import get_trading_fees
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
