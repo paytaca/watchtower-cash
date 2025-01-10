@@ -283,30 +283,8 @@ class AppealViewSet(viewsets.GenericViewSet):
 
         context = { 'wallet_hash': wallet_hash }
         serialized_appeal = serializers.AppealSerializer(appeal, context=context)
-        serialized_order = serializers.OrderSerializer(appeal.order, context=context)
-        
-        statuses = Status.objects.filter(order=appeal.order.id).order_by('-created_at')
-        serialized_statuses = serializers.StatusSerializer(statuses, many=True)
-        
-        contract = models.Contract.objects.filter(order=appeal.order.id).first()
-        serialized_contract = serializers.ContractDetailSerializer(contract)
-        
-        transactions = models.Transaction.objects.filter(contract=contract.id)
-        serialized_transactions = serializers.TransactionSerializer(transactions, many=True)
-        serialized_ad_snapshot =  serializers.AdSnapshotSerializer(appeal.order.ad_snapshot)
-
-        total_fee, fees = get_trading_fees(appeal.order.trade_amount)
         response = {
             'appeal': serialized_appeal if serialized_appeal is None else serialized_appeal.data,
-            'order': serialized_order.data,
-            'ad_snapshot': serialized_ad_snapshot.data,
-            'statuses': serialized_statuses.data,
-            'contract': serialized_contract.data,
-            'transactions': serialized_transactions.data,
-            'fees': {
-                'total': total_fee,
-                'fees': fees
-            }
         }
         return response
         
