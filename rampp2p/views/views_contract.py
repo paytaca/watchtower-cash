@@ -52,9 +52,9 @@ class ContractViewSet(viewsets.GenericViewSet):
     def create(self, request):
         try:
             version = request.headers.get('version')
-            platform = request.headers.get('platform', 'web')
-            in_range, min_required_version = utils.version_in_range(version, platform=platform)
-            if not in_range:
+            min_required_version = '0.21.0'
+            is_compatible = utils.is_min_version_compatible(min_required_version, version)
+            if not is_compatible:
                 return Response({ 'error' : f'Invalid app version {version}. Min required version is {min_required_version}.' }, status=status.HTTP_400_BAD_REQUEST )
 
             order_pk = request.data.get('order_id')

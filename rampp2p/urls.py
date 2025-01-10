@@ -84,9 +84,10 @@ urlpatterns = [
     path('order/feedback/peer/', PeerFeedbackViewSet.as_view({'get': 'list', 'post': 'create'}), name='peer-feedback-list-create'),
 
     # Utils
-    path('utils/contract-fees/', ContractFees.as_view()),
+    path('utils/calculate-fees/', ContractFeeCalculation.as_view()),
     path('utils/market-price/', MarketRates.as_view(), name='market-price'),
     path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
-    path('feature-toggles/', feature_toggles)
+    path('feature-toggles/', check_feature_control),
+    path('feature-control/', check_feature_control)
 ]

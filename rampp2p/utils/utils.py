@@ -93,3 +93,10 @@ def version_in_range(version, platform='web'):
     logger.info(f"Is {version_to_check} within the range {lower_bound} and {upper_bound}? {is_in_range}")
     
     return is_in_range, lower_bound
+
+def is_min_version_compatible(min_required_version, version):
+    version_to_check = Version(version)
+    lower_bound = Version(min_required_version)
+    is_compatible = lower_bound <= version_to_check
+    logger.info(f"Is {version_to_check} compatible with {lower_bound}? {is_compatible}")
+    return is_compatible
