@@ -56,6 +56,17 @@ from main.tasks import _process_mempool_transaction
 GP_LP = GeneralProtocolsLP()
 REDIS_STORAGE = settings.REDISKV
 
+# most preimum so far was around 1% for hedge, while 2.5% for short 
+# we set 5% for a large margin
+MAX_PREMIUM_PCTG = 0.05
+HEDGE_FUNDING_NETWORK_FEES = 2500 # sats
+SETTLEMENT_SERVICE_FEE = 3000 # sats
+
+DUST_SATS = 546
+MINIMUM_BALANCE_FOR_SHORT = DUST_SATS + (DUST_SATS / MAX_PREMIUM_PCTG) + \
+                            HEDGE_FUNDING_NETWORK_FEES + \
+                            SETTLEMENT_SERVICE_FEE
+
 
 def get_or_create_short_proposal(treasury_contract_address:str):
     existing_data = get_short_contract_proposal(treasury_contract_address)
@@ -68,6 +79,10 @@ def get_or_create_short_proposal(treasury_contract_address:str):
 def create_short_proposal(treasury_contract_address:str, for_multisig=False):
     LOGGER.info(f"SHORT PROPOSAL | CREATE | {treasury_contract_address}")
     short_proposal_data = short_funds(treasury_contract_address, for_multisig=for_multisig)
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.info(f"SHORT PROPOSAL | CREATE |{treasury_contract_address} | {data_str}")
+
     save_short_proposal_data(
         treasury_contract_address,
         contract_data = short_proposal_data["contract_data"],
@@ -75,9 +90,6 @@ def create_short_proposal(treasury_contract_address:str, for_multisig=False):
         funding_amounts = short_proposal_data["funding_amounts"],
         funding_utxo_tx = short_proposal_data["funding_utxo_tx"],
     )
-
-    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
-    LOGGER.info(f"SHORT PROPOSAL | CREATE |{treasury_contract_address} | {data_str}")
 
     return short_proposal_data
 
@@ -214,24 +226,23 @@ def short_funds(treasury_contract_address:str, for_multisig=False):
     spendable_sats = balance_data["spendable"]
     LOGGER.debug(f"SHORT PROPOSAL | BALANCE | {treasury_contract_address} | {balance_data}")
 
-    HEDGE_FUNDING_NETWORK_FEES = 2500 # sats
-    SETTLEMENT_SERVICE_FEE = 3000 # sats
-    # most preimum so far was around 1% for hedge, while 2.5% for short 
-    # we set 5% for a large margin
-    MAX_PREMIUM_PCTG = 0.05
-
     shortable_sats = (spendable_sats - HEDGE_FUNDING_NETWORK_FEES - SETTLEMENT_SERVICE_FEE) * (1-MAX_PREMIUM_PCTG)
+
+    try:
+        duration_seconds = treasury_contract.short_position_rule.target_duration
+    except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
+        duration_seconds = 86_400 # seconds = 1 day
 
     create_result = create_short_contract(
         treasury_contract_address,
         satoshis=shortable_sats,
         low_liquidation_multiplier = 0.5,
         high_liquidation_multiplier = 5.0,
-        duration_seconds = 86400 # seconds = 1 day
+        duration_seconds = duration_seconds,
     )
 
     if "contract_data" not in create_result:
-        return create_result
+        raise StablehedgeException(create_result.get("error"), code="create_failed")
 
     contract_data = create_result["contract_data"]
     settlement_service = create_result["settlement_service"]
@@ -364,7 +375,7 @@ def create_short_contract(
         return dict(success=False, error="Not enough liquidity")
 
     LOGGER.debug(f"SHORT PROPOSAL | CONTRACT | {GP_LP.json_parser.dumps(contract_data, indent=2)}")
-    return dict(contract_data=contract_data, settlement_service=settlement_service)
+    return dict(success=True, contract_data=contract_data, settlement_service=settlement_service)
 
 def get_treasury_contract_oracle_pubkey(treasury_contract_address:str):
     return models.RedemptionContract.objects. \

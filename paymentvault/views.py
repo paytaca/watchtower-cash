@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from django_filters import rest_framework as filters
 from drf_yasg.utils import swagger_auto_schema
 
+from paytacapos.pagination import CustomLimitOffsetPagination
 from .models import *
 from .serializers import *
 from .filters import *
@@ -24,6 +25,7 @@ class PaymentVaultViewSet(
     serializer_class = PaymentVaultSerializer
     filter_backends = (filters.DjangoFilterBackend, )
     filterset_class = PaymentVaultFilterSet
+    pagination_class = CustomLimitOffsetPagination
 
     @swagger_auto_schema(request_body=CreatePaymentVaultSerializer, responses={ 201: serializer_class })
     def create(self, request, *args, **kwargs):

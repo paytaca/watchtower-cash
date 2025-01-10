@@ -109,6 +109,22 @@ class RedemptionContractViewSet(
             .select_related("treasury_contract") \
             .all()
 
+    @decorators.action(
+        methods=["get"], detail=False,
+        serializer_class=serializers.RedemptionContractMarketInfoSerializer,
+    )
+    def market_info(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @decorators.action(
+        methods=["get"], detail=True,
+        serializer_class=serializers.RedemptionContractMarketInfoSerializer,
+        url_path="market_info",
+    )
+    def market_info_detail(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+
     @swagger_auto_schema(method="get", responses={200:response_serializers.ArtifactResponse})
     @decorators.action(methods=["get"], detail=False)
     def artifact(self, request, *args, **kwargs):

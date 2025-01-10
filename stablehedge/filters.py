@@ -15,6 +15,7 @@ class FiatTokenFilter(filters.FilterSet):
 
 
 class RedemptionContractFilter(filters.FilterSet):
+    addresses = filters.CharFilter(method="addresses_filter")
     categories = filters.CharFilter(method="categories_filter")
     currencies = filters.CharFilter(method="currencies_filter")
     auth_token_id = filters.CharFilter()
@@ -28,6 +29,9 @@ class RedemptionContractFilter(filters.FilterSet):
     min_reserve_supply = filters.NumberFilter(method="min_reserve_supply_filter")
     max_reserve_supply = filters.NumberFilter(method="max_reserve_supply_filter")
     verified = filters.BooleanFilter()
+
+    def addresses_filter(self, queryset, name, value):
+        return queryset.filter(address__in=str(value).split(","))
 
     def categories_filter(self, queryset, name, value):
         return queryset.filter(fiat_token__category__in=str(value).split(","))
