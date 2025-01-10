@@ -5,10 +5,10 @@ class TreasuryContractBchBalance(serializers.Serializer):
     spendable = serializers.IntegerField()
     utxo_count = serializers.IntegerField()
 
-class TreasuryContractShortPositionValue(serializers.Serializer):
+class TreasuryContractShortPayoutData(serializers.Serializer):
     count = serializers.IntegerField()
-    satoshis = serializers.IntegerField()
-    unit_value = serializers.IntegerField()
+    total_nominal_units_x_sats_per_bch = serializers.IntegerField()
+    total_sats_for_nominal_units_at_high_liquidation = serializers.IntegerField()
 
 class TreasuryContractBalance(TreasuryContractBchBalance):
-    in_short = TreasuryContractShortPositionValue()
+    short_payout_data = TreasuryContractShortPayoutData()

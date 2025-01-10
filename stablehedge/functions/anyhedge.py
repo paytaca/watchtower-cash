@@ -839,31 +839,65 @@ def get_ongoing_short_positions(treasury_contract_address:str):
         settlements__isnull=True,
     )
 
-def get_total_short_value(treasury_contract_address:str):
+def get_aggregate_short_position_payout_data(treasury_contract_address:str):
+    """
+    Used for getting "total short payout sats" of all short positions at the current price.
+    but current price is always changing, this gives minimal data needed to get that value.
+    """
+
+    """
+    Formula for getting short payout sats for a contract:
+    Taken directly from source code: https://gitlab.com/GeneralProtocols/anyhedge/library/-/blob/v2.0.1/lib/anyhedge.ts?ref_type=tags#L1557
+    short_payout_sats = (nominal_units_x_sats_per_bch / current_price) - sats_for_nominal_units_at_high_liquidation
+
+    Let:
+    x = current_price
+    nom_sats = nominal_units_x_sats_per_bch
+    nom_hlp = sats_for_nominal_units_at_high_liquidation
+
+    => short_payout_sats = nom_sats / x - nom_hlp
+
+    Total short payout sats would be:
+    => Summation(short_payout_sats)
+    => Summation(nom_sats / x - nom_hlp)
+    => Summation(nom_sats / x) - Summation(nom_hlp)
+    => [1/x * Summation(nom_sats)] - Summation(nom_hlp)
+
+    Return Summation(nom_sats), Summation(nom_hlp)
+
+    Calculating total short payout can be done in frontend where current price, x, is taken separately
+    """
+
     ongoing_short_positions = get_ongoing_short_positions(treasury_contract_address)
-    if ongoing_short_positions.filter(metadata__total_short_funding_sats__isnull=True).exists():
-        for short_position in ongoing_short_positions:
-            resolve_liquidity_fee(short_position, hard_update=True)
+    short_position_values = ongoing_short_positions.values(
+        "satoshis", "start_price", "high_liquidation_multiplier", "is_simple_hedge",
+    )
+    
+    LOGGER.info(f"{treasury_contract_address} | {short_position_values}")
 
-    short_position_values = ongoing_short_positions \
-        .annotate(short_funding_sats = F("metadata__total_short_funding_sats")) \
-        .values(
-            "start_price",
-            "short_funding_sats",
-        )
-
-    total_sats = decimal.Decimal(0)
-    total_unit_value = decimal.Decimal(0)
+    nom_sats_sum = 0
+    nom_hlp_sum = 0
     for data in short_position_values:
-        funding_sats = decimal.Decimal(data["short_funding_sats"])
-        start_price = decimal.Decimal(data["start_price"])
-        token_units = satoshis_to_token(funding_sats, start_price)
+        satoshis = data["satoshis"]
+        start_price = data["start_price"]
+        high_liquidation_multiplier = data["high_liquidation_multiplier"]
+        is_simple_hedge = data["is_simple_hedge"]
 
-        total_sats += funding_sats
-        total_unit_value += token_units
+        _high_liquidation_price = start_price * high_liquidation_multiplier
+        high_liquidation_price = anyhedge_models.custom_round(_high_liquidation_price)
+
+        nom_sats = satoshis * start_price
+
+        if is_simple_hedge:
+            nom_hlp = 0
+        else:
+            nom_hlp = int(nom_sats / high_liquidation_price)
+
+        nom_sats_sum += nom_sats
+        nom_hlp_sum += nom_hlp
 
     return dict(
-        count=len(short_position_values),
-        satoshis=total_sats,
-        unit_value=total_unit_value,
+        count=short_position_values.count(),
+        total_nominal_units_x_sats_per_bch=nom_sats_sum,
+        total_sats_for_nominal_units_at_high_liquidation=nom_hlp_sum,
     )
