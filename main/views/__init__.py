@@ -25,3 +25,4 @@ from main.views.view_wallet_addresses import *
 from main.views.view_app_version import *
 from main.views.view_vouchers_temp import *
 from main.views.view_wallet_address_app import *
+from main.views.view_app_control import *

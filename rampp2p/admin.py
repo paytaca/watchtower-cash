@@ -4,10 +4,25 @@ from rampp2p.forms import *
 
 # Register your models here.
 
-class FeatureToggleAdmin(admin.ModelAdmin):
-    list_display = ['feature_name', 'is_enabled']
+class FeatureControlAdmin(admin.ModelAdmin):
+    list_display = ['name', 'is_enabled']
+    actions = ['enable', 'disable']
 
-admin.site.register(FeatureToggle, FeatureToggleAdmin)
+    def enable(self, request, queryset):
+        for feature in queryset:
+            feature.is_enabled = True
+            feature.save()
+
+    enable.short_description = "Enable selected features"
+
+    def disable(self, request, queryset):
+        for feature in queryset:
+            feature.is_enabled = False
+            feature.save()
+
+    disable.short_description = "Disable selected features"
+
+admin.site.register(FeatureControl, FeatureControlAdmin)
 
 class TradeFeeAdmin(admin.ModelAdmin):
     form = TradeFeeForm
