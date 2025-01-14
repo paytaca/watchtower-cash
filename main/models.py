@@ -863,3 +863,21 @@ class WalletAddressApp(models.Model):
 
     def __str__(self):
         return f"{self.wallet_address} -> {self.app_url}"
+
+class AppControl(models.Model):
+    class App (models.TextChoices):
+        CASH_IN         = 'CASH_IN'
+        P2P_EXCHANGE    = 'P2P_EXCHANGE'
+        MARKETPLACE     = 'MARKETPLACE'
+        WALLET_CONNECT  = 'WALLET_CONNECT'
+        GIFTS           = 'GIFTS'
+        COLLECTIBLES    = 'COLLECTIBLES'
+        ANYHEDGE        = 'ANYHEDGE'
+        MAP             = 'MAP'
+        MERCHANT_ADMIN  = 'MERCHANT_ADMIN'
+    
+    name = models.CharField(max_length=100, unique=True, choices=App.choices)
+    is_enabled = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name

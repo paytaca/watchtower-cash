@@ -27,7 +27,7 @@ class AuthToken(models.Model):
         key = get_random_string(40)
         cipher_suite = Fernet(settings.FERNET_KEY)
         self.key = cipher_suite.encrypt(key.encode()).decode()
-        self.key_expires_at = timezone.now() + timezone.timedelta(hours=1) # Token expires in 1 hr
+        self.key_expires_at = timezone.now() + timezone.timedelta(days=3) # Token expires in 3 days
         self.save()
     
     def update_nonce(self):

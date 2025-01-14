@@ -43,8 +43,11 @@ class Order(models.Model):
         return self.ad_snapshot.fiat_currency
     
     def is_appealable(self):
-        time_now = timezone.make_aware(datetime.now())
-        return time_now >= self.appealable_at, self.appealable_at
+        appealable = False
+        if self.appealable_at:
+            time_now = timezone.make_aware(datetime.now())
+            appealable = time_now >= self.appealable_at
+        return appealable, self.appealable_at
     
     def get_members(self):
         OrderMember = apps.get_model('rampp2p', 'OrderMember')

@@ -651,7 +651,7 @@ class AdSummaryMessage(MessageBase):
 
     @classmethod
     def get_message_header_block(cls, ad:models.Ad):
-        header_text = f'Ad #{ad.id} Summary'
+        header_text = f'{ad.trade_type.capitalize()} Ad #{ad.id} Summary'
         plain_text = block_kit.PlainText(header_text)
         header = block_kit.Header(plain_text)
         return header

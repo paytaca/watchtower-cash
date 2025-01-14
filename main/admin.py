@@ -413,3 +413,23 @@ class AppVersionAdmin(admin.ModelAdmin):
     fields = ('platform', 'latest_version', 'min_required_version', 'release_date', 'notes')
 
 admin.site.register(AppVersion, AppVersionAdmin)
+
+class AppControlAdmin(admin.ModelAdmin):
+    list_display = ['name', 'is_enabled']
+    actions = ['enable', 'disable']
+
+    def enable(self, request, queryset):
+        for app in queryset:
+            app.is_enabled = True
+            app.save()
+
+    enable.short_description = "Enable selected apps"
+
+    def disable(self, request, queryset):
+        for app in queryset:
+            app.is_enabled = False
+            app.save()
+
+    disable.short_description = "Disable selected apps"
+
+admin.site.register(AppControl, AppControlAdmin)
