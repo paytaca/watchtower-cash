@@ -35,6 +35,7 @@ from main.utils.address_validator import is_bch_address
 from main.utils.wallet import HistoryParser
 from main.utils.push_notification import (
     send_wallet_history_push_notification,
+    send_wallet_history_push_notification_nft
 )
 from django.db.utils import IntegrityError
 from django.conf import settings
@@ -1609,6 +1610,8 @@ def send_wallet_history_push_notification_task(wallet_history_id):
         if abs(history.amount) > 0.00001:
             LOGGER.info(f"PUSH_NOTIF CURRENCY: wallet_history:{history.txid} | {history.amount} | {history.fiat_value} | {history.usd_value} | {history.market_prices}")
             return send_wallet_history_push_notification(history)
+        else:
+            return send_wallet_history_push_notification_nft(history)
     except Exception as exception:
         LOGGER.exception(exception)
 

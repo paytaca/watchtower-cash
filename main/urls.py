@@ -84,7 +84,10 @@ main_urls += [
     path('version/check/<str:platform>/', views.check_app_version),
     path('nonce/', views.NonceAPIView.as_view()),
     path('wallet-address-app/', views.WalletAddressAppView.as_view()),
-    path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view())
+    path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view()),
+
+    # App control
+    path('app-control/', views.check_app_control)
 ]
 
 test_urls = [
