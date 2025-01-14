@@ -26,6 +26,7 @@ from .models import Location, Category, Merchant, PosDevice
 from main.models import Address
 
 from authentication.token import WalletAuthentication
+from django.core.exceptions import ValidationError
 
 import logging
 
@@ -437,3 +438,55 @@ class BranchViewSet(viewsets.ModelViewSet):
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove branches linked to a device")
         return super().destroy(request, *args, **kwargs)
+
+class MerchantTransactionsView(APIView):
+    def get(self, request, merchant_pk):
+        # Fetch merchant from merchant_pk
+        # Fetch pos ids associated to merchant
+        # Use merchant.wallet_hash and pos_ids to fetch merchant related transactions
+        # Allow filter by specific pos_id
+        pass
+
+class CashOutViewSet(viewsets.ModelViewSet):
+    queryset = CashOutOrder.objects.all()
+    serializer_class = CashOutOrderSerializer
+
+class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
+    queryset = MerchantPaymentMethod.objects.all()
+    serializer_class = MerchantPaymentMethodSerializer
+
+    def create(self, request, *args, **kwargs):        
+        try:
+            wallet_hash = request.headers.get('wallet_hash', None)
+            payment_type_id = request.data.get('payment_type_id', None)
+            payment_fields = request.data.get('payment_fields')
+            
+            if payment_fields is None or len(payment_fields) == 0:
+                raise ValidationError('Empty payment method fields')
+            
+            merchant = Merchant.objects.get(wallet_hash=wallet_hash)
+            payment_type = PaymentType.objects.get(id=payment_type_id)
+
+            data = {
+                'owner': merchant,
+                'payment_type': payment_type
+            }
+
+            with transaction.atomic():
+                # create payment method
+                payment_method = MerchantPaymentMethod.objects.create(**data)
+                # create payment method fields
+                for field in payment_fields:
+                    field_ref = PaymentTypeField.objects.get(id=field['field_reference'])
+                    data = {
+                        'payment_method': payment_method,
+                        'field_reference': field_ref,
+                        'value': field['value']
+                    }
+                    MerchantPaymentMethodField.objects.create(**data)
+                
+            serializer = self.serializer_class(payment_method)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+

@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.contrib.postgres.fields import ArrayField
 from psqlextra.query import PostgresQuerySet
 from main.models import WalletHistory
+from rampp2p.models import PaymentType, PaymentTypeField
 
 from PIL import Image
 import os
@@ -286,3 +287,35 @@ class Branch(models.Model):
                 raise Exception("Unable to save as main branch due to existing main branch")
 
         return super().save(*args, **kwargs)
+    
+class MerchantPaymentMethod(models.Model):
+    payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE)
+    owner = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    def __str__(self):
+	    return str(self.id)
+
+class MerchantPaymentMethodField(models.Model):
+    payment_method = models.ForeignKey(MerchantPaymentMethod, on_delete=models.CASCADE)
+    field_reference = models.ForeignKey(PaymentTypeField, on_delete=models.CASCADE)
+    value = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    modified_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+	    return str(self.id)
+
+class CashOutOrder(models.Model):
+    class StatusType(models.TextChoices):
+        PENDING     = 'PENDING'
+        PROCESSING  = 'PROCESSING'
+        COMPLETED   = 'COMPLETED'
+
+    transactions = models.ManyToManyField(WalletHistory)
+    payment_method = models.ForeignKey(MerchantPaymentMethod, on_delete=models.SET_NULL, null=True)
+    status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    def __str__(self):
+            return str(self.id)

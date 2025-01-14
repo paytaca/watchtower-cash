@@ -841,3 +841,19 @@ class MerchantVaultAddressSerializer(serializers.Serializer):
 
 class LatestPosIdSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
+
+
+class CashOutOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashOutOrder
+        fields = ('id', 'transactions', 'payment_method', 'status', 'created_at')
+
+class MerchantPaymentMethodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MerchantPaymentMethod
+        fields = ('id', 'payment_type', 'owner', 'created_at')
+
+class MerchantPaymentMethodFieldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MerchantPaymentMethodField
+        fields = ('id', 'payment_method', 'field_reference', 'value', 'created_at', 'modified_at')

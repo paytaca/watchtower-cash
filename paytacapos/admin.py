@@ -161,3 +161,45 @@ class LocationAdmin(admin.ModelAdmin):
         "merchant",
         "branch",
     ]
+
+@admin.register(MerchantPaymentMethod)
+class MerchantPaymentMethodAdmin(admin.ModelAdmin):
+    list_display = ['payment_type', 'owner']
+
+@admin.register(MerchantPaymentMethodField)
+class MerchantPaymentMethodFieldAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'payment_method_name',
+        'field_reference_name',
+        'value',
+        'created_at',
+        'modified_at'
+    ]
+    search_fields = [
+        'value'
+    ]
+    
+    def payment_method_name(self, obj):        
+        name = obj.payment_method.payment_type.full_name
+        if not name:
+            name = obj.payment_method.payment_type.short_name
+        return name
+        
+    def field_reference_name(self, obj):
+        return obj.field_reference.fieldname
+
+@admin.register(CashOutOrder)
+class CashOutOrderAdmin(admin.ModelAdmin):
+    list_display = ['id', 'merchant', 'payment_type', 'status', 'created_at']
+    search_fields = ['id', 'merchant', 'payment_type', 'status']
+
+    def merchant(self, obj):
+        name = obj.payment_method.owner.name
+        return name
+
+    def payment_type(self, obj):
+        payment_type_name = obj.payment_method.payment_type.short_name
+        if not payment_type_name:
+            payment_type_name = obj.payment_method.payment_type.full_name
+        return payment_type_name
