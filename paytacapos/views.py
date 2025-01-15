@@ -17,7 +17,7 @@ from rest_framework import viewsets, mixins, decorators, exceptions, permissions
 from rest_framework import status
 from .serializers import *
 from .filters import *
-from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader
+from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader, HasPaymentObjectPermission
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
@@ -454,10 +454,12 @@ class CashOutViewSet(viewsets.ModelViewSet):
 class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = MerchantPaymentMethod.objects.all()
     serializer_class = MerchantPaymentMethodSerializer
+    authentication_classes = [ WalletAuthentication ]
+    permission_classes = [ HasPaymentObjectPermission ]
 
     def create(self, request, *args, **kwargs):        
         try:
-            wallet_hash = request.headers.get('wallet_hash', None)
+            wallet_hash = request.user.wallet_hash
             payment_type_id = request.data.get('payment_type_id', None)
             payment_fields = request.data.get('payment_fields')
             
@@ -490,3 +492,37 @@ class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
         except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
+    def partial_update(self, request, pk):
+        try:
+            payment_method = self.get_queryset().get(pk=pk)
+        
+            data = request.data.copy()
+            payment_fields = data.get('payment_fields')
+            if payment_fields is None or len(payment_fields) == 0:
+                raise ValidationError('Empty payment method fields')
+
+            with transaction.atomic():
+                for field in payment_fields:
+                    field_serializer = None
+                    field_id = field.get('id')
+                    if field_id:
+                        payment_method_field = MerchantPaymentMethodField.objects.get(id=field_id)
+                        field_serializer = MerchantPaymentMethodFieldSerializer(payment_method_field, data={ 'value': field.get('value') })
+                    elif field.get('value') and field.get('field_reference'):
+                        field_ref = models.PaymentTypeField.objects.get(id=field.get('field_reference'))
+                        data = {
+                            'payment_method': payment_method,
+                            'field_reference': field_ref,
+                            'value': field.get('value')
+                        }
+                        field_serializer = MerchantPaymentMethodFieldSerializer(data=data)
+                    
+                    if field_serializer and field_serializer.is_valid():
+                        field_serializer.save()
+                    else:
+                        raise Exception(field_serializer.errors)
+
+            serializer = MerchantPaymentMethodSerializer(payment_method)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
