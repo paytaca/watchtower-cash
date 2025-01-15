@@ -479,6 +479,7 @@ class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
                 payment_method = PaymentMethod.objects.create(**data)
                 # create payment method fields
                 for field in payment_fields:
+                    # TODO: restrict field_reference allowed to payment_type
                     field_ref = PaymentTypeField.objects.get(id=field['field_reference'])
                     data = {
                         'payment_method': payment_method,

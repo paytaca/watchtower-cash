@@ -184,35 +184,6 @@ class PaymentMethodAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'merchant', 'payment_type'
     ]
 
-# @admin.register(PaymentMethodField)
-# class PaymentMethodFieldAdmin(DynamicRawIDMixin, admin.ModelAdmin):
-#     list_display = [
-#         'merchant',
-#         'payment_type',
-#         'field_reference_name',
-#         'value',
-#         'created_at',
-#         'modified_at'
-#     ]
-#     search_fields = [
-#         'value', 
-#         'payment_method__merchant__name', 
-#         'payment_method__payment_type__full_name', 
-#         'payment_method__payment_type__short_name',
-#         'field_reference__fieldname']
-
-#     def merchant(self, obj):
-#         return obj.payment_method.merchant.name
-    
-#     def payment_type(self, obj):        
-#         name = obj.payment_method.payment_type.full_name
-#         if not name:
-#             name = obj.payment_method.payment_type.short_name
-#         return name
-        
-#     def field_reference_name(self, obj):
-#         return obj.field_reference.fieldname
-
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = ['id', 'merchant', 'status', 'created_at']
