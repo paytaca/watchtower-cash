@@ -1,9 +1,22 @@
 import logging
 from rest_framework import permissions, exceptions
 
-from paytacapos.models import Merchant
+from paytacapos.models import Merchant, MerchantPaymentMethod
 
 LOGGER = logging.getLogger("django")
+
+class HasPaymentObjectPermission(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS: return True
+
+        wallet = request.user
+        if not wallet or not wallet.is_authenticated:
+            return False
+
+        if not isinstance(obj, MerchantPaymentMethod):
+            return False
+        
+        return obj.owner.wallet_hash == wallet.wallet_hash
 
 class HasMerchantObjectPermission(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -21,7 +34,6 @@ class HasMerchantObjectPermission(permissions.BasePermission):
             return obj.wallet_hash == wallet.wallet_hash
 
         return obj.merchant.wallet_hash == wallet.wallet_hash
-
 
 class HasMinPaytacaVersionHeader(permissions.BasePermission):
     """
