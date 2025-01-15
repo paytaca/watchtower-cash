@@ -390,6 +390,7 @@ class CashNonFungibleToken(models.Model):
     )
     current_txid = models.CharField(max_length=70, db_index=True)
     current_index = models.PositiveIntegerField(db_index=True)
+    fixed_supply = models.BooleanField(null=True, blank=True, help_text="Null means unknown")
 
     class Meta:
         verbose_name_plural = 'CashToken NFTs'
