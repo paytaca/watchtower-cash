@@ -164,23 +164,33 @@ class LocationAdmin(admin.ModelAdmin):
 
 @admin.register(MerchantPaymentMethod)
 class MerchantPaymentMethodAdmin(admin.ModelAdmin):
-    list_display = ['payment_type', 'owner']
+    list_display = ['id', 'merchant', 'payment_type']
+    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'owner__name']
+    
+    def merchant(self, obj):
+        return obj.owner.name
 
 @admin.register(MerchantPaymentMethodField)
 class MerchantPaymentMethodFieldAdmin(admin.ModelAdmin):
     list_display = [
-        'id',
-        'payment_method_name',
+        'merchant',
+        'payment_type',
         'field_reference_name',
         'value',
         'created_at',
         'modified_at'
     ]
     search_fields = [
-        'value'
-    ]
+        'value', 
+        'payment_method__owner__name', 
+        'payment_method__payment_type__full_name', 
+        'payment_method__payment_type__short_name',
+        'field_reference__fieldname']
+
+    def merchant(self, obj):
+        return obj.payment_method.owner.name
     
-    def payment_method_name(self, obj):        
+    def payment_type(self, obj):        
         name = obj.payment_method.payment_type.full_name
         if not name:
             name = obj.payment_method.payment_type.short_name
@@ -192,7 +202,12 @@ class MerchantPaymentMethodFieldAdmin(admin.ModelAdmin):
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(admin.ModelAdmin):
     list_display = ['id', 'merchant', 'payment_type', 'status', 'created_at']
-    search_fields = ['id', 'merchant', 'payment_type', 'status']
+    search_fields = [
+        'id',
+        'payment_method__owner__name',
+        'payment_method__payment_type__full_name', 
+        'payment_method__payment_type__short_name',
+        'status']
 
     def merchant(self, obj):
         name = obj.payment_method.owner.name
