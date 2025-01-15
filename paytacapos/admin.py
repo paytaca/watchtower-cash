@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import *
-
+from dynamic_raw_id.admin import DynamicRawIDMixin
 from main.models import (
     Wallet,
     WalletHistory
@@ -162,56 +162,70 @@ class LocationAdmin(admin.ModelAdmin):
         "branch",
     ]
 
-@admin.register(MerchantPaymentMethod)
-class MerchantPaymentMethodAdmin(admin.ModelAdmin):
-    list_display = ['id', 'merchant', 'payment_type']
-    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'owner__name']
-    
-    def merchant(self, obj):
-        return obj.owner.name
+class PaymentMethodFieldInline(DynamicRawIDMixin, admin.TabularInline):
+    model = PaymentMethodField
+    extra = 1
+    dynamic_raw_id_fields = ('field_reference')
+    readonly_fields = ('field_name',)
+    fields = ('field_reference', 'field_name', 'value')
+    can_delete = True
 
-@admin.register(MerchantPaymentMethodField)
-class MerchantPaymentMethodFieldAdmin(admin.ModelAdmin):
-    list_display = [
-        'merchant',
-        'payment_type',
-        'field_reference_name',
-        'value',
-        'created_at',
-        'modified_at'
-    ]
-    search_fields = [
-        'value', 
-        'payment_method__owner__name', 
-        'payment_method__payment_type__full_name', 
-        'payment_method__payment_type__short_name',
-        'field_reference__fieldname']
-
-    def merchant(self, obj):
-        return obj.payment_method.owner.name
-    
-    def payment_type(self, obj):        
-        name = obj.payment_method.payment_type.full_name
-        if not name:
-            name = obj.payment_method.payment_type.short_name
-        return name
-        
-    def field_reference_name(self, obj):
+    def field_name(self, obj):
         return obj.field_reference.fieldname
+    field_name.short_description = 'Field Reference Name'
+
+@admin.register(PaymentMethod)
+class PaymentMethodAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    list_display = ['id', 'merchant', 'payment_type']
+    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'merchant__name']
+    inlines = [PaymentMethodFieldInline]
+        
+    dynamic_raw_id_fields = [
+        'merchant', 'payment_type'
+    ]
+
+# @admin.register(PaymentMethodField)
+# class PaymentMethodFieldAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+#     list_display = [
+#         'merchant',
+#         'payment_type',
+#         'field_reference_name',
+#         'value',
+#         'created_at',
+#         'modified_at'
+#     ]
+#     search_fields = [
+#         'value', 
+#         'payment_method__merchant__name', 
+#         'payment_method__payment_type__full_name', 
+#         'payment_method__payment_type__short_name',
+#         'field_reference__fieldname']
+
+#     def merchant(self, obj):
+#         return obj.payment_method.merchant.name
+    
+#     def payment_type(self, obj):        
+#         name = obj.payment_method.payment_type.full_name
+#         if not name:
+#             name = obj.payment_method.payment_type.short_name
+#         return name
+        
+#     def field_reference_name(self, obj):
+#         return obj.field_reference.fieldname
 
 @admin.register(CashOutOrder)
-class CashOutOrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'merchant', 'payment_type', 'status', 'created_at']
+class CashOutOrderAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    list_display = ['id', 'merchant', 'status', 'created_at']
     search_fields = [
         'id',
-        'payment_method__owner__name',
+        'merchant__name',
         'payment_method__payment_type__full_name', 
         'payment_method__payment_type__short_name',
         'status']
-
-    def merchant(self, obj):
-        name = obj.payment_method.owner.name
-        return name
+    
+    dynamic_raw_id_fields = [
+        'merchant', 'transactions'
+    ]
 
     def payment_type(self, obj):
         payment_type_name = obj.payment_method.payment_type.short_name
