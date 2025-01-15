@@ -1,7 +1,7 @@
 import logging
 from rest_framework import permissions, exceptions
 
-from paytacapos.models import Merchant, MerchantPaymentMethod
+from paytacapos.models import Merchant, PaymentMethod
 
 LOGGER = logging.getLogger("django")
 
@@ -13,7 +13,7 @@ class HasPaymentObjectPermission(permissions.BasePermission):
         if not wallet or not wallet.is_authenticated:
             return False
 
-        if not isinstance(obj, MerchantPaymentMethod):
+        if not isinstance(obj, PaymentMethod):
             return False
         
         return obj.owner.wallet_hash == wallet.wallet_hash

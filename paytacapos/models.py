@@ -288,16 +288,16 @@ class Branch(models.Model):
 
         return super().save(*args, **kwargs)
     
-class MerchantPaymentMethod(models.Model):
-    payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE)
-    owner = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+class PaymentMethod(models.Model):
+    payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name="merchant_payment_methods")
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
 	    return str(self.id)
 
-class MerchantPaymentMethodField(models.Model):
-    payment_method = models.ForeignKey(MerchantPaymentMethod, on_delete=models.CASCADE)
+class PaymentMethodField(models.Model):
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE)
     field_reference = models.ForeignKey(PaymentTypeField, on_delete=models.CASCADE)
     value = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
@@ -313,7 +313,7 @@ class CashOutOrder(models.Model):
         COMPLETED   = 'COMPLETED'
 
     transactions = models.ManyToManyField(WalletHistory)
-    payment_method = models.ForeignKey(MerchantPaymentMethod, on_delete=models.SET_NULL, null=True)
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 

@@ -452,7 +452,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
     serializer_class = CashOutOrderSerializer
 
 class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
-    queryset = MerchantPaymentMethod.objects.all()
+    queryset = PaymentMethod.objects.all()
     serializer_class = MerchantPaymentMethodSerializer
     authentication_classes = [ WalletAuthentication ]
     permission_classes = [ HasPaymentObjectPermission ]
@@ -476,7 +476,7 @@ class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
 
             with transaction.atomic():
                 # create payment method
-                payment_method = MerchantPaymentMethod.objects.create(**data)
+                payment_method = PaymentMethod.objects.create(**data)
                 # create payment method fields
                 for field in payment_fields:
                     field_ref = PaymentTypeField.objects.get(id=field['field_reference'])
@@ -485,7 +485,7 @@ class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
                         'field_reference': field_ref,
                         'value': field['value']
                     }
-                    MerchantPaymentMethodField.objects.create(**data)
+                    PaymentMethodField.objects.create(**data)
                 
             serializer = self.serializer_class(payment_method)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -506,7 +506,7 @@ class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
                     field_serializer = None
                     field_id = field.get('id')
                     if field_id:
-                        payment_method_field = MerchantPaymentMethodField.objects.get(id=field_id)
+                        payment_method_field = PaymentMethodField.objects.get(id=field_id)
                         field_serializer = MerchantPaymentMethodFieldSerializer(payment_method_field, data={ 'value': field.get('value') })
                     elif field.get('value') and field.get('field_reference'):
                         field_ref = models.PaymentTypeField.objects.get(id=field.get('field_reference'))

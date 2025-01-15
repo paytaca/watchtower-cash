@@ -852,7 +852,7 @@ class MerchantPaymentMethodFieldSerializer(serializers.ModelSerializer):
     field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)
     payment_method = serializers.PrimaryKeyRelatedField(queryset=PaymentType.objects.all(), required=False)
     class Meta:
-        model = MerchantPaymentMethodField
+        model = PaymentMethodField
         fields = ('id', 'payment_method', 'field_reference', 'value', 'created_at', 'modified_at')
 
 class MerchantPaymentMethodSerializer(serializers.ModelSerializer):
@@ -861,11 +861,11 @@ class MerchantPaymentMethodSerializer(serializers.ModelSerializer):
     payment_fields = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
-        model = MerchantPaymentMethod
+        model = PaymentMethod
         fields = ('id', 'payment_type', 'owner', 'payment_fields', 'created_at')
 
     def get_payment_fields(self, obj):
-        fields = MerchantPaymentMethodField.objects.filter(payment_method__id=obj.id)
+        fields = PaymentMethodField.objects.filter(payment_method__id=obj.id)
         serialized_fields = MerchantPaymentMethodFieldSerializer(fields, many=True)
         return serialized_fields.data
 
