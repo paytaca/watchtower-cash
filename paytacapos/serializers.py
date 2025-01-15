@@ -848,14 +848,14 @@ class CashOutOrderSerializer(serializers.ModelSerializer):
         model = CashOutOrder
         fields = ('id', 'transactions', 'payment_method', 'status', 'created_at')
 
-class MerchantPaymentMethodFieldSerializer(serializers.ModelSerializer):
+class PaymentMethodFieldSerializer(serializers.ModelSerializer):
     field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)
     payment_method = serializers.PrimaryKeyRelatedField(queryset=PaymentType.objects.all(), required=False)
     class Meta:
         model = PaymentMethodField
         fields = ('id', 'payment_method', 'field_reference', 'value', 'created_at', 'modified_at')
 
-class MerchantPaymentMethodSerializer(serializers.ModelSerializer):
+class PaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = PaymentTypeSerializer(read_only=True)
     owner = MerchantSerializer(read_only=True)
     payment_fields = serializers.SerializerMethodField(read_only=True)
@@ -866,7 +866,7 @@ class MerchantPaymentMethodSerializer(serializers.ModelSerializer):
 
     def get_payment_fields(self, obj):
         fields = PaymentMethodField.objects.filter(payment_method__id=obj.id)
-        serialized_fields = MerchantPaymentMethodFieldSerializer(fields, many=True)
+        serialized_fields = PaymentMethodFieldSerializer(fields, many=True)
         return serialized_fields.data
 
     def create(self, validated_data):

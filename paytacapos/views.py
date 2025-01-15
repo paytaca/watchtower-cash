@@ -451,9 +451,9 @@ class CashOutViewSet(viewsets.ModelViewSet):
     queryset = CashOutOrder.objects.all()
     serializer_class = CashOutOrderSerializer
 
-class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
+class PaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = PaymentMethod.objects.all()
-    serializer_class = MerchantPaymentMethodSerializer
+    serializer_class = PaymentMethodSerializer
     authentication_classes = [ WalletAuthentication ]
     permission_classes = [ HasPaymentObjectPermission ]
 
@@ -508,7 +508,7 @@ class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
                     field_id = field.get('id')
                     if field_id:
                         payment_method_field = PaymentMethodField.objects.get(id=field_id)
-                        field_serializer = MerchantPaymentMethodFieldSerializer(payment_method_field, data={ 'value': field.get('value') })
+                        field_serializer = PaymentMethodFieldSerializer(payment_method_field, data={ 'value': field.get('value') })
                     elif field.get('value') and field.get('field_reference'):
                         field_ref = models.PaymentTypeField.objects.get(id=field.get('field_reference'))
                         data = {
@@ -516,14 +516,14 @@ class MerchantPaymentMethodViewSet(viewsets.ModelViewSet):
                             'field_reference': field_ref,
                             'value': field.get('value')
                         }
-                        field_serializer = MerchantPaymentMethodFieldSerializer(data=data)
+                        field_serializer = PaymentMethodFieldSerializer(data=data)
                     
                     if field_serializer and field_serializer.is_valid():
                         field_serializer.save()
                     else:
                         raise Exception(field_serializer.errors)
 
-            serializer = MerchantPaymentMethodSerializer(payment_method)
+            serializer = PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
