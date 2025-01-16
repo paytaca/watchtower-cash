@@ -1673,6 +1673,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     if abs(amount) > 0.00001:
                         LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
                         send_wallet_history_push_notification(history)
+                    else:
+                        return send_wallet_history_push_notification_nft(history)
                 except Exception as exception:
                     LOGGER.exception(exception)
             except IntegrityError as exc:
