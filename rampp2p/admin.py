@@ -1,9 +1,12 @@
 from django.contrib import admin
 from rampp2p.models import *
 from rampp2p.forms import *
+from rampp2p.slackbot.send import MessageBase
+from dynamic_raw_id.admin import DynamicRawIDMixin
 
 # Register your models here.
 
+@admin.register(FeatureControl)
 class FeatureControlAdmin(admin.ModelAdmin):
     list_display = ['name', 'is_enabled']
     actions = ['enable', 'disable']
@@ -22,8 +25,7 @@ class FeatureControlAdmin(admin.ModelAdmin):
 
     disable.short_description = "Disable selected features"
 
-admin.site.register(FeatureControl, FeatureControlAdmin)
-
+@admin.register(TradeFee)
 class TradeFeeAdmin(admin.ModelAdmin):
     form = TradeFeeForm
     list_display = ['category', 'type', 'fixed_value', 'floating_value', 'updated_at']
@@ -35,9 +37,8 @@ class TradeFeeAdmin(admin.ModelAdmin):
     
     def has_delete_permission(self, request, obj = None):
         return False
-    
-admin.site.register(TradeFee, TradeFeeAdmin)
 
+@admin.register(Ad)
 class AdAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -81,8 +82,7 @@ class AdAdmin(admin.ModelAdmin):
     
     mark_private.short_description = "Mark selected ads as private"
 
-admin.site.register(Ad, AdAdmin)
-
+@admin.register(FiatCurrency)
 class FiatCurrencyAdmin(admin.ModelAdmin):
     form = FiatCurrencyForm
 
@@ -101,8 +101,7 @@ class FiatCurrencyAdmin(admin.ModelAdmin):
     list_display = ['name', 'symbol', 'cashin_presets_display']
     search_fields = ['name', 'symbol']
 
-admin.site.register(FiatCurrency, FiatCurrencyAdmin)
-
+@admin.register(CryptoCurrency)
 class CryptoCurrencyAdmin(admin.ModelAdmin):
     form = CryptoCurrencyForm
 
@@ -121,8 +120,7 @@ class CryptoCurrencyAdmin(admin.ModelAdmin):
     list_display = ['name', 'symbol', 'cashin_presets_display']
     search_fields = ['name', 'symbol']
 
-admin.site.register(CryptoCurrency, CryptoCurrencyAdmin)
-
+@admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -140,8 +138,7 @@ class OrderAdmin(admin.ModelAdmin):
             return obj.ad_snapshot.trade_type
         return None
 
-admin.site.register(Order, OrderAdmin)
-
+@admin.register(MarketRate)
 class MarketRateAdmin(admin.ModelAdmin):
     list_display = [
         'currency',
@@ -152,16 +149,14 @@ class MarketRateAdmin(admin.ModelAdmin):
         'currency'
     ]
 
-admin.site.register(MarketRate, MarketRateAdmin)
-
+@admin.register(PaymentMethod)
 class PaymentMethodAdmin(admin.ModelAdmin):
     list_display = [
         'payment_type',    
         'owner'
     ]
 
-admin.site.register(PaymentMethod, PaymentMethodAdmin)
-
+@admin.register(Arbiter)
 class ArbiterAdmin(admin.ModelAdmin):
     list_display = [
         'name',
@@ -169,8 +164,7 @@ class ArbiterAdmin(admin.ModelAdmin):
         'is_disabled'
     ]
 
-admin.site.register(Arbiter, ArbiterAdmin)
-
+@admin.register(Contract)
 class ContractAdmin(admin.ModelAdmin):
     readonly_fields = ['order', 'address', 'version', 'contract_fee', 'arbitration_fee', 'service_fee']
     list_display = [
@@ -185,8 +179,7 @@ class ContractAdmin(admin.ModelAdmin):
         'version'
     ]
 
-admin.site.register(Contract, ContractAdmin)
-
+@admin.register(PaymentType)
 class PaymentTypeAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -195,27 +188,18 @@ class PaymentTypeAdmin(admin.ModelAdmin):
         'is_disabled'
     ]
 
-admin.site.register(PaymentType, PaymentTypeAdmin)
-
+@admin.register(Peer)
 class PeerAdmin(admin.ModelAdmin):
     list_display = ['name', 'address', 'is_disabled']
     search_fields = ['name', 'address']
 
-admin.site.register(Peer, PeerAdmin)
+@admin.register(Status)
+class StatusAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    list_display = ['order', 'status', 'created_at']
+    search_fields = ['order', 'status']
+    dynamic_raw_id_fields = ['order']
 
-class StatusAdmin(admin.ModelAdmin):
-    list_display = [
-        'order',
-        'status',
-        'created_at'
-    ]
-    search_fields = [
-        'order',
-        'status'
-    ]
-
-admin.site.register(Status, StatusAdmin)
-
+@admin.register(Feedback)
 class FeedbackAdmin(admin.ModelAdmin):
     list_display = [
         'order',
@@ -232,8 +216,7 @@ class FeedbackAdmin(admin.ModelAdmin):
         'rating'
     ]
 
-admin.site.register(Feedback, FeedbackAdmin)
-
+@admin.register(Appeal)
 class AppealAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -245,8 +228,7 @@ class AppealAdmin(admin.ModelAdmin):
     ]
     search_fields = ['id', 'order__id', 'owner__name']
 
-admin.site.register(Appeal, AppealAdmin)
-
+@admin.register(ContractMember)
 class ContractMemberAdmin(admin.ModelAdmin):
     list_display = [
         'contract',
@@ -254,8 +236,7 @@ class ContractMemberAdmin(admin.ModelAdmin):
         'address',
     ]
 
-admin.site.register(ContractMember, ContractMemberAdmin)
-
+@admin.register(AdSnapshot)
 class AdSnapshotAdmin(admin.ModelAdmin):
     list_display = [
         'ad',
@@ -263,8 +244,7 @@ class AdSnapshotAdmin(admin.ModelAdmin):
         'created_at'
     ]
 
-admin.site.register(AdSnapshot, AdSnapshotAdmin)
-
+@admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
     list_display = [
         'contract',
@@ -276,24 +256,18 @@ class TransactionAdmin(admin.ModelAdmin):
     search_fields = [
         'txid'
     ]
-admin.site.register(Transaction, TransactionAdmin)
 
-admin.site.register(ReservedName)
-admin.site.register(IdentifierFormat)
-
+@admin.register(OrderMember)
 class OrderMemberAdmin(admin.ModelAdmin):
     list_display = ['order', 'type', 'name']
     search_fields = ['order__id', 'type']
 
-admin.site.register(OrderMember, OrderMemberAdmin)
-
+@admin.register(OrderPayment)
 class OrderPaymentAdmin(admin.ModelAdmin):
     list_display = ['id', 'order', 'payment_type', 'payment_method']
     search_fields = ['id', 'order__id', 'payment_type__short_name', 'payment_type__full_name', 'payment_method__id']
 
-admin.site.register(OrderPayment, OrderPaymentAdmin)
-admin.site.register(DynamicPaymentTypeField)
-
+@admin.register(PaymentTypeField)
 class PaymentTypeFieldAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -304,8 +278,8 @@ class PaymentTypeFieldAdmin(admin.ModelAdmin):
     search_fields = [
         'fieldname'
     ]
-admin.site.register(PaymentTypeField, PaymentTypeFieldAdmin)
 
+@admin.register(PaymentMethodField)
 class PaymentMethodFieldAdmin(admin.ModelAdmin):
     list_display = [
         'id',
@@ -328,17 +302,12 @@ class PaymentMethodFieldAdmin(admin.ModelAdmin):
     def field_reference_name(self, obj):
         return obj.field_reference.fieldname
     
-admin.site.register(PaymentMethodField, PaymentMethodFieldAdmin)
-admin.site.register(ImageUpload)
-admin.site.register(OrderPaymentAttachment)
-
+@admin.register(AppVersion)
 class AppVersionAdmin(admin.ModelAdmin):
     list_display = ['latest_version', 'min_required_version', 'platform', 'release_date']
     fields = ['platform', 'latest_version', 'min_required_version', 'release_date', 'notes']
 
-admin.site.register(AppVersion, AppVersionAdmin)
-
-from rampp2p.slackbot.send import MessageBase
+@admin.register(SlackMessageLog)
 class SlackMessageLogAdmin(admin.ModelAdmin):
     search_fields = [
         "topic",
@@ -372,4 +341,8 @@ class SlackMessageLogAdmin(admin.ModelAdmin):
 
     delete_in_slack.short_description = "Delete selected messages in slack"
 
-admin.site.register(SlackMessageLog, SlackMessageLogAdmin)
+admin.site.register(ImageUpload)
+admin.site.register(OrderPaymentAttachment)
+admin.site.register(ReservedName)
+admin.site.register(IdentifierFormat)
+admin.site.register(DynamicPaymentTypeField)

@@ -351,6 +351,7 @@ def get_cashtoken_meta_data(
         cashtoken.capability = capability
         cashtoken.info = cashtoken_info
         cashtoken.save()
+        resolve_ct_nft_genesis(cashtoken, txid=txid)
     else:
         cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
         cashtoken.fetch_metadata()
@@ -614,6 +615,127 @@ def process_cashtoken_tx(
         'decimals': decimals,
         'amount': amount or ''
     }
+
+def resolve_ct_nft_genesis(cashtoken:CashNonFungibleToken, txid=""):
+    """
+        Determines whether a CashToken NFT is from a fixed supply or not
+        Will attempt to save a minting NFT transaction if not fixed supply
+    """
+    if not isinstance(cashtoken, CashNonFungibleToken):
+        return
+
+    minting_nft = None
+    if cashtoken.capability == "minting":
+        minting_nft = cashtoken
+    elif cashtoken.fixed_supply is None:
+        minting_nft = CashNonFungibleToken.objects.filter(
+            category=cashtoken.category, capability="minting"
+        ).first()
+
+    if minting_nft:
+        cashtoken.fixed_supply = False
+
+    elif cashtoken.fixed_supply is None or not minting_nft:
+        try:
+            cashtoken.fixed_supply = find_and_save_minting_transaction(
+                txid=txid,
+                category=cashtoken.category,
+                capability=cashtoken.capability,
+                commitment=cashtoken.commitment,
+            )
+        except Exception as exc:
+            LOGGER.error(f"Error in finding and saving minting transaction: {exc}")
+
+    cashtoken.save()
+    return cashtoken
+
+@shared_task(queue='query_transaction')
+def find_and_save_minting_transaction(txid="", category="", capability="", commitment="", max_depth=20):
+    """
+        Traces back to the minting transaction of a CashToken NFT and save the minting nft's transaction
+        Returns null if no genesis transaction found
+        Returns True if NFT is not created from a minting NFT, otherwise False
+    """
+    try:
+        result = get_ct_nft_genesis_tx(
+            txid=txid,
+            category=category,
+            capability=capability,
+            commitment=commitment,
+            max_depth=max_depth,
+        )
+    except StopIteration as exception:
+        LOGGER.error(exception)
+        return
+
+    if not result: return
+
+    if not result["is_nft"]:
+        return True
+
+    save_minting_nft_transaction(result["transaction"], result["minting_input_index"])
+    return False
+
+
+def get_ct_nft_genesis_tx(txid="", category="", capability="", commitment="", max_depth=20):
+    if max_depth == 0:
+        raise StopIteration("Max depth reached")
+
+    tx = NODE.BCH.get_transaction(txid)
+    token_data = {
+        "category": category,
+        "nft": { "capability": capability, "commitment": commitment },
+    }
+    LOGGER.debug("CT NFT GENESIS SEARCH | txid:", txid, "depth:", max_depth, "token_data:", token_data)
+    for index, tx_input in enumerate(tx["inputs"]):
+        if category == tx_input["txid"]:
+            return dict(transaction=tx, minting_input_index=index, is_nft=False)
+
+        if "token_data" not in tx_input: continue
+        if "category" not in tx_input["token_data"]: continue
+        if "nft" not in tx_input["token_data"]: continue
+
+        token_data = tx_input["token_data"]
+        if token_data["nft"]["capability"] == "minting":
+            return dict(transaction=tx, minting_input_index=index, is_nft=True)
+
+        if category == token_data["category"] and \
+            capability == token_data["nft"]["capability"] and \
+            commitment == token_data["nft"]["commitment"]:
+
+            return get_ct_nft_genesis_tx(
+                txid=tx_input["txid"],
+                category=category,
+                capability=capability,
+                commitment=commitment,
+                max_depth=max_depth-1,
+            )
+
+def save_minting_nft_transaction(transaction:dict, minting_input_index:int):
+    minting_input = transaction["inputs"][minting_input_index]
+
+    if "token_data" not in minting_input: return
+    if "nft" not in minting_input["token_data"]: return
+    if "capability" not in minting_input["token_data"]["nft"]: return
+    if minting_input["token_data"]["nft"]["capability"] != "minting": return
+
+    process_result = process_cashtoken_tx(
+        minting_input["token_data"],
+        minting_input["address"],
+        minting_input["txid"],
+        index=minting_input["spent_index"],
+        value=minting_input["value"],
+        force_create=True,
+    )
+
+    # using this method of update to skip triggering post save signals
+    # process_cashtoken_tx will probably fire it already
+    Transaction.objects.filter(id=process_result["transaction_id"]).update(
+        spending_txid=transaction["txid"],
+        spent=True,
+    )
+    return process_result
+
 
 @shared_task(queue='query_transaction')
 def query_transaction(txid, block_id, for_slp=False):
@@ -1551,6 +1673,8 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     if abs(amount) > 0.00001:
                         LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
                         send_wallet_history_push_notification(history)
+                    else:
+                        return send_wallet_history_push_notification_nft(history)
                 except Exception as exception:
                     LOGGER.exception(exception)
             except IntegrityError as exc:
@@ -2415,7 +2539,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                         try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
-                            if addr_obj and addr_obj.wallet:
+                            if addr_obj and addr_obj.wallet and addr_obj.wallet.wallet_hash:
                                 hash_obj = SHA256.new(addr_obj.wallet.wallet_hash.encode('utf-8'))
                                 hashed_wallet_hash = hash_obj.hexdigest()
                                 topic = f"transactions/{hashed_wallet_hash}/{bchaddress}"

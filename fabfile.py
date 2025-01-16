@@ -101,6 +101,7 @@ def deploy(ctx):
     build(ctx)
     down(ctx)
     up(ctx)
+    clear_caches(ctx)
 
 
 @task
@@ -122,6 +123,14 @@ def nginx(ctx):
         conn.run(f'sudo ln -s {nginx_conf} {nginx_slink}')
 
         conn.run('sudo service nginx restart')
+
+
+@task
+def clear_caches(ctx):
+    if 'network' not in ctx.config.keys(): return
+    conn = ctx.config.run.env['conn']
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py clear_caches')
 
 
 @task
