@@ -11,6 +11,7 @@ from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, decorators, exceptions, permissions
@@ -21,9 +22,11 @@ from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
+from .utils.transaction import fetch_unspent_merchant_transactions
 
 from .models import Location, Category, Merchant, PosDevice
 from main.models import Address
+from main.serializers import WalletHistorySerializer
 
 from authentication.token import WalletAuthentication
 from django.core.exceptions import ValidationError
@@ -439,17 +442,21 @@ class BranchViewSet(viewsets.ModelViewSet):
             raise exceptions.ValidationError("Unable to remove branches linked to a device")
         return super().destroy(request, *args, **kwargs)
 
-class MerchantTransactionsView(APIView):
-    def get(self, request, merchant_pk):
-        # Fetch merchant from merchant_pk
-        # Fetch pos ids associated to merchant
-        # Use merchant.wallet_hash and pos_ids to fetch merchant related transactions
-        # Allow filter by specific pos_id
-        pass
-
 class CashOutViewSet(viewsets.ModelViewSet):
     queryset = CashOutOrder.objects.all()
     serializer_class = CashOutOrderSerializer
+    authentication_classes = [WalletAuthentication]
+
+    @action(detail=False, methods=['get'])
+    def list_unspent_txns(self, request):
+        ''' Fetch unspent, incoming, transactions by wallet_hash and pos_id '''
+        wallet_hash = request.user.wallet_hash
+        posids = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash).values_list('posid', flat=True)
+        unspent_merchant_txns = fetch_unspent_merchant_transactions(wallet_hash, posids)
+        serializer = WalletHistorySerializer(unspent_merchant_txns, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+       
+
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = PaymentMethod.objects.all()

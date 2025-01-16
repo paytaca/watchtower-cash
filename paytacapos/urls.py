@@ -8,6 +8,7 @@ router.register(r"devices", PosDeviceViewSet, basename="paytacapos-devices")
 router.register(r"merchants", MerchantViewSet, basename="paytacapos-merchants")
 router.register(r"branches", BranchViewSet, basename="paytacapos-branches")
 router.register(f"payment-methods", PaymentMethodViewSet, basename="paytacapos-paymentmethods")
+router.register(f"cash-out", CashOutViewSet, basename="paytacapos-cashout")
 
 urlpatterns = router.urls + [
     path('broadcast/', BroadcastPaymentView.as_view(), name="broadcast-pos-payment")
