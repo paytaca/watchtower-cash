@@ -645,6 +645,7 @@ def resolve_ct_nft_genesis(cashtoken:CashNonFungibleToken, txid=""):
             )
         except Exception as exc:
             LOGGER.error(f"Error in finding and saving minting transaction: {exc}")
+            LOGGER.exception(exc)
 
     cashtoken.save()
     return cashtoken
@@ -691,7 +692,7 @@ def get_ct_nft_genesis_tx(txid="", category="", capability="", commitment="", ma
         if category == tx_input["txid"]:
             return dict(transaction=tx, minting_input_index=index, is_nft=False)
 
-        if "token_data" not in tx_input: continue
+        if not tx_input.get("token_data"): continue
         if "category" not in tx_input["token_data"]: continue
         if "nft" not in tx_input["token_data"]: continue
 
@@ -714,7 +715,7 @@ def get_ct_nft_genesis_tx(txid="", category="", capability="", commitment="", ma
 def save_minting_nft_transaction(transaction:dict, minting_input_index:int):
     minting_input = transaction["inputs"][minting_input_index]
 
-    if "token_data" not in minting_input: return
+    if minting_input.get("token_data"): return
     if "nft" not in minting_input["token_data"]: return
     if "capability" not in minting_input["token_data"]["nft"]: return
     if minting_input["token_data"]["nft"]["capability"] != "minting": return

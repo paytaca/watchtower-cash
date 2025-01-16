@@ -708,6 +708,7 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             validated_data["location"] = location_serializer.save()
 
         instance = super().update(instance, validated_data)
+        result = instance.sync_main_branch_location()
         return instance
 
 
@@ -819,7 +820,9 @@ class BranchSerializer(PermissionSerializerMixin, serializers.ModelSerializer):
                 .exclude(pk=instance.pk) \
                 .update(is_main=False)
 
-        return super().update(instance, validated_data)
+        instance = super().update(instance, validated_data)
+        result = instance.sync_location_to_merchant()
+        return instance
 
 
 class WalletLatestMerchantIndexSerializer(serializers.ModelSerializer):
