@@ -2,7 +2,7 @@ from celery import shared_task
 
 from rampp2p.models import Status, Order, StatusType
 from rampp2p.serializers import StatusSerializer
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Q
 from django.utils import timezone
 from datetime import timedelta
 from rampp2p.validators import validate_status_inst_count, validate_status_progression
@@ -13,15 +13,16 @@ logger = logging.getLogger(__name__)
 @shared_task(queue='rampp2p__cancel_expired_orders')
 def cancel_expired_orders():
     # find expired orders with status SUBMITTED
-    latest_status_subquery = Status.objects.filter(
-        order=OuterRef('pk'),
-    ).order_by('-created_at').values('status')[:1]
-    annotated_orders = Order.objects.annotate(latest_status = Subquery(latest_status_subquery))
-    submitted_orders = annotated_orders.filter(latest_status=StatusType.SUBMITTED)
-    logger.warning(f'{len(submitted_orders)} submitted orders')
+    latest_status_subquery = Status.objects.filter(order=OuterRef('pk'),).order_by('-created_at').values('status')[:1]
+    queryset = Order.objects.annotate(latest_status=Subquery(latest_status_subquery))
+    target_orders = queryset.filter(
+        Q(latest_status__in=[StatusType.SUBMITTED, StatusType.CONFIRMED]) &
+        (Q(expires_at__lte=timezone.now()) | Q(expires_at__isnull=True)))
+    
+    logger.warning(f'{target_orders.count()} target (submitted/confirmed) orders')
     
     # cancel expired orders
-    for order in submitted_orders:
+    for order in target_orders:
         # initialize expires_at if null
         if order.expires_at is None:
             order.expires_at = order.created_at + timedelta(hours=24)
@@ -45,7 +46,7 @@ def cancel_expired_orders():
                 validate_status_progression(StatusType.CANCELED, order.id)
                 if status.is_valid():
                     status.save()
+                else:
+                    logger.exception(status.errors)
             except Exception as err:
                 logger.warning(f'error: {err}')
-            
-            order.save()
