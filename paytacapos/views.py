@@ -136,7 +136,6 @@ class PosDeviceViewSet(
     @swagger_auto_schema(method="post", request_body=PosDeviceLinkRequestSerializer, responses={ 200: PosDeviceLinkSerializer })
     @decorators.action(methods=["post"], detail=False)
     def generate_link_device_code(self, request, *args, **kwargs):
-        code_ttl = 60 * 5
         serializer = PosDeviceLinkRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.save_link_request()
