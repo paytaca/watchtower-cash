@@ -99,10 +99,14 @@ class PosDeviceLinkSerializer(serializers.Serializer):
 
 
 class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Serializer):
+    HARD_MIN_TTL = 60 * 5
+    HARD_MAX_TTL = 86_400 * 7
+
     wallet_hash = serializers.CharField()
     posid = serializers.IntegerField()
     encrypted_xpubkey = serializers.CharField()
     signature = serializers.CharField()
+    code_ttl = serializers.IntegerField(default=86_400)
 
     def validate(self, data):
         wallet_hash = data["wallet_hash"]
@@ -153,10 +157,17 @@ class PosDeviceLinkRequestSerializer(PermissionSerializerMixin, serializers.Seri
             return None
 
     def save_link_request(self):
-        code_ttl = 60 * 5 # seconds
         code = uuid4().hex
         redis_key = self.generate_redis_key(code)
         data = json.dumps(self.validated_data).encode()
+
+        try:
+            code_ttl = self.validated_data["code_ttl"]
+        except:
+            code_ttl = 86_400 # seconds
+        code_ttl = max(code_ttl, self.HARD_MIN_TTL)
+        code_ttl = min(code_ttl, self.HARD_MAX_TTL)
+
         REDIS_CLIENT.set(redis_key, data, ex=code_ttl)
         now = timezone.now()
         expires = now + timezone.timedelta(seconds=code_ttl)
