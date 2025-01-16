@@ -646,11 +646,9 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 validate_status_progression(StatusType.CONFIRMED, pk)
 
                 order = models.Order.objects.get(pk=pk)
-
                 if order.expires_at and order.expires_at < timezone.now():
                     raise ValidationError('Cannot confirm expired order')
                 
-                order.expires_at = None
                 order.save()
 
                 # Decrease the Ad's trade amount and ceiling
@@ -762,7 +760,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
         wallet_hash = request.user.wallet_hash
         try:
             order = models.Order.objects.get(pk=pk)        
-
+            
             # Require user is seller
             seller = None
             if order.ad_snapshot.trade_type == models.TradeType.SELL:
