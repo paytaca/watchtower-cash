@@ -60,12 +60,14 @@ def send_wallet_history_push_notification(wallet_history_obj):
         )
 
 def send_wallet_history_push_notification_nft(wallet_history_obj):
-    transaction = Transaction.objects.get(txid=wallet_history_obj.txid)
-    ctnft = transaction.cashtoken_nft
+    transaction = Transaction.objects.filter(
+        txid=wallet_history_obj.txid,
+        cashtoken_nft_id__isnull=False
+    )
 
-    if ctnft is not None and wallet_history_obj.amount >= 0:
+    if transaction.exists() and wallet_history_obj.amount >= 0:
         title = 'NFT Received'
-        message = f'Received {ctnft.info.name}'
+        message = f'Received {transaction.get().cashtoken_nft.info.name}'
         extra = {
             "txid": wallet_history_obj.txid,
             "type": NotificationTypes.MAIN_TRANSACTION,
@@ -85,7 +87,7 @@ def send_wallet_history_push_notification_nft(wallet_history_obj):
             [wallet_history_obj.wallet.wallet_hash],
             message,
             title=title,
-            extra=extra,   
+            extra=extra
         )
 
 def parse_transaction_extra_data(txid):

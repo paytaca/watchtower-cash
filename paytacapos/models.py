@@ -249,6 +249,22 @@ class Merchant(models.Model):
             index += 1
         return index
 
+    def sync_main_branch_location(self):
+        if not self.location: return
+
+        main_branch = self.branches.filter(is_main=True).first()
+
+        if not main_branch: return
+
+        main_branch_location = main_branch.location or Location()
+        new_location = self.location
+        new_location.id = main_branch_location.id
+        new_location.save()
+
+        if main_branch.location_id != new_location.id:
+            main_branch.location = new_location
+            main_branch.save()
+        return new_location
 
 
 class Review(models.Model):
@@ -287,6 +303,23 @@ class Branch(models.Model):
                 raise Exception("Unable to save as main branch due to existing main branch")
 
         return super().save(*args, **kwargs)
+
+    def sync_location_to_merchant(self):
+        if not self.location: return
+        if not self.is_main: return
+        if not self.merchant: return
+
+        merchant = self.merchant
+        location = merchant.location or Location()
+        new_location = self.location
+        new_location.id = location.id
+        new_location.save()
+
+        if merchant.location_id != new_location.id:
+            merchant.location = new_location
+            merchant.save()
+        return new_location
+
     
 class PaymentMethod(models.Model):
     payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name="merchant_payment_methods")

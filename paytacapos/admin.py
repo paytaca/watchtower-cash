@@ -100,6 +100,10 @@ class MerchantAdmin(admin.ModelAdmin):
         "outgoing_txs",
         "last_transaction"
     ]
+
+    actions = [
+        "sync_main_branch_location",
+    ]
     
     def merchant_location(self, obj):
         _location = ''
@@ -129,6 +133,11 @@ class MerchantAdmin(admin.ModelAdmin):
     def last_transaction(self, obj):
         return obj.last_transaction_date
 
+    def sync_main_branch_location(self, request, queryset):
+        for merchant in queryset:
+            merchant.location.sync_main_branch_location()
+    sync_main_branch_location.short_description = "Sync location to main branch location"
+
 
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
@@ -142,6 +151,15 @@ class BranchAdmin(admin.ModelAdmin):
         "name",
         "merchant",
     ]
+
+    actions = [
+        "sync_merchant_location",
+    ]
+
+    def sync_merchant_location(self, request, queryset):
+        for branch in queryset:
+            branch.sync_location_to_merchant()
+    sync_merchant_location.short_description = "Sync location to merchant location"
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
