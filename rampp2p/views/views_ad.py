@@ -21,6 +21,7 @@ from decimal import Decimal
 
 import rampp2p.serializers as rampp2p_serializers
 import rampp2p.models as rampp2p_models
+import rampp2p.utils.websocket as websocket
 from rampp2p.utils import bch_to_satoshi, fiat_to_bch
 
 import logging
@@ -566,13 +567,17 @@ class AdViewSet(viewsets.GenericViewSet):
         data.pop('crypto_currency', None)
 
         serializer = rampp2p_serializers.AdSerializer(ad, data=data)
-        if serializer.is_valid():
-            ad = serializer.save()
-            context = { 'wallet_hash': wallet_hash }
-            serializer = rampp2p_serializers.AdListSerializer(ad, context=context)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        ad = serializer.save()
+        context = { 'wallet_hash': wallet_hash }
+        serializer = rampp2p_serializers.AdListSerializer(ad, context=context)
+
+        # Notify ad subscribers
+        websocket.send_ad_update('AD_UPDATED', pk)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
     def destroy(self, request, pk):
         wallet_hash = request.user.wallet_hash
         if not self.has_permissions(wallet_hash, pk):
