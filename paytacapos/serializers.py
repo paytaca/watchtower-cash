@@ -843,10 +843,24 @@ class LatestPosIdSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
 
 
+class CashOutTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashOutTransaction
+        fields = ('id', 'transaction', 'wallet_history', 'created_at')
+
 class CashOutOrderSerializer(serializers.ModelSerializer):
+    transactions = serializers.PrimaryKeyRelatedField(queryset=WalletHistory.objects.all(), many=True, required=False)
+    status = serializers.ChoiceField(choices=CashOutOrder.StatusType.choices, required=False)
     class Meta:
         model = CashOutOrder
-        fields = ('id', 'transactions', 'payment_method', 'status', 'created_at')
+        fields = (
+            'id', 
+            'transactions', 
+            'wallet', 
+            'currency',
+            'market_price',
+            'status',
+            'created_at')
 
 class PaymentMethodFieldSerializer(serializers.ModelSerializer):
     field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)

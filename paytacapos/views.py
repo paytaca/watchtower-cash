@@ -16,6 +16,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, decorators, exceptions, permissions
 from rest_framework import status
+from rest_framework.exceptions import MethodNotAllowed
+
 from .serializers import *
 from .filters import *
 from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader, HasPaymentObjectPermission
@@ -25,7 +27,8 @@ from .utils.report import SalesSummary
 from .utils.transaction import fetch_unspent_merchant_transactions
 
 from .models import Location, Category, Merchant, PosDevice
-from main.models import Address
+from main.models import Address, Transaction, WalletHistory
+from rampp2p.models import MarketRate
 from main.serializers import WalletHistorySerializer
 
 from authentication.token import WalletAuthentication
@@ -449,14 +452,61 @@ class CashOutViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def list_unspent_txns(self, request):
-        ''' Fetch unspent, incoming, transactions by wallet_hash and pos_id '''
         wallet_hash = request.user.wallet_hash
         posids = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash).values_list('posid', flat=True)
         unspent_merchant_txns = fetch_unspent_merchant_transactions(wallet_hash, posids)
         serializer = WalletHistorySerializer(unspent_merchant_txns, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-       
 
+    def create(self, request, *args, **kwargs):
+        wallet = request.user
+        txids =  request.data.get('txids', [])
+        currency = request.data.get('currency', None)
+
+        try:
+            with transaction.atomic():
+                if len(txids) == 0:
+                    raise ValidationError("empty cash out txids")
+                
+                currency_obj = FiatCurrency.objects.get(symbol=currency)
+                current_market_price = MarketRate.objects.get(currency=currency)
+
+                data = { 
+                    "wallet": wallet.id,
+                    "currency": currency_obj.id,
+                    "market_price": current_market_price.price
+                }
+                serializer = CashOutOrderSerializer(data=data)
+                if not serializer.is_valid(): raise ValidationError(serializer.errors)
+                order = serializer.save()
+
+                for txid in txids:
+                    txn = Transaction.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
+                    wallet_history = WalletHistory.objects.get(txid__in=txids, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
+                    serializer = CashOutTransactionSerializer(data={
+                        "order": order.id,
+                        "transaction": txn.id,
+                        "wallet_history": wallet_history.id
+                    })
+                    if serializer.is_valid():
+                        serializer.save()
+                    else:
+                        raise ValidationError(serializer.errors)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except (ValidationError, Exception) as err:
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def partial_update(self, request, *args, **kwargs):
+        raise MethodNotAllowed(method='PATCH')
+
+    def update(self, request, *args, **kwargs):
+        if kwargs.get('partial', False):
+            raise MethodNotAllowed(method='PATCH')
+        raise MethodNotAllowed(method='PUT')
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed(method='DELETE')
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = PaymentMethod.objects.all()

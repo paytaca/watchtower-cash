@@ -186,7 +186,7 @@ class PaymentMethodAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(DynamicRawIDMixin, admin.ModelAdmin):
-    list_display = ['id', 'merchant', 'status', 'created_at']
+    list_display = ['id', 'wallet', 'status', 'created_at']
     search_fields = [
         'id',
         'merchant__name',
@@ -203,3 +203,7 @@ class CashOutOrderAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         if not payment_type_name:
             payment_type_name = obj.payment_method.payment_type.full_name
         return payment_type_name
+
+@admin.register(CashOutTransaction)
+class CashOutTransactionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'transaction', 'wallet_history', 'created_at']

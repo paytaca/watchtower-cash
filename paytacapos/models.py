@@ -3,8 +3,8 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.postgres.fields import ArrayField
 from psqlextra.query import PostgresQuerySet
-from main.models import WalletHistory
-from rampp2p.models import PaymentType, PaymentTypeField
+from main.models import WalletHistory, Wallet, Transaction
+from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
 
 from PIL import Image
 import os
@@ -312,10 +312,47 @@ class CashOutOrder(models.Model):
         PROCESSING  = 'PROCESSING'
         COMPLETED   = 'COMPLETED'
 
-    transactions = models.ManyToManyField(WalletHistory)
-    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+    currency = models.ForeignKey(
+        FiatCurrency,
+        on_delete=models.PROTECT,
+        related_name="cashout_orders"
+    )
+    market_price = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
-            return str(self.id)
+        return str(self.id)
+
+class CashOutTransaction(models.Model):
+    order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)
+    transaction = models.ForeignKey(Transaction, on_delete=models.PROTECT)
+    wallet_history = models.ForeignKey(WalletHistory, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    def __str__(self):
+        return str(self.id)
+    
+    def fiat_value(self):
+        currency = self.order.currency.symbol
+        amount = self.wallet_history.amount
+        
+        # The market price on transaction creation
+        market_price = None
+        market_prices = self.wallet_history.market_prices
+        if market_prices and market_prices.get(currency, None):
+            market_price = market_prices[currency]
+        
+        # The market price on order creation
+        order_market_price = self.order.market_price
+
+        if not market_price or not order_market_price:
+            return
+        
+        return {
+            "currency": currency,
+            "order_value": round(order_market_price * amount, 2),
+            "value": round(market_price * amount, 2)
+        }
+       

@@ -11,7 +11,11 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     unspent_txids = unspent_txns.values_list('txid', flat=True)
 
     # Step 2: Filter incoming unspent WalletHistory transactions by txid
-    incoming_unspent_txns = WalletHistory.objects.filter(txid__in=unspent_txids, record_type=WalletHistory.INCOMING)
+    incoming_unspent_txns = WalletHistory.objects.filter(
+        txid__in=unspent_txids,
+        record_type=WalletHistory.INCOMING,
+        wallet__wallet_hash=wallet_hash,
+        token__name="bch")
 
     # Step 3: Transform posids into regex patterns
     transformed_posids = [f"((0|1)/)?0*\d+{posid}" for posid in posids]
