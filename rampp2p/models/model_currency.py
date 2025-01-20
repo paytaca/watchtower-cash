@@ -1,6 +1,7 @@
+
 from django.db import models
-from .payment import PaymentType
-from .peer import Peer
+from .model_peer import Peer
+from .model_payment import PaymentType
 
 class FiatCurrency(models.Model):
     name = models.CharField(max_length=100, db_index=True)

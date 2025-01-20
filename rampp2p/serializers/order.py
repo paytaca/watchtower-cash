@@ -206,7 +206,7 @@ class OrderSerializer(serializers.ModelSerializer):
         status = self.get_status(obj)
         feedback = None
         if status['value'] in ['CNCL', 'RLS', 'RFN']:
-            user_feedback = models.Feedback.objects.filter(Q(from_peer__wallet_hash=wallet_hash) and Q(order__id=obj.id)).first()
+            user_feedback = models.OrderFeedback.objects.filter(Q(from_peer__wallet_hash=wallet_hash) and Q(order__id=obj.id)).first()
             if user_feedback:
                 feedback = {
                     'id': user_feedback.id,

@@ -5,9 +5,9 @@ from django.apps import apps
 from rampp2p.utils import satoshi_to_bch
 from datetime import timedelta
 
-from .peer import Peer
-from .currency import FiatCurrency, CryptoCurrency
-from .payment import PaymentMethod, PaymentType
+from .model_peer import Peer
+from .model_currency import FiatCurrency, CryptoCurrency
+from .model_payment import PaymentMethod, PaymentType
 
 class CooldownChoices(models.IntegerChoices):
     FIFTEEN     =   15, '15 minutes'
@@ -73,8 +73,8 @@ class Ad(models.Model):
         if self.price_type == PriceType.FIXED:
             return self.fixed_price
         
-        MarketRate = apps.get_model('rampp2p', 'MarketRate')
-        market_price = MarketRate.objects.filter(currency=self.fiat_currency.symbol).first()
+        MarketPrice = apps.get_model('rampp2p', 'MarketPrice')
+        market_price = MarketPrice.objects.filter(currency=self.fiat_currency.symbol).first()
         if market_price:
             market_price = market_price.price
             return market_price * (self.floating_price/100)

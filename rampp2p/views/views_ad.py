@@ -75,7 +75,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         if payment_type:
             queryset = queryset.filter(payment_methods__payment_type__id=payment_type).distinct()
 
-        market_rate_subq = rampp2p_models.MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+        market_rate_subq = rampp2p_models.MarketPrice.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
         queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
 
         # Annotate ad price for sorting
@@ -227,7 +227,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         queryset = self.filter_by_access_control(currency, queryset)
 
         # Annotate price
-        market_rate_subq = rampp2p_models.MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+        market_rate_subq = rampp2p_models.MarketPrice.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
         queryset = queryset.annotate(market_rate=Subquery(market_rate_subq)).annotate(
             price=ExpressionWrapper(
                 Case(
@@ -280,7 +280,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
                     satoshi_presets.append(bch_to_satoshi(preset))
                 cashin_presets = satoshi_presets
         else:
-            price_obj = rampp2p_models.MarketRate.objects.filter(currency=currency.symbol)
+            price_obj = rampp2p_models.MarketPrice.objects.filter(currency=currency.symbol)
             price = None
             if price_obj.exists():
                 price = price_obj.first().price
@@ -406,7 +406,7 @@ class AdViewSet(viewsets.GenericViewSet):
                 time_limits = list(map(int, time_limits))
                 queryset = queryset.filter(appeal_cooldown_choice__in=time_limits).distinct()
 
-            market_rate_subq = rampp2p_models.MarketRate.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
+            market_rate_subq = rampp2p_models.MarketPrice.objects.filter(currency=OuterRef('fiat_currency__symbol')).values('price')[:1]
             queryset = queryset.annotate(market_rate=Subquery(market_rate_subq))
 
             # Annotate to compute ad price based on price type (FIXED vs FLOATING)

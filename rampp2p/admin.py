@@ -138,8 +138,8 @@ class OrderAdmin(admin.ModelAdmin):
             return obj.ad_snapshot.trade_type
         return None
 
-@admin.register(MarketRate)
-class MarketRateAdmin(admin.ModelAdmin):
+@admin.register(MarketPrice)
+class MarketPriceAdmin(admin.ModelAdmin):
     list_display = [
         'currency',
         'price',
@@ -199,8 +199,8 @@ class StatusAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = ['order__id', 'status']
     dynamic_raw_id_fields = ['order']
 
-@admin.register(Feedback)
-class FeedbackAdmin(admin.ModelAdmin):
+@admin.register(OrderFeedback)
+class OrderFeedbackAdmin(admin.ModelAdmin):
     list_display = [
         'order',
         'from_peer',
@@ -344,5 +344,4 @@ class SlackMessageLogAdmin(admin.ModelAdmin):
 admin.site.register(ImageUpload)
 admin.site.register(OrderPaymentAttachment)
 admin.site.register(ReservedName)
-admin.site.register(IdentifierFormat)
 admin.site.register(DynamicPaymentTypeField)

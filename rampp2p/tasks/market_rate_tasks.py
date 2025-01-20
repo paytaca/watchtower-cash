@@ -32,7 +32,7 @@ def update_market_rates():
     for currency in market_prices:
         price = market_prices.get(currency)
         if price:
-            rate, _ = models.MarketRate.objects.get_or_create(currency=currency.upper())
+            rate, _ = models.MarketPrice.objects.get_or_create(currency=currency.upper())
             rate.price = price
             rate.save()
         data =  { 'currency': currency, 'price' : price }

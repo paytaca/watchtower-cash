@@ -332,7 +332,7 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
     serializer_class = rampp2p_serializers.FeedbackSerializer
-    queryset = models.Feedback.objects.all()
+    queryset = models.OrderFeedback.objects.all()
 
     def list(self, request):
         queryset = self.get_queryset()
@@ -410,7 +410,7 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
     
     def _validate_limit(self, from_peer, to_peer, order):
         ''' Validates that from_peer can only create 1 feedback for the order.'''
-        feedback_count = (models.Feedback.objects.filter(Q(from_peer=from_peer) & Q(to_peer=to_peer) & Q(order=order))).count()
+        feedback_count = (models.OrderFeedback.objects.filter(Q(from_peer=from_peer) & Q(to_peer=to_peer) & Q(order=order))).count()
         assert feedback_count == 0, 'peer feedback already existing'
     
     def _validate_permissions(self, wallet_hash, pk):

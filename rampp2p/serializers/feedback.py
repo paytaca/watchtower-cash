@@ -3,7 +3,7 @@ from rampp2p.models import (
     Arbiter,
     Peer,
     Order,
-    Feedback,
+    OrderFeedback,
     ArbiterFeedback
 )
 
@@ -13,7 +13,7 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
   order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
 
   class Meta:
-    model = Feedback
+    model = OrderFeedback
     fields = [
       "id",
       "from_peer",
@@ -34,7 +34,7 @@ class FeedbackSerializer(serializers.ModelSerializer):
   order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
 
   class Meta:
-    model = Feedback
+    model = OrderFeedback
     fields = [
       "id",
       "from_peer",
@@ -45,13 +45,13 @@ class FeedbackSerializer(serializers.ModelSerializer):
       "created_at"
     ]
   
-  def get_from_peer(self, instance: Feedback):
+  def get_from_peer(self, instance: OrderFeedback):
     return {
       'id':       instance.from_peer.id,
       'name': instance.from_peer.name
     }
   
-  def get_to_peer(self, instance: Feedback):
+  def get_to_peer(self, instance: OrderFeedback):
      return {
       'id':       instance.to_peer.id,
       'name': instance.to_peer.name
