@@ -1,5 +1,5 @@
 from rampp2p.validators import validate_status_inst_count, validate_status_progression
-from rampp2p.serializers.status import StatusSerializer, StatusReadSerializer
+from rampp2p.serializers.serializer_status import StatusSerializer, StatusReadSerializer
 from django.core.exceptions import ValidationError
 
 import logging

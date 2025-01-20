@@ -1,14 +1,9 @@
 from rest_framework import serializers
-from django.db.models import Q, Subquery, OuterRef
 from rampp2p.utils.fees import get_trading_fees
 
 import rampp2p.models as models
-
-from .currency import FiatCurrencySerializer, CryptoCurrencySerializer
-from .payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
-
-import logging
-logger = logging.getLogger(__name__)
+from .serializer_currency import FiatCurrencySerializer, CryptoCurrencySerializer
+from .serializer_payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
 
 class AdSnapshotSerializer(serializers.ModelSerializer):
     price = serializers.SerializerMethodField()
@@ -243,8 +238,7 @@ class AdDetailSerializer(AdListSerializer):
     
 class AdOwnerSerializer(AdDetailSerializer):
     payment_methods = PaymentMethodSerializer(many=True)
-
-    
+   
 class AdSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all(), required=False)
     trade_type = serializers.ChoiceField(choices=models.TradeType.choices, required=False)
