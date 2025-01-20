@@ -175,7 +175,7 @@ class ContractAdmin(admin.ModelAdmin):
     ]
     search_fields = [
         'address',
-        'order',
+        'order__id',
         'version'
     ]
 
@@ -191,12 +191,12 @@ class PaymentTypeAdmin(admin.ModelAdmin):
 @admin.register(Peer)
 class PeerAdmin(admin.ModelAdmin):
     list_display = ['name', 'address', 'is_disabled']
-    search_fields = ['name', 'address']
+    search_fields = ['name', 'address', 'wallet_hash']
 
 @admin.register(Status)
 class StatusAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = ['order', 'status', 'created_at']
-    search_fields = ['order', 'status']
+    search_fields = ['order__id', 'status']
     dynamic_raw_id_fields = ['order']
 
 @admin.register(Feedback)
@@ -210,9 +210,9 @@ class FeedbackAdmin(admin.ModelAdmin):
         'created_at'
     ]
     search_fields = [
-        'order',
-        'from_peer',
-        'to_peer',
+        'order__id',
+        'from_peer__name',
+        'to_peer__name',
         'rating'
     ]
 
