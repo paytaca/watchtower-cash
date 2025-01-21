@@ -5,7 +5,16 @@ import rampp2p.models as models
 from .serializer_currency import FiatCurrencySerializer, CryptoCurrencySerializer
 from .serializer_payment import RelatedPaymentMethodSerializer, PaymentMethodSerializer, SubsetPaymentMethodSerializer
 
+import logging
+logger = logging.getLogger(__name__)
+
 class AdSnapshotSerializer(serializers.ModelSerializer):
+    """
+    Serializer for ad snapshots.
+
+    This serializer handles the serialization of ad snapshot data, providing
+    a snapshot of the ad's state at a particular point in time.
+    """
     price = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
@@ -68,6 +77,12 @@ class AdSnapshotSerializer(serializers.ModelSerializer):
         }
 
 class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
+    """
+    Serializer for a subset of ad snapshots.
+
+    This serializer extends the AdSnapshotSerializer and includes additional
+    fields specific to the subset of ad snapshots. Overrides the id to return the related Ad id.
+    """
     id = serializers.SerializerMethodField()
     owner = serializers.SerializerMethodField()
     fiat_currency = FiatCurrencySerializer()
@@ -107,21 +122,15 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     def get_appeal_cooldown(self, obj):
         return str(obj.appeal_cooldown_choice)
 
-class AdListSerializer(serializers.ModelSerializer):
-    owner = serializers.SerializerMethodField()
+class BaseAdSerializer(serializers.ModelSerializer):
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
+    appeal_cooldown = serializers.SerializerMethodField()
     price = serializers.SerializerMethodField()
-    
     trade_amount = serializers.SerializerMethodField()
     trade_floor = serializers.SerializerMethodField()
     trade_ceiling = serializers.SerializerMethodField()
-
     payment_methods = serializers.SerializerMethodField()
-    trade_count = serializers.SerializerMethodField()
-    completion_rate = serializers.SerializerMethodField()
-    is_owned = serializers.SerializerMethodField()
-    appeal_cooldown = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Ad
@@ -137,23 +146,50 @@ class AdListSerializer(serializers.ModelSerializer):
             'trade_ceiling',
             'trade_amount',
             'trade_limits_in_fiat',
-            'trade_amount_in_fiat',
-            'payment_methods',
-            'trade_count',
-            'completion_rate',
-            'appeal_cooldown',
-            'is_owned',
-            'is_public',
-            'created_at',
-            'modified_at'
+            'appeal_cooldown'
         ]
-
-    def get_payment_methods(self, obj: models.Ad):
-        return obj.payment_methods.values_list('payment_type__short_name', flat=True)
     
     def get_appeal_cooldown(self, instance: models.Ad):
         return models.CooldownChoices(instance.appeal_cooldown_choice).value
+
+    def get_price(self, obj: models.Ad):
+        return obj.get_price()
     
+    def get_trade_amount(self, obj: models.Ad):
+        return obj.get_trade_amount()
+    
+    def get_trade_floor(self, obj: models.Ad):
+        return obj.get_trade_floor()
+    
+    def get_trade_ceiling(self, obj: models.Ad):
+        return obj.get_trade_ceiling()
+    
+    def get_payment_methods(self, obj: models.Ad):
+        return obj.payment_methods.values_list('payment_type__short_name', flat=True)
+
+class StoreAdSerializer(BaseAdSerializer):
+    """
+    Serializer for ads displayed on the P2P exchange's Store page.
+    This serializer extends the BaseAdSerializer and adds additional fields
+    specific to the Store page.
+    """
+    
+    owner = serializers.SerializerMethodField()
+    is_owned = serializers.SerializerMethodField()
+
+    class Meta(BaseAdSerializer.Meta):
+        fields = BaseAdSerializer.Meta.fields + [
+            'owner',
+            'payment_methods',
+            'is_owned'
+        ]
+    
+    def get_is_owned(self, obj: models.Ad):
+        wallet_hash = self.context.get('wallet_hash')
+        if obj.owner.wallet_hash == wallet_hash:
+            return True
+        return False
+
     def get_owner(self, obj: models.Ad):
         trade_count = obj.owner.get_trade_count()
         completion_rate = obj.owner.get_completion_rate()
@@ -167,50 +203,46 @@ class AdListSerializer(serializers.ModelSerializer):
             'is_online': obj.owner.is_online,
             'last_online_at': obj.owner.last_online_at
         }
-    
-    def get_is_owned(self, obj: models.Ad):
-        wallet_hash = self.context.get('wallet_hash')
-        if obj.owner.wallet_hash == wallet_hash:
-            return True
-        return False
-    
-    def get_price(self, obj: models.Ad):
-        return obj.get_price()
-    
-    def get_trade_amount(self, obj: models.Ad):
-        return obj.get_trade_amount()
-    
-    def get_trade_floor(self, obj: models.Ad):
-        return obj.get_trade_floor()
-    
-    def get_trade_ceiling(self, obj: models.Ad):
-        return obj.get_trade_ceiling()
+
+class ListAdSerializer(BaseAdSerializer):
+    """
+    Serializer for ads displayed on the P2P exchange's Ads page.
+    This serializer extends the BaseAdSerializer and adds additional fields
+    specific to the Ads page.
+    """
+
+    trade_count = serializers.SerializerMethodField()
+    completion_rate = serializers.SerializerMethodField()
+
+    class Meta(BaseAdSerializer.Meta):
+        fields = BaseAdSerializer.Meta.fields + [
+            'trade_count',
+            'completion_rate',
+            'payment_methods',
+            'is_public'
+        ]
     
     def get_trade_count(self, obj: models.Ad):
         return obj.get_trade_count()
 
     def get_completion_rate(self, obj: models.Ad):
         return obj.get_completion_rate()
+    
+class CashinAdSerializer(BaseAdSerializer):
+    """
+    Serializer for ads fetched for the cash-in feature.
 
-class CashinAdSerializer(AdListSerializer):
+    This serializer extends the BaseAdSerializer and adds additional fields
+    specific to the cash-in feature.
+    """
+    
     is_online = serializers.SerializerMethodField()
     last_online_at = serializers.SerializerMethodField()
     payment_methods = RelatedPaymentMethodSerializer(many=True)
     
-    class Meta(AdListSerializer.Meta):
-        fields = [
-            'id',
-            'owner',
-            'price_type',
-            'price',
-            'trade_floor',
-            'trade_ceiling',
-            'trade_amount',
-            'trade_limits_in_fiat',
-            'trade_amount_in_fiat',
+    class Meta(BaseAdSerializer.Meta):
+        fields = BaseAdSerializer.Meta.fields + [
             'payment_methods',
-            'trade_count',
-            'completion_rate',
             'is_online',
             'last_online_at'
         ]
@@ -221,25 +253,66 @@ class CashinAdSerializer(AdListSerializer):
     def get_last_online_at(self, obj):
         return obj.owner.last_online_at
 
-class AdDetailSerializer(AdListSerializer):
+class AdSerializer(BaseAdSerializer):
+    """
+    Serializer used to serialize more detailed Ad information.
+    Extends the BaseAdSerializer.
+    """
+    owner = serializers.SerializerMethodField()
     fees = serializers.SerializerMethodField()
+    is_owned = serializers.SerializerMethodField()
+    payment_methods = serializers.SerializerMethodField()
 
-    class Meta(AdListSerializer.Meta):
-        fields = AdListSerializer.Meta.fields + [
+    class Meta(BaseAdSerializer.Meta):
+        fields = BaseAdSerializer.Meta.fields + [
+            'owner',
             'fees',
             'floating_price',
             'fixed_price',
-            'trade_amount'
+            'payment_methods',
+            'is_owned',
+            'is_public'
         ]
+    
+    def get_payment_methods(self, obj):
+        wallet_hash = self.context.get('wallet_hash')
+        data = None
+
+        # Return detailed payment method information if user is the ad owner
+        if obj.owner.wallet_hash == wallet_hash:
+            payment_methods = obj.payment_methods
+            data = PaymentMethodSerializer(payment_methods, many=True).data
+        else:
+            # Return only payment type names if user is not the ad owner
+            data = obj.payment_methods.values_list('payment_type__short_name', flat=True)
+        return data
 
     def get_fees(self, _):
         _, fees = get_trading_fees()
         return fees
     
-class AdOwnerSerializer(AdDetailSerializer):
-    payment_methods = PaymentMethodSerializer(many=True)
+    def get_owner(self, obj: models.Ad):
+        return {
+            'id': obj.owner.id,
+            'chat_identity_id': obj.owner.chat_identity_id,
+            'name': obj.owner.name,
+            'is_online': obj.owner.is_online,
+            'last_online_at': obj.owner.last_online_at
+        }
+    
+    def get_is_owned(self, obj: models.Ad):
+        wallet_hash = self.context.get('wallet_hash')
+        if obj.owner.wallet_hash == wallet_hash:
+            return True
+        return False
    
-class AdSerializer(serializers.ModelSerializer):
+class WriteAdSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating and updating ads.
+
+    This serializer handles the validation and serialization of ad data
+    for creating and updating ad instances.
+    """
     owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all(), required=False)
     trade_type = serializers.ChoiceField(choices=models.TradeType.choices, required=False)
     price_type = serializers.ChoiceField(choices=models.PriceType.choices, required=False)
@@ -284,6 +357,5 @@ class AdSerializer(serializers.ModelSerializer):
             'crypto_currency',
             'appeal_cooldown_choice',
             'payment_methods',
-            'is_public',
-            'modified_at',
+            'is_public'
         ]

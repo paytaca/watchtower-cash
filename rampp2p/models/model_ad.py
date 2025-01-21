@@ -34,20 +34,21 @@ class Ad(models.Model):
     
     trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
-    
+    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+   
     trade_floor_sats = models.BigIntegerField(null=True)
     trade_ceiling_sats = models.BigIntegerField(null=True)
-    
+    trade_amount_sats = models.BigIntegerField(null=True)
+   
+    trade_limits_in_fiat = models.BooleanField(default=False)
+
+    ### retained for legacy support
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    trade_limits_in_fiat = models.BooleanField(default=False)
-    
-    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
-    trade_amount_sats = models.BigIntegerField(null=True)
-    
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
-    
+    ### retained for legacy support
+
     appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices, default=CooldownChoices.SIXTY)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
     is_public = models.BooleanField(default=True)

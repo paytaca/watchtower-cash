@@ -347,11 +347,9 @@ class AdViewSet(viewsets.GenericViewSet):
             ad = self.get_object(pk)
             wallet_hash = request.user.wallet_hash
             context = { 'wallet_hash': wallet_hash }
-            serializer = None
-            if ad.owner.wallet_hash == wallet_hash:
-                serializer = rampp2p_serializers.AdOwnerSerializer(ad, context=context).data
-            else:
-                serializer = rampp2p_serializers.AdDetailSerializer(ad, context=context).data
+            logger.warning(f'wallet_hash: {wallet_hash}')
+            logger.warning(f'ad wallet_hash: {ad.owner.wallet_hash}')
+            serializer = rampp2p_serializers.AdSerializer(ad, context=context).data
             response_data = serializer
         else:
             queryset = rampp2p_models.Ad.objects.filter(Q(deleted_at__isnull=True))
@@ -470,7 +468,8 @@ class AdViewSet(viewsets.GenericViewSet):
             paged_queryset = queryset[offset:offset + limit]
 
             context = { 'wallet_hash': wallet_hash }
-            serializer = rampp2p_serializers.AdListSerializer(paged_queryset, many=True, context=context)
+            AdSerializer = rampp2p_serializers.ListAdSerializer if owned else rampp2p_serializers.StoreAdSerializer
+            serializer = AdSerializer(paged_queryset, many=True, context=context)
             data = {
                 'ads': serializer.data,
                 'count': count,
@@ -536,7 +535,7 @@ class AdViewSet(viewsets.GenericViewSet):
         if self.ad_count(wallet_hash, data['fiat_currency'], data['trade_type']) >= 1:
             return Response({ 'error': 'Limited to 1 ad per fiat currency' }, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = rampp2p_serializers.AdSerializer(data=data)
+        serializer = rampp2p_serializers.WriteAdSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -566,13 +565,13 @@ class AdViewSet(viewsets.GenericViewSet):
         data = request.data.copy()
         data.pop('crypto_currency', None)
 
-        serializer = rampp2p_serializers.AdSerializer(ad, data=data)
+        serializer = rampp2p_serializers.WriteAdSerializer(ad, data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         ad = serializer.save()
         context = { 'wallet_hash': wallet_hash }
-        serializer = rampp2p_serializers.AdListSerializer(ad, context=context)
+        serializer = rampp2p_serializers.AdSerializer(ad, context=context)
 
         # Notify ad subscribers
         websocket.send_ad_update('AD_UPDATED', pk)
