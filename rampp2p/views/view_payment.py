@@ -15,7 +15,6 @@ from authentication.permissions import RampP2PIsAuthenticated
 import rampp2p.models as models
 import rampp2p.serializers as serializers
 import rampp2p.utils.file_upload as file_upload_utils
-import rampp2p.utils.utils as rampp2putils
 
 from PIL import Image
 

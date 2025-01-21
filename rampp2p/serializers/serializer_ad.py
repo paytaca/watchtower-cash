@@ -123,6 +123,11 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
         return str(obj.appeal_cooldown_choice)
 
 class BaseAdSerializer(serializers.ModelSerializer):
+    """
+    Base serializer for ads.
+
+    This serializer provides the base fields and methods for serializing ad data.
+    """
     fiat_currency = FiatCurrencySerializer()
     crypto_currency = CryptoCurrencySerializer()
     appeal_cooldown = serializers.SerializerMethodField()

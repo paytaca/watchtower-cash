@@ -219,7 +219,6 @@ class WriteOrderSerializer(serializers.ModelSerializer):
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
     arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
-    # locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     trade_amount = serializers.IntegerField(required=True)
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), required=False, many=True)
     is_cash_in = serializers.BooleanField(required=True)
@@ -231,7 +230,6 @@ class WriteOrderSerializer(serializers.ModelSerializer):
             'ad_snapshot', 
             'owner',
             'arbiter',
-            # 'locked_price',
             'trade_amount',
             'payment_methods',
             'chat_session_ref',

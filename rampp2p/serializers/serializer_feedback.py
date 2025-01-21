@@ -1,19 +1,13 @@
 from rest_framework import serializers
-from rampp2p.models import (
-    Arbiter,
-    Peer,
-    Order,
-    OrderFeedback,
-    ArbiterFeedback
-)
+import rampp2p.models as models
 
 class FeedbackCreateSerializer(serializers.ModelSerializer):
-  from_peer = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
-  to_peer = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
-  order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+  from_peer = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
+  to_peer = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
+  order = serializers.PrimaryKeyRelatedField(queryset=models.Order.objects.all())
 
   class Meta:
-    model = OrderFeedback
+    model = models.OrderFeedback
     fields = [
       "id",
       "from_peer",
@@ -31,10 +25,10 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
 class FeedbackSerializer(serializers.ModelSerializer):
   from_peer = serializers.SerializerMethodField()
   to_peer = serializers.SerializerMethodField()
-  order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+  order = serializers.PrimaryKeyRelatedField(queryset=models.Order.objects.all())
 
   class Meta:
-    model = OrderFeedback
+    model = models.OrderFeedback
     fields = [
       "id",
       "from_peer",
@@ -45,25 +39,25 @@ class FeedbackSerializer(serializers.ModelSerializer):
       "created_at"
     ]
   
-  def get_from_peer(self, instance: OrderFeedback):
+  def get_from_peer(self, obj):
     return {
-      'id':       instance.from_peer.id,
-      'name': instance.from_peer.name
+      'id': obj.from_peer.id,
+      'name': obj.from_peer.name
     }
   
-  def get_to_peer(self, instance: OrderFeedback):
+  def get_to_peer(self, obj):
      return {
-      'id':       instance.to_peer.id,
-      'name': instance.to_peer.name
+      'id': obj.to_peer.id,
+      'name': obj.to_peer.name
     }
 
 class ArbiterFeedbackCreateSerializer(serializers.ModelSerializer):
-    from_peer = serializers.PrimaryKeyRelatedField(queryset=Peer.objects.all())
-    to_arbiter = serializers.PrimaryKeyRelatedField(queryset=Arbiter.objects.all())
-    order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+    from_peer = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
+    to_arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all())
+    order = serializers.PrimaryKeyRelatedField(queryset=models.Order.objects.all())
 
     class Meta:
-        model = ArbiterFeedback
+        model = models.ArbiterFeedback
         fields = [
             "from_peer",
             "to_arbiter",
@@ -76,10 +70,10 @@ class ArbiterFeedbackCreateSerializer(serializers.ModelSerializer):
 class ArbiterFeedbackSerializer(serializers.ModelSerializer):
     peer = serializers.SerializerMethodField()
     arbiter = serializers.SerializerMethodField()
-    order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+    order = serializers.PrimaryKeyRelatedField(queryset=models.Order.objects.all())
 
     class Meta:
-        model = ArbiterFeedback
+        model = models.ArbiterFeedback
         fields = [
             "id",
             "peer",
@@ -90,14 +84,14 @@ class ArbiterFeedbackSerializer(serializers.ModelSerializer):
             "created_at"
         ]
     
-    def get_peer(self, instance: ArbiterFeedback):
+    def get_peer(self, obj):
       return {
-        'id': instance.from_peer.id,
-        'name': instance.from_peer.name
+        'id': obj.from_peer.id,
+        'name': obj.from_peer.name
       }
     
-    def get_arbiter(self, instance: ArbiterFeedback):
+    def get_arbiter(self, obj):
       return {
-        'id': instance.to_arbiter.id,
-        'name': instance.to_arbiter.name
+        'id': obj.to_arbiter.id,
+        'name': obj.to_arbiter.name
       }

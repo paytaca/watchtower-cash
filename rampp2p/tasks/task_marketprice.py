@@ -8,8 +8,17 @@ import rampp2p.models as models
 import logging
 logger = logging.getLogger(__name__)
 
-@shared_task(queue='rampp2p__market_rates')
-def update_market_rates():
+@shared_task(queue='rampp2p__marketprices')
+def update_market_prices():
+    """
+    Updates the market prices for subscribed fiat currencies.
+
+    This function fetches the latest market prices for Bitcoin Cash (BCH) from CoinGecko and Fullstack.cash.
+    It updates the MarketPrice model with the fetched prices and sends the updated prices through a websocket channel.
+
+    Returns:
+        None
+    """
     # get subscribed fiat currencies
     currencies = models.FiatCurrency.objects.all().values_list('symbol', flat=True)
 
@@ -39,6 +48,18 @@ def update_market_rates():
         send_market_price(data, currency)
 
 def get_latest_bch_prices_coingecko(currencies):
+    """
+    Fetches the latest BCH prices from CoinGecko.
+
+    This function sends a request to the CoinGecko API to retrieve the latest BCH prices
+    for the specified fiat currencies.
+
+    Args:
+        currencies (list): A list of fiat currency symbols.
+
+    Returns:
+        dict: A dictionary containing the latest BCH prices for the specified currencies.
+    """
     coin_id = "bitcoin-cash"
     query = { "ids": coin_id, "vs_currencies": ','.join(currencies) }
     response = requests.get("https://api.coingecko.com/api/v3/simple/price/", params=query)
@@ -46,6 +67,18 @@ def get_latest_bch_prices_coingecko(currencies):
     return data.get(coin_id)
 
 def get_latest_bch_prices_fullstackcash(currencies):
+    """
+    Fetches the latest BCH prices from Fullstack.cash.
+
+    This function sends a request to the Fullstack.cash API to retrieve the latest BCH prices
+    for the specified fiat currencies.
+
+    Args:
+        currencies (list): A list of fiat currency symbols.
+
+    Returns:
+        dict: A dictionary containing the latest BCH prices for the specified currencies.
+    """
     response = requests.get("https://api.fullstack.cash/v5/price/rates")
     data = response.json()
 
