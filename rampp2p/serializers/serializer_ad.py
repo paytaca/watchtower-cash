@@ -301,6 +301,7 @@ class AdSerializer(BaseAdSerializer):
             'id': obj.owner.id,
             'chat_identity_id': obj.owner.chat_identity_id,
             'name': obj.owner.name,
+            'rating':  obj.owner.average_rating(),
             'is_online': obj.owner.is_online,
             'last_online_at': obj.owner.last_online_at
         }
@@ -362,5 +363,6 @@ class WriteAdSerializer(serializers.ModelSerializer):
             'crypto_currency',
             'appeal_cooldown_choice',
             'payment_methods',
-            'is_public'
+            'is_public',
+            'modified_at'
         ]
