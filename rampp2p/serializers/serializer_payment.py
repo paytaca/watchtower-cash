@@ -1,6 +1,5 @@
 from rest_framework import serializers
 import rampp2p.models as models
-from django.db.models import Q
 
 import logging
 logger = logging.getLogger(__name__)
@@ -49,34 +48,9 @@ class SubsetPaymentMethodSerializer(serializers.ModelSerializer):
         return PaymentMethodFieldSerializer(payment_method_fields, many=True).data
 
     def get_dynamic_values(self, obj):
-        '''
-         dynamic_fields = []
-        if self.context and 'order_id' in self.context:
-            order_id = self.context['order_id']
-            logger.warn(f'get_dynamic_values[order_id]: {order_id}')
-            
-            order = models.Order.objects.filter(id=order_id)
-            logger.warn(f'order.exists: {order.exists()}')
-            if not order.exists():
-                return dynamic_fields
-            
-            order = order.first()
-            queryset = obj.payment_type.dynamic_fields.all()
-            for field in queryset:
-                value = None
-                if field.model_ref == models.DynamicPaymentTypeField.ModelRef.ORDER:
-                    if field.field_ref == models.DynamicPaymentTypeField.FieldRef.ID:
-                        value = order.id
-                    if field.field_ref == models.DynamicPaymentTypeField.FieldRef.TRACKING_ID:
-                        value = order.tracking_id
-                dynamic_fields.append({ 'fieldname': field.fieldname, 'value': value })
-
-        return dynamic_fields
-        '''
         dynamic_fields = obj.payment_type.dynamic_fields.all()
         serialized_data = DynamicPaymentTypeFieldSerializer(dynamic_fields, many=True)
         return serialized_data.data
-
 
 class RelatedPaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = serializers.SerializerMethodField()

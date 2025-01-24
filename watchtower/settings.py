@@ -272,10 +272,10 @@ CELERY_IMPORTS = (
     'smartbch.tasks',
     'anyhedge.tasks',
     'ramp.tasks',
-    'rampp2p.tasks.contract_tasks',
-    'rampp2p.tasks.market_rate_tasks',
-    'rampp2p.tasks.transaction_tasks',
-    'rampp2p.tasks.order_tasks',
+    'rampp2p.tasks.task_contract',
+    'rampp2p.tasks.task_marketprice',
+    'rampp2p.tasks.task_transaction',
+    'rampp2p.tasks.task_order',
     'stablehedge.tasks',
 )
 
@@ -403,8 +403,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ramp.tasks.update_shift_status',
         'schedule': 60
     },
-    'update_market_rates': {
-        'task': 'rampp2p.tasks.market_rate_tasks.update_market_rates',
+    'update_market_prices': {
+        'task': 'rampp2p.tasks.task_marketprice.update_market_prices',
         'schedule': 15 # run every 15 seconds
     },
     'check_unfunded_gifts': {
@@ -420,7 +420,7 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 30
     },
     'cancel_expired_orders': {
-        'task': 'rampp2p.tasks.order_tasks.cancel_expired_orders',
+        'task': 'rampp2p.tasks.task_order.cancel_expired_orders',
         'schedule': 60 # run every 1 minute
     }
 }

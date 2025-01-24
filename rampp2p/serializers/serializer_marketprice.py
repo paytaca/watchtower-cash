@@ -1,9 +1,9 @@
 from rest_framework import serializers
-from rampp2p.models import MarketRate
+from rampp2p.models import MarketPrice
 
-class MarketRateSerializer(serializers.ModelSerializer):
+class MarketPriceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = MarketRate
+        model = MarketPrice
         fields = [
             'id',
             'currency',

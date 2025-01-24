@@ -5,9 +5,9 @@ from django.apps import apps
 from rampp2p.utils import satoshi_to_bch
 from datetime import timedelta
 
-from .peer import Peer
-from .currency import FiatCurrency, CryptoCurrency
-from .payment import PaymentMethod, PaymentType
+from .model_peer import Peer
+from .model_currency import FiatCurrency, CryptoCurrency
+from .model_payment import PaymentMethod, PaymentType
 
 class CooldownChoices(models.IntegerChoices):
     FIFTEEN     =   15, '15 minutes'
@@ -34,20 +34,21 @@ class Ad(models.Model):
     
     trade_floor_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     trade_ceiling_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
-    
+    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+   
     trade_floor_sats = models.BigIntegerField(null=True)
     trade_ceiling_sats = models.BigIntegerField(null=True)
-    
+    trade_amount_sats = models.BigIntegerField(null=True)
+   
+    trade_limits_in_fiat = models.BooleanField(default=False)
+
+    ### retained for legacy support
     trade_floor = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_ceiling = models.DecimalField(max_digits=18, decimal_places=8, default=0)
-    trade_limits_in_fiat = models.BooleanField(default=False)
-    
-    trade_amount_fiat = models.DecimalField(max_digits=18, decimal_places=2, default=0)
-    trade_amount_sats = models.BigIntegerField(null=True)
-    
     trade_amount = models.DecimalField(max_digits=18, decimal_places=8, default=0)
     trade_amount_in_fiat = models.BooleanField(default=False)
-    
+    ### retained for legacy support
+
     appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices, default=CooldownChoices.SIXTY)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
     is_public = models.BooleanField(default=True)
@@ -73,8 +74,8 @@ class Ad(models.Model):
         if self.price_type == PriceType.FIXED:
             return self.fixed_price
         
-        MarketRate = apps.get_model('rampp2p', 'MarketRate')
-        market_price = MarketRate.objects.filter(currency=self.fiat_currency.symbol).first()
+        MarketPrice = apps.get_model('rampp2p', 'MarketPrice')
+        market_price = MarketPrice.objects.filter(currency=self.fiat_currency.symbol).first()
         if market_price:
             market_price = market_price.price
             return market_price * (self.floating_price/100)

@@ -1,4 +1,4 @@
-from rampp2p.tasks.contract_tasks import execute_subprocess, contract_handler
+from rampp2p.tasks.task_contract import execute_subprocess, contract_handler
 
 import logging
 logger = logging.getLogger(__name__)

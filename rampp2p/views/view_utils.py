@@ -10,8 +10,8 @@ from django.http import HttpResponse, JsonResponse
 from main.utils.subscription import save_subscription
 from rampp2p.utils.fees import get_trading_fees
 
-from rampp2p.models import MarketRate, AppVersion, FeatureControl
-from rampp2p.serializers import MarketRateSerializer
+from rampp2p.models import MarketPrice, AppVersion, FeatureControl
+from rampp2p.serializers import MarketPriceSerializer
 from decimal import Decimal
 
 import logging
@@ -52,17 +52,17 @@ class ContractFeeCalculation(APIView):
         _, fees = get_trading_fees(trade_amount=trade_amount)
         return Response(fees, status=status.HTTP_200_OK)
 
-class MarketRates(APIView):
+class MarketPrices(APIView):
     def get(self, request):
-        queryset = MarketRate.objects.all()
+        queryset = MarketPrice.objects.all()
         currency = request.query_params.get('currency')
         response = {}
         if currency is not None:
-            queryset = MarketRate.objects.filter(currency=currency)
+            queryset = MarketPrice.objects.filter(currency=currency)
             if (queryset.exists()):
-                response = MarketRateSerializer(queryset.first()).data
+                response = MarketPriceSerializer(queryset.first()).data
         else:
-            response = MarketRateSerializer(queryset, many=True).data
+            response = MarketPriceSerializer(queryset, many=True).data
         return Response(response, status.HTTP_200_OK)
     
 class SubscribeContractAddress(APIView):

@@ -85,7 +85,7 @@ urlpatterns = [
 
     # Utils
     path('utils/calculate-fees/', ContractFeeCalculation.as_view()),
-    path('utils/market-price/', MarketRates.as_view(), name='market-price'),
+    path('utils/market-price/', MarketPrices.as_view(), name='market-price'),
     path('utils/subscribe-address/', SubscribeContractAddress.as_view(), name='subscribe-address'),
     path('chats/webhook/', ChatWebhookView.as_view(), name='chat-webhook'),
     path('feature-toggles/', check_feature_control),

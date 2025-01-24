@@ -28,6 +28,18 @@ logger = logging.getLogger(__name__)
 
 @shared_task(queue='rampp2p__contract_execution')
 def execute_subprocess(command):
+    """
+    Executes a subprocess command.
+
+    This function runs a subprocess command and captures its output and error streams.
+    It also removes control characters from the JSON output.
+
+    Args:
+        command (str): The command to be executed.
+
+    Returns:
+        dict: A dictionary containing the result and stderr output of the command.
+    """
     # execute subprocess
     logger.warning(f'executing: {command}')
     process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -51,16 +63,29 @@ def execute_subprocess(command):
 
 @shared_task(queue='rampp2p__contract_execution')
 def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
-    '''
-    Checks if `txn` is valid given `action` and `contract_id`. If valid:
-    automatically updates the related order's status. The result is sent 
-    through a websocket channel.
-    '''
+    """
+    Validates a transaction for a given action and contract.
+
+    This function checks if the transaction is valid for the specified action and contract.
+    If valid, it updates the related order's status and sends the result through a websocket channel.
+
+    Args:
+        txn (Dict): The transaction details.
+        action (str): The action type (e.g., 'ESCROW', 'REFUND', 'RELEASE').
+        contract_id (int): The ID of the contract associated with the transaction.
+
+    Returns:
+        dict: The result of the validation and order status update.
+    """
     logger.warning(f'Validating txn: {txn} | {action} | contract: {contract_id}')
+
+    # Fetches contract given contract id
     contract = Contract.objects.get(pk=contract_id)
+    # Validates the transaction
     valid, error, outputs = verify_txn(action, contract, txn)
     result = None
     
+    # Builds the result response
     if valid:
         txn = {
             'action': action,
@@ -71,6 +96,7 @@ def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
                 'outputs': outputs,
             }
         }
+        # Updates the contract related order's status
         result = handle_order_status(action, contract, txn)
     else:
         result = {
@@ -79,6 +105,7 @@ def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
             'error': error
         }
 
+    # Sends the result response through websocket
     websocket.send_order_update(
         result, 
         contract.order.id
@@ -87,6 +114,20 @@ def handle_transaction_validation(txn: Dict, action: str, contract_id: int):
     return result
 
 def handle_order_status(action: str, contract: Contract, txn: Dict):
+    """
+    Handles the order status update based on the transaction action.
+
+    This function updates the order status and transaction details based on the action type.
+    It also sends push notifications to the contract parties and removes address tx subscriptions if necessary.
+
+    Args:
+        action      (str): The action type (e.g., 'ESCROW', 'REFUND', 'RELEASE').
+        contract    (Contract): The contract associated with the transaction.
+        txn         (Dict): The transaction details.
+
+    Returns:
+        dict: The result of the order status update.
+    """
     valid = txn.get('valid')
     error = txn.get('error')
     txid = txn.get('details').get('txid')
@@ -108,7 +149,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
     status = None
     if valid:
 
-        # Update transaction details 
+        # Update transaction txid and valid status
         transaction = Transaction.objects.filter(Q(contract__id=contract.id) & Q(action=action))
         if transaction.exists():
             transaction = transaction.last()
@@ -120,7 +161,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             result["success"] = False
             return result
 
-        # Save transaction outputs
+        # Save transaction outputs as Recipients
         if outputs is not None:
             for output in outputs:
                 out_data = {
@@ -136,7 +177,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                     result["success"] = False
                     return result
     
-        # Update order status
+        # Update the status of the associated order
         order_members = contract.order.get_members()
         status_created_by = None
         status_type = None
@@ -150,7 +191,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             status_type = StatusType.ESCROWED
 
         try:
-            # Resolve order appeal once order is RELEASED/REFUNDED
+            # Resolve order appeal (if any) once order is released/refunded
             appeal_exists = False
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
                 appeal = Appeal.objects.filter(order=contract.order.id)
@@ -160,7 +201,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
                     appeal.resolved_at = timezone.now()
                     appeal.save()
 
-            # Update order appealable_at if status is ESCROWED
+            # Update order appealable_at if status is escrowed
             if status_type == StatusType.ESCROWED:
                 contract.order.appealable_at = timezone.now() + contract.order.ad_snapshot.appeal_cooldown
                 contract.order.save()
@@ -170,7 +211,7 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             if contract.order.is_cash_in:
                 websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': contract.order.id}, contract.order.owner.wallet_hash)
 
-            # Remove subscription once order is complete
+            # Remove address subscription once order is complete
             if status_type == StatusType.RELEASED or status_type == StatusType.REFUNDED:
                 logger.info(f'Removing subscription to contract {transaction.contract.address}')
                 remove_subscription(transaction.contract.address, transaction.contract.id)
@@ -217,6 +258,20 @@ class TxnVerificationError(Exception):
 
 
 def verify_txn(action, contract: Contract, txn: Dict):
+    """
+    Verifies the validity of a transaction for a given action and contract.
+
+    This function checks the transaction inputs and outputs to ensure they match the expected values
+    for the specified action and contract.
+
+    Args:
+        action   (str): The action type (e.g., 'ESCROW', 'REFUND', 'RELEASE').
+        contract (Contract): The contract associated with the transaction.
+        txn      (Dict): The transaction details.
+
+    Returns:
+        tuple: A tuple containing the validity status, error message (if any), and transaction outputs.
+    """
     outputs = []
     try:
         if txn.get('valid') is False:
@@ -231,16 +286,15 @@ def verify_txn(action, contract: Contract, txn: Dict):
             raise TxnVerificationError(txn.get('error', 'Transaction input/outputs empty'))
         
         if action == Transaction.ActionType.ESCROW:
-            '''
-            If the transaction ActionType is ESCROW:
-                (1) check if output value is correct,
-                (2) check if output address is the expected contract address
-            '''
+            # If the transaction ActionType is ESCROW:
+            #  1) check if output amount is correct,
+            #  2) check if output address is the expected contract address
             
             total_fees = contract.get_total_fees()
             if total_fees is None:
                 raise TxnVerificationError(f'Failed to fetch correct total_fees expected an int got {total_fees}')
             
+            # Calculate expected amount in satoshi including fees
             expected_amount = contract.order.trade_amount
             if expected_amount is None:
                 expected_amount = bch_to_satoshi(contract.order.crypto_amount)
@@ -248,30 +302,31 @@ def verify_txn(action, contract: Contract, txn: Dict):
 
             if len(outputs) >= 1:
                 to_address = outputs[0].get('address')
+                # Check if the tx destination address is the contract address
                 if to_address == contract.address:
-                    # Check if the amount is correct
+                    # Check if the tx amount and expected amount matches
                     actual_amount = outputs[0].get('value')
                     if actual_amount != expected_amount_with_fees:
                         raise TxnVerificationError(f'Transaction value {actual_amount} does not match expected value {expected_amount_with_fees}')
                 else:
                     raise TxnVerificationError(f'Transaction outputs[0] address {outputs[0].get("address")} does not match expected contract address {contract.address}')
+            else:
+                raise TxnVerificationError(f'Empty transaction outputs')
         
         else:
-            '''
-            If the transaction ActionType is RELEASE or REFUND:
-                (1) check if input address is the contract address
-                (2) check if outputs include:
-                    - servicer address with output amount == service fee
-                    - arbiter address with output amount == arbitration fee
-                    - buyer (if RELEASE) or seller (if REFUND) address with correct value minus fees.
-            '''
+            # If the transaction ActionType is RELEASE or REFUND:
+            # (1) check if input address is the contract address
+            # (2) check if outputs include:
+            #    - servicer address with output amount == service fee
+            #    - arbiter address with output amount == arbitration fee
+            #    - buyer (if RELEASE) or seller (if REFUND) address with correct value minus fees.
+
             # Find the contract address in the list of transaction's inputs
             input_addresses = [item['address'] for item in inputs if 'address' in item]
-            
             if contract.address not in input_addresses:
                 raise TxnVerificationError(f'Expected contract address {contract.address} not found in input_addresses: {input_addresses}')
             
-            # Retrieve expected transaction output addresses
+            # Retrieve the expected transaction output addresses
             contract_members = contract.get_members()
             expected_addresses = {
                 'arbiter': contract_members['arbiter'].address,
@@ -280,7 +335,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
                 'servicer': settings.SERVICER_ADDR
             }
 
-            # Get expected transaction amount and fees
+            # Calculate the expected transaction amount in satoshi, including fees
             expected_arbitration_fee = contract.arbitration_fee
             expected_service_fee = contract.service_fee
             expected_transfer_amount = contract.order.trade_amount
@@ -302,7 +357,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
                 else:
                     raise TxnVerificationError(f'Incorrect output address {to_address} (expected {expected_address})')
 
-                # Checks if outputs[1] sends to servicer and if value sent is correct
+                # Checks if outputs[1] sends to servicer and if amount sent is correct
                 servicer_address = outputs[1].get('address')
                 if servicer_address == expected_addresses['servicer']:
                     service_fee = outputs[1].get('value')
@@ -311,7 +366,7 @@ def verify_txn(action, contract: Contract, txn: Dict):
                 else:
                     raise TxnVerificationError(f'Incorrect service address {servicer_address} (expected {expected_addresses["servicer"]})')
 
-                # Checks if outputs[2] sends to arbiter and if value sent is correct
+                # Checks if outputs[2] sends to arbiter and if amount sent is correct
                 arbiter_address = outputs[2].get('address')
                 if arbiter_address == expected_addresses['arbiter']:
                     arbitration_fee = int(outputs[2].get('value'))
@@ -326,6 +381,18 @@ def verify_txn(action, contract: Contract, txn: Dict):
         return False, err.message, outputs
 
 def remove_subscription(address, subscriber_id):
+    """
+    Removes a subscription for a given address and subscriber.
+
+    This function deletes the subscription record for the specified address and subscriber ID.
+
+    Args:
+        address (str): The address of the subscription.
+        subscriber_id (int): The ID of the subscriber.
+
+    Returns:
+        bool: True if the subscription was removed, False otherwise.
+    """
     subscription = Subscription.objects.filter(
         address__address=address,
         recipient__telegram_id=subscriber_id

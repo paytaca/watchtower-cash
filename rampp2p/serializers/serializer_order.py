@@ -2,9 +2,9 @@ from PIL import Image
 from rest_framework import serializers
 from django.db.models import Q
 
-from .ad import SubsetAdSnapshotSerializer
-from .payment import SubsetPaymentMethodSerializer
-from .transaction import TransactionSerializer
+from .serializer_ad import SubsetAdSnapshotSerializer
+from .serializer_payment import SubsetPaymentMethodSerializer
+from .serializer_transaction import TransactionSerializer
 import rampp2p.models as models
 
 import logging
@@ -206,7 +206,7 @@ class OrderSerializer(serializers.ModelSerializer):
         status = self.get_status(obj)
         feedback = None
         if status['value'] in ['CNCL', 'RLS', 'RFN']:
-            user_feedback = models.Feedback.objects.filter(Q(from_peer__wallet_hash=wallet_hash) and Q(order__id=obj.id)).first()
+            user_feedback = models.OrderFeedback.objects.filter(Q(from_peer__wallet_hash=wallet_hash) and Q(order__id=obj.id)).first()
             if user_feedback:
                 feedback = {
                     'id': user_feedback.id,
@@ -219,7 +219,6 @@ class WriteOrderSerializer(serializers.ModelSerializer):
     ad_snapshot = serializers.PrimaryKeyRelatedField(required=True, queryset=models.AdSnapshot.objects.all())
     owner = serializers.PrimaryKeyRelatedField(required=True, queryset=models.Peer.objects.all())
     arbiter = serializers.PrimaryKeyRelatedField(queryset=models.Arbiter.objects.all(), required=False)
-    # locked_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
     trade_amount = serializers.IntegerField(required=True)
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), required=False, many=True)
     is_cash_in = serializers.BooleanField(required=True)
@@ -231,7 +230,6 @@ class WriteOrderSerializer(serializers.ModelSerializer):
             'ad_snapshot', 
             'owner',
             'arbiter',
-            # 'locked_price',
             'trade_amount',
             'payment_methods',
             'chat_session_ref',

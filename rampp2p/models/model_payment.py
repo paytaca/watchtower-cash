@@ -1,11 +1,5 @@
 from django.db import models
-from .peer import Peer
-
-class IdentifierFormat(models.Model):
-  format = models.CharField(max_length=64, unique=True)
-
-  def __str__(self):
-    return self.format
+from .model_peer import Peer
 
 class PaymentType(models.Model):
   full_name = models.CharField(max_length=100, db_index=True)
@@ -24,9 +18,6 @@ class PaymentMethod(models.Model):
   payment_type = models.ForeignKey(PaymentType, on_delete=models.PROTECT)
   owner = models.ForeignKey(Peer, on_delete=models.CASCADE)
   created_at = models.DateTimeField(auto_now_add=True, editable=False)
-
-  # class Meta:
-  #   unique_together = ('owner', 'payment_type')
 
   def __str__(self):
     return f"{self.id}"

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models.currency import FiatCurrency, CryptoCurrency
+from rampp2p.models import FiatCurrency, CryptoCurrency
 
 class FiatCurrencySerializer(serializers.ModelSerializer):
   cashin_presets = serializers.SerializerMethodField()

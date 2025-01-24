@@ -13,8 +13,8 @@ def get_price(ad):
     if ad.price_type == PriceType.FIXED:
         return ad.fixed_price
     
-    MarketRate = apps.get_model('rampp2p', 'MarketRate')
-    market_price = MarketRate.objects.filter(currency=ad.fiat_currency.symbol).first()
+    MarketPrice = apps.get_model('rampp2p', 'MarketPrice')
+    market_price = MarketPrice.objects.filter(currency=ad.fiat_currency.symbol).first()
     if market_price:
         market_price = market_price.price
         return market_price * (ad.floating_price/100)

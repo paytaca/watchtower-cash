@@ -1,13 +1,5 @@
 from rest_framework import serializers
 from django.db.models import Q
-# from rampp2p.models import (
-#     Appeal, 
-#     Peer, 
-#     Order,
-#     Status,
-#     AdSnapshot,
-#     PriceType
-# )
 import rampp2p.models as models
 import json
 
@@ -21,7 +13,7 @@ class ListTextField(serializers.Field):
     def to_internal_value(self, data):
         return json.dumps(data)
 
-class AppealCreateSerializer(serializers.ModelSerializer):
+class BaseAppealSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=models.Peer.objects.all())
     order = serializers.PrimaryKeyRelatedField(queryset=models.Order.objects.all())
     reasons = ListTextField()
@@ -35,7 +27,7 @@ class AppealCreateSerializer(serializers.ModelSerializer):
            'reasons'
         ]
 
-class AppealSerializer(AppealCreateSerializer):
+class AppealSerializer(BaseAppealSerializer):
     owner = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
     order = serializers.SerializerMethodField()
@@ -43,7 +35,7 @@ class AppealSerializer(AppealCreateSerializer):
 
     class Meta:
         model = models.Appeal
-        fields = AppealCreateSerializer.Meta.fields + [
+        fields = BaseAppealSerializer.Meta.fields + [
             'resolved_at',
             'created_at',
             'read_at'

@@ -1,6 +1,6 @@
 from django.db import models
 from django.apps import apps
-from .currency import FiatCurrency
+from .model_currency import FiatCurrency
 
 class Arbiter(models.Model):
     chat_identity_id = models.IntegerField(null=True, blank=True)

@@ -14,7 +14,7 @@ class ContractMemberSerializer(serializers.ModelSerializer):
             'address_path'
         ]
 
-class ContractSerializer(serializers.ModelSerializer):
+class BaseContractSerializer(serializers.ModelSerializer):
     order = serializers.PrimaryKeyRelatedField(queryset=models.Order.objects.all())
     class Meta:
         model = models.Contract
@@ -25,14 +25,14 @@ class ContractSerializer(serializers.ModelSerializer):
             'created_at'
         ]
 
-class ContractDetailSerializer(ContractSerializer): 
+class ContractSerializer(BaseContractSerializer): 
     members = ContractMemberSerializer(many=True, read_only=True)
     pubkeys = serializers.SerializerMethodField()
     addresses = serializers.SerializerMethodField()
     timestamp = serializers.SerializerMethodField()
     class Meta:
         model = models.Contract
-        fields = ContractSerializer.Meta.fields + [
+        fields = BaseContractSerializer.Meta.fields + [
             'members',
             'pubkeys',
             'addresses',
