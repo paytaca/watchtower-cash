@@ -1,5 +1,5 @@
 from django.contrib import admin
-
+from dynamic_raw_id.admin import DynamicRawIDMixin
 from .models import *
 
 from main.models import (
@@ -45,11 +45,15 @@ def IsNullListFilter(parameter_name):
 # Register your models here.
 
 @admin.register(PosDevice)
-class PosDeviceAdmin(admin.ModelAdmin):
+class PosDeviceAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = [
         "wallet_hash",
         "name",
         "merchant__name",
+    ]
+
+    dynamic_raw_id_fields = [
+        'latest_transaction'
     ]
 
     list_display = [

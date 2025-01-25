@@ -12,7 +12,7 @@ from main.mqtt import publish_message
 from watchtower.celery import app as celery_app
 from main.models import *
 from main.utils.address_validator import *
-from paytacapos.models import Merchant
+from paytacapos.models import Merchant, PosDevice
 from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
@@ -1687,6 +1687,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             merchant = merchant_check.last()
             merchant.last_update = timezone.now()
             merchant.save()
+
+            # update latest_transaction in POS devices
+            pos_devices = PosDevice.objects.filter(merchant=merchant)
+            for device in pos_devices:
+                device.populate_latest_transaction()
 
         # for older token records
         if (
