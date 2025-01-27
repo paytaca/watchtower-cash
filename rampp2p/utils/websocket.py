@@ -30,6 +30,10 @@ def send_message(data, room_name):
         }
     )
 
+def send_ad_update(data, ad_id):
+    room_name = f'p2pxchange_ad_{ad_id}'
+    send_message(data, room_name)
+
 def send_order_update(data, order_id):
     room_name = f'p2pxchange_order_{order_id}'
     send_message(data, room_name)

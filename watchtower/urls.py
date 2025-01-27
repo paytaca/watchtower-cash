@@ -107,7 +107,7 @@ else:
     import re
     from django.urls import re_path
     from django.conf import settings
-    from rampp2p.views.views_utils import media_proxy_view
+    from rampp2p.views.view_utils import media_proxy_view
     
     base_media_url = settings.MEDIA_URL.strip("/")
     urlpatterns += [

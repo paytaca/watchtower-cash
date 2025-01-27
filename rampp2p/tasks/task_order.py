@@ -12,7 +12,16 @@ logger = logging.getLogger(__name__)
 
 @shared_task(queue='rampp2p__cancel_expired_orders')
 def cancel_expired_orders():
-    # find expired orders with status SUBMITTED
+    """
+    Cancels expired orders with status SUBMITTED or CONFIRMED.
+
+    This function finds orders that have expired and updates their status to CANCELED.
+    It also marks the orders as read by all parties.
+
+    Returns:
+        None
+    """
+    # find expired orders with status SUBMITTED or CONFIRMED
     latest_status_subquery = Status.objects.filter(order=OuterRef('pk'),).order_by('-created_at').values('status')[:1]
     queryset = Order.objects.annotate(latest_status=Subquery(latest_status_subquery))
     target_orders = queryset.filter(

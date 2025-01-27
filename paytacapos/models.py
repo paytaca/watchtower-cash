@@ -3,7 +3,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.postgres.fields import ArrayField
 from psqlextra.query import PostgresQuerySet
-from main.models import WalletHistory, Wallet, Transaction
+from main.models import WalletHistory, Wallet, Address, Transaction
 from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
 
 from PIL import Image
@@ -68,6 +68,12 @@ class PosDevice(models.Model):
         null=True, blank=True,
     )
 
+    latest_transaction = models.ForeignKey(
+        'main.Transaction',
+        on_delete=models.SET_NULL, related_name="devices",
+        null=True, blank=True
+    )
+
     class Meta:
         unique_together = (
             ("posid", "wallet_hash"),
@@ -86,6 +92,15 @@ class PosDevice(models.Model):
                 return i
 
         return None
+    
+    def populate_latest_transaction(self):
+        last_tx = Transaction.objects.filter(
+            wallet__wallet_hash=self.wallet_hash,
+            address__address_path__iregex=f"((0|1)/)?0*\d+{self.posid}"
+        ).order_by('date_created').last()
+        if last_tx:
+            self.latest_transaction = last_tx
+            self.save()
 
 
 class Location(models.Model):
@@ -189,14 +204,17 @@ class Merchant(models.Model):
 
             super().save(*args, **kwargs)
 
-
     @property
     def last_transaction_date(self):
-        wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
-        last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')
-        last_tx_date = None
-        if last_tx:
-            last_tx_date = str(last_tx.date_created)
+        pos_devices_check = self.devices.filter(latest_transaction__isnull=False)
+        if pos_devices_check.exists():
+            last_tx_date = pos_devices_check.latest('latest_transaction').latest_transaction.date_created
+        else:
+            wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
+            last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')
+            last_tx_date = None
+            if last_tx:
+                last_tx_date = str(last_tx.date_created)
         return last_tx_date
 
     def get_main_branch(self):

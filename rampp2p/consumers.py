@@ -34,6 +34,33 @@ class MarketPriceConsumer(AsyncWebsocketConsumer):
         data = event.get('message')
         await self.send(text_data=json.dumps(data))
 
+class AdUpdatesConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.ad_id = self.scope['url_route']['kwargs']['ad_id']
+        self.room_name = f'p2pxchange_ad_{self.ad_id}'
+        await self.channel_layer.group_add(
+            self.room_name,
+            self.channel_name
+        )
+        await self.accept()
+        data = { 
+            'success': True,
+            'type': 'ConnectionMessage',
+            'extra': {
+                'message': f"Subscribed to '{self.room_name}'" 
+            }
+        }
+        await self.send(text_data=json.dumps(data))
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_name,
+            self.channel_name
+        )
+
+    async def send_message(self, event):
+        data = event.get('message')
+        await self.send(text_data=json.dumps(data))
 
 class OrderUpdatesConsumer(AsyncWebsocketConsumer):
     async def connect(self):

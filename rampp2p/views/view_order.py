@@ -1,5 +1,4 @@
 from rest_framework import status, viewsets
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
@@ -300,7 +299,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             self._check_create_permissions(wallet_hash, ad.id)
 
             # query market price for ad fiat currency
-            market_price = models.MarketRate.objects.filter(currency=ad.fiat_currency.symbol)
+            market_price = models.MarketPrice.objects.filter(currency=ad.fiat_currency.symbol)
             if market_price.exists():
                 market_price = market_price.first()
             else:

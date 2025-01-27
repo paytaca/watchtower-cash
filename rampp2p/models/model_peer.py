@@ -21,8 +21,8 @@ class Peer(models.Model):
         return self.name
 
     def average_rating(self):
-        Feedback = apps.get_model('rampp2p', 'Feedback')
-        avg_rating = Feedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']
+        OrderFeedback = apps.get_model('rampp2p', 'OrderFeedback')
+        avg_rating = OrderFeedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']
         return avg_rating
     
     def get_orders(self):
@@ -62,8 +62,7 @@ class Peer(models.Model):
         if completed_count > 0:
             completion_rate = released_count / completed_count * 100
         return completion_rate
-        
-
+    
 class ReservedName(models.Model):
     peer = models.ForeignKey(Peer, on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=64, unique=True)

@@ -139,7 +139,7 @@ class AppealViewSet(viewsets.GenericViewSet):
             }
 
             with transaction.atomic():
-                serialized_appeal = serializers.AppealCreateSerializer(data=data)
+                serialized_appeal = serializers.BaseAppealSerializer(data=data)
                 if not serialized_appeal.is_valid():
                     raise ValidationError(serialized_appeal.errors)
                 

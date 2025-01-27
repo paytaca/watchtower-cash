@@ -13,7 +13,7 @@ from authentication.token import TokenAuthentication
 from authentication.serializers import UserSerializer
 from authentication.permissions import RampP2PIsAuthenticated
 
-import rampp2p.serializers as rampp2p_serializers
+import rampp2p.serializers as serializers
 import rampp2p.models as models
 from rampp2p.viewcodes import ViewCode
 from rampp2p.utils.signature import verify_signature, get_verification_headers
@@ -35,13 +35,13 @@ class UserProfileView(APIView):
         arbiter = models.Arbiter.objects.filter(wallet_hash=wallet_hash)
         
         if arbiter.exists():
-            user = rampp2p_serializers.ArbiterSerializer(arbiter.first()).data
+            user = serializers.ArbiterSerializer(arbiter.first()).data
             is_arbiter = True
         
         if not is_arbiter:
             peer = models.Peer.objects.filter(wallet_hash=wallet_hash)
             if peer.exists():    
-                user = rampp2p_serializers.PeerProfileSerializer(peer.first()).data
+                user = serializers.PeerProfileSerializer(peer.first()).data
             
         response = {
             "is_arbiter": is_arbiter,
@@ -58,7 +58,7 @@ class ArbiterView(APIView):
                 arbiter = models.Arbiter.objects.get(wallet_hash=wallet_hash)
             except models.Arbiter.DoesNotExist as err:
                 return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-            return Response(rampp2p_serializers.ArbiterSerializer(arbiter).data, status=status.HTTP_200_OK)
+            return Response(serializers.ArbiterSerializer(arbiter).data, status=status.HTTP_200_OK)
         else:
             # List arbiters
             queryset = models.Arbiter.objects.filter(
@@ -77,7 +77,7 @@ class ArbiterView(APIView):
             if id:
                 queryset = queryset.filter(id=id)
 
-            serializer = rampp2p_serializers.ArbiterSerializer(queryset, many=True)
+            serializer = serializers.ArbiterSerializer(queryset, many=True)
             return Response(serializer.data, status.HTTP_200_OK)
     
     def post(self, request):
@@ -97,12 +97,12 @@ class ArbiterView(APIView):
         data = request.data.copy()
         data['wallet_hash'] = wallet_hash
 
-        serialized_arbiter = rampp2p_serializers.ArbiterSerializer(data=data)
+        serialized_arbiter = serializers.ArbiterSerializer(data=data)
         if not serialized_arbiter.is_valid():
             return Response(serialized_arbiter.errors, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            serialized_arbiter = rampp2p_serializers.ArbiterSerializer(serialized_arbiter.save())
+            serialized_arbiter = serializers.ArbiterSerializer(serialized_arbiter.save())
         except IntegrityError:
             return Response({'error': 'arbiter with wallet_hash already exists'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serialized_arbiter.data, status=status.HTTP_200_OK)
@@ -113,9 +113,9 @@ class ArbiterView(APIView):
         if inactive_hours:
             data['inactive_until'] = datetime.now() + timedelta(hours=inactive_hours)
         
-        serializer = rampp2p_serializers.ArbiterSerializer(request.user, data=data)
+        serializer = serializers.ArbiterSerializer(request.user, data=data)
         if serializer.is_valid():
-            serializer = rampp2p_serializers.ArbiterSerializer(serializer.save())
+            serializer = serializers.ArbiterSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_200_OK)        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -135,7 +135,7 @@ class PeerView(APIView):
             peer = models.Peer.objects.get(pk=pk)
         except models.Peer.DoesNotExist:
             raise Http404
-        serializer = rampp2p_serializers.PeerSerializer(peer)
+        serializer = serializers.PeerSerializer(peer)
         return Response(serializer.data, status.HTTP_200_OK)
 
     def post(self, request):
@@ -184,10 +184,10 @@ class PeerView(APIView):
         data['wallet_hash'] = wallet_hash
         data['public_key'] = public_key
         
-        serializer = rampp2p_serializers.PeerCreateSerializer(data=data)
+        serializer = serializers.PeerCreateSerializer(data=data)
         if serializer.is_valid():
             peer = serializer.save()
-            serializer = rampp2p_serializers.PeerSerializer(peer)
+            serializer = serializers.PeerSerializer(peer)
             if reserved:
                 reserved.peer = peer
                 reserved.redeemed_at = timezone.now()
@@ -204,7 +204,7 @@ class PeerView(APIView):
                 if name_conflict_peer.exists() and request.user.wallet_hash != name_conflict_peer.first().wallet_hash:
                     raise IntegrityError('Name already taken')
 
-            serializer = rampp2p_serializers.PeerUpdateSerializer(request.user, data=request.data)
+            serializer = serializers.PeerUpdateSerializer(request.user, data=request.data)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
@@ -224,7 +224,7 @@ class PeerView(APIView):
 class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
-    serializer_class = rampp2p_serializers.ArbiterFeedbackSerializer
+    serializer_class = serializers.ArbiterFeedbackSerializer
     queryset = models.ArbiterFeedback.objects.all()
 
     def list(self, request):
@@ -275,7 +275,7 @@ class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
         offset = (page - 1) * limit
         paged_queryset = queryset[offset:offset + limit]
 
-        serializer = rampp2p_serializers.ArbiterFeedbackSerializer(paged_queryset, many=True)
+        serializer = serializers.ArbiterFeedbackSerializer(paged_queryset, many=True)
         data = {
             'feedbacks': serializer.data,
             'count': count,
@@ -300,9 +300,9 @@ class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
         data['from_peer'] = from_peer.id
         data['to_arbiter'] = arbiter.id
         
-        serializer = rampp2p_serializers.ArbiterFeedbackCreateSerializer(data=data)
+        serializer = serializers.ArbiterFeedbackCreateSerializer(data=data)
         if serializer.is_valid():                        
-            serializer = rampp2p_serializers.ArbiterFeedbackCreateSerializer(serializer.save())
+            serializer = serializers.ArbiterFeedbackCreateSerializer(serializer.save())
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -331,8 +331,8 @@ class ArbiterFeedbackViewSet(viewsets.GenericViewSet):
 class PeerFeedbackViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
-    serializer_class = rampp2p_serializers.FeedbackSerializer
-    queryset = models.Feedback.objects.all()
+    serializer_class = serializers.FeedbackSerializer
+    queryset = models.OrderFeedback.objects.all()
 
     def list(self, request):
         queryset = self.get_queryset()
@@ -379,7 +379,7 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
         offset = (page - 1) * limit
         paged_queryset = queryset[offset:offset + limit]
 
-        serializer = rampp2p_serializers.FeedbackSerializer(paged_queryset, many=True)
+        serializer = serializers.FeedbackSerializer(paged_queryset, many=True)
         data = {
             'feedbacks': serializer.data,
             'count': count,
@@ -401,7 +401,7 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
         except (AssertionError, models.Peer.DoesNotExist, models.Order.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             
-        serializer = rampp2p_serializers.FeedbackCreateSerializer(data=data)
+        serializer = serializers.FeedbackCreateSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -410,7 +410,7 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
     
     def _validate_limit(self, from_peer, to_peer, order):
         ''' Validates that from_peer can only create 1 feedback for the order.'''
-        feedback_count = (models.Feedback.objects.filter(Q(from_peer=from_peer) & Q(to_peer=to_peer) & Q(order=order))).count()
+        feedback_count = (models.OrderFeedback.objects.filter(Q(from_peer=from_peer) & Q(to_peer=to_peer) & Q(order=order))).count()
         assert feedback_count == 0, 'peer feedback already existing'
     
     def _validate_permissions(self, wallet_hash, pk):

@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 class ContractViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
-    serializer_class = serializers.ContractSerializer
+    serializer_class = serializers.BaseContractSerializer
     queryset = models.Contract.objects.all()
 
     def retrieve(self, request, pk):
         try:
             contract = self.get_queryset().get(pk=pk)
-            serialized_contract = serializers.ContractDetailSerializer(contract)
+            serialized_contract = serializers.ContractSerializer(contract)
             return Response(serialized_contract.data, status=status.HTTP_200_OK)
         except models.Contract.DoesNotExist:
             raise Http404
@@ -44,7 +44,7 @@ class ContractViewSet(viewsets.GenericViewSet):
             if not contract.exists():
                 raise models.Contract.DoesNotExist
             contract = contract.first()
-            serialized_contract = serializers.ContractDetailSerializer(contract)
+            serialized_contract = serializers.ContractSerializer(contract)
             return Response(serialized_contract.data, status=status.HTTP_200_OK)
         except models.Contract.DoesNotExist:
             raise Http404
