@@ -48,7 +48,7 @@ def send_wallet_history_push_notification(wallet_history_obj):
             'message': message,
             'wallet_hash': wallet_history_obj.wallet.wallet_hash,
             'notif_type': 'TR',
-            'extra_data': parse_transaction_extra_data(wallet_history_obj.txid),
+            'extra_data': parse_transaction_extra_data(wallet_history_obj),
             'date_posted': timezone.now().isoformat()
         })
 
@@ -79,7 +79,7 @@ def send_wallet_history_push_notification_nft(wallet_history_obj):
             'message': message,
             'wallet_hash': wallet_history_obj.wallet.wallet_hash,
             'notif_type': 'NF',
-            'extra_data': parse_transaction_extra_data(wallet_history_obj.txid),
+            'extra_data': parse_transaction_extra_data(wallet_history_obj),
             'date_posted': timezone.now().isoformat()
         })
 
@@ -90,6 +90,5 @@ def send_wallet_history_push_notification_nft(wallet_history_obj):
             extra=extra
         )
 
-def parse_transaction_extra_data(txid):
-    wallet_history = WalletHistory.objects.get(txid=txid)
-    return f'{txid};{wallet_history.token.pk}'
+def parse_transaction_extra_data(wallet_history):
+    return f'{wallet_history.txid};{wallet_history.token.pk}'
