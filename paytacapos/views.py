@@ -28,7 +28,7 @@ from .utils.transaction import fetch_unspent_merchant_transactions
 
 from .models import Location, Category, Merchant, PosDevice
 from main.models import Address, Transaction, WalletHistory
-from rampp2p.models import MarketRate
+from rampp2p.models import MarketPrice
 from main.serializers import WalletHistorySerializer
 
 from authentication.token import WalletAuthentication
@@ -454,8 +454,9 @@ class CashOutViewSet(viewsets.ModelViewSet):
         wallet_hash = request.user.wallet_hash
         posids = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash).values_list('posid', flat=True)
         unspent_merchant_txns = fetch_unspent_merchant_transactions(wallet_hash, posids)
-        serializer = WalletHistorySerializer(unspent_merchant_txns, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        logger.warning(f'uspent_merchant_txns: {unspent_merchant_txns}')
+        wallet_histories = WalletHistorySerializer(unspent_merchant_txns, many=True)
+        return Response(wallet_histories.data, status=status.HTTP_200_OK)
 
     def create(self, request, *args, **kwargs):
         wallet = request.user
@@ -465,10 +466,10 @@ class CashOutViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 if len(txids) == 0:
-                    raise ValidationError("empty cash out txids")
+                    raise ValidationError("missing required txids")
                 
                 currency_obj = FiatCurrency.objects.get(symbol=currency)
-                current_market_price = MarketRate.objects.get(currency=currency)
+                current_market_price = MarketPrice.objects.get(currency=currency)
 
                 data = { 
                     "wallet": wallet.id,
@@ -476,21 +477,25 @@ class CashOutViewSet(viewsets.ModelViewSet):
                     "market_price": current_market_price.price
                 }
                 serializer = CashOutOrderSerializer(data=data)
-                if not serializer.is_valid(): raise ValidationError(serializer.errors)
+                if not serializer.is_valid(): 
+                    raise ValidationError(serializer.errors)
+                
                 order = serializer.save()
 
                 for txid in txids:
                     txn = Transaction.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
                     wallet_history = WalletHistory.objects.get(txid__in=txids, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
+
                     serializer = CashOutTransactionSerializer(data={
                         "order": order.id,
                         "transaction": txn.id,
                         "wallet_history": wallet_history.id
                     })
-                    if serializer.is_valid():
-                        serializer.save()
-                    else:
+                    
+                    if not serializer.is_valid():
                         raise ValidationError(serializer.errors)
+                    
+                    serializer.save()
 
             return Response(serializer.data, status=status.HTTP_200_OK)
         except (ValidationError, Exception) as err:

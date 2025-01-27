@@ -1,5 +1,8 @@
 from main.models import Transaction, WalletHistory, Address
-from django.db.models import Q
+from django.db.models import Q, Func, Subquery
+import logging
+
+logger = logging.getLogger(__name__)
 
 def fetch_unspent_merchant_transactions(wallet_hash, posids):
     """
@@ -27,11 +30,12 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
 
     # Step 5: Filter addresses based on wallet_hash and posid regex
     address_queryset = Address.objects.filter(wallet__wallet_hash=wallet_hash).filter(posid_regex_query).values('address').distinct()
-    
+
     # Step 6: Extract posid-filtered addresses into a list
-    pos_addresses = address_queryset.values_list('address', flat=True)
+    pos_addresses = address_queryset.values('address').distinct()
+    pos_addresses_subquery = Func(Subquery(pos_addresses), function="array")
 
     # Step 7: Filter WalletHistory transactions where recipients overlap with posid-filtered addresses
-    unspent_merchant_txns = incoming_unspent_txns.filter(recipients__overlap=pos_addresses)
+    unspent_merchant_txns = incoming_unspent_txns.filter(recipients__overlap=pos_addresses_subquery)
     
     return unspent_merchant_txns

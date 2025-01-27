@@ -860,7 +860,7 @@ class LatestPosIdSerializer(serializers.Serializer):
 class CashOutTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CashOutTransaction
-        fields = ('id', 'transaction', 'wallet_history', 'created_at')
+        fields = ('id', 'order', 'transaction', 'wallet_history', 'created_at')
 
 class CashOutOrderSerializer(serializers.ModelSerializer):
     transactions = serializers.PrimaryKeyRelatedField(queryset=WalletHistory.objects.all(), many=True, required=False)
