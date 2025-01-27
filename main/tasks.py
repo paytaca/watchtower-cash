@@ -1510,6 +1510,10 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
     # parsed_history.keys() = ['bch_or_slp', 'ct']
     for key in parsed_history.keys():
+        ct_category = None
+        if key.startswith("ct/"):
+            ct_category = key.split("ct/")[1]
+
         data = parsed_history[key]
         record_type = data['record_type']
         amount = data['diff']
@@ -1562,18 +1566,18 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             if key == BCH_OR_SLP:
                 txns = txns.filter(token__name='bch')
                 spent_txns = spent_txns.filter(token__name='bch')
-            else:
-                _txns = txns.exclude(token__name='bch')
+            elif ct_category:
+                _txns = txns.filter(
+                    models.Q(cashtoken_ft__category=ct_category) | \
+                    models.Q(cashtoken_nft__category=ct_category),
+                )
                 if _txns.exists():
                     txns = _txns
-                    ft_tx = txns.filter(cashtoken_ft__isnull=False).last()
+                    ft_tx = txns.filter(cashtoken_ft_id=ct_category).last()
                     if ft_tx:
                         cashtoken_ft = ft_tx.cashtoken_ft
                     if not cashtoken_ft:
-                        nft_tx = txns.filter(
-                            cashtoken_nft__isnull=False,
-                            cashtoken_nft__category=cashtoken_ft.category
-                        ).last()
+                        nft_tx = txns.filter(cashtoken_nft__category=ct_category).last()
                         if nft_tx:
                             cashtoken_nft = nft_tx.cashtoken_nft
                 else:
@@ -1582,10 +1586,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     ct_index = None
                     for i, _recipient in enumerate(processed_recipients):
                         ct_index = i
-                        if _recipient[2]:
+                        if _recipient[2] == ct_category:
                             ct_recipient = _recipient
                             break
-                    if key == 'ct' and ct_recipient:
+
+                    if key.startswith("ct") and ct_recipient:
                         token_obj, _ = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
                         token_id = ct_recipient[2]
                         nft_capability = ct_recipient[4]

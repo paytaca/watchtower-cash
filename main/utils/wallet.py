@@ -48,6 +48,15 @@ class HistoryParser(object):
             return value_sum / (10 ** 8)
         return qs.aggregate(Sum('amount'))['amount__sum']
 
+    def get_total_ct_amount(self, qs):
+        _qs = qs.order_by() # GROUP BY doesnt work as expected sometimes if there is ordering
+        result = _qs.values("cashtoken_ft_id") \
+                .annotate(total=Sum("amount")) \
+                .values("cashtoken_ft_id", "total")
+
+        result_map = { data["cashtoken_ft_id"]: data["total"] for data in result }
+        return result_map
+
     def get_record_type(self, diff):
         if diff == 0:
             return ''
@@ -77,37 +86,56 @@ class HistoryParser(object):
         diff = total_outputs - total_inputs
         return round(diff, 8)
 
+    def parse_ct(self, ct_inputs, ct_outputs):
+        change_address = self.get_change_address(ct_inputs, ct_outputs)
+        total_ct_inputs_map = {} # { <category>: <total> }
+        total_ct_outputs_map = {} # { <category>: <total> }
+
+        if ct_inputs.exists():
+            total_ct_inputs_map = self.get_total_ct_amount(ct_inputs)
+
+        if ct_outputs.exists():
+            total_ct_outputs_map = self.get_total_ct_amount(ct_outputs)
+
+        categories = { *total_ct_inputs_map.keys(), *total_ct_outputs_map.keys() }
+
+        results = {}
+        for category in categories:
+            total_inputs = total_ct_inputs_map.get(category, 0)
+            total_outputs = total_ct_outputs_map.get(category, 0)
+
+            diff = self.get_txn_diff(total_outputs, total_inputs)
+            record_type = self.get_record_type(diff)
+            results[f"ct/{category}"] = dict(
+                record_type=record_type,
+                change_address=change_address,
+                diff=diff,
+            )
+
+        return results
+
     def parse(self):
         total_outputs = 0
-        total_ct_outputs = 0
         total_inputs = 0
-        total_ct_inputs = 0
 
         outputs, ct_outputs = self.get_relevant_outputs()
         inputs, ct_inputs = self.get_relevant_inputs()
-        
+
         if outputs.exists():
             total_outputs = self.get_total_amount(outputs)
-        if ct_outputs.exists():
-            total_ct_outputs = self.get_total_amount(ct_outputs, is_bch=False)
 
         if inputs.exists():
             total_inputs = self.get_total_amount(inputs)
-        if ct_inputs.exists():
-            total_ct_inputs = self.get_total_amount(ct_inputs, is_bch=False)
 
         diff = self.get_txn_diff(total_outputs, total_inputs)
-        diff_ct = self.get_txn_diff(total_ct_outputs, total_ct_inputs)
 
-        return {
+        result = {
             'bch_or_slp': {
                 'record_type': self.get_record_type(diff),
                 'change_address': self.get_change_address(inputs, outputs),
                 'diff': diff
             },
-            'ct': {
-                'record_type': self.get_record_type(diff_ct),
-                'change_address': self.get_change_address(ct_inputs, ct_outputs),
-                'diff': diff_ct
-            }
+            **self.parse_ct(ct_inputs, ct_outputs),
         }
+
+        return result
