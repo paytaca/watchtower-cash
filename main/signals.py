@@ -1,3 +1,4 @@
+import logging
 from django.conf import settings
 from django.db import transaction
 from django.db.models.signals import post_save
@@ -150,4 +151,7 @@ def wallet_history_post_save(sender, instance=None, created=False, **kwargs):
             txid=instance.txid,
             wallet=instance.wallet,
             record_type=instance.record_type,
+            token=instance.token,
+            cashtoken_ft=instance.cashtoken_ft,
+            cashtoken_nft=instance.cashtoken_nft,
         ).exclude(id=instance.id).delete()
