@@ -128,10 +128,12 @@ def client_acknowledgement(self, txid):
                 token_details_key = None
                 category = None
 
+                # note that transaction can have cashtoken_ft & cashtoken_nft
+                # cashtoken_nft is used if there is both
                 if transaction.cashtoken_ft:
                     token = transaction.cashtoken_ft
                     token_details_key = 'fungible'
-                elif transaction.cashtoken_nft:
+                if transaction.cashtoken_nft:
                     token = transaction.cashtoken_nft
                     token_details_key = 'nft'
                     category = token.token_id.split('/')[1]
@@ -251,6 +253,7 @@ def get_cashtoken_meta_data(
     txid=None,
     index=None,
     is_nft=False,
+    nft_has_fungible=False, # some cashtokens are both ft & nft
     commitment=None,
     capability=None,
     from_bcmr_webhook=False
@@ -352,9 +355,12 @@ def get_cashtoken_meta_data(
         cashtoken.info = cashtoken_info
         cashtoken.save()
         resolve_ct_nft_genesis(cashtoken, txid=txid)
-    else:
-        cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
-        cashtoken.fetch_metadata()
+
+    if not is_nft or nft_has_fungible:
+        _cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
+        _cashtoken.fetch_metadata()
+
+        if not is_nft: cashtoken = _cashtoken
 
     return cashtoken
 
@@ -427,6 +433,7 @@ def save_record(
     with trans.atomic():
         transaction_created = False
         cashtoken = None
+        ct_nft_hash_fungible = bool(is_cashtoken_nft and amount)
 
         if token.lower() == 'bch':
             token_obj, created = Token.objects.get_or_create(name=token)
@@ -452,7 +459,8 @@ def save_record(
                     index=index,
                     commitment=commitment,
                     capability=capability,
-                    is_nft=is_cashtoken_nft
+                    is_nft=is_cashtoken_nft,
+                    nft_has_fungible=ct_nft_hash_fungible,
                 )
             else:
                 token_obj, created = Token.objects.get_or_create(tokenid=token)
@@ -494,7 +502,7 @@ def save_record(
             if is_cashtoken:
                 if is_cashtoken_nft:
                     txn_data['cashtoken_nft'] = CashNonFungibleToken.objects.get(id=cashtoken.id)
-                else:
+                if not is_cashtoken_nft or ct_nft_hash_fungible:
                     txn_data['cashtoken_ft'] = CashFungibleToken.objects.get(category=cashtoken.category)
 
             transaction_obj, transaction_created = Transaction.objects.get_or_create(**txn_data)
@@ -1502,6 +1510,10 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
 
     # parsed_history.keys() = ['bch_or_slp', 'ct']
     for key in parsed_history.keys():
+        ct_category = None
+        if key.startswith("ct/"):
+            ct_category = key.split("ct/")[1]
+
         data = parsed_history[key]
         record_type = data['record_type']
         amount = data['diff']
@@ -1554,18 +1566,18 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             if key == BCH_OR_SLP:
                 txns = txns.filter(token__name='bch')
                 spent_txns = spent_txns.filter(token__name='bch')
-            else:
-                _txns = txns.exclude(token__name='bch')
+            elif ct_category:
+                _txns = txns.filter(
+                    models.Q(cashtoken_ft__category=ct_category) | \
+                    models.Q(cashtoken_nft__category=ct_category),
+                )
                 if _txns.exists():
                     txns = _txns
-                    ft_tx = txns.filter(cashtoken_ft__isnull=False).last()
+                    ft_tx = txns.filter(cashtoken_ft_id=ct_category).last()
                     if ft_tx:
                         cashtoken_ft = ft_tx.cashtoken_ft
                     if not cashtoken_ft:
-                        nft_tx = txns.filter(
-                            cashtoken_nft__isnull=False,
-                            cashtoken_nft__category=cashtoken_ft.category
-                        ).last()
+                        nft_tx = txns.filter(cashtoken_nft__category=ct_category).last()
                         if nft_tx:
                             cashtoken_nft = nft_tx.cashtoken_nft
                 else:
@@ -1574,10 +1586,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                     ct_index = None
                     for i, _recipient in enumerate(processed_recipients):
                         ct_index = i
-                        if _recipient[2]:
+                        if _recipient[2] == ct_category:
                             ct_recipient = _recipient
                             break
-                    if key == 'ct' and ct_recipient:
+
+                    if key.startswith("ct") and ct_recipient:
                         token_obj, _ = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
                         token_id = ct_recipient[2]
                         nft_capability = ct_recipient[4]
