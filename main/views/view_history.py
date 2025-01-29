@@ -54,6 +54,7 @@ class WalletHistoryView(APIView):
             openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
             openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+            openapi.Parameter(name="reference", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="attr", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True, required=False),
         ]
     )
@@ -67,6 +68,7 @@ class WalletHistoryView(APIView):
         record_type = request.query_params.get('type', 'all')
         posid = request.query_params.get("posid", None)
         txids = request.query_params.get("txids", "")
+        reference = request.query_params.get("reference", "")
         include_attrs = str(request.query_params.get("exclude_attr", "true")).strip().lower() == "true"
         
         is_cashtoken_nft = False
@@ -82,13 +84,15 @@ class WalletHistoryView(APIView):
         cache_key = None
         history = []
         data = None
+        use_cache = record_type == 'all' and not index and not txids and not reference
+        
         if wallet.version > 1:
-            cache = settings.REDISKV
-            asset_key = token_id_or_category or 'bch'
-            cache_key = f'wallet:history:{wallet_hash}:{asset_key}:{str(page)}'
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                data = retrieve_object(cached_data, cache)
+            if use_cache:
+                cache = settings.REDISKV
+                cache_key = f'wallet:history:{wallet_hash}:all:{str(page)}'
+                cached_data = cache.get(cache_key)
+                if cached_data:
+                    data = retrieve_object(cached_data, cache)
 
         if not data:
             qs = WalletHistory.objects.exclude(amount=0)
@@ -106,6 +110,8 @@ class WalletHistoryView(APIView):
                 qs = qs.filter(record_type=record_type)
             if len(txids):
                 qs = qs.filter(txid__in=txids)
+            if reference:
+                qs = qs.filter(txid__startswith=reference.lower())
 
             qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
 
@@ -203,7 +209,8 @@ class WalletHistoryView(APIView):
                     'has_next': page_obj.has_next()
                 }
 
-                store_object(cache_key, data, cache)
+                if use_cache:
+                    store_object(cache_key, data, cache)
 
         return Response(data=data, status=status.HTTP_200_OK)
 
