@@ -452,10 +452,11 @@ class CashOutViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def list_unspent_txns(self, request):
         wallet_hash = request.user.wallet_hash
+        currency = request.query_params.get('currency')
         posids = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash).values_list('posid', flat=True)
         unspent_merchant_txns = fetch_unspent_merchant_transactions(wallet_hash, posids)
         logger.warning(f'uspent_merchant_txns: {unspent_merchant_txns}')
-        wallet_histories = WalletHistorySerializer(unspent_merchant_txns, many=True)
+        wallet_histories = MerchantTransactionSerializer(unspent_merchant_txns, many=True, context={'currency': currency})
         return Response(wallet_histories.data, status=status.HTTP_200_OK)
 
     def create(self, request, *args, **kwargs):

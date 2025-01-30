@@ -11,6 +11,7 @@ from rest_framework import serializers, exceptions
 
 from main.models import CashNonFungibleToken, Wallet, Address
 from anyhedge.utils.address import pubkey_to_cashaddr
+from rampp2p.models import MarketPrice
 
 from .models import *
 from .permissions import HasMinPaytacaVersionHeader
@@ -923,3 +924,45 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+class MerchantTransactionSerializer(serializers.ModelSerializer):
+    fiat_price = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+            model = WalletHistory
+            fields = [
+                'txid',
+                'amount',
+                'tx_timestamp',
+                'fiat_price',
+                'status'
+            ]
+
+    def get_fiat_price(self, obj):
+        pref_currency = self.context.get('currency')
+        init_price = {}
+
+        if obj.usd_price:
+            init_price['USD'] = obj.usd_price
+        
+        curr_price = {}
+        if obj.usd_price:
+            usd_price = MarketPrice.objects.filter(currency="USD").first()
+            if usd_price:
+                curr_price["USD"] = usd_price.price
+
+        if pref_currency and pref_currency != 'USD':
+            init_price[pref_currency] = obj.market_prices.get(pref_currency)
+
+            currency_price = MarketPrice.objects.filter(currency=pref_currency).first()
+            if currency_price:
+                curr_price[pref_currency] = currency_price.price
+
+        return {
+            'init': init_price,
+            'curr': curr_price
+        }
+    
+    def get_status(self, obj):
+        return "Status"
