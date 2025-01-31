@@ -6,6 +6,8 @@ from psqlextra.query import PostgresQuerySet
 from main.models import WalletHistory, Wallet, Address, Transaction
 from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
 
+from decimal import Decimal
+
 from PIL import Image
 import os
 
@@ -387,16 +389,16 @@ class CashOutTransaction(models.Model):
     
     def fiat_value(self):
         currency = self.order.currency.symbol
-        amount = self.wallet_history.amount
+        amount = Decimal(self.wallet_history.amount)
         
         # The market price on transaction creation
         market_price = None
         market_prices = self.wallet_history.market_prices
         if market_prices and market_prices.get(currency, None):
-            market_price = market_prices[currency]
+            market_price = Decimal(market_prices[currency])
         
         # The market price on order creation
-        order_market_price = self.order.market_price
+        order_market_price = Decimal(self.order.market_price)
 
         if not market_price or not order_market_price:
             return
@@ -404,6 +406,6 @@ class CashOutTransaction(models.Model):
         return {
             "currency": currency,
             "order_value": round(order_market_price * amount, 2),
-            "value": round(market_price * amount, 2)
+            "initial_value": round(market_price * amount, 2)
         }
        

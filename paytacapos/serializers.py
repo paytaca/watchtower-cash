@@ -18,6 +18,7 @@ from .permissions import HasMinPaytacaVersionHeader
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 from .utils.websocket import send_device_update
+from .utils.transaction import fetch_unspent_merchant_transactions
 from rampp2p.serializers import PaymentTypeSerializer
 
 REDIS_CLIENT = settings.REDISKV
@@ -858,24 +859,56 @@ class LatestPosIdSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
 
 
-class CashOutTransactionSerializer(serializers.ModelSerializer):
+class BaseCashOutTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CashOutTransaction
-        fields = ('id', 'order', 'transaction', 'wallet_history', 'created_at')
+        fields = ['id', 'order', 'transaction', 'wallet_history', 'created_at']
 
-class CashOutOrderSerializer(serializers.ModelSerializer):
-    transactions = serializers.PrimaryKeyRelatedField(queryset=WalletHistory.objects.all(), many=True, required=False)
-    status = serializers.ChoiceField(choices=CashOutOrder.StatusType.choices, required=False)
+class CashOutTransactionSerializer(BaseCashOutTransactionSerializer):
+    wallet_history = serializers.SerializerMethodField()
+    fiat_value = serializers.SerializerMethodField()
+    
+    class Meta(BaseCashOutTransactionSerializer.Meta):
+        fields = BaseCashOutTransactionSerializer.Meta.fields + ['fiat_value']
+
+    def get_wallet_history(self, obj):
+        return MerchantTransactionSerializer(obj.wallet_history, context={'currency': obj.order.currency.symbol}).data
+
+    def fiat_value(self, obj):
+        return obj.fiat_value()
+    
+class BaseCashOutOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = CashOutOrder
         fields = (
             'id', 
+            'currency',
+            'wallet',
+            'market_price',
+            'status',
+            'created_at')
+
+class CashOutOrderSerializer(BaseCashOutOrderSerializer):
+    transactions = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    
+    class Meta(BaseCashOutOrderSerializer.Meta):
+        model = CashOutOrder
+        fields = (
+            'id', 
             'transactions', 
-            'wallet', 
             'currency',
             'market_price',
             'status',
             'created_at')
+        
+    def get_transactions(self, obj):
+        order_txns = CashOutTransaction.objects.filter(order__id=obj.id)
+        txns = CashOutTransactionSerializer(order_txns, many=True, context={'currency': obj.currency.symbol})
+        return txns.data
+    
+    def get_currency(self, obj):
+        return obj.currency.symbol
 
 class PaymentMethodFieldSerializer(serializers.ModelSerializer):
     field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)
@@ -930,14 +963,14 @@ class MerchantTransactionSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
 
     class Meta:
-            model = WalletHistory
-            fields = [
-                'txid',
-                'amount',
-                'tx_timestamp',
-                'fiat_price',
-                'status'
-            ]
+        model = WalletHistory
+        fields = [
+            'txid',
+            'amount',
+            'tx_timestamp',
+            'fiat_price',
+            'status'
+        ]
 
     def get_fiat_price(self, obj):
         pref_currency = self.context.get('currency')
@@ -965,4 +998,7 @@ class MerchantTransactionSerializer(serializers.ModelSerializer):
         }
     
     def get_status(self, obj):
-        return "Status"
+        order_tx = CashOutTransaction.objects.filter(wallet_history__id=obj.id).first()
+        if order_tx:
+            return order_tx.order.status
+        return None

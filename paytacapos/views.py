@@ -455,7 +455,6 @@ class CashOutViewSet(viewsets.ModelViewSet):
         currency = request.query_params.get('currency')
         posids = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash).values_list('posid', flat=True)
         unspent_merchant_txns = fetch_unspent_merchant_transactions(wallet_hash, posids)
-        logger.warning(f'uspent_merchant_txns: {unspent_merchant_txns}')
         wallet_histories = MerchantTransactionSerializer(unspent_merchant_txns, many=True, context={'currency': currency})
         return Response(wallet_histories.data, status=status.HTTP_200_OK)
 
@@ -477,7 +476,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
                     "currency": currency_obj.id,
                     "market_price": current_market_price.price
                 }
-                serializer = CashOutOrderSerializer(data=data)
+                serializer = BaseCashOutOrderSerializer(data=data)
                 if not serializer.is_valid(): 
                     raise ValidationError(serializer.errors)
                 
@@ -487,7 +486,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
                     txn = Transaction.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
                     wallet_history = WalletHistory.objects.get(txid__in=txids, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
 
-                    serializer = CashOutTransactionSerializer(data={
+                    serializer = BaseCashOutTransactionSerializer(data={
                         "order": order.id,
                         "transaction": txn.id,
                         "wallet_history": wallet_history.id
@@ -498,7 +497,8 @@ class CashOutViewSet(viewsets.ModelViewSet):
                     
                     serializer.save()
 
-            return Response(serializer.data, status=status.HTTP_200_OK)
+                order_serializer = CashOutOrderSerializer(order)
+            return Response(order_serializer.data, status=status.HTTP_200_OK)
         except (ValidationError, Exception) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
