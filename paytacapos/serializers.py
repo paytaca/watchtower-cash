@@ -929,41 +929,41 @@ class PaymentMethodFieldSerializer(serializers.ModelSerializer):
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = PaymentTypeSerializer(read_only=True)
-    owner = MerchantSerializer(read_only=True)
-    payment_fields = serializers.SerializerMethodField(read_only=True)
+    merchant = MerchantSerializer(read_only=True)
+    values = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = PaymentMethod
-        fields = ('id', 'payment_type', 'owner', 'payment_fields', 'created_at')
+        fields = ('id', 'payment_type', 'merchant', 'values', 'created_at')
 
-    def get_payment_fields(self, obj):
+    def get_values(self, obj):
         fields = PaymentMethodField.objects.filter(payment_method__id=obj.id)
         serialized_fields = PaymentMethodFieldSerializer(fields, many=True)
         return serialized_fields.data
 
     def create(self, validated_data):
         payment_type_data = self.initial_data.get('payment_type')
-        owner_data = self.initial_data.get('owner')
+        merchant_data = self.initial_data.get('merchant')
         
         payment_type = PaymentType.objects.get(id=payment_type_data['id'])
-        owner = Merchant.objects.get(id=owner_data['id'])
+        merchant = Merchant.objects.get(id=merchant_data['id'])
 
         validated_data['payment_type'] = payment_type
-        validated_data['owner'] = owner
+        validated_data['merchant'] = merchant
 
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
         payment_type_data = self.initial_data.get('payment_type')
-        owner_data = self.initial_data.get('owner')
+        merchant_data = self.initial_data.get('merchant')
         
         if payment_type_data:
             payment_type = PaymentType.objects.get(id=payment_type_data['id'])
             instance.payment_type = payment_type
 
-        if owner_data:
-            owner = Merchant.objects.get(id=owner_data['id'])
-            instance.owner = owner
+        if merchant_data:
+            merchant = Merchant.objects.get(id=merchant_data['id'])
+            instance.merchant = merchant
 
         instance.save()
         return instance

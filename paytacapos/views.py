@@ -523,16 +523,16 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
         try:
             wallet_hash = request.user.wallet_hash
             payment_type_id = request.data.get('payment_type_id', None)
-            payment_fields = request.data.get('payment_fields')
+            values = request.data.get('values')
             
-            if payment_fields is None or len(payment_fields) == 0:
+            if values is None or len(values) == 0:
                 raise ValidationError('Empty payment method fields')
             
             merchant = Merchant.objects.get(wallet_hash=wallet_hash)
             payment_type = PaymentType.objects.get(id=payment_type_id)
 
             data = {
-                'owner': merchant,
+                'merchant': merchant,
                 'payment_type': payment_type
             }
 
@@ -540,7 +540,7 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
                 # create payment method
                 payment_method = PaymentMethod.objects.create(**data)
                 # create payment method fields
-                for field in payment_fields:
+                for field in values:
                     # TODO: restrict field_reference allowed to payment_type
                     field_ref = PaymentTypeField.objects.get(id=field['field_reference'])
                     data = {

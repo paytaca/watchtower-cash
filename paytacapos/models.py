@@ -340,11 +340,13 @@ class Branch(models.Model):
             merchant.save()
         return new_location
 
-    
 class PaymentMethod(models.Model):
     payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name="merchant_payment_methods")
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    class Meta:
+        unique_together = ('payment_type', 'merchant')
 
     def __str__(self):
 	    return str(self.id)
