@@ -380,32 +380,52 @@ class CashOutOrder(models.Model):
 
 class CashOutTransaction(models.Model):
     order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)
-    transaction = models.ForeignKey(Transaction, on_delete=models.PROTECT)
-    wallet_history = models.ForeignKey(WalletHistory, on_delete=models.PROTECT)
+    transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT)
+    wallet_history = models.OneToOneField(WalletHistory, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
         return str(self.id)
     
-    def fiat_value(self):
-        currency = self.order.currency.symbol
-        amount = Decimal(self.wallet_history.amount)
-        
-        # The market price on transaction creation
-        market_price = None
+    @property
+    def currency(self):
+        return self.order.currency.symbol
+    
+    @property
+    def tx_price(self):
+        ''' Fetches the recorded market price when transaction was created. '''
+        price = None
         market_prices = self.wallet_history.market_prices
-        if market_prices and market_prices.get(currency, None):
-            market_price = Decimal(market_prices[currency])
-        
-        # The market price on order creation
-        order_market_price = Decimal(self.order.market_price)
+        if market_prices and market_prices.get(self.currency, None):
+            price = Decimal(market_prices[self.currency])
+        return price
+    
+    @property
+    def order_price(self):
+        ''' Fetches the recorded market price when the cash-out order was created. '''
+        return Decimal(self.order.market_price)
 
-        if not market_price or not order_market_price:
+    @property
+    def initial_fiat_value(self):
+        ''' Calculates the fiat value of transaction when it was created. '''
+        amount = Decimal(self.wallet_history.amount)
+        tx_price = self.tx_price
+        order_price = self.order_price
+
+        if not tx_price or not order_price:
             return
         
-        return {
-            "currency": currency,
-            "order_value": round(order_market_price * amount, 2),
-            "initial_value": round(market_price * amount, 2)
-        }
+        return round(tx_price * amount, 2)
+    
+    @property
+    def order_fiat_value(self):
+        ''' Calculates the fiat value of transaction when the order was created. '''
+        amount = Decimal(self.wallet_history.amount)
+        tx_price = self.tx_price
+        order_price = self.order_price
+
+        if not tx_price or not order_price:
+            return
+
+        return round(order_price * amount, 2)
        

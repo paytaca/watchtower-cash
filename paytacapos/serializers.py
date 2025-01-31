@@ -866,16 +866,26 @@ class BaseCashOutTransactionSerializer(serializers.ModelSerializer):
 
 class CashOutTransactionSerializer(BaseCashOutTransactionSerializer):
     wallet_history = serializers.SerializerMethodField()
-    fiat_value = serializers.SerializerMethodField()
+    initial_fiat_value = serializers.SerializerMethodField()
+    order_fiat_value = serializers.SerializerMethodField()
     
     class Meta(BaseCashOutTransactionSerializer.Meta):
-        fields = BaseCashOutTransactionSerializer.Meta.fields + ['fiat_value']
+        fields = BaseCashOutTransactionSerializer.Meta.fields + [
+            'initial_fiat_value',
+            'order_fiat_value'
+        ]
 
     def get_wallet_history(self, obj):
-        return MerchantTransactionSerializer(obj.wallet_history, context={'currency': obj.order.currency.symbol}).data
+        return MerchantTransactionSerializer(
+            obj.wallet_history,
+            context={'currency': obj.order.currency.symbol}
+        ).data
+    
+    def get_initial_fiat_value(self, obj):
+        return obj.initial_fiat_value
 
-    def fiat_value(self, obj):
-        return obj.fiat_value()
+    def get_order_fiat_value(self, obj):
+        return obj.order_fiat_value
     
 class BaseCashOutOrderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -993,8 +1003,8 @@ class MerchantTransactionSerializer(serializers.ModelSerializer):
                 curr_price[pref_currency] = currency_price.price
 
         return {
-            'init': init_price,
-            'curr': curr_price
+            'initial': init_price,
+            'current': curr_price
         }
     
     def get_status(self, obj):
