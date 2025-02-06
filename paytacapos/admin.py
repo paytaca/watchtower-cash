@@ -198,12 +198,12 @@ class PaymentMethodFieldInline(DynamicRawIDMixin, admin.TabularInline):
 
 @admin.register(PaymentMethod)
 class PaymentMethodAdmin(DynamicRawIDMixin, admin.ModelAdmin):
-    list_display = ['id', 'merchant', 'payment_type']
-    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'merchant__name']
+    list_display = ['id', 'wallet', 'payment_type']
+    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'wallet__wallet_hash']
     inlines = [PaymentMethodFieldInline]
         
     dynamic_raw_id_fields = [
-        'merchant', 'payment_type'
+        'wallet', 'payment_type'
     ]
 
 @admin.register(CashOutOrder)

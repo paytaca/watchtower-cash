@@ -18,7 +18,6 @@ from .permissions import HasMinPaytacaVersionHeader
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 from .utils.websocket import send_device_update
-from .utils.transaction import fetch_unspent_merchant_transactions
 from rampp2p.serializers import PaymentTypeSerializer
 
 REDIS_CLIENT = settings.REDISKV
@@ -886,39 +885,6 @@ class CashOutTransactionSerializer(BaseCashOutTransactionSerializer):
 
     def get_order_fiat_value(self, obj):
         return obj.order_fiat_value
-    
-class BaseCashOutOrderSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CashOutOrder
-        fields = (
-            'id', 
-            'currency',
-            'wallet',
-            'market_price',
-            'status',
-            'created_at')
-
-class CashOutOrderSerializer(BaseCashOutOrderSerializer):
-    transactions = serializers.SerializerMethodField()
-    currency = serializers.SerializerMethodField()
-    
-    class Meta(BaseCashOutOrderSerializer.Meta):
-        model = CashOutOrder
-        fields = (
-            'id', 
-            'transactions', 
-            'currency',
-            'market_price',
-            'status',
-            'created_at')
-        
-    def get_transactions(self, obj):
-        order_txns = CashOutTransaction.objects.filter(order__id=obj.id)
-        txns = CashOutTransactionSerializer(order_txns, many=True, context={'currency': obj.currency.symbol})
-        return txns.data
-    
-    def get_currency(self, obj):
-        return obj.currency.symbol
 
 class PaymentMethodFieldSerializer(serializers.ModelSerializer):
     field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)
@@ -929,12 +895,11 @@ class PaymentMethodFieldSerializer(serializers.ModelSerializer):
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
     payment_type = PaymentTypeSerializer(read_only=True)
-    merchant = MerchantSerializer(read_only=True)
     values = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = PaymentMethod
-        fields = ('id', 'payment_type', 'merchant', 'values', 'created_at')
+        fields = ('id', 'payment_type', 'wallet', 'values', 'created_at')
 
     def get_values(self, obj):
         fields = PaymentMethodField.objects.filter(payment_method__id=obj.id)
@@ -943,30 +908,51 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         payment_type_data = self.initial_data.get('payment_type')
-        merchant_data = self.initial_data.get('merchant')
-        
         payment_type = PaymentType.objects.get(id=payment_type_data['id'])
-        merchant = Merchant.objects.get(id=merchant_data['id'])
-
         validated_data['payment_type'] = payment_type
-        validated_data['merchant'] = merchant
-
         return super().create(validated_data)
     
     def update(self, instance, validated_data):
         payment_type_data = self.initial_data.get('payment_type')
-        merchant_data = self.initial_data.get('merchant')
         
         if payment_type_data:
             payment_type = PaymentType.objects.get(id=payment_type_data['id'])
             instance.payment_type = payment_type
 
-        if merchant_data:
-            merchant = Merchant.objects.get(id=merchant_data['id'])
-            instance.merchant = merchant
-
         instance.save()
         return instance
+
+class BaseCashOutOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashOutOrder
+        fields = [
+            'id', 
+            'currency',
+            'wallet',
+            'market_price',
+            'payment_method',
+            'status',
+            'created_at']
+        
+class CashOutOrderSerializer(BaseCashOutOrderSerializer):
+    transactions = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    payment_method = PaymentMethodSerializer()
+    
+    class Meta(BaseCashOutOrderSerializer.Meta):
+        fields = BaseCashOutOrderSerializer.Meta.fields + [
+            'transactions', 
+            'currency',
+            'payment_method'
+        ]
+        
+    def get_transactions(self, obj):
+        order_txns = CashOutTransaction.objects.filter(order__id=obj.id)
+        txns = CashOutTransactionSerializer(order_txns, many=True, context={'currency': obj.currency.symbol})
+        return txns.data
+    
+    def get_currency(self, obj):
+        return obj.currency.symbol
 
 class MerchantTransactionSerializer(serializers.ModelSerializer):
     fiat_price = serializers.SerializerMethodField()

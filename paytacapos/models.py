@@ -342,11 +342,11 @@ class Branch(models.Model):
 
 class PaymentMethod(models.Model):
     payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name="merchant_payment_methods")
-    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     class Meta:
-        unique_together = ('payment_type', 'merchant')
+        unique_together = ('payment_type', 'wallet')
 
     def __str__(self):
 	    return str(self.id)
@@ -375,6 +375,7 @@ class CashOutOrder(models.Model):
     market_price = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):

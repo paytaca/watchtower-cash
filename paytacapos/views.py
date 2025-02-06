@@ -462,6 +462,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
         wallet = request.user
         txids =  request.data.get('txids', [])
         currency = request.data.get('currency', None)
+        payment_method_id = request.data.get('payment_method_id')
 
         try:
             with transaction.atomic():
@@ -470,11 +471,13 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 
                 currency_obj = FiatCurrency.objects.get(symbol=currency)
                 current_market_price = MarketPrice.objects.get(currency=currency)
+                payment_method = PaymentMethod.objects.get(wallet__wallet_hash=wallet.wallet_hash, id=payment_method_id)
 
                 data = { 
                     "wallet": wallet.id,
                     "currency": currency_obj.id,
-                    "market_price": current_market_price.price
+                    "market_price": current_market_price.price,
+                    "payment_method": payment_method.id
                 }
                 serializer = BaseCashOutOrderSerializer(data=data)
                 if not serializer.is_valid(): 
@@ -528,11 +531,11 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
             if values is None or len(values) == 0:
                 raise ValidationError('Empty payment method fields')
             
-            merchant = Merchant.objects.get(wallet_hash=wallet_hash)
+            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
             payment_type = PaymentType.objects.get(id=payment_type_id)
 
             data = {
-                'merchant': merchant,
+                'wallet': wallet,
                 'payment_type': payment_type
             }
 
