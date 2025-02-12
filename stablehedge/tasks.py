@@ -111,6 +111,20 @@ def short_treasury_contract_funds(treasury_contract_address:str):
 
         contract_address = short_proposal["contract_data"]["address"]
 
+        funding_amounts = short_proposal["funding_amounts"]
+        liquidity_fee = funding_amounts["liquidity_fee"]
+        settlement_service_fee = funding_amounts["liquidity_fee"]
+        total_lp_fee = liquidity_fee + settlement_service_fee
+        sats_to_fund = funding_amounts["satoshis_to_fund"]
+
+        MAX_LP_FEE_PCTG = 0.05
+        total_lp_fee_pctg = total_lp_fee / sats_to_fund
+        if MAX_LP_FEE_PCTG < total_lp_fee_pctg:
+            return dict(
+                success=True, error="Liquidity fee too large",
+                funding_amount=sats_to_fund, liquidity_provider_fee=total_lp_fee,
+            )
+
         access_key_sign_result = ScriptFunctions.schnorrSign(dict(
             message=contract_address, wif=wif,
         ))
