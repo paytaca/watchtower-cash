@@ -422,6 +422,10 @@ CELERY_BEAT_SCHEDULE = {
     'cancel_expired_orders': {
         'task': 'rampp2p.tasks.task_order.cancel_expired_orders',
         'schedule': 60 # run every 1 minute
+    },
+    'short_treasury_contract_funds': {
+        'task': 'stablehedge.tasks.check_treasury_contract_short',
+        'schedule': 6 * 3600 # every 6 hours
     }
 }
 

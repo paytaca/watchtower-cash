@@ -51,6 +51,27 @@ def check_and_short_funds(
 
     return result
     
+@shared_task(queue=_QUEUE_TREASURY_CONTRACT)
+def check_treasury_contract_short():
+    results = []
+    for treasury_contract in models.TreasuryContract.objects.filter():
+        try:
+            min_sats = treasury_contract.short_position_rule.target_satoshis
+        except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
+            min_sats = 10 ** 8
+
+        result = check_and_short_funds(
+            treasury_contract.address,
+            min_sats=min_sats,
+            background_task=True,
+        )
+
+        results.append(
+            (treasury_contract.address, result),
+        )
+
+    return results
+
 
 @shared_task(queue=_QUEUE_TREASURY_CONTRACT, time_limit=_TASK_TIME_LIMIT)
 def short_treasury_contract_funds(treasury_contract_address:str):
