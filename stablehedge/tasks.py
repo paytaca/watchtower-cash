@@ -27,7 +27,7 @@ REDIS_STORAGE = settings.REDISKV
 GP_LP = GeneralProtocolsLP()
 
 _TASK_TIME_LIMIT = 300 # 5 minutes
-_QUEUE_TREASURY_CONTRACT = "stablhedge__treasury_contract"
+_QUEUE_TREASURY_CONTRACT = "stablehedge__treasury_contract"
 
 
 def check_and_short_funds(
