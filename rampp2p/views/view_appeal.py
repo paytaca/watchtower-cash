@@ -30,6 +30,7 @@ class AppealViewSet(viewsets.GenericViewSet):
         try:
             arbiter = models.Arbiter.objects.get(wallet_hash=wallet_hash)
             appeal_state = request.query_params.get('state')
+            sort_by_date = request.query_params.get('sort_by_date', 'desc')
             limit = int(request.query_params.get('limit', 0))
             page = int(request.query_params.get('page', 1))
 
@@ -40,7 +41,8 @@ class AppealViewSet(viewsets.GenericViewSet):
                 return Response({'error': 'invalid page number'}, status=status.HTTP_400_BAD_REQUEST)
             
             arbiter_order_ids = list(models.Order.objects.filter(arbiter__wallet_hash=arbiter.wallet_hash).values_list('id', flat=True))
-            queryset = models.Appeal.objects.filter(order__pk__in=arbiter_order_ids).order_by('created_at')
+            order_by_key = 'created_at' if sort_by_date == 'asc' else '-created_at'
+            queryset = models.Appeal.objects.filter(order__pk__in=arbiter_order_ids).order_by(order_by_key)
 
             if appeal_state == 'PENDING':
                 queryset = queryset.exclude(resolved_at__isnull=False)
