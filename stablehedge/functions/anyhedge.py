@@ -76,9 +76,9 @@ def get_or_create_short_proposal(treasury_contract_address:str):
     return create_short_proposal(treasury_contract_address)
 
 
-def create_short_proposal(treasury_contract_address:str, for_multisig=False):
+def create_short_proposal(treasury_contract_address:str, for_multisig=False, cap_tvl:float=0.5):
     LOGGER.info(f"SHORT PROPOSAL | CREATE | {treasury_contract_address}")
-    short_proposal_data = short_funds(treasury_contract_address, for_multisig=for_multisig)
+    short_proposal_data = short_funds(treasury_contract_address, for_multisig=for_multisig, cap_tvl=cap_tvl)
 
     data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
     LOGGER.info(f"SHORT PROPOSAL | CREATE |{treasury_contract_address} | {data_str}")
@@ -220,13 +220,19 @@ def refetch_short_proposal_contract_data(treasury_contract_address:str, pubkey="
     return short_proposal_data
 
 
-def short_funds(treasury_contract_address:str, for_multisig=False):
+def short_funds(treasury_contract_address:str, for_multisig=False, cap_tvl:float=0.5):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
     balance_data = get_spendable_sats(treasury_contract_address)
     spendable_sats = balance_data["spendable"]
     LOGGER.debug(f"SHORT PROPOSAL | BALANCE | {treasury_contract_address} | {balance_data}")
 
     shortable_sats = (spendable_sats - HEDGE_FUNDING_NETWORK_FEES - SETTLEMENT_SERVICE_FEE) * (1-MAX_PREMIUM_PCTG)
+
+    if cap_tvl:
+        tvl_data = _get_tvl_sats(treasury_contract_address)
+        tvl_sats = int(tvl_data["total"])
+        capped_tvl_sats = tvl_sats * cap_tvl
+        shortable_sats = min(capped_tvl_sats, shortable_sats)
 
     try:
         duration_seconds = treasury_contract.short_position_rule.target_duration
@@ -296,6 +302,34 @@ def short_funds(treasury_contract_address:str, for_multisig=False):
         funding_amounts = funding_amounts,
         funding_utxo_tx = funding_utxo_tx,
     )
+
+
+def _get_tvl_sats(treasury_contract_address:str):
+    result = {}
+    total = 0
+
+    balance_data = get_spendable_sats(treasury_contract_address)
+    spendable = decimal.Decimal(balance_data["spendable"])
+    result["satoshis"] = spendable
+    total += spendable
+
+    short_value_data = get_total_short_value(treasury_contract_address)
+    short_value_sats = decimal.Decimal(short_value_data["satoshis"])
+    result["in_short"] = short_value_sats
+    total += short_value_sats
+
+    redeemable = models.RedemptionContract.objects \
+        .annotate_redeemable() \
+        .filter(treasury_contract__address=treasury_contract_address) \
+        .values_list("redeemable", flat=True).first()
+    if redeemable is not None:
+        redeemable = decimal.Decimal(redeemable)
+        result["redeemable"] = redeemable
+        total += redeemable
+
+    result["total"] = total
+    return result
+
 
 def create_short_contract(
     treasury_contract_address:str,
