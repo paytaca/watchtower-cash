@@ -545,13 +545,14 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
                 # create payment method fields
                 for field in values:
                     # TODO: restrict field_reference allowed to payment_type
-                    field_ref = PaymentTypeField.objects.get(id=field['field_reference'])
-                    data = {
-                        'payment_method': payment_method,
-                        'field_reference': field_ref,
-                        'value': field['value']
-                    }
-                    PaymentMethodField.objects.create(**data)
+                    if field['value']:
+                        field_ref = PaymentTypeField.objects.get(id=field['field_reference'])
+                        data = {
+                            'payment_method': payment_method,
+                            'field_reference': field_ref,
+                            'value': field['value']
+                        }
+                        PaymentMethodField.objects.create(**data)
                 
             serializer = self.serializer_class(payment_method)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -569,24 +570,19 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
 
             with transaction.atomic():
                 for field in payment_fields:
-                    field_serializer = None
                     field_id = field.get('id')
                     if field_id:
                         payment_method_field = PaymentMethodField.objects.get(id=field_id)
-                        field_serializer = PaymentMethodFieldSerializer(payment_method_field, data={ 'value': field.get('value') })
+                        payment_method_field.value = field.get('value')
+                        payment_method_field.save()
                     elif field.get('value') and field.get('field_reference'):
-                        field_ref = models.PaymentTypeField.objects.get(id=field.get('field_reference'))
+                        field_ref = PaymentTypeField.objects.get(id=field.get('field_reference'))
                         data = {
                             'payment_method': payment_method,
                             'field_reference': field_ref,
                             'value': field.get('value')
                         }
-                        field_serializer = PaymentMethodFieldSerializer(data=data)
-                    
-                    if field_serializer and field_serializer.is_valid():
-                        field_serializer.save()
-                    else:
-                        raise Exception(field_serializer.errors)
+                        PaymentMethodField.objects.create(**data)
 
             serializer = PaymentMethodSerializer(payment_method)
             return Response(serializer.data, status=status.HTTP_200_OK)
