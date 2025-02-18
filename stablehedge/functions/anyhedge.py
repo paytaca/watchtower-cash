@@ -232,7 +232,13 @@ def short_funds(treasury_contract_address:str, for_multisig=False, cap_tvl:float
         tvl_data = _get_tvl_sats(treasury_contract_address)
         tvl_sats = int(tvl_data["total"])
         capped_tvl_sats = tvl_sats * cap_tvl
+        capped_tvl_sats -= int(tvl_data.get("in_short") or 0)
         shortable_sats = min(capped_tvl_sats, shortable_sats)
+        if shortable_sats <= 0:
+            raise StablehedgeException(
+                f"Total shorted value is more than x{cap_tvl} of TVL",
+                code="tvl-cap-reached",
+            )
 
     try:
         duration_seconds = treasury_contract.short_position_rule.target_duration
