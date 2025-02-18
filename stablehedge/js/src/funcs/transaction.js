@@ -1,8 +1,9 @@
-import { binToHex, decodePrivateKeyWif, encodeTransaction, secp256k1, sha256 } from '@bitauth/libauth'
+import { binToHex, decodePrivateKeyWif, encodeTransaction, hexToBin, secp256k1, sha256 } from '@bitauth/libauth'
 import { parseUtxo, toCashAddress, toTokenAddress } from '../utils/crypto.js'
 import { addPrecision, cashscriptTxToLibauth, groupUtxoAssets, removePrecision } from '../utils/transaction.js'
 import { calculateDust, getOutputSize } from 'cashscript/dist/utils.js'
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
+import { HashType } from 'cashscript'
 
 /**
  * @param {Object} opts 
@@ -126,4 +127,73 @@ export function schnorrSign(opts) {
   const msgHash = sha256.hash(Buffer.from(opts?.message, 'utf8'))
   const signature = secp256k1.signMessageHashSchnorr(privateKey, msgHash)
   return { success: true, signature: binToHex(signature) }
+}
+
+/**
+ * @param {Object} opts 
+ * @param {Number} opts.locktime
+ * @param {import('cashscript').UtxoP2PKH} opts.authKeyUtxo
+ */
+export function signAuthKeyUtxo(opts) {
+  const locktime = parseInt(opts?.locktime) || 0
+  const authKeyUtxo = parseUtxo({
+    ...opts?.authKeyUtxo,
+    hashType: HashType.SIGHASH_SINGLE | HashType.SIGHASH_ANYONECANPAY,
+  })
+
+
+  /** @type {import('cashscript').SignatureTemplate} */
+  const signatureTemplate = authKeyUtxo?.template
+  const unlocker = signatureTemplate?.unlockP2PKH()
+  const utxoLockingBytecode = unlocker.generateLockingBytecode()
+
+  const transaction = {
+    version: 2,
+    locktime: locktime,
+    inputs: [{
+      outpointIndex: authKeyUtxo?.vout,
+      outpointTransactionHash: hexToBin(opts?.utxo?.txid),
+      sequenceNumber: 0xfffffffe,
+      unlockingBytecode: new Uint8Array(),
+    }],
+    outputs: [{
+      lockingBytecode: utxoLockingBytecode,
+      valueSatoshis: authKeyUtxo.satoshis,
+      token: {
+        category: authKeyUtxo.token.category,
+        amount: authKeyUtxo.token.amount,
+        nft: {
+          commitment: authKeyUtxo.token.nft.commitment,
+          capability: authKeyUtxo.token.nft.capability,
+        }
+      }
+    }],
+  }
+
+
+  const sourceOutputs = [{
+    lockingBytecode: utxoLockingBytecode,
+    valueSatoshis: authKeyUtxo.satoshis,
+    token: {
+      category: authKeyUtxo.token.category,
+      amount: authKeyUtxo.token.amount,
+      nft: {
+        commitment: authKeyUtxo.token.nft.commitment,
+        capability: authKeyUtxo.token.nft.capability,
+      }
+    }
+  }]
+
+  const unlockingBytecode = signatureTemplate.unlockP2PKH().generateUnlockingBytecode({
+    transaction,
+    inputIndex: 0,
+    sourceOutputs,
+  })
+
+  return {
+    success: true,
+    locktime,
+    lockingBytecode: binToHex(utxoLockingBytecode),
+    unlockingBytecode: binToHex(unlockingBytecode),
+  }
 }

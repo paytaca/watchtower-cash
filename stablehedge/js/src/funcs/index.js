@@ -19,7 +19,8 @@ import {
   unlockRedemptionContractWithNft,
 } from './redemption-contract.js'
 import { generatePriceMessage, parsePriceMessage } from './price-oracle.js'
-import { sweepUtxos, schnorrSign } from './transaction.js'
+import { sweepUtxos, schnorrSign, signAuthKeyUtxo } from './transaction.js'
+import { transferTreasuryFundsToRedemptionContract } from './rebalancing.js'
 
 export default {
   getTreasuryContractArtifact,
@@ -45,4 +46,7 @@ export default {
 
   sweepUtxos,
   schnorrSign,
+  signAuthKeyUtxo,
+
+  transferTreasuryFundsToRedemptionContract,
 }

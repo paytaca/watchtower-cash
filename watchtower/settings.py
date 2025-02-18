@@ -423,9 +423,15 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'rampp2p.tasks.task_order.cancel_expired_orders',
         'schedule': 60 # run every 1 minute
     },
+
+    # auto rebalancing 30 minutes before automatic shorting
+    'rebalance_fund_allocation': {
+        'task': 'stablehedge.tasks.check_treasury_contracts_for_rebalance',
+        'schedule': crontab(minute=0, hour="*/6"), # every 6 hours
+    },
     'short_treasury_contract_funds': {
         'task': 'stablehedge.tasks.check_treasury_contract_short',
-        'schedule': 6 * 3600 # every 6 hours
+        'schedule': crontab(minute=30, hour="*/6"), # minute 30 at every 6th hour
     }
 }
 
@@ -747,3 +753,7 @@ Address.__init__ = new_init
 
 # stablehedge configs
 STABLEHEDGE_FERNET_KEY = config('STABLEHEDGE_FERNET_KEY')
+STABLEHEDGE = {
+    "FERNET_KEY": config('STABLEHEDGE_FERNET_KEY', ''),
+    "AUTH_KEY_WALLET_WIF": config('STABLEHEDGE_AUTH_KEY_WALLET_WIF', ''),
+}
