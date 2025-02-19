@@ -395,7 +395,7 @@ def get_and_validate_price_message(oracle_public_key:str, price_obj:anyhedge_mod
             .order_by("-message_timestamp") \
             .first()
 
-    if price_obj.message_timestamp < (timezone.now() - timezone.timedelta(seconds=60)):
+    if price_obj.message_timestamp < (timezone.now() - timezone.timedelta(seconds=120)):
         return "Price is too old"
 
     if not price_obj:

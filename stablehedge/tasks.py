@@ -27,7 +27,7 @@ REDIS_STORAGE = settings.REDISKV
 GP_LP = GeneralProtocolsLP()
 
 _TASK_TIME_LIMIT = 300 # 5 minutes
-_QUEUE_TREASURY_CONTRACT = "stablhedge__treasury_contract"
+_QUEUE_TREASURY_CONTRACT = "stablehedge__treasury_contract"
 
 
 def check_and_short_funds(
@@ -51,6 +51,27 @@ def check_and_short_funds(
 
     return result
     
+@shared_task(queue=_QUEUE_TREASURY_CONTRACT)
+def check_treasury_contract_short():
+    results = []
+    for treasury_contract in models.TreasuryContract.objects.filter():
+        try:
+            min_sats = treasury_contract.short_position_rule.target_satoshis
+        except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
+            min_sats = 10 ** 8
+
+        result = check_and_short_funds(
+            treasury_contract.address,
+            min_sats=min_sats,
+            background_task=True,
+        )
+
+        results.append(
+            (treasury_contract.address, result),
+        )
+
+    return results
+
 
 @shared_task(queue=_QUEUE_TREASURY_CONTRACT, time_limit=_TASK_TIME_LIMIT)
 def short_treasury_contract_funds(treasury_contract_address:str):
@@ -89,6 +110,20 @@ def short_treasury_contract_funds(treasury_contract_address:str):
             time.sleep(5)
 
         contract_address = short_proposal["contract_data"]["address"]
+
+        funding_amounts = short_proposal["funding_amounts"]
+        liquidity_fee = funding_amounts["liquidity_fee"]
+        settlement_service_fee = funding_amounts["liquidity_fee"]
+        total_lp_fee = liquidity_fee + settlement_service_fee
+        sats_to_fund = funding_amounts["satoshis_to_fund"]
+
+        MAX_LP_FEE_PCTG = 0.05
+        total_lp_fee_pctg = total_lp_fee / sats_to_fund
+        if MAX_LP_FEE_PCTG < total_lp_fee_pctg:
+            return dict(
+                success=True, error="Liquidity fee too large",
+                funding_amount=sats_to_fund, liquidity_provider_fee=total_lp_fee,
+            )
 
         access_key_sign_result = ScriptFunctions.schnorrSign(dict(
             message=contract_address, wif=wif,

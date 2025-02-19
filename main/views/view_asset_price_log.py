@@ -1,6 +1,7 @@
 import time
 import logging
 import celery
+from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
@@ -164,3 +165,48 @@ class LatestMarketPriceView(generics.GenericAPIView):
                     break
         except Exception as exception:
             LOGGER.exception(exception)
+
+
+class PriceChartView(generics.GenericAPIView):
+    serializer_class = serializers.AssetPriceChartSerializer
+    permission_classes = [AllowAny,]
+    
+    @swagger_auto_schema(
+        responses = {200: serializer_class(many=True)},
+        manual_parameters=[
+            openapi.Parameter(name="vs_currency", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=True),
+            openapi.Parameter(name="days", type=openapi.TYPE_INTEGER, in_=openapi.IN_QUERY, required=True),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        relative_currency = kwargs.get('relative_currency', 'bitcoin-cash')
+        vs_currency = request.query_params.get('vs_currency', 'USD')
+        days = request.query_params.get('days', 1)
+        days = int(days)
+
+        self.get_latest_pair(coin_id=relative_currency, currency=vs_currency)
+
+        if relative_currency == 'bitcoin-cash':
+            relative_currency = 'BCH'
+
+        min_timestamp = timezone.now() - timezone.timedelta(days=days)
+        data = AssetPriceLog.objects.filter(
+            currency=vs_currency,
+            relative_currency=relative_currency,
+            timestamp__gte=min_timestamp,
+        ).order_by("-timestamp").values("timestamp", "price_value")
+
+        serializer = self.serializer_class(data, many=True)
+        return Response(serializer.data)
+
+    def get_latest_pair(self, coin_id:str, currency:str):
+        pair_name = market_price_task.construct_pair(
+            coin_id=coin_id, currency=currency,
+        )
+        asset_price_log = market_price_task.get_latest(pair_name=pair_name)
+
+        if not asset_price_log:
+            market_price_task.queue_pairs(pair_name)
+            market_price_task.delay()
+
+        return market_price_task.get_latest(pair_name=pair_name)
