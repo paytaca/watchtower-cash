@@ -16,7 +16,7 @@ class HasPaymentObjectPermission(permissions.BasePermission):
         if not isinstance(obj, PaymentMethod):
             return False
         
-        return obj.owner.wallet_hash == wallet.wallet_hash
+        return obj.wallet.wallet_hash == wallet.wallet_hash
 
 class HasMerchantObjectPermission(permissions.BasePermission):
     def has_permission(self, request, view):
