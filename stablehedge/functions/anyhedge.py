@@ -296,6 +296,14 @@ def short_funds(treasury_contract_address:str, for_multisig=False, cap_tvl:float
     funding_amounts["settlement_service_fee"] = int(service_fee_estimate)
     funding_amounts["satoshis_to_fund"] = int(sats_to_fund)
 
+    if sats_to_fund > spendable_sats:
+        LOGGER.debug(
+            f"SHORT PROPOSAL | INSUFFICIENT FUNDS | {treasury_contract_address}"
+            f" | sats_to_fund={sats_to_fund} | spendable_sats={spendable_sats}"
+            f" | shortable_sats={shortable_sats}"
+        )
+        raise StablehedgeException("Insufficient funds for funding", code="insufficient-funds")
+
     funding_utxo_tx = create_tx_for_funding_utxo(
         treasury_contract_address,
         int(sats_to_fund),
