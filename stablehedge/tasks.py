@@ -1,4 +1,5 @@
 import time
+import json
 from celery import shared_task
 from django.conf import settings
 
@@ -14,11 +15,14 @@ from stablehedge.functions.anyhedge import (
     update_short_proposal_access_keys,
     update_short_proposal_funding_utxo_tx_sig,
     complete_short_proposal,
+    _get_tvl_sats,
 )
 from stablehedge.functions.treasury_contract import (
     get_spendable_sats,
     get_wif_for_short_proposal
 )
+from stablehedge.functions.market import transfer_treasury_funds_to_redemption_contract
+from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import wif_to_pubkey
 
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
@@ -161,5 +165,70 @@ def short_treasury_contract_funds(treasury_contract_address:str):
         return dict(success=True, address=hedge_pos_obj.address)
     except (AnyhedgeException, StablehedgeException) as error:
         return dict(success=False, error=str(error), code=error.code)
+    finally:
+        REDIS_STORAGE.delete(REDIS_KEY)
+
+
+@shared_task(queue=_QUEUE_TREASURY_CONTRACT)
+def check_treasury_contracts_for_rebalance():
+    results = []
+    for treasury_contract in models.TreasuryContract.objects.filter():
+        try:
+            result = rebalance_funds(treasury_contract.address)
+            results.append([treasury_contract.address, result])
+        except Exception as exception:
+            results.append([treasury_contract.address, str(exception)])
+
+    return results
+
+@shared_task(queue=_QUEUE_TREASURY_CONTRACT)
+def rebalance_funds(treasury_contract_address:str):
+    REDIS_KEY = f"treasury-contract-rebalance-task-{treasury_contract_address}"
+
+    if REDIS_STORAGE.exists(REDIS_KEY):
+        return dict(success=False, error="Task key in use")
+
+    LOGGER.info(f"ATTEMPTING REBALANCING | treasury contract | {treasury_contract_address}")
+    try:
+        REDIS_STORAGE.set(REDIS_KEY, "1", ex=120)
+        tvl_data = _get_tvl_sats(treasury_contract_address)
+
+        LOGGER.info(f"TVL DATA | {tvl_data}")
+
+        total_tvl = tvl_data["total"]
+        redeemable = tvl_data["redeemable"]
+
+        required_sats = (total_tvl / 2) - redeemable
+        transferrable = tvl_data["satoshis"]
+
+        if required_sats <= 0:
+            return dict(success=True, message="No rebalance required")
+
+        satoshis_to_transfer = None
+        if transferrable > required_sats:
+            satoshis_to_transfer = int(required_sats)
+
+        result = transfer_treasury_funds_to_redemption_contract(
+            treasury_contract_address, satoshis=satoshis_to_transfer
+        )
+
+        LOGGER.info(f"REBALANCE TX RESULT | {json.dumps(result, indent=2)}")
+
+        if not result["success"]:
+            return result
+
+        success, txid_or_error = broadcast_transaction(result["tx_hex"])
+        if not success:
+            return dict(success=False, error=txid_or_error, tx_hex=result["tx_hex"])
+
+        result.pop("tx_hex", None)
+        result["txid"] = txid_or_error
+        return result
+
+    except (AnyhedgeException, StablehedgeException) as error:
+        return dict(success=False, error=str(error), code=error.code)
+    except Exception as exception:
+        REDIS_STORAGE.delete(REDIS_KEY)
+        raise exception
     finally:
         REDIS_STORAGE.delete(REDIS_KEY)
