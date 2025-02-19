@@ -152,7 +152,7 @@ export function signAuthKeyUtxo(opts) {
     locktime: locktime,
     inputs: [{
       outpointIndex: authKeyUtxo?.vout,
-      outpointTransactionHash: hexToBin(opts?.utxo?.txid),
+      outpointTransactionHash: hexToBin(authKeyUtxo?.txid),
       sequenceNumber: 0xfffffffe,
       unlockingBytecode: new Uint8Array(),
     }],
@@ -160,10 +160,10 @@ export function signAuthKeyUtxo(opts) {
       lockingBytecode: utxoLockingBytecode,
       valueSatoshis: authKeyUtxo.satoshis,
       token: {
-        category: authKeyUtxo.token.category,
+        category: hexToBin(authKeyUtxo.token.category),
         amount: authKeyUtxo.token.amount,
         nft: {
-          commitment: authKeyUtxo.token.nft.commitment,
+          commitment: hexToBin(authKeyUtxo.token.nft.commitment),
           capability: authKeyUtxo.token.nft.capability,
         }
       }
@@ -175,10 +175,10 @@ export function signAuthKeyUtxo(opts) {
     lockingBytecode: utxoLockingBytecode,
     valueSatoshis: authKeyUtxo.satoshis,
     token: {
-      category: authKeyUtxo.token.category,
+      category: hexToBin(authKeyUtxo.token.category),
       amount: authKeyUtxo.token.amount,
       nft: {
-        commitment: authKeyUtxo.token.nft.commitment,
+        commitment: hexToBin(authKeyUtxo.token.nft.commitment),
         capability: authKeyUtxo.token.nft.capability,
       }
     }

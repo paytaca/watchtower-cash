@@ -21,6 +21,7 @@ from stablehedge.functions.treasury_contract import (
     get_spendable_sats,
     get_wif_for_short_proposal
 )
+from stablehedge.functions.market import transfer_treasury_funds_to_redemption_contract
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import wif_to_pubkey
 
@@ -205,7 +206,7 @@ def rebalance_funds(treasury_contract_address:str):
 
         satoshis_to_transfer = None
         if transferrable > required_sats:
-            satoshis_to_transfer = required_sats
+            satoshis_to_transfer = int(required_sats)
 
         result = transfer_treasury_funds_to_redemption_contract(
             treasury_contract_address, satoshis=satoshis_to_transfer

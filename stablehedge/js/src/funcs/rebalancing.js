@@ -1,9 +1,10 @@
 import { TransactionBuilder } from 'cashscript'
+import { P2PKH_INPUT_SIZE } from 'cashscript/dist/constants.js'
+import { getOutputSize } from 'cashscript/dist/utils.js'
 import { RedemptionContract } from '../contracts/redemption-contract/index.js'
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
 import { parseUtxo, serializeOutput, serializeUtxo } from '../utils/crypto.js'
 import { addPrecision, calculateInputSize, removePrecision } from '../utils/transaction.js'
-import { getOutputSize } from 'cashscript/dist/utils.js'
 
 /**
  * @param {Object} opts
@@ -43,11 +44,11 @@ export async function transferTreasuryFundsToRedemptionContract(opts) {
 
   transaction.addInput(reserveUtxo, rcUnlocker)
   __totalInput += addPrecision(reserveUtxo.satoshis)
-  __txFee += addPrecision(tcInputSize)
-
-  transaction.addInput(authKeyUtxo, rcUnlocker)
-  __totalInput += addPrecision(authKeyUtxo.satoshis)
   __txFee += addPrecision(rcInputSize)
+
+  transaction.addInput(authKeyUtxo, authKeyUtxo.template.unlockP2PKH())
+  __totalInput += addPrecision(authKeyUtxo.satoshis)
+  __txFee += addPrecision(P2PKH_INPUT_SIZE)
 
   transaction.addInputs(treasuryContractUtxos, tcUnlocker)
   __totalInput += treasuryContractUtxos
@@ -65,13 +66,13 @@ export async function transferTreasuryFundsToRedemptionContract(opts) {
     changeOutput = false
   }
 
-  const reserveOutput = { to: rc.address, amount: outputSats, token: reserveUtxo.token }
+  const reserveOutput = { to: rc.tokenAddress, amount: outputSats, token: reserveUtxo.token }
   transaction.addOutput(reserveOutput)
   __totalOutput += addPrecision(outputSats)
   __txFee += addPrecision(getOutputSize(reserveOutput))
 
   const authKeyOutput = {
-    to: authKeyUtxo.template.unlockP2PKH().getLockingBytecode(),
+    to: authKeyUtxo.template.unlockP2PKH().generateLockingBytecode(),
     amount: authKeyUtxo.satoshis,
     token: authKeyUtxo.token,
   }

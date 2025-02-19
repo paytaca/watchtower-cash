@@ -8,6 +8,7 @@ from stablehedge.utils.transaction import (
 
 from .auth_key import get_signed_auth_key_utxo
 from .redemption_contract import find_fiat_token_utxos
+from .treasury_contract import get_bch_utxos
 
 def transfer_treasury_funds_to_redemption_contract(
     treasury_contract_address,
@@ -25,7 +26,7 @@ def transfer_treasury_funds_to_redemption_contract(
     if redemption_contract.auth_token_id != treasury_contract.auth_token_id:
         raise StablehedgeException("Mismatch in auth token", code="mismatch-auth-token")
 
-    reserve_utxo = find_fiat_token_utxos(redemption_contract.address).first()
+    reserve_utxo = find_fiat_token_utxos(redemption_contract).first()
 
     treasury_contract_utxos = get_bch_utxos(treasury_contract_address, satoshis=satoshis)
 
