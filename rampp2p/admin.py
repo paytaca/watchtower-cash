@@ -190,8 +190,8 @@ class PaymentTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Peer)
 class PeerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'address', 'is_disabled']
-    search_fields = ['name', 'address', 'wallet_hash']
+    list_display = ['id', 'name', 'address', 'is_disabled']
+    search_fields = ['id', 'name', 'address', 'wallet_hash']
 
 @admin.register(Status)
 class StatusAdmin(DynamicRawIDMixin, admin.ModelAdmin):
