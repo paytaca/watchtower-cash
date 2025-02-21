@@ -349,7 +349,11 @@ class PaymentMethod(models.Model):
         unique_together = ('payment_type', 'wallet')
 
     def __str__(self):
-	    return str(self.id)
+        name = self.payment_type.short_name
+        if not name:
+            name = self.payment_type.full_name
+	    
+        return str(name)
 
 class PaymentMethodField(models.Model):
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE)

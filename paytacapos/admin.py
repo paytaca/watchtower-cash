@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from .models import *
 from dynamic_raw_id.admin import DynamicRawIDMixin
@@ -184,47 +186,50 @@ class LocationAdmin(admin.ModelAdmin):
         "branch",
     ]
 
-class PaymentMethodFieldInline(DynamicRawIDMixin, admin.TabularInline):
+class PaymentMethodFieldInline(admin.TabularInline):
     model = PaymentMethodField
-    extra = 1
-    dynamic_raw_id_fields = ('field_reference')
-    readonly_fields = ('field_name',)
-    fields = ('field_reference', 'field_name', 'value')
-    can_delete = True
+    readonly_fields = ('field_name', 'value')
+    fields = ('field_name', 'value')
+    extra = 0
+    max_num = 0
+    can_delete = False
 
     def field_name(self, obj):
         return obj.field_reference.fieldname
-    field_name.short_description = 'Field Reference Name'
+    field_name.short_description = 'Field Name'
 
 @admin.register(PaymentMethod)
-class PaymentMethodAdmin(DynamicRawIDMixin, admin.ModelAdmin):
-    list_display = ['id', 'wallet', 'payment_type']
+class PaymentMethodAdmin(admin.ModelAdmin):
+    readonly_fields = ['payment_type', 'wallet']
+    list_display = ['id', 'payment_type', 'wallet']
     search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'wallet__wallet_hash']
     inlines = [PaymentMethodFieldInline]
-        
-    dynamic_raw_id_fields = [
-        'wallet', 'payment_type'
-    ]
 
 @admin.register(CashOutOrder)
-class CashOutOrderAdmin(DynamicRawIDMixin, admin.ModelAdmin):
-    list_display = ['id', 'wallet', 'status', 'created_at']
+class CashOutOrderAdmin(admin.ModelAdmin):
+    readonly_fields = ['currency', 'market_price', 'wallet', 'payment_method']
+    list_display = ['id', 'status', 'payment_method_link', 'wallet', 'created_at']
     search_fields = [
         'id',
-        'merchant__name',
+        'wallet__wallet_hash',
         'payment_method__payment_type__full_name', 
         'payment_method__payment_type__short_name',
         'status']
     
     dynamic_raw_id_fields = [
-        'merchant', 'transactions'
+        'wallet', 'transactions'
     ]
 
-    def payment_type(self, obj):
+    def payment_method_link(self, obj):
+        url = reverse('admin:paytacapos_paymentmethod_change', args=[obj.payment_method.id])
+        return format_html('<a href="{}">{}</a>', url, self.payment_method_ref(obj))
+
+    def payment_method_ref(self, obj):
         payment_type_name = obj.payment_method.payment_type.short_name
         if not payment_type_name:
             payment_type_name = obj.payment_method.payment_type.full_name
-        return payment_type_name
+        pm_field = PaymentMethodField.objects.filter(payment_method_id=obj.id).first()
+        return f'{payment_type_name}({pm_field.value})'
 
 @admin.register(CashOutTransaction)
 class CashOutTransactionAdmin(admin.ModelAdmin):
