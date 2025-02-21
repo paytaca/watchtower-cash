@@ -229,3 +229,12 @@ class CashOutOrderAdmin(DynamicRawIDMixin, admin.ModelAdmin):
 @admin.register(CashOutTransaction)
 class CashOutTransactionAdmin(admin.ModelAdmin):
     list_display = ['id', 'transaction', 'wallet_history', 'created_at']
+
+@admin.register(PayoutAddress)
+class PayoutAddressAdmin(admin.ModelAdmin):
+
+    def has_add_permission(self, request):
+        return not PayoutAddress.objects.exists()
+    
+    def has_delete_permission(self, request, obj = None):
+        return False

@@ -162,7 +162,7 @@ class PosDeviceViewSet(
         code_ttl = 60 * 5
         serializer = PosDeviceLinkRequestSerializer(data=link_request_data)
         if not serializer.is_valid():
-            return Response(status=400)
+            return Response(serializer.errors, status=400)
         return Response(serializer.validated_data["encrypted_xpubkey"])
 
     @swagger_auto_schema(method="post", request_body=LinkedDeviceInfoSerializer)
