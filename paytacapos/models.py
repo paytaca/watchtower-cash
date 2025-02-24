@@ -380,6 +380,7 @@ class CashOutOrder(models.Model):
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
+    payout_address = models.CharField(max_length=255, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):

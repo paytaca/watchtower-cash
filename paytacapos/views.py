@@ -464,6 +464,11 @@ class CashOutViewSet(viewsets.ModelViewSet):
         currency = request.data.get('currency', None)
         payment_method_id = request.data.get('payment_method_id')
 
+        # require that payout address is set before allowing users to create cash out orders
+        payout_address = PayoutAddress.objects.first()
+        if not payout_address:
+            return Response({'error': 'payout address not set'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             with transaction.atomic():
                 if len(txids) == 0:
@@ -477,7 +482,8 @@ class CashOutViewSet(viewsets.ModelViewSet):
                     "wallet": wallet.id,
                     "currency": currency_obj.id,
                     "market_price": current_market_price.price,
-                    "payment_method": payment_method.id
+                    "payment_method": payment_method.id,
+                    "payout_address": payout_address.address
                 }
                 serializer = BaseCashOutOrderSerializer(data=data)
                 if not serializer.is_valid(): 
@@ -515,6 +521,13 @@ class CashOutViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         raise MethodNotAllowed(method='DELETE')
+    
+    @action(detail=False, methods=['get'])
+    def payout_address(self, request):
+        payout_address = PayoutAddress.objects.first()
+        if not payout_address:
+            return Response({'error': 'payout address not set'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'payout_address': payout_address.address}, status=status.HTTP_200_OK)
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = PaymentMethod.objects.all()

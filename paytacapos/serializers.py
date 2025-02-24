@@ -932,6 +932,7 @@ class BaseCashOutOrderSerializer(serializers.ModelSerializer):
             'market_price',
             'payment_method',
             'status',
+            'payout_address',
             'created_at']
         
 class CashOutOrderSerializer(BaseCashOutOrderSerializer):
@@ -957,6 +958,7 @@ class CashOutOrderSerializer(BaseCashOutOrderSerializer):
 class MerchantTransactionSerializer(serializers.ModelSerializer):
     fiat_price = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
+    address = serializers.SerializerMethodField()
 
     class Meta:
         model = WalletHistory
@@ -965,8 +967,20 @@ class MerchantTransactionSerializer(serializers.ModelSerializer):
             'amount',
             'tx_timestamp',
             'fiat_price',
+            'address',
             'status'
         ]
+
+    def get_address(self, obj):
+        data = {}
+        # find the transaction of this wallet history
+        transaction = Transaction.objects.filter(txid=obj.txid, wallet__wallet_hash=obj.wallet.wallet_hash, token__name="bch")
+        if transaction.exists():
+            # get the address associated with the transaction
+            transaction = transaction.first()
+            data['address'] = transaction.address.address
+            data['address_path'] = transaction.address.address_path
+        return data
 
     def get_fiat_price(self, obj):
         pref_currency = self.context.get('currency')

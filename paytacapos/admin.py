@@ -207,7 +207,7 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(admin.ModelAdmin):
-    readonly_fields = ['currency', 'market_price', 'wallet', 'payment_method']
+    readonly_fields = ['payout_address', 'currency', 'market_price', 'wallet', 'payment_method']
     list_display = ['id', 'status', 'payment_method_link', 'wallet', 'created_at']
     search_fields = [
         'id',
@@ -228,7 +228,8 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         payment_type_name = obj.payment_method.payment_type.short_name
         if not payment_type_name:
             payment_type_name = obj.payment_method.payment_type.full_name
-        pm_field = PaymentMethodField.objects.filter(payment_method_id=obj.id).first()
+        
+        pm_field = PaymentMethodField.objects.filter(payment_method_id=obj.payment_method.id).first()
         return f'{payment_type_name}({pm_field.value})'
 
 @admin.register(CashOutTransaction)
