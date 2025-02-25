@@ -2715,7 +2715,10 @@ class MarketPriceTaskQueueManager(celery_app.Task):
 
         if return_id: query = query.values_list("id", flat=True)
 
-        return query.first()
+        if query.first():
+            return query.first()
+        else:
+            return get_latest_bch_price(currency)
 
     @classmethod
     def queue_pairs(cls, *pair_names):
