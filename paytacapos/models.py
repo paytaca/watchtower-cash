@@ -1,9 +1,10 @@
 from django.db import transaction
 from django.db import models
 from django.utils import timezone
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields import JSONField
+from psqlextra.models import PostgresModel
 from psqlextra.query import PostgresQuerySet
-from main.models import WalletHistory, Wallet, Address, Transaction
+from main.models import WalletHistory, Wallet, Transaction
 from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
 
 from decimal import Decimal
@@ -365,7 +366,7 @@ class PaymentMethodField(models.Model):
     def __str__(self):
 	    return str(self.id)
 
-class CashOutOrder(models.Model):
+class CashOutOrder(PostgresModel):
     class StatusType(models.TextChoices):
         PENDING     = 'PENDING'
         PROCESSING  = 'PROCESSING'
@@ -380,6 +381,8 @@ class CashOutOrder(models.Model):
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
+    payout_details = JSONField(null=True, blank=True)
+    payout_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     payout_address = models.CharField(max_length=255, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
@@ -451,4 +454,4 @@ class PayoutAddress(models.Model):
 
     def __str__(self):
         return str(self.address)
-       
+    

@@ -29,7 +29,7 @@ from .utils.transaction import fetch_unspent_merchant_transactions
 from .models import Location, Category, Merchant, PosDevice
 from main.models import Address, Transaction, WalletHistory
 from rampp2p.models import MarketPrice
-from main.serializers import WalletHistorySerializer
+from .tasks import calculate_cashout_total
 
 from authentication.token import WalletAuthentication
 from django.core.exceptions import ValidationError
@@ -507,6 +507,8 @@ class CashOutViewSet(viewsets.ModelViewSet):
                     serializer.save()
 
                 order_serializer = CashOutOrderSerializer(order)
+            
+            calculate_cashout_total.apply_async(args=[order.id])
             return Response(order_serializer.data, status=status.HTTP_200_OK)
         except (ValidationError, Exception) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)

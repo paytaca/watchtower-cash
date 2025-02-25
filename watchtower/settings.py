@@ -277,6 +277,7 @@ CELERY_IMPORTS = (
     'rampp2p.tasks.task_transaction',
     'rampp2p.tasks.task_order',
     'stablehedge.tasks',
+    'paytacapos.tasks'
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'

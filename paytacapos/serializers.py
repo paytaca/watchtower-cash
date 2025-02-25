@@ -927,11 +927,12 @@ class BaseCashOutOrderSerializer(serializers.ModelSerializer):
         model = CashOutOrder
         fields = [
             'id', 
-            'currency',
+            'status',
             'wallet',
+            'currency',
             'market_price',
             'payment_method',
-            'status',
+            'payout_amount',
             'payout_address',
             'created_at']
         
