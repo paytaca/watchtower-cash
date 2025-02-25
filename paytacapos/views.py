@@ -24,7 +24,7 @@ from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader
 from .pagination import CustomLimitOffsetPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
-from .utils.transaction import fetch_unspent_merchant_transactions
+from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout_address
 
 from .models import Location, Category, Merchant, PosDevice
 from main.models import Address, Transaction, WalletHistory
@@ -450,6 +450,11 @@ class CashOutViewSet(viewsets.ModelViewSet):
     authentication_classes = [WalletAuthentication]
 
     @action(detail=False, methods=['get'])
+    def payout_address(self, request):
+        address = generate_payout_address()
+        return Response(address, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
     def list_unspent_txns(self, request):
         wallet_hash = request.user.wallet_hash
         currency = request.query_params.get('currency')
@@ -524,12 +529,12 @@ class CashOutViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         raise MethodNotAllowed(method='DELETE')
     
-    @action(detail=False, methods=['get'])
-    def payout_address(self, request):
-        payout_address = PayoutAddress.objects.first()
-        if not payout_address:
-            return Response({'error': 'payout address not set'}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({'payout_address': payout_address.address}, status=status.HTTP_200_OK)
+    # @action(detail=False, methods=['get'])
+    # def payout_address(self, request):
+    #     payout_address = PayoutAddress.objects.first()
+    #     if not payout_address:
+    #         return Response({'error': 'payout address not set'}, status=status.HTTP_400_BAD_REQUEST)
+    #     return Response({'payout_address': payout_address.address}, status=status.HTTP_200_OK)
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = PaymentMethod.objects.all()

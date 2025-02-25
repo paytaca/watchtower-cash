@@ -1,5 +1,8 @@
 from main.models import Transaction, WalletHistory, Address
+from paytacapos.models import PayoutAddress
 from django.db.models import Q, Func, Subquery
+from django.conf import settings
+import bip32utils
 import logging
 
 logger = logging.getLogger(__name__)
@@ -39,3 +42,19 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     unspent_merchant_txns = incoming_unspent_txns.filter(recipients__overlap=pos_addresses_subquery)
     
     return unspent_merchant_txns
+
+def generate_payout_address():
+    xpubkey = settings.PAYTACAPOS_PAYOUT_XPUBKEY
+    if not xpubkey:
+        raise Exception('paytacapos payout xpubkey not set')
+    
+    key = bip32utils.BIP32Key.fromExtendedKey(xpubkey)
+    last_payout_address = PayoutAddress.objects.last()
+    
+    next_index = 0
+    if last_payout_address:
+        next_index = last_payout_address.index + 1
+
+    address = key.ChildKey(next_index).Address()
+    PayoutAddress.objects.get_or_create(address=address, index=next_index)
+    return address

@@ -441,16 +441,9 @@ class CashOutTransaction(models.Model):
         return round(order_price * amount, 2)
     
 class PayoutAddress(models.Model):
+    index = models.IntegerField(default=0)
     address = models.CharField(max_length=255)
-
-    class Meta:
-        verbose_name = "Payout Address"
-        verbose_name_plural = "Payout Address"
-
-    def save(self, *args, **kwargs):
-        if not self.pk and PayoutAddress.objects.exists():
-            raise ValueError('There can only be one PayoutAddress instance')
-        super().save(*args, **kwargs)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
         return str(self.address)

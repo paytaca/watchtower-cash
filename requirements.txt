@@ -126,3 +126,4 @@ python-slugify==8.0.1
 uvicorn==0.32.0
 uvloop==0.21.0
 git+https://github.com/paytaca/python-bitcoinrpc
+bip32utils==0.3.post4
