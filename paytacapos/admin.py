@@ -238,9 +238,4 @@ class CashOutTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(PayoutAddress)
 class PayoutAddressAdmin(admin.ModelAdmin):
-
-    def has_add_permission(self, request):
-        return not PayoutAddress.objects.exists()
-    
-    def has_delete_permission(self, request, obj = None):
-        return False
+    list_display = ['address', 'index']

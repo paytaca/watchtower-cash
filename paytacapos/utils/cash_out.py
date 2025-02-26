@@ -1,4 +1,4 @@
-from main.models import Transaction, WalletHistory, Address
+from main.models import Transaction, WalletHistory, Address, Wallet, Recipient, Subscription
 from paytacapos.models import PayoutAddress
 from django.db.models import Q, Func, Subquery
 from django.conf import settings
@@ -45,18 +45,29 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     return unspent_merchant_txns
 
 def generate_payout_address():
-    xpubkey = settings.PAYTACAPOS_PAYOUT_XPUBKEY
-    if not xpubkey:
-        raise Exception('paytacapos payout xpubkey not set')
-    
-    key = bip32utils.BIP32Key.fromExtendedKey(xpubkey)
-    last_payout_address = PayoutAddress.objects.last()
-    
-    next_index = 0
-    if last_payout_address:
-        next_index = last_payout_address.index + 1
+    payout_address = settings.PAYTACAPOS_PAYOUT_ADDRESS
+    return payout_address
 
-    legacy_address = key.ChildKey(next_index).Address()
-    cash_address = cashaddress.convert.to_cash_address(legacy_address)
-    PayoutAddress.objects.get_or_create(address=cash_address, index=next_index)
-    return cash_address
+    # wallet_hash = settings.PAYTACAPOS_PAYOUT_WALLET_HASH
+    # xpubkey = settings.PAYTACAPOS_PAYOUT_XPUBKEY
+    
+    # if not xpubkey or not wallet_hash:
+    #     raise Exception('paytacapos payout xpubkey or wallet_hash not set')
+    
+    # wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+    # key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)
+    # last_payout_address = PayoutAddress.objects.last()
+    
+    # next_index = 0
+    # if last_payout_address:
+    #     next_index = last_payout_address.index + 1
+
+    # bch_legacy_address = key.ChildKey(next_index).Address()
+    # cash_address = cashaddress.convert.to_cash_address(bch_legacy_address)
+    # payout_address_obj, _ = PayoutAddress.objects.get_or_create(address=cash_address, index=next_index)
+    # address_obj, _ = Address.objects.get_or_create(address=cash_address, wallet=wallet)
+    # recipient, _ = Recipient.objects.get_or_create(telegram_id=payout_address_obj.id)
+    
+    # Subscription.objects.get_or_create(recipient=recipient, address=address_obj)
+
+    # return cash_address
