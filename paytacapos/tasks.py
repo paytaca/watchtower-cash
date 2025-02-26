@@ -10,6 +10,16 @@ logger = logging.getLogger(__name__)
 
 @shared_task(queue='paytacapos__cashout')
 def calculate_cashout_total (cashout_order_id):
+    '''
+    Calculates and saves the payout detail of a given CashOutOrder.
+    Saves the following info:
+        - initial_total:    The total fiat amount of the transactions at the market price when they were created
+        - payout_total:     The total fiat amount of the transactions at the current market price
+        - loss_gain:        The difference between the payout_total and initial_total 
+                            (positive if market price had increased, negative if decreased, zero if there was no change)
+        - loss_covered:     The loss amount covered if loss_gain is < 0. This only applies to transactions not older than 30 days.
+        - total_bch_amount: The total bch amount of the transactions
+    '''
     try:
         order = CashOutOrder.objects.get(id=cashout_order_id)
         wallet_history_ids = CashOutTransaction.objects.filter(order__id=order.id).values_list('wallet_history', flat=True)

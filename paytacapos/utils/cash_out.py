@@ -3,6 +3,7 @@ from paytacapos.models import PayoutAddress
 from django.db.models import Q, Func, Subquery
 from django.conf import settings
 import bip32utils
+import cashaddress
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ def generate_payout_address():
     if last_payout_address:
         next_index = last_payout_address.index + 1
 
-    address = key.ChildKey(next_index).Address()
-    PayoutAddress.objects.get_or_create(address=address, index=next_index)
-    return address
+    legacy_address = key.ChildKey(next_index).Address()
+    cash_address = cashaddress.convert.to_cash_address(legacy_address)
+    PayoutAddress.objects.get_or_create(address=cash_address, index=next_index)
+    return cash_address
