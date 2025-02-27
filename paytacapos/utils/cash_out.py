@@ -13,6 +13,9 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     Find unspent, incoming transactions by wallet_hash and posids.
     """
 
+    if len(posids) == 0:
+        return []
+
     # Filter unspent transactions by wallet_hash
     unspent_txns = Transaction.objects.filter(wallet__wallet_hash=wallet_hash, spent=False)
     unspent_txids = unspent_txns.values_list('txid', flat=True)

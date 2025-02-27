@@ -458,7 +458,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
     def list_unspent_txns(self, request):
         wallet_hash = request.user.wallet_hash
         currency = request.query_params.get('currency')
-        merchant_ids = request.query_params.get('merchant_ids')
+        merchant_ids = request.query_params.getlist('merchant_ids', [])
         
         pos_queryset = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash)
         if len(merchant_ids) > 0:
