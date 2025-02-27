@@ -375,19 +375,36 @@ class CashOutOrder(PostgresModel):
     currency = models.ForeignKey(
         FiatCurrency,
         on_delete=models.PROTECT,
-        related_name="cashout_orders"
+        related_name="cashout_orders",
+        editable=False
     )
-    market_price = models.DecimalField(max_digits=18, decimal_places=2, default=0)
-    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE)
+    market_price = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, editable=False)
     status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
-    payout_details = JSONField(null=True, blank=True)
-    payout_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, editable=False)
+    payout_details = JSONField(null=True, blank=True, editable=False)
+    payout_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
     payout_address = models.CharField(max_length=255, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    processed_at = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
 
     def __str__(self):
         return str(self.id)
+    
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            old_status = CashOutOrder.objects.get(pk=self.pk).status
+            if old_status != self.status:
+                if self.status == CashOutOrder.StatusType.PENDING:
+                    self.processed_at = None
+                    self.completed_at = None
+                if self.status == CashOutOrder.StatusType.PROCESSING:
+                    self.completed_at = None
+                    self.processed_at = timezone.now()
+                if self.status == CashOutOrder.StatusType.COMPLETED:
+                    self.completed_at = timezone.now()
+        super(CashOutOrder, self).save(*args, **kwargs)
 
 class CashOutTransaction(models.Model):
     order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)

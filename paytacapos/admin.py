@@ -207,7 +207,17 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(admin.ModelAdmin):
-    readonly_fields = ['payout_address', 'currency', 'market_price', 'wallet', 'payment_method']
+    readonly_fields = [
+        'payout_amount_',
+        'payout_details',
+        'payout_address',
+        'currency_',
+        'market_price_',
+        'payment_method_details',
+        'created_at',
+        'processed_at',
+        'completed_at'
+    ]
     list_display = ['id', 'status', 'payment_method_link', 'wallet', 'created_at']
     search_fields = [
         'id',
@@ -231,6 +241,24 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         
         pm_field = PaymentMethodField.objects.filter(payment_method_id=obj.payment_method.id).first()
         return f'{payment_type_name}({pm_field.value})'
+    
+    def payout_amount_(self, obj):
+        return f"{obj.payout_amount} {obj.currency.symbol}"
+    
+    def currency_(self, obj):
+        return f"{obj.currency.name} ({obj.currency.symbol})"
+    
+    def market_price_(self, obj):
+        return f"{obj.market_price} {obj.currency.symbol}"
+    
+    def payment_method_details(self, obj):
+        fields = PaymentMethodField.objects.filter(payment_method__id=obj.payment_method.id)
+        detail_str = f"{obj.payment_method.payment_type.short_name}"
+        for field in fields:
+            detail_str = f"{detail_str} | {field.field_reference.fieldname}: {field.value}"
+        
+        url = reverse('admin:paytacapos_paymentmethod_change', args=[obj.payment_method.id])
+        return format_html('<a href="{}">{}</a>', url, detail_str)
 
 @admin.register(CashOutTransaction)
 class CashOutTransactionAdmin(admin.ModelAdmin):
