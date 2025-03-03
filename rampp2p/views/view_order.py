@@ -628,17 +628,10 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
     
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk):
-        '''Confirms an order. Is callable only by the ad owner.'''
-
         wallet_hash = request.user.wallet_hash
         try:
             with transaction.atomic():
                 order = models.Order.objects.get(pk=pk)
-                
-                # User must be ad owner
-                is_ad_owner = models.Ad.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(pk=order.ad_snapshot.ad.id)).exists()
-                if not is_ad_owner:
-                    raise ValidationError('User must be ad owner')
                     
                 validate_status(pk, StatusType.SUBMITTED)
                 validate_status_inst_count(StatusType.CONFIRMED, pk)
