@@ -47,30 +47,49 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     
     return unspent_merchant_txns
 
-def generate_payout_address():
+def save_and_subsribe_to_address(**kwargs):
+    wallet = kwargs['wallet']
+    address = kwargs['address']
+    index = kwargs['index']
+
+    payout_address_obj, _ = PayoutAddress.objects.get_or_create(address=address, index=index)
+    address_obj, _ = Address.objects.get_or_create(address=address)
+    address_obj.wallet = wallet
+    address_obj.save()
+    
+    recipient, _ = Recipient.objects.get_or_create(telegram_id=payout_address_obj.id)    
+    Subscription.objects.get_or_create(recipient=recipient, address=address_obj)
+
+def generate_address_from_xpubkey(xpubkey):
+    if not xpubkey:
+        raise Exception('paytacapos payout xpubkey not set')
+        
+    key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)
+    last_payout_address = PayoutAddress.objects.last()
+    
+    next_index = 0
+    if last_payout_address:
+        next_index = last_payout_address.index + 1
+
+    bch_legacy_address = key.ChildKey(next_index).Address()
+    address = cashaddress.convert.to_cash_address(bch_legacy_address)
+    return address, next_index
+
+def generate_payout_address(fixed=True):
+
     payout_address = settings.PAYTACAPOS_PAYOUT_ADDRESS
+    wallet_hash = settings.PAYTACAPOS_PAYOUT_WALLET_HASH
+
+    if not wallet_hash:
+        raise Exception('paytacapos payout wallet_hash not set')
+    
+    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+   
+    next_index = None
+    if not fixed:
+        payout_address, next_index = generate_address_from_xpubkey(settings.PAYTACAPOS_PAYOUT_XPUBKEY)
+    
+    save_and_subsribe_to_address(wallet=wallet, address=payout_address, index=next_index)
+
     return payout_address
 
-    # wallet_hash = settings.PAYTACAPOS_PAYOUT_WALLET_HASH
-    # xpubkey = settings.PAYTACAPOS_PAYOUT_XPUBKEY
-    
-    # if not xpubkey or not wallet_hash:
-    #     raise Exception('paytacapos payout xpubkey or wallet_hash not set')
-    
-    # wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-    # key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)
-    # last_payout_address = PayoutAddress.objects.last()
-    
-    # next_index = 0
-    # if last_payout_address:
-    #     next_index = last_payout_address.index + 1
-
-    # bch_legacy_address = key.ChildKey(next_index).Address()
-    # cash_address = cashaddress.convert.to_cash_address(bch_legacy_address)
-    # payout_address_obj, _ = PayoutAddress.objects.get_or_create(address=cash_address, index=next_index)
-    # address_obj, _ = Address.objects.get_or_create(address=cash_address, wallet=wallet)
-    # recipient, _ = Recipient.objects.get_or_create(telegram_id=payout_address_obj.id)
-    
-    # Subscription.objects.get_or_create(recipient=recipient, address=address_obj)
-
-    # return cash_address

@@ -934,7 +934,10 @@ class BaseCashOutOrderSerializer(serializers.ModelSerializer):
             'payment_method',
             'payout_amount',
             'payout_address',
-            'created_at']
+            'payout_details',
+            'created_at',
+            'processed_at',
+            'completed_at']
         
 class CashOutOrderSerializer(BaseCashOutOrderSerializer):
     transactions = serializers.SerializerMethodField()
@@ -949,9 +952,12 @@ class CashOutOrderSerializer(BaseCashOutOrderSerializer):
         ]
         
     def get_transactions(self, obj):
-        order_txns = CashOutTransaction.objects.filter(order__id=obj.id)
-        txns = CashOutTransactionSerializer(order_txns, many=True, context={'currency': obj.currency.symbol})
-        return txns.data
+        inputs = CashOutTransactionSerializer(obj.get_input_tx(), many=True, context={'currency': obj.currency.symbol}).data
+        outputs = CashOutTransactionSerializer(obj.get_output_tx(), many=True, context={'currency': obj.currency.symbol}).data
+        return {
+            'inputs': inputs,
+            'outputs': outputs
+        }
     
     def get_currency(self, obj):
         return obj.currency.symbol

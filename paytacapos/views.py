@@ -485,23 +485,17 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 current_market_price = MarketPrice.objects.get(currency=currency)
                 payment_method = PaymentMethod.objects.get(wallet__wallet_hash=wallet.wallet_hash, id=payment_method_id)
 
-                data = { 
-                    "wallet": wallet.id,
-                    "currency": currency_obj.id,
-                    "market_price": current_market_price.price,
-                    "payment_method": payment_method.id,
-                    "payout_address": payout_address
-                }
-
-                serializer = BaseCashOutOrderSerializer(data=data)
-                if not serializer.is_valid(): 
-                    raise ValidationError(serializer.errors)
-                
-                order = serializer.save()
+                order = CashOutOrder.objects.create( 
+                    wallet=wallet,
+                    currency=currency_obj,
+                    market_price=current_market_price.price,
+                    payment_method=payment_method,
+                    payout_address=payout_address
+                )
 
                 for txid in txids:
                     txn = Transaction.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
-                    wallet_history = WalletHistory.objects.get(txid__in=txids, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
+                    wallet_history = WalletHistory.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
 
                     serializer = BaseCashOutTransactionSerializer(data={
                         "order": order.id,
@@ -531,6 +525,47 @@ class CashOutViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         raise MethodNotAllowed(method='DELETE')
+    
+    @action(detail=False, methods=['post'])
+    def save_output_tx(self, request):
+        try:
+            wallet = request.user
+            order_id = request.data.get('order_id')
+            order = CashOutOrder.objects.filter(id=order_id, wallet__wallet_hash=wallet.wallet_hash)
+
+            if not order.exists():
+                return Response({"error": "order does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            order = order.first()
+            txids = request.data.get('txids')
+
+            with transaction.atomic():
+                cashout_transactions = []
+                for txid in txids:
+                    txn = Transaction.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
+                    wallet_history = WalletHistory.objects.filter(txid=txid, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
+                    
+                    data={
+                        "order": order.id,
+                        "transaction": txn.id
+                    }
+
+                    if wallet_history.exists():
+                        wallet_history = wallet_history.first()
+                        data["wallet_history"] = wallet_history.id
+
+                    serializer = BaseCashOutTransactionSerializer(data=data)
+                    
+                    if not serializer.is_valid():
+                        raise ValidationError(serializer.errors)
+                    
+                    tx = serializer.save()
+                    cashout_transactions.append(tx)
+                
+                serializer = BaseCashOutTransactionSerializer(cashout_transactions, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+        except (ValidationError, Exception) as err:
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = PaymentMethod.objects.all()

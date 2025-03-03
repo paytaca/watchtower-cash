@@ -406,10 +406,18 @@ class CashOutOrder(PostgresModel):
                     self.completed_at = timezone.now()
         super(CashOutOrder, self).save(*args, **kwargs)
 
+    def get_input_tx(self):
+        inputs = CashOutTransaction.objects.filter(order__id=self.id, wallet_history__record_type=WalletHistory.INCOMING)
+        return inputs
+    
+    def get_output_tx(self):
+        outputs = CashOutTransaction.objects.filter(order__id=self.id, wallet_history__record_type=WalletHistory.OUTGOING)
+        return outputs
+
 class CashOutTransaction(models.Model):
     order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)
     transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT)
-    wallet_history = models.OneToOneField(WalletHistory, on_delete=models.PROTECT)
+    wallet_history = models.OneToOneField(WalletHistory, on_delete=models.PROTECT, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
@@ -458,7 +466,7 @@ class CashOutTransaction(models.Model):
         return round(order_price * amount, 2)
     
 class PayoutAddress(models.Model):
-    index = models.IntegerField(default=0)
+    index = models.IntegerField(null=True)
     address = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
