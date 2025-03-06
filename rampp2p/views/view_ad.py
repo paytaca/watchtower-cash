@@ -257,7 +257,52 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             if len(cashin_blacklisted_ids) > 0:
                 queryset = queryset.exclude(owner__id__in=cashin_blacklisted_ids)
         return queryset
-    
+
+    def filter_preset_available_ads(self, queryset, currency):
+        ''' Filters only ads that can accomodate the currency's preset values. '''
+        
+        # annotate the trade limits
+        annotated_limits_qs = queryset.annotate(
+            ttrade_floor=Case(
+                When(trade_limits_in_fiat=True, then=F('trade_floor_fiat')),
+                When(trade_limits_in_fiat=False, then=F('trade_floor_sats')),
+                output_field=DecimalField()
+            ),
+            ttrade_ceiling=Case(
+                When(trade_limits_in_fiat=True, then=F('trade_ceiling_fiat')),
+                When(trade_limits_in_fiat=False, then=F('trade_ceiling_sats')),
+                output_field=DecimalField()
+            ),
+            ttrade_amount=Case(
+                When(trade_limits_in_fiat=True, then=F('trade_amount_fiat')),
+                When(trade_limits_in_fiat=False, then=F('trade_amount_sats')),
+                output_field=DecimalField()
+            )
+        )
+
+        bch_presets = self.get_bch_preset_amounts(currency)
+        fiat_presets = currency.get_cashin_presets()
+
+        q_objects = Q()
+        for preset in fiat_presets:
+            q_objects |= Q(
+                trade_limits_in_fiat=True,
+                ttrade_floor__lte=preset,
+                ttrade_amount__gte=preset,
+                ttrade_ceiling__gte=preset
+            )
+
+        for preset in bch_presets:
+            q_objects |= Q(
+                trade_limits_in_fiat=False,
+                ttrade_floor__lte=preset,
+                ttrade_amount__gte=preset,
+                ttrade_ceiling__gte=preset
+            )
+        
+        preset_filtered_qs = annotated_limits_qs.filter(q_objects)
+        return preset_filtered_qs
+
     def get_bch_preset_amounts(self, currency):
         ''' Retrieves a currency's fiat preset amounts then converts it to BCH. If preset is not set,
          returns the crypto currency's set preset amounts or the hard coded preset amounts: ['0.02', '0.04', '0.1', '0.25', '0.5', '1'].'''
@@ -291,16 +336,6 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             cashin_presets = sat_amounts
     
         return cashin_presets
-
-    def filter_preset_available_ads(self, queryset, currency):
-        ''' Filters only ads that can accomodate the currency's preset values. '''
-        amounts = self.get_bch_preset_amounts(currency)
-        combined_query = Q()
-        for amount in amounts:
-            combined_query |= Q(trade_floor_sats__lte=amount) & Q(trade_amount_sats__gte=amount) & Q(trade_ceiling_sats__gte=amount)
-        queryset = queryset.filter(combined_query)
-        
-        return queryset
     
     def get_paymenttypes(self, queryset, payment_types):
         ''' [Deprecated] Retrieves the list of unique payment types from cash-in available ads. '''
