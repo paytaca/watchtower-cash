@@ -665,7 +665,7 @@ class AdSummaryMessage(MessageBase):
 
         trade_amount = ad.get_trade_amount()
         trade_amount = '{:f}'.format(Decimal(trade_amount).normalize())
-        if ad.trade_amount_in_fiat:
+        if ad.trade_limits_in_fiat:
             trade_amount = f'{trade_amount} {ad.fiat_currency.symbol}'
         else:
             trade_amount = f'{trade_amount} {ad.crypto_currency.symbol}'
