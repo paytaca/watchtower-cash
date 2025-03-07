@@ -40,7 +40,7 @@ class CryptoCurrency(models.Model):
     def get_cashin_presets(self):
         if self.cashin_presets:
             return list(map(int, self.cashin_presets.split(',')))
-        return None
+        return ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
 
     def set_cashin_presets(self, presets):
         self.cashin_presets = ','.join(map(str, presets))
