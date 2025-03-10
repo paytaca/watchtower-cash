@@ -16,7 +16,7 @@ REDIS_STORAGE = settings.REDISKV
 
 def find_fiat_token_utxos(redemptionContractOrAddress, min_token_amount=None, min_satoshis=None):
     if isinstance(redemptionContractOrAddress, str):
-        obj = models.RedemptionContract(redemptionContractOrAddress)
+        obj = models.RedemptionContract.objects.get(address=redemptionContractOrAddress)
     else:
         obj = redemptionContractOrAddress
 

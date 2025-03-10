@@ -10,6 +10,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 def update_user_active_status(wallet_hash, is_online):
+    if wallet_hash == None: return
+    
     Peer = apps.get_model('rampp2p', 'Peer')
     Arbiter = apps.get_model('rampp2p', 'Arbiter')
     try:

@@ -342,6 +342,7 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
         from_peer = request.query_params.get('from_peer', None)
         to_peer = request.query_params.get('to_peer', None)
         rating = request.query_params.get('rating', None)
+        sort_by_date = request.query_params.get('sort_by_date', 'desc')
 
         try:
             limit = int(request.query_params.get('limit', 0))
@@ -369,6 +370,9 @@ class PeerFeedbackViewSet(viewsets.GenericViewSet):
         
         if rating is not None:
             queryset = queryset.filter(Q(rating=rating))
+
+        order_by_key = 'created_at' if sort_by_date == 'asc' else '-created_at'
+        queryset = queryset.order_by(order_by_key)
 
         # pagination
         count = queryset.count()
