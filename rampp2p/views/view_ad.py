@@ -178,34 +178,60 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         by_fiat = by_fiat == 'true'
 
         try:
-            currency = models.FiatCurrency.objects.get(symbol=currency)
-            queryset = self.get_queryset(currency, wallet_hash)
+            fiat = models.FiatCurrency.objects.get(symbol=currency)
+            bch = models.CryptoCurrency.objects.get(symbol="BCH")
+
+            queryset = self.get_queryset(fiat, wallet_hash)
             queryset = queryset.filter(payment_methods__payment_type_id=payment_type_id)
 
             ads_by_amount = {}
-            presets = currency.get_cashin_presets()
-            amounts = self.get_bch_preset_amounts(currency)
-            
-            if not by_fiat:
-                bch = models.CryptoCurrency.objects.get(symbol="BCH")
-                presets = bch.get_cashin_presets() or ['0.02', '0.04', '0.1', '0.25', '0.5', '1']
-                sat_presets = []
-                for preset in presets:
-                    sat_presets.append(bch_to_satoshi(preset))
-                amounts = sat_presets
+            fiat_presets = fiat.get_cashin_presets()
+            bch_presets = bch.get_cashin_presets()
+            presets, amounts = fiat_presets, fiat_presets # use fiat presets by default
 
-            if presets:
-                for index, amount in enumerate(amounts):
-                    ads = queryset.filter(Q(trade_floor_sats__lte=amount) & Q(trade_amount_sats__gte=amount) & Q(trade_ceiling_sats__gte=amount))
-                    serialized_ads = serializers.CashinAdSerializer(ads, many=True)
-                    key = presets[index]
-                    if key is None:
-                        key = amounts[index]
-                    ads_by_amount[key] = serialized_ads.data
+            if not by_fiat:
+                # if filtering by bch, use bch presets but convert to satoshi
+                satoshi_amounts = [bch_to_satoshi(preset) for preset in bch_presets]
+                presets, amounts = bch_presets, satoshi_amounts
+
+            # limit candidate ads to top 5
+            queryset = queryset[0:5]
+           
+            for index, amount in enumerate(amounts):                
+                amount_ads = []
+                for ad in queryset:
+                    trade_amount, trade_floor, trade_ceiling = 0, 0, 0
+
+                    if by_fiat:
+                        if ad.trade_limits_in_fiat:
+                            trade_amount = ad.trade_amount_fiat
+                            trade_floor = ad.trade_floor_fiat
+                            trade_ceiling = ad.trade_ceiling_fiat
+                        else:
+                            # convert to fiat
+                            trade_amount = Decimal(ad.trade_amount_sats / settings.SATOSHI_PER_BCH) * ad.price
+                            trade_floor = Decimal(ad.trade_floor_sats / settings.SATOSHI_PER_BCH) * ad.price
+                            trade_ceiling = Decimal(ad.trade_ceiling_sats / settings.SATOSHI_PER_BCH) * ad.price
+                    else:
+                        if not ad.trade_limits_in_fiat:
+                            trade_amount = ad.trade_amount_sats
+                            trade_floor = ad.trade_floor_sats
+                            trade_ceiling = ad.trade_ceiling_sats
+                        else:
+                            # convert to sats
+                            trade_amount = ad.trade_amount_fiat / ad.price * settings.SATOSHI_PER_BCH
+                            trade_floor = ad.trade_floor_fiat / ad.price * settings.SATOSHI_PER_BCH
+                            trade_ceiling = ad.trade_ceiling_fiat / ad.price * settings.SATOSHI_PER_BCH
+                    
+                    if trade_amount >= amount and trade_ceiling >= amount and trade_floor <= amount:
+                        serialized_ad = serializers.CashinAdSerializer(ad)
+                        amount_ads.append(serialized_ad.data)
+
+                key = presets[index] or amounts[index]
+                ads_by_amount[key] = amount_ads
             
             return Response(ads_by_amount, status=status.HTTP_200_OK)
-        except (models.PaymentMethod.DoesNotExist, 
-                models.FiatCurrency.DoesNotExist) as err:
+        except (models.PaymentMethod.DoesNotExist, models.FiatCurrency.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)    
 
     def get_queryset(self, currency, wallet_hash):
@@ -304,8 +330,9 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         return preset_filtered_qs
 
     def get_bch_preset_amounts(self, currency):
-        ''' Retrieves a currency's fiat preset amounts then converts it to BCH. If preset is not set,
-         returns the crypto currency's set preset amounts or the hard coded preset amounts: ['0.02', '0.04', '0.1', '0.25', '0.5', '1'].'''
+        ''' Retrieves a currency's fiat preset amounts then converts it to BCH. 
+        If preset is not set, returns the crypto currency's set preset amounts 
+        or the hard coded preset amounts: ['0.02', '0.04', '0.1', '0.25', '0.5', '1'].'''
 
         # Use currency presets by default
         cashin_presets = currency.get_cashin_presets()

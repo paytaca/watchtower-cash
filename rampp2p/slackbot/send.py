@@ -921,6 +921,6 @@ class AdUpdateMessage(MessageBase):
                 return ""
             return f"{ad.trade_type} ad #{ad.id} updated payment type(s) to {new_payment_types}"
         elif update_type == AdUpdateType.DELETED_AT:
-            return f"{ad.trade_type} d #{ad.id} deleted"
+            return f"{ad.trade_type} ad #{ad.id} deleted"
         else:
             return ""
