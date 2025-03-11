@@ -1,5 +1,5 @@
 import { compileFile } from "cashc"
-import { Contract, ElectrumNetworkProvider, SignatureAlgorithm, SignatureTemplate } from "cashscript"
+import { Contract, ElectrumNetworkProvider, HashType, SignatureAlgorithm, SignatureTemplate } from "cashscript"
 import { binToHex, hexToBin, secp256k1 } from "@bitauth/libauth"
 
 import { calculateDust, createSighashPreimage, getOutputSize } from "cashscript/dist/utils.js"
@@ -15,7 +15,9 @@ export class TreasuryContract {
    * @param {Object} opts.params
    * @param {String} opts.params.authKeyId
    * @param {String[]} opts.params.pubkeys
+   * @param {String} opts.params.anyhedgeBaseBytecode
    * @param {Object} opts.options
+   * @param {'v1' | 'v2'} opts.options.version
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
    */
@@ -23,11 +25,13 @@ export class TreasuryContract {
     this.params = {
       authKeyId: opts?.params?.authKeyId,
       pubkeys: opts?.params?.pubkeys,
+      anyhedgeBaseBytecode: opts?.params?.anyhedgeBaseBytecode,
     }
 
     this.options = {
       network: opts?.options?.network || 'mainnet',
       addressType: opts?.options?.addressType,
+      version: opts?.options?.version,
     }
   }
 
@@ -35,17 +39,26 @@ export class TreasuryContract {
     return this.options?.network === 'chipnet'
   }
   
-  static getArtifact() {
-    const cashscriptFilename = 'treasury-contract.cash';
+  static getArtifact(version) {
+    let cashscriptFilename = 'treasury-contract.cash';
+    if (version === 'v2') {
+      cashscriptFilename = 'treasury-contract-v2.cash';
+    }
     const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
     return artifact;
   }
-  
-  getContract() {
-    const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
-    const opts = { provider, addressType: this.options?.addressType }
 
-    const artifact = TreasuryContract.getArtifact()    
+  get contractParameters() {
+    if (this.options.version === 'v2') {  
+      const contractParams = [
+        hexToBin(this.params?.authKeyId).reverse(),
+        hexToBin(this.params?.pubkeys?.[0]),
+        hexToBin(this.params?.pubkeys?.[1]),
+        hexToBin(this.params?.pubkeys?.[2]),
+        hexToBin(this.params?.anyhedgeBaseBytecode),
+      ] 
+      return contractParams
+    }
 
     const contractParams = [
       hexToBin(this.params?.authKeyId).reverse(),
@@ -55,6 +68,17 @@ export class TreasuryContract {
       hexToBin(this.params?.pubkeys?.[3]),
       hexToBin(this.params?.pubkeys?.[4]),
     ]
+
+    return contractParams
+  }
+
+  getContract() {
+    const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
+    const opts = { provider, addressType: this.options?.addressType }
+
+    const artifact = TreasuryContract.getArtifact(this.options?.version)
+
+    const contractParams = this.contractParameters
     const contract = new Contract(artifact, contractParams, opts);
 
     if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
@@ -463,6 +487,34 @@ export class TreasuryContract {
       })
       return binToHex(unlockingBytecode)
     })
+  }
+
+  /**
+   * @param {Object} opts
+   * @param {String} opts.contractParametersBytecode
+   * @param {Number} [opts.locktime]
+   * @param {import("cashscript").Utxo[]} opts.inputs
+   * @param {import("cashscript").Recipient[]} opts.outputs
+   */
+  async spendToContract(opts) {
+    const contract = this.getContract()
+    if (!contract.functions.spendToContract) return 'Contract function not supported'
+
+    const contractParametersBytecode = hexToBin(opts?.contractParametersBytecode)
+    const transaction = contract.functions.spendToContract(contractParametersBytecode)
+
+    opts?.inputs?.forEach(input => {
+      input?.wif
+        ? transaction.fromP2PKH(input, new SignatureTemplate(input.wif, HashType.SIGHASH_SINGLE | HashType.SIGHASH_ANYONECANPAY, SignatureAlgorithm.ECDSA))
+        : transaction.from(input)
+    })
+
+    transaction.to(opts?.outputs)
+
+    if (Number.isSafeInteger(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
+    return transaction
   }
 }
 

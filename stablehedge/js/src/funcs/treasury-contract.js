@@ -6,8 +6,12 @@ import { TreasuryContract } from '../contracts/treasury-contract/index.js'
 import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo, wifToPubkey } from '../utils/crypto.js'
 
 
-export function getTreasuryContractArtifact() {
-  const artifact = TreasuryContract.getArtifact();
+/**
+ * @param {Object} opts
+ * @param {'v1' | 'v2'} opts.version
+ */
+export function getTreasuryContractArtifact(opts) {
+  const artifact = TreasuryContract.getArtifact(opts);
   return { success: true, artifact }
 }
 
