@@ -458,6 +458,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
         try:
             limit = int(request.query_params.get('limit', 0))
             page = int(request.query_params.get('page', 1))
+            merchant_ids = request.query_params.getlist('merchant_ids', [])
             order_type = request.query_params.get('order_type', 'all')
             order_type = order_type.upper()
 
@@ -468,6 +469,10 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 raise ValidationError('invalid page number')
 
             queryset = self.get_queryset()
+
+            if len(merchant_ids) > 0:
+                queryset = queryset.filter(merchant__id__in=merchant_ids)
+
             if order_type != 'ALL':
                 queryset = self.queryset.filter(status__icontains=order_type).order_by('-created_at')
             
