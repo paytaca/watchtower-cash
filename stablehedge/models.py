@@ -158,6 +158,10 @@ class TreasuryContractQuerySet(PostgresQuerySet):
 
 
 class TreasuryContract(models.Model):
+    class Version(models.TextChoices):
+        V1 = "v1"
+        V2 = "v2"
+
     objects = TreasuryContractQuerySet.as_manager()
 
     redemption_contract = models.OneToOneField(
@@ -165,6 +169,7 @@ class TreasuryContract(models.Model):
         related_name="treasury_contract",
     )
 
+    version = models.CharField(max_length=5, choices=Version.choices)
     address = models.CharField(max_length=100)
 
     auth_token_id = models.CharField(max_length=64)
@@ -172,8 +177,10 @@ class TreasuryContract(models.Model):
     pubkey1 = models.CharField(max_length=70)
     pubkey2 = models.CharField(max_length=70)
     pubkey3 = models.CharField(max_length=70)
-    pubkey4 = models.CharField(max_length=70)
-    pubkey5 = models.CharField(max_length=70)
+    pubkey4 = models.CharField(max_length=70, null=True, blank=True)
+    pubkey5 = models.CharField(max_length=70, null=True, blank=True)
+    anyhedge_base_bytecode = models.TextField(null=True, blank=True)
+    anyhedge_contract_version = models.CharField(max_length=50, null=True, blank=True)
 
     encrypted_funding_wif = models.CharField(
         max_length=200, unique=True,
@@ -206,8 +213,10 @@ class TreasuryContract(models.Model):
                     self.pubkey4,
                     self.pubkey5,
                 ],
+                anyhedgeBaseBytecode=self.anyhedge_base_bytecode,
             ),
             options=dict(
+                version=self.version,
                 network=self.network,
                 addressType=address_type,
             ),

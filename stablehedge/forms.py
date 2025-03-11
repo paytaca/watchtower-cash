@@ -1,6 +1,7 @@
 from django import forms
 from django.conf import settings
 
+from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.encryption import encrypt_str
@@ -39,6 +40,13 @@ class TreasuryContractForm(forms.ModelForm):
         max_length=100, required=False,
         widget=forms.TextInput(attrs={'readonly': 'readonly'})
     )
+    version = forms.ChoiceField(choices=models.TreasuryContract.Version.choices)
+    anyhedge_base_bytecode = forms.CharField(
+        required=False, widget=forms.Textarea(attrs={'readonly': 'readonly'}),
+    )
+    anyhedge_contract_version = forms.CharField(
+        required=False, widget=forms.TextInput(attrs={'readonly': 'readonly'}),
+    )
 
     class Meta:
         model = models.TreasuryContract
@@ -60,26 +68,47 @@ class TreasuryContractForm(forms.ModelForm):
 
         return value
 
+    def compile_contract_from_data(self, data):
+        version = data["version"]
+        anyhedge_base_bytecode = None
+        anyhedge_contract_version = None
+        pubkeys = [
+            data["pubkey1"], data["pubkey2"], data["pubkey3"],
+        ]
+        if version == "v1":
+            pubkeys.append(data["pubkey4"])
+            pubkeys.append(data["pubkey5"])
+        elif version == "v2":
+            result = ScriptFunctions.getAnyhedgeBaseBytecode()
+            anyhedge_base_bytecode = result["bytecode"]
+            anyhedge_contract_version = result["version"]
+
+        compile_opts = dict(
+            params=dict(
+                authKeyId=data["auth_token_id"],
+                pubkeys=pubkeys,
+                anyhedgeBaseBytecode=anyhedge_base_bytecode,
+            ),
+            options=dict(version=version, network=settings.BCH_NETWORK, addressType="p2sh32"),
+        )
+
+        compile_data = ScriptFunctions.compileTreasuryContract(compile_opts)
+        return compile_data, anyhedge_base_bytecode, anyhedge_contract_version
+
     def clean(self):
         super().clean()
 
         if self.cleaned_data.get("address"):
             return
 
-        compile_data = ScriptFunctions.compileTreasuryContract(dict(
-            params=dict(
-                authKeyId=self.cleaned_data["auth_token_id"],
-                pubkeys=[
-                    self.cleaned_data["pubkey1"],
-                    self.cleaned_data["pubkey2"],
-                    self.cleaned_data["pubkey3"],
-                    self.cleaned_data["pubkey4"],
-                    self.cleaned_data["pubkey5"],
-                ]
-            ),
-            options=dict(network=settings.BCH_NETWORK, addressType="p2sh32"),
-        ))
+        compile_data, ah_base_bytecode, ah_version = self.compile_contract_from_data(
+            self.cleaned_data,
+        )
+
         self.cleaned_data["address"] = compile_data["address"]
+        self.cleaned_data["anyhedge_base_bytecode"] = ah_base_bytecode
+        self.cleaned_data["anyhedge_contract_version"] = ah_version
+
 
 
 class TreasuryContractKeyForm(forms.ModelForm):
