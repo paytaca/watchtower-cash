@@ -665,7 +665,7 @@ class AdSummaryMessage(MessageBase):
 
         trade_amount = ad.get_trade_amount()
         trade_amount = '{:f}'.format(Decimal(trade_amount).normalize())
-        if ad.trade_amount_in_fiat:
+        if ad.trade_limits_in_fiat:
             trade_amount = f'{trade_amount} {ad.fiat_currency.symbol}'
         else:
             trade_amount = f'{trade_amount} {ad.crypto_currency.symbol}'
@@ -834,12 +834,17 @@ class AdUpdateMessage(MessageBase):
             return
 
         text = cls.get_text(ad, update_type=update_type, context=kwargs.get('context'))
+        context_block = block_kit.ContextBlock(block_kit.Markdown(f"Updated by {ad.owner}"))
 
         if not text:
             return
 
         return dict(
-            text=text
+            text=text,
+            attachments=[dict(
+                color="#9e9e9e",
+                blocks=[context_block]
+            )]
         )
 
     @classmethod
@@ -879,29 +884,29 @@ class AdUpdateMessage(MessageBase):
             new_value = '{:.2f}'.format(new_value)
 
         if update_type == AdUpdateType.CURRENCY:
-            return f"Ad #{ad.id} updated currency from {old_value} to {new_value}"
+            return f"{ad.trade_type} ad #{ad.id} updated currency from {old_value} to {new_value}"
         elif update_type == AdUpdateType.PRICE_TYPE:
-            return f"Ad #{ad.id} updated price type from {old_value} to {new_value}"
+            return f"{ad.trade_type} ad #{ad.id} updated price type from {old_value} to {new_value}"
         elif update_type == AdUpdateType.FIXED_PRICE:
-            return f"Ad #{ad.id} updated fixed price from {old_value} {old_currency or ad.fiat_currency.symbol} to {new_value} {new_currency or ad.fiat_currency.symbol}"
+            return f"{ad.trade_type} ad #{ad.id} updated fixed price from {old_value} {old_currency or ad.fiat_currency.symbol} to {new_value} {new_currency or ad.fiat_currency.symbol}"
         elif update_type == AdUpdateType.FLOATING_PRICE:
-            return f"Ad #{ad.id} updated floating price from {old_value}% to {new_value}%"
+            return f"{ad.trade_type} ad #{ad.id} updated floating price from {old_value}% to {new_value}%"
         elif update_type == AdUpdateType.TRADE_FLOOR:
-            return f"Ad #{ad.id} updated trade floor from {old_value} {old_currency} to {new_value} {new_currency}"
+            return f"{ad.trade_type} ad #{ad.id} updated trade floor from {old_value} {old_currency} to {new_value} {new_currency}"
         elif update_type == AdUpdateType.TRADE_CEILING:
-            return f"Ad #{ad.id} updated trade ceiling from {old_value} {old_currency} to {new_value} {new_currency}"
+            return f"{ad.trade_type} ad #{ad.id} updated trade ceiling from {old_value} {old_currency} to {new_value} {new_currency}"
         elif update_type == AdUpdateType.TRADE_AMOUNT:
-            return f"Ad #{ad.id} updated trade quantity from {old_value} {old_currency} to {new_value} {new_currency}"
+            return f"{ad.trade_type} ad #{ad.id} updated trade quantity from {old_value} {old_currency} to {new_value} {new_currency}"
         elif update_type == AdUpdateType.TRADE_AMOUNT_IN_FIAT:
             currency = f'{ad.fiat_currency.symbol}' if new_value == True else 'BCH'
-            return f"Ad #{ad.id} trade quantity currency set to {currency}"
+            return f"{ad.trade_type} ad #{ad.id} trade quantity currency set to {currency}"
         elif update_type == AdUpdateType.TRADE_LIMITS_IN_FIAT:
             currency = f'{ad.fiat_currency.symbol}' if new_value == True else 'BCH'
-            return f"Ad #{ad.id} trade limits currency set to {currency}"
+            return f"{ad.trade_type} ad #{ad.id} trade limits currency set to {currency}"
         elif update_type == AdUpdateType.APPEAL_COOLDOWN:
             old_value = models.CooldownChoices(old_value).label
             new_value = models.CooldownChoices(new_value).label
-            return f"Ad #{ad.id} updated appeal cooldown from {old_value} to {new_value}"
+            return f"{ad.trade_type} ad #{ad.id} updated appeal cooldown from {old_value} to {new_value}"
         elif update_type == AdUpdateType.VISIBILITY:            
             old_visibility = 'public'
             if not old_value:
@@ -909,13 +914,13 @@ class AdUpdateMessage(MessageBase):
             new_visibility = 'public'
             if not new_value:
                 new_visibility = 'private' 
-            return f"Ad #{ad.id} visibility set from {old_visibility} to {new_visibility}"
+            return f"{ad.trade_type} ad #{ad.id} visibility set from {old_visibility} to {new_visibility}"
         elif update_type == AdUpdateType.PAYMENT_TYPES:
             new_payment_types = ', '.join(new_value) or None
             if new_payment_types == None:
                 return ""
-            return f"Ad #{ad.id} updated payment type(s) to {new_payment_types}"
+            return f"{ad.trade_type} ad #{ad.id} updated payment type(s) to {new_payment_types}"
         elif update_type == AdUpdateType.DELETED_AT:
-            return f"Ad #{ad.id} deleted"
+            return f"{ad.trade_type} ad #{ad.id} deleted"
         else:
             return ""
