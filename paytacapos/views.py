@@ -34,6 +34,7 @@ from .tasks import calculate_cashout_total
 from authentication.token import WalletAuthentication
 from django.core.exceptions import ValidationError
 
+import math
 import logging
 
 logger = logging.getLogger(__name__)
@@ -449,6 +450,45 @@ class CashOutViewSet(viewsets.ModelViewSet):
     serializer_class = CashOutOrderSerializer
     authentication_classes = [WalletAuthentication]
 
+    def get_queryset(self):
+        return self.queryset.order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+
+        try:
+            limit = int(request.query_params.get('limit', 0))
+            page = int(request.query_params.get('page', 1))
+            order_type = request.query_params.get('order_type', 'all')
+            order_type = order_type.upper()
+
+            if limit < 0:
+                raise ValidationError('limit must be a non-negative number')
+            
+            if page < 1:
+                raise ValidationError('invalid page number')
+
+            queryset = self.get_queryset()
+            if order_type != 'ALL':
+                queryset = self.queryset.filter(status__icontains=order_type).order_by('-created_at')
+            
+            count = queryset.count()
+            total_pages = page
+            if limit > 0:
+                total_pages = math.ceil(count / limit)
+
+            offset = (page - 1) * limit
+            paged_queryset = queryset[offset:offset + limit]
+
+            serializer = self.get_serializer(paged_queryset, many=True)
+            data = {
+                'orders': serializer.data,
+                'count': count,
+                'total_pages': total_pages
+            }
+            return Response(data)
+        except ValidationError as err:
+            return Response({ 'error': err.args[0] }, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=False, methods=['get'])
     def payout_address(self, request):
         address = generate_payout_address()
@@ -456,18 +496,39 @@ class CashOutViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def list_unspent_txns(self, request):
-        wallet_hash = request.user.wallet_hash
-        currency = request.query_params.get('currency')
-        merchant_ids = request.query_params.getlist('merchant_ids', [])
+
+        try:
+            limit = int(request.query_params.get('limit', 0))
+            page = int(request.query_params.get('page', 1))
+            wallet_hash = request.user.wallet_hash
+            currency = request.query_params.get('currency')
+            merchant_ids = request.query_params.getlist('merchant_ids', [])
+            
+            pos_queryset = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash)
+            if len(merchant_ids) > 0:
+                pos_queryset = pos_queryset.filter(merchant__id__in=merchant_ids)
+            
+            posids = pos_queryset.values_list('posid', flat=True)
+            queryset = fetch_unspent_merchant_transactions(wallet_hash, posids)
+
+            count = queryset.count()
+            total_pages = page
+            if limit > 0:
+                total_pages = math.ceil(count / limit)
+
+            offset = (page - 1) * limit
+            paged_queryset = queryset[offset:offset + limit]
+            
+            serializer = MerchantTransactionSerializer(paged_queryset, many=True, context={'currency': currency})
+            data = {
+                'unspent_transactions': serializer.data,
+                'count': count,
+                'total_pages': total_pages
+            }
+            return Response(data)
         
-        pos_queryset = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash)
-        if len(merchant_ids) > 0:
-            pos_queryset = pos_queryset.filter(merchant__id__in=merchant_ids)
-        
-        posids = pos_queryset.values_list('posid', flat=True)
-        unspent_merchant_txns = fetch_unspent_merchant_transactions(wallet_hash, posids)
-        wallet_histories = MerchantTransactionSerializer(unspent_merchant_txns, many=True, context={'currency': currency})
-        return Response(wallet_histories.data, status=status.HTTP_200_OK)
+        except (ValidationError, Exception) as err:
+            return Response({ 'error': err.args[0] }, status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request, *args, **kwargs):
         wallet = request.user
