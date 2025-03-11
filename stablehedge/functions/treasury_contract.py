@@ -82,7 +82,7 @@ def get_bch_utxos(treasury_contract_address:str, satoshis:int=None):
         return utxos
 
     P2PKH_OUTPUT_FEE = 44
-    fee_sats_per_input = 500
+    fee_sats_per_input = 700
 
     subtotal = 0
     sendable = 0 - (P2PKH_OUTPUT_FEE * 2) # 2 outputs for send and change
