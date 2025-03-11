@@ -1,3 +1,4 @@
+import { getAnyhedgeBaseBytecode, prepareTreasuryContractParams } from './anyhedge.js'
 import {
   compileTreasuryContract,
   getTreasuryContractArtifact,
@@ -23,6 +24,9 @@ import { sweepUtxos, schnorrSign, signAuthKeyUtxo } from './transaction.js'
 import { transferTreasuryFundsToRedemptionContract } from './rebalancing.js'
 
 export default {
+  getAnyhedgeBaseBytecode,
+  prepareTreasuryContractParams,
+
   getTreasuryContractArtifact,
   compileTreasuryContract,
   sweepTreasuryContract,

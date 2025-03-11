@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@bitauth/libauth": "^2.1.0",
+    "@generalprotocols/anyhedge": "^2.0.2",
     "cashc": "^0.8.0",
     "cashscript": "^0.10.2"
   },
