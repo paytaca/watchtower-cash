@@ -503,6 +503,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
             wallet_hash = request.user.wallet_hash
             currency = request.query_params.get('currency')
             merchant_ids = request.query_params.getlist('merchant_ids', [])
+            status = request.query_params.get('status')
             
             pos_queryset = PosDevice.objects.filter(merchant__wallet_hash=wallet_hash)
             if len(merchant_ids) > 0:
@@ -510,6 +511,18 @@ class CashOutViewSet(viewsets.ModelViewSet):
             
             posids = pos_queryset.values_list('posid', flat=True)
             queryset = fetch_unspent_merchant_transactions(wallet_hash, posids)
+
+            if status:
+                now = timezone.datetime.now()
+                expiration_date = now - timezone.timedelta(days=30)
+
+                if status == 'expired':
+                    # include only expired transactions
+                    queryset = queryset.filter(tx_timestamp__lt=expiration_date)
+                
+                if status == 'not-expired':
+                    # exclude expired transactions
+                    queryset = queryset.exclude(tx_timestamp__lt=expiration_date)
 
             count = queryset.count()
             total_pages = page
