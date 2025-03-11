@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework import serializers, exceptions
+from django.db.models import F
 
 from main.models import CashNonFungibleToken, Wallet, Address
 from anyhedge.utils.address import pubkey_to_cashaddr
@@ -21,6 +22,10 @@ from .utils.websocket import send_device_update
 from rampp2p.serializers import PaymentTypeSerializer
 
 REDIS_CLIENT = settings.REDISKV
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_address_or_err(address):
@@ -929,6 +934,7 @@ class BaseCashOutOrderSerializer(serializers.ModelSerializer):
             'id', 
             'status',
             'wallet',
+            'merchant',
             'currency',
             'market_price',
             'payment_method',
@@ -966,28 +972,50 @@ class MerchantTransactionSerializer(serializers.ModelSerializer):
     fiat_price = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
+    transaction = serializers.SerializerMethodField()
 
     class Meta:
         model = WalletHistory
         fields = [
-            'txid',
             'amount',
             'tx_timestamp',
             'fiat_price',
             'address',
+            'transaction',
             'status'
         ]
 
+    def get_transaction(self, obj):
+        transaction = Transaction.objects.filter(txid=obj.txid).annotate(
+            vout=F('index'),
+            block=F('blockheight__number'),
+            wallet_index=F('address__wallet_index'),
+            address_path=F('address__address_path')
+        ).values(
+            'txid',
+            'vout',
+            'value',
+            'block',
+            'wallet_index',
+            'address_path'
+        )
+        if transaction:
+            return transaction.first()
+        return None
+
     def get_address(self, obj):
-        data = {}
         # find the transaction of this wallet history
-        transaction = Transaction.objects.filter(txid=obj.txid, wallet__wallet_hash=obj.wallet.wallet_hash, token__name="bch")
+        address = None
+        transaction = Transaction.objects.filter(
+            txid=obj.txid,
+            wallet__wallet_hash=obj.wallet.wallet_hash,
+            token__name="bch"
+        )
         if transaction.exists():
             # get the address associated with the transaction
             transaction = transaction.first()
-            data['address'] = transaction.address.address
-            data['address_path'] = transaction.address.address_path
-        return data
+            address = transaction.address.address
+        return address
 
     def get_fiat_price(self, obj):
         pref_currency = self.context.get('currency')

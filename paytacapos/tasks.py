@@ -20,6 +20,9 @@ def calculate_cashout_total (cashout_order_id):
         - loss_covered:     The loss amount covered if loss_gain is < 0. This only applies to transactions not older than 30 days.
         - total_bch_amount: The total bch amount of the transactions
     '''
+
+    logger.warning(f'calculate_cashout_total | order id: {cashout_order_id}')
+    
     try:
         order = CashOutOrder.objects.get(id=cashout_order_id)
         wallet_history_ids = CashOutTransaction.objects.filter(order__id=order.id).values_list('wallet_history', flat=True)

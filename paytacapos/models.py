@@ -380,6 +380,7 @@ class CashOutOrder(PostgresModel):
     )
     market_price = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, editable=False)
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, null=True)
     status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, editable=False)
     payout_details = JSONField(null=True, blank=True, editable=False)

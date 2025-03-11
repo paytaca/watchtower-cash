@@ -209,7 +209,6 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 class CashOutOrderAdmin(admin.ModelAdmin):
     readonly_fields = [
         'payout_amount_',
-        'payout_details',
         'payout_address',
         'currency_',
         'market_price_',
@@ -218,7 +217,7 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         'processed_at',
         'completed_at'
     ]
-    list_display = ['id', 'status', 'payment_method_link', 'wallet', 'created_at']
+    list_display = ['id', 'status', 'payment_method_link', 'merchant', 'created_at']
     search_fields = [
         'id',
         'wallet__wallet_hash',

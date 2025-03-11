@@ -475,18 +475,21 @@ class CashOutViewSet(viewsets.ModelViewSet):
         currency = request.data.get('currency', None)
         payment_method_id = request.data.get('payment_method_id')
         payout_address = request.data.get('payout_address')
+        merchant_id = request.data.get('merchant_id')
 
         try:
             with transaction.atomic():
                 if len(txids) == 0:
                     raise ValidationError("missing required txids")
                 
+                merchant = Merchant.objects.get(id=merchant_id)
                 currency_obj = FiatCurrency.objects.get(symbol=currency)
                 current_market_price = MarketPrice.objects.get(currency=currency)
                 payment_method = PaymentMethod.objects.get(wallet__wallet_hash=wallet.wallet_hash, id=payment_method_id)
 
                 order = CashOutOrder.objects.create( 
                     wallet=wallet,
+                    merchant=merchant,
                     currency=currency_obj,
                     market_price=current_market_price.price,
                     payment_method=payment_method,
