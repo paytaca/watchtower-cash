@@ -494,7 +494,8 @@ export class TreasuryContract {
    * @param {Object} opts.contractParametersBytecode
    * @param {String} opts.contractParametersBytecode.segment1 enableMutualRedemption + shortPubkey + longPubkey
    * @param {String} opts.contractParametersBytecode.segment2 satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
-   * @param {String} opts.contractParametersBytecode.payoutSats
+   * @param {BigInt} opts.contractParametersBytecode.shortInputSats
+   * @param {BigInt} opts.contractParametersBytecode.longInputSats
    * @param {String} opts.contractParametersBytecode.lowPrice
    * @param {String} opts.contractParametersBytecode.highPrice
    * @param {String} opts.contractParametersBytecode.startTs
@@ -511,7 +512,8 @@ export class TreasuryContract {
     const transaction = contract.functions.spendToContract(
       hexToBin(contractParametersBytecode?.segment1),
       hexToBin(contractParametersBytecode?.segment2),
-      hexToBin(contractParametersBytecode?.payoutSats),
+      contractParametersBytecode?.shortInputSats,
+      contractParametersBytecode?.longInputSats,
       hexToBin(contractParametersBytecode?.lowPrice),
       hexToBin(contractParametersBytecode?.highPrice),
       hexToBin(contractParametersBytecode?.startTs),

@@ -38,8 +38,10 @@ contract TreasuryContractV2(
 
     function spendToAnyhedge(
         bytes argsSegment1, // enableMutualRedemption + shortPubkey + longPubkey
-        bytes argsSegment2, // payoutSatsBytecode + satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
-        bytes payoutSatsBytecode, // int type
+        bytes argsSegment2, // satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
+        int shortInputSats,
+        int longInputSats,
+        // bytes payoutSatsBytecode, // int type
         bytes lowPriceBytecode, // int type
         bytes highPriceBytecode, // int type
         bytes startTsBytecode, // int type
@@ -47,11 +49,14 @@ contract TreasuryContractV2(
     ) {
         bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
 
+        int payoutSats = shortInputSats + longInputSats;
+        bytes payoutSatsBytes = bytes(payoutSats);
+
         bytes contractParametersBytecode = maturityTsBytecode +
             startTsBytecode +
             highPriceBytecode +
             lowPriceBytecode +
-            payoutSatsBytecode + 
+            bytes(payoutSatsBytes.length) + payoutSatsBytes +
             argsSegment2 +
             bytes(35) + thisLockScript +
             argsSegment1;
@@ -60,14 +65,7 @@ contract TreasuryContractV2(
         bytes32 scriptHash = hash256(contractBytecode);
         bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);
         require(tx.outputs[0].lockingBytecode == lockingBytecode);
-        if (tx.outputs.length == 2) {
-            bytes35 thisBytecode = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
-            require(tx.outputs[1].lockingBytecode == thisBytecode);
-        }
-
-        // additional 1991 for settlement tx fee
-        int payoutSats = int(payoutSatsBytecode.split(1)[1]) + 1991;
-        require(payoutSats == tx.outputs[0].value);
+        // require(tx.outputs.length < 2 || tx.outputs[1].lockingBytecode == thisLockingBytecode);
 
         int maturityTs = int(maturityTsBytecode.split(1)[1]);
         int startTs = int(startTsBytecode.split(1)[1]);
@@ -78,5 +76,10 @@ contract TreasuryContractV2(
         int lowPrice = int(lowPriceBytecode.split(1)[1]);
         int priceMult = highPrice / lowPrice;
         require(priceMult >= 2);
+
+        // additional 1991 for settlement tx fee
+        require(payoutSats + 1991 == tx.outputs[0].value);
+        require(tx.inputs[0].value >= shortInputSats + 1991);
+        require(tx.inputs[1].value >= longInputSats);
     }
 }

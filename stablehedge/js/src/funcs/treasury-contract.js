@@ -11,7 +11,7 @@ import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializ
  * @param {'v1' | 'v2'} opts.version
  */
 export function getTreasuryContractArtifact(opts) {
-  const artifact = TreasuryContract.getArtifact(opts);
+  const artifact = TreasuryContract.getArtifact(opts?.version);
   return { success: true, artifact }
 }
 
@@ -255,7 +255,8 @@ export function signMutliSigTx(opts) {
  * @param {Object} opts.contractParametersBytecode
  * @param {String} opts.contractParametersBytecode.segment1 enableMutualRedemption + shortPubkey + longPubkey
  * @param {String} opts.contractParametersBytecode.segment2 satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
- * @param {String} opts.contractParametersBytecode.payoutSats
+ * @param {Number} opts.contractParametersBytecode.shortInputSats
+ * @param {Number} opts.contractParametersBytecode.longInputSats
  * @param {String} opts.contractParametersBytecode.lowPrice
  * @param {String} opts.contractParametersBytecode.highPrice
  * @param {String} opts.contractParametersBytecode.startTs
@@ -271,7 +272,11 @@ export async function spendToAnyhedgeContract(opts) {
   const outputs = opts?.outputs?.map(parseCashscriptOutput)
 
   const transaction = await treasuryContract.spendToContract({
-    contractParametersBytecode: opts?.contractParametersBytecode,
+    contractParametersBytecode: {
+      ...opts?.contractParametersBytecode,
+      shortInputSats: BigInt(opts?.contractParametersBytecode?.shortInputSats),
+      longInputSats: BigInt(opts?.contractParametersBytecode?.longInputSats),
+    },
     locktime: opts?.locktime,
     inputs, outputs
   })
