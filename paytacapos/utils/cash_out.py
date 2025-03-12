@@ -2,6 +2,9 @@ from main.models import Transaction, WalletHistory, Address, Wallet, Recipient, 
 from paytacapos.models import PayoutAddress
 from django.db.models import Q, Func, Subquery
 from django.conf import settings
+from main.serializers import SubscriberSerializer
+from main.utils.subscription import new_subscription
+
 import bip32utils
 import cashaddress
 import logging
@@ -47,18 +50,17 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     
     return unspent_merchant_txns
 
-def save_and_subsribe_to_address(**kwargs):
-    wallet = kwargs['wallet']
-    address = kwargs['address']
-    index = kwargs['index']
+def save_and_subsribe_to_address(data, index):
 
-    payout_address_obj, _ = PayoutAddress.objects.get_or_create(address=address, index=index)
-    address_obj, _ = Address.objects.get_or_create(address=address)
-    address_obj.wallet = wallet
-    address_obj.save()
-    
-    recipient, _ = Recipient.objects.get_or_create(telegram_id=payout_address_obj.id)    
-    Subscription.objects.get_or_create(recipient=recipient, address=address_obj)
+    # save as PayoutAddress
+    PayoutAddress.objects.get_or_create(address=data['address'], index=index)
+
+    # subscribe
+    serializer = SubscriberSerializer(data=data)
+    if serializer.is_valid():
+        response = new_subscription(**serializer.data)
+
+    return response
 
 def generate_address_from_xpubkey(xpubkey):
     if not xpubkey:
@@ -69,7 +71,8 @@ def generate_address_from_xpubkey(xpubkey):
     
     next_index = 0
     if last_payout_address:
-        next_index = last_payout_address.index + 1
+        last_index = last_payout_address.index or 0
+        next_index = last_index + 1
 
     bch_legacy_address = key.ChildKey(next_index).Address()
     address = cashaddress.convert.to_cash_address(bch_legacy_address)
@@ -83,13 +86,11 @@ def generate_payout_address(fixed=True):
     if not wallet_hash:
         raise Exception('paytacapos payout wallet_hash not set')
     
-    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-   
     next_index = None
     if not fixed:
         payout_address, next_index = generate_address_from_xpubkey(settings.PAYTACAPOS_PAYOUT_XPUBKEY)
     
-    save_and_subsribe_to_address(wallet=wallet, address=payout_address, index=next_index)
+    save_and_subsribe_to_address({ 'address': payout_address, 'wallet_hash': wallet_hash }, next_index)
 
     return payout_address
 

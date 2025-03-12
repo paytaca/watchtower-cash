@@ -496,7 +496,8 @@ class CashOutViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def payout_address(self, request):
-        address = generate_payout_address()
+        fixed = request.query_params.get('fixed', 'true') == 'true'
+        address = generate_payout_address(fixed=fixed)
         return Response({'payout_address': address}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
