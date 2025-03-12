@@ -241,10 +241,19 @@ class TreasuryContractViewSet(
             .select_related("redemption_contract") \
             .all()
 
-    @swagger_auto_schema(method="get", responses={200:response_serializers.ArtifactResponse})
+    @swagger_auto_schema(
+        method="get", responses={200:response_serializers.ArtifactResponse},
+        manual_parameters=[
+            openapi.Parameter(
+                'version', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                description="Version", enum=["v1", "v2"], default="v1",
+            ),
+        ],
+    )
     @decorators.action(methods=["get"], detail=False)
     def artifact(self, request, *args, **kwargs):
-        result = ScriptFunctions.getTreasuryContractArtifact()
+        version = str(request.query_params.get("version", "v1")).lower().strip()
+        result = ScriptFunctions.getTreasuryContractArtifact(dict(version=version))
 
         # remove unnecessary data for compiling the contract
         result["artifact"].pop("source", None)
