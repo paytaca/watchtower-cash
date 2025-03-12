@@ -491,7 +491,14 @@ export class TreasuryContract {
 
   /**
    * @param {Object} opts
-   * @param {String} opts.contractParametersBytecode
+   * @param {Object} opts.contractParametersBytecode
+   * @param {String} opts.contractParametersBytecode.segment1 enableMutualRedemption + shortPubkey + longPubkey
+   * @param {String} opts.contractParametersBytecode.segment2 satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
+   * @param {String} opts.contractParametersBytecode.payoutSats
+   * @param {String} opts.contractParametersBytecode.lowPrice
+   * @param {String} opts.contractParametersBytecode.highPrice
+   * @param {String} opts.contractParametersBytecode.startTs
+   * @param {String} opts.contractParametersBytecode.maturityTs
    * @param {Number} [opts.locktime]
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
@@ -500,8 +507,16 @@ export class TreasuryContract {
     const contract = this.getContract()
     if (!contract.functions.spendToContract) return 'Contract function not supported'
 
-    const contractParametersBytecode = hexToBin(opts?.contractParametersBytecode)
-    const transaction = contract.functions.spendToContract(contractParametersBytecode)
+    const contractParametersBytecode = opts?.contractParametersBytecode
+    const transaction = contract.functions.spendToContract(
+      hexToBin(contractParametersBytecode?.segment1),
+      hexToBin(contractParametersBytecode?.segment2),
+      hexToBin(contractParametersBytecode?.payoutSats),
+      hexToBin(contractParametersBytecode?.lowPrice),
+      hexToBin(contractParametersBytecode?.highPrice),
+      hexToBin(contractParametersBytecode?.startTs),
+      hexToBin(contractParametersBytecode?.maturityTs),
+    )
 
     opts?.inputs?.forEach(input => {
       input?.wif
@@ -510,6 +525,34 @@ export class TreasuryContract {
     })
 
     transaction.to(opts?.outputs)
+
+    if (Number.isSafeInteger(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
+    return transaction
+  }
+
+  /**
+   * @param {Object} opts 
+   * @param {Number} [opts.locktime]
+   * @param {import("cashscript").Utxo[]} opts.inputs
+   * @param {Number} [opts.satoshis] falsey value would mean to consolidate all inputs into 1 utxo
+   */
+  async consolidate(opts) {
+    const contract = this.getContract()
+    if (!contract.functions.consolidate) return 'Contract function not supported'
+
+    const transaction = contract.functions.consolidate()
+
+    opts?.inputs?.forEach(input => {
+      input?.wif
+        ? transaction.fromP2PKH(input, new SignatureTemplate(input.wif, HashType.SIGHASH_SINGLE | HashType.SIGHASH_ANYONECANPAY, SignatureAlgorithm.ECDSA))
+        : transaction.from(input)
+    })
+
+    if (opts?.satoshis) {
+      transaction.to(contract.address, BigInt(opts?.satoshis))
+    }
 
     if (Number.isSafeInteger(opts?.locktime)) {
       transaction.withTime(opts?.locktime)

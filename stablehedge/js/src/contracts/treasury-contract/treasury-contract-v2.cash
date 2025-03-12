@@ -27,9 +27,19 @@ contract TreasuryContractV2(
         require(checkMultiSig([sig1, sig2, sig3], [pk1, pk2, pk3]));
     }
 
+    function consolidate() {
+        require(tx.outputs.length <= 2);
+        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
+        require(tx.outputs[0].lockingBytecode == thisLockScript);
+        if (tx.outputs.length == 2) {
+            require(tx.outputs[1].lockingBytecode == thisLockScript);
+        }
+    }
+
     function spendToAnyhedge(
         bytes argsSegment1, // enableMutualRedemption + shortPubkey + longPubkey
         bytes argsSegment2, // payoutSatsBytecode + satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
+        bytes payoutSatsBytecode, // int type
         bytes lowPriceBytecode, // int type
         bytes highPriceBytecode, // int type
         bytes startTsBytecode, // int type
@@ -41,6 +51,7 @@ contract TreasuryContractV2(
             startTsBytecode +
             highPriceBytecode +
             lowPriceBytecode +
+            payoutSatsBytecode + 
             argsSegment2 +
             bytes(35) + thisLockScript +
             argsSegment1;
@@ -53,6 +64,10 @@ contract TreasuryContractV2(
             bytes35 thisBytecode = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
             require(tx.outputs[1].lockingBytecode == thisBytecode);
         }
+
+        // additional 1991 for settlement tx fee
+        int payoutSats = int(payoutSatsBytecode.split(1)[1]) + 1991;
+        require(payoutSats == tx.outputs[0].value);
 
         int maturityTs = int(maturityTsBytecode.split(1)[1]);
         int startTs = int(startTsBytecode.split(1)[1]);

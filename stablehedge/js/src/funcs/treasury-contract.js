@@ -247,3 +247,57 @@ export function signMutliSigTx(opts) {
 
     return signatures
 }
+
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts
+ * @param {Object} opts.contractParametersBytecode
+ * @param {String} opts.contractParametersBytecode.segment1 enableMutualRedemption + shortPubkey + longPubkey
+ * @param {String} opts.contractParametersBytecode.segment2 satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
+ * @param {String} opts.contractParametersBytecode.payoutSats
+ * @param {String} opts.contractParametersBytecode.lowPrice
+ * @param {String} opts.contractParametersBytecode.highPrice
+ * @param {String} opts.contractParametersBytecode.startTs
+ * @param {String} opts.contractParametersBytecode.maturityTs
+ * @param {Number} [opts.locktime]
+ * @param {import("cashscript").Utxo[]} opts.inputs
+ * @param {import("cashscript").Recipient[]} opts.outputs
+ */
+export async function spendToAnyhedgeContract(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+  const outputs = opts?.outputs?.map(parseCashscriptOutput)
+
+  const transaction = await treasuryContract.spendToContract({
+    contractParametersBytecode: opts?.contractParametersBytecode,
+    locktime: opts?.locktime,
+    inputs, outputs
+  })
+
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build() }
+}
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts
+ * @param {Number} [opts.locktime]
+ * @param {import("cashscript").Utxo[]} opts.inputs
+ * @param {Number} opts.satoshis
+ */
+export async function consolidateTreasuryContract(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+
+  const transaction = await treasuryContract.consolidate({
+    inputs,
+    satoshis: opts?.satoshis,
+    locktime: opts?.locktime,
+  })
+
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build() }
+}

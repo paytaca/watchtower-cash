@@ -9,6 +9,8 @@ import {
   verifyTreasuryContractMultisigTx,
   getMultisigTxUnlockingScripts,
   signMutliSigTx,
+  spendToAnyhedgeContract,
+  consolidateTreasuryContract,
  } from './treasury-contract.js'
 import {
   getRedemptionContractArtifact,
@@ -36,6 +38,8 @@ export default {
   verifyTreasuryContractMultisigTx,
   getMultisigTxUnlockingScripts,
   signMutliSigTx,
+  spendToAnyhedgeContract,
+  consolidateTreasuryContract,
 
   getRedemptionContractArtifact,
   compileRedemptionContract,

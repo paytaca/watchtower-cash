@@ -44,11 +44,12 @@ export async function prepareTreasuryContractParams(contractData) {
 
   // const argsCount = bytecodesHex.length
   const segment1 = bytecodesHex.slice(-3).join('');
-  const segment2 = bytecodesHex.slice(-9, -4).join('');
+  const segment2 = bytecodesHex.slice(-8, -4).join('');
 
   return {
     segment1,
     segment2,
+    payoutSats: bytecodesHex[4],
     lowPrice: bytecodesHex[3],
     highPrice: bytecodesHex[2],
     startTs: bytecodesHex[1],
