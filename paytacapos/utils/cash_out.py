@@ -1,5 +1,5 @@
 from main.models import Transaction, WalletHistory, Address, Wallet, Recipient, Subscription
-from paytacapos.models import PayoutAddress
+from paytacapos.models import PayoutAddress, CashOutOrder
 from django.db.models import Q, Func, Subquery
 from django.conf import settings
 from main.serializers import SubscriberSerializer
@@ -50,13 +50,20 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     
     return unspent_merchant_txns
 
-def save_and_subsribe_to_address(data, index):
+def save_and_subsribe_to_address(request):
+    subscription_data = request['subscription_data']
+    cashout_order = request['cashout_order']
+    index = request['index']
 
     # save as PayoutAddress
-    PayoutAddress.objects.get_or_create(address=data['address'], index=index)
+    PayoutAddress.objects.get_or_create(
+        address=subscription_data['address'],
+        index=index,
+        order=cashout_order
+    )
 
     # subscribe
-    serializer = SubscriberSerializer(data=data)
+    serializer = SubscriberSerializer(data=subscription_data)
     if serializer.is_valid():
         response = new_subscription(**serializer.data)
 
@@ -78,10 +85,17 @@ def generate_address_from_xpubkey(xpubkey):
     address = cashaddress.convert.to_cash_address(bch_legacy_address)
     return address, next_index
 
-def generate_payout_address(fixed=True):
+def generate_payout_address(order_id, fixed=True):
 
     payout_address = settings.PAYTACAPOS_PAYOUT_ADDRESS
     wallet_hash = settings.PAYTACAPOS_PAYOUT_WALLET_HASH
+   
+    order = CashOutOrder.objects.get(id=order_id)
+    
+    # return existing payout address for order if already existing
+    payout_address_obj = PayoutAddress.objects.filter(order__id=order.id).last()
+    if payout_address_obj:
+       return payout_address_obj.address 
 
     if not wallet_hash:
         raise Exception('paytacapos payout wallet_hash not set')
@@ -90,7 +104,11 @@ def generate_payout_address(fixed=True):
     if not fixed:
         payout_address, next_index = generate_address_from_xpubkey(settings.PAYTACAPOS_PAYOUT_XPUBKEY)
     
-    save_and_subsribe_to_address({ 'address': payout_address, 'wallet_hash': wallet_hash }, next_index)
+    save_and_subsribe_to_address({
+        'subscription_data': { 'address': payout_address, 'wallet_hash': wallet_hash },
+        'index': next_index,
+        'cashout_order': order
+    })
 
     return payout_address
 

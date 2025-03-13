@@ -939,7 +939,6 @@ class BaseCashOutOrderSerializer(serializers.ModelSerializer):
             'market_price',
             'payment_method',
             'payout_amount',
-            'payout_address',
             'payout_details',
             'created_at',
             'processed_at',
@@ -949,11 +948,13 @@ class CashOutOrderSerializer(BaseCashOutOrderSerializer):
     transactions = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
     payment_method = PaymentMethodSerializer()
+    payout_address = serializers.SerializerMethodField(required=False)
     
     class Meta(BaseCashOutOrderSerializer.Meta):
         fields = BaseCashOutOrderSerializer.Meta.fields + [
             'transactions', 
             'currency',
+            'payout_address',
             'payment_method'
         ]
         
@@ -967,6 +968,13 @@ class CashOutOrderSerializer(BaseCashOutOrderSerializer):
     
     def get_currency(self, obj):
         return obj.currency.symbol
+    
+    def get_payout_address(self, obj):
+        address = None
+        payout_address = PayoutAddress.objects.filter(order__id=obj.id).last()
+        if payout_address:
+            address = payout_address.address
+        return address
 
 class MerchantTransactionSerializer(serializers.ModelSerializer):
     fiat_price = serializers.SerializerMethodField()

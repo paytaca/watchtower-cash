@@ -241,6 +241,13 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         pm_field = PaymentMethodField.objects.filter(payment_method_id=obj.payment_method.id).first()
         return f'{payment_type_name}({pm_field.value})'
     
+    def payout_address(self, obj):
+        address = None
+        payout_address = PayoutAddress.objects.filter(order__id=obj.id).last()
+        if payout_address:
+            address = payout_address.address
+        return address
+    
     def payout_amount_(self, obj):
         return f"{obj.payout_amount} {obj.currency.symbol}"
     
@@ -265,4 +272,4 @@ class CashOutTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(PayoutAddress)
 class PayoutAddressAdmin(admin.ModelAdmin):
-    list_display = ['address', 'index']
+    list_display = ['address', 'order', 'index']
