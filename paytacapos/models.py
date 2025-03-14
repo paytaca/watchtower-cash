@@ -385,6 +385,7 @@ class CashOutOrder(PostgresModel):
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, editable=False)
     payout_details = JSONField(null=True, blank=True, editable=False)
     payout_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
+    sats_amount = models.BigIntegerField(null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     processed_at = models.DateTimeField(null=True)
     completed_at = models.DateTimeField(null=True)
@@ -416,7 +417,8 @@ class CashOutOrder(PostgresModel):
 
 class CashOutTransaction(models.Model):
     order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)
-    transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT)
+    txid = models.CharField(max_length=70, db_index=True, null=True)
+    transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT, null=True)
     wallet_history = models.OneToOneField(WalletHistory, on_delete=models.PROTECT, null=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 

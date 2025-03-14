@@ -29,7 +29,7 @@ from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout
 from .models import Location, Category, Merchant, PosDevice
 from main.models import Address, Transaction, WalletHistory
 from rampp2p.models import MarketPrice
-from .tasks import calculate_cashout_total
+from .tasks import process_cashout_txns
 
 from authentication.token import WalletAuthentication
 from django.core.exceptions import ValidationError
@@ -454,7 +454,6 @@ class CashOutViewSet(viewsets.ModelViewSet):
         return self.queryset.order_by('-created_at')
 
     def list(self, request, *args, **kwargs):
-
         try:
             limit = int(request.query_params.get('limit', 0))
             page = int(request.query_params.get('page', 1))
@@ -561,45 +560,44 @@ class CashOutViewSet(viewsets.ModelViewSet):
         payment_method_id = request.data.get('payment_method_id')
         merchant_id = request.data.get('merchant_id')
 
-        # try:
-        with transaction.atomic():
-            if len(txids) == 0:
-                raise ValidationError("missing required txids")
+        try:
+
+            # limit to process only 500 txids per order
+            if len(txids) > 500:
+                raise ValidationError('cannot process more than 500 txids per order')
             
-            merchant = Merchant.objects.get(id=merchant_id)
-            currency_obj = FiatCurrency.objects.get(symbol=currency)
-            current_market_price = MarketPrice.objects.get(currency=currency)
-            payment_method = PaymentMethod.objects.get(wallet__wallet_hash=wallet.wallet_hash, id=payment_method_id)
-
-            order = CashOutOrder.objects.create( 
-                wallet=wallet,
-                merchant=merchant,
-                currency=currency_obj,
-                market_price=current_market_price.price,
-                payment_method=payment_method
-            )
-
-            for txid in txids:
-                txn = Transaction.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
-                wallet_history = WalletHistory.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
-
-                serializer = BaseCashOutTransactionSerializer(data={
-                    "order": order.id,
-                    "transaction": txn.id,
-                    "wallet_history": wallet_history.id
-                })
+            with transaction.atomic():
+                if len(txids) == 0:
+                    raise ValidationError("missing required txids")
                 
-                if not serializer.is_valid():
-                    raise ValidationError(serializer.errors)
-                
-                serializer.save()
+                merchant = Merchant.objects.get(id=merchant_id)
+                currency_obj = FiatCurrency.objects.get(symbol=currency)
+                current_market_price = MarketPrice.objects.get(currency=currency)
+                payment_method = PaymentMethod.objects.get(wallet__wallet_hash=wallet.wallet_hash, id=payment_method_id)
 
-            order_serializer = CashOutOrderSerializer(order)
+                order = CashOutOrder.objects.create( 
+                    wallet=wallet,
+                    merchant=merchant,
+                    currency=currency_obj,
+                    market_price=current_market_price.price,
+                    payment_method=payment_method
+                )
+                order_serializer = CashOutOrderSerializer(order)
+            
+            process_cashout_txns.apply_async(args=[
+                order.id,
+                wallet.wallet_hash,
+                txids
+            ])
+            
+            return Response(order_serializer.data, status=status.HTTP_200_OK)
         
-        calculate_cashout_total.apply_async(args=[order.id])
-        return Response(order_serializer.data, status=status.HTTP_200_OK)
-        # except (ValidationError, Exception) as err:
-        #     return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValidationError,
+                Merchant.DoesNotExist,
+                FiatCurrency.DoesNotExist,
+                MarketPrice.DoesNotExist,
+                PaymentMethod.DoesNotExist) as err:
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
     
     def partial_update(self, request, *args, **kwargs):
         raise MethodNotAllowed(method='PATCH')
@@ -623,34 +621,47 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 return Response({"error": "order does not exist"}, status=status.HTTP_400_BAD_REQUEST)
             
             order = order.first()
-            txids = request.data.get('txids')
+            txid = request.data.get('txid')
 
             with transaction.atomic():
-                cashout_transactions = []
-                for txid in txids:
-                    txn = Transaction.objects.get(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
-                    wallet_history = WalletHistory.objects.filter(txid=txid, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
-                    
-                    data={
-                        "order": order.id,
-                        "transaction": txn.id
-                    }
-
-                    if wallet_history.exists():
-                        wallet_history = wallet_history.first()
-                        data["wallet_history"] = wallet_history.id
-
-                    serializer = BaseCashOutTransactionSerializer(data=data)
-                    
-                    if not serializer.is_valid():
-                        raise ValidationError(serializer.errors)
-                    
-                    tx = serializer.save()
-                    cashout_transactions.append(tx)
+                txn = Transaction.objects.filter(txid=txid, wallet__wallet_hash=wallet.wallet_hash)
+                wallet_history = WalletHistory.objects.filter(txid=txid, wallet__wallet_hash=wallet.wallet_hash, token__name="bch")
                 
-                serializer = BaseCashOutTransactionSerializer(cashout_transactions, many=True)
+                data={
+                    'order': order.id,
+                    'txid': txid
+                }
+
+                if txn.exists():
+                    data['transaction'] = txn.first().id
+
+                if wallet_history.exists():
+                    data["wallet_history"] = wallet_history.first().id
+
+                serializer = BaseCashOutTransactionSerializer(data=data)
+                if not serializer.is_valid():
+                    raise ValidationError(serializer.errors)
+                
+                tx = serializer.save()
+                serializer = BaseCashOutTransactionSerializer(tx)
+
                 return Response(serializer.data, status=status.HTTP_200_OK)
         except (ValidationError, Exception) as err:
+            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def calculate_payout_details(self, request):
+        try:
+            order_id = request.data.get('order_id')
+            wallet_hash = request.user.wallet_hash
+            txids = CashOutTransaction.objects.filter(order__id=order_id).values_list('txid', flat=True)
+            process_cashout_txns.apply_async(args=[
+                order_id,
+                wallet_hash,
+                list(txids)
+            ])
+            return Response(status=status.HTTP_200_OK)
+        except CashOutOrder.DoesNotExist as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):

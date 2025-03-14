@@ -268,7 +268,7 @@ class CashOutOrderAdmin(admin.ModelAdmin):
 
 @admin.register(CashOutTransaction)
 class CashOutTransactionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'transaction', 'wallet_history', 'created_at']
+    list_display = ['id', 'order', 'txid', 'transaction', 'wallet_history', 'created_at']
 
 @admin.register(PayoutAddress)
 class PayoutAddressAdmin(admin.ModelAdmin):
