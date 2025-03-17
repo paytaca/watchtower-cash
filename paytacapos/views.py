@@ -29,7 +29,7 @@ from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout
 from .models import Location, Category, Merchant, PosDevice
 from main.models import Address, Transaction, WalletHistory
 from rampp2p.models import MarketPrice
-from .tasks import process_cashout_txns
+from .tasks import process_cashout_input_txns
 
 from authentication.token import WalletAuthentication
 from django.core.exceptions import ValidationError
@@ -496,9 +496,9 @@ class CashOutViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def payout_address(self, request):
         try:
-            fixed = request.query_params.get('fixed', 'true') == 'true'
             order_id = request.query_params.get('order_id')
-            address = generate_payout_address(order_id, fixed=fixed)
+            fixed = request.query_params.get('fixed', 'true') == 'true'
+            address = generate_payout_address(order_id=order_id, fixed=fixed)
             return Response({'payout_address': address})
         except Exception as err:
             return Response({ 'error': err.args[0] }, status=status.HTTP_400_BAD_REQUEST)
@@ -584,7 +584,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 )
                 order_serializer = CashOutOrderSerializer(order)
             
-            process_cashout_txns.apply_async(args=[
+            process_cashout_input_txns.apply_async(args=[
                 order.id,
                 wallet.wallet_hash,
                 txids
@@ -614,11 +614,15 @@ class CashOutViewSet(viewsets.ModelViewSet):
     def save_output_tx(self, request):
         try:
             wallet = request.user
+            payout_address = request.data.get('payout_address')
             order_id = request.data.get('order_id')
             order = CashOutOrder.objects.filter(id=order_id, wallet__wallet_hash=wallet.wallet_hash)
 
             if not order.exists():
                 return Response({"error": "order does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not payout_address:
+                return Response({"error": "payout_address is required"}, status=status.HTTP_400_BAD_REQUEST)
             
             order = order.first()
             txid = request.data.get('txid')
@@ -629,7 +633,8 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 
                 data={
                     'order': order.id,
-                    'txid': txid
+                    'txid': txid,
+                    'record_type': CashOutTransaction.OUTGOING
                 }
 
                 if txn.exists():
@@ -645,6 +650,12 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 tx = serializer.save()
                 serializer = BaseCashOutTransactionSerializer(tx)
 
+                # save PayoutAddress
+                PayoutAddress.objects.get_or_create(
+                    address=payout_address,
+                    order=order
+                )
+
                 return Response(serializer.data, status=status.HTTP_200_OK)
         except (ValidationError, Exception) as err:
             return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
@@ -655,7 +666,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
             order_id = request.data.get('order_id')
             wallet_hash = request.user.wallet_hash
             txids = CashOutTransaction.objects.filter(order__id=order_id).values_list('txid', flat=True)
-            process_cashout_txns.apply_async(args=[
+            process_cashout_input_txns.apply_async(args=[
                 order_id,
                 wallet_hash,
                 list(txids)

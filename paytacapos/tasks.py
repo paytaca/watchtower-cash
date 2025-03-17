@@ -1,6 +1,7 @@
 
 from celery import shared_task
-from paytacapos.models import CashOutOrder, WalletHistory
+from main.models import WalletHistory
+from paytacapos.models import CashOutOrder, CashOutTransaction 
 from datetime import timedelta
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -17,9 +18,9 @@ def is_loss_protected(timestamp):
     return timestamp >= timezone.now() - timedelta(days=30)
 
 @shared_task(queue='paytacapos__cashout')
-def process_cashout_txns(order_id, wallet_hash, txids):
+def process_cashout_input_txns(order_id, wallet_hash, txids):
     '''
-    Processes txids to save as CashOutTransaction for a CashOutOrder, then calculates and saves the 
+    Processes txids to save as incoming CashOutTransaction for a CashOutOrder, then calculates and saves the 
     total payout details.
     '''
     order = CashOutOrder.objects.get(id=order_id, wallet__wallet_hash=wallet_hash)
@@ -37,7 +38,11 @@ def process_cashout_txns(order_id, wallet_hash, txids):
         txn = Transaction.objects.filter(txid=txid, wallet__wallet_hash=wallet_hash)
         wallet_history = WalletHistory.objects.filter(txid=txid, wallet__wallet_hash=wallet_hash, token__name="bch")
 
-        data = { 'order': order.id, 'txid': txid }
+        data = { 
+            'order': order.id,
+            'txid': txid,
+            'record_type': CashOutTransaction.INCOMING
+        }
 
         if txn.exists():
             data['transaction'] = txn.first().id

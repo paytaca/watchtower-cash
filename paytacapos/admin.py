@@ -208,11 +208,13 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(admin.ModelAdmin):
     readonly_fields = [
+        'sats_amount',
         'payout_amount_',
-        'payout_address',
         'currency_',
         'market_price_',
         'payment_method_details',
+        'payout_address',
+        'output_tx',
         'created_at',
         'processed_at',
         'completed_at'
@@ -265,11 +267,22 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         
         url = reverse('admin:paytacapos_paymentmethod_change', args=[obj.payment_method.id])
         return format_html('<a href="{}">{}</a>', url, detail_str)
+    
+    def output_tx(self, obj):
+        output = CashOutTransaction.objects.filter(order__id=obj.id, record_type=CashOutTransaction.OUTGOING)
+        if not output.exists():
+            return None
+        
+        output = output.first()
+        url = reverse('admin:main_transaction_change', args=[output.transaction.id])
+        return format_html('<a href="{}">{}</a> | {}', url, output.txid, output.transaction.address.address)
 
 @admin.register(CashOutTransaction)
 class CashOutTransactionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'order', 'txid', 'transaction', 'wallet_history', 'created_at']
+    search_fields = ['id', 'order__id', 'record_type', 'txid']
+    list_display = ['id', 'order', 'record_type', 'txid', 'created_at']
 
 @admin.register(PayoutAddress)
 class PayoutAddressAdmin(admin.ModelAdmin):
-    list_display = ['address', 'order', 'index']
+    search_fields = ['id', 'order__id', 'address']
+    list_display = ['id', 'order', 'address', 'created_at']

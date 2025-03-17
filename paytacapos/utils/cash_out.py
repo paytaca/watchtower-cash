@@ -5,6 +5,7 @@ from django.conf import settings
 from main.serializers import SubscriberSerializer
 from main.utils.subscription import new_subscription
 
+import random
 import bip32utils
 import cashaddress
 import logging
@@ -50,19 +51,9 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     
     return unspent_merchant_txns
 
-def save_and_subsribe_to_address(request):
+def subsribe_to_address(request):
     subscription_data = request['subscription_data']
-    cashout_order = request['cashout_order']
-    index = request['index']
 
-    # save as PayoutAddress
-    PayoutAddress.objects.get_or_create(
-        address=subscription_data['address'],
-        index=index,
-        order=cashout_order
-    )
-
-    # subscribe
     serializer = SubscriberSerializer(data=subscription_data)
     if serializer.is_valid():
         response = new_subscription(**serializer.data)
@@ -73,41 +64,33 @@ def generate_address_from_xpubkey(xpubkey):
     if not xpubkey:
         raise Exception('paytacapos payout xpubkey not set')
         
-    key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)
-    last_payout_address = PayoutAddress.objects.last()
-    
-    next_index = 0
-    if last_payout_address:
-        last_index = last_payout_address.index or 0
-        next_index = last_index + 1
+    key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)    
+    rand_index = random.randint(0, 999)
 
-    bch_legacy_address = key.ChildKey(next_index).Address()
+    bch_legacy_address = key.ChildKey(rand_index).Address()
     address = cashaddress.convert.to_cash_address(bch_legacy_address)
-    return address, next_index
+    return address
 
-def generate_payout_address(order_id, fixed=True):
+def generate_payout_address(order_id=None, fixed=True):
 
     payout_address = settings.PAYTACAPOS_PAYOUT_ADDRESS
     wallet_hash = settings.PAYTACAPOS_PAYOUT_WALLET_HASH
    
-    order = CashOutOrder.objects.get(id=order_id)
-    
-    # return existing payout address for order if already existing
-    payout_address_obj = PayoutAddress.objects.filter(order__id=order.id).last()
-    if payout_address_obj:
-       return payout_address_obj.address 
+    if order_id:    
+        # return existing payout address for order if already existing
+        payout_address_obj = PayoutAddress.objects.filter(order__id=order_id).last()
+        logger.warning(f'payout_address_obj: {payout_address_obj}')
+        if payout_address_obj:
+            return payout_address_obj.address 
 
     if not wallet_hash:
         raise Exception('paytacapos payout wallet_hash not set')
     
-    next_index = None
     if not fixed:
-        payout_address, next_index = generate_address_from_xpubkey(settings.PAYTACAPOS_PAYOUT_XPUBKEY)
+        payout_address = generate_address_from_xpubkey(settings.PAYTACAPOS_PAYOUT_XPUBKEY)
     
-    save_and_subsribe_to_address({
+    subsribe_to_address({
         'subscription_data': { 'address': payout_address, 'wallet_hash': wallet_hash },
-        'index': next_index,
-        'cashout_order': order
     })
 
     return payout_address

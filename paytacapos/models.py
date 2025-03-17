@@ -416,6 +416,19 @@ class CashOutOrder(PostgresModel):
         return outputs
 
 class CashOutTransaction(models.Model):
+    INCOMING = 'incoming'
+    OUTGOING = 'outgoing'
+    RECORD_TYPE_OPTIONS = [
+        (INCOMING, 'Incoming'),
+        (OUTGOING, 'Outgoing')
+    ]
+    record_type = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+        db_index=True,
+        choices=RECORD_TYPE_OPTIONS
+    )
     order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)
     txid = models.CharField(max_length=70, db_index=True, null=True)
     transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT, null=True)
