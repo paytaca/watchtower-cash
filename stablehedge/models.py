@@ -177,8 +177,8 @@ class TreasuryContract(models.Model):
     pubkey1 = models.CharField(max_length=70)
     pubkey2 = models.CharField(max_length=70)
     pubkey3 = models.CharField(max_length=70)
-    pubkey4 = models.CharField(max_length=70, null=True, blank=True)
-    pubkey5 = models.CharField(max_length=70, null=True, blank=True)
+    pubkey4 = models.CharField(max_length=70)
+    pubkey5 = models.CharField(max_length=70)
     anyhedge_base_bytecode = models.TextField(null=True, blank=True)
     anyhedge_contract_version = models.CharField(max_length=50, null=True, blank=True)
 

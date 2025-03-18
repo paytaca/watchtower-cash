@@ -49,17 +49,6 @@ export class TreasuryContract {
   }
 
   get contractParameters() {
-    if (this.options.version === 'v2') {  
-      const contractParams = [
-        hexToBin(this.params?.authKeyId).reverse(),
-        hexToBin(this.params?.pubkeys?.[0]),
-        hexToBin(this.params?.pubkeys?.[1]),
-        hexToBin(this.params?.pubkeys?.[2]),
-        hexToBin(this.params?.anyhedgeBaseBytecode),
-      ] 
-      return contractParams
-    }
-
     const contractParams = [
       hexToBin(this.params?.authKeyId).reverse(),
       hexToBin(this.params?.pubkeys?.[0]),
@@ -68,6 +57,10 @@ export class TreasuryContract {
       hexToBin(this.params?.pubkeys?.[3]),
       hexToBin(this.params?.pubkeys?.[4]),
     ]
+
+    if (this.options.version === 'v2') {
+      contractParams.push(hexToBin(this.params?.anyhedgeBaseBytecode))
+    }
 
     return contractParams
   }

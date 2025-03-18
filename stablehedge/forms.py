@@ -73,12 +73,10 @@ class TreasuryContractForm(forms.ModelForm):
         anyhedge_base_bytecode = None
         anyhedge_contract_version = None
         pubkeys = [
-            data["pubkey1"], data["pubkey2"], data["pubkey3"],
+            data["pubkey1"], data["pubkey2"], data["pubkey3"], data["pubkey4"], data["pubkey5"]
         ]
-        if version == "v1":
-            pubkeys.append(data["pubkey4"])
-            pubkeys.append(data["pubkey5"])
-        elif version == "v2":
+
+        if version == "v2":
             result = ScriptFunctions.getAnyhedgeBaseBytecode()
             anyhedge_base_bytecode = result["bytecode"]
             anyhedge_contract_version = result["version"]

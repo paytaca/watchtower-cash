@@ -5,8 +5,8 @@ contract TreasuryContractV2(
     pubkey pk1, // 33 B
     pubkey pk2, // 33 B
     pubkey pk3, // 33 B
-    // pubkey pk4, // 33 B
-    // pubkey pk5, // 33 B
+    pubkey pk4, // 33 B
+    pubkey pk5, // 33 B
     bytes anyhedgeBaseBytecode, // an artifact bytecode of anyhedge smart contract
 ) {
     // Based on Authguard
@@ -24,9 +24,11 @@ contract TreasuryContractV2(
     }
 
     function unlockWithMultiSig(sig sig1, sig sig2, sig sig3) {
-        require(checkMultiSig([sig1, sig2, sig3], [pk1, pk2, pk3]));
+        require(checkMultiSig([sig1, sig2, sig3], [pk1, pk2, pk3, pk4, pk5]));
     }
 
+    // Exploitable, someone could keep consolidating utxos until balance
+    //   reaches zero due to transaction fees
     function consolidate() {
         require(tx.outputs.length <= 2);
         bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
@@ -41,7 +43,6 @@ contract TreasuryContractV2(
         bytes argsSegment2, // satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
         int shortInputSats,
         int longInputSats,
-        // bytes payoutSatsBytecode, // int type
         bytes lowPriceBytecode, // int type
         bytes highPriceBytecode, // int type
         bytes startTsBytecode, // int type
@@ -65,13 +66,18 @@ contract TreasuryContractV2(
         bytes32 scriptHash = hash256(contractBytecode);
         bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);
         require(tx.outputs[0].lockingBytecode == lockingBytecode);
-        // require(tx.outputs.length < 2 || tx.outputs[1].lockingBytecode == thisLockingBytecode);
+        if (tx.outputs.length >= 2) {
+            require(tx.outputs[1].lockingBytecode == thisLockScript);
+        }
 
+        // Necessary to ensure duration is not too long that it's unaccessible
         int maturityTs = int(maturityTsBytecode.split(1)[1]);
         int startTs = int(startTsBytecode.split(1)[1]);
         int duration = maturityTs - startTs;
-        require(duration > 0 && duration <= 432000); // 432000 is 5 days in seconds
+        require(within(duration, 0, 432000)); // 432000 is 5 days in seconds
 
+        // This implies price range is wide enough but does not show how close
+        // one boundary is to the start price
         int highPrice = int(highPriceBytecode.split(1)[1]);
         int lowPrice = int(lowPriceBytecode.split(1)[1]);
         int priceMult = highPrice / lowPrice;
