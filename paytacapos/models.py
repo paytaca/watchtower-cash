@@ -481,7 +481,7 @@ class CashOutTransaction(models.Model):
         return round(order_price * amount, 2)
     
 class PayoutAddress(models.Model):
-    index = models.IntegerField(null=True)
+    address_index = models.IntegerField(null=True)
     address = models.CharField(max_length=255)
     order = models.OneToOneField(CashOutOrder, on_delete=models.SET_NULL, null=True, related_name="payout_address")
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
