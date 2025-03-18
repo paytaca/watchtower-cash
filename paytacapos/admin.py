@@ -1,7 +1,9 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from .models import *
-
+from dynamic_raw_id.admin import DynamicRawIDMixin
 from main.models import (
     Wallet,
     WalletHistory
@@ -183,4 +185,104 @@ class LocationAdmin(admin.ModelAdmin):
         "merchant",
         "branch",
     ]
+
+class PaymentMethodFieldInline(admin.TabularInline):
+    model = PaymentMethodField
+    readonly_fields = ('field_name', 'value')
+    fields = ('field_name', 'value')
+    extra = 0
+    max_num = 0
+    can_delete = False
+
+    def field_name(self, obj):
+        return obj.field_reference.fieldname
+    field_name.short_description = 'Field Name'
+
+@admin.register(PaymentMethod)
+class PaymentMethodAdmin(admin.ModelAdmin):
+    readonly_fields = ['payment_type', 'wallet']
+    list_display = ['id', 'payment_type', 'wallet']
+    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'wallet__wallet_hash']
+    inlines = [PaymentMethodFieldInline]
+
+@admin.register(CashOutOrder)
+class CashOutOrderAdmin(admin.ModelAdmin):
+    readonly_fields = [
+        'sats_amount',
+        'payout_amount_',
+        'currency_',
+        'market_price_',
+        'payment_method_details',
+        'payout_address',
+        'output_tx',
+        'created_at',
+        'processed_at',
+        'completed_at'
+    ]
+    list_display = ['id', 'status', 'payment_method_link', 'merchant', 'created_at']
+    search_fields = [
+        'id',
+        'wallet__wallet_hash',
+        'payment_method__payment_type__full_name', 
+        'payment_method__payment_type__short_name',
+        'status']
     
+    dynamic_raw_id_fields = [
+        'wallet', 'transactions'
+    ]
+
+    def payment_method_link(self, obj):
+        url = reverse('admin:paytacapos_paymentmethod_change', args=[obj.payment_method.id])
+        return format_html('<a href="{}">{}</a>', url, self.payment_method_ref(obj))
+
+    def payment_method_ref(self, obj):
+        payment_type_name = obj.payment_method.payment_type.short_name
+        if not payment_type_name:
+            payment_type_name = obj.payment_method.payment_type.full_name
+        
+        pm_field = PaymentMethodField.objects.filter(payment_method_id=obj.payment_method.id).first()
+        return f'{payment_type_name}({pm_field.value})'
+    
+    def payout_address(self, obj):
+        address = None
+        payout_address = PayoutAddress.objects.filter(order__id=obj.id).last()
+        if payout_address:
+            address = payout_address.address
+        return address
+    
+    def payout_amount_(self, obj):
+        return f"{obj.payout_amount} {obj.currency.symbol}"
+    
+    def currency_(self, obj):
+        return f"{obj.currency.name} ({obj.currency.symbol})"
+    
+    def market_price_(self, obj):
+        return f"{obj.market_price} {obj.currency.symbol}"
+    
+    def payment_method_details(self, obj):
+        fields = PaymentMethodField.objects.filter(payment_method__id=obj.payment_method.id)
+        detail_str = f"{obj.payment_method.payment_type.short_name}"
+        for field in fields:
+            detail_str = f"{detail_str} | {field.field_reference.fieldname}: {field.value}"
+        
+        url = reverse('admin:paytacapos_paymentmethod_change', args=[obj.payment_method.id])
+        return format_html('<a href="{}">{}</a>', url, detail_str)
+    
+    def output_tx(self, obj):
+        output = CashOutTransaction.objects.filter(order__id=obj.id, record_type=CashOutTransaction.OUTGOING)
+        if not output.exists():
+            return None
+        
+        output = output.first()
+        url = reverse('admin:main_transaction_change', args=[output.transaction.id])
+        return format_html('<a href="{}">{}</a> | {}', url, output.txid, output.transaction.address.address)
+
+@admin.register(CashOutTransaction)
+class CashOutTransactionAdmin(admin.ModelAdmin):
+    search_fields = ['id', 'order__id', 'record_type', 'txid']
+    list_display = ['id', 'order', 'record_type', 'txid', 'created_at']
+
+@admin.register(PayoutAddress)
+class PayoutAddressAdmin(admin.ModelAdmin):
+    search_fields = ['id', 'order__id', 'address']
+    list_display = ['id', 'order', 'address', 'created_at']
