@@ -56,9 +56,7 @@ def subsribe_to_address(request):
 
     serializer = SubscriberSerializer(data=subscription_data)
     if serializer.is_valid():
-        response = new_subscription(**serializer.data)
-
-    return response
+        new_subscription(**serializer.data)
 
 def generate_address_from_xpubkey(xpubkey):
     if not xpubkey:
