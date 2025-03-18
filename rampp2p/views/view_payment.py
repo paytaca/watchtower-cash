@@ -22,8 +22,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PaymentTypeView(APIView):
-    authentication_classes = [TokenAuthentication]
-
     def get(self, request):
         queryset = models.PaymentType.objects.filter(payment_currency__isnull=False)
         currency = request.query_params.get('currency')
