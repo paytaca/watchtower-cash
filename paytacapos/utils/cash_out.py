@@ -57,13 +57,26 @@ def subscribe_to_address(data):
     if serializer.is_valid():
         new_subscription(**serializer.data)
 
+MAX_ADDR_INDEX = (2 ** 31) - 1
+
 def generate_address_set_from_xpubkey(xpubkey, address_index=None):
     if not xpubkey:
         raise Exception('paytacapos payout xpubkey not set')
         
     key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)
     if address_index == None:
-        address_index = random.randint(0, 999)
+
+        # increment from the last payout address's index
+        last_index = 0
+        last_address = PayoutAddress.objects.values('address_index').last()
+        if last_address:
+            last_index = last_address['address_index']
+        
+        # if next address index is > MAX_ADDR_INDEX, reset index back to 0
+        address_index = last_index + 1
+        if address_index > MAX_ADDR_INDEX:
+            address_index = 0
+
     else:
         address_index = int(address_index)
 

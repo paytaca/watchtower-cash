@@ -594,7 +594,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
             # generate the payout address
             payout_address, address_index = generate_payout_address()
             PayoutAddress.objects.get_or_create(
-                    address=payout_address,
+                    address=payout_address['receiving'],
                     address_index=address_index,
                     order=order,
                 )
