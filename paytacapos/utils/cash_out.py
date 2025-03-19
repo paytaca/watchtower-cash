@@ -51,45 +51,63 @@ def fetch_unspent_merchant_transactions(wallet_hash, posids):
     
     return unspent_merchant_txns
 
-def subsribe_to_address(request):
-    subscription_data = request['subscription_data']
+def subscribe_to_address(data):
 
-    serializer = SubscriberSerializer(data=subscription_data)
+    serializer = SubscriberSerializer(data=data)
     if serializer.is_valid():
         new_subscription(**serializer.data)
 
-def generate_address_from_xpubkey(xpubkey):
+MAX_ADDR_INDEX = (2 ** 31) - 1
+
+def generate_address_set_from_xpubkey(xpubkey, address_index=None):
     if not xpubkey:
         raise Exception('paytacapos payout xpubkey not set')
         
-    key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)    
-    rand_index = random.randint(0, 999)
+    key = bip32utils.BIP32Key.fromExtendedKey(xpubkey, public=True)
+    if address_index == None:
 
-    bch_legacy_address = key.ChildKey(rand_index).Address()
-    address = cashaddress.convert.to_cash_address(bch_legacy_address)
-    return address
+        # increment from the last payout address's index
+        last_index = 0
+        last_address = PayoutAddress.objects.values('address_index').last()
+        if last_address:
+            last_index = last_address['address_index']
+        
+        # if next address index is > MAX_ADDR_INDEX, reset index back to 0
+        address_index = last_index + 1
+        if address_index > MAX_ADDR_INDEX:
+            address_index = 0
 
-def generate_payout_address(order_id=None, fixed=True):
+    else:
+        address_index = int(address_index)
 
-    payout_address = settings.PAYTACAPOS_PAYOUT_ADDRESS
-    wallet_hash = settings.PAYTACAPOS_PAYOUT_WALLET_HASH
+    # receiving
+    bch_legacy_address = key.ChildKey(0).ChildKey(address_index).Address()
+    receiving_address = cashaddress.convert.to_cash_address(bch_legacy_address)
+
+    # change
+    bch_legacy_address = key.ChildKey(1).ChildKey(address_index).Address()
+    change_address = cashaddress.convert.to_cash_address(bch_legacy_address)
    
-    if order_id:    
-        # return existing payout address for order if already existing
-        payout_address_obj = PayoutAddress.objects.filter(order__id=order_id).last()
-        logger.warning(f'payout_address_obj: {payout_address_obj}')
-        if payout_address_obj:
-            return payout_address_obj.address 
+    addresses = {
+        'receiving': receiving_address,
+        'change': change_address
+    }
+
+    return addresses, address_index
+
+def generate_payout_address(address_index=None):
+    wallet_hash = settings.PAYTACAPOS_PAYOUT_WALLET_HASH
+    xpubkey = settings.PAYTACAPOS_PAYOUT_XPUBKEY
 
     if not wallet_hash:
         raise Exception('paytacapos payout wallet_hash not set')
     
-    if not fixed:
-        payout_address = generate_address_from_xpubkey(settings.PAYTACAPOS_PAYOUT_XPUBKEY)
-    
-    subsribe_to_address({
-        'subscription_data': { 'address': payout_address, 'wallet_hash': wallet_hash },
+    addresses, address_index = generate_address_set_from_xpubkey(xpubkey, address_index=address_index)
+    subscribe_to_address({ 
+        'addresses': addresses, 
+        'wallet_hash': wallet_hash, 
+        'address_index': address_index
     })
 
-    return payout_address
+    return addresses, address_index
 

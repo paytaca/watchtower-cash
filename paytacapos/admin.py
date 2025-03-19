@@ -284,5 +284,5 @@ class CashOutTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(PayoutAddress)
 class PayoutAddressAdmin(admin.ModelAdmin):
-    search_fields = ['id', 'order__id', 'address']
-    list_display = ['id', 'order', 'address', 'created_at']
+    search_fields = ['id', 'order__id', 'address', 'address_index']
+    list_display = ['id', 'order', 'address', 'address_index', 'created_at']
