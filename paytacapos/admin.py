@@ -9,6 +9,8 @@ from main.models import (
     WalletHistory
 )
 
+from rampp2p.utils import satoshi_to_bch
+
 def IsNullListFilter(parameter_name):
     """
         https://docs.djangoproject.com/en/dev/ref/contrib/admin/filters/#modeladmin-list-filters
@@ -208,9 +210,9 @@ class PaymentMethodAdmin(admin.ModelAdmin):
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(admin.ModelAdmin):
     readonly_fields = [
-        'sats_amount',
-        'payout_amount_',
         'currency_',
+        'bch_amount',
+        'payout_amount_',
         'market_price_',
         'payment_method_details',
         'payout_address',
@@ -259,6 +261,12 @@ class CashOutOrderAdmin(admin.ModelAdmin):
     def market_price_(self, obj):
         return f"{obj.market_price} {obj.currency.symbol}"
     
+    def bch_amount(self, obj):
+        satoshi = obj.sats_amount
+        if not satoshi:
+            return None
+        return satoshi_to_bch(satoshi)
+    
     def payment_method_details(self, obj):
         fields = PaymentMethodField.objects.filter(payment_method__id=obj.payment_method.id)
         detail_str = f"{obj.payment_method.payment_type.short_name}"
@@ -269,7 +277,7 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         return format_html('<a href="{}">{}</a>', url, detail_str)
     
     def output_tx(self, obj):
-        output = CashOutTransaction.objects.filter(order__id=obj.id, record_type=CashOutTransaction.OUTGOING)
+        output = obj.get_output_tx()
         if not output.exists():
             return None
         

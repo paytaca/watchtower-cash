@@ -385,7 +385,7 @@ class CashOutOrder(PostgresModel):
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, editable=False)
     payout_details = JSONField(null=True, blank=True, editable=False)
     payout_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
-    sats_amount = models.BigIntegerField(null=True)
+    sats_amount = models.BigIntegerField(null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     processed_at = models.DateTimeField(null=True)
     completed_at = models.DateTimeField(null=True)
