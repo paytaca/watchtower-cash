@@ -23,6 +23,7 @@ class ZMQHandler():
         self.zmqContext = zmq.Context()
         self.zmqSubSocket = self.zmqContext.socket(zmq.SUB)
         self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "rawtx")
+        self.zmqSubSocket.setsockopt_string(zmq.SUBSCRIBE, "hashds")
         self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE,1)
         self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_CNT,10)
         self.zmqSubSocket.setsockopt(zmq.TCP_KEEPALIVE_IDLE,1)
@@ -45,6 +46,10 @@ class ZMQHandler():
                     }
                     publish_message('mempool', data, qos=1, message_type='mempool')
                     LOGGER.info('New mempool tx pushed to MQTT: ' + txid)
+
+                if topic == "hashds":
+                    hash_ds = binascii.hexlify(body).decode()
+                    LOGGER.info('New double spend detected: ' + str(hash_ds))
 
         except KeyboardInterrupt:
             self.zmqContext.destroy()
