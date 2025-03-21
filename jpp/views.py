@@ -4,9 +4,11 @@ from rest_framework import (
     viewsets,
     mixins,
     decorators,
+    parsers,
     renderers,
     exceptions,
 )
+from rest_framework.settings import api_settings
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_yasg import openapi
@@ -15,9 +17,11 @@ from drf_yasg.utils import swagger_auto_schema
 from .models import Invoice
 from .parser import (
     BComPaymentParser,
+    BitPayPaymentOptionsParser,
     BitPayPaymentRequestParser,
     BitPayVerifyPaymentParser,
     BitPayPaymentParser,
+    BComPaymentRequestParser,
 )
 from .renderers import (
     MediaTypes,
@@ -78,6 +82,7 @@ class InvoiceBaseView(APIView):
 
 class InvoiceBitPayView(InvoiceBaseView):
     parser_classes = (
+        BitPayPaymentOptionsParser,
         BitPayPaymentRequestParser,
         BitPayVerifyPaymentParser,
         BitPayPaymentParser,
@@ -235,8 +240,54 @@ class InvoiceViewSet(
     lookup_field = "uuid"
     serializer_class = InvoiceSerializer
 
+    parser_classes = (
+        parsers.JSONParser,
+        BitPayPaymentOptionsParser,
+        BitPayPaymentRequestParser,
+        BComPaymentRequestParser,
+    )
+
+    renderer_classes = [
+        BitPayPaymentOptionsRenderer,
+        BitPayPaymentRequestRenderer,
+        BComPaymentRequestRenderer,
+        renderers.TemplateHTMLRenderer,
+        *api_settings.DEFAULT_RENDERER_CLASSES,
+    ]
+
+    def get_accept_list(self):
+        """
+        Given the incoming request, return a tokenized list of media
+        type strings.
+        """
+        header = self.request.META.get("HTTP_ACCEPT", "*/*")
+        return [token.strip() for token in header.split(",")]
+
     def get_queryset(self):
         return self.serializer_class.Meta.model.objects.all()
+
+    def retrieve(self, request, *args, **kwargs):
+        accepts = self.get_accept_list()
+        instance = self.get_object()
+        if MediaTypes.BitPay.PaymentOptions in accepts:
+            instance_url = instance.get_absolute_uri(
+                self.request, url_type=Invoice.URL_TYPE_BITPAY,
+            )
+            data = instance.payment_options(payment_url=instance_url)
+            return Response(data=data)
+        elif MediaTypes.BCom.PaymentRequest in accepts:
+            instance_url = instance.get_absolute_uri(
+                self.request, url_type=Invoice.URL_TYPE_BCOM,
+            )
+            payment_request_pb = serialize_invoice(instance, payment_url=instance_url)
+            data = payment_request_pb.SerializeToString()
+            return Response(data=data)
+        elif renderers.TemplateHTMLRenderer.media_type in accepts:
+            data = { "invoice": instance, "url": instance_url }
+            return Response(data, template_name='jpp/invoice.html')
+
+        return super().retrieve(request, *args, **kwargs)
+
 
     @swagger_auto_schema(method="post", request_body=InvoiceVerifySerializer, responses={200: InvoiceVerifySerializer, 400: InvoiceVerifySerializer})
     @decorators.action(methods=["post"], detail=True)
