@@ -17,7 +17,6 @@ from main.models import (
 )
 from main import mqtt
 from main.tasks import get_slp_utxos, get_bch_utxos
-from chat.models import ChatIdentity
 
 import logging
 import web3
@@ -167,20 +166,6 @@ def new_subscription(**kwargs):
                     response['success'] = True
             else:
                 response['error'] = 'invalid_address'
-        
-        # # Create PGP info record if the required details are provided
-        # if response['success'] and chat_identity and addresses and addresses['receiving'].split(':')[1] == chat_identity['user_id']:
-        #     chat_identity_exists = ChatIdentity.objects.filter(address__address=addresses['receiving']).exists()
-        #     if not chat_identity_exists:
-        #             chat_identity = ChatIdentity(
-        #                 address=Address.objects.get(address=addresses['receiving']),
-        #                 user_id=chat_identity['user_id'],
-        #                 email=chat_identity['email'],
-        #                 public_key=chat_identity['public_key'],
-        #                 public_key_hash=chat_identity['public_key_hash'],
-        #                 signature=chat_identity['signature']
-        #             )
-        #             chat_identity.save()
 
         if response['success'] and new_addresses:
             publish_subscribed_addresses_to_mqtt(new_addresses)
