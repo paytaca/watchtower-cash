@@ -8,18 +8,24 @@ from django.db import transaction
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework import serializers, exceptions
+from django.db.models import F
 
 from main.models import CashNonFungibleToken, Wallet, Address
 from anyhedge.utils.address import pubkey_to_cashaddr
+from rampp2p.models import MarketPrice
 
 from .models import *
 from .permissions import HasMinPaytacaVersionHeader
 from .utils.broadcast import broadcast_transaction
 from .utils.totp import generate_pos_device_totp
 from .utils.websocket import send_device_update
-
+from rampp2p.serializers import PaymentTypeSerializer
 
 REDIS_CLIENT = settings.REDISKV
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_address_or_err(address):
@@ -855,3 +861,197 @@ class MerchantVaultAddressSerializer(serializers.Serializer):
 
 class LatestPosIdSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
+
+
+class BaseCashOutTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashOutTransaction
+        fields = ['id', 'txid', 'record_type', 'order', 'transaction', 'wallet_history', 'created_at']
+
+class CashOutTransactionSerializer(BaseCashOutTransactionSerializer):
+    wallet_history = serializers.SerializerMethodField()
+    initial_fiat_value = serializers.SerializerMethodField()
+    order_fiat_value = serializers.SerializerMethodField()
+    
+    class Meta(BaseCashOutTransactionSerializer.Meta):
+        fields = BaseCashOutTransactionSerializer.Meta.fields + [
+            'initial_fiat_value',
+            'order_fiat_value'
+        ]
+
+    def get_wallet_history(self, obj):
+        return MerchantTransactionSerializer(
+            obj.wallet_history,
+            context={'currency': obj.order.currency.symbol}
+        ).data
+    
+    def get_initial_fiat_value(self, obj):
+        return obj.initial_fiat_value
+
+    def get_order_fiat_value(self, obj):
+        return obj.order_fiat_value
+
+class PaymentMethodFieldSerializer(serializers.ModelSerializer):
+    field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)
+    payment_method = serializers.PrimaryKeyRelatedField(queryset=PaymentType.objects.all(), required=False)
+    class Meta:
+        model = PaymentMethodField
+        fields = ('id', 'payment_method', 'field_reference', 'value', 'created_at', 'modified_at')
+
+class PaymentMethodSerializer(serializers.ModelSerializer):
+    payment_type = PaymentTypeSerializer(read_only=True)
+    values = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = PaymentMethod
+        fields = ('id', 'payment_type', 'wallet', 'values', 'created_at')
+
+    def get_values(self, obj):
+        fields = PaymentMethodField.objects.filter(payment_method__id=obj.id)
+        serialized_fields = PaymentMethodFieldSerializer(fields, many=True)
+        return serialized_fields.data
+
+    def create(self, validated_data):
+        payment_type_data = self.initial_data.get('payment_type')
+        payment_type = PaymentType.objects.get(id=payment_type_data['id'])
+        validated_data['payment_type'] = payment_type
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        payment_type_data = self.initial_data.get('payment_type')
+        
+        if payment_type_data:
+            payment_type = PaymentType.objects.get(id=payment_type_data['id'])
+            instance.payment_type = payment_type
+
+        instance.save()
+        return instance
+
+class BaseCashOutOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CashOutOrder
+        fields = [
+            'id', 
+            'status',
+            'wallet',
+            'merchant',
+            'currency',
+            'market_price',
+            'payment_method',
+            'payout_amount',
+            'payout_details',
+            'created_at',
+            'processed_at',
+            'completed_at']
+        
+class CashOutOrderSerializer(BaseCashOutOrderSerializer):
+    transactions = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    payment_method = PaymentMethodSerializer()
+    payout_address = serializers.SerializerMethodField(required=False)
+    
+    class Meta(BaseCashOutOrderSerializer.Meta):
+        fields = BaseCashOutOrderSerializer.Meta.fields + [
+            'transactions', 
+            'currency',
+            'payout_address',
+            'payment_method'
+        ]
+        
+    def get_transactions(self, obj):
+        inputs = CashOutTransactionSerializer(obj.get_input_tx(), many=True, context={'currency': obj.currency.symbol}).data
+        outputs = CashOutTransactionSerializer(obj.get_output_tx(), many=True, context={'currency': obj.currency.symbol}).data
+        return {
+            'inputs': inputs,
+            'outputs': outputs
+        }
+    
+    def get_currency(self, obj):
+        return obj.currency.symbol
+    
+    def get_payout_address(self, obj):
+        address = None
+        payout_address = PayoutAddress.objects.filter(order__id=obj.id).last()
+        if payout_address:
+            address = payout_address.address
+        return address
+
+class MerchantTransactionSerializer(serializers.ModelSerializer):
+    fiat_price = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    address = serializers.SerializerMethodField()
+    transaction = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WalletHistory
+        fields = [
+            'amount',
+            'tx_timestamp',
+            'fiat_price',
+            'address',
+            'transaction',
+            'status'
+        ]
+
+    def get_transaction(self, obj):
+        transaction = Transaction.objects.filter(txid=obj.txid).annotate(
+            vout=F('index'),
+            block=F('blockheight__number'),
+            wallet_index=F('address__wallet_index'),
+            address_path=F('address__address_path')
+        ).values(
+            'txid',
+            'vout',
+            'value',
+            'block',
+            'wallet_index',
+            'address_path'
+        )
+        if transaction:
+            return transaction.first()
+        return None
+
+    def get_address(self, obj):
+        # find the transaction of this wallet history
+        address = None
+        transaction = Transaction.objects.filter(
+            txid=obj.txid,
+            wallet__wallet_hash=obj.wallet.wallet_hash,
+            token__name="bch"
+        )
+        if transaction.exists():
+            # get the address associated with the transaction
+            transaction = transaction.first()
+            address = transaction.address.address
+        return address
+
+    def get_fiat_price(self, obj):
+        pref_currency = self.context.get('currency')
+        init_price = {}
+
+        if obj.usd_price:
+            init_price['USD'] = obj.usd_price
+        
+        curr_price = {}
+        if obj.usd_price:
+            usd_price = MarketPrice.objects.filter(currency="USD").first()
+            if usd_price:
+                curr_price["USD"] = usd_price.price
+
+        if pref_currency and pref_currency != 'USD':
+            init_price[pref_currency] = obj.market_prices.get(pref_currency)
+
+            currency_price = MarketPrice.objects.filter(currency=pref_currency).first()
+            if currency_price:
+                curr_price[pref_currency] = currency_price.price
+
+        return {
+            'initial': init_price,
+            'current': curr_price
+        }
+    
+    def get_status(self, obj):
+        order_tx = CashOutTransaction.objects.filter(wallet_history__id=obj.id).first()
+        if order_tx:
+            return order_tx.order.status
+        return None

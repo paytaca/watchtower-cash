@@ -16,6 +16,12 @@ class BComPaymentParser(parsers.BaseParser):
         # return super().parse(stream, media_type=None, parser_context=None)
         return stream.read()
 
+class BComPaymentRequestParser(parsers.BaseParser):
+    media_type = MediaTypes.BCom.PaymentRequest
+
+class BitPayPaymentOptionsParser(parsers.JSONParser):
+    media_type = MediaTypes.BitPay.PaymentOptions
+
 class BitPayPaymentRequestParser(parsers.JSONParser):
     media_type = MediaTypes.BitPay.PaymentRequest
 

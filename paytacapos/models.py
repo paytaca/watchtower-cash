@@ -1,9 +1,13 @@
 from django.db import transaction
 from django.db import models
 from django.utils import timezone
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields import JSONField
+from psqlextra.models import PostgresModel
 from psqlextra.query import PostgresQuerySet
-from main.models import WalletHistory, Address, Transaction
+from main.models import WalletHistory, Wallet, Transaction
+from rampp2p.models import PaymentType, PaymentTypeField, FiatCurrency
+
+from decimal import Decimal
 
 from PIL import Image
 import os
@@ -206,15 +210,24 @@ class Merchant(models.Model):
     @property
     def last_transaction_date(self):
         pos_devices_check = self.devices.filter(latest_transaction__isnull=False)
+        pos_latest_tx_date = None
+        wallet_latest_tx_date = None
+
         if pos_devices_check.exists():
-            last_tx_date = pos_devices_check.latest('latest_transaction').latest_transaction.date_created
+            pos_latest_tx_date = pos_devices_check.latest('latest_transaction').latest_transaction.date_created
+
+        wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
+        last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')
+        if last_tx:
+            wallet_latest_tx_date = last_tx.date_created
+
+        merchants_count = Merchant.objects.filter(wallet_hash=self.wallet_hash).count()
+        if merchants_count == 1:
+            # Return the latest date between pos_latest_tx_date and wallet_latest_tx_date
+            return max(filter(None, [pos_latest_tx_date, wallet_latest_tx_date]))
         else:
-            wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
-            last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')
-            last_tx_date = None
-            if last_tx:
-                last_tx_date = str(last_tx.date_created)
-        return last_tx_date
+            # Return the earliest date between pos_latest_tx_date and wallet_latest_tx_date
+            return min(filter(None, [pos_latest_tx_date, wallet_latest_tx_date]))
 
     def get_main_branch(self):
         return self.branches.filter(is_main=True).first()
@@ -336,3 +349,151 @@ class Branch(models.Model):
             merchant.location = new_location
             merchant.save()
         return new_location
+
+class PaymentMethod(models.Model):
+    payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name="merchant_payment_methods")
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    class Meta:
+        unique_together = ('payment_type', 'wallet')
+
+    def __str__(self):
+        name = self.payment_type.short_name
+        if not name:
+            name = self.payment_type.full_name
+	    
+        return str(name)
+
+class PaymentMethodField(models.Model):
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE)
+    field_reference = models.ForeignKey(PaymentTypeField, on_delete=models.CASCADE)
+    value = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    modified_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+	    return str(self.id)
+
+class CashOutOrder(PostgresModel):
+    class StatusType(models.TextChoices):
+        PENDING     = 'PENDING'
+        PROCESSING  = 'PROCESSING'
+        COMPLETED   = 'COMPLETED'
+
+    currency = models.ForeignKey(
+        FiatCurrency,
+        on_delete=models.PROTECT,
+        related_name="cashout_orders",
+        editable=False
+    )
+    market_price = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, editable=False)
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, null=True)
+    status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, editable=False)
+    payout_details = JSONField(null=True, blank=True, editable=False)
+    payout_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
+    sats_amount = models.BigIntegerField(null=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    processed_at = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
+
+    def __str__(self):
+        return str(self.id)
+    
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            old_status = CashOutOrder.objects.get(pk=self.pk).status
+            if old_status != self.status:
+                if self.status == CashOutOrder.StatusType.PENDING:
+                    self.processed_at = None
+                    self.completed_at = None
+                if self.status == CashOutOrder.StatusType.PROCESSING:
+                    self.completed_at = None
+                    self.processed_at = timezone.now()
+                if self.status == CashOutOrder.StatusType.COMPLETED:
+                    self.completed_at = timezone.now()
+        super(CashOutOrder, self).save(*args, **kwargs)
+
+    def get_input_tx(self):
+        inputs = CashOutTransaction.objects.filter(order__id=self.id, wallet_history__record_type=WalletHistory.INCOMING)
+        return inputs
+    
+    def get_output_tx(self):
+        outputs = CashOutTransaction.objects.filter(order__id=self.id, wallet_history__record_type=WalletHistory.OUTGOING)
+        return outputs
+
+class CashOutTransaction(models.Model):
+    INCOMING = 'incoming'
+    OUTGOING = 'outgoing'
+    RECORD_TYPE_OPTIONS = [
+        (INCOMING, 'Incoming'),
+        (OUTGOING, 'Outgoing')
+    ]
+    record_type = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+        db_index=True,
+        choices=RECORD_TYPE_OPTIONS
+    )
+    order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)
+    txid = models.CharField(max_length=70, db_index=True, null=True)
+    transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT, null=True)
+    wallet_history = models.OneToOneField(WalletHistory, on_delete=models.PROTECT, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    def __str__(self):
+        return str(self.id)
+    
+    @property
+    def currency(self):
+        return self.order.currency.symbol
+    
+    @property
+    def tx_price(self):
+        ''' Fetches the recorded market price when transaction was created. '''
+        price = None
+        market_prices = self.wallet_history.market_prices
+        if market_prices and market_prices.get(self.currency, None):
+            price = Decimal(market_prices[self.currency])
+        return price
+    
+    @property
+    def order_price(self):
+        ''' Fetches the recorded market price when the cash-out order was created. '''
+        return Decimal(self.order.market_price)
+
+    @property
+    def initial_fiat_value(self):
+        ''' Calculates the fiat value of transaction when it was created. '''
+        amount = Decimal(self.wallet_history.amount)
+        tx_price = self.tx_price
+        order_price = self.order_price
+
+        if not tx_price or not order_price:
+            return
+        
+        return round(tx_price * amount, 2)
+    
+    @property
+    def order_fiat_value(self):
+        ''' Calculates the fiat value of transaction when the order was created. '''
+        amount = Decimal(self.wallet_history.amount)
+        tx_price = self.tx_price
+        order_price = self.order_price
+
+        if not tx_price or not order_price:
+            return
+
+        return round(order_price * amount, 2)
+    
+class PayoutAddress(models.Model):
+    address_index = models.IntegerField(null=True)
+    address = models.CharField(max_length=255)
+    order = models.OneToOneField(CashOutOrder, on_delete=models.SET_NULL, null=True, related_name="payout_address")
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    def __str__(self):
+        return str(self.address)

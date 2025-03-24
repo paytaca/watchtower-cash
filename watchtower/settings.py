@@ -277,6 +277,7 @@ CELERY_IMPORTS = (
     'rampp2p.tasks.task_transaction',
     'rampp2p.tasks.task_order',
     'stablehedge.tasks',
+    'paytacapos.tasks'
 )
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
@@ -688,6 +689,9 @@ SERVICE_FEE = config('SERVICE_FEE', 1000)
 ARBITRATION_FEE = config('ARBITRATION_FEE', 1000)
 CONTRACT_FEE = config('CONTRACT_FEE', 1000)
 SMART_CONTRACT_VERSION = config('SMART_CONTRACT_VERSION', '0.8.0')
+
+PAYTACAPOS_PAYOUT_XPUBKEY = config('PAYTACAPOS_PAYOUT_XPUBKEY', '')
+PAYTACAPOS_PAYOUT_WALLET_HASH = config('PAYTACAPOS_PAYOUT_WALLET_HASH', '')
 
 from requests.compat import urljoin
 IMAGE_UPLOAD_FOLDER = 'image_uploads'

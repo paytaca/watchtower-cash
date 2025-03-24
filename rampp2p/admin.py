@@ -149,12 +149,24 @@ class MarketPriceAdmin(admin.ModelAdmin):
         'currency'
     ]
 
+class PaymentMethodFieldInline(DynamicRawIDMixin, admin.TabularInline):
+    model = PaymentMethodField
+    extra = 0
+    dynamic_raw_id_fields = ('field_reference')
+    readonly_fields = ('field_name',)
+    fields = ('field_reference', 'field_name', 'value')
+    can_delete = True
+
+    def field_name(self, obj):
+        return obj.field_reference.fieldname
+    field_name.short_description = 'Field Reference Name'
+
 @admin.register(PaymentMethod)
 class PaymentMethodAdmin(admin.ModelAdmin):
-    list_display = [
-        'payment_type',    
-        'owner'
-    ]
+    inlines = [PaymentMethodFieldInline]
+    list_display = ['id', 'payment_type', 'owner']
+    dynamic_raw_id_fields = ['wallet', 'payment_type']
+    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'owner__wallet_hash']
 
 @admin.register(Arbiter)
 class ArbiterAdmin(admin.ModelAdmin):
@@ -179,8 +191,15 @@ class ContractAdmin(admin.ModelAdmin):
         'version'
     ]
 
+class PaymentTypeFieldInline(DynamicRawIDMixin, admin.TabularInline):
+    model = PaymentTypeField
+    extra = 0
+    fields = ('fieldname', 'format', 'description', 'payment_type', 'required')
+    can_delete = True
+
 @admin.register(PaymentType)
 class PaymentTypeAdmin(admin.ModelAdmin):
+    inlines = [PaymentTypeFieldInline]
     list_display = [
         'id',
         'full_name',

@@ -23,7 +23,7 @@ if settings.BCH_NETWORK == 'mainnet':
 else:
     mqtt_client = mqtt.Client(client_id=mqtt_client_id, clean_session=False)
 
-mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, 10)
+mqtt_client.connect(settings.MQTT_HOST, settings.MQTT_PORT, keepalive=60)
 
 
 # The callback for when the client receives a CONNACK response from the server.

@@ -137,7 +137,7 @@ class OrderViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         wallet_hash = request.user.wallet_hash
-        params = self._parse_params(request)
+        params = self.parse_params(request)
 
         if params['status_type'] is None:
             return Response(
@@ -280,6 +280,7 @@ class OrderViewSet(viewsets.GenericViewSet):
     def create(self, request):
         wallet_hash = request.user.wallet_hash
         try:
+            payment_method_ids = request.data.get('payment_methods', [])
             is_cash_in = request.data.get('is_cash_in', False)
             trade_amount = request.data.get('trade_amount')
             if trade_amount == None or trade_amount == 0:
@@ -287,157 +288,56 @@ class OrderViewSet(viewsets.GenericViewSet):
 
             ad = models.Ad.objects.get(pk=request.data.get('ad'))
             owner = models.Peer.objects.get(wallet_hash=wallet_hash)
-            payment_method_ids = request.data.get('payment_methods', [])
 
             # require payment methods if creating a SELL order
             if ad.trade_type == models.TradeType.BUY:
                 if len(payment_method_ids) == 0:
                     raise ValidationError('payment_methods field is required for SELL orders')            
-                self._check_payment_permissions(wallet_hash, payment_method_ids)
+                self.check_payment_permissions(wallet_hash, payment_method_ids)
             
             # check permissions
-            self._check_create_permissions(wallet_hash, ad.id)
-
-            # query market price for ad fiat currency
-            market_price = models.MarketPrice.objects.filter(currency=ad.fiat_currency.symbol)
-            if market_price.exists():
-                market_price = market_price.first()
-            else:
-                raise ValidationError(f'market price for currency {ad.fiat_currency.symbol} does not exist.')
-            
-        except (models.Ad.DoesNotExist, models.Peer.DoesNotExist, ValidationError) as err:
-            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
+            self.check_create_permissions(wallet_hash, ad.id)
+        
             with transaction.atomic():
-                # Prevent multiple cash-in orders with status Submitted/Confirmed
                 if is_cash_in:
-                    cancellable_cashin_orders = self._cancellable_cash_in_orders(wallet_hash)
-                    if cancellable_cashin_orders.count() > 0:
-                        raise ValidationError({ 'pending_orders': cancellable_cashin_orders })
+                    self.require_singular_cashin_order(wallet_hash=wallet_hash)
 
-                # Create a snapshot of ad
-                ad_snapshot = models.AdSnapshot(
-                    ad = ad,
-                    trade_type = ad.trade_type,
-                    price_type = ad.price_type,
-                    fiat_currency = ad.fiat_currency,
-                    crypto_currency = ad.crypto_currency,
-                    fixed_price = ad.fixed_price,
-                    floating_price = ad.floating_price,
-                    market_price = market_price.price,
-                    
-                    trade_floor_sats = ad.trade_floor_sats,
-                    trade_ceiling_sats = ad.trade_ceiling_sats,
-                    trade_amount_sats = ad.trade_amount_sats,
+                snapshot = self.snapshot_ad(ad)
+                tracking_id = self.generate_tracking_id()
 
-                    trade_floor_fiat = ad.trade_floor_fiat,
-                    trade_ceiling_fiat = ad.trade_ceiling_fiat,
-                    trade_amount_fiat = ad.trade_amount_fiat,
-                    
-                    appeal_cooldown_choice = ad.appeal_cooldown_choice,
-                    trade_amount_in_fiat = ad.trade_amount_in_fiat,
-                    trade_limits_in_fiat = ad.trade_limits_in_fiat
-                )
-                ad_snapshot.save()
-                ad_payment_methods = ad.payment_methods.all()
-                ad_payment_types = [pm.payment_type for pm in ad_payment_methods]
-                ad_snapshot.payment_types.set(ad_payment_types)
-
-                # Generate order tracking id
-                tracking_id = self._generate_tracking_id()
-
-                # Create the order data
                 data = {
                     'owner': owner.id,
-                    'ad_snapshot': ad_snapshot.id,
+                    'ad_snapshot': snapshot.id,
                     'payment_methods': payment_method_ids,
                     'trade_amount': trade_amount,
                     'is_cash_in': is_cash_in,
                     'tracking_id': tracking_id
                 }
-
                 serialized_order = serializers.WriteOrderSerializer(data=data)
-
-                # Raise error if order isn't valid
                 serialized_order.is_valid(raise_exception=True)
                 order = serialized_order.save()
                 
-                # Set order expiration date
-                expiration = order.created_at + timedelta(hours=24)
-                if is_cash_in:
-                    expiration = order.created_at + timedelta(minutes=15)
-                order.expires_at = expiration
+                self.set_expiration_date(order)
+                self.submit_order(ad=ad, order=order, wallet_hash=wallet_hash)
 
-                # Create SUBMITTED status for order
-                submitted_status = serializers.StatusSerializer(data={
-                    'status': StatusType.SUBMITTED, 
-                    'order': order.id,
-                    'created_by': wallet_hash
-                })
-                submitted_status.is_valid(raise_exception=True)
-                submitted_status = serializers.StatusSerializer(submitted_status.save()).data
-                
-                # Create and associate order members
-                seller, buyer = None, None
-                if ad_snapshot.trade_type == models.TradeType.SELL:
-                    seller = ad_snapshot.ad.owner
-                    buyer = order.owner
-                else:
-                    seller = order.owner
-                    buyer = ad_snapshot.ad.owner
-                seller_member = models.OrderMember.objects.create(order=order, peer=seller, type=models.OrderMember.MemberType.SELLER)
-                buyer_member = models.OrderMember.objects.create(order=order, peer=buyer, type=models.OrderMember.MemberType.BUYER)
-                
-                # Mark order creator member as already read
-                if seller_member.peer.wallet_hash == order.owner.wallet_hash:
-                    seller_member.read_at = timezone.now()
-                    seller_member.save()
-                if buyer_member.peer.wallet_hash == order.owner.wallet_hash:
-                    buyer_member.read_at = timezone.now()
-                    buyer_member.save()
+                members = self.create_members(snapshot=snapshot, order=order)
+                self.mark_creator_as_read(order=order, members=members)
 
-                order.save()
-
-                # If order is cash-in, create OrderPayment records
                 if order.is_cash_in:
-                    payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
-                    for payment_method in payment_methods:
-                        data = {
-                            "order": order.id,
-                            "payment_method": payment_method.id,
-                            "payment_type": payment_method.payment_type.id
-                        }
-                        order_method = serializers.OrderPaymentSerializer(data=data)
-                        if order_method.is_valid():
-                            order_method.save()
+                    self.create_order_payment_methods(payment_method_ids=payment_method_ids, order=order)
 
-                # Serialize response data
+                self.update_ad_trade_amount(order=order)
+                serialized_status = self.confirm_order(wallet_hash=wallet_hash, order=order)
+
                 serialized_order = serializers.OrderSerializer(order, context={'wallet_hash': wallet_hash}).data    
                 response = {
                     'success': True,
                     'order': serialized_order,
-                    'status': submitted_status
+                    'status': serialized_status
                 }
-        except Exception as err:
+            return Response(response, status=status.HTTP_201_CREATED)
+        except (models.Ad.DoesNotExist, models.Peer.DoesNotExist, ValidationError) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Send push notification to the Ad owner
-        extra = {'order_id': serialized_order['id']}
-        send_push_notification([ad.owner.wallet_hash], "Received a new order", extra=extra)
-
-        # Recount the number of unopened orders for the Ad owner, send this value to general websocket
-        unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=ad.owner.wallet_hash)).count()
-        serialized_order = serializers.OrderSerializer(order, context={'wallet_hash': ad.owner.wallet_hash})
-        websocket.send_general_update({
-            'type': WSGeneralMessageType.NEW_ORDER.value,
-            'extra': {
-                'order': serialized_order.data,
-                'unread_count': unread_count
-            }
-        }, ad.owner.wallet_hash)
-
-        return Response(response, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, pk):
         try:
@@ -501,7 +401,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             websocket.send_general_update({'type': WSGeneralMessageType.READ_ORDER.value, 'extra': { 'unread_count': unread_count }}, wallet_hash)
             return Response({'success': True}, status=status.HTTP_200_OK)
     
-    def _parse_params(self, request_data):
+    def parse_params(self, request_data):
         request = request_data
         limit = request.query_params.get('limit', 0)
         page = request.query_params.get('page', 1)
@@ -542,7 +442,7 @@ class OrderViewSet(viewsets.GenericViewSet):
             'query_name': query_name
         }
     
-    def _generate_tracking_id(self):
+    def generate_tracking_id(self):
         ''' PEO[year][month][day]-[order_count_today] e.g. PEO20211201-0001 '''
         today = datetime.today()
         today_midnight = datetime.combine(today, time.min)
@@ -551,7 +451,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         tracking_id = f'PEO{today.year}{str(today.month).zfill(2)}{str(today.day).zfill(2)}-{str(order_count).zfill(4)}'
         return tracking_id
     
-    def _check_create_permissions(self, wallet_hash, pk):
+    def check_create_permissions(self, wallet_hash, pk):
         '''
         - Arbiters are not allowed to create orders
         - Ad owners are not allowed to create orders for their own ads
@@ -564,13 +464,13 @@ class OrderViewSet(viewsets.GenericViewSet):
         is_ad_owner = models.Ad.objects.filter(pk=pk, owner__wallet_hash=wallet_hash).exists()
         if is_ad_owner: raise ValidationError('Ad owner cannot create order for this ad')
 
-    def _check_payment_permissions(self, wallet_hash, payment_method_ids: List[int]):
+    def check_payment_permissions(self, wallet_hash, payment_method_ids: List[int]):
         ''' Validates if peer owns the payment methods '''
         owned_payment_methods = models.PaymentMethod.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(id__in=payment_method_ids))
         if len(payment_method_ids) != owned_payment_methods.count():
             raise ValidationError(f'Invalid payment method(s). Expected {len(payment_method_ids)} owned payment methods, got {owned_payment_methods.count()}.')
     
-    def _cancellable_cash_in_orders(self, wallet_hash):
+    def cancellable_cash_in_orders(self, wallet_hash):
         queryset = models.Order.objects.filter(Q(owner__wallet_hash=wallet_hash) & Q(is_cash_in=True))
 
         latest_status = models.Status.objects.filter(order__id=OuterRef('pk')).order_by('-id')
@@ -580,6 +480,172 @@ class OrderViewSet(viewsets.GenericViewSet):
         queryset = queryset.filter(Q(latest_status=StatusType.SUBMITTED) | Q(latest_status=StatusType.CONFIRMED)).values_list('id', flat=True)
         return queryset
 
+    def update_ad_trade_amount(self, order=None):
+        # Decrease the Ad's trade amount and ceiling
+        ad = order.ad_snapshot.ad
+        if order.ad_snapshot.trade_limits_in_fiat:
+            order_amount_fiat = bch_to_fiat(satoshi_to_bch(order.trade_amount), order.ad_snapshot.price)
+            ad_quantity_fiat = Decimal(order.ad_snapshot.trade_amount_fiat)
+            new_ad_quantity_fiat = ad_quantity_fiat - order_amount_fiat
+            
+            if new_ad_quantity_fiat < 0:
+                raise ValidationError('order amount exceeds ad remaining trade quantity')
+            
+            ad.trade_amount_fiat = new_ad_quantity_fiat
+            if ad.trade_amount_fiat < ad.trade_ceiling_fiat:
+                ad.trade_ceiling_fiat = new_ad_quantity_fiat
+        else:
+            order_amount_sats = order.trade_amount
+            ad_quantity_sats = order.ad_snapshot.ad.trade_amount_sats
+            new_ad_quantity_sats = ad_quantity_sats - order_amount_sats
+            
+            if new_ad_quantity_sats < 0:
+                raise ValidationError('order amount exceeds ad remaining trade quantity')
+            
+            ad.trade_amount_sats = new_ad_quantity_sats
+            if ad.trade_amount_sats < ad.trade_ceiling_sats:
+                ad.trade_ceiling_sats = new_ad_quantity_sats
+        ad.save()
+
+    def get_market_price(self, currency):
+        market_price = models.MarketPrice.objects.filter(currency=currency)
+        if not market_price.exists():
+            raise ValidationError(f'market price for currency {currency} does not exist.')
+        return market_price.first()
+    
+    def snapshot_ad(self, ad):
+        # query market price for ad fiat currency
+        market_price = self.get_market_price(ad.fiat_currency.symbol)
+
+        ad_snapshot = models.AdSnapshot(
+            ad = ad,
+            trade_type = ad.trade_type,
+            price_type = ad.price_type,
+            fiat_currency = ad.fiat_currency,
+            crypto_currency = ad.crypto_currency,
+            fixed_price = ad.fixed_price,
+            floating_price = ad.floating_price,
+            market_price = market_price.price,
+            trade_floor_sats = ad.trade_floor_sats,
+            trade_ceiling_sats = ad.trade_ceiling_sats,
+            trade_amount_sats = ad.trade_amount_sats,
+            trade_floor_fiat = ad.trade_floor_fiat,
+            trade_ceiling_fiat = ad.trade_ceiling_fiat,
+            trade_amount_fiat = ad.trade_amount_fiat,
+            appeal_cooldown_choice = ad.appeal_cooldown_choice,
+            trade_amount_in_fiat = ad.trade_amount_in_fiat,
+            trade_limits_in_fiat = ad.trade_limits_in_fiat
+        )
+        ad_snapshot.save()
+        ad_payment_methods = ad.payment_methods.all()
+        ad_payment_types = [pm.payment_type for pm in ad_payment_methods]
+        ad_snapshot.payment_types.set(ad_payment_types)
+        return ad_snapshot
+    
+    def set_expiration_date(self, order):
+        expiration = order.created_at + timedelta(hours=24)
+        if order.is_cash_in:
+            expiration = order.created_at + timedelta(minutes=15)
+        order.expires_at = expiration
+        order.save()
+
+    def create_status(self, order=None, status_type=None, creator=None):
+        submitted_status = serializers.StatusSerializer(data={
+            'status': status_type, 
+            'order': order.id,
+            'created_by': creator
+        })
+        submitted_status.is_valid(raise_exception=True)
+        submitted_status = submitted_status.save()
+        return submitted_status
+    
+    def create_members(self, snapshot=None, order=None):
+       
+        seller, buyer = None, None
+        if snapshot.trade_type == models.TradeType.SELL:
+            seller = snapshot.ad.owner
+            buyer = order.owner
+        else:
+            seller = order.owner
+            buyer = snapshot.ad.owner
+        
+        seller_member = models.OrderMember.objects.create(order=order, peer=seller, type=models.OrderMember.MemberType.SELLER)
+        buyer_member = models.OrderMember.objects.create(order=order, peer=buyer, type=models.OrderMember.MemberType.BUYER)
+        
+        return {
+            'seller_member': seller_member,
+            'buyer_member': buyer_member
+        }
+    
+    def mark_creator_as_read(self, order=None, members=None):
+        if members == None or order == None:
+            raise ValidationError('mark_creator_as_read: has empty order or members')
+        
+        seller = members.get('seller_member')
+        buyer = members.get('buyer_member')
+
+        # Mark order creator member as already read
+        if seller.peer.wallet_hash == order.owner.wallet_hash:
+            seller.read_at = timezone.now()
+            seller.save()
+        
+        if buyer.peer.wallet_hash == order.owner.wallet_hash:
+            buyer.read_at = timezone.now()
+            buyer.save()
+
+    def create_order_payment_methods(self, payment_method_ids=[], order=None):
+        payment_methods = models.PaymentMethod.objects.filter(id__in=payment_method_ids)
+        for payment_method in payment_methods:
+            data = {
+                "order": order.id,
+                "payment_method": payment_method.id,
+                "payment_type": payment_method.payment_type.id
+            }
+            order_method = serializers.OrderPaymentSerializer(data=data)
+            if order_method.is_valid():
+                order_method.save()
+    
+    def require_singular_cashin_order(self, wallet_hash=None):
+        cancellable_cashin_orders = self.cancellable_cash_in_orders(wallet_hash)
+        if cancellable_cashin_orders.count() > 0:
+            raise ValidationError({ 'pending_orders': cancellable_cashin_orders })
+    
+    def notify_ad_owner_channel(self, ad=None, order=None):
+        unread_count = models.OrderMember.objects.filter(Q(read_at__isnull=True) & Q(peer__wallet_hash=ad.owner.wallet_hash)).count()
+        serialized_order = serializers.OrderSerializer(order, context={'wallet_hash': ad.owner.wallet_hash})
+        websocket.send_general_update({
+            'type': WSGeneralMessageType.NEW_ORDER.value,
+            'extra': {
+                'order': serialized_order.data,
+                'unread_count': unread_count
+            }
+        }, ad.owner.wallet_hash)
+
+    def submit_order(self, ad=None, order=None, wallet_hash=None):
+        status = self.create_status(order=order, status_type=StatusType.SUBMITTED, creator=wallet_hash)   
+        serialized_status = serializers.StatusReadSerializer(status)
+
+        send_push_notification([ad.owner.wallet_hash], "Received a new order", extra={'order_id': order.id})
+        self.notify_ad_owner_channel(ad=ad, order=order)
+
+        return serialized_status.data
+
+    def confirm_order(self, order=None, wallet_hash=None):
+        status = self.create_status(order=order, status_type=StatusType.CONFIRMED, creator=wallet_hash)   
+        serialized_status = serializers.StatusReadSerializer(status)
+
+        websocket.send_order_update({'success': True, 'status': serialized_status.data}, order.id)
+        if order.is_cash_in:
+            websocket.send_cashin_order_alert({'type': 'ORDER_STATUS_UPDATED', 'order': order.id}, order.owner.wallet_hash)
+        
+        send_push_notification(
+            [order.owner.wallet_hash],
+            f'Order #{order.id} confirmed',
+            extra={'order_id': order.id}
+        )
+        return serialized_status.data
+
+        
 class OrderStatusViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]
     permission_classes = [RampP2PIsAuthenticated]
@@ -630,9 +696,7 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
     def confirm(self, request, pk):
         wallet_hash = request.user.wallet_hash
         try:
-            with transaction.atomic():
-                order = models.Order.objects.get(pk=pk)
-                    
+            with transaction.atomic():                
                 validate_status(pk, StatusType.SUBMITTED)
                 validate_status_inst_count(StatusType.CONFIRMED, pk)
                 validate_status_progression(StatusType.CONFIRMED, pk)
@@ -643,36 +707,9 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
                 
                 order.save()
 
-                # Decrease the Ad's trade amount and ceiling
-                ad = order.ad_snapshot.ad
-                if order.ad_snapshot.trade_limits_in_fiat:
-                    order_amount_fiat = bch_to_fiat(satoshi_to_bch(order.trade_amount), order.ad_snapshot.price)
-                    ad_quantity_fiat = Decimal(order.ad_snapshot.trade_amount_fiat)
-                    new_ad_quantity_fiat = ad_quantity_fiat - order_amount_fiat
-                    
-                    if new_ad_quantity_fiat < 0:
-                        raise ValidationError('order amount exceeds ad remaining trade quantity')
-                    
-                    ad.trade_amount_fiat = new_ad_quantity_fiat
-                    if ad.trade_amount_fiat < ad.trade_ceiling_fiat:
-                        ad.trade_ceiling_fiat = new_ad_quantity_fiat
-                else:
-                    order_amount_sats = order.trade_amount
-                    ad_quantity_sats = order.ad_snapshot.ad.trade_amount_sats
-                    new_ad_quantity_sats = ad_quantity_sats - order_amount_sats
-                    
-                    if new_ad_quantity_sats < 0:
-                        raise ValidationError('order amount exceeds ad remaining trade quantity')
-                    
-                    ad.trade_amount_sats = new_ad_quantity_sats
-                    if ad.trade_amount_sats < ad.trade_ceiling_sats:
-                        ad.trade_ceiling_sats = new_ad_quantity_sats
-
-                ad.save()
-
         except (ValidationError, IntegrityError, models.Order.DoesNotExist, models.Ad.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
-                
+        
         serialized_status = serializers.StatusSerializer(data={
             'status': StatusType.CONFIRMED,
             'order': pk,
