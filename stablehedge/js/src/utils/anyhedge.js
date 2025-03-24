@@ -1,5 +1,6 @@
 import { AnyHedgeArtifacts } from "@generalprotocols/anyhedge-contracts";
 import { asmToScript, generateRedeemScript, scriptToBytecode } from "@cashscript/utils"
+import { encodeConstructorArguments } from "cashscript/dist/Argument.js";
 import { binToHex } from "@bitauth/libauth";
 
 /**
@@ -93,4 +94,57 @@ export function parseContractData(contractDataV2) {
   }
 
   return contractDataV2
+}
+
+/**
+ * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
+ * @returns 
+ */
+export function getContractParamBytecodes(contractData) {
+  const contractParameters = contractData.parameters
+  const parameters = [
+    contractParameters.shortMutualRedeemPublicKey,
+    contractParameters.longMutualRedeemPublicKey,
+    contractParameters.enableMutualRedemption,
+    contractParameters.shortLockScript,
+    contractParameters.longLockScript,
+    contractParameters.oraclePublicKey,
+    contractParameters.nominalUnitsXSatsPerBch,
+    contractParameters.satsForNominalUnitsAtHighLiquidation,
+    contractParameters.payoutSats,
+    contractParameters.lowLiquidationPrice,
+    contractParameters.highLiquidationPrice,
+    contractParameters.startTimestamp,
+    contractParameters.maturityTimestamp,
+  ];
+
+  const { artifact } = getArtifact({ version: contractData.version })
+  const encodedArgs = encodeConstructorArguments(artifact, parameters).slice();
+  const argsScript = generateRedeemScript(new Uint8Array(), encodedArgs);
+  const bytecodesHex = argsScript.map(script => {
+    return binToHex(scriptToBytecode([script]))
+  })
+
+  // const argsCount = bytecodesHex.length
+  const segment1 = bytecodesHex.slice(3).reverse().join('');
+  const segment2 = bytecodesHex.slice(5, 8).reverse().join('');
+
+  return {
+    segment1,
+    segment2,
+    bytecodesHex,
+    shortMutualRedeemPublicKey: bytecodesHex[12],
+    longMutualRedeemPublicKey: bytecodesHex[11],
+    enableMutualRedemption: bytecodesHex[10],
+    shortLockScript: bytecodesHex[9],
+    longLockScript: bytecodesHex[8],
+    oraclePublicKey: bytecodesHex[7],
+    nominalUnitsXSatsPerBch: bytecodesHex[6],
+    satsForNominalUnitsAtHighLiquidation: bytecodesHex[5],
+    payoutSats: bytecodesHex[4],
+    lowPrice: bytecodesHex[3],
+    highPrice: bytecodesHex[2],
+    startTs: bytecodesHex[1],
+    maturityTs: bytecodesHex[0],
+  }
 }
