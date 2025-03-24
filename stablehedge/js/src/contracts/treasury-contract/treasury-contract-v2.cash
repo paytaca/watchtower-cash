@@ -40,13 +40,15 @@ contract TreasuryContractV2(
 
     function spendToAnyhedge(
         bytes argsSegment1, // enableMutualRedemption + shortPubkey + longPubkey
-        bytes argsSegment2, // satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
+        bytes argsSegment2, // satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey
+        bytes longLockScriptBytecode, // type bytes
         int shortInputSats,
         int longInputSats,
         bytes lowPriceBytecode, // int type
         bytes highPriceBytecode, // int type
         bytes startTsBytecode, // int type
         bytes maturityTsBytecode, // int type
+        int longLiquidityFee,
     ) {
         bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
 
@@ -59,6 +61,7 @@ contract TreasuryContractV2(
             lowPriceBytecode +
             bytes(payoutSatsBytes.length) + payoutSatsBytes +
             argsSegment2 +
+            longLockScriptBytecode + 
             bytes(35) + thisLockScript +
             argsSegment1;
 
@@ -66,9 +69,6 @@ contract TreasuryContractV2(
         bytes32 scriptHash = hash256(contractBytecode);
         bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);
         require(tx.outputs[0].lockingBytecode == lockingBytecode);
-        if (tx.outputs.length >= 2) {
-            require(tx.outputs[1].lockingBytecode == thisLockScript);
-        }
 
         // Necessary to ensure duration is not too long that it's unaccessible
         int maturityTs = int(maturityTsBytecode.split(1)[1]);
@@ -83,9 +83,33 @@ contract TreasuryContractV2(
         int priceMult = highPrice / lowPrice;
         require(priceMult >= 2);
 
-        // additional 1991 for settlement tx fee
-        require(payoutSats + 1991 == tx.outputs[0].value);
-        require(tx.inputs[0].value >= shortInputSats + 1991);
-        require(tx.inputs[1].value >= longInputSats);
+        // 1332 is DUST_LIMIT, when settlement prices for AH is at min/max
+        // https://bitcoincashresearch.org/t/friday-night-challenge-worst-case-dust/1181/2
+        //
+        // 698 is for settlement tx fee, added ~15-20 sats for margin
+        // value is based on minerCostInSatoshis in AH contract data
+        int settlementFee = 2030; // 1332 + 698 = 2030
+        int totalFundingSats = payoutSats + settlementFee;
+        int longFundingSats = longInputSats; // long just needs the input sats while short covers all fee
+
+        // based on this contract's input size + base tx fee of 10 sats
+        // added ~5-10 sats for margin
+        // might have to change if source code changes (e.g. increases in size)
+        // did not include long funding fee, it should be covered by long
+        int shortFundingInputFee = 1025;
+        int shortFundingSats = shortInputSats + settlementFee + shortFundingInputFee;
+        if (longLiquidityFee > 0) {
+            int maxLiquidityFee = shortInputSats / 20; // this is 5% of short input sats
+            require(within(longLiquidityFee, 546, maxLiquidityFee));
+            shortFundingSats = shortFundingSats + longLiquidityFee + 45; // 45 is output fee
+            bytes longLockScript = longLockScriptBytecode.split(1)[1];
+            require(tx.outputs[1].value == longLiquidityFee);
+            require(tx.outputs[1].lockingBytecode == longLockScript);
+        }
+
+        // This output is used as input for settlement tx of AH contract
+        require(tx.outputs[0].value == totalFundingSats);
+        require(tx.inputs[0].value == shortFundingSats);
+        require(tx.inputs[1].value >= longFundingSats);
     }
 }
