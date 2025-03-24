@@ -876,9 +876,11 @@ class AppControl(models.Model):
         ANYHEDGE        = 'ANYHEDGE'
         MAP             = 'MAP'
         MERCHANT_ADMIN  = 'MERCHANT_ADMIN'
+        MERCHANT_CASH_OUT = 'MERCHANT_CASH_OUT'
     
-    name = models.CharField(max_length=100, unique=True, choices=App.choices)
-    is_enabled = models.BooleanField(default=False)
+    feature_name = models.CharField(max_length=100, unique=True, null=True, choices=App.choices)
+    is_enabled = models.BooleanField(default=True)
+    enabled_countries = JSONField(default=list)
 
     def __str__(self):
-        return self.name
+        return self.feature_name
