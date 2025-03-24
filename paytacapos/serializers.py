@@ -650,6 +650,8 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "allow_duplicates", # temporary field
             "branch_count",
             "pos_device_count",
+            "active",
+            "verified"
         ]
 
     def validate_wallet_hash(self, value):
