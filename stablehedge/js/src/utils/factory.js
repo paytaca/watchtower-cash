@@ -2,7 +2,7 @@ import { binToHex, encodeLockingBytecodeP2sh32, generateRandomBytes, hexToBin } 
 import { Contract } from "cashscript";
 
 import { getBaseBytecode } from "./anyhedge.js";
-import { TreasuryContract } from "../contracts/treasury-contract.js";
+import { TreasuryContract } from "../contracts/treasury-contract/index.js";
 import { generateProxyFunderContractWithArtifact } from "../contracts/liquidity-provider/proxy-funder-gen.js";
 import { AnyHedgeManager } from "@generalprotocols/anyhedge";
 
@@ -68,9 +68,10 @@ export function createProxyFunder(opts) {
  * @param {String} opts.priceData.pubkey
  * @param {String} opts.priceData.message
  * @param {String} opts.priceData.message_timestamp
+ * @param {Number} opts.liquidityFeePctg
  */
 export async function createAnyhedgeContract(opts) {
-  const priceData = {
+  const priceData = opts?.priceData ? opts?.priceData : {
     pubkey: '02d09db08af1ff4e8453919cc866a4be427d7bfe18f2c05e5444c196fcf6fd2818',
     message: '5221dd678f2410007724100030810000',
     signature: 'cf08429d880d1145ef1614eefc93015c0a9f640630b72f740f3eedf5f355b91711fc3d5502c6fdd5f19ca1da033fdff390ef554a6159de3b3d96099e71b1e586',
@@ -78,7 +79,7 @@ export async function createAnyhedgeContract(opts) {
   }
 
   const manager = new AnyHedgeManager()
-  return manager.createContract({
+  const contractData = await manager.createContract({
     makerSide: 'long',
     takerSide: 'short',
     nominalUnits: 100,
@@ -95,4 +96,15 @@ export async function createAnyhedgeContract(opts) {
     enableMutualRedemption: 1n,
     isSimpleHedge: 0n,
   })
+
+  if (opts?.liquidityFeePctg) {
+    const liquidityFee = contractData.metadata.shortInputInSatoshis * BigInt(opts?.liquidityFeePctg) / 100n
+    await manager.addContractFee(contractData, {
+      address: opts?.longAddress,
+      satoshis: liquidityFee,
+      name: 'Liquidity fee',
+      description: 'LP Fee for long position',
+    })
+  }
+  return contractData
 }

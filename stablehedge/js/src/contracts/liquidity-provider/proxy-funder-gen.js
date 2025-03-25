@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as url from 'url';
 import { compileString } from "cashc";
-import { asmToScript, generateRedeemScript, scriptToBytecode } from "@cashscript/utils";
-import { binToHex } from '@bitauth/libauth';
+import { baseBytecodeToHex } from '../../utils/contracts.js';
 
 /**
  * @param {Number} numContributors 
@@ -96,14 +95,6 @@ function baseBytecodeChecks(baseBytecode = '') {
   }
 }
 
-function bytecodeToHex(bytecode) {
-  const script = asmToScript(bytecode)
-  const baseScript = generateRedeemScript(script, new Uint8Array())  
-  const baseBytecode = scriptToBytecode(baseScript)
-  return binToHex(baseBytecode)
-}
-
-
 const modulePath = url.fileURLToPath(import.meta.url);
 if (process.argv[1] === modulePath) {
   const displayHelp = process.argv.indexOf('-h')
@@ -148,7 +139,7 @@ if (process.argv[1] === modulePath) {
   }
 
   if (checkBaseBytecode) {
-    const bytecode = bytecodeToHex(result.bytecode)
+    const bytecode = baseBytecodeToHex(result.bytecode)
     const bytecodeChecksResult = baseBytecodeChecks(bytecode)
     console.log(bytecodeChecksResult)
   }

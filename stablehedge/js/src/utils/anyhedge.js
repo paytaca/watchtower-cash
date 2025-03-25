@@ -1,7 +1,5 @@
 import { AnyHedgeArtifacts } from "@generalprotocols/anyhedge-contracts";
-import { asmToScript, generateRedeemScript, scriptToBytecode } from "@cashscript/utils"
-import { encodeConstructorArguments } from "cashscript/dist/Argument.js";
-import { binToHex } from "@bitauth/libauth";
+import { baseBytecodeToHex, encodeParameterBytecode } from "./contracts";
 
 /**
  * @param {Object} opts
@@ -24,13 +22,8 @@ export function getArtifact(opts) {
  */
 export function getBaseBytecode(opts) {
   const { artifact, version } = getArtifact(opts)
-
-  const script = asmToScript(artifact.bytecode)
-  const baseScript = generateRedeemScript(script, new Uint8Array())  
-
-  const baseBytecode = scriptToBytecode(baseScript)
-
-  return { bytecode: binToHex(baseBytecode), version: version }
+  const baseBytecode = baseBytecodeToHex(artifact.bytecode);
+  return { bytecode: baseBytecode, version: version }
 }
 
 export function castBigInt(value, radix) {
@@ -117,13 +110,9 @@ export function getContractParamBytecodes(contractData) {
     contractParameters.startTimestamp,
     contractParameters.maturityTimestamp,
   ];
-
+  
   const { artifact } = getArtifact({ version: contractData.version })
-  const encodedArgs = encodeConstructorArguments(artifact, parameters).slice();
-  const argsScript = generateRedeemScript(new Uint8Array(), encodedArgs);
-  const bytecodesHex = argsScript.map(script => {
-    return binToHex(scriptToBytecode([script]))
-  })
+  const bytecodesHex = encodeParameterBytecode(artifact, parameters);
 
   // const argsCount = bytecodesHex.length
   const segment1 = bytecodesHex.slice(3).reverse().join('');
