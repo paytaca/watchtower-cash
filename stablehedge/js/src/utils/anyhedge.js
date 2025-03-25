@@ -1,5 +1,5 @@
 import { AnyHedgeArtifacts } from "@generalprotocols/anyhedge-contracts";
-import { baseBytecodeToHex, encodeParameterBytecode } from "./contracts";
+import { baseBytecodeToHex, encodeParameterBytecode } from "./contracts.js";
 
 /**
  * @param {Object} opts
@@ -113,27 +113,20 @@ export function getContractParamBytecodes(contractData) {
   
   const { artifact } = getArtifact({ version: contractData.version })
   const bytecodesHex = encodeParameterBytecode(artifact, parameters);
-
-  // const argsCount = bytecodesHex.length
-  const segment1 = bytecodesHex.slice(3).reverse().join('');
-  const segment2 = bytecodesHex.slice(5, 8).reverse().join('');
-
   return {
-    segment1,
-    segment2,
     bytecodesHex,
-    shortMutualRedeemPublicKey: bytecodesHex[12],
-    longMutualRedeemPublicKey: bytecodesHex[11],
-    enableMutualRedemption: bytecodesHex[10],
-    shortLockScript: bytecodesHex[9],
-    longLockScript: bytecodesHex[8],
-    oraclePublicKey: bytecodesHex[7],
+    shortMutualRedeemPublicKey: bytecodesHex[0],
+    longMutualRedeemPublicKey: bytecodesHex[1],
+    enableMutualRedemption: bytecodesHex[2],
+    shortLockScript: bytecodesHex[3],
+    longLockScript: bytecodesHex[4],
+    oraclePublicKey: bytecodesHex[5],
     nominalUnitsXSatsPerBch: bytecodesHex[6],
-    satsForNominalUnitsAtHighLiquidation: bytecodesHex[5],
-    payoutSats: bytecodesHex[4],
-    lowPrice: bytecodesHex[3],
-    highPrice: bytecodesHex[2],
-    startTs: bytecodesHex[1],
-    maturityTs: bytecodesHex[0],
+    satsForNominalUnitsAtHighLiquidation: bytecodesHex[7],
+    payoutSats: bytecodesHex[8],
+    lowPrice: bytecodesHex[9],
+    highPrice: bytecodesHex[10],
+    startTs: bytecodesHex[11],
+    maturityTs: bytecodesHex[12],
   }
 }
