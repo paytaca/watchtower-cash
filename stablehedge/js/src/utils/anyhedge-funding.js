@@ -11,22 +11,9 @@ import { createProxyFunder, createTreasuryContract } from "./factory.js";
  */
 export function getTreasuryContractInputSize(opts) {
   const { contract } = createTreasuryContract(opts)
-
-  const ahContract = opts?.contractData
-  const ahContractArgs = getContractParamBytecodes(ahContract)
   const treasuryContractInputSize = calculateInputSize(contract.functions.spendToAnyhedge(
-    hexToBin(ahContractArgs.segment1),
-    hexToBin(ahContractArgs.segment2),
-    ahContractArgs.longLockScript,
-    ahContract.metadata.shortInputInSatoshis,
-    ahContract.metadata.longInputInSatoshis,
-    hexToBin(ahContractArgs.lowPrice),
-    hexToBin(ahContractArgs.highPrice),
-    hexToBin(ahContractArgs.startTs),
-    hexToBin(ahContractArgs.maturityTs),
-    ahContract.fees?.[0] ? ahContract.fees[0].satoshis : 0n,
+    ...prepareParamForTreasuryContract(ahContract),
   ))
-
   return treasuryContractInputSize
 }
 
@@ -62,7 +49,7 @@ export function getLiquidityFee(contractData) {
   }
 
   const MIN_FEE = 546;
-  const MAX_FEE = contractData.metadata.shortInputInSatoshis / 20; // ~5%
+  const MAX_FEE = contractData.metadata.shortInputInSatoshis / 20n; // ~5%
   const feeSats = fee.satoshis
 
   if (feeSats < MIN_FEE || feeSats > MAX_FEE) return 'Invalid fee amount'
@@ -70,3 +57,48 @@ export function getLiquidityFee(contractData) {
   return fee
 }
 
+
+
+/**
+ * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
+ */
+export function prepareParamForTreasuryContract(contractData) {
+  const _bytecodes = getContractParamBytecodes(contractData)
+  const {
+      bytecodesHex,
+      longLockScript,
+      lowPrice,
+      highPrice,
+      startTs,
+      maturityTs,
+    } = _bytecodes
+    const fee = getLiquidityFee(contractData);
+
+    console.log(_bytecodes)
+    console.log(bytecodesHex.slice(0, 3))
+    console.log(bytecodesHex.slice(5, 8))
+  
+    return [
+      hexToBin(bytecodesHex.slice(0, 3).reverse().join('')),
+      hexToBin(bytecodesHex.slice(5, 8).reverse().join('')),
+      hexToBin(longLockScript),
+      contractData.metadata.shortInputInSatoshis,
+      contractData.metadata.longInputInSatoshis,
+      hexToBin(lowPrice),
+      hexToBin(highPrice),
+      hexToBin(startTs),
+      hexToBin(maturityTs),
+      fee?.satoshis ? fee.satoshis : 0n,
+    ]
+}
+
+/**
+ * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
+ */
+export function prepareParamForProxyFunder(contractData) {
+  const { bytecodesHex } = getContractParamBytecodes(contractData)
+  return [
+    hexToBin(bytecodesHex.slice(0, 4).reverse().join('')),
+    hexToBin(bytecodesHex.slice(5).reverse().join('')),
+  ]
+}
