@@ -417,11 +417,11 @@ class CashOutOrder(PostgresModel):
         super(CashOutOrder, self).save(*args, **kwargs)
 
     def get_input_tx(self):
-        inputs = CashOutTransaction.objects.filter(order__id=self.id, wallet_history__record_type=WalletHistory.INCOMING)
+        inputs = CashOutTransaction.objects.filter(order__id=self.id, record_type=CashOutTransaction.INCOMING)
         return inputs
     
     def get_output_tx(self):
-        outputs = CashOutTransaction.objects.filter(order__id=self.id, wallet_history__record_type=WalletHistory.OUTGOING)
+        outputs = CashOutTransaction.objects.filter(order__id=self.id, record_type=CashOutTransaction.OUTGOING)
         return outputs
 
 class CashOutTransaction(models.Model):
@@ -440,8 +440,8 @@ class CashOutTransaction(models.Model):
     )
     order = models.ForeignKey(CashOutOrder, on_delete=models.CASCADE)
     txid = models.CharField(max_length=70, db_index=True, null=True)
-    transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT, null=True)
-    wallet_history = models.OneToOneField(WalletHistory, on_delete=models.PROTECT, null=True)
+    transaction = models.OneToOneField(Transaction, on_delete=models.PROTECT, null=True, blank=True)
+    wallet_history = models.OneToOneField(WalletHistory, on_delete=models.PROTECT, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):
