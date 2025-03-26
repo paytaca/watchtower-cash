@@ -504,11 +504,11 @@ class CashOutViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def list_unspent_txns(self, request):
+        wallet_hash = request.user.wallet_hash
 
         try:
             limit = int(request.query_params.get('limit', 0))
             page = int(request.query_params.get('page', 1))
-            wallet_hash = request.user.wallet_hash
             currency = request.query_params.get('currency')
             merchant_ids = request.query_params.getlist('merchant_ids', [])
             expire_status = request.query_params.get('status')
@@ -540,7 +540,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
             offset = (page - 1) * limit
             paged_queryset = queryset[offset:offset + limit]
             
-            serializer = MerchantTransactionSerializer(paged_queryset, many=True, context={'currency': currency})
+            serializer = MerchantTransactionSerializer(paged_queryset, many=True, context={'wallet_hash': wallet_hash, 'currency': currency})
             data = {
                 'unspent_transactions': serializer.data,
                 'count': count,

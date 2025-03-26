@@ -996,7 +996,8 @@ class MerchantTransactionSerializer(serializers.ModelSerializer):
         ]
 
     def get_transaction(self, obj):
-        transaction = Transaction.objects.filter(txid=obj.txid).annotate(
+        wallet_hash = self.context.get('wallet_hash')
+        transaction = Transaction.objects.filter(txid=obj.txid, address__wallet__wallet_hash=wallet_hash).annotate(
             vout=F('index'),
             block=F('blockheight__number'),
             wallet_index=F('address__wallet_index'),
