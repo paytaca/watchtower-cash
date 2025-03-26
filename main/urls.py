@@ -17,7 +17,7 @@ router.register(r"wallet/address-scan", views.WalletAddressScanViewSet, basename
 router.register(r"wallet/preferences", views.WalletPreferencesViewSet, basename="wallet-preferences")
 router.register(r"payment-requests", views.PaymentRequestViewSet, basename="payment-requests")
 router.register(r"wallet/shard", views.WalletShardViewSet, basename="wallet-shard")
-
+router.register(r"app-control", views.AppControlViewSet, basename="app-control")
 
 main_urls = router.urls
 
@@ -85,10 +85,7 @@ main_urls += [
     path('version/check/<str:platform>/', views.check_app_version),
     path('nonce/', views.NonceAPIView.as_view()),
     path('wallet-address-app/', views.WalletAddressAppView.as_view()),
-    path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view()),
-
-    # App control
-    path('app-control/', views.check_app_control)
+    path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view())
 ]
 
 test_urls = [

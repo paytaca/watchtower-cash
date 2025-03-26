@@ -221,7 +221,7 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         'processed_at',
         'completed_at'
     ]
-    list_display = ['id', 'status', 'payment_method_link', 'merchant', 'created_at']
+    list_display = ['id', 'status', 'payment_method_link', 'merchant', 'payout_address', 'created_at']
     search_fields = [
         'id',
         'wallet__wallet_hash',
@@ -278,12 +278,17 @@ class CashOutOrderAdmin(admin.ModelAdmin):
     
     def output_tx(self, obj):
         output = obj.get_output_tx()
+
         if not output.exists():
             return None
         
         output = output.first()
-        url = reverse('admin:main_transaction_change', args=[output.transaction.id])
-        return format_html('<a href="{}">{}</a> | {}', url, output.txid, output.transaction.address.address)
+        address = ''
+        url = reverse('admin:paytacapos_cashouttransaction_change', args=[output.id])
+        if output.transaction:
+            url = reverse('admin:main_transaction_change', args=[output.transaction.id])
+            address = output.transaction.address.address
+        return format_html('<a href="{}">{}</a> | {}', url, output.txid, address)
 
 @admin.register(CashOutTransaction)
 class CashOutTransactionAdmin(admin.ModelAdmin):
