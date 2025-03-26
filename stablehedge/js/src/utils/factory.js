@@ -40,13 +40,23 @@ export function createProxyFunder(opts) {
   let sum = 100;
   const contributions = Array.from({ length: contributorNum }, (_, index) => {
     if (index + 1 == contributorNum) return sum
-    return Math.max(Math.floor(Math.random() * sum), 1);
+    const pctg = Math.max(Math.floor(Math.random() * sum), 1);
+    sum = sum - pctg;
+    return pctg
   }).map(BigInt);
   
   const contributors = contributions.map(() => encodeLockingBytecodeP2sh32(generateRandomBytes(32)))
 
   const { bytecode } = getBaseBytecode({ version: opts?.anyhedgeVersion })
-  const constructorArgs = [...contributions, ...contributors, hexToBin(bytecode)]
+  const contributionsHex = contributions.map(pctg => BigInt(pctg) * 100n)
+    .map(basisPts => basisPts.toString(16).padStart(4, '0'))
+    .join('')
+  const constructorArgs = [
+    hexToBin(bytecode),
+    ...contributors,
+    hexToBin(contributionsHex),
+    // ...contributions.map(pctg => BigInt(pctg) * 100n),
+  ]
   const contract = new Contract(artifact, constructorArgs, { addressType: 'p2sh32' })
 
   return {

@@ -15,19 +15,19 @@ contract LPContract(pubkey owner) {
         require(tx.outputs[0].lockingBytecode == lockingBytecode);
 
         // base bytecode starts with
-        // 5#79009c63c3519dc4 or 01##79009c63c3519dc4
+        // 5#79009c63c352a169c4519d02 or 01##79009c63c352a169c4519d02
         bytes prefix, bytes segment1 = baseBytecode.split(1);
         if (prefix == 0x01) {
             segment1 = baseBytecode.split(2)[1];
         }
 
-        bytes commonSegment1, bytes segment2 = segment1.split(8);
-        require(commonSegment1 == 0x79009c63c3519dc4);
+        bytes commonSegment1, bytes segment2 = segment1.split(12);
+        require(commonSegment1 == 0x79009c63c352a169c4519d02);
 
-        bytes commonSegment2, bytes segment3 = segment2.split(1)[1].split(4);
-        require(commonSegment2 == 0x9d00c602);
+        bytes commonSegment2, bytes segment3 = segment2.split(2)[1].split(20);
+        require(commonSegment2 == 0x00c67c94c3529c6301647851c69378947b757768);
 
-        bytes commonSegment3 = segment3.split(2)[1].split(4)[0];
-        require(commonSegment3 == 0x94016495);
+        bytes commonSegment3 = segment3.split(2)[1].split(7)[0];
+        require(commonSegment3 == 0x007f77527f7581);
     }
 }
