@@ -7,7 +7,12 @@ contract LPContract(pubkey owner) {
 
     // The checks in this function is from the base bytecode of ProxyFunder smart contract
     // changes in that contract will have need adjustments here
-    function spendToFunder(bytes paramBytecode, bytes baseBytecode) {
+    function spendToFunder(bytes paramBytecodeSegment1, bytes paramBytecodeSegment2, bytes baseBytecode) {
+        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
+        bytes paramBytecode = paramBytecodeSegment1 + 
+            bytes(35) + thisLockScript +
+            paramBytecodeSegment2;
+
         bytes contractBytecode = paramBytecode + baseBytecode;
         bytes32 scriptHash = hash256(contractBytecode);
         bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);

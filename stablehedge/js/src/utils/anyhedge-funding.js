@@ -3,6 +3,7 @@ import { getContractParamBytecodes } from "./anyhedge.js";
 
 import { calculateInputSize } from "./transaction.js";
 import { createProxyFunder, createTreasuryContract } from "./factory.js";
+import { baseBytecodeToHex, encodeParameterBytecode } from "./contracts.js";
 
 /**
  * @param {Object} opts
@@ -100,5 +101,29 @@ export function prepareParamForProxyFunder(contractData) {
   return [
     hexToBin(bytecodesHex.slice(0, 4).reverse().join('')),
     hexToBin(bytecodesHex.slice(5).reverse().join('')),
+  ]
+}
+
+/**
+ * @param {import("cashscript").Artifact} artifact
+ * @param {any[]} parameters
+ * @param {Number} contributorIndex
+ */
+export function prepareParamForLP(artifact, parameters, contributorIndex) {
+  const parameterBytecodes = encodeParameterBytecode(artifact, parameters)
+  
+  const segment1 = parameterBytecodes.slice(2 + contributorIndex);
+  const segment2 = parameterBytecodes.slice(0, 1 + contributorIndex);
+  const baseBytecode = baseBytecodeToHex(artifact.bytecode);
+
+  console.log('Bytecodes', parameterBytecodes)
+  console.log('Parambytecode', [...parameterBytecodes].reverse().join(''));
+  console.log('Segment1', [...segment1].reverse().join(''));
+  console.log('Segment2', [...segment2].reverse().join(''));
+
+  return [
+    hexToBin(segment1.reverse().join('')),
+    hexToBin(segment2.reverse().join('')),
+    hexToBin(baseBytecode),
   ]
 }
