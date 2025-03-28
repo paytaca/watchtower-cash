@@ -369,10 +369,10 @@ class PaymentMethod(models.Model):
         if not name:
             name = self.payment_type.full_name
 	    
-        return str(name)
+        return f'#{self.id} | {name}'
 
 class PaymentMethodField(models.Model):
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE)
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE, related_name="fields")
     field_reference = models.ForeignKey(PaymentTypeField, on_delete=models.CASCADE)
     value = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
@@ -396,8 +396,7 @@ class CashOutOrder(PostgresModel):
     market_price = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, editable=False)
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, null=True)
-    status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING) 
-    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, editable=False)
+    status = models.CharField(max_length=50, choices=StatusType.choices, db_index=True, default=StatusType.PENDING)
     payout_details = JSONField(null=True, blank=True, editable=False)
     payout_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
     sats_amount = models.BigIntegerField(null=True, editable=False)
@@ -429,6 +428,34 @@ class CashOutOrder(PostgresModel):
     def get_output_tx(self):
         outputs = CashOutTransaction.objects.filter(order__id=self.id, record_type=CashOutTransaction.OUTGOING)
         return outputs
+    
+    def get_payment_method(self):
+        payment_method = CashOutPaymentMethod.objects.filter(order__id=self.id)
+        return payment_method
+
+class CashOutPaymentMethod(models.Model):
+    order = models.OneToOneField(CashOutOrder, on_delete=models.CASCADE, null=True)
+    reference = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, related_name="cashout_payment_methods")
+    payment_type = models.ForeignKey(PaymentType, on_delete=models.CASCADE, related_name="cashout_payment_methods")
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    def __str__(self):
+        name = self.payment_type.short_name
+        if not name:
+            name = self.payment_type.full_name
+	    
+        return f'Order #{self.order.id} | {name}'
+
+class CashOutPaymentMethodField(models.Model):
+    payment_method = models.ForeignKey(CashOutPaymentMethod, on_delete=models.CASCADE, related_name="fields")
+    field_reference = models.ForeignKey(PaymentTypeField, on_delete=models.CASCADE)
+    value = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    modified_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+	    return str(self.id)
 
 class CashOutTransaction(models.Model):
     INCOMING = 'incoming'
