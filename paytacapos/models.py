@@ -71,8 +71,8 @@ class PosDevice(models.Model):
         null=True, blank=True,
     )
 
-    latest_transaction = models.ForeignKey(
-        'main.Transaction',
+    latest_history_record = models.ForeignKey(
+        'main.WalletHistory',
         on_delete=models.SET_NULL, related_name="devices",
         null=True, blank=True
     )
@@ -96,15 +96,16 @@ class PosDevice(models.Model):
 
         return None
     
-    def populate_latest_transaction(self):
-        last_tx = Transaction.objects.filter(
-            wallet__wallet_hash=self.wallet_hash,
-            address__address_path__iregex=f"((0|1)/)?0*\d+{self.posid}"
-        ).order_by('date_created').last()
-        if last_tx:
-            self.latest_transaction = last_tx
-            self.save()
-
+    def populate_latest_history_record(self):
+        qs = WalletHistory.objects.filter(record_type='incoming').exclude(amount=0)
+        if qs.exists():
+            try:
+                last_record = qs.filter_pos(self.wallet_hash, self.posid).latest('date_created')
+                if last_record:
+                    self.latest_history_record = last_record
+                    self.save()
+            except WalletHistory.DoesNotExist:
+                pass
 
 class Location(models.Model):
     landmark = models.TextField(null=True, blank=True, help_text="Other helpful information to locate the place")
@@ -209,12 +210,17 @@ class Merchant(models.Model):
 
     @property
     def last_transaction_date(self):
-        pos_devices_check = self.devices.filter(latest_transaction__isnull=False)
+        pos_devices_check = self.devices.filter(latest_history_record__isnull=False)
         pos_latest_tx_date = None
         wallet_latest_tx_date = None
 
         if pos_devices_check.exists():
-            pos_latest_tx_date = pos_devices_check.latest('latest_transaction').latest_transaction.date_created
+            latest_records = []
+            for pos in pos_devices_check:
+                latest_records.append(pos.latest_history_record.date_created)
+            pos_latest_tx_date = max(latest_records)
+            #pos_latest_records = WalletHistory.objects.filter(wallet__devices__in=pos_devices_check)
+            #pos_latest_tx_date = pos_latest_records.latest('date_created').date_created
 
         wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
         last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')

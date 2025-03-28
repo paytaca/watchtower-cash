@@ -1704,7 +1704,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             # update latest_transaction in POS devices
             pos_devices = PosDevice.objects.filter(merchant=merchant)
             for device in pos_devices:
-                device.populate_latest_transaction()
+                device.populate_latest_history_record()
 
         # for older token records
         if (
