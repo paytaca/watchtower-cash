@@ -26,7 +26,7 @@ from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout_address
 
-from .models import Location, Category, Merchant, PosDevice
+from .models import Location, Category, Merchant, PosDevice, CashOutPaymentMethod
 from main.models import Address, Transaction, WalletHistory
 from rampp2p.models import MarketPrice
 from .tasks import process_cashout_input_txns
@@ -579,9 +579,27 @@ class CashOutViewSet(viewsets.ModelViewSet):
                     wallet=wallet,
                     merchant=merchant,
                     currency=currency_obj,
-                    market_price=current_market_price.price,
-                    payment_method=payment_method
+                    market_price=current_market_price.price
                 )
+                
+                # create a snapshot of the payment method
+                snapshot_data = {
+                    'order': order,
+                    'reference': payment_method,
+                    'wallet': payment_method.wallet,
+                    'payment_type': payment_method.payment_type
+                }
+                snapshot_payment_method = CashOutPaymentMethod.objects.create(**snapshot_data)
+                fields = payment_method.fields.all()
+                for field in fields:
+                    # TODO: restrict field_reference allowed to payment_type
+                    data = {
+                        'payment_method': snapshot_payment_method,
+                        'field_reference': field.field_reference,
+                        'value': field.value
+                    }
+                    CashOutPaymentMethodField.objects.create(**data)
+
                 order_serializer = CashOutOrderSerializer(order)
             
             # save input transactions as CashOutTransaction
@@ -679,6 +697,23 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentMethodSerializer
     authentication_classes = [ WalletAuthentication ]
     permission_classes = [ HasPaymentObjectPermission ]
+
+    def list(self, request, *args, **kwargs):
+        try:
+            wallet = request.user
+            if wallet == None:
+                raise ValidationError('no credentials provided')
+            
+            currency = request.query_params.get('currency')
+            currency = FiatCurrency.objects.get(symbol=currency)
+            payment_type_ids = currency.payment_types.all().values_list('id')
+
+            queryset = self.get_queryset().filter(wallet__wallet_hash=wallet.wallet_hash, payment_type__id__in=payment_type_ids)
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+
+        except (FiatCurrency.DoesNotExist, ValidationError) as err:
+            return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request, *args, **kwargs):        
         try:
