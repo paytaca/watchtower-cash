@@ -455,6 +455,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         try:
+            wallet = request.user
             limit = int(request.query_params.get('limit', 0))
             page = int(request.query_params.get('page', 1))
             merchant_ids = request.query_params.getlist('merchant_ids', [])
@@ -468,12 +469,13 @@ class CashOutViewSet(viewsets.ModelViewSet):
                 raise ValidationError('invalid page number')
 
             queryset = self.get_queryset()
+            queryset = queryset.filter(wallet__wallet_hash=wallet.wallet_hash)
 
             if len(merchant_ids) > 0:
                 queryset = queryset.filter(merchant__id__in=merchant_ids)
 
             if order_type != 'ALL':
-                queryset = self.queryset.filter(status__icontains=order_type).order_by('-created_at')
+                queryset = queryset.filter(status__icontains=order_type).order_by('-created_at')
             
             count = queryset.count()
             total_pages = page
