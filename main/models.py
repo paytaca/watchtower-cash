@@ -864,7 +864,8 @@ class WalletAddressApp(models.Model):
 
     def __str__(self):
         return f"{self.wallet_address} -> {self.app_url}"
-
+ 
+ 
 class AppControl(models.Model):
     class App (models.TextChoices):
         CASH_IN         = 'CASH_IN'
