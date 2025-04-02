@@ -459,8 +459,7 @@ class CashOutViewSet(viewsets.ModelViewSet):
             limit = int(request.query_params.get('limit', 0))
             page = int(request.query_params.get('page', 1))
             merchant_ids = request.query_params.getlist('merchant_ids', [])
-            order_type = request.query_params.get('order_type', 'all')
-            order_type = order_type.upper()
+            order_types = request.query_params.getlist('order_types', [])
 
             if limit < 0:
                 raise ValidationError('limit must be a non-negative number')
@@ -474,9 +473,10 @@ class CashOutViewSet(viewsets.ModelViewSet):
             if len(merchant_ids) > 0:
                 queryset = queryset.filter(merchant__id__in=merchant_ids)
 
-            if order_type != 'ALL':
-                queryset = queryset.filter(status__icontains=order_type).order_by('-created_at')
+            if len(order_types) > 0:
+                queryset = queryset.filter(status__in=order_types)
             
+            queryset = queryset.order_by('-created_at')
             count = queryset.count()
             total_pages = page
             if limit > 0:
