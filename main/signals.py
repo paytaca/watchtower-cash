@@ -101,22 +101,16 @@ def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwar
             first_pos_index = "1" + posid_str
             address_path = "0/" + first_pos_index
 
-            address = Address.objects.filter(
-                address_path=address_path,
-                wallet__wallet_hash=instance.wallet_hash
-            )
-            index_address = Address.objects.filter(
-                address_path=f'0/{raw_posid}',
-                wallet__wallet_hash=instance.wallet_hash
-            )
+            first_pos_addr = Address.objects.filter(address_path=address_path, wallet__wallet_hash=instance.wallet_hash)
+            zeroth_address = Address.objects.filter(address_path='0/0', wallet__wallet_hash=instance.wallet_hash)
 
-            if address.exists() and index_address.exists():
-                address = address.first()
-                index_address = index_address.first()
+            if first_pos_addr.exists() and zeroth_address.exists():
+                first_pos_addr = first_pos_addr.first()
+                zeroth_address = zeroth_address.first()
                 
-                transaction = Transaction.objects.filter(txid=instance.txid, address=index_address)
+                transaction = Transaction.objects.filter(txid=instance.txid, address=zeroth_address)
                 transaction = transaction.first()
-                room_name = address.address.replace(':','_') + '_'
+                room_name = first_pos_addr.address.replace(':','_') + '_'
                 senders = [*Transaction.objects.filter(spending_txid=transaction.txid).values_list('address__address', flat=True)]
 
                 data = {
