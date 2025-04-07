@@ -19,15 +19,10 @@ urlpatterns = [
     path('cash-in/order/', CashinOrderViewSet.as_view({'get': 'list'}), name='cashin-order-list'),
     path('cash-in/order/alerts/', CashinOrderViewSet.as_view({'get': 'check_alerts'}), name='cashin-order-alerts'),
 
-    path('user/', UserProfileView.as_view(), name='user-profile'),
-    path('peer/', PeerView.as_view(), name='peer-create-edit'),
-   
-    ###### TODO: temporary endpoints to handle app v0.20.1 incompatibility, remove on next app release
-    path('user/detail', UserProfileView.as_view()),
-    path('peer/detail', PeerView.as_view()),
-    
-   
-    path('peer/<int:pk>/', PeerView.as_view(), name='peer-detail'),
+    path('user/', UserAuthView.as_view(), name='user-profile'),
+    path('peer/', PeerViewSet.as_view({ 'get': 'retrieve_by_user', 'post': 'create', 'patch': 'partial_update' })),
+    path('peer/<int:pk>/', PeerViewSet.as_view({ 'get': 'retrieve'})),
+    path('peer/<str:wallet_hash>/', PeerViewSet.as_view({ 'get': 'retrieve_by_wallet'})),
     path('arbiter/', ArbiterView.as_view(), name='arbiter-list-create-edit'),
     path('arbiter/<str:wallet_hash>/', ArbiterView.as_view(), name='arbiter-detail'),
 
