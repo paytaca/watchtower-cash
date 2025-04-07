@@ -35,18 +35,18 @@ contract TreasuryContractV2(
             3. The OP_RETURN data must be of length 4 * inputs.length
             4. OP_RETURN data is a sequence of 4 byte numbers which represents cumulative amounts.
                This first 4 bytes is the satoshi amount of first input, the second 4 bytes is the
-               cumulative amount of the first two inputs, and so on. This makes the last 4 bytes
-               the cumulative amount of all inputs.
+               cumulative amount of the first two inputs, and so on.
+            5. This makes the last 4 bytes the cumulative amount of all inputs. Condition 1 above
+                is a way to ensure that this condition is true.
     */
     function consolidate() {
-        bool isNotLastInput = this.activeInputIndex < tx.inputs.length - 1;
-
         // this ensures all inputs are from this smart contract's
-        if (isNotLastInput) {
-            bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
-            bytes nextInputLockScript = tx.inputs[this.activeInputIndex + 1].lockingBytecode;
-            require(inputLockScript == nextInputLockScript);
-        }
+        // we check if adjacent inputs are from the same address
+        bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
+        bytes prevInputLockScript = tx.inputs[max(this.activeInputIndex - 1, 0)].lockingBytecode;
+        bytes nextInputLockScript = tx.inputs[min(this.activeInputIndex + 1, tx.inputs.length - 1)].lockingBytecode;
+        require(inputLockScript == nextInputLockScript);
+        require(inputLockScript == prevInputLockScript);
 
         bytes OP_DATA = tx.outputs[0].lockingBytecode;
         bytes cumulativeAmounts = OP_DATA.split(OP_DATA.length - tx.inputs.length * 4)[1];
