@@ -57,6 +57,15 @@ class TokenAuthentication(BaseAuthentication):
         
         return (wallet, None)
 
+class IgnoreInvalidTokenAuthentication(TokenAuthentication):
+    def authenticate(self, request):
+        try:
+            auth = super().authenticate(request)
+            if auth is None:
+                return None
+            return auth
+        except AuthenticationFailed:
+            return None
 
 class WalletAuthentication(BaseAuthentication):
     def get_auth_headers(self, request):
