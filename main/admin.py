@@ -415,7 +415,7 @@ class AppVersionAdmin(admin.ModelAdmin):
 admin.site.register(AppVersion, AppVersionAdmin)
 
 class AppControlAdmin(admin.ModelAdmin):
-    list_display = ['name', 'is_enabled']
+    list_display = ['feature_name', 'is_enabled', 'enabled_countries']
     actions = ['enable', 'disable']
 
     def enable(self, request, queryset):

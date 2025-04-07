@@ -17,6 +17,10 @@ class AuthToken(models.Model):
     nonce_expires_at = models.DateTimeField(null=True, blank=True)
     key_expires_at = models.DateTimeField(null=True)
 
+    @property
+    def is_authenticated(self):
+        return not(self.is_key_expired())
+
     def is_nonce_expired(self):
         return timezone.now() > self.nonce_expires_at
     

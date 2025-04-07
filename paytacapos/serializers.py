@@ -650,6 +650,8 @@ class MerchantSerializer(PermissionSerializerMixin, serializers.ModelSerializer)
             "allow_duplicates", # temporary field
             "branch_count",
             "pos_device_count",
+            "active",
+            "verified"
         ]
 
     def validate_wallet_hash(self, value):
@@ -893,9 +895,16 @@ class CashOutTransactionSerializer(BaseCashOutTransactionSerializer):
 
 class PaymentMethodFieldSerializer(serializers.ModelSerializer):
     field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)
-    payment_method = serializers.PrimaryKeyRelatedField(queryset=PaymentType.objects.all(), required=False)
+    payment_method = serializers.PrimaryKeyRelatedField(queryset=PaymentMethod.objects.all(), required=False)
     class Meta:
         model = PaymentMethodField
+        fields = ('id', 'payment_method', 'field_reference', 'value', 'created_at', 'modified_at')
+
+class CashOutPaymentMethodFieldSerializer(serializers.ModelSerializer):
+    field_reference = serializers.PrimaryKeyRelatedField(queryset=PaymentTypeField.objects.all(), required=False)
+    payment_method = serializers.PrimaryKeyRelatedField(queryset=CashOutPaymentMethod.objects.all(), required=False)
+    class Meta:
+        model = CashOutPaymentMethodField
         fields = ('id', 'payment_method', 'field_reference', 'value', 'created_at', 'modified_at')
 
 class PaymentMethodSerializer(serializers.ModelSerializer):
@@ -926,6 +935,35 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+    
+class CashOutPaymentMethodSerializer(serializers.ModelSerializer):
+    payment_type = PaymentTypeSerializer(read_only=True)
+    values = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CashOutPaymentMethod
+        fields = ('id', 'reference', 'payment_type', 'wallet', 'values', 'created_at')
+
+    def get_values(self, obj):
+        fields = CashOutPaymentMethodField.objects.filter(payment_method__id=obj.id)
+        serialized_fields = CashOutPaymentMethodFieldSerializer(fields, many=True)
+        return serialized_fields.data
+
+    def create(self, validated_data):
+        payment_type_data = self.initial_data.get('payment_type')
+        payment_type = PaymentType.objects.get(id=payment_type_data['id'])
+        validated_data['payment_type'] = payment_type
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        payment_type_data = self.initial_data.get('payment_type')
+        
+        if payment_type_data:
+            payment_type = PaymentType.objects.get(id=payment_type_data['id'])
+            instance.payment_type = payment_type
+
+        instance.save()
+        return instance
 
 class BaseCashOutOrderSerializer(serializers.ModelSerializer):
     class Meta:
@@ -937,7 +975,6 @@ class BaseCashOutOrderSerializer(serializers.ModelSerializer):
             'merchant',
             'currency',
             'market_price',
-            'payment_method',
             'payout_amount',
             'payout_details',
             'created_at',
@@ -947,7 +984,7 @@ class BaseCashOutOrderSerializer(serializers.ModelSerializer):
 class CashOutOrderSerializer(BaseCashOutOrderSerializer):
     transactions = serializers.SerializerMethodField()
     currency = serializers.SerializerMethodField()
-    payment_method = PaymentMethodSerializer()
+    payment_method = serializers.SerializerMethodField()
     payout_address = serializers.SerializerMethodField(required=False)
     
     class Meta(BaseCashOutOrderSerializer.Meta):
@@ -958,6 +995,12 @@ class CashOutOrderSerializer(BaseCashOutOrderSerializer):
             'payment_method'
         ]
         
+    def get_payment_method(self, obj):
+        payment_method = CashOutPaymentMethod.objects.get(order__id=obj.id)
+        if payment_method:
+            return CashOutPaymentMethodSerializer(payment_method).data
+        return None
+
     def get_transactions(self, obj):
         inputs = CashOutTransactionSerializer(obj.get_input_tx(), many=True, context={'currency': obj.currency.symbol}).data
         outputs = CashOutTransactionSerializer(obj.get_output_tx(), many=True, context={'currency': obj.currency.symbol}).data
@@ -994,7 +1037,8 @@ class MerchantTransactionSerializer(serializers.ModelSerializer):
         ]
 
     def get_transaction(self, obj):
-        transaction = Transaction.objects.filter(txid=obj.txid).annotate(
+        wallet_hash = self.context.get('wallet_hash')
+        transaction = Transaction.objects.filter(txid=obj.txid, address__wallet__wallet_hash=wallet_hash).annotate(
             vout=F('index'),
             block=F('blockheight__number'),
             wallet_index=F('address__wallet_index'),

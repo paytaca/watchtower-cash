@@ -207,6 +207,25 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'wallet__wallet_hash']
     inlines = [PaymentMethodFieldInline]
 
+class CashoutPaymentMethodFieldInline(admin.TabularInline):
+    model = CashOutPaymentMethodField
+    readonly_fields = ('field_name', 'value')
+    fields = ('field_name', 'value')
+    extra = 0
+    max_num = 0
+    can_delete = False
+
+    def field_name(self, obj):
+        return obj.field_reference.fieldname
+    field_name.short_description = 'Field Name'
+
+@admin.register(CashOutPaymentMethod)
+class CashoutPaymentMethodAdmin(admin.ModelAdmin):
+    readonly_fields = ['payment_type', 'wallet']
+    list_display = ['id', 'order', 'payment_type', 'wallet']
+    search_fields = ['id', 'payment_type__full_name', 'payment_type__short_name', 'wallet__wallet_hash']
+    inlines = [CashoutPaymentMethodFieldInline]
+
 @admin.register(CashOutOrder)
 class CashOutOrderAdmin(admin.ModelAdmin):
     readonly_fields = [
@@ -221,7 +240,7 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         'processed_at',
         'completed_at'
     ]
-    list_display = ['id', 'status', 'payment_method_link', 'merchant', 'created_at']
+    list_display = ['id', 'status', 'payment_method_link', 'merchant', 'payout_address', 'created_at']
     search_fields = [
         'id',
         'wallet__wallet_hash',
@@ -234,16 +253,24 @@ class CashOutOrderAdmin(admin.ModelAdmin):
     ]
 
     def payment_method_link(self, obj):
-        url = reverse('admin:paytacapos_paymentmethod_change', args=[obj.payment_method.id])
-        return format_html('<a href="{}">{}</a>', url, self.payment_method_ref(obj))
+        payment_method = obj.get_payment_method()
+        if payment_method.exists():
+            payment_method = payment_method.first()
+            url = reverse('admin:paytacapos_cashoutpaymentmethod_change', args=[payment_method.id])
+            return format_html('<a href="{}">{}</a>', url, self.payment_method_ref(obj))
+        return None
 
     def payment_method_ref(self, obj):
-        payment_type_name = obj.payment_method.payment_type.short_name
-        if not payment_type_name:
-            payment_type_name = obj.payment_method.payment_type.full_name
-        
-        pm_field = PaymentMethodField.objects.filter(payment_method_id=obj.payment_method.id).first()
-        return f'{payment_type_name}({pm_field.value})'
+        payment_method = obj.get_payment_method()
+        if payment_method.exists():
+            payment_method = payment_method.first()
+            payment_type_name = payment_method.payment_type.short_name
+            if not payment_type_name:
+                payment_type_name = payment_method.payment_type.full_name
+            
+            pm_field = CashOutPaymentMethodField.objects.filter(payment_method_id=payment_method.id).first()
+            return f'{payment_type_name}({pm_field.value})'
+        return ''
     
     def payout_address(self, obj):
         address = None
@@ -268,22 +295,30 @@ class CashOutOrderAdmin(admin.ModelAdmin):
         return satoshi_to_bch(satoshi)
     
     def payment_method_details(self, obj):
-        fields = PaymentMethodField.objects.filter(payment_method__id=obj.payment_method.id)
-        detail_str = f"{obj.payment_method.payment_type.short_name}"
-        for field in fields:
-            detail_str = f"{detail_str} | {field.field_reference.fieldname}: {field.value}"
-        
-        url = reverse('admin:paytacapos_paymentmethod_change', args=[obj.payment_method.id])
-        return format_html('<a href="{}">{}</a>', url, detail_str)
+        payment_method = obj.get_payment_method()
+        if payment_method.exists():
+            payment_method = payment_method.first()
+            fields = CashOutPaymentMethodField.objects.filter(payment_method__id=payment_method.id)
+            detail_str = f"{payment_method.payment_type.short_name}"
+            for field in fields:
+                detail_str = f"{detail_str} | {field.field_reference.fieldname}: {field.value}"
+            
+            url = reverse('admin:paytacapos_cashoutpaymentmethod_change', args=[payment_method.id])
+            return format_html('<a href="{}">{}</a>', url, detail_str)
     
     def output_tx(self, obj):
         output = obj.get_output_tx()
+
         if not output.exists():
             return None
         
         output = output.first()
-        url = reverse('admin:main_transaction_change', args=[output.transaction.id])
-        return format_html('<a href="{}">{}</a> | {}', url, output.txid, output.transaction.address.address)
+        address = ''
+        url = reverse('admin:paytacapos_cashouttransaction_change', args=[output.id])
+        if output.transaction:
+            url = reverse('admin:main_transaction_change', args=[output.transaction.id])
+            address = output.transaction.address.address
+        return format_html('<a href="{}">{}</a> | {}', url, output.txid, address)
 
 @admin.register(CashOutTransaction)
 class CashOutTransactionAdmin(admin.ModelAdmin):
