@@ -27,15 +27,60 @@ contract TreasuryContractV2(
         require(checkMultiSig([sig1, sig2, sig3], [pk1, pk2, pk3, pk4, pk5]));
     }
 
-    // Exploitable, someone could keep consolidating utxos until balance
-    //   reaches zero due to transaction fees
+    /**
+        This allows contract to consolidate or create a UTXO with specific satoshis amount
+        This consolidate tx has the following requirements:
+            1. All the inputs must be from this smart contract
+            2. The first output has to be an OP_RETURN output
+            3. The OP_RETURN data must be of length 4 * inputs.length
+            4. OP_RETURN data is a sequence of 4 byte numbers which represents cumulative amounts.
+               This first 4 bytes is the satoshi amount of first input, the second 4 bytes is the
+               cumulative amount of the first two inputs, and so on. This makes the last 4 bytes
+               the cumulative amount of all inputs.
+    */
     function consolidate() {
-        require(tx.outputs.length <= 2);
-        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
-        require(tx.outputs[0].lockingBytecode == thisLockScript);
-        if (tx.outputs.length == 2) {
-            require(tx.outputs[1].lockingBytecode == thisLockScript);
+        bool isNotLastInput = this.activeInputIndex < tx.inputs.length - 1;
+
+        // this ensures all inputs are from this smart contract's
+        if (isNotLastInput) {
+            bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
+            bytes nextInputLockScript = tx.inputs[this.activeInputIndex + 1].lockingBytecode;
+            require(inputLockScript == nextInputLockScript);
         }
+
+        bytes OP_DATA = tx.outputs[0].lockingBytecode;
+        bytes cumulativeAmounts = OP_DATA.split(OP_DATA.length - tx.inputs.length * 4)[1];
+
+        int segmentIndex = min(8, cumulativeAmounts.length);
+        bytes segment = cumulativeAmounts.split(this.activeInputIndex * 4)[1].split(segmentIndex)[0];
+        bytes prevCumulativeBytes, bytes cumulativeBytes = segment.split(4);
+        int inputAmount = int(prevCumulativeBytes);
+        if (this.activeInputIndex > 0) {
+            int cumulative = int(cumulativeBytes);
+            inputAmount = cumulative - inputAmount;
+        }
+        require(tx.inputs[this.activeInputIndex].value == inputAmount);
+
+        int totalInputSats = int(cumulativeAmounts.split(cumulativeAmounts.length - 4)[1]);
+        int totalOutputSats = tx.outputs[0].value;
+
+        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
+        require(tx.outputs.length <= 3);
+        require(tx.outputs[1].lockingBytecode == thisLockScript);
+        if (tx.outputs.length == 3) {
+            totalOutputSats = totalOutputSats + tx.outputs[2].value;
+            require(tx.outputs[2].lockingBytecode == thisLockScript);
+        }
+
+        // 13 => 10 base fee + 3 OP_DATA prefix 
+        // inputs.length * 800 => 796 input fee + 4 bytes from OP_DATA
+        // 45 bytes per output => BCH only with p2sh32 address
+        int maxFee = 13 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);
+        int diff = totalInputSats - totalOutputSats;
+
+        // using '<=' instead of '==' so creator of transaction can still optimize fee size
+        // too small fees will just be rejected by min tx fee requirement
+        require(within(diff, 0, maxFee));
     }
 
     function spendToAnyhedge(
@@ -109,6 +154,9 @@ contract TreasuryContractV2(
 
         // This output is used as input for settlement tx of AH contract
         require(tx.outputs[0].value == totalFundingSats);
+
+        // will ensure treasury contract only has input 0
+        require(this.activeInputIndex == 0);
         require(tx.inputs[0].value == shortFundingSats);
         require(tx.inputs[1].value >= longFundingSats);
     }
