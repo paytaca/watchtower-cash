@@ -64,7 +64,7 @@ contract TreasuryContractV2(
         int totalInputSats = int(cumulativeAmounts.split(cumulativeAmounts.length - 4)[1]);
         int totalOutputSats = tx.outputs[0].value;
 
-        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
+        bytes thisLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
         require(tx.outputs.length <= 3);
         require(tx.outputs[1].lockingBytecode == thisLockScript);
         if (tx.outputs.length == 3) {
@@ -95,7 +95,7 @@ contract TreasuryContractV2(
         bytes maturityTsBytecode, // int type
         int longLiquidityFee,
     ) {
-        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
+        bytes thisLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
 
         int payoutSats = shortInputSats + longInputSats;
         bytes payoutSatsBytes = bytes(payoutSats);
