@@ -408,8 +408,6 @@ class AdViewSet(viewsets.GenericViewSet):
             ad = self.get_object(pk)
             wallet_hash = request.user.wallet_hash
             context = { 'wallet_hash': wallet_hash }
-            logger.warning(f'wallet_hash: {wallet_hash}')
-            logger.warning(f'ad wallet_hash: {ad.owner.wallet_hash}')
             serializer = serializers.AdSerializer(ad, context=context).data
             response_data = serializer
         else:
@@ -442,7 +440,7 @@ class AdViewSet(viewsets.GenericViewSet):
 
             if not owned:
                 # If not fetching owned ads: fetch only public ads and those with trade amount > 0
-                queryset = queryset.filter(Q(is_public=True) & (Q(trade_amount_sats__gte=1000) | Q(trade_amount_fiat__gt=0)))
+                queryset = queryset.filter(Q(is_public=True) & ((Q(trade_limits_in_fiat=False) & Q(trade_amount_sats__gte=1000)) | (Q(trade_limits_in_fiat=True) & Q(trade_amount_fiat__gt=0))))
             
             # filters
             if owner_id is not None:
