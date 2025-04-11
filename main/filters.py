@@ -278,3 +278,22 @@ class TokensViewSetFilter(BaseFilterBackend):
                 }
             },
         ]
+
+
+class TransactionOutputFilter(filters.FilterSet):
+    address = filters.CharFilter(field_name='address__address')
+    token_address = filters.CharFilter(field_name='address__token_address')
+    tokenid = filters.CharFilter(field_name='token__tokenid')
+    category = filters.CharFilter(method='category_filter')
+    capability = filters.CharFilter(field_name='cashtoken_nft__capability')
+    commitment = filters.CharFilter(field_name='cashtoken_nft__commitment')
+    value = filters.NumberFilter()
+    value_gte = filters.NumberFilter(field_name="value", lookup_expr="gte")
+    value_lte = filters.NumberFilter(field_name="value", lookup_expr="lte")
+    amount_gte = filters.NumberFilter(field_name="amount", lookup_expr="gte")
+    amount_lte = filters.NumberFilter(field_name="amount", lookup_expr="lte")
+
+    def category_filter(self, queryset, name, value):
+        return queryset.filter(
+            Q(cashtoken_nft__category=value) | Q(cashtoken_ft__category=value),
+        )
