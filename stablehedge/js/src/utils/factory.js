@@ -1,10 +1,11 @@
 import { binToHex, encodeLockingBytecodeP2sh32, generateRandomBytes, hexToBin } from "@bitauth/libauth";
 import { Contract } from "cashscript";
-
-import { getBaseBytecode } from "./anyhedge.js";
-import { TreasuryContract } from "../contracts/treasury-contract/index.js";
-import { generateProxyFunderContractWithArtifact } from "../contracts/liquidity-provider/proxy-funder-gen.js";
 import { AnyHedgeManager } from "@generalprotocols/anyhedge";
+
+import { generateProxyFunderContractWithArtifact } from "../contracts/liquidity-provider/proxy-funder-gen.js";
+import { TreasuryContract } from "../contracts/treasury-contract/index.js";
+import { getBaseBytecode } from "./anyhedge.js";
+import { generateRandomWif, wifToPubkey } from "./crypto.js";
 
 
 /**
@@ -14,7 +15,8 @@ import { AnyHedgeManager } from "@generalprotocols/anyhedge";
 export function createTreasuryContract(opts) {
   const { bytecode } = getBaseBytecode({ version: opts?.anyhedgeVersion })
   const authKeyId = generateRandomBytes(32);
-  const pubkeys = Array.from({ length: 5 }).map(() => generateRandomBytes(33))
+  const wifs = Array.from({ length: 5 }).map(() => generateRandomWif())
+  const pubkeys = wifs.map(wif => wifToPubkey(wif))
   const contractParams = [authKeyId, ...pubkeys.map(hexToBin), bytecode]
   const artifact = TreasuryContract.getArtifact('v2')
   const contract = new Contract(artifact, contractParams, { addressType: 'p2sh32' })
@@ -24,6 +26,7 @@ export function createTreasuryContract(opts) {
     contract,
     authKeyId: binToHex(authKeyId),
     pubkeys,
+    wifs,
   }
 }
 
