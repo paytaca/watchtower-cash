@@ -1,6 +1,7 @@
+
+from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.decorators import action
 
@@ -9,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import OuterRef, Subquery, Q
 from django.utils.translation import gettext_lazy as _
 
-from authentication.token import TokenAuthentication
+from authentication.token import TokenAuthentication, IgnoreInvalidTokenAuthentication
 from authentication.permissions import RampP2PIsAuthenticated
 
 import rampp2p.models as models
@@ -22,6 +23,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PaymentTypeView(APIView):
+    authentication_classes = [IgnoreInvalidTokenAuthentication]
+
     def get(self, request):
         queryset = models.PaymentType.objects.filter(payment_currency__isnull=False)
         currency = request.query_params.get('currency')
