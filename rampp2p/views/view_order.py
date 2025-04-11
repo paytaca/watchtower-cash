@@ -481,7 +481,7 @@ class OrderViewSet(viewsets.GenericViewSet):
         return queryset
 
     def update_ad_trade_amount(self, order=None):
-        # Decrease the Ad's trade amount and ceiling
+        # Decrease the Ad's trade amount and limits
         ad = order.ad_snapshot.ad
         if order.ad_snapshot.trade_limits_in_fiat:
             order_amount_fiat = bch_to_fiat(satoshi_to_bch(order.trade_amount), order.ad_snapshot.price)
@@ -740,8 +740,6 @@ class OrderStatusViewSet(viewsets.GenericViewSet):
 
         try:
             order = models.Order.objects.get(pk=pk)
-        
-            # Caller must be order or ad owner
             order_owner = order.owner.wallet_hash
             ad_owner = order.ad_snapshot.ad.owner.wallet_hash
             if wallet_hash != order_owner and wallet_hash != ad_owner:
