@@ -67,6 +67,7 @@ export function prepareParamForTreasuryContract(contractData) {
   const _bytecodes = getContractParamBytecodes(contractData)
   const {
       bytecodesHex,
+      shortMutualRedeemPublicKey,
       longLockScript,
       lowPrice,
       highPrice,
@@ -76,11 +77,12 @@ export function prepareParamForTreasuryContract(contractData) {
     const fee = getLiquidityFee(contractData);
 
     console.log(_bytecodes)
-    console.log(bytecodesHex.slice(0, 3))
+    console.log(bytecodesHex.slice(1, 3))
     console.log(bytecodesHex.slice(5, 8))
   
     return [
-      hexToBin(bytecodesHex.slice(0, 3).reverse().join('')),
+      shortMutualRedeemPublicKey,
+      hexToBin(bytecodesHex.slice(1, 3).reverse().join('')),
       hexToBin(bytecodesHex.slice(5, 8).reverse().join('')),
       hexToBin(longLockScript),
       contractData.metadata.shortInputInSatoshis,

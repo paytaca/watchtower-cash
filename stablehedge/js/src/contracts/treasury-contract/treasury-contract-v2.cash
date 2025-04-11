@@ -84,7 +84,8 @@ contract TreasuryContractV2(
     }
 
     function spendToAnyhedge(
-        bytes argsSegment1, // enableMutualRedemption + shortPubkey + longPubkey
+        bytes shortPubkeyBytecode,
+        bytes argsSegment1, // enableMutualRedemption + longPubkey
         bytes argsSegment2, // satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey
         bytes longLockScriptBytecode, // type bytes
         int shortInputSats,
@@ -108,12 +109,18 @@ contract TreasuryContractV2(
             argsSegment2 +
             longLockScriptBytecode + 
             bytes(35) + thisLockScript +
-            argsSegment1;
+            argsSegment1 +
+            shortPubkeyBytecode;
 
         bytes contractBytecode = contractParametersBytecode + anyhedgeBaseBytecode;
         bytes32 scriptHash = hash256(contractBytecode);
         bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);
         require(tx.outputs[0].lockingBytecode == lockingBytecode);
+
+        if (argsSegment1.split(1)[0] == 0x51) {
+            bytes shortPubkey = shortPubkeyBytecode.split(1)[1];
+            require(shortPubkey == pk1 || shortPubkey == pk2 || shortPubkey == pk3 || shortPubkey == pk4 || shortPubkey == pk5);
+        }
 
         // Necessary to ensure duration is not too long that it's unaccessible
         int maturityTs = int(maturityTsBytecode.split(1)[1]);
