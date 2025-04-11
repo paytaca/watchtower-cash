@@ -278,3 +278,12 @@ class TokensViewSetFilter(BaseFilterBackend):
                 }
             },
         ]
+
+
+class TransactionOutputFilter(filters.FilterSet):
+    address = filters.CharFilter(field_name='address__address')
+    token_address = filters.CharFilter(field_name='address__token_address')
+    tokenid = filters.CharFilter(field_name='token__tokenid')
+    capability = filters.CharFilter(field_name='cashtoken_nft__capability')
+    commitment = filters.CharFilter(field_name='cashtoken_nft__commitment')
+    value = filters.NumberFilter()

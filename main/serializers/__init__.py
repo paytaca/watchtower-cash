@@ -4,6 +4,7 @@ from main.serializers.serializer_asset_price_log import *
 from main.serializers.serializer_balance import *
 from main.serializers.serializer_blockheight import *
 from main.serializers.serializer_token import *
+from main.serializers.serializer_transaction import *
 from main.serializers.serializer_user_auth import *
 from main.serializers.serializer_history import *
 from main.serializers.serializer_paymentrequest import *
