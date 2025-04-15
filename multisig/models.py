@@ -1,22 +1,9 @@
 from django.db import models
 from django.contrib.postgres.fields import JSONField
 
-# class MultisigWallet:
-#   m = models.IntegerField()
-#   n = models.IntegerField()
-#   template = JSONField(default=dict, blank=True, null=True)
-
-# class Signer:
-#   xpub = models.CharField(max_length=120)
-#   derivation_path = models.CharField(max_length=120, default="m/44'/140'/0'")
-#   wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE, related_name="signers")
-
-
-# # models.py
-
 class Signer(models.Model):
     xpub = models.CharField(max_length=120)
-    derivation_path = models.CharField(max_length=120, default="m/44'/140'/0'/0/0")
+    derivation_path = models.CharField(max_length=120, default="m/44'/145'/0'/0/0")
 
     class Meta:
         unique_together = ('xpub', 'derivation_path')
