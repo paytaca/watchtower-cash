@@ -18,6 +18,30 @@ from .serializers import (
 )
 
 
+# {
+#   "m": 2,
+#   "n": 3,
+#   "template": {
+#     "script_type": "p2sh",
+#     "network": "testnet"
+#   },
+#   "signers": [
+#     {
+#       "xpub": "xpub6CUGRU...",
+#       "derivation_path": "m/44'/0'/0'"
+#     },
+#     {
+#       "xpub": "xpub6F5UZi...",
+#       "derivation_path": "m/44'/0'/1'"
+#     },
+#     {
+#       "xpub": "xpub6E2ZmL...",
+#       "derivation_path": "m/44'/0'/2'"
+#     }
+#   ]
+# }
+
+
 class MultisigWalletListCreateView(APIView):
     def get(self, request):
         wallets = MultisigWallet.objects.all()
