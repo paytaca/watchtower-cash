@@ -77,11 +77,11 @@ def validate_status_progression(new_status, order_id):
                     invalid_status = True
     
     if (current_status.status == StatusType.RELEASE_PENDING):
-        if (new_status != StatusType.RELEASED):
+        if (new_status != StatusType.RELEASED and new_status != StatusType.REFUNDED):
             invalid_status = True
         
     if (current_status.status == StatusType.REFUND_PENDING):
-        if (new_status != StatusType.REFUNDED):
+        if (new_status != StatusType.RELEASED and new_status != StatusType.REFUNDED):
             invalid_status = True
 
     if invalid_status:
