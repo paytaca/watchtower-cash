@@ -18,7 +18,7 @@ from .crypto_utils import verify_signature  # from previous utility
 from django.conf import settings
 import redis
 
-redis_client = redis.Redis.from_url(settings.REDISKV)
+nonce_cache = redis.Redis.from_url(settings.REDISKV)
 
 class SignerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -48,21 +48,22 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
         if claimed_xpub not in xpubs:
             raise serializers.ValidationError("The claimed xpub must be one of the wallet signers.")
 
-        # Get derivation path for that xpub (needed for verification)
-        signer_info = next(s for s in signers if s['xpub'] == claimed_xpub)
+        try:
+            signer_info = next(s for s in signers if s['xpub'] == claimed_xpub)
+        except StopIteration:
+            raise serializers.ValidationError("Signer information for claimed xpub not found.")
+
         derivation_path = signer_info.get('derivation_path', "m/44'/145'/0'/0/0")
 
-        # Extract nonce from message and validate it
+        nonce = message
         try:
-            nonce = message.split("nonce:")[-1].strip()
+            nonce = nonce.split("nonce:")[-1].strip()
         except Exception:
             raise serializers.ValidationError("Invalid message format.")
 
-        nonce_key = f"nonce:{nonce}"
-        if not redis_client.get(nonce_key):
+        if not nonce_cache.get(nonce):
             raise serializers.ValidationError("Invalid or expired nonce.")
 
-        # Perform signature verification
         if not verify_signature(message, signature, claimed_xpub, derivation_path):
             raise serializers.ValidationError("Signature verification failed.")
 
