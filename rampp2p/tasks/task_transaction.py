@@ -156,10 +156,12 @@ def handle_order_status(action: str, contract: Contract, txn: Dict):
             transaction.valid = True
             transaction.txid = txid
         else:
-            errors.append(f'Transaction with contract_id={contract.id} and action={action} does not exist')
-            result["errors"] = errors
-            result["success"] = False
-            return result
+            transaction = Transaction.objects.create(
+                txid=txid,
+                valid=True,
+                contract=contract,
+                action=action
+            )
 
         # Save transaction outputs as Recipients
         if outputs is not None:
