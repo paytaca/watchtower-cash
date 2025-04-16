@@ -40,6 +40,7 @@ from paytacagifts.urls import urlpatterns as paytacagifts_urlpatterns
 from cts.urls import urlpatterns as cts_urlpatterns
 from authentication.urls import urlpatterns as auth_urlpatterns
 from stablehedge.urls import urlpatterns as stablehedge_urlpatterns
+from multisig.urls import urlpatterns as multisig_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -89,7 +90,8 @@ urlpatterns = [
     path('webhooks/telegram/', csrf_exempt(TelegramBotView.as_view()), name="telegram-webhook"),
     url(r'^api/swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui')
+    url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    url('api/multisig/', include(multisig_urlpatterns)),
 ]
 
 

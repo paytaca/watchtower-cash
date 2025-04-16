@@ -1,8 +1,11 @@
+import logging
 from django.http import JsonResponse
 from django.conf import settings
 from redis import Redis
 from .crypto_utils import verify_signature, get_address_index
 from .models import Signer
+
+LOGGER = logging.getLogger(__name__)
 
 nonce_cache = settings.REDISKV
 
@@ -16,8 +19,12 @@ class SignerVerificationMiddleware:
 
     def __call__(self, request):
         if 'multisig' not in request.path:
-            return self.get_response(request)  
-        
+            return self.get_response(request)
+        LOGGER.info(request.path)
+        LOGGER.info(request.method)
+        if '/api/multisig/wallets' in request.path and request.method == 'POST':
+            return self.get_response(request)
+
         xpub = request.headers.get("X-Xpub")
         derivation_path = request.headers.get("X-Derivation-Path")
         signature = request.headers.get("X-Signature")
