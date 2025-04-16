@@ -34,23 +34,26 @@ class SignerVerificationMiddleware:
         if not xpub or not signature or not message:
             return JsonResponse({"detail": "Missing auth headers"}, status=400)
         
-        wallet_id = request.GET.get("wallet_id")
+        signer_id = request.GET.get("signer_id")
+
+        if not signer_id:
+            return JsonResponse({"detail": "Missing signer record id"}, status=403)
+        
         try:
-            signer = Signer.objects.get(xpub=xpub, wallet_id=wallet_id)
+            signer = Signer.objects.get(id=signer_id)
         except Signer.DoesNotExist:
             return JsonResponse({"detail": "Signer not found in this wallet"}, status=403)
 
         # Extract nonce from the message (nonce:<nonce_value>`)
-        nonce_from_message = message.split("nonce:")[-1]
-        nonce_key = f"nonce:{nonce_from_message}"
+        nonce = message.split("nonce:")[-1]
         
-        nonce_valid = nonce_cache.get(nonce_key) is not None
+        nonce_valid = nonce_cache.get(nonce) is not None
         if not nonce_valid:
             return JsonResponse({"detail": "Invalid message"}, status=403)
 
         address_index = get_address_index(signer.derivation_path)
         
-        valid = verify_signature(message, signature, xpub, address_index, algo)
+        valid = verify_signature(message, signature, signer.xpub, address_index, algo)
         if not valid:
             return JsonResponse({"detail": "Signature verification failed"}, status=403)
         request.signer = signer  
