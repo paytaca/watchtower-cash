@@ -1,5 +1,6 @@
 # multisig/crypto_utils.py
 import bip32utils
+import hashlib
 from coincurve import PublicKey
 from hashlib import sha256
 
@@ -31,7 +32,9 @@ def verify_signature(message: str, signature_hex: str, xpub: str, derivation_pat
         
         signature = bytes.fromhex(signature_hex)
         message_bytes = message.encode('utf-8')
-
+        message_hash = hashlib.sha256()
+        message_hash.update(message_bytes)
+        message_hash = message_hash.digest()
         if not algo or algo == 'ecdsa':
             return pubkey.verify(signature, message_hash)
         elif algo == "schnorr":
