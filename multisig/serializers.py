@@ -1,5 +1,7 @@
+import logging
 from rest_framework import serializers
 from django.db import transaction
+LOGGER = logging.getLogger(__name__)
 
 from .models import (
     MultisigWallet,
@@ -29,11 +31,9 @@ class SignerSerializer(serializers.ModelSerializer):
         fields = ['xpub', 'derivation_path']
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
-    signers = SignerSerializer(many=True, write_only=True)
-
+    signers = serializers.DictField(child=SignerSerializer(), write_only=True)
     # Extra fields for authentication
-    claimed_xpub = serializers.CharField(write_only=True)
-    creator_signer_index = serializers.IntegerField(write_only=True)
+    creator_signer_index = serializers.CharField(write_only=True)
     signature = serializers.CharField(write_only=True)
     message = serializers.CharField(write_only=True)
 
@@ -44,26 +44,31 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
     def validate(self, data):
 
         if data['m'] > data['n']:
+            LOGGER.error("m cannot be greater than n.")
             raise serializers.ValidationError("m cannot be greater than n.")
 
         signers_dict = data.get("signers", {})
-
+        LOGGER.error(signers_dict)
         creator_signer_index = data['creator_signer_index']
+        LOGGER.error(creator_signer_index)
 
-        if creator_signer_index < 1 or creator_signer_index > len(signers_dict.keys()):
+        if int(creator_signer_index) < 1 or int(creator_signer_index) > len(signers_dict.keys()):
+            LOGGER.error(f"Invalid signer index: {signer_index}.")
             raise serializers.ValidationError(f"Invalid signer index: {signer_index}.")
 
-        creator_claimed_xpub = data['signers'][creator_signer_index]['xpub']
+        creator_claimed_xpub = signers_dict[creator_signer_index]['xpub']
         signature = data['signature']
         message = data['message']
 
         xpubs = [s["xpub"] for s in signers_dict.values()]
         if creator_claimed_xpub not in xpubs:
+            LOGGER.error("The claimed xpub must be one of the wallet signers.")
             raise serializers.ValidationError("The claimed xpub must be one of the wallet signers.")
 
         try:
             signer_info = next(s for s in signers_dict.values() if s['xpub'] == creator_claimed_xpub)
         except StopIteration:
+            LOGGER.error("Signer information for claimed xpub not found.")
             raise serializers.ValidationError("Signer information for claimed xpub not found.")
 
         derivation_path = signer_info.get('derivation_path', "m/44'/145'/0'/0/0")
@@ -72,12 +77,15 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
         try:
             nonce = nonce.split("nonce:")[-1].strip()
         except Exception:
+            LOGGER.error("Invalid message format.")
             raise serializers.ValidationError("Invalid message format.")
 
         if not nonce_cache.get(nonce):
+            LOGGER.error("Invalid or expired nonce.")
             raise serializers.ValidationError("Invalid or expired nonce.")
 
         if not verify_signature(message, signature, creator_claimed_xpub, derivation_path):
+            LOGGER.error("Signature verification failed.")
             raise serializers.ValidationError("Signature verification failed.")
 
         return data

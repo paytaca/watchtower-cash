@@ -8,29 +8,28 @@ class Signer(models.Model):
     class Meta:
         unique_together = ('xpub', 'derivation_path')
 
+
+class MultisigWallet(models.Model):
+    m = models.IntegerField()
+    n = models.IntegerField()
+    template = JSONField(default=dict, blank=True, null=True)
+    signers = models.ManyToManyField(Signer, through='MultisigWalletSigner', related_name='wallets')
+
 class MultisigWalletSigner(models.Model):
-    wallet = models.ForeignKey('MultisigWallet', on_delete=models.CASCADE)
-    signer = models.ForeignKey('Signer', on_delete=models.CASCADE)
+    wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE)
+    signer = models.ForeignKey(Signer, on_delete=models.CASCADE)
     index = models.PositiveIntegerField(help_text="Position of the signer in the multisig wallet")
 
     class Meta:
         unique_together = ('wallet', 'index', 'signer')
         ordering = ['index']
 
-class MultisigWallet(models.Model):
-    m = models.IntegerField()
-    n = models.IntegerField()
-    template = models.JSONField(default=dict, blank=True, null=True)
-    signers = models.ManyToManyField(Signer, through='MultisigWalletSigner', related_name='wallets')
-
-
-
-class Transaction:
+class Transaction(models.Model):
   txid = models.CharField(max_length=64, blank=True, null=True)
   unsigned_hex = models.TextField(unique=True)
   unsigned_hex_hash = models.TextField(unique=True, help_text="Sha256 hash of the unsigned hex")
 
-class SignerTransactionSignature:
+class SignerTransactionSignature(models.Model):
   SIGNATURE_ALGOS = [
         ('ecdsa', 'ecdsa'),
         ('schnorr', 'schnorr'),

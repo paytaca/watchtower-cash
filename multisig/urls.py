@@ -1,15 +1,22 @@
 from django.urls import path
 from .views import (
-    MultisigWalletListCreateView, MultisigWalletDetailView,
-    SignerListCreateView, SignerDetailView,
-    TransactionListCreateView, TransactionDetailView,
-    SignatureListCreateView, SignatureDetailView
+    MultisigWalletListCreateView,
+    MultisigWalletDetailView,
+    MultisigWalletTransactionListView,
+    SignerListCreateView,
+    SignerDetailView,
+    SignerTransactionListView,
+    TransactionListCreateView,
+    TransactionDetailView,
+    TransactionSignaturesListView,
+    SignatureListCreateView,
+    SignatureDetailView
 )
 
 urlpatterns = [
     path('wallets/', MultisigWalletListCreateView.as_view()),
     path('wallets/<int:pk>/', MultisigWalletDetailView.as_view()),
-    path('wallets/<int:wallet_id>/transactions/', WalletTransactionListView.as_view(), name='wallet-transactions'),
+    path('wallets/<int:wallet_id>/transactions/', MultisigWalletTransactionListView.as_view(), name='wallet-transactions'),
 
     path('signers/', SignerListCreateView.as_view()),
     path('signers/<int:pk>/', SignerDetailView.as_view()),
