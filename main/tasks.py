@@ -41,7 +41,7 @@ from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
 from django.db import transaction as trans
-from celery import Celery
+from celery.exceptions import TimeoutError
 from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -2650,7 +2650,7 @@ def get_latest_bch_price(currency):
         existing_task = celery_app.AsyncResult(existing_task_id)
         try:
             existing_task.get(timeout=30)
-        except celery.exceptions.TimeoutError:
+        except TimeoutError:
             pass
         finally:
             latest = get_latest()
@@ -2830,7 +2830,7 @@ def get_latest_market_price_task(coin_id:str, currency:str):
         existing_task = celery_app.AsyncResult(existing_task_id)
         try:
             existing_task.get(timeout=30)
-        except celery.exceptions.TimeoutError:
+        except TimeoutError:
             pass
 
     if queue_result.get("run"):

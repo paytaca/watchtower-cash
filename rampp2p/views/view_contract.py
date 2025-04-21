@@ -422,7 +422,7 @@ class ContractViewSet(viewsets.GenericViewSet):
         }
 
     def _retrieve_transactions(self, contract_id):
-        transactions = models.Transaction.objects.filter(contract__id=contract_id)
+        transactions = models.Transaction.objects.filter(contract__id=contract_id, txid__isnull=False)
         tx_data = []
         for _, tx in enumerate(transactions):
             tx_outputs = models.Recipient.objects.filter(transaction__id=tx.id)

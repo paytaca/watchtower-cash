@@ -147,3 +147,10 @@ def reports(ctx):
     conn = ctx.config.run.env['conn']
     with conn.cd(ctx.config.project_dir):
         conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py reports -p paytaca')
+
+@task
+def check_tx(ctx, txid):
+    if 'network' not in ctx.config.keys(): return
+    conn = ctx.config.run.env['conn']
+    with conn.cd(ctx.config.project_dir):
+        conn.run(f'docker-compose -f compose/{ctx.config.network}.yml --env-file {ctx.config.project_dir}/.env exec -T web python manage.py tx_fiat_amounts -t {txid} -c php') 

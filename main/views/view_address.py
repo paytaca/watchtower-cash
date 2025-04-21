@@ -14,7 +14,9 @@ class AddressInfoView(APIView):
     def get(self, request, *args, **kwargs):
         bchaddress = kwargs.get('bchaddress', '')
 
-        address_obj = Address.objects.filter(address=bchaddress).first()
+        address_obj = Address.objects.filter(
+            Q(address=bchaddress) | Q(token_address=bchaddress)
+        ).first()
 
         wallet = getattr(address_obj, "wallet", None)
         wallet_hash = getattr(wallet, "wallet_hash", "")
@@ -28,10 +30,12 @@ class AddressInfoView(APIView):
                 .exists()
 
         serializer = self.serializer_class(dict(
-            address=bchaddress,
+            address=address_obj.address,
             token_address=address_obj.token_address,
             wallet_hash=wallet_hash,
             project_id=project_id,
+            address_path=address_obj.address_path,
+            wallet_index=address_obj.wallet_index,
             has_subscribed_push_notifications=has_subscribed_push_notifications,
         ))
         return Response(serializer.data)

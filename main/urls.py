@@ -18,6 +18,7 @@ router.register(r"wallet/preferences", views.WalletPreferencesViewSet, basename=
 router.register(r"payment-requests", views.PaymentRequestViewSet, basename="payment-requests")
 router.register(r"wallet/shard", views.WalletShardViewSet, basename="wallet-shard")
 router.register(r"app-control", views.AppControlViewSet, basename="app-control")
+router.register(r"transactions/outputs", views.TransactionOutputViewSet, basename="transaction-outputs")
 
 main_urls = router.urls
 
