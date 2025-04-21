@@ -92,9 +92,9 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         signers_dict = validated_data.pop('signers')
-        validated_data.pop('creator_signer_index')
         validated_data.pop('signature')
         validated_data.pop('message')
+        creator_signer_index = validated_data.pop('creator_signer_index')
 
         with transaction.atomic():
             wallet = MultisigWallet.objects.create(**validated_data)
@@ -107,9 +107,15 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
 
                 signer, _ = Signer.objects.get_or_create(
                     xpub=signer_data['xpub'],
-                    derivation_path=signer_data.get('derivation_path', "m/44'/145'/0'/0/0")
+                    derivation_path=signer_data.get('derivation_path', "m/44'/145'/0'/0/0"),
+                    name=signer_data.get('name', f'Signer {index_str}')
                 )
-                MultisigWalletSigner.objects.create(wallet=wallet, signer=signer, index=index)
+                MultisigWalletSigner.objects.create(
+                    wallet=wallet, 
+                    signer=signer, 
+                    signer_is_wallet_creator=int(creator_signer_index)==index
+                    index=index,
+                )
 
         return wallet
 
