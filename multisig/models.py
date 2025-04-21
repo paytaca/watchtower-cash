@@ -4,10 +4,10 @@ from django.contrib.postgres.fields import JSONField
 class Signer(models.Model):
     xpub = models.CharField(max_length=120)
     derivation_path = models.CharField(max_length=120, default="m/44'/145'/0'/0/0")
+    name = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        unique_together = ('xpub', 'derivation_path')
-
+        unique_together = ('xpub', 'derivation_path', 'name')
 
 class MultisigWallet(models.Model):
     m = models.IntegerField()
@@ -18,6 +18,7 @@ class MultisigWallet(models.Model):
 class MultisigWalletSigner(models.Model):
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE)
     signer = models.ForeignKey(Signer, on_delete=models.CASCADE)
+    signer_is_wallet_creator = models.BooleanField(default=False, help_text="True if this signer created this wallet")
     index = models.PositiveIntegerField(help_text="Position of the signer in the multisig wallet")
 
     class Meta:
@@ -25,7 +26,7 @@ class MultisigWalletSigner(models.Model):
         ordering = ['index']
 
 class Transaction(models.Model):
-  txid = models.CharField(max_length=64, blank=True, null=True)
+  txid = models.CharField(max_length=64, blank=True, null=True, help_text="If present, transaction broadcasted to the network.")
   unsigned_hex = models.TextField(unique=True)
   unsigned_hex_hash = models.TextField(unique=True, help_text="Sha256 hash of the unsigned hex")
 
