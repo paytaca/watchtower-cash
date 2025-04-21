@@ -113,7 +113,7 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
                 MultisigWalletSigner.objects.create(
                     wallet=wallet, 
                     signer=signer, 
-                    signer_is_wallet_creator=int(creator_signer_index)==index
+                    signer_is_wallet_creator=int(creator_signer_index)==index,
                     index=index,
                 )
 
