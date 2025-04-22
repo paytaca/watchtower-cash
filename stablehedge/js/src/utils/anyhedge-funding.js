@@ -69,6 +69,7 @@ export function prepareParamForTreasuryContract(contractData) {
       bytecodesHex,
       shortMutualRedeemPublicKey,
       longLockScript,
+      satsForNominalUnitsAtHighLiquidation,
       lowPrice,
       highPrice,
       startTs,
@@ -78,13 +79,14 @@ export function prepareParamForTreasuryContract(contractData) {
 
     console.log(_bytecodes)
     console.log(bytecodesHex.slice(1, 3))
-    console.log(bytecodesHex.slice(5, 8))
+    console.log(bytecodesHex.slice(5, 7))
   
     return [
       shortMutualRedeemPublicKey,
       hexToBin(bytecodesHex.slice(1, 3).reverse().join('')),
-      hexToBin(bytecodesHex.slice(5, 8).reverse().join('')),
       hexToBin(longLockScript),
+      hexToBin(bytecodesHex.slice(5, 7).reverse().join('')),
+      satsForNominalUnitsAtHighLiquidation,
       contractData.metadata.shortInputInSatoshis,
       contractData.metadata.longInputInSatoshis,
       hexToBin(lowPrice),

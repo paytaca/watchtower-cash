@@ -93,8 +93,9 @@ contract TreasuryContractV2(
     function spendToAnyhedge(
         bytes shortPubkeyBytecode,
         bytes argsSegment1, // enableMutualRedemption + longPubkey
-        bytes argsSegment2, // satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey
         bytes longLockScriptBytecode, // type bytes
+        bytes argsSegment2, // nominalUnitsXSatsPerBchBytecode + oraclePubkey
+        bytes satsForNominalUnitsAtHighLiquidationBytecode,
         int shortInputSats,
         int longInputSats,
         bytes lowPriceBytecode, // int type
@@ -113,6 +114,7 @@ contract TreasuryContractV2(
             highPriceBytecode +
             lowPriceBytecode +
             bytes(payoutSatsBytes.length) + payoutSatsBytes +
+            satsForNominalUnitsAtHighLiquidationBytecode +
             argsSegment2 +
             longLockScriptBytecode + 
             bytes(35) + thisLockScript +
@@ -123,6 +125,10 @@ contract TreasuryContractV2(
         bytes32 scriptHash = hash256(contractBytecode);
         bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);
         require(tx.outputs[0].lockingBytecode == lockingBytecode);
+
+        // Require that the contract is not a simple hedge
+        int satsForNominalUnitsAtHighLiquidation = int(satsForNominalUnitsAtHighLiquidationBytecode.split(1)[1]);
+        require(satsForNominalUnitsAtHighLiquidation > 0);
 
         // Check short mutual redeem pubkey must be one of contract's pubkeys
         // if mutual redemption is enabled
