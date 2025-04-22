@@ -12,8 +12,10 @@ class Signer(models.Model):
 class MultisigWallet(models.Model):
     m = models.IntegerField()
     n = models.IntegerField()
+    name = models.CharField(max_length=120, blank=True, null=True)
     template = JSONField(default=dict, blank=True, null=True)
     signers = models.ManyToManyField(Signer, through='MultisigWalletSigner', related_name='wallets')
+    address = models.CharField(max_length=120)
 
 class MultisigWalletSigner(models.Model):
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE)
