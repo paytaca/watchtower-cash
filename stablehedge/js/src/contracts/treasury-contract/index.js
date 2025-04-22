@@ -4,10 +4,11 @@ import { binToHex, hexToBin, secp256k1 } from "@bitauth/libauth"
 
 import { calculateDust, createSighashPreimage, getOutputSize } from "cashscript/dist/utils.js"
 import { LOCKTIME_SIZE, P2PKH_INPUT_SIZE, VERSION_SIZE } from "cashscript/dist/constants.js"
-import { hash256 } from "@cashscript/utils"
+import { hash256, scriptToBytecode } from "@cashscript/utils"
 
 import { toTokenAddress } from "../../utils/crypto.js"
 import { calculateInputSize, cashscriptTxToLibauth } from "../../utils/transaction.js"
+import { numbersToCumulativeHexString } from "../../utils/math.js"
 
 export class TreasuryContract {
   /**
@@ -537,13 +538,10 @@ export class TreasuryContract {
     const contract = this.getContract()
     if (!contract.functions.consolidate) return 'Contract function not supported'
 
+    const opData = numbersToCumulativeHexString(opts?.inputs?.map(input => input.satoshis))
     const transaction = contract.functions.consolidate()
-
-    opts?.inputs?.forEach(input => {
-      input?.wif
-        ? transaction.fromP2PKH(input, new SignatureTemplate(input.wif, HashType.SIGHASH_SINGLE | HashType.SIGHASH_ANYONECANPAY, SignatureAlgorithm.ECDSA))
-        : transaction.from(input)
-    })
+        .from(opts.inputs)
+        .to([{ to: new Uint8Array([0x6a, ...hexToBin(opData)]), amount: 0n }]) // opreturn
 
     if (opts?.satoshis) {
       transaction.to(contract.address, BigInt(opts?.satoshis))
