@@ -1,7 +1,7 @@
 import { HashType, SignatureAlgorithm, SignatureTemplate } from 'cashscript'
 import { binToHex, decodePrivateKeyWif, hash256, hexToBin, secp256k1, SigningSerializationFlag } from '@bitauth/libauth';
 import { createSighashPreimage } from 'cashscript/dist/utils.js';
-import { cashscriptTxToLibauth } from '../utils/transaction.js';
+import { calculateInputSize, cashscriptTxToLibauth } from '../utils/transaction.js';
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
 import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo, wifToPubkey } from '../utils/crypto.js'
 
@@ -24,6 +24,35 @@ export function compileTreasuryContract(opts) {
     options: treasuryContract.options,
     bytecode: contract.bytecode,
   }
+}
+
+/**
+ * @param {Object} opts 
+ * @param {Object} opts.contractOpts 
+ * @param {'unlockWithNft' | 'unlockWithMultiSig'} opts.function
+ */
+export function calculateTreasuryContractInputSize(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+  const contract = treasuryContract.getContract()
+  
+  const funcName = opts?.function;
+  const func = contract.functions[funcName];
+  if (!func) {
+    return { success: false, error: 'Function not found' }
+  }
+  
+  const params = [];
+  if (funcName == 'unlockWithNft') {
+    params.push(true)
+  } else if (funcName == 'unlockWithMultiSig') {
+    params.push(
+      new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+      new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+      new SignatureTemplate({}, undefined, SignatureAlgorithm.ECDSA),
+    )
+  }
+
+  return { success: true, size: calculateInputSize(func(...params)) }
 }
 
 /**
@@ -226,6 +255,7 @@ export function signMutliSigTx(opts) {
     const bytecode = hexToBin(contract.bytecode)
     transaction.inputs.forEach((input, index) => {
       if (input?.unlockingBytecode?.length > 0) return
+      if (input?.template) return
 
       const preimage = createSighashPreimage(transaction, sourceOutputs, index, bytecode, hashType)
       const sighash = hash256(preimage);

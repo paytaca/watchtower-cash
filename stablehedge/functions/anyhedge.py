@@ -1,6 +1,7 @@
 import time
 import json
 import decimal
+import bitcash
 from django.conf import settings
 from django.db import transaction
 from django.db.models import F
@@ -11,6 +12,7 @@ from stablehedge import models
 from stablehedge.exceptions import StablehedgeException
 from stablehedge.utils.anyhedge import get_latest_oracle_price
 from stablehedge.utils.blockchain import (
+    get_tx_hash,
     test_transaction_accept,
     broadcast_transaction,
 )
@@ -20,6 +22,7 @@ from stablehedge.utils.transaction import (
     tx_model_to_cashscript,
     get_tx_input_hashes,
     satoshis_to_token,
+    extract_unlocking_script,
 )
 from stablehedge.js.runner import ScriptFunctions
 
@@ -99,6 +102,7 @@ def save_short_proposal_data(
     settlement_service=None,
     funding_amounts=None,
     funding_utxo_tx=None,
+    funding_tx=None,
 ):
     timeout = funding_amounts["recalculate_after"]
     ttl = int(timeout - time.time()) - 5 # 5 seconds for margin
@@ -109,6 +113,7 @@ def save_short_proposal_data(
         settlement_service = settlement_service,
         funding_amounts = funding_amounts,
         funding_utxo_tx = funding_utxo_tx,
+        funding_tx = funding_tx,
     )
     REDIS_KEY = f"treasury-contract-short-{treasury_contract_address}"
 
@@ -286,6 +291,29 @@ def short_funds(treasury_contract_address:str, for_multisig=False, cap_tvl:float
     lp_fee = proposal_data["liquidityProviderFeeInSatoshis"]
     lp_timeout = proposal_data["renegotiateAfterTimestamp"]
 
+    if for_multisig:
+        """
+            For multisig, we will be funding directly instead of using a proxy P2PKH.
+            So we need to calculate the input size of the contract
+            since it will be used as a P2PKH input which has a fixed size
+        """
+        inputSizeCalcResult = ScriptFunctions.calculateTreasuryContractInputSize(dict(
+            contractOpts=treasury_contract.contract_opts,
+            function="unlockWithMultiSig",
+        ))
+        inputSize = decimal.Decimal(inputSizeCalcResult["size"])
+        if not inputSize:
+            error = inputSizeCalcResult.get("error") or "Failed to calculate input size"
+            raise StablehedgeException(error, code="input-size-error")
+
+        # need to adjust the short amount since it's funding calculation assumes the input is
+        # a P2PKH input which has a fixed input size unlike a smart contract that has a variable size
+        P2PKH_INPUT_SIZE = decimal.Decimal(148)
+        short_funding_amount = decimal.Decimal(funding_amounts["short"])
+        short_funding_amount -= P2PKH_INPUT_SIZE
+        short_funding_amount += inputSize
+        funding_amounts["short"] = int(short_funding_amount)
+
     P2PKH_OUTPUT_FEE = decimal.Decimal(34)
     sats_to_fund = decimal.Decimal(funding_amounts["short"])
     sats_to_fund += P2PKH_OUTPUT_FEE + service_fee_estimate
@@ -307,6 +335,7 @@ def short_funds(treasury_contract_address:str, for_multisig=False, cap_tvl:float
     funding_utxo_tx = create_tx_for_funding_utxo(
         treasury_contract_address,
         int(sats_to_fund),
+        use_proxy_funder=False,
         for_multisig=for_multisig,
     )
 
@@ -459,7 +488,7 @@ def get_and_validate_price_message(oracle_public_key:str, price_obj:anyhedge_mod
 # """"""""""""""""""""""""""""""Funding functions"""""""""""""""""""""""""""""" #
 # ============================================================================= #
 
-def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int, for_multisig=False):
+def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int, use_proxy_funder=False, for_multisig=False):
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
     # added 1000 to ensure change amount dont end up as transaction fee due to min dust
     utxos = get_bch_utxos(treasury_contract_address, satoshis=satoshis + 1000)
@@ -468,7 +497,14 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int, for_
         raise Exception("No utxo/s found")
 
     inputs = [tx_model_to_cashscript(utxo) for utxo in utxos]
-    funding_address = get_funding_wif_address(treasury_contract.address, token=False)
+
+    if for_multisig and not use_proxy_funder:
+        proxy_funding = False
+        funding_address = treasury_contract_address
+    else:
+        proxy_funding = True
+        funding_address = get_funding_wif_address(treasury_contract.address, token=False)
+
     outputs = [dict(
         to=funding_address,
         amount=satoshis,
@@ -487,6 +523,7 @@ def create_tx_for_funding_utxo(treasury_contract_address:str, satoshis:int, for_
         outputs = outputs,
     ))
 
+    result["is_proxy_funding"] = proxy_funding
     result["is_multisig"] = for_multisig
     result["locktime"] = 0
     result["funding_utxo_index"] = 0
@@ -564,7 +601,7 @@ def update_short_proposal_funding_utxo_tx_auth_key(treasury_contract_address:str
     return short_proposal_data
 
 
-def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
+def build_short_proposal_funding_utxo_tx(treasury_contract_address:str, save=True):
     short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
     funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
     treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
@@ -602,7 +639,113 @@ def build_short_proposal_funding_utxo_tx(treasury_contract_address:str):
     if not valid_tx:
         raise StablehedgeException("Invalid transaction", code=error_or_txid)
 
+    if save:
+        funding_utxo_tx["tx_hex"] = tx_hex
+        short_proposal_data["funding_utxo_tx"] = funding_utxo_tx
+        save_short_proposal_data(
+            treasury_contract_address,
+            **short_proposal_data,
+        )
+        data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+        LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX BUILD | {treasury_contract_address} | {data_str}")
+
     return dict(tx_hex=tx_hex, txid=error_or_txid)
+
+
+def create_short_proposal_funding_tx(treasury_contract_address:str):
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING TX CREATE | {treasury_contract_address}")
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+
+    contract_data = short_proposal_data["contract_data"]
+    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
+    funding_utxo_index = funding_utxo_tx.get("funding_utxo_index", 0)
+    funding_utxo = dict(
+        txid="",
+        vout=funding_utxo_index,
+        satoshis=funding_utxo_tx["outputs"][funding_utxo_index]["amount"],
+        wif="",
+    )
+
+    if funding_utxo_tx.get("txid"):
+        funding_utxo["txid"] = funding_utxo_tx["txid"]
+    elif "tx_hex" in funding_utxo_tx:
+        funding_utxo["txid"] = get_tx_hash(funding_utxo_tx["tx_hex"])
+    else:
+        raise StablehedgeException("Funding utxo tx not found", code="invalid_tx")
+
+    dummy_long_funding_utxo = dict(
+        txid="0" * 64, vout=0,
+        satoshis=contract_data["metadata"]["longInputInSatoshis"],
+        wif=bitcash.PrivateKey().from_int(1).to_wif(),
+    )
+    inputs = [funding_utxo, dummy_long_funding_utxo]
+
+    create_outputs_result = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
+    outputs = create_outputs_result["outputs"]
+
+    funding_tx = dict(locktime=0, inputs=inputs, outputs=outputs)
+
+    short_proposal_data["funding_tx"] = funding_tx
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX CREATE | {treasury_contract_address} | {data_str}")
+    return short_proposal_data
+
+
+def update_short_proposal_funding_tx_sig(treasury_contract_address:str, sig:list, sig_index:int=0):
+    LOGGER.info(f"SHORT PROPOSAL | FUNDING TX SIG | {treasury_contract_address} | {sig_index} | {sig}")
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+
+    short_proposal_data["funding_tx"] = save_signature_to_tx(
+        treasury_contract,
+        short_proposal_data["funding_tx"],
+        sig,
+        int(sig_index),
+    )
+    save_short_proposal_data(
+        treasury_contract_address,
+        **short_proposal_data,
+    )
+
+    data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+    LOGGER.debug(f"SHORT PROPOSAL | FUNDING TX SIG | {treasury_contract_address} | {data_str}")
+
+    return short_proposal_data
+
+
+def build_short_funding_proposal_multi_sig(treasury_contract_address:str):
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+    short_proposal_data = get_short_contract_proposal(treasury_contract_address, recompile=False)
+
+    funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
+    funding_tx = short_proposal_data["funding_tx"]
+
+    build_result = ScriptFunctions.unlockTreasuryContractWithMultiSig(dict(
+        contractOpts=treasury_contract.contract_opts,
+        sig1=funding_tx["sig1"],
+        sig2=funding_tx["sig2"],
+        sig3=funding_tx["sig3"],
+        locktime=funding_tx.get("locktime") or 0,
+        inputs=funding_tx["inputs"],
+        outputs=funding_tx["outputs"],
+    ))
+    input_tx_hashes = [inp["txid"] for inp in funding_utxo_tx["inputs"]]
+
+    tx_hex = build_result["tx_hex"]
+    funding_input = funding_tx["inputs"][0]
+    return dict(
+        txHash=funding_input["txid"],
+        txIndex=funding_input["vout"],
+        txValue=funding_input["satoshis"],
+        unlockingScript=extract_unlocking_script(tx_hex, index=0),
+        inputTxHashes=input_tx_hashes,
+    )
 
 
 def complete_short_proposal_funding_txs(treasury_contract_address:str):
@@ -613,16 +756,24 @@ def complete_short_proposal_funding_txs(treasury_contract_address:str):
     LOGGER.debug(f"SHORT PROPOSAL | FUNDING TXS BUILD | {treasury_contract_address} | {data_str}")
 
     contract_data = short_proposal_data["contract_data"]
-    settlement_service = short_proposal_data["settlement_service"]
     funding_utxo_tx = short_proposal_data["funding_utxo_tx"]
 
     if funding_utxo_tx.get("txid"):
         funding_utxo_txid = funding_utxo_tx["txid"]
         funding_utxo_tx_hex = None
+    elif funding_utxo_tx.get("tx_hex"):
+        funding_utxo_tx_hex = funding_utxo_tx["tx_hex"]
+        funding_utxo_txid = get_tx_hash(funding_utxo_tx_hex)
     else:
         build_result = build_short_proposal_funding_utxo_tx(treasury_contract_address)
         funding_utxo_txid = build_result["txid"]
         funding_utxo_tx_hex = build_result["tx_hex"]
+
+    if short_proposal_data.get("funding_tx"):
+        return dict(
+            funding_proposal=build_short_funding_proposal_multi_sig(treasury_contract_address),
+            funding_utxo_tx_hex=funding_utxo_tx_hex,
+        )
 
     funding_utxo_index = int(funding_utxo_tx.get("funding_utxo_index", 0))
     funding_utxo_sats = int(funding_utxo_tx["outputs"][funding_utxo_index]["amount"])
@@ -639,12 +790,6 @@ def complete_short_proposal_funding_txs(treasury_contract_address:str):
     create_outputs_result = AnyhedgeFunctions.createFundingTransactionOutputs(contract_data)
     funding_outputs = create_outputs_result["outputs"]
     LOGGER.debug(f"FUNDING OUTPUTS | {GP_LP.json_parser.dumps(funding_outputs, indent=2)}")
-
-    # proxy_funding_tx = dict(
-    #     locktime=0,
-    #     inputs=[funding_utxo],
-    #     outputs=funding_outputs,
-    # )
 
     funding_proposal_signature = AnyhedgeFunctions.signFundingUtxo(
         contract_data, funding_utxo, proxy_funding_wif,
@@ -696,6 +841,9 @@ def complete_short_proposal(treasury_contract_address:str):
 
     oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
 
+    LOGGER.info(f"FUNDING PROPOSAL | {funding_proposal}")
+
+    raise Exception("BLOCK")
     if funding_utxo_tx_hex:
         success, error_or_txid = broadcast_transaction(funding_utxo_tx_hex)
         if not success:

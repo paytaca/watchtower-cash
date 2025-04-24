@@ -1,5 +1,6 @@
 import {
   compileTreasuryContract,
+  calculateTreasuryContractInputSize,
   getTreasuryContractArtifact,
   sweepTreasuryContract,
   unlockTreasuryContractWithMultiSig,
@@ -25,6 +26,7 @@ import { transferTreasuryFundsToRedemptionContract } from './rebalancing.js'
 export default {
   getTreasuryContractArtifact,
   compileTreasuryContract,
+  calculateTreasuryContractInputSize,
   sweepTreasuryContract,
   unlockTreasuryContractWithMultiSig,
   unlockTreasuryContractWithNft,

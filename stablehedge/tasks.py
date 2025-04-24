@@ -14,6 +14,9 @@ from stablehedge.functions.anyhedge import (
     create_short_proposal,
     update_short_proposal_access_keys,
     update_short_proposal_funding_utxo_tx_sig,
+    build_short_proposal_funding_utxo_tx,
+    create_short_proposal_funding_tx,
+    update_short_proposal_funding_tx_sig,
     complete_short_proposal,
     _get_tvl_sats,
 )
@@ -148,18 +151,34 @@ def short_treasury_contract_funds(treasury_contract_address:str):
         )
 
         funding_utxo_tx = short_proposal["funding_utxo_tx"]
+        is_funding_utxo_tx_signed = "sig1" in funding_utxo_tx and "sig2" in funding_utxo_tx and "sig3" in funding_utxo_tx
+        skip_signing = is_funding_utxo_tx_signed or "tx_hex" in funding_utxo_tx or "txid" in funding_utxo_tx
 
-        for index, _wif in enumerate(wifs[:3]):
-            signatures = ScriptFunctions.signMutliSigTx(dict(
-                contractOpts=treasury_contract.contract_opts,
-                wif=_wif,
-                locktime=0,
-                inputs=funding_utxo_tx["inputs"],
-                outputs=funding_utxo_tx["outputs"],
-            ))
-            update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
-            update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
-            update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
+        if not skip_signing:
+            for index, _wif in enumerate(wifs[:3]):
+                signatures = ScriptFunctions.signMutliSigTx(dict(
+                    contractOpts=treasury_contract.contract_opts,
+                    wif=_wif,
+                    locktime=0,
+                    inputs=funding_utxo_tx["inputs"],
+                    outputs=funding_utxo_tx["outputs"],
+                ))
+                update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
+
+
+        if not funding_utxo_tx["is_proxy_funding"]:
+            build_short_proposal_funding_utxo_tx(treasury_contract_address)
+            funding_tx = create_short_proposal_funding_tx(treasury_contract_address)["funding_tx"]
+            for index, _wif in enumerate(wifs[:3]):
+                signatures = ScriptFunctions.signMutliSigTx(dict(
+                    contractOpts=treasury_contract.contract_opts,
+                    wif=_wif,
+                    locktime=funding_tx.get("locktime", 0),
+                    hashType=3 | 128, # SINGLE | ANYONECANPAY
+                    inputs=funding_tx["inputs"],
+                    outputs=funding_tx["outputs"],
+                ))
+                update_short_proposal_funding_tx_sig(treasury_contract_address, signatures, index + 1)
 
         hedge_pos_obj = complete_short_proposal(treasury_contract_address)
         return dict(success=True, address=hedge_pos_obj.address)
