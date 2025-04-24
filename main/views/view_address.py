@@ -1,3 +1,4 @@
+from hashlib import sha224
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -48,10 +49,15 @@ class AddressInfoView(APIView):
                 .filter(Q(gcm_device__active=True) | Q(apns_device__active=True)) \
                 .exists()
 
+        wallet_digest = None
+        if address_obj.wallet and address_obj.wallet.wallet_hash:
+            wallet_hash_bytes = bytes.fromhex(address_obj.wallet.wallet_hash)
+            wallet_digest = sha224(wallet_hash_bytes).digest().hex()
+
         serializer = self.serializer_class(dict(
             address=address_obj.address,
             token_address=address_obj.token_address,
-            wallet_hash=wallet_hash,
+            wallet_digest=wallet_digest,
             project_id=project_id,
             address_path=address_obj.address_path,
             wallet_index=address_obj.wallet_index,
