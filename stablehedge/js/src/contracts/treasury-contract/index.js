@@ -9,6 +9,7 @@ import { hash256, scriptToBytecode } from "@cashscript/utils"
 import { toTokenAddress } from "../../utils/crypto.js"
 import { calculateInputSize, cashscriptTxToLibauth } from "../../utils/transaction.js"
 import { numbersToCumulativeHexString } from "../../utils/math.js"
+import { prepareParamForTreasuryContract } from "../../utils/anyhedge-funding.js"
 
 export class TreasuryContract {
   /**
@@ -485,15 +486,7 @@ export class TreasuryContract {
 
   /**
    * @param {Object} opts
-   * @param {Object} opts.contractParametersBytecode
-   * @param {String} opts.contractParametersBytecode.segment1 enableMutualRedemption + shortPubkey + longPubkey
-   * @param {String} opts.contractParametersBytecode.segment2 satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
-   * @param {BigInt} opts.contractParametersBytecode.shortInputSats
-   * @param {BigInt} opts.contractParametersBytecode.longInputSats
-   * @param {String} opts.contractParametersBytecode.lowPrice
-   * @param {String} opts.contractParametersBytecode.highPrice
-   * @param {String} opts.contractParametersBytecode.startTs
-   * @param {String} opts.contractParametersBytecode.maturityTs
+   * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
    * @param {Number} [opts.locktime]
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
@@ -502,21 +495,12 @@ export class TreasuryContract {
     const contract = this.getContract()
     if (!contract.functions.spendToContract) return 'Contract function not supported'
 
-    const contractParametersBytecode = opts?.contractParametersBytecode
-    const transaction = contract.functions.spendToContract(
-      hexToBin(contractParametersBytecode?.segment1),
-      hexToBin(contractParametersBytecode?.segment2),
-      contractParametersBytecode?.shortInputSats,
-      contractParametersBytecode?.longInputSats,
-      hexToBin(contractParametersBytecode?.lowPrice),
-      hexToBin(contractParametersBytecode?.highPrice),
-      hexToBin(contractParametersBytecode?.startTs),
-      hexToBin(contractParametersBytecode?.maturityTs),
-    )
+    const covenantParams = prepareParamForTreasuryContract(opts?.contractData)
+    const transaction = contract.functions.spendToContract(...covenantParams)
 
     opts?.inputs?.forEach(input => {
       input?.wif
-        ? transaction.fromP2PKH(input, new SignatureTemplate(input.wif, HashType.SIGHASH_SINGLE | HashType.SIGHASH_ANYONECANPAY, SignatureAlgorithm.ECDSA))
+        ? transaction.fromP2PKH(input, new SignatureTemplate(input.wif))
         : transaction.from(input)
     })
 

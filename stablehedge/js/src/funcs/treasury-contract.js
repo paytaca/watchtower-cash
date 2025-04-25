@@ -4,6 +4,7 @@ import { createSighashPreimage } from 'cashscript/dist/utils.js';
 import { cashscriptTxToLibauth } from '../utils/transaction.js';
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
 import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo, wifToPubkey } from '../utils/crypto.js'
+import { parseContractData } from '../utils/anyhedge.js';
 
 
 /**
@@ -252,15 +253,7 @@ export function signMutliSigTx(opts) {
 /**
  * @param {Object} opts
  * @param {Object} opts.contractOpts
- * @param {Object} opts.contractParametersBytecode
- * @param {String} opts.contractParametersBytecode.segment1 enableMutualRedemption + shortPubkey + longPubkey
- * @param {String} opts.contractParametersBytecode.segment2 satsForNominalUnitsAtHighLiquidationBytecode + nominalUnitsXSatsPerBchBytecode + oraclePubkey + longLockScript
- * @param {Number} opts.contractParametersBytecode.shortInputSats
- * @param {Number} opts.contractParametersBytecode.longInputSats
- * @param {String} opts.contractParametersBytecode.lowPrice
- * @param {String} opts.contractParametersBytecode.highPrice
- * @param {String} opts.contractParametersBytecode.startTs
- * @param {String} opts.contractParametersBytecode.maturityTs
+ * @param {import('@generalprotocols/anyhedge').ContractDataV2} opts.contractData
  * @param {Number} [opts.locktime]
  * @param {import("cashscript").Utxo[]} opts.inputs
  * @param {import("cashscript").Recipient[]} opts.outputs
@@ -268,15 +261,12 @@ export function signMutliSigTx(opts) {
 export async function spendToAnyhedgeContract(opts) {
   const treasuryContract = new TreasuryContract(opts?.contractOpts)
 
+  const contractData = parseContractData(opts?.contractData)
   const inputs = opts?.inputs?.map(parseUtxo)
   const outputs = opts?.outputs?.map(parseCashscriptOutput)
 
   const transaction = await treasuryContract.spendToContract({
-    contractParametersBytecode: {
-      ...opts?.contractParametersBytecode,
-      shortInputSats: BigInt(opts?.contractParametersBytecode?.shortInputSats),
-      longInputSats: BigInt(opts?.contractParametersBytecode?.longInputSats),
-    },
+    contractData,
     locktime: opts?.locktime,
     inputs, outputs
   })

@@ -20,8 +20,18 @@ export function createTreasuryContract(opts) {
   const contractParams = [authKeyId, ...pubkeys.map(hexToBin), bytecode]
   const artifact = TreasuryContract.getArtifact('v2')
   const contract = new Contract(artifact, contractParams, { addressType: 'p2sh32' })
+  const manager = new TreasuryContract({
+    params: {
+      authKeyId: binToHex(authKeyId),
+      pubkeys,
+      anyhedgeBaseBytecode: bytecode,
+    },
+    options: { version: 'v2', addressType: 'p2sh32', network: 'mainnet' }
+  })
+
 
   return {
+    manager,
     artifact,
     contract,
     authKeyId: binToHex(authKeyId),

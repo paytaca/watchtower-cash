@@ -1,4 +1,4 @@
-import { getBaseBytecode, getContractParamBytecodes, parseContractData } from "../utils/anyhedge.js";
+import { getBaseBytecode, parseContractData } from "../utils/anyhedge.js";
 import { getLiquidityFee, getProxyFunderInputSize } from "../utils/anyhedge-funding.js";
 
 /**
@@ -7,16 +7,6 @@ import { getLiquidityFee, getProxyFunderInputSize } from "../utils/anyhedge-fund
  */
 export function getAnyhedgeBaseBytecode(opts) {
   return getBaseBytecode(opts)
-}
-
-
-/**
- * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
- * @returns 
- */
-export async function prepareTreasuryContractParams(contractData) {
-  contractData = parseContractData(contractData)
-  return getContractParamBytecodes(contractData)
 }
 
 
