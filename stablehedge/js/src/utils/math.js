@@ -34,6 +34,7 @@ export function numbersToCumulativeHexString(numbers, elementBytes=4) {
     subtotal += BigInt(num);
     return subtotal
   })
+  cumulativeSats.unshift(0n)
 
   const hexCumulatives = cumulativeSats.map(sats => intToHexString(sats, elementBytes))
   return hexCumulatives.reduce((substr, satsHex) => substr + satsHex, '')

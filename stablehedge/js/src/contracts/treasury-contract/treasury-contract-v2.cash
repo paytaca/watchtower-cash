@@ -34,8 +34,8 @@ contract TreasuryContractV2(
             2. The first output has to be an OP_RETURN output
             3. The OP_RETURN data must be of length 4 * inputs.length
             4. OP_RETURN data is a sequence of 4 byte numbers which represents cumulative amounts.
-               This first 4 bytes is the satoshi amount of first input, the second 4 bytes is the
-               cumulative amount of the first two inputs, and so on.
+               This first 4 bytes is zero, the second 4 bytes the satoshi amount of first input,
+               the third 4 bytes is the cumulative amount of the first two inputs, and so on.
             5. This makes the last 4 bytes the cumulative amount of all inputs. Condition 1 above
                 is a way to ensure that this condition is true.
 
@@ -52,38 +52,32 @@ contract TreasuryContractV2(
         require(inputLockScript == prevInputLockScript);
 
         bytes OP_DATA = tx.outputs[0].lockingBytecode;
-        bytes cumulativeAmounts = OP_DATA.split(OP_DATA.length - tx.inputs.length * 4)[1];
+        bytes cumulativeAmounts = OP_DATA.split(OP_DATA.length - (tx.inputs.length+1) * 4)[1];
 
-        int segmentIndex = min(8, cumulativeAmounts.length);
-        bytes segment = cumulativeAmounts.split(this.activeInputIndex * 4)[1].split(segmentIndex)[0];
+        bytes segment = cumulativeAmounts.split(this.activeInputIndex * 4)[1].split(8)[0];
         bytes prevCumulativeBytes, bytes cumulativeBytes = segment.split(4);
-        int inputAmount = int(prevCumulativeBytes);
-        if (this.activeInputIndex > 0) {
-            int cumulative = int(cumulativeBytes);
-            inputAmount = cumulative - inputAmount;
-        }
+        int inputAmount = int(cumulativeBytes) - int(prevCumulativeBytes);
         require(tx.inputs[this.activeInputIndex].value == inputAmount);
 
         int totalInputSats = int(cumulativeAmounts.split(cumulativeAmounts.length - 4)[1]);
-        int totalOutputSats = tx.outputs[0].value;
+        int totalOutputSats = tx.outputs[1].value;
 
-        bytes thisLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
         require(tx.outputs.length <= 3);
-        require(tx.outputs[1].lockingBytecode == thisLockScript);
+        require(tx.outputs[1].lockingBytecode == inputLockScript);
         if (tx.outputs.length == 3) {
             totalOutputSats = totalOutputSats + tx.outputs[2].value;
-            require(tx.outputs[2].lockingBytecode == thisLockScript);
+            require(tx.outputs[1].lockingBytecode == tx.outputs[2].lockingBytecode);
         }
 
-        // 13 => 10 base fee + 3 OP_DATA prefix 
+        // 13 => 10 base fee + 3 OP_DATA length prefix + 4 OP_DATA prefix of 0x00000000
         // inputs.length * 800 => 796 input fee + 4 bytes from OP_DATA
         // 45 bytes per output => BCH only with p2sh32 address
-        int maxFee = 13 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);
+        int maxFee = 17 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);
         int diff = totalInputSats - totalOutputSats;
 
         // using '<=' instead of '==' so creator of transaction can still optimize fee size
         // too small fees will just be rejected by min tx fee requirement
-        require(within(diff, 0, maxFee));
+        require(diff <= maxFee);
     }
 
     /**

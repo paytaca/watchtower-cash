@@ -523,9 +523,10 @@ export class TreasuryContract {
     if (!contract.functions.consolidate) return 'Contract function not supported'
 
     const opData = numbersToCumulativeHexString(opts?.inputs?.map(input => input.satoshis))
+    const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
     const transaction = contract.functions.consolidate()
         .from(opts.inputs)
-        .to([{ to: new Uint8Array([0x6a, ...hexToBin(opData)]), amount: 0n }]) // opreturn
+        .to([{ to: opDataBytecode, amount: 0n }]) // opreturn
 
     if (opts?.satoshis) {
       transaction.to(contract.address, BigInt(opts?.satoshis))
