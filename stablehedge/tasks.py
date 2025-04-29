@@ -12,20 +12,25 @@ from stablehedge.functions.anyhedge import (
     MINIMUM_BALANCE_FOR_SHORT,
     get_short_contract_proposal,
     create_short_proposal,
+    create_short_contract,
     update_short_proposal_access_keys,
     update_short_proposal_funding_utxo_tx_sig,
     complete_short_proposal,
+    complete_short_proposal_funding,
     _get_tvl_sats,
 )
 from stablehedge.functions.treasury_contract import (
     get_spendable_sats,
-    get_wif_for_short_proposal
+    get_wif_for_short_proposal,
+    build_or_find_funding_utxo,
 )
 from stablehedge.functions.market import transfer_treasury_funds_to_redemption_contract
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import wif_to_pubkey
+from stablehedge.utils.transaction import extract_unlocking_script
 
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
+from anyhedge.utils.contract import contract_data_to_obj
 
 REDIS_STORAGE = settings.REDISKV
 GP_LP = GeneralProtocolsLP()
@@ -162,6 +167,116 @@ def short_treasury_contract_funds(treasury_contract_address:str):
             update_short_proposal_funding_utxo_tx_sig(treasury_contract_address, signatures, index + 1)
 
         hedge_pos_obj = complete_short_proposal(treasury_contract_address)
+        return dict(success=True, address=hedge_pos_obj.address)
+    except (AnyhedgeException, StablehedgeException) as error:
+        return dict(success=False, error=str(error), code=error.code)
+    finally:
+        REDIS_STORAGE.delete(REDIS_KEY)
+
+
+@shared_task(queue=_QUEUE_TREASURY_CONTRACT, time_limit=_TASK_TIME_LIMIT)
+def short_v2_treasury_contract_funds(treasury_contract_address:str):
+    REDIS_KEY = f"treasury-contract-short-pos-task-{treasury_contract_address}"
+    if REDIS_STORAGE.exists(REDIS_KEY):
+        return dict(success=False, error="Task key in use")
+
+    treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
+    if not treasury_contract:
+        return dict(success=False, error="Treasury contract not found")
+    elif not treasury_contract.version != models.TreasuryContract.Version.V2:
+        return dict(success=False, error="Treasury contract not v2")
+
+    LOGGER.info(f"SHORT TREAURY CONTRACT | {treasury_contract_address}")
+
+    try:
+        REDIS_STORAGE.set(REDIS_KEY, "1", ex=120)
+
+        balance_data = get_spendable_sats(treasury_contract_address)
+
+        MAX_PREMIUM_PCTG = 0.05
+        HEDGE_FUNDING_NETWORK_FEES = 2500 # sats
+        SETTLEMENT_SERVICE_FEE = 3000 # sats
+
+        spendable_sats = balance_data["spendable"]
+        shortable_sats = (spendable_sats - HEDGE_FUNDING_NETWORK_FEES - SETTLEMENT_SERVICE_FEE) * (1-MAX_PREMIUM_PCTG)
+
+        create_result = create_short_contract(
+            treasury_contract_address,
+            satoshis=shortable_sats,
+            low_liquidation_multiplier = 0.5,
+            high_liquidation_multiplier = 2.0,
+            duration_seconds = duration_seconds,
+        )
+
+        if "contract_data" not in create_result:
+            raise StablehedgeException(create_result)
+        
+        contract_data = create_result["contract_data"]
+        settlement_service = create_result["settlement_service"]
+
+        contract_data_to_obj(contract_data)
+
+        funding_amounts = ScriptFunctions.calculateTotalFundingSatoshis(dict(
+            contractData=contract_data,
+            anyhedgeVersion=contract_data["version"],
+            contributorNum=2, # wont be really useful
+        ))
+
+        data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+        LOGGER.debug(f"FUNDING AMOUNTS | {treasury_contract_address} | {funding_amounts}")
+
+        contract_proposal_data = GP_LP.contract_data_to_proposal(contract_data)
+        service_fee_estimate = GP_LP.estimate_service_fee(
+            contract_proposal_data,
+            settlement_service=settlement_service,
+        )
+        proposal_data = GP_LP.propose_contract(contract_proposal_data)
+
+        funding_sats = funding_amounts["shortFundingUtxoSats"]
+        funding_utxo_build_result = build_or_find_funding_utxo(treasury_contract_address, satoshis=funding_sats)
+        funding_utxo = funding_utxo_build_result["utxo"]
+        funding_utxo_tx = funding_utxo_build_result["transaction"]
+
+        result = ScriptFunctions.spendToAnyhedgeContract(dict(
+            contractOpts=treasury_contract.contract_opts,
+            inputs=[
+                funding_utxo,
+                dict(
+                    txid="0" * 64, vout=0, satoshis=funding_amounts["longFundingSats"] + 141 + 35,
+                    lockingBytecode="0" * 50, # p2pkh locking bytecode length = 25 bytes
+                    unlockingBytecode="0" * (98 * 2), # 65 byte schnorr signature + 33 byte pubkey
+                ),
+            ],
+            outputs=[
+                dict(to=contract_data["address"], amount=funding_amounts["totalFundingSats"]),
+            ]
+        ))
+        if not result.get("success"):
+            raise StablehedgeException(result.get("error", "Failed to build funding tx"))
+
+        funding_transaction = result["tx_hex"]
+        unlocking_bytecode = extract_unlocking_script(funding_transaction, index=0)
+        funding_proposal=dict(
+            txHash=funding_utxo["txid"],
+            txIndex=funding_utxo["vout"],
+            txValue=funding_utxo["satoshis"],
+            unlockingBytecode=unlocking_bytecode,
+        )
+
+        if funding_utxo_tx:
+            success, error_or_txid = broadcast_transaction(funding_utxo_tx)
+            if not success:
+                raise StablehedgeException(
+                    f"Invalid funding utxo tx: {error_or_txid}", code="invalid_transaction"
+                )
+    
+
+        hedge_pos_obj = complete_short_proposal_funding(
+            treasury_contract_address,
+            contract_data,
+            settlement_service,
+            funding_proposal,
+        )
         return dict(success=True, address=hedge_pos_obj.address)
     except (AnyhedgeException, StablehedgeException) as error:
         return dict(success=False, error=str(error), code=error.code)

@@ -694,8 +694,6 @@ def complete_short_proposal(treasury_contract_address:str):
     funding_utxo_tx_hex = funding_txs_data["funding_utxo_tx_hex"]
     funding_proposal = funding_txs_data["funding_proposal"]
 
-    oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
-
     if funding_utxo_tx_hex:
         success, error_or_txid = broadcast_transaction(funding_utxo_tx_hex)
         if not success:
@@ -706,8 +704,22 @@ def complete_short_proposal(treasury_contract_address:str):
             **short_proposal_data,
         )
 
-    # ideally these 2 steps should be last
-    # since it communicates with LP
+    return complete_short_proposal_funding(
+        treasury_contract_address,
+        contract_data,
+        settlement_service,
+        funding_proposal,
+        funding_utxo_tx_hex,
+    )
+
+
+def complete_short_proposal_funding(
+    treasury_contract_address:str,
+    contract_data:dict,
+    settlement_service:dict,
+    funding_proposal:dict,
+):
+    oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
     hedge_pos_obj = save_contract_data(contract_data, settlement_service_data=settlement_service)
     funding_response = fund_hedge_position(
         contract_data,
