@@ -35,11 +35,12 @@ export async function calculateTotalFundingSatoshis(opts) {
   let shortFundingSats = contractData?.metadata?.shortInputInSatoshis;
   let longFundingSats = contractData?.metadata?.longInputInSatoshis;
 
+  const settlementTxFee = 2030n;
   // 1332 is DUST_LIMIT, when settlement prices for AH is at min/max
   // 798 is for settlement tx fee, added a few sats for margin
   // https://bitcoincashresearch.org/t/friday-night-challenge-worst-case-dust/1181/2
   // 1332 + 698 = 2130
-  shortFundingSats += 2030n;
+  shortFundingSats += settlementTxFee;
   const fundingOutputSats = shortFundingSats + longFundingSats;
 
   const longLiquidityFee = getLiquidityFee(contractData)
@@ -58,6 +59,8 @@ export async function calculateTotalFundingSatoshis(opts) {
   // 10 sats as base tx details, 45 sats for p2sh32 output(no token)
   const longFundingUtxoSats = longFundingSats + BigInt(proxyFunderInputSize) + 10n + 45n;
 
+  const totalFundingSats = contractData?.parameters.payoutSats + settlementTxFee;
+
   return {
     fundingOutputSats,
     shortFundingSats,
@@ -66,5 +69,6 @@ export async function calculateTotalFundingSatoshis(opts) {
     proxyFunderInputSize,
     shortFundingUtxoSats,
     longFundingUtxoSats,
+    totalFundingSats,
   }
 }
