@@ -175,7 +175,7 @@ contract TreasuryContractV2(
 
         // will ensure treasury contract only has input 0
         require(this.activeInputIndex == 0);
-        require(tx.inputs[0].value == shortFundingSats);
+        require(within(tx.inputs[0].value, shortInputSats, shortFundingSats+1));
         require(tx.inputs[1].value >= longFundingSats);
     }
 }

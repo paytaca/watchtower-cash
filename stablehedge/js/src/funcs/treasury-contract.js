@@ -265,7 +265,7 @@ export async function spendToAnyhedgeContract(opts) {
   const inputs = opts?.inputs?.map(parseUtxo)
   const outputs = opts?.outputs?.map(parseCashscriptOutput)
 
-  const transaction = await treasuryContract.spendToContract({
+  const transaction = await treasuryContract.spendToAnyhedge({
     contractData,
     locktime: opts?.locktime,
     inputs, outputs

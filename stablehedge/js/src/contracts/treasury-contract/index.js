@@ -491,12 +491,12 @@ export class TreasuryContract {
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {import("cashscript").Recipient[]} opts.outputs
    */
-  async spendToContract(opts) {
+  async spendToAnyhedge(opts) {
     const contract = this.getContract()
-    if (!contract.functions.spendToContract) return 'Contract function not supported'
+    if (!contract.functions.spendToAnyhedge) return 'Contract function not supported'
 
     const covenantParams = prepareParamForTreasuryContract(opts?.contractData)
-    const transaction = contract.functions.spendToContract(...covenantParams)
+    const transaction = contract.functions.spendToAnyhedge(...covenantParams)
 
     opts?.inputs?.forEach(input => {
       input?.wif
