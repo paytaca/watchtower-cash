@@ -7,7 +7,7 @@ from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.exceptions import StablehedgeException
 from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey
-from stablehedge.utils.blockchain import broadcast_transaction
+from stablehedge.utils.blockchain import broadcast_transaction, get_tx_hash
 from stablehedge.utils.transaction import tx_model_to_cashscript
 from stablehedge.utils.encryption import encrypt_str, decrypt_wif_safe
 
@@ -216,3 +216,51 @@ def get_wif_for_short_proposal(treasury_contract:models.TreasuryContract):
     other_wifs = [_wif for _wif in wifs[1:] if _wif]
 
     return (wif1, *other_wifs[:2])
+
+
+def consolidate_treasury_contract(treasury_contract_address:str, satoshis:int=None):
+    """
+        Consolidate treasury contract utxos to a single tx
+    """
+    treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
+    if not treasury_contract:
+        raise StablehedgeException("Treasury contract not found", code="contract_not_found")
+
+    # get utxos
+    utxos = get_bch_utxos(treasury_contract_address, satoshis=satoshis)
+    if not len(utxos):
+        raise StablehedgeException("No UTXOs found", code="no_utxos")
+
+    cashscript_utxos = [tx_model_to_cashscript(utxo) for utxo in utxos]
+
+    # create transaction
+    result = ScriptFunctions.consolidateTreasuryContract(dict(
+        contractOpts=treasury_contract.contract_opts,
+        locktime=0,
+        inputs=cashscript_utxos,
+        satoshis=satoshis,
+    ))
+
+    if "success" not in result or not result["success"]:
+        raise StablehedgeException(result.get("error", "Unknown error"))
+
+    return result["tx_hex"]
+
+
+def build_or_find_funding_utxo(treasury_contract_address:str, satoshis:int=0):
+    """
+        Build or find funding utxo for treasury contract
+    """
+    funding_utxo = find_single_bch_utxo(treasury_contract_address, satoshis=satoshis)
+
+    if funding_utxo:
+        utxo_data = tx_model_to_cashscript(funding_utxo)
+    else:
+        transaction = consolidate_treasury_contract(treasury_contract_address, satoshis=satoshis)
+        txid = get_tx_hash(transaction)
+        utxo_data = dict(txid=txid, vout=0, satoshis=satoshis)
+
+    return dict(
+        utxo=utxo_data,
+        transaction=transaction,
+    )

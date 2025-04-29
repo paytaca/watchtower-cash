@@ -172,3 +172,8 @@ def token_to_satoshis(token_units, price_value):
     token_unit_sats_per_bch = token_units * 10 ** 8 # <units(sats per bch)> == <sats(units per bch)>
     satoshis = math.floor(token_unit_sats_per_bch / token_units_per_bch)
     return decimal.Decimal(satoshis)
+
+
+def extract_unlocking_script(tx_hex, index=0):
+    decoded_tx = NODE.BCH._decode_raw_transaction(tx_hex)
+    return decoded_tx["vin"][index]["scriptSig"]["hex"]
