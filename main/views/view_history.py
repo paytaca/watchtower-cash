@@ -30,7 +30,7 @@ def store_object(key, obj, cache):
     # Convert binary to Base64 string
     encoded_data = base64.b64encode(pickled_data).decode('utf-8')
     # Store in Redis
-    cache.set(key, encoded_data)
+    cache.set(key, encoded_data, ex=60 * 5)  # Cache for 5 minutes
 
 
 def retrieve_object(key, cache):
