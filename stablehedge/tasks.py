@@ -216,6 +216,45 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
 
         contract_data_to_obj(contract_data)
 
+        wifs = get_wif_for_short_proposal(treasury_contract)
+        short_pubkey = contract_data["parameters"]["shortMutualRedeemPublicKey"]
+        wif = None
+        for _wif in wifs:
+            pubkey = wif_to_pubkey(_wif)
+            if pubkey == short_pubkey:
+                wif = _wif
+                break
+    
+        if not wif:
+            raise StablehedgeException("WIF not found for short position pubkey")
+
+        access_key_sign_result = ScriptFunctions.schnorrSign(dict(
+            message=contract_data["address"], wif=wif,
+        ))
+        data_str = GP_LP.json_parser.dumps(access_key_sign_result, indent=2)
+        LOGGER.debug(f"SHORT | ACCESS KEY | {treasury_contract_address} | {data_str}")
+
+        if not access_key_sign_result["success"]:
+            return dict(
+                success=False, code="access-key-error",
+                error=access_key_sign_result.get("error"),
+            )
+
+        settlement_service["short_signature"] = access_key_sign_result["signature"]
+        contract_data2 = get_contract_status(
+            contract_data["address"],
+            short_pubkey,
+            settlement_service["short_signature"],
+            settlement_service_scheme=settlement_service["scheme"],
+            settlement_service_domain=settlement_service["host"],
+            settlement_service_port=settlement_service["port"],
+            authentication_token=settlement_service.get("auth_token", None),
+        )
+        if contract_data2["address"] != contract_data["address"]:
+            raise StablehedgeException("Contract address from settlement service mismatched")
+
+        contract_data = contract_data2
+
         funding_amounts = ScriptFunctions.calculateTotalFundingSatoshis(dict(
             contractData=contract_data,
             anyhedgeVersion=contract_data["version"],
