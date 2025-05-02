@@ -272,7 +272,7 @@ class Balance(APIView):
                         data['yield'] = None # compute_wallet_yield(wallet_hash)
                         data['valid'] = True
 
-                        cache.set(bch_cache_key, json.dumps(data))
+                        cache.set(bch_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
                 else:
                     ct_cache_key = f'wallet:balance:token:{wallet_hash}:{_category}'
                     cached_data = cache.get(ct_cache_key)
@@ -305,7 +305,7 @@ class Balance(APIView):
                             data['commitment'] = token.commitment
                             data['capability'] = token.capability
 
-                        cache.set(ct_cache_key, json.dumps(data))
+                        cache.set(ct_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
 
             # Update last_balance_check timestamp
             wallet.last_balance_check = timezone.now()

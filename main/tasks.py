@@ -1699,6 +1699,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         if merchant_check.exists():
             for merchant in merchant_check.all():
                 merchant.last_update = timezone.now()
+                merchant.active = True
                 merchant.save()
 
                 # update latest_transaction in POS devices
