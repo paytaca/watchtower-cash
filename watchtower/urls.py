@@ -28,7 +28,6 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from main.urls import main_urls, test_urls
 from paytacapos.urls import urlpatterns as paytacapos_urlpatterns
-from paymentvault.urls import urlpatterns as paymentvault_urlpatterns
 from smartbch.urls import urlpatterns as sbch_urlpatterns
 from anyhedge.urls import urlpatterns as anyhedge_urlpatterns
 from notifications.urls import urlpatterns as notifications_urlpatterns
@@ -78,7 +77,6 @@ urlpatterns = [
     path('api/', include(main_urls)),
     path('api/smartbch/', include(sbch_urlpatterns)),
     path('api/paytacapos/', include(paytacapos_urlpatterns)),
-    path('api/payment-vaults/', include(paymentvault_urlpatterns)),
     path('api/anyhedge/', include(anyhedge_urlpatterns)),
     path('api/push-notifications/', include(notifications_urlpatterns)),
     path('api/jpp/', include(jpp_urlpatterns)),

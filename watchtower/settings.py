@@ -81,7 +81,6 @@ INSTALLED_APPS=[
     'main',
     'smartbch',
     'paytacapos',
-    'paymentvault',
     'paytacagifts',
     'anyhedge',
     'chat',
