@@ -70,7 +70,6 @@ services:
       - /code/cts/js/node_modules
       - /code/vouchers/js/node_modules
       - /code/stablehedge/js/node_modules
-      - /code/paymentvault/js/node_modules
 volumes:
   watchtower_db_data:
     # external: true
