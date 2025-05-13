@@ -11,11 +11,6 @@ from .models import (
     MultisigWalletSigner
 )
 
-class SignerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Signer
-        fields = ['xpub', 'derivation_path']
-
 # serializers.py
 from rest_framework import serializers
 from .models import MultisigWallet, Signer
@@ -28,7 +23,7 @@ nonce_cache = settings.REDISKV
 class SignerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Signer
-        fields = ['xpub', 'derivation_path']
+        fields = ['xpub', 'name']
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
     signers = serializers.DictField(child=SignerSerializer(), write_only=True)
@@ -39,7 +34,7 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'm', 'n', 'template', 'signers', 'creator_signer_index', 'signature', 'message']
+        fields = ['id', 'm', 'n', 'signers', 'primary_multisig_address', 'address_index', 'creator_signer_index', 'signature', 'message']
 
     def validate(self, data):
 
@@ -71,8 +66,6 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             LOGGER.error("Signer information for claimed xpub not found.")
             raise serializers.ValidationError("Signer information for claimed xpub not found.")
 
-        derivation_path = signer_info.get('derivation_path', "m/44'/145'/0'/0/0")
-        
         nonce = message
         try:
             nonce = nonce.split("nonce:")[-1].strip()
@@ -84,7 +77,7 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             LOGGER.error("Invalid or expired nonce.")
             raise serializers.ValidationError("Invalid or expired nonce.")
 
-        if not verify_signature(message, signature, creator_claimed_xpub, derivation_path):
+        if not verify_signature(message, signature, creator_claimed_xpub, address_index):
             LOGGER.error("Signature verification failed.")
             raise serializers.ValidationError("Signature verification failed.")
 
@@ -107,7 +100,6 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
 
                 signer, _ = Signer.objects.get_or_create(
                     xpub=signer_data['xpub'],
-                    derivation_path=signer_data.get('derivation_path', "m/44'/145'/0'/0/0"),
                     name=signer_data.get('name', f'Signer {index_str}')
                 )
                 MultisigWalletSigner.objects.create(
