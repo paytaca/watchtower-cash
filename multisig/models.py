@@ -3,19 +3,19 @@ from django.contrib.postgres.fields import JSONField
 
 class Signer(models.Model):
     xpub = models.CharField(max_length=120)
-    derivation_path = models.CharField(max_length=120, default="m/44'/145'/0'/0/0")
     name = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        unique_together = ('xpub', 'derivation_path', 'name')
+        unique_together = ('xpub', 'name')
 
 class MultisigWallet(models.Model):
     m = models.IntegerField()
     n = models.IntegerField()
     name = models.CharField(max_length=120, blank=True, null=True)
-    template = JSONField(default=dict, blank=True, null=True)
     signers = models.ManyToManyField(Signer, through='MultisigWalletSigner', related_name='wallets')
-    address = models.CharField(max_length=120)
+    primary_multisig_address = models.CharField(max_length=120, unique=True, help_text='Multisig address derived using the shared derivation path at address index 0. Used to uniquely identify this wallet')
+    derivation_path = models.CharField(max_length=120, default="m/44'/145'/0'/0", help_text='Shared BIP32 derivation path (excluding address index).')
+
 
 class MultisigWalletSigner(models.Model):
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE)
@@ -28,7 +28,7 @@ class MultisigWalletSigner(models.Model):
         ordering = ['index']
 
 class Transaction(models.Model):
-  txid = models.CharField(max_length=64, blank=True, null=True, help_text="If present, transaction broadcasted to the network.")
+  txid = models.CharField(max_length=64, blank=True, null=True, help_text="If present, transaction was broadcasted to the network.")
   unsigned_hex = models.TextField(unique=True)
   unsigned_hex_hash = models.TextField(unique=True, help_text="Sha256 hash of the unsigned hex")
 
@@ -47,5 +47,5 @@ class SignerTransactionSignature(models.Model):
         default='schnorr',
         help_text="Signature algorithm used (ecdsa or schnorr)"
     )
-  signature_script_placeholder = models.CharField(max_length=200, help_text="Libauth template signature placeholder key. Example: key1.schnorr_signature.all_outputs")
+  signature_identifier = models.CharField(max_length=200, help_text="Libauth template signature placeholder key. Example: key1.schnorr_signature.all_outputs")
   sighash = models.CharField(max_length=50, null=True, blank=True)

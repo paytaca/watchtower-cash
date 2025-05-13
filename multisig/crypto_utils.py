@@ -13,17 +13,17 @@ def get_address_index(path: str) -> int:
     
     return last
 
-def derive_pubkey_from_xpub(xpub: str, derivation_path: str):
+def derive_pubkey_from_xpub(xpub: str, address_index: str):
     """Derives the public key from xpub and returns its hexadecimal representation."""
     key = Bip32Secp256k1.FromExtendedKey(xpub)
-    public_key = key.DerivePath(get_address_index(derivation_path or '0')).PublicKey()
+    public_key = key.DerivePath(address_index or '0').PublicKey()
     # Return the hexadecimal representation of the public key
     return public_key.RawCompressed()
 
-def verify_signature(message: str, signature_hex: str, xpub: str, derivation_path: str, algo: str = "ecdsa") -> bool:
-    """Verifies the signature using the given xpub, derivation path, and algorithm."""
+def verify_signature(message: str, signature_hex: str, xpub: str, address_index: str, algo: str = "ecdsa") -> bool:
+    """Verifies the signature using the given xpub, address index, and algorithm."""
     try:
-        public_key = derive_pubkey_from_xpub(xpub, derivation_path)
+        public_key = derive_pubkey_from_xpub(xpub, address_index)
         signature = bytes.fromhex(signature_hex)
         message_bytes = message.encode('utf-8')        
         # message_hash = hashlib.sha256()
