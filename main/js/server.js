@@ -4,6 +4,9 @@ import {
     encodeCashAddress,
     CashAddressType,
     CashAddressNetworkPrefix,
+    importWalletTemplate,
+    walletTemplateToCompilerBCH,
+    lockingBytecodeToCashAddress
 } from '@bitauth/libauth'
 import ElectrumCashProvider from './utils/electrum-cash-provider.js'
 
@@ -82,6 +85,12 @@ function getTransactions(address, network=''){
 const app = express()
 const port = 3000
 
+// Middleware to parse JSON bodies
+app.use(express.json());
+
+// Middleware to parse URL-encoded bodies (for form submissions)
+app.use(express.urlencoded({ extended: true }));
+
 app.get('/validate-address/:address', (req, res) => {
     const isTokenAddress = req.query.token === 'True'
     const result = validateAddress(req.params.address, isTokenAddress)
@@ -98,6 +107,33 @@ app.get('/get-transactions/:address', async (req, res) => {
     const network = req.query.network
     const response = await getTransactions(req.params.address, network)
     res.send(response)
+})
+
+app.post('/multisig/wallet/derive-address', async (req, res) => {
+    const { template, lockingData } = req.body
+    const { cashAddressNetworkPrefix } = req.query
+    const validTemplate = importWalletTemplate(template);
+    const compiler = walletTemplateToCompilerBCH(validTemplate);
+    const lockingBytecode = compiler.generateBytecode({
+        data: lockingData,
+        scriptId: lockingScript,
+        debug: true
+      })
+
+    const cashAddress = lockingBytecodeToCashAddress({
+        bytecode: lockingBytecode.bytecode,
+        prefix: cashAddressNetworkPrefix || CashAddressNetworkPrefix.mainnet
+    })
+    const tokenAddress = lockingBytecodeToCashAddress({
+        bytecode: lockingBytecode.bytecode,
+        prefix: cashAddressNetworkPrefix || CashAddressNetworkPrefix.mainnet,
+        tokenSupport: true
+    })
+
+    res.send({
+        cashAddress: cashAddress.address,
+        tokenAddress: tokenAddress.address
+    })
 })
 
 app.listen(port, () => {
