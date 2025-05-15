@@ -1,4 +1,6 @@
 import logging
+
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -58,3 +60,9 @@ class RenameMultisigWalletView(APIView):
         wallet.save()
 
         return Response({"id": wallet.id, "name": new_name}, status=status.HTTP_200_OK)
+
+class MultisigWalletDeleteAPIView(APIView):
+    def delete(self, request, pk, format=None):
+        wallet = get_object_or_404(MultisigWallet, pk=pk)
+        wallet.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

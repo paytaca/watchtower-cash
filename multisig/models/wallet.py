@@ -37,5 +37,10 @@ class SignerHdPublicKey(models.Model):
     key = models.CharField(max_length=255, help_text="The signer's entity-key, Example: signer_1")
     value = models.CharField(max_length=512, db_index=True, help_text="The xpub owned by the signer")
 
+    class Meta:
+        constraints = [
+                models.UniqueConstraint(fields=['wallet', 'key', 'value'], name='unique_wallet_key_value')
+            ]
+        
     def __str__(self):
         return f"{self.key}: {self.value}"
