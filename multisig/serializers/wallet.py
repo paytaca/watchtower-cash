@@ -4,77 +4,77 @@ import hashlib
 import logging
 from django.db import transaction
 from rest_framework import serializers
-from ..models.wallet import MultisigTemplate, MultisigWallet, SignerHdPublicKey
+from ..models.wallet import MultisigWallet, Signer
 from ..utils import get_multisig_wallet_locking_script
 LOGGER = logging.getLogger(__name__)
 
 
-class SignerHdPublicKeySerializer(serializers.ModelSerializer):
+class SignerSerializer(serializers.ModelSerializer):
     class Meta:
-        model = SignerHdPublicKey
-        fields = ['key', 'value']
+        model = Signer
+        fields = ['entity_key', 'xpub']
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
-    signer_hd_public_keys = SignerHdPublicKeySerializer(many=True, read_only=True)
+    signers = SignerSerializer(many=True, read_only=True)
     # template_name = serializers.CharField(source='template.name', required=False)
     lockingData = serializers.JSONField(source='locking_data')
-    template = serializers.JSONField(source='template.json')
+    template = serializers.JSONField()
 
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'template', 'lockingData', 'signer_hd_public_keys', 'created_at']
-        read_only_fields = ['signer_hd_public_keys', 'created_at']
+        fields = ['id', 'template', 'lockingData', 'signers', 'created_at', 'locking_bytecode']
+        read_only_fields = ['signers', 'created_at']
     
-    def to_representation(self, instance):
+    # def to_representation(self, instance):
         
-        rep = super().to_representation(instance)
+    #     rep = super().to_representation(instance)
 
-        def extract_sort_key(key):
-            match = re.search(r'_(\d+)$', key)
-            return int(match.group(1)) if match else float('inf')
+    #     def extract_sort_key(key):
+    #         match = re.search(r'_(\d+)$', key)
+    #         return int(match.group(1)) if match else float('inf')
 
-        hd_public_keys = dict(
-            sorted(
-                (
-                    (signer.key, signer.value)
-                    for signer in instance.signer_hd_public_keys.all()
-                ),
-                key=lambda item: (extract_sort_key(item[0]), item[0])  # fallback to alpha sort if needed
-            )
-        )
+    #     hd_public_keys = dict(
+    #         sorted(
+    #             (
+    #                 (signer.key, signer.value)
+    #                 for signer in instance.signer_hd_public_keys.all()
+    #             ),
+    #             key=lambda item: (extract_sort_key(item[0]), item[0])  # fallback to alpha sort if needed
+    #         )
+    #     )
 
-        rep['lockingData'] = {
-            'hdKeys': {
-                'addressIndex': instance.locking_data.get('hdKeys', {}).get('addressIndex', 0),
-                'hdPublicKeys': hd_public_keys
-            }
-        }
+    #     rep['lockingData'] = {
+    #         'hdKeys': {
+    #             'addressIndex': instance.locking_data.get('hdKeys', {}).get('addressIndex', 0),
+    #             'hdPublicKeys': hd_public_keys
+    #         }
+    #     }
 
-        LOGGER.info(instance.template.json)
+    #     LOGGER.info(instance.template.json)
 
-        return {
-            'id': instance.id,
-            'template': instance.template.json,
-            'lockingData': rep['lockingData']
-        }
+    #     return {
+    #         'id': instance.id,
+    #         'template': instance.template.json,
+    #         'lockingData': rep['lockingData']
+    #     }
     
-    @staticmethod
-    def get_or_create_template(template_json):
-        canonical = json.dumps(template_json, sort_keys=True)
-        template_hash = hashlib.sha256(canonical.encode()).hexdigest()
-        template, created = MultisigTemplate.objects.get_or_create(
-            hash=template_hash,
-            defaults=template_json
-        )
-        return template
+    # @staticmethod
+    # def get_or_create_template(template_json):
+    #     canonical = json.dumps(template_json, sort_keys=True)
+    #     template_hash = hashlib.sha256(canonical.encode()).hexdigest()
+    #     template, created = MultisigTemplate.objects.get_or_create(
+    #         hash=template_hash,
+    #         defaults=template_json
+    #     )
+    #     return template
     
     def create(self, validated_data):
         # locking_data = validated_data.pop('locking_data', {})
         locking_data = validated_data.get('locking_data', {})
-        template_json = validated_data.get('template', {})
+        template = validated_data.get('template', {})
         with transaction.atomic():
-            template = MultisigWalletSerializer.get_or_create_template(template_json)
-            locking_bytecode = get_multisig_wallet_locking_script(template_json['json'], locking_data)
+            # template = MultisigWalletSerializer.get_or_create_template(template_json)
+            locking_bytecode = get_multisig_wallet_locking_script(template, locking_data)
             wallet, created = MultisigWallet.objects.get_or_create(
                 locking_bytecode=locking_bytecode,
                 defaults= {
@@ -90,10 +90,10 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             if created:
                 hd_public_keys = locking_data.get('hdKeys', {}).get('hdPublicKeys', {})
                 for key, value in hd_public_keys.items():
-                    SignerHdPublicKey.objects.create(
+                    Signer.objects.create(
                         wallet=wallet,
-                        key=key,
-                        value=value
+                        entity_key=key,
+                        xpub=value
                     )
 
         return wallet
