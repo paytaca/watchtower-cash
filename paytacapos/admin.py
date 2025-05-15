@@ -48,6 +48,27 @@ def IsNullListFilter(parameter_name):
 
 # Register your models here.
 
+@admin.register(LinkedDeviceInfo)
+class LinkedDeviceInfoAdmin(admin.ModelAdmin):
+    list_display = [
+        'link_code',
+        'device_id',
+        'name',
+        'device_model',
+        'os',
+        'is_suspended',
+    ]
+    search_fields = [
+        'link_code',
+        'device_id',
+        'name',
+        'device_model',
+    ]
+    list_filter = [
+        'is_suspended',
+        'os',
+    ]
+
 @admin.register(PosDevice)
 class PosDeviceAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = [
