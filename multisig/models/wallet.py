@@ -10,7 +10,7 @@ class MultisigWallet(models.Model):
     template = JSONField(help_text="Wallet template")
     locking_data = JSONField(null=True, blank=True, help_text="Raw locking data")
     created_at = models.DateTimeField(auto_now_add=True)
-    locking_bytecode = models.CharField(max_length=46, null=True, blank=True)
+    locking_bytecode = models.CharField(max_length=46, null=True, blank=True, unique=True)
     # created_by = models.CharField(max_length=255, null=True, blank=True, help_text="The signer's entity-key, Example: signer_1")
     
     def __str__(self):
