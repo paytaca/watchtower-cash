@@ -1,9 +1,12 @@
 from django.urls import path
-from .views.wallet import (
+from .views import (
   MultisigWalletDeleteAPIView,
   MultisigWalletListCreateView,
   RenameMultisigWalletView,
-  MultisigWalletDetailView
+  MultisigWalletDetailView,
+  MultisigTransactionProposalListCreateView,
+  MultisigTransactionProposalDetailView,
+  SignatureAddView
 )
 
 urlpatterns = [
@@ -11,7 +14,7 @@ urlpatterns = [
     path('wallets/<int:pk>/', MultisigWalletDetailView.as_view(), name='wallet_detail'),
     path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),
     path('wallets/<int:pk>/delete/', MultisigWalletDeleteAPIView.as_view(), name='wallet-delete'),
-
+    path('transaction-proposals/', MultisigTransactionProposalListCreateView.as_view(), name='transaction-proposal-list-create'),
+    path('transaction-proposals/<int:pk>/', MultisigTransactionProposalDetailView.as_view(), name='transaction-proposal-detail'),
+    path('transaction-proposals/<int:proposal_id>/signatures/<int:signer_id>', SignatureAddView.as_view(), name='signature-add'),
 ]
-
-

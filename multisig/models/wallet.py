@@ -11,7 +11,11 @@ class MultisigWallet(models.Model):
     locking_data = JSONField(null=True, blank=True, help_text="Raw locking data")
     created_at = models.DateTimeField(auto_now_add=True)
     locking_bytecode = models.CharField(max_length=46, null=True, blank=True, unique=True)
-    # created_by = models.CharField(max_length=255, null=True, blank=True, help_text="The signer's entity-key, Example: signer_1")
+
+    @property
+    def required_signatures(self):
+        m = int(self.template.get('scripts')['lock']['script'].split('\n')[0].split('_')[1])
+        return m
     
     def __str__(self):
         return self.template.get("name", "Unnamed Wallet")
