@@ -274,11 +274,12 @@ def get_cashtoken_meta_data(
     #         METADATA = None
 
     if METADATA:
-        name = METADATA['name'] or default_details['name']
-        description = METADATA['description']
-        symbol = METADATA['symbol'] or default_details['symbol']
+        # Truncate all string fields to safe lengths
+        name = (METADATA['name'] or default_details['name'])[:200]  # Safe limit for name
+        description = METADATA['description'][:1000] if METADATA['description'] else ''  # Reasonable limit for description
+        symbol = (METADATA['symbol'] or default_details['symbol'])[:100]  # Model limit for symbol
         decimals = METADATA['decimals']
-        image_url = METADATA['uris']['icon']
+        image_url = METADATA['uris']['icon'][:200] if METADATA['uris'].get('icon') else None  # Safe limit for URL
         
         # nft_details field for FT are {}
         # nft_details field for NFTs are:
@@ -299,13 +300,13 @@ def get_cashtoken_meta_data(
                         nft_keys = nfts.keys()
 
                         if 'name' in nft_keys:
-                            name = nfts['name']
+                            name = nfts['name'][:200]  # Safe limit for name
                         if 'description' in nft_keys:
-                            description = nfts['description']
+                            description = nfts['description'][:1000] if nfts['description'] else ''  # Reasonable limit for description
                         if 'uris' in nft_keys:
                             uris = nfts['uris']
                             if 'icon' in uris.keys():
-                                image_url = uris['icon']
+                                image_url = uris['icon'][:200] if uris['icon'] else None  # Safe limit for URL
         data = {
             'name': name,
             'description': description,
@@ -326,8 +327,8 @@ def get_cashtoken_meta_data(
             cashtoken_info.save()
     else:
         # save as default metadata/info if there is no record of metadata from BCMR
-        name = default_details['name']
-        symbol = default_details['symbol']
+        name = default_details['name'][:200]  # Safe limit for name
+        symbol = default_details['symbol'][:100]  # Model limit for symbol
             
         # did not use get_or_create bec of async multiple objects returned error
         cashtoken_infos = CashTokenInfo.objects.filter(name=name, symbol=symbol)
