@@ -137,7 +137,7 @@ contract TreasuryContractV2(
         int maturityTs = int(maturityTsBytecode.split(1)[1]);
         int startTs = int(startTsBytecode.split(1)[1]);
         int durationSeconds = maturityTs - startTs;
-        require(within(durationSeconds, 7200, 432000)); // 7200sec = 2hrs | 432000sec = 5days
+        require(within(durationSeconds, 21600, 432000)); // 21600sec = 6hrs | 432000sec = 5days
 
         // This implies price range is wide enough but does not show how close
         // one boundary is to the start price
