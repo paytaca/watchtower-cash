@@ -168,6 +168,9 @@ contract TreasuryContractV2(
             bytes longLockScript = longLockScriptBytecode.split(1)[1];
             require(tx.outputs[1].value == longLiquidityFee);
             require(tx.outputs[1].lockingBytecode == longLockScript);
+        } else if (longLiquidityFee < 0) {
+            require(tx.outputs[1].lockingBytecode == thisLockScript);
+            require(tx.outputs[1].value == longLiquidityFee * -1);
         }
 
         // This output is used as input for settlement tx of AH contract
