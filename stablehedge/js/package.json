@@ -3,12 +3,7 @@
     "@bitauth/libauth": "^2.1.0",
     "@generalprotocols/anyhedge": "^2.0.2",
     "cashc": "^0.8.0",
-    "cashscript": "^0.10.2"
-  },
-  "overrides": {
-    "@cashscript/utils": {
-      "@bitauth/libauth": "2.0.0-alpha.8"
-    }
+    "cashscript": "^0.11.0-next.4"
   },
   "type": "module"
 }

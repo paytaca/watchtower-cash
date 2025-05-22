@@ -10,15 +10,17 @@ import { generateRandomWif, wifToPubkey } from "./crypto.js";
 
 /**
  * @param {Object} opts 
+ * @param {String} opts.version
  * @param {String} [opts.anyhedgeVersion]
  */
 export function createTreasuryContract(opts) {
+  const version = opts?.version || 'v2'
   const { bytecode } = getBaseBytecode({ version: opts?.anyhedgeVersion })
   const authKeyId = generateRandomBytes(32);
   const wifs = Array.from({ length: 5 }).map(() => generateRandomWif())
   const pubkeys = wifs.map(wif => wifToPubkey(wif))
   const contractParams = [authKeyId, ...pubkeys.map(hexToBin), bytecode]
-  const artifact = TreasuryContract.getArtifact('v2')
+  const artifact = TreasuryContract.getArtifact(version)
   const contract = new Contract(artifact, contractParams, { addressType: 'p2sh32' })
   const manager = new TreasuryContract({
     params: {
@@ -26,7 +28,7 @@ export function createTreasuryContract(opts) {
       pubkeys,
       anyhedgeBaseBytecode: bytecode,
     },
-    options: { version: 'v2', addressType: 'p2sh32', network: 'mainnet' }
+    options: { version: version, addressType: 'p2sh32', network: 'mainnet' }
   })
 
 
