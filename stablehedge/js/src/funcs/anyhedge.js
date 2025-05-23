@@ -1,5 +1,5 @@
 import { getBaseBytecode, parseContractData } from "../utils/anyhedge.js";
-import { getLiquidityFee, getProxyFunderInputSize } from "../utils/anyhedge-funding.js";
+import { getLiquidityFee, getSettlementServiceFee, getProxyFunderInputSize } from "../utils/anyhedge-funding.js";
 
 /**
  * @param {Object} opts
@@ -47,6 +47,12 @@ export async function calculateTotalFundingSatoshis(opts) {
   if (typeof longLiquidityFee === 'string') return { error: longLiquidityFee }
   if (longLiquidityFee) {
     shortFundingSats += longLiquidityFee.satoshis + 45n; // 45 is output fee
+  }
+
+  const settlementServiceFee = getSettlementServiceFee(contractData)
+  if (typeof settlementServiceFee === 'string') return { error: settlementServiceFee }
+  if (settlementServiceFee) {
+    shortFundingSats += settlementServiceFee.satoshis + 45n; // 45 is output fee
   }
 
   // This is calculated using getTreasuryContractInputSize in src/utils/anyhedge-funding.js

@@ -5,6 +5,10 @@ import { calculateInputSize } from "./transaction.js";
 import { createProxyFunder, createTreasuryContract } from "./factory.js";
 import { baseBytecodeToHex, encodeParameterBytecode } from "./contracts.js";
 
+
+const LP_FEE_NAME = 'Liquidity Premium'
+const SETTLEMENT_SERVICE_FEE_NAME = 'Settlement Service Fee'
+
 /**
  * @param {Object} opts
  * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
@@ -42,9 +46,10 @@ export function getProxyFunderInputSize(opts) {
  */
 export function getLiquidityFee(contractData) {
   if (!contractData.fees.length) return
-  if (contractData.fees.length > 1) return 'Must only have atmost 1 fee'
+  if (contractData.fees.length > 2) return 'Must only have atmost 2 fee'
 
-  const fee = contractData.fees[0]
+  const fee = contractData.fees.find(fee => fee.name === LP_FEE_NAME)
+  if (!fee) return
   if (fee.address !== contractData.metadata.longPayoutAddress) {
     return 'Fee recipient must be long payout address'
   }
@@ -58,6 +63,25 @@ export function getLiquidityFee(contractData) {
   return fee
 }
 
+
+/**
+ * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
+ */
+export function getSettlementServiceFee(contractData) {
+  if (!contractData.fees.length) return
+  if (contractData.fees.length > 2) return 'Must only have atmost 2 fee'
+
+  const fee = contractData.fees.find(fee => fee.name === SETTLEMENT_SERVICE_FEE_NAME)
+  if (!fee) return
+
+  const MIN_FEE = 546;
+  const MAX_FEE = contractData.parameters.payoutSats / 100n; // ~1%
+  const feeSats = fee.satoshis
+
+  if (feeSats < MIN_FEE || feeSats > MAX_FEE) return 'Invalid fee amount'
+
+  return fee
+}
 
 
 /**
@@ -76,6 +100,7 @@ export function prepareParamForTreasuryContract(contractData) {
       maturityTs,
     } = _bytecodes
     const fee = getLiquidityFee(contractData);
+    const settlementServiceFee = getSettlementServiceFee(contractData);
 
     console.log(_bytecodes)
     console.log(bytecodesHex.slice(1, 3))
@@ -94,6 +119,7 @@ export function prepareParamForTreasuryContract(contractData) {
       hexToBin(startTs),
       hexToBin(maturityTs),
       fee?.satoshis ? fee.satoshis : 0n,
+      settlementServiceFee?.satoshis ? settlementServiceFee.satoshis : 0n,
     ]
 }
 
