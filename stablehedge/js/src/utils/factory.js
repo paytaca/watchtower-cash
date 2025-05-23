@@ -94,6 +94,7 @@ export function createProxyFunder(opts) {
  * @param {String} opts.priceData.message
  * @param {String} opts.priceData.message_timestamp
  * @param {Number} opts.liquidityFeePctg
+ * @param {Number} opts.settlementServicePctg
  */
 export async function createAnyhedgeContract(opts) {
   const priceData = opts?.priceData ? opts?.priceData : {
@@ -127,8 +128,18 @@ export async function createAnyhedgeContract(opts) {
     await manager.addContractFee(contractData, {
       address: opts?.longAddress,
       satoshis: liquidityFee,
-      name: 'Liquidity fee',
+      name: 'Liquidity Premium',
       description: 'LP Fee for long position',
+    })
+  }
+
+  if (opts?.settlementServicePctg) {
+    const settlementServiceFee = contractData.parameters.payoutSats * BigInt(opts?.settlementServicePctg * 100) / 10_000n
+    await manager.addContractFee(contractData, {
+      address: opts?.longAddress,
+      satoshis: settlementServiceFee,
+      name: 'Settlement Service Fee',
+      description: 'Settlement Service Fee for long position',
     })
   }
   return contractData

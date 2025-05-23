@@ -214,8 +214,8 @@ contract TreasuryContractV2(
         }
 
         if (settlementServiceFee > 0) {
-            // this is 1% of total funding sats, based on data from watchtower ranging from 0.02% to 0.74%
-            int maxSettlementServiceFee = totalFundingSats / 100;
+            // this is 0.5% of total funding sats
+            int maxSettlementServiceFee = (totalFundingSats * 50 + 9999) / 10000;
             shortFundingSats = shortFundingSats + settlementServiceFee + 45; // 45 is output fee
             require(within(settlementServiceFee, 546, maxSettlementServiceFee));
             require(tx.outputs[2].value == settlementServiceFee);
