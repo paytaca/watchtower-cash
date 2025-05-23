@@ -57,7 +57,7 @@ export async function calculateTotalFundingSatoshis(opts) {
 
   // This is calculated using getTreasuryContractInputSize in src/utils/anyhedge-funding.js
   // set to fixed since it's set in treasury contract's cashscript code
-  const treasuryContractInputSize = 1025n;
+  const treasuryContractInputSize = 1100n;
   const shortFundingUtxoSats = shortFundingSats + treasuryContractInputSize;
 
   const proxyFunderInputSize = getProxyFunderInputSize(opts);

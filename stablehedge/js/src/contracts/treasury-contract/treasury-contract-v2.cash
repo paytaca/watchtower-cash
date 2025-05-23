@@ -199,7 +199,7 @@ contract TreasuryContractV2(
         // added ~5-10 sats for margin
         // might have to change if source code changes (e.g. increases in size)
         // did not include long funding fee, it should be covered by long
-        int shortFundingInputFee = 1025;
+        int shortFundingInputFee = 1100;
         int shortFundingSats = shortInputSats + settlementFee + shortFundingInputFee;
         if (longLiquidityFee > 0) {
             int maxLiquidityFee = shortInputSats / 20; // this is 5% of short input sats
