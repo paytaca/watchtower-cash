@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -7,8 +8,7 @@ from multisig.serializers import (
     MultisigTransactionProposalSerializer,
     SignatureSerializer
 )
-from django.shortcuts import get_object_or_404
-
+from multisig.models.wallet import MultisigWallet
 
 class MultisigTransactionProposalListCreateView(APIView):
     def get(self, request):
@@ -16,10 +16,12 @@ class MultisigTransactionProposalListCreateView(APIView):
         serializer = MultisigTransactionProposalSerializer(proposals, many=True)
         return Response(serializer.data)
 
-    def post(self, request):
+    def post(self, request, wallet_pk):
+        multisig_wallet = get_object_or_404(MultisigWallet, pk=wallet_pk)
+
         serializer = MultisigTransactionProposalSerializer(data=request.data)
         if serializer.is_valid():
-            proposal = serializer.save()
+            proposal = serializer.save(wallet=multisig_wallet)
             return Response(MultisigTransactionProposalSerializer(proposal).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -50,10 +52,19 @@ class SignatureAddView(APIView):
             raise NotFound(f"Signer with id {signer_id} not found.")
         
         data = request.data.copy()
-        data['transaction_proposal'] = proposal.id
-        data['signer'] = signer.id
-        serializer = SignatureSerializer(data=data)
-        if serializer.is_valid():
-            signature = serializer.save()
+        
+        for input_index, signature_key_value in data:
+            signature_model_data = {
+                'transaction_proposal': proposal.id,
+                'signer': signer.id,
+                'input_index': input_index
+            }
+            for key, value in signature_key_value:
+                signature_model_data['signature_key'] = key
+                signature_model_data['signature_value'] = value
+                serializer = SignatureSerializer(data=signature_model_data)
+                if serializer.is_valid():
+                    signature = serializer.save()
+
             return Response(SignatureSerializer(signature).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
