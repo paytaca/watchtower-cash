@@ -75,7 +75,7 @@ export function getSettlementServiceFee(contractData) {
   if (!fee) return
 
   const MIN_FEE = 546;
-  const MAX_FEE = (contractData.parameters.payoutSats * 50n + 9999n) / 10000n; // ~0.5%
+  const MAX_FEE = (contractData.parameters.payoutSats * 75n + 9999n) / 10000n; // ~0.5%
   const feeSats = fee.satoshis
 
   if (feeSats < MIN_FEE || feeSats > MAX_FEE) return 'Invalid fee amount'
