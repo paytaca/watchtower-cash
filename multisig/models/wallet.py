@@ -21,9 +21,11 @@ class MultisigWallet(models.Model):
         return self.template.get("name", "Unnamed Wallet")
 
 class Signer(models.Model):
-    wallet = models.ForeignKey(MultisigWallet, related_name='signer_hd_public_keys', on_delete=models.CASCADE)
+    wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
     entity_key = models.CharField(max_length=255, help_text="The signer's entity-key, Example: signer_1")
     xpub = models.CharField(max_length=512, db_index=True, help_text="The xpub owned by the signer")
+    acknowledged = models.BooleanField(default=False, help_text="True if signer acknowledged the wallet")
+
     class Meta:
         constraints = [
                 models.UniqueConstraint(fields=['wallet', 'entity_key', 'xpub'], name='unique_signer')

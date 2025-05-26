@@ -3,15 +3,18 @@ from .wallet import MultisigWalletSerializer, SignerSerializer
 from ..models.transaction_proposal import MultisigTransactionProposal, Signature
 
 class SignatureSerializer(serializers.ModelSerializer):
-    signer = SignerSerializer(read_only=True)
-
+    signer = serializers.PrimaryKeyRelatedField(read_only=True)
+    transaction_proposal = serializers.PrimaryKeyRelatedField(read_only=True)
+    
     class Meta:
         model = Signature
-        fields = ['id', 'signer', 'signature_key', 'signature_value']
+        fields = ['id', 'signer', 'transaction_proposal', 'input_index', 'signature_key', 'signature_value']
+        read_only_fields = ['signers', 'created_at']
 
 class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
     wallet = serializers.PrimaryKeyRelatedField(read_only=True)
-    signatures = SignatureSerializer(source='signatures', many=True, read_only=True)
+    signatures = SignatureSerializer(many=True, read_only=True)
+    
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -35,4 +38,4 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MultisigTransactionProposal
-        fields = ['id', 'wallet_id', 'transaction', 'source_outputs', 'metadata', 'created_at', 'signatures']
+        fields = ['id', 'wallet', 'transaction', 'source_outputs', 'metadata', 'created_at', 'signatures']
