@@ -29,45 +29,6 @@ contract TreasuryContractV2(
 
     /**
         This allows contract to consolidate or create a UTXO with specific satoshis amount
-        - Getting the total input and output satoshis is necessary to ensure that the input & output
-            satoshis are balanced correctly(e.g. no BCH is burned)
-        - The number of outputs is predictable but the inputs are not which means:
-            - Getting the total output satoshis can be calculated
-            - Getting the total input satoshis is not so easy;
-        - So we store the total input satoshis in the OP_RETURN data and provide a 
-     */
-    // function consolidate2(int elementSize, bytes prevInputAmounts, bytes nextInputAmounts) {
-    //     require(prevInputAmounts.length == this.activeInputIndex * elementSize);
-    //     require(nextInputAmounts.length == (tx.inputs.length - this.activeInputIndex - 1) * elementSize);
-
-    //     int currentAmount = int(tx.inputs[this.activeInputIndex].value);
-    //     bytes inputAmountsData = prevInputAmounts + bytes(currentAmount, elementSize) + nextInputAmounts;
-    //     bytes32 inputAmountsHash = hash256(inputAmountsData);
-
-    //     bytes opDataAmountsHash, bytes totalInputSats = tx.outputs[0].lockingBytecode.split(32);
-    //     require(inputAmountsHash == opDataAmountsHash);
-
-    //     bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
-    //     require(tx.outputs.length <= 3);
-    //     require(tx.outputs[1].lockingBytecode == inputLockScript);
-    //     if (tx.outputs.length == 3) {
-    //         totalOutputSats = totalOutputSats + tx.outputs[2].value;
-    //         require(tx.outputs[1].lockingBytecode == tx.outputs[2].lockingBytecode);
-    //     }
-
-    //     // 13 => 10 base fee + 3 OP_DATA length prefix + 4 OP_DATA prefix of 0x00000000
-    //     // inputs.length * 800 => 796 input fee + 4 bytes from OP_DATA
-    //     // 45 bytes per output => BCH only with p2sh32 address
-    //     int maxFee = 17 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);
-    //     int diff = totalInputSats - totalOutputSats;
-
-    //     // using '<=' instead of '==' so creator of transaction can still optimize fee size
-    //     // too small fees will just be rejected by min tx fee requirement
-    //     require(diff <= maxFee);
-    // }
-
-    /**
-        This allows contract to consolidate or create a UTXO with specific satoshis amount
         This consolidate tx has the following requirements:
             1. All the inputs must be from this smart contract
             2. The first output has to be an OP_RETURN output
