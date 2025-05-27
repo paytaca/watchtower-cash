@@ -1,5 +1,5 @@
 import { compileFile } from "cashc"
-import { Contract, ElectrumNetworkProvider, HashType, SignatureAlgorithm, SignatureTemplate } from "cashscript"
+import { Contract, ElectrumNetworkProvider, HashType, SignatureAlgorithm, SignatureTemplate, TransactionBuilder } from "cashscript"
 import { binToHex, hexToBin, secp256k1 } from "@bitauth/libauth"
 
 import { calculateDust, createSighashPreimage, getOutputSize } from "cashscript/dist/utils.js"
@@ -515,6 +515,8 @@ export class TreasuryContract {
   /**
    * @param {Object} opts 
    * @param {Number} [opts.locktime]
+   * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
+   * @param {import("cashscript").Output} opts.feeFunderOutput
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {Number} [opts.satoshis] falsey value would mean to consolidate all inputs into 1 utxo
    */
@@ -522,20 +524,44 @@ export class TreasuryContract {
     const contract = this.getContract()
     if (!contract.functions.consolidate) return 'Contract function not supported'
 
-    const opData = numbersToCumulativeHexString(opts?.inputs?.map(input => input.satoshis))
+    const feeFunderUtxo = opts?.feeFunderUtxo
+    const feeFunderOutput = opts?.feeFunderOutput
+    const totalSats = opts.inputs.reduce((subtotal, utxo) => subtotal + utxo.satoshis, 0n)
+    const opData = numbersToCumulativeHexString([0n, ...opts?.inputs?.map(input => input.satoshis)])
     const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
-    const transaction = contract.functions.consolidate()
-        .from(opts.inputs)
-        .to([{ to: opDataBytecode, amount: 0n }]) // opreturn
 
-    if (opts?.satoshis) {
-      transaction.to(contract.address, BigInt(opts?.satoshis))
+    const builder = new TransactionBuilder({ provider: contract.provider })
+      .addInput(feeFunderUtxo, feeFunderUtxo.template.unlockP2PKH())
+      .addInputs(opts.inputs)
+
+    if (feeFunderOutput) {
+      builder.addOutput(feeFunderOutput)
+    } else {
+      builder.addOutput({
+        to: feeFunderUtxo.template.unlockP2PKH().generateLockingBytecode(),
+        amount: feeFunderUtxo.satoshis
+      })
+    }
+
+    builder.addOutput({ to: opDataBytecode, amount: 0n })
+
+    if (opts.satoshis) {
+      builder.addOutput({ to: tc.contract.address, amount: opts.satoshis })
+      builder.addOutput({ to: tc.contract.address, amount: totalSats - opts.satoshis })
+    } else {
+      builder.addOutput({ to: tc.contract.address, amount: totalSats })
     }
 
     if (Number.isSafeInteger(opts?.locktime)) {
-      transaction.withTime(opts?.locktime)
+      builder.setLocktime(opts?.locktime)
     }
-    return transaction
+
+    if (!feeFunderOutput) {
+      const txSize = builder.build().length
+      builder.outputs[0].amount -= BigInt(txSize / 2)
+    }
+
+    return builder
   }
 }
 

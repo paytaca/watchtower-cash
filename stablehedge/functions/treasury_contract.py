@@ -217,8 +217,26 @@ def get_wif_for_short_proposal(treasury_contract:models.TreasuryContract):
 
     return (wif1, *other_wifs[:2])
 
+def get_funding_utxo_for_consolidation(treasury_contract_address:str, wif:str, utxos_count:int):
+    if not wif:
+        wif = get_funding_wif(treasury_contract_address)
 
-def consolidate_treasury_contract(treasury_contract_address:str, satoshis:int=None):
+    if not wif:
+        raise StablehedgeException("Funding WIF not set", code="funding_wif_not_set")
+    
+    if not is_valid_wif(wif):
+        raise StablehedgeException("Invalid funding WIF", code="invalid_funding_wif")
+
+    address = wif_to_cash_address(wif, testnet=settings.BCH_NETWORK == "chipnet")
+    return wif, main_models.Transaction.objects.filter(
+        address__address=address,
+        token__name="bch",
+        spent=False,
+        value__gte=1000 + utxos_count * 900,
+    ).first()
+
+
+def consolidate_treasury_contract(treasury_contract_address:str, satoshis:int=None, funding_wif:str=None):
     """
         Consolidate treasury contract utxos to a single tx
     """
@@ -233,10 +251,20 @@ def consolidate_treasury_contract(treasury_contract_address:str, satoshis:int=No
 
     cashscript_utxos = [tx_model_to_cashscript(utxo) for utxo in utxos]
 
+    fee_funder_wif, funding_utxo = get_funding_utxo_for_consolidation(
+        treasury_contract_address, funding_wif, len(cashscript_utxos),
+    )
+    if not funding_utxo:
+        raise StablehedgeException("Funding UTXO not found", code="funding_utxo_not_found")
+
+    funding_utxo_data = tx_model_to_cashscript(funding_utxo)
+    funding_utxo_data["wif"] = fee_funder_wif
+
     # create transaction
     result = ScriptFunctions.consolidateTreasuryContract(dict(
         contractOpts=treasury_contract.contract_opts,
         locktime=0,
+        feeFunderUtxo=funding_utxo_data,
         inputs=cashscript_utxos,
         satoshis=satoshis,
     ))

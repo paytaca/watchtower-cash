@@ -30,28 +30,36 @@ contract TreasuryContractV2(
     /**
         This allows contract to consolidate or create a UTXO with specific satoshis amount
         This consolidate tx has the following requirements:
-            1. All the inputs must be from this smart contract
-            2. The first output has to be an OP_RETURN output
-            3. The OP_RETURN data must be of length 4 * inputs.length
-            4. OP_RETURN data is a sequence of 4 byte numbers which represents cumulative amounts.
-               This first 4 bytes is zero, the second 4 bytes the satoshi amount of first input,
-               the third 4 bytes is the cumulative amount of the first two inputs, and so on.
-            5. This makes the last 4 bytes the cumulative amount of all inputs. Condition 1 above
-                is a way to ensure that this condition is true.
+            1. First input and output is used as fee funder for the consolidate tx.
+                This can be any wallet (e.g. p2sh, p2pkh)
+            2. All the inputs after input#0 must be from this smart contract
+            3. The output#1 has to be an OP_RETURN output
+            4. The OP_RETURN data must be of length 4 * inputs.length + 1
+            5. OP_RETURN data is a sequence of 4 byte numbers which represents cumulative amounts
+                of the inputs' satoshis amount.
+                This first 4 bytes is zero, the second 4 bytes is set as zero since
+                it represents input#0 and input#0 is not from this smart contract,
+                the third 4 bytes is the amount of input#1,
+                the fourth 4 bytes is the cumulative amount of the first two inputs, and so on.
+            6. This makes the last 4 bytes the cumulative amount of the smart contract's inputs.
+                Condition 1 above is a way to ensure that this condition is true.
+            7. output#2 and output#3 (if exists) must have a total satoshis equal to last 4 bytes
+                in the cumulitive amounts OP_RETURN data.
+            8. The recipient for output#2 and #3 should be this smart contract.
 
-        Current vulnerabilities seen:
-            1. Anyone can keep spamming consolidate, potentially consume a lot of BCH as tx fee
+        Based on the conditions above, the transaction fee is covered by the executor of the
+        consolidate transaction to prevent abuse of this function and result in loss of funds.
     */
     function consolidate() {
         // this ensures all inputs are from this smart contract's
         // we check if adjacent inputs are from the same address
         bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
-        bytes prevInputLockScript = tx.inputs[max(this.activeInputIndex - 1, 0)].lockingBytecode;
+        bytes prevInputLockScript = tx.inputs[max(this.activeInputIndex - 1, 1)].lockingBytecode;
         bytes nextInputLockScript = tx.inputs[min(this.activeInputIndex + 1, tx.inputs.length - 1)].lockingBytecode;
         require(inputLockScript == nextInputLockScript);
         require(inputLockScript == prevInputLockScript);
 
-        bytes OP_DATA = tx.outputs[0].lockingBytecode;
+        bytes OP_DATA = tx.outputs[1].lockingBytecode;
         bytes cumulativeAmounts = OP_DATA.split(OP_DATA.length - (tx.inputs.length+1) * 4)[1];
 
         bytes segment = cumulativeAmounts.split(this.activeInputIndex * 4)[1].split(8)[0];
@@ -60,24 +68,24 @@ contract TreasuryContractV2(
         require(tx.inputs[this.activeInputIndex].value == inputAmount);
 
         int totalInputSats = int(cumulativeAmounts.split(cumulativeAmounts.length - 4)[1]);
-        int totalOutputSats = tx.outputs[1].value;
+        int totalOutputSats = tx.outputs[2].value;
 
-        require(tx.outputs.length <= 3);
-        require(tx.outputs[1].lockingBytecode == inputLockScript);
-        if (tx.outputs.length == 3) {
-            totalOutputSats = totalOutputSats + tx.outputs[2].value;
-            require(tx.outputs[1].lockingBytecode == tx.outputs[2].lockingBytecode);
+        require(tx.outputs.length <= 4);
+        require(tx.outputs[2].lockingBytecode == inputLockScript);
+        if (tx.outputs.length == 4) {
+            totalOutputSats = totalOutputSats + tx.outputs[3].value;
+            require(tx.outputs[2].lockingBytecode == tx.outputs[3].lockingBytecode);
         }
 
         // 13 => 10 base fee + 3 OP_DATA length prefix + 4 OP_DATA prefix of 0x00000000
         // inputs.length * 800 => 796 input fee + 4 bytes from OP_DATA
         // 45 bytes per output => BCH only with p2sh32 address
-        int maxFee = 17 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);
+        // int maxFee = 17 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);
         int diff = totalInputSats - totalOutputSats;
 
         // using '<=' instead of '==' so creator of transaction can still optimize fee size
         // too small fees will just be rejected by min tx fee requirement
-        require(diff <= maxFee);
+        require(diff == 0);
     }
 
     /**
