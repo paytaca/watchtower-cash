@@ -51,9 +51,11 @@ contract TreasuryContractV2(
         consolidate transaction to prevent abuse of this function and result in loss of funds.
     */
     function consolidate() {
+        bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
+        require(tx.inputs[0].lockingBytecode != inputLockScript);
+
         // this ensures all inputs are from this smart contract's
         // we check if adjacent inputs are from the same address
-        bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
         bytes prevInputLockScript = tx.inputs[max(this.activeInputIndex - 1, 1)].lockingBytecode;
         bytes nextInputLockScript = tx.inputs[min(this.activeInputIndex + 1, tx.inputs.length - 1)].lockingBytecode;
         require(inputLockScript == nextInputLockScript);
