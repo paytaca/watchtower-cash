@@ -1,5 +1,6 @@
 import { getBaseBytecode, parseContractData } from "../utils/anyhedge.js";
 import { getLiquidityFee, getSettlementServiceFee, getProxyFunderInputSize } from "../utils/anyhedge-funding.js";
+import { P2PKH_INPUT_SIZE } from "cashscript/dist/constants.js";
 
 /**
  * @param {Object} opts
@@ -27,7 +28,7 @@ export async function getArgsForTreasuryContract(opts) {
  * @param {Object} opts
  * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
  * @param {String} opts.anyhedgeVersion
- * @param {Number} opts.contributorNum
+ * @param {Number} [opts.contributorNum] Set to 0 to assume p2pkh counterparty instead of P2P-LP contract
  * @returns 
  */
 export async function calculateTotalFundingSatoshis(opts) {
@@ -60,10 +61,12 @@ export async function calculateTotalFundingSatoshis(opts) {
   const treasuryContractInputSize = 1100n;
   const shortFundingUtxoSats = shortFundingSats + treasuryContractInputSize;
 
-  const proxyFunderInputSize = getProxyFunderInputSize(opts);
-
-  // 10 sats as base tx details, 45 sats for p2sh32 output(no token)
-  const longFundingUtxoSats = longFundingSats + BigInt(proxyFunderInputSize) + 10n + 45n;
+  let longFundingUtxoSats = longFundingSats + BigInt(P2PKH_INPUT_SIZE) + 35n; // 34 is p2pkh output fee
+  if (opts?.contributorNum) {
+    const proxyFunderInputSize = getProxyFunderInputSize(opts);
+    // 45 sats for p2sh32 output(no token)
+    longFundingUtxoSats = longFundingSats + BigInt(proxyFunderInputSize) + 45n;
+  }
 
   const totalFundingSats = contractData?.parameters.payoutSats + settlementTxFee;
 
@@ -72,7 +75,6 @@ export async function calculateTotalFundingSatoshis(opts) {
     shortFundingSats,
     longFundingSats,
     treasuryContractInputSize,
-    proxyFunderInputSize,
     shortFundingUtxoSats,
     longFundingUtxoSats,
     totalFundingSats,
