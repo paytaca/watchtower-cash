@@ -1,7 +1,8 @@
+import logging
 from bip_utils import Bip32Secp256k1
 from coincurve import PublicKey
 from bip_utils import Bip32Secp256k1, Hash160
-
+LOGGER = logging.getLogger(__name__)
 def get_address_index(path: str) -> int:
     parts = path.strip().split("/")
     last = parts[-1]
@@ -17,7 +18,7 @@ def derive_pubkey_from_xpub(xpub: str, address_index: str):
     key = Bip32Secp256k1.FromExtendedKey(xpub)
     public_key = key.DerivePath(address_index or '0').PublicKey()
     # Return the hexadecimal representation of the public key
-    return public_key.RawCompressed()
+    return public_key.RawCompressed().ToHex()
 
 def verify_signature(message: str, signature_hex: str, xpub: str, address_index: str, algo: str = "ecdsa") -> bool:
     """Verifies the signature using the given xpub, address index, and algorithm."""
@@ -51,7 +52,7 @@ def create_redeem_script(pubkeys, m: int):
     script = m
     for pubkey in pubkeys:
         print(pubkey)
-        script += '21' + pubkey 
+        script += '21' + pubkey
     script += n + 'ae'
     return script
     
@@ -67,10 +68,13 @@ def get_locking_script(locking_bytecode: str):
 
 def get_multisig_wallet_locking_script(template: dict, locking_data: dict):
     m = int(template['scripts']['lock']['script'].split('\n')[0].split('_')[1])
-    address_index = locking_data['hdKeys']['addressIndex'] or 0
+    address_index = locking_data['hdKeys']['addressIndex'] or '0'
     xpubs = locking_data['hdKeys']['hdPublicKeys']
     sorted_xpubs = [v for k, v in sorted(xpubs.items(), key=lambda item: int(item[0].split('_')[1]))]
-    pubkeys = [derive_pubkey_from_xpub(xpub, address_index) for xpub in sorted_xpubs]
+    
+    pubkeys = [derive_pubkey_from_xpub(xpub, str(address_index)) for xpub in sorted_xpubs]
+    LOGGER.info(pubkeys)
+
     redeem_script = create_redeem_script(pubkeys, m)
     locking_bytecode = get_locking_bytecode(redeem_script)
     locking_script = get_locking_script(locking_bytecode)

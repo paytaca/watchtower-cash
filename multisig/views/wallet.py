@@ -14,7 +14,7 @@ class MultisigWalletListCreateView(APIView):
         xpub = request.query_params.get('xpub')
         queryset = MultisigWallet.objects.all()
         if xpub:
-            queryset = queryset.filter(signer_hd_public_keys__xpub=xpub).distinct()
+            queryset = queryset.filter(signers__xpub=xpub).distinct()
 
         serializer = MultisigWalletSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -29,17 +29,15 @@ class MultisigWalletListCreateView(APIView):
     
 class MultisigWalletDetailView(APIView):
     
-    def get(self, request, pk):
+    def get(self, request, identifier):
         try:
-            # Fetch the wallet with the provided wallet_id
-            wallet = MultisigWallet.objects.get(id=pk)
+            if identifier.isdigit():
+                wallet = MultisigWallet.objects.get(id=identifier)
+            else:
+                wallet = MultisigWallet.objects.get(locking_bytecode=identifier)
         except MultisigWallet.DoesNotExist:
             raise NotFound(detail="Wallet not found.")
-        
-        # Serialize the wallet data
         serializer = MultisigWalletSerializer(wallet)
-        
-        # Return the serialized data
         return Response(serializer.data)
         
 class RenameMultisigWalletView(APIView):
