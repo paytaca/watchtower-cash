@@ -397,12 +397,27 @@ class TreasuryContractViewSet(
     @swagger_auto_schema(
         method="post",
         responses={ 200:response_serializers.TxidSerializer },
+        manual_parameters=[
+            openapi.Parameter(
+                'force', openapi.IN_QUERY,
+                description="V2 treasury contract require force since it has different functionality",
+                type=openapi.TYPE_BOOLEAN, default=False,
+            ),
+        ],
     )
     @decorators.action(methods=["post"], detail=True)
     def sweep_proxy_funder(self, request, *args, **kwargs):
+        force = str(request.query_params.get("force", "")).lower().strip() == "true"
         instance = self.get_object()
-        txid = sweep_funding_wif(instance.address)
-        return Response({ "txid": txid })
+        try:
+            txid = sweep_funding_wif(instance.address, force=force)
+            return Response({ "txid": txid })
+        except StablehedgeException as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
 
     @swagger_auto_schema(
         method="post",

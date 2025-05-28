@@ -137,8 +137,18 @@ def get_funding_wif(treasury_contract_address:str):
     return decrypt_wif_safe(encrypted_funding_wif)
 
 
-def sweep_funding_wif(treasury_contract_address:str):
+def sweep_funding_wif(treasury_contract_address:str, force:bool=False):
     LOGGER.info(f"SWEEP FUNDING WIF | {treasury_contract_address}")
+
+    treasury_contract = models.TreasuryContract.objects \
+        .filter(address=treasury_contract_address).first()
+
+    if treasury_contract.version == models.TreasuryContract.Version.V2 and not force:
+        raise StablehedgeException(
+            "Sweep funding WIF is not supported for V2 contracts. Set force=True to allow.",
+            code="v2_not_supported",
+        )
+
     funding_wif = get_funding_wif(treasury_contract_address)
     funding_wif_address = get_funding_wif_address(treasury_contract_address)
 

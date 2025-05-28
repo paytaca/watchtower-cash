@@ -178,7 +178,12 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         "subscribe_funding_wif",
         "update_utxos",
         "sweep_funding_wif",
+        "force_sweep_funding_wif",
         "short_funds",
+    ]
+
+    list_filter = [
+        "version",
     ]
 
     def recompile(self, request, queryset):
@@ -234,6 +239,15 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         for obj in queryset.all():
             try:
                 txid = sweep_funding_wif(obj.address)
+                messages.info(request, f"Sweep | {obj} | {txid}")
+            except Exception as exception:
+                messages.error(request, f"Sweep | {obj} | {exception}")
+                LOGGER.exception(exception)
+
+    def force_sweep_funding_wif(self, request, queryset):
+        for obj in queryset.all():
+            try:
+                txid = sweep_funding_wif(obj.address, force=True)
                 messages.info(request, f"Sweep | {obj} | {txid}")
             except Exception as exception:
                 messages.error(request, f"Sweep | {obj} | {exception}")
