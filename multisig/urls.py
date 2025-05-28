@@ -11,7 +11,7 @@ from .views import (
 
 urlpatterns = [
     path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
-    path('wallets/<int:pk>/', MultisigWalletDetailView.as_view(), name='wallet_detail'),
+    path('wallets/<str:identifier>/', MultisigWalletDetailView.as_view(), name='wallet_detail') ,
     path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),
     path('wallets/<int:pk>/delete/', MultisigWalletDeleteAPIView.as_view(), name='wallet-delete'),
     path('wallets/<int:wallet_pk>/transaction-proposals/', MultisigTransactionProposalListCreateView.as_view(), name='transaction-proposal-list-create'),
