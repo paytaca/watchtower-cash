@@ -1,5 +1,5 @@
-import { hexToBin } from "@bitauth/libauth";
-import { getContractParamBytecodes } from "./anyhedge.js";
+import { hexToBin, isHex } from "@bitauth/libauth";
+import { getBaseBytecode, getContractParamBytecodes } from "./anyhedge.js";
 
 import { calculateInputSize } from "./transaction.js";
 import { createProxyFunder, createTreasuryContract } from "./factory.js";
@@ -86,8 +86,9 @@ export function getSettlementServiceFee(contractData) {
 
 /**
  * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
+ * @param {String} [contractBaseBytecode]
  */
-export function prepareParamForTreasuryContract(contractData) {
+export function prepareParamForTreasuryContract(contractData, contractBaseBytecode) {
   const _bytecodes = getContractParamBytecodes(contractData)
   const {
       bytecodesHex,
@@ -102,11 +103,13 @@ export function prepareParamForTreasuryContract(contractData) {
     const fee = getLiquidityFee(contractData);
     const settlementServiceFee = getSettlementServiceFee(contractData);
 
-    console.log(_bytecodes)
-    console.log(bytecodesHex.slice(1, 3))
-    console.log(bytecodesHex.slice(5, 7))
-  
+    if (!contractBaseBytecode) {
+      const { bytecode } = getBaseBytecode({ version: contractData.version })
+      contractBaseBytecode = bytecode;
+    }
+
     return [
+      isHex(contractBaseBytecode) ? hexToBin(contractBaseBytecode) : contractBaseBytecode,
       shortMutualRedeemPublicKey,
       hexToBin(bytecodesHex.slice(1, 3).reverse().join('')),
       hexToBin(longLockScript),

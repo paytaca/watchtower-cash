@@ -1,5 +1,8 @@
 pragma cashscript ^0.8.0;
 
+// Smart Contract fingerprint
+// https://bitcoincashresearch.org/t/smart-contract-fingerprinting-a-method-for-pattern-recognition-and-analysis-in-bitcoin-cash/1441
+
 contract TreasuryContractV2(
     bytes32 authKeyId, // 32 B token category of authkey nft
     pubkey pk1, // 33 B
@@ -7,7 +10,7 @@ contract TreasuryContractV2(
     pubkey pk3, // 33 B
     pubkey pk4, // 33 B
     pubkey pk5, // 33 B
-    bytes anyhedgeBaseBytecode, // an artifact bytecode of anyhedge smart contract
+    bytes32 anyhedgeContractFingerprint, // an smart contract fingerprint of anyhedge smart contract
 ) {
     // Based on Authguard
     // https://github.com/mr-zwets/AuthGuard/blob/c5115b0df05c868018cc433e1047f5c5f6c8f7f7/AuthGuard.cash
@@ -95,6 +98,7 @@ contract TreasuryContractV2(
             1. ...
      */
     function spendToAnyhedge(
+        bytes anyhedgeBaseBytecode,
         bytes shortPubkeyBytecode,
         bytes argsSegment1, // enableMutualRedemption + longPubkey
         bytes longLockScriptBytecode, // type bytes
@@ -109,6 +113,7 @@ contract TreasuryContractV2(
         int longLiquidityFee,
         int settlementServiceFee,
     ) {
+        require(anyhedgeContractFingerprint == hash256(anyhedgeBaseBytecode));
         bytes thisLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
 
         int payoutSats = shortInputSats + longInputSats;

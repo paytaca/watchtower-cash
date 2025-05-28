@@ -16,18 +16,24 @@ export class TreasuryContract {
    * @param {Object} opts
    * @param {Object} opts.params
    * @param {String} opts.params.authKeyId
+   * @param {String} opts.params.tokenCategory
+   * @param {String} opts.params.oraclePublicKey
    * @param {String[]} opts.params.pubkeys
    * @param {String} opts.params.anyhedgeBaseBytecode
+   * @param {String} opts.params.redemptionContractBaseBytecode
    * @param {Object} opts.options
-   * @param {'v1' | 'v2'} opts.options.version
+   * @param {'v1' | 'v2' | 'v3'} opts.options.version
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
    */
   constructor(opts) {
     this.params = {
       authKeyId: opts?.params?.authKeyId,
+      tokenCategory: opts?.params?.tokenCategory,
+      oraclePublicKey: opts?.params?.oraclePublicKey,
       pubkeys: opts?.params?.pubkeys,
       anyhedgeBaseBytecode: opts?.params?.anyhedgeBaseBytecode,
+      redemptionContractBaseBytecode: opts?.params?.redemptionContractBaseBytecode,
     }
 
     this.options = {
@@ -45,12 +51,15 @@ export class TreasuryContract {
     let cashscriptFilename = 'treasury-contract.cash';
     if (version === 'v2') {
       cashscriptFilename = 'treasury-contract-v2.cash';
+    } else if (version) {
+      cashscriptFilename = `treasury-contract-${version}.cash`;
     }
     const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
     return artifact;
   }
 
   get contractParameters() {
+    const version = this.options.version
     const contractParams = [
       hexToBin(this.params?.authKeyId).reverse(),
       hexToBin(this.params?.pubkeys?.[0]),
@@ -60,10 +69,11 @@ export class TreasuryContract {
       hexToBin(this.params?.pubkeys?.[4]),
     ]
 
-    if (this.options.version === 'v2') {
-      contractParams.push(hexToBin(this.params?.anyhedgeBaseBytecode))
+    if (['v2', 'v3'].includes(version)) {
+      contractParams.push(
+        hash256(hexToBin(this.params?.anyhedgeBaseBytecode))
+      )
     }
-
     return contractParams
   }
 

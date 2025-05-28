@@ -1,4 +1,4 @@
-import { binToHex, encodeLockingBytecodeP2sh32, generateRandomBytes, hexToBin } from "@bitauth/libauth";
+import { binToHex, encodeLockingBytecodeP2sh32, generateRandomBytes, hash256, hexToBin } from "@bitauth/libauth";
 import { Contract } from "cashscript";
 import { AnyHedgeManager } from "@generalprotocols/anyhedge";
 
@@ -19,7 +19,7 @@ export function createTreasuryContract(opts) {
   const authKeyId = generateRandomBytes(32);
   const wifs = Array.from({ length: 5 }).map(() => generateRandomWif())
   const pubkeys = wifs.map(wif => wifToPubkey(wif))
-  const contractParams = [authKeyId, ...pubkeys.map(hexToBin), bytecode]
+  const contractParams = [authKeyId, ...pubkeys.map(hexToBin), hash256(hexToBin(bytecode))]
   const artifact = TreasuryContract.getArtifact(version)
   const contract = new Contract(artifact, contractParams, { addressType: 'p2sh32' })
   const manager = new TreasuryContract({
