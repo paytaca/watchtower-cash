@@ -11,8 +11,18 @@ from multisig.serializers import (
 from multisig.models.wallet import MultisigWallet
 
 class MultisigTransactionProposalListCreateView(APIView):
-    def get(self, request):
+    def get(self, request, wallet_identifier):
         proposals = MultisigTransactionProposal.objects.all()
+        
+        if wallet_identifier.isdigit():
+            proposals = proposals.filter(wallet__id=int(wallet_identifier))
+        else:
+            proposals = proposals.filter(wallet__locking_bytecode=wallet_identifier)
+        wallet_address_index = request.query_params.get('wallet_address_index')
+
+        if wallet_address_index != None:
+            proposals = proposals.filter(wallet_address_index=wallet_address_index)
+
         serializer = MultisigTransactionProposalSerializer(proposals, many=True)
         return Response(serializer.data)
 
