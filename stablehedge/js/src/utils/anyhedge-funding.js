@@ -86,14 +86,17 @@ export function getSettlementServiceFee(contractData) {
 
 /**
  * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
- * @param {String} [contractBaseBytecode]
+ * @param {Object} opts
+ * @param {String} [opts.contractBaseBytecode]
+ * @param {String} [opts.treasuryContractVersion]
  */
-export function prepareParamForTreasuryContract(contractData, contractBaseBytecode) {
+export function prepareParamForTreasuryContract(contractData, opts) {
   const _bytecodes = getContractParamBytecodes(contractData)
   const {
       bytecodesHex,
       shortMutualRedeemPublicKey,
       longLockScript,
+      nominalUnitsXSatsPerBch,
       satsForNominalUnitsAtHighLiquidation,
       lowPrice,
       highPrice,
@@ -103,17 +106,21 @@ export function prepareParamForTreasuryContract(contractData, contractBaseByteco
     const fee = getLiquidityFee(contractData);
     const settlementServiceFee = getSettlementServiceFee(contractData);
 
+    let contractBaseBytecode = opts?.contractBaseBytecode
     if (!contractBaseBytecode) {
       const { bytecode } = getBaseBytecode({ version: contractData.version })
       contractBaseBytecode = bytecode;
     }
 
+    const param5 = opts?.treasuryContractVersion === 'v3'
+      ? hexToBin(nominalUnitsXSatsPerBch)
+      : hexToBin(bytecodesHex.slice(5, 7).reverse().join(''))
     return [
       isHex(contractBaseBytecode) ? hexToBin(contractBaseBytecode) : contractBaseBytecode,
       shortMutualRedeemPublicKey,
       hexToBin(bytecodesHex.slice(1, 3).reverse().join('')),
       hexToBin(longLockScript),
-      hexToBin(bytecodesHex.slice(5, 7).reverse().join('')),
+      param5,
       satsForNominalUnitsAtHighLiquidation,
       contractData.metadata.shortInputInSatoshis,
       contractData.metadata.longInputInSatoshis,

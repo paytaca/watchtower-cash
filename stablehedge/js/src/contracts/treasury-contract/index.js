@@ -16,10 +16,10 @@ export class TreasuryContract {
    * @param {Object} opts
    * @param {Object} opts.params
    * @param {String} opts.params.authKeyId
-   * @param {String} opts.params.tokenCategory
-   * @param {String} opts.params.oraclePublicKey
    * @param {String[]} opts.params.pubkeys
    * @param {String} opts.params.anyhedgeBaseBytecode
+   * @param {String} opts.params.redemptionTokenCategory
+   * @param {String} opts.params.oraclePublicKey
    * @param {String} opts.params.redemptionContractBaseBytecode
    * @param {Object} opts.options
    * @param {'v1' | 'v2' | 'v3'} opts.options.version
@@ -29,10 +29,10 @@ export class TreasuryContract {
   constructor(opts) {
     this.params = {
       authKeyId: opts?.params?.authKeyId,
-      tokenCategory: opts?.params?.tokenCategory,
-      oraclePublicKey: opts?.params?.oraclePublicKey,
       pubkeys: opts?.params?.pubkeys,
       anyhedgeBaseBytecode: opts?.params?.anyhedgeBaseBytecode,
+      redemptionTokenCategory: opts?.params?.redemptionTokenCategory,
+      oraclePublicKey: opts?.params?.oraclePublicKey,
       redemptionContractBaseBytecode: opts?.params?.redemptionContractBaseBytecode,
     }
 
@@ -72,6 +72,14 @@ export class TreasuryContract {
     if (['v2', 'v3'].includes(version)) {
       contractParams.push(
         hash256(hexToBin(this.params?.anyhedgeBaseBytecode))
+      )
+    }
+
+    if (version === 'v3') {
+      contractParams.push(
+        hexToBin(this.params?.redemptionTokenCategory).reverse(),
+        hexToBin(this.params?.oraclePublicKey),
+        hash256(hexToBin(this.params?.redemptionContractBaseBytecode)),
       )
     }
     return contractParams
@@ -526,13 +534,17 @@ export class TreasuryContract {
    * @param {Object} opts 
    * @param {Number} [opts.locktime]
    * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
-   * @param {import("cashscript").Output} opts.feeFunderOutput
+   * @param {import("cashscript").Output} [opts.feeFunderOutput]
    * @param {import("cashscript").Utxo[]} opts.inputs
+   * @param {Boolean} [opts.sendToRedemptionContract]
    * @param {Number} [opts.satoshis] falsey value would mean to consolidate all inputs into 1 utxo
    */
   async consolidate(opts) {
     const contract = this.getContract()
     if (!contract.functions.consolidate) return 'Contract function not supported'
+    if (opts?.sendToRedemptionContract && this.options.version !== 'v3') {
+      return 'Consolidation to redemption contract is only supported in v3'
+    }
 
     const feeFunderUtxo = opts?.feeFunderUtxo
     const feeFunderOutput = opts?.feeFunderOutput
@@ -540,9 +552,15 @@ export class TreasuryContract {
     const opData = numbersToCumulativeHexString([0n, ...opts?.inputs?.map(input => input.satoshis)])
     const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
 
+    let consolidateParam = undefined
+    if (this.options.version === 'v3') {
+      consolidateParam = opts?.sendToRedemptionContract
+        ? hexToBin(this.params.redemptionContractBaseBytecode)
+        : new Uint8Array(0)
+    }
     const builder = new TransactionBuilder({ provider: contract.provider })
       .addInput(feeFunderUtxo, feeFunderUtxo.template.unlockP2PKH())
-      .addInputs(opts.inputs)
+      .addInputs(opts.inputs, contract.unlock.consolidate(consolidateParam))
 
     if (feeFunderOutput) {
       builder.addOutput(feeFunderOutput)

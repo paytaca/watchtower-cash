@@ -28,6 +28,7 @@ export async function getArgsForTreasuryContract(opts) {
  * @param {Object} opts
  * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
  * @param {String} opts.anyhedgeVersion
+ * @param {Number} [opts.treasuryContractInputSize=1100]
  * @param {Number} [opts.contributorNum] Set to 0 to assume p2pkh counterparty instead of P2P-LP contract
  * @returns 
  */
@@ -58,7 +59,7 @@ export async function calculateTotalFundingSatoshis(opts) {
 
   // This is calculated using getTreasuryContractInputSize in src/utils/anyhedge-funding.js
   // set to fixed since it's set in treasury contract's cashscript code
-  const treasuryContractInputSize = 1100n;
+  const treasuryContractInputSize = BigInt(opts?.treasuryContractInputSize || 1100n);
   const shortFundingUtxoSats = shortFundingSats + treasuryContractInputSize;
 
   let longFundingUtxoSats = longFundingSats + BigInt(P2PKH_INPUT_SIZE) + 35n; // 34 is p2pkh output fee
