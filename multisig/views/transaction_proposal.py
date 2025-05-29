@@ -1,3 +1,4 @@
+import requests
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -9,6 +10,8 @@ from multisig.serializers import (
     SignatureSerializer
 )
 from multisig.models.wallet import MultisigWallet
+
+MAIN_JS_SERVER = 'http://localhost:3000'
 
 class MultisigTransactionProposalListCreateView(APIView):
     def get(self, request, wallet_identifier):
@@ -33,8 +36,25 @@ class MultisigTransactionProposalListCreateView(APIView):
             multisig_wallet = get_object_or_404(MultisigWallet, id=int(wallet_identifier))
         else:
             multisig_wallet = get_object_or_404(MultisigWallet, locking_bytecode=wallet_identifier)
-            
-        serializer = MultisigTransactionProposalSerializer(data=request.data)
+        
+        transaction_hash = None
+        try:
+            resp = requests.post(
+                f'{MAIN_JS_SERVER}/multisig/utils/get-transaction-hash',
+                data = {'transaction': request.data['transaction']}, timeout=5
+            )
+            resp = resp.json()
+            transaction_hash = resp.get('transaction_hash')
+        except Exception as e:
+            return Response(
+                {
+                    "error": "Service unavailable",
+                    "details": "An internal dependency is currently down. Please try again later."
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        
+        serializer = MultisigTransactionProposalSerializer(data={**request.data, 'transaction_hash': transaction_hash})
         if serializer.is_valid():
             proposal = serializer.save(wallet=multisig_wallet)
             return Response(MultisigTransactionProposalSerializer(proposal).data, status=status.HTTP_201_CREATED)

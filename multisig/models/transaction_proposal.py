@@ -11,6 +11,7 @@ class MultisigTransactionProposal(models.Model):
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE)
     wallet_address_index = models.PositiveIntegerField(default=0, blank=True, null=True)
     transaction = models.TextField(help_text="Unsigned transaction hex")
+    transaction_hash = models.CharField(max_length=64, help_text="Computed hash of the unsigned transaction hex", unique=True)
     source_outputs = JSONField(null=True, blank=True, help_text="The source utxos")
     metadata = JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -19,6 +20,7 @@ class MultisigTransactionProposal(models.Model):
     def __str__(self):
         return self.wallet.template.get("name", "Unnamed Wallet")
     
+
 class Signature(models.Model):
     transaction_proposal = models.ForeignKey(
         MultisigTransactionProposal,
