@@ -26,9 +26,14 @@ class MultisigTransactionProposalListCreateView(APIView):
         serializer = MultisigTransactionProposalSerializer(proposals, many=True)
         return Response(serializer.data)
 
-    def post(self, request, wallet_pk):
-        multisig_wallet = get_object_or_404(MultisigWallet, pk=wallet_pk)
+    def post(self, request, wallet_identifier):
+        multisig_wallet = MultisigWallet.objects.all()
 
+        if wallet_identifier.isdigit():
+            multisig_wallet = get_object_or_404(MultisigWallet, id=int(wallet_identifier))
+        else:
+            multisig_wallet = get_object_or_404(MultisigWallet, locking_bytecode=wallet_identifier)
+            
         serializer = MultisigTransactionProposalSerializer(data=request.data)
         if serializer.is_valid():
             proposal = serializer.save(wallet=multisig_wallet)
