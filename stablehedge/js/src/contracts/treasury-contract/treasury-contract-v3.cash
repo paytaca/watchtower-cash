@@ -3,7 +3,7 @@ pragma cashscript ^0.8.0;
 // Smart Contract fingerprint
 // https://bitcoincashresearch.org/t/smart-contract-fingerprinting-a-method-for-pattern-recognition-and-analysis-in-bitcoin-cash/1441
 
-contract TreasuryContractV2(
+contract TreasuryContractV3(
     bytes32 authKeyId, // 32 B token category of authkey nft
     pubkey pk1, // 33 B
     pubkey pk2, // 33 B
@@ -11,6 +11,9 @@ contract TreasuryContractV2(
     pubkey pk4, // 33 B
     pubkey pk5, // 33 B
     bytes32 anyhedgeContractFingerprint, // 32 B smart contract fingerprint of anyhedge smart contract
+    bytes32 redemptionTokenCategory, // 32 B
+    bytes33 oraclePublicKey, // 33 B
+    bytes32 redemptionContractFingerprint, // 32 B smart contract fingerprint of redemption contract
 ) {
     // Based on Authguard
     // https://github.com/mr-zwets/AuthGuard/blob/c5115b0df05c868018cc433e1047f5c5f6c8f7f7/AuthGuard.cash
@@ -53,7 +56,7 @@ contract TreasuryContractV2(
         Based on the conditions above, the transaction fee is covered by the executor of the
         consolidate transaction to prevent abuse of this function and result in loss of funds.
     */
-    function consolidate() {
+    function consolidate(bytes redemptionContractBaseBytecode) {
         bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
         require(tx.inputs[0].lockingBytecode != inputLockScript);
 
@@ -76,10 +79,23 @@ contract TreasuryContractV2(
         int totalOutputSats = tx.outputs[2].value;
 
         require(tx.outputs.length <= 4);
-        require(tx.outputs[2].lockingBytecode == inputLockScript);
+        bytes recipientLockScript = inputLockScript;
+        if (redemptionContractBaseBytecode.length > 0) {
+            require(redemptionContractFingerprint == hash256(redemptionContractBaseBytecode));
+            bytes redemptionContractBytecode = bytes(35) + inputLockScript +
+                bytes(33) + oraclePublicKey +
+                bytes(32) + redemptionTokenCategory +
+                bytes(32) + authKeyId +
+                redemptionContractBaseBytecode;
+
+            bytes32 redemptionContractScriptHash = hash256(redemptionContractBytecode);
+            recipientLockScript = new LockingBytecodeP2SH32(redemptionContractScriptHash);
+        }
+        require(tx.outputs[2].lockingBytecode == recipientLockScript);
+
         if (tx.outputs.length == 4) {
             totalOutputSats = totalOutputSats + tx.outputs[3].value;
-            require(tx.outputs[2].lockingBytecode == tx.outputs[3].lockingBytecode);
+            require(tx.outputs[3].lockingBytecode == inputLockScript);
         }
 
         // 13 => 10 base fee + 3 OP_DATA length prefix + 4 OP_DATA prefix of 0x00000000
@@ -102,7 +118,7 @@ contract TreasuryContractV2(
         bytes shortPubkeyBytecode,
         bytes argsSegment1, // enableMutualRedemption + longPubkey
         bytes longLockScriptBytecode, // type bytes
-        bytes argsSegment2, // nominalUnitsXSatsPerBchBytecode + oraclePubkey
+        bytes nominalUnitsXSatsPerBchBytecode, // int type
         bytes satsForNominalUnitsAtHighLiquidationBytecode,
         int shortInputSats,
         int longInputSats,
@@ -125,7 +141,8 @@ contract TreasuryContractV2(
             lowPriceBytecode +
             bytes(payoutSatsBytes.length) + payoutSatsBytes +
             satsForNominalUnitsAtHighLiquidationBytecode +
-            argsSegment2 +
+            nominalUnitsXSatsPerBchBytecode +
+            bytes(33) + oraclePublicKey +
             longLockScriptBytecode + 
             bytes(35) + thisLockScript +
             argsSegment1 +
@@ -175,7 +192,7 @@ contract TreasuryContractV2(
         // added ~5-10 sats for margin
         // might have to change if source code changes (e.g. increases in size)
         // did not include long funding fee, it should be covered by long
-        int shortFundingInputFee = 1100;
+        int shortFundingInputFee = 1300;
         int shortFundingSats = shortInputSats + settlementFee + shortFundingInputFee;
         if (longLiquidityFee > 0) {
             int maxLiquidityFee = shortInputSats / 20; // this is 5% of short input sats
