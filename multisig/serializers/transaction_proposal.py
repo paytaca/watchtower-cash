@@ -50,4 +50,4 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MultisigTransactionProposal
-        fields = ['id', 'wallet', 'transaction', 'sourceOutputs', 'metadata', 'created_at', 'signatures']
+        fields = ['id', 'wallet', 'transaction', 'transaction_hash', 'sourceOutputs', 'metadata', 'created_at', 'signatures']
