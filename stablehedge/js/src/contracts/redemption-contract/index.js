@@ -1,6 +1,6 @@
 import { compileFile } from "cashc"
 import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate } from "cashscript"
-import { hexToBin } from "@bitauth/libauth"
+import { cashAddressToLockingBytecode, hexToBin } from "@bitauth/libauth"
 
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
 import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
@@ -20,7 +20,9 @@ export class RedemptionContract {
    * @param {String} opts.params.authKeyId
    * @param {String} opts.params.tokenCategory
    * @param {String} opts.params.oraclePublicKey
+   * @param {String} opts.params.treasuryContractAddress
    * @param {Object} opts.options
+   * @param {'v1' | 'v2'} opts.options.version
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
    */
@@ -29,11 +31,13 @@ export class RedemptionContract {
       authKeyId: opts?.params?.authKeyId,
       tokenCategory: opts?.params?.tokenCategory,
       oraclePublicKey: opts?.params?.oraclePublicKey,
+      treasuryContractAddress: opts?.params?.treasuryContractAddress,
     }
 
     this.options = {
       network: opts?.options?.network || 'mainnet',
       addressType: opts?.options?.addressType,
+      version: opts?.options?.version,
     }
   }
 
@@ -41,23 +45,35 @@ export class RedemptionContract {
     return this.options?.network === 'chipnet'
   }
 
-  static getArtifact() {
-    const cashscriptFilename = 'redemption-contract.cash';
+  static getArtifact(version) {
+    let cashscriptFilename = 'redemption-contract.cash';
+    if (version === 'v2') {
+      cashscriptFilename = 'redemption-contract-v2.cash';
+    }
     const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
     return artifact;
+  }
+
+  get contractParameters() {
+    const contractParams = [
+      hexToBin(this.params?.authKeyId).reverse(),
+      hexToBin(this.params?.tokenCategory).reverse(),
+      hexToBin(this.params?.oraclePublicKey),
+    ]
+
+    if (this.options.version === 'v2') {
+      const lockingBytecode = cashAddressToLockingBytecode(this.params.treasuryContractAddress)
+      contractParams.push(lockingBytecode.bytecode);
+    }
+
+    return contractParams
   }
 
   getContract() {
     const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
     const opts = { provider, addressType: this.options?.addressType }
-    const artifact = RedemptionContract.getArtifact();
-    // const artifact = redemptionContractArtifact
-    const contractParams = [
-      hexToBin(this.params.authKeyId).reverse(),
-      hexToBin(this.params?.tokenCategory).reverse(),
-      this.params?.oraclePublicKey,
-    ]
-    const contract = new Contract(artifact, contractParams, opts);
+    const artifact = RedemptionContract.getArtifact(this.options.version);
+    const contract = new Contract(artifact, this.contractParameters, opts);
 
     if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
     if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
