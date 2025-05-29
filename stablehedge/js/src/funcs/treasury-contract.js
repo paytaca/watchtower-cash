@@ -279,6 +279,7 @@ export async function spendToAnyhedgeContract(opts) {
  * @param {Object} opts
  * @param {Object} opts.contractOpts
  * @param {Number} [opts.locktime]
+ * @param {Boolean} [opts.sendToRedemptionContract]
  * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
  * @param {import("cashscript").Output} [opts.feeFunderOutput]
  * @param {import("cashscript").Utxo[]} opts.inputs
@@ -302,6 +303,7 @@ export async function consolidateTreasuryContract(opts) {
     inputs,
     satoshis: opts?.satoshis,
     locktime: opts?.locktime,
+    sendToRedemptionContract: opts?.sendToRedemptionContract,
   })
 
   if (typeof transaction === 'string') return { success: false, error: transaction }

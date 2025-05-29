@@ -11,6 +11,8 @@ import { calculateInputSize, cashscriptTxToLibauth } from "../../utils/transacti
 import { numbersToCumulativeHexString } from "../../utils/math.js"
 import { prepareParamForTreasuryContract } from "../../utils/anyhedge-funding.js"
 
+import { RedemptionContract } from "../redemption-contract/index.js"
+
 export class TreasuryContract {
   /**
    * @param {Object} opts
@@ -98,6 +100,26 @@ export class TreasuryContract {
     if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
 
     return contract
+  }
+
+  getRedemptionContract() {
+    if (this.options.version !== 'v3') return
+
+    const contract = this.getContract()
+
+    return new RedemptionContract({
+      params: {
+        authKeyId: this.params.authKeyId,
+        tokenCategory: this.params.redemptionTokenCategory,
+        oraclePublicKey: this.params.oraclePublicKey,
+        treasuryContractAddress: contract.address,
+      },
+      options: {
+        version: 'v2',
+        addressType: this.options.addressType,
+        network: this.options.network,
+      }
+    })
   }
 
   /**
@@ -573,11 +595,16 @@ export class TreasuryContract {
 
     builder.addOutput({ to: opDataBytecode, amount: 0n })
 
+    let recipient = contract.address
+    if (this.options.version === 'v3' && opts?.sendToRedemptionContract) {
+      recipient = this.getRedemptionContract()?.getContract()?.address
+    }
+
     if (opts.satoshis) {
-      builder.addOutput({ to: tc.contract.address, amount: opts.satoshis })
-      builder.addOutput({ to: tc.contract.address, amount: totalSats - opts.satoshis })
+      builder.addOutput({ to: recipient, amount: opts.satoshis })
+      builder.addOutput({ to: contract.address, amount: totalSats - opts.satoshis })
     } else {
-      builder.addOutput({ to: tc.contract.address, amount: totalSats })
+      builder.addOutput({ to: recipient, amount: totalSats })
     }
 
     if (Number.isSafeInteger(opts?.locktime)) {
