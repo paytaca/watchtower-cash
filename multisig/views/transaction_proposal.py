@@ -62,10 +62,12 @@ class MultisigTransactionProposalListCreateView(APIView):
 
 
 class MultisigTransactionProposalDetailView(APIView):
-    def get_object(self, pk):
-        return get_object_or_404(MultisigTransactionProposal, pk=pk)
+    def get_object(self, proposal_identifier):
+        if proposal_identifier.isdigit():
+            return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
+        return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
 
-    def get(self, request, pk):
+    def get(self, request, proposal_identifier):
         proposal = self.get_object(pk)
         serializer = MultisigTransactionProposalSerializer(proposal)
         return Response(serializer.data)
@@ -77,14 +79,20 @@ class MultisigTransactionProposalDetailView(APIView):
 
 
 class SignatureAddView(APIView):
-    def post(self, request, proposal_id, signer_id):
+
+    def get_transaction_proposal(self, proposal_identifier):
+        if proposal_identifier.isdigit():
+            return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
+        return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
+
+    def post(self, request, proposal_identifier, signer_entity_key):
         try:
-            proposal = MultisigTransactionProposal.objects.get(id=proposal_id)
-            signer = get_object_or_404(Signer, id=signer_id)
+            proposal = self.get_transaction_proposal(proposal_identifier)
+            signer = get_object_or_404(Signer, entity_key=signer_entity_key)
         except MultisigTransactionProposal.DoesNotExist:
             raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
         except MultisigTransactionProposal.DoesNotExist:
-            raise NotFound(f"Signer with id {signer_id} not found.")
+            raise NotFound(f"Signer with entity key {signer_entity_key} not found.")
         
         data = request.data.copy()
         
