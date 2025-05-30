@@ -281,6 +281,7 @@ CELERY_IMPORTS = (
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 # CELERY_RESULT_BACKEND = 'rpc://'
+CELERY_RESULT_EXPIRES = 300 # 5 minutes
 
 if REDIS_PASSWORD:
     redis_prefix = ''
