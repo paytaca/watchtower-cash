@@ -47,7 +47,8 @@ def validate_status_progression(new_status, order_id):
                 invalid_status = True
 
     if current_status.status == StatusType.ESCROW_PENDING:
-        if (new_status != StatusType.ESCROWED):
+        if (new_status != StatusType.ESCROWED and 
+            new_status != StatusType.CANCELED):
                 invalid_status = True
          
     if current_status.status == StatusType.ESCROWED:
