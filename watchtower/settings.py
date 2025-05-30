@@ -288,14 +288,21 @@ if REDIS_PASSWORD:
     if DEPLOYMENT_INSTANCE == 'prod':
         redis_prefix = 'user'
         
-    CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    # CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
+    RABBITMQ_HOST = config('RABBITMQ_HOST')
+    RABBITMQ_PORT = config('RABBITMQ_PORT')
+    RABBITMQ_USER = config('RABBITMQ_USER')
+    RABBITMQ_PASSWORD = config('RABBITMQ_PASSWORD')
+    RABBITMQ_VHOST = config('RABBITMQ_VHOST')
+    CELERY_BROKER_URL = 'amqp://%s:%s@%s:%s/%s' % (RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_HOST, RABBITMQ_PORT, RABBITMQ_VHOST)
+
     CELERY_BROKER_CONN = redis.StrictRedis(
         host=REDIS_HOST,
         password=REDIS_PASSWORD,
         port=6379,
         db=DB_NUM[0]
     )
-
+    
     CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
     CELERY_BROKER_CONN = redis.StrictRedis(
         host=REDIS_HOST,
