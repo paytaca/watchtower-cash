@@ -1,7 +1,6 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 from rampp2p.utils import unread_orders_count
-from authentication.models import AuthToken
 from rampp2p.models import Peer
 from datetime import datetime
 import json
@@ -131,7 +130,7 @@ class GeneralUpdatesConsumer(AsyncWebsocketConsumer):
         try:
             user = Peer.objects.get(wallet_hash=wallet_hash)
             return user
-        except AuthToken.DoesNotExist:
+        except Exception:
             return None
     
     @sync_to_async
@@ -166,7 +165,6 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         user = await self.get_user_from_wallet_hash(self.wallet_hash)
         await self.set_user_active(user, False)
-        await self.set_user_active(user, False)
         await self.channel_layer.group_discard(
             self.room_name,
             self.channel_name
@@ -181,7 +179,7 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         try:
             user = Peer.objects.get(wallet_hash=wallet_hash)
             return user
-        except AuthToken.DoesNotExist:
+        except Exception:
             return None
 
     @sync_to_async
