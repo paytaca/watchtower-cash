@@ -1,10 +1,24 @@
 import { RedemptionContract } from '../contracts/redemption-contract/index.js'
+import { baseBytecodeToHex } from '../utils/contracts.js';
 import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 
 
 export function getRedemptionContractArtifact() {
   const artifact = RedemptionContract.getArtifact();
   return { success: true, artifact }
+}
+
+/**
+ * @param {Object} opts
+ * @param {Object} [opts.version=v2]
+ */
+export function getRedemptionContractBaseBytecode(opts) {
+  const version = opts?.version || 'v2'
+  const artifact = RedemptionContract.getArtifact()
+  return {
+    version: version,
+    bytecode: baseBytecodeToHex(artifact.bytecode)
+  }
 }
 
 /**

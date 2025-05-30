@@ -53,7 +53,7 @@ export class TreasuryContract {
     let cashscriptFilename = 'treasury-contract.cash';
     if (version === 'v2') {
       cashscriptFilename = 'treasury-contract-v2.cash';
-    } else if (version) {
+    } else if (version !== 'v1') {
       cashscriptFilename = `treasury-contract-${version}.cash`;
     }
     const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));

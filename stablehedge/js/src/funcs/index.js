@@ -14,6 +14,7 @@ import {
  } from './treasury-contract.js'
 import {
   getRedemptionContractArtifact,
+  getRedemptionContractBaseBytecode,
   compileRedemptionContract,
   deposit,
   redeem,
@@ -42,6 +43,7 @@ export default {
   consolidateTreasuryContract,
 
   getRedemptionContractArtifact,
+  getRedemptionContractBaseBytecode,
   compileRedemptionContract,
   deposit,
   redeem,
