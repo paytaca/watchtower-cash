@@ -1,3 +1,4 @@
+import logging
 import requests
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
@@ -10,10 +11,21 @@ from multisig.serializers import (
     SignatureSerializer
 )
 from multisig.models.wallet import MultisigWallet
-
+LOGGER = logging.getLogger(__name__)
 MAIN_JS_SERVER = 'http://localhost:3000'
 
 class MultisigTransactionProposalListCreateView(APIView):
+
+    def get_wallet(self, wallet_identifier): 
+        wallet = None
+
+        if wallet_identifier.isdigit():
+            wallet = get_object_or_404(MultisigWallet, id=int(wallet_identifier))
+        else:
+            wallet = get_object_or_404(MultisigWallet, locking_bytecode=wallet_identifier)
+
+        return wallet
+
     def get(self, request, wallet_identifier):
         proposals = MultisigTransactionProposal.objects.all()
         
@@ -30,13 +42,7 @@ class MultisigTransactionProposalListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request, wallet_identifier):
-        multisig_wallet = MultisigWallet.objects.all()
-
-        if wallet_identifier.isdigit():
-            multisig_wallet = get_object_or_404(MultisigWallet, id=int(wallet_identifier))
-        else:
-            multisig_wallet = get_object_or_404(MultisigWallet, locking_bytecode=wallet_identifier)
-        
+        wallet = self.get_wallet(wallet_identifier)
         transaction_hash = None
         try:
             resp = requests.post(
@@ -45,6 +51,7 @@ class MultisigTransactionProposalListCreateView(APIView):
             )
             resp = resp.json()
             transaction_hash = resp.get('transaction_hash')
+            LOGGER.info(transaction_hash)   
         except Exception as e:
             return Response(
                 {
@@ -54,14 +61,26 @@ class MultisigTransactionProposalListCreateView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
         
-        serializer = MultisigTransactionProposalSerializer(data={**request.data, 'transaction_hash': transaction_hash})
+
+
+        proposal = MultisigTransactionProposal.objects.filter(transaction_hash=transaction_hash)
+        LOGGER.info('proposal')
+        LOGGER.info(proposal)
+        if proposal.exists():
+            proposal = proposal.values().first()
+            serializer = MultisigTransactionProposalSerializer(data=proposal, many=False)
+            return Response(serializer.initial_data, status=status.HTTP_200_OK)
+
+        serializer = MultisigTransactionProposalSerializer(data={ **request.data, 'transaction_hash': transaction_hash }, many=False)
         if serializer.is_valid():
-            proposal = serializer.save(wallet=multisig_wallet)
-            return Response(MultisigTransactionProposalSerializer(proposal).data, status=status.HTTP_201_CREATED)
+            proposal = serializer.save(wallet=wallet)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        LOGGER.info(serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class MultisigTransactionProposalDetailView(APIView):
+
     def get_object(self, proposal_identifier):
         if proposal_identifier.isdigit():
             return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
