@@ -151,6 +151,9 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         )
         await self.accept()
 
+        user = await self.get_user_from_wallet_hash(self.wallet_hash)
+        await self.set_user_active(user, True)
+
         data = { 
             'success': True,
             'type': 'ConnectionMessage',
@@ -161,6 +164,9 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(data))
 
     async def disconnect(self, close_code):
+        user = await self.get_user_from_wallet_hash(self.wallet_hash)
+        await self.set_user_active(user, False)
+        await self.set_user_active(user, False)
         await self.channel_layer.group_discard(
             self.room_name,
             self.channel_name
@@ -169,3 +175,18 @@ class CashinAlertsConsumer(AsyncWebsocketConsumer):
     async def send_message(self, event):
         data = event.get('message')
         await self.send(text_data=json.dumps(data))
+
+    @sync_to_async
+    def get_user_from_wallet_hash(self, wallet_hash):
+        try:
+            user = Peer.objects.get(wallet_hash=wallet_hash)
+            return user
+        except AuthToken.DoesNotExist:
+            return None
+
+    @sync_to_async
+    def set_user_active(self, user, is_active):
+        if user:
+            user.is_online = is_active
+            user.last_online_at = datetime.now()
+            user.save()
