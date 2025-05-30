@@ -53,6 +53,11 @@ class RedemptionContractAdmin(admin.ModelAdmin):
         "is_subscribed",
     ]
 
+    list_filter = [
+        "version",
+    ]
+
+
     actions = [
         "recompile",
         "subscribe",
