@@ -50,8 +50,13 @@ class RedemptionContractQueryset(PostgresQuerySet):
 
 
 class RedemptionContract(models.Model):
+    class Version(models.TextChoices):
+        V1 = "v1"
+        V2 = "v2"
+
     objects = RedemptionContractQueryset.as_manager()
 
+    version = models.CharField(max_length=5, choices=Version.choices)
     address = models.CharField(max_length=100)
 
     fiat_token = models.ForeignKey(FiatToken, on_delete=models.PROTECT, related_name="redemption_contracts")
@@ -59,6 +64,12 @@ class RedemptionContract(models.Model):
     price_oracle_pubkey = models.CharField(max_length=70)
 
     verified = models.BooleanField(default=False)
+
+    treasury_contract = models.OneToOneField(
+        "TreasuryContract", on_delete=models.PROTECT,
+        related_name="redemption_contract",
+        null=True, blank=True,
+    )
 
     def __str__(self):
         return f"RedemptionContract#{self.id}: {self.address}"
@@ -89,11 +100,8 @@ class RedemptionContract(models.Model):
 
     @property
     def treasury_contract_address(self):
-        try:
-            self.treasury_contract
+        if self.treasury_contract:
             return self.treasury_contract.address
-        except self.__class__.treasury_contract.RelatedObjectDoesNotExist:
-            pass
 
     def get_subscription(self):
         Subscription = apps.get_model("main", "Subscription")
@@ -161,13 +169,9 @@ class TreasuryContract(models.Model):
     class Version(models.TextChoices):
         V1 = "v1"
         V2 = "v2"
+        V3 = "v3"
 
     objects = TreasuryContractQuerySet.as_manager()
-
-    redemption_contract = models.OneToOneField(
-        RedemptionContract, on_delete=models.PROTECT,
-        related_name="treasury_contract",
-    )
 
     version = models.CharField(max_length=5, choices=Version.choices)
     address = models.CharField(max_length=100)
@@ -181,6 +185,15 @@ class TreasuryContract(models.Model):
     pubkey5 = models.CharField(max_length=70)
     anyhedge_base_bytecode = models.TextField(null=True, blank=True)
     anyhedge_contract_version = models.CharField(max_length=50, null=True, blank=True)
+
+    fiat_token = models.ForeignKey(
+        FiatToken, on_delete=models.PROTECT,
+        related_name="treasury_contracts",
+        null=True, blank=True,
+    )
+    price_oracle_pubkey = models.CharField(max_length=70, null=True, blank=True)
+    redemption_contract_base_bytecode = models.TextField(null=True, blank=True)
+    redemption_contract_version = models.CharField(max_length=20, null=True, blank=True)
 
     encrypted_funding_wif = models.CharField(
         max_length=200, unique=True,
