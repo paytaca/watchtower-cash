@@ -5,8 +5,7 @@
         {
           "appID": "89X576BZBF.com.paytaca.app",
           "paths": [
-            "/claim",
-            "/ad"
+            "*"
           ]
         }
       ]
