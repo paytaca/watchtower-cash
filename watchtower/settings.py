@@ -565,7 +565,9 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [REDIS_CHANNEL]
+            'hosts': [REDIS_CHANNEL],
+            "capacity": 1000,  # messages per channel
+            "expiry": 300,      # seconds a message stays in Redis
         }
     }
 }

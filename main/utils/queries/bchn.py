@@ -1,6 +1,7 @@
 import logging
 from functools import lru_cache
 from bitcoinrpc.authproxy import AuthServiceProxy
+import http.client
 
 from django.conf import settings
 from django.utils import timezone
@@ -47,29 +48,51 @@ def retry(max_retries):
 
 
 class BCHN(object):
-
     def __init__(self):
         self.max_retries = 20
-        self.rpc_connection = AuthServiceProxy(settings.BCHN_NODE, timeout=30)
         self.source = 'bchn'
         self.fulcrum = {
             'host': settings.BCHN_HOST,
             'port': settings.FULCRUM_PORT
         }
 
+    def _get_rpc_connection(self):
+        """Create a new RPC connection for each request"""
+        return AuthServiceProxy(settings.BCHN_NODE, timeout=30)
+
+    def _close_connection(self, connection):
+        """Safely close the RPC connection"""
+        try:
+            if hasattr(connection, '_conn') and isinstance(connection._conn, http.client.HTTPConnection):
+                connection._conn.close()
+        except Exception as e:
+            logging.warning(f"Error closing RPC connection: {str(e)}")
+
     @retry(max_retries=3)
     def get_latest_block(self):
-        return self.rpc_connection.getblockcount()
+        connection = self._get_rpc_connection()
+        try:
+            return connection.getblockcount()
+        finally:
+            self._close_connection(connection)
 
     @retry(max_retries=3)
     def get_block_chain_info(self):
-        return self.rpc_connection.getblockchaininfo()
+        connection = self._get_rpc_connection()
+        try:
+            return connection.getblockchaininfo()
+        finally:
+            self._close_connection(connection)
 
     @retry(max_retries=3)
     def get_block(self, block, verbosity=None):
-        block_hash = self.rpc_connection.getblockhash(block)
-        block_data = self.rpc_connection.getblock(block_hash, verbosity)
-        return block_data['tx']
+        connection = self._get_rpc_connection()
+        try:
+            block_hash = connection.getblockhash(block)
+            block_data = connection.getblock(block_hash, verbosity)
+            return block_data['tx']
+        finally:
+            self._close_connection(connection)
 
     @retry(max_retries=3)
     def get_block_stats(self, block_number_or_hash, stats=None):
@@ -78,7 +101,11 @@ class BCHN(object):
             stats: (None, List<str>) provide list of strings to return only a subset of stats
                 See https://docs.bitcoincashnode.org/doc/json-rpc/getblockstats/ for valid values
         """
-        return self.rpc_connection.getblockstats(block_number_or_hash, stats)
+        connection = self._get_rpc_connection()
+        try:
+            return connection.getblockstats(block_number_or_hash, stats)
+        finally:
+            self._close_connection(connection)
 
     # Cache to prevent multiple requests when parsing transaction in '._parse_transaction()'
     @redis_cache(expiration_seconds=900)
@@ -86,8 +113,12 @@ class BCHN(object):
         retries = 0
         while retries < self.max_retries:
             try:
-                txn = self.rpc_connection.getrawtransaction(txid, 2)
-                return txn
+                connection = self._get_rpc_connection()
+                try:
+                    txn = connection.getrawtransaction(txid, 2)
+                    return txn
+                finally:
+                    self._close_connection(connection)
             except Exception as exception:
                 retries += 1
                 if retries >= self.max_retries:
@@ -100,8 +131,12 @@ class BCHN(object):
 
     @retry(max_retries=3)
     def _decode_raw_transaction(self, tx_hex):
-        txn = self.rpc_connection.decoderawtransaction(tx_hex)
-        return txn
+        connection = self._get_rpc_connection()
+        try:
+            txn = connection.decoderawtransaction(tx_hex)
+            return txn
+        finally:
+            self._close_connection(connection)
 
     def build_tx_from_hex(self, tx_hex, tx_fee=None):
         txn = self._decode_raw_transaction(tx_hex)
@@ -226,11 +261,19 @@ class BCHN(object):
 
     @retry(max_retries=3)
     def test_mempool_accept(self, hex_str):
-        return self.rpc_connection.testmempoolaccept([hex_str])[0]
+        connection = self._get_rpc_connection()
+        try:
+            return connection.testmempoolaccept([hex_str])[0]
+        finally:
+            self._close_connection(connection)
 
     @retry(max_retries=3)  
     def broadcast_transaction(self, hex_str):
-        return self.rpc_connection.sendrawtransaction(hex_str)
+        connection = self._get_rpc_connection()
+        try:
+            return connection.sendrawtransaction(hex_str)
+        finally:
+            self._close_connection(connection)
     
     def get_input_details(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
