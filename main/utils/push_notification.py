@@ -27,14 +27,8 @@ def send_wallet_history_push_notification(wallet_history_obj):
     extra = {
         "txid": wallet_history_obj.txid,
         "type": NotificationTypes.MAIN_TRANSACTION,
-        "token_id": wallet_history_obj.token.tokenid,
+        "token_id": resolve_token_id_for_notifications(wallet_history_obj),
     }
-
-    if wallet_history_obj.token.tokenid == settings.WT_DEFAULT_CASHTOKEN_ID:
-        if wallet_history_obj.cashtoken_ft:
-            extra["token_id"] = wallet_history_obj.cashtoken_ft.token_id
-        elif wallet_history_obj.cashtoken_nft:
-            extra["token_id"] = wallet_history_obj.cashtoken_nft.token_id
 
     if incoming:
         # title = "Payment Received" if incoming else "Payment Sent"
@@ -97,4 +91,14 @@ def send_wallet_history_push_notification_nft(wallet_history_obj):
         )
 
 def parse_transaction_extra_data(wallet_history):
-    return f'{wallet_history.txid};{wallet_history.token.pk}'
+    token_id = resolve_token_id_for_notifications(wallet_history)
+    return f'{wallet_history.txid};{token_id}'
+
+def resolve_token_id_for_notifications(wallet_history_obj):
+    if wallet_history_obj.token and wallet_history_obj.token.tokenid != settings.WT_DEFAULT_CASHTOKEN_ID:
+        return wallet_history_obj.token.tokenid
+
+    if wallet_history_obj.cashtoken_ft:
+        return wallet_history_obj.cashtoken_ft.token_id
+    elif wallet_history_obj.cashtoken_nft:
+        return wallet_history_obj.cashtoken_nft.token_id
