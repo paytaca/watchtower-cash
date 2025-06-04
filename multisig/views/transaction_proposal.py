@@ -63,17 +63,14 @@ class MultisigTransactionProposalListCreateView(APIView):
         
 
 
-        proposal = MultisigTransactionProposal.objects.filter(transaction_hash=transaction_hash)
-        LOGGER.info('proposal')
-        LOGGER.info(proposal)
+        proposal = MultisigTransactionProposal.objects.prefetch_related('signatures').filter(transaction_hash=transaction_hash)
         if proposal.exists():
-            proposal = proposal.values().first()
-            serializer = MultisigTransactionProposalSerializer(data=proposal, many=False)
-            return Response(serializer.initial_data, status=status.HTTP_200_OK)
+            serializer = MultisigTransactionProposalSerializer(proposal.first())
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         serializer = MultisigTransactionProposalSerializer(data={ **request.data, 'transaction_hash': transaction_hash }, many=False)
         if serializer.is_valid():
-            proposal = serializer.save(wallet=wallet)
+            serializer.save(wallet=wallet)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         LOGGER.info(serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -104,10 +101,10 @@ class SignatureAddView(APIView):
             return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
         return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
 
-    def post(self, request, proposal_identifier, signer_entity_key):
+    def post(self, request, proposal_identifier, signer_identifier):
         try:
             proposal = self.get_transaction_proposal(proposal_identifier)
-            signer = get_object_or_404(Signer, entity_key=signer_entity_key)
+            signer = get_object_or_404(Signer, entity_key=signer_identifier)
         except MultisigTransactionProposal.DoesNotExist:
             raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
         except MultisigTransactionProposal.DoesNotExist:

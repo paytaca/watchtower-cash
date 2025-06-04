@@ -20,7 +20,7 @@ class SignatureSerializer(serializers.ModelSerializer):
 
 class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
     wallet = serializers.PrimaryKeyRelatedField(read_only=True)
-    signatures = SignatureSerializer(many=True, read_only=False)
+    signatures = SignatureSerializer(many=True)
     sourceOutputs = serializers.JSONField(source='source_outputs')
 
     def to_representation(self, instance):
@@ -30,6 +30,7 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
             params = {k.lower(): v for k, v in request.query_params.items()}
             if params.get('expand_wallet') in ["1", "true", "yes", "on"]:
                 rep['wallet'] = MultisigWalletSerializer(instance.wallet, context=self.context).data
+        rep['signatures'] = SignatureSerializer(instance.signatures.all(), many=True).data
         return rep
 
     def create(self, validated_data):
@@ -44,7 +45,7 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
                     if signer_entity_data['variables'].get(variable):
                         signer = Signer.objects.get(wallet=proposal.wallet, entity_key=signer)
                         Signature.objects.create(transaction_proposal=proposal, signer=signer, **sig_data)
-
+       
         return proposal
 
 
