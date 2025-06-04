@@ -30,6 +30,12 @@ def send_wallet_history_push_notification(wallet_history_obj):
         "token_id": wallet_history_obj.token.tokenid,
     }
 
+    if wallet_history_obj.token.tokenid == settings.WT_DEFAULT_CASHTOKEN_ID:
+        if wallet_history_obj.cashtoken_ft:
+            extra["token_id"] = wallet_history_obj.cashtoken_ft.token_id
+        elif wallet_history_obj.cashtoken_nft:
+            extra["token_id"] = wallet_history_obj.cashtoken_nft.token_id
+
     if incoming:
         # title = "Payment Received" if incoming else "Payment Sent"
         title = "Payment Received"
@@ -71,7 +77,7 @@ def send_wallet_history_push_notification_nft(wallet_history_obj):
         extra = {
             "txid": wallet_history_obj.txid,
             "type": NotificationTypes.MAIN_TRANSACTION,
-            "token_id": wallet_history_obj.token.tokenid,
+            "token_id": wallet_history_obj.cashtoken_nft.token_id,
         }
 
         broadcast_to_engagementhub({
