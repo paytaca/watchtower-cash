@@ -81,7 +81,6 @@ INSTALLED_APPS=[
     'main',
     'smartbch',
     'paytacapos',
-    'paymentvault',
     'paytacagifts',
     'anyhedge',
     'chat',
@@ -282,6 +281,7 @@ CELERY_IMPORTS = (
 
 # CELERY_BROKER_URL = 'pyamqp://guest:guest@rabbitmq:5672//'
 # CELERY_RESULT_BACKEND = 'rpc://'
+CELERY_RESULT_EXPIRES = 300 # 5 minutes
 
 if REDIS_PASSWORD:
     redis_prefix = ''
@@ -289,20 +289,8 @@ if REDIS_PASSWORD:
         redis_prefix = 'user'
         
     CELERY_BROKER_URL = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_BROKER_CONN = redis.StrictRedis(
-        host=REDIS_HOST,
-        password=REDIS_PASSWORD,
-        port=6379,
-        db=DB_NUM[0]
-    )
-
+    
     CELERY_RESULT_BACKEND = 'redis://%s:%s@%s:%s/%s' % (redis_prefix, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT, DB_NUM[1])
-    CELERY_BROKER_CONN = redis.StrictRedis(
-        host=REDIS_HOST,
-        password=REDIS_PASSWORD,
-        port=6379,
-        db=DB_NUM[0]
-    )
     
     REDISKV = redis.StrictRedis(
         host=REDIS_HOST,
@@ -312,11 +300,6 @@ if REDIS_PASSWORD:
     )
 else:
     CELERY_BROKER_URL = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[0])
-    CELERY_BROKER_CONN = redis.StrictRedis(
-        host=REDIS_HOST,
-        port=6379,
-        db=DB_NUM[0]
-    )
 
     CELERY_RESULT_BACKEND = 'redis://%s:%s/%s' % (REDIS_HOST, REDIS_PORT, DB_NUM[1])
     REDISKV = redis.StrictRedis(
@@ -582,7 +565,9 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [REDIS_CHANNEL]
+            'hosts': [REDIS_CHANNEL],
+            "capacity": 1000,  # messages per channel
+            "expiry": 300,      # seconds a message stays in Redis
         }
     }
 }

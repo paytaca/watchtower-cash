@@ -30,9 +30,6 @@ RUN npm install --prefix /code/rampp2p/js --legacy-peer-deps
 COPY ./cts/js/package*.json /code/cts/js/
 RUN npm install --prefix /code/cts/js 
 
-COPY ./paymentvault/js/package*.json /code/paymentvault/js/
-RUN npm install --prefix /code/paymentvault/js 
-
 COPY ./stablehedge/js/package*.json /code/stablehedge/js/
 RUN npm install --prefix /code/stablehedge/js 
 COPY . /code

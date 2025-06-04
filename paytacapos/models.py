@@ -104,6 +104,10 @@ class PosDevice(models.Model):
                 if last_record:
                     self.latest_history_record = last_record
                     self.save()
+
+                    # Mark the associated merchant as active
+                    self.merchant.active = True
+                    self.merchant.save()
             except WalletHistory.DoesNotExist:
                 pass
 

@@ -311,13 +311,30 @@ class CashFungibleToken(models.Model):
                 except (TypeError, ValueError):
                     decimals = 0
 
+                # Truncate name and symbol if they're too long
+                name = data.get('name', f'CT-{self.category[0:4]}')
+                if len(name) > 200:  # Database limit for name
+                    name = name[:200]
+
+                symbol = data.get('token').get('symbol', '')
+                if symbol and len(symbol) > 100:  # Model limit for symbol
+                    symbol = symbol[:100]
+
+                description = data.get('description', '')
+                if description and len(description) > 1000:  # Reasonable limit for description
+                    description = description[:1000]
+
+                image_url = uris.get('icon')
+                if image_url and len(image_url) > 200:  # Safe limit for URL
+                    image_url = image_url[:200]
+
                 try:
                     info, _ = CashTokenInfo.objects.get_or_create(
-                        name=data.get('name', f'CT-{self.category[0:4]}'),
-                        description=data.get('description', ''),
-                        symbol=data.get('token').get('symbol'),
+                        name=name,
+                        description=description,
+                        symbol=symbol,
                         decimals=decimals,
-                        image_url=uris.get('icon')
+                        image_url=image_url
                     )
                     self.info = info
                     self.save()

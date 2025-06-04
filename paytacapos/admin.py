@@ -48,6 +48,27 @@ def IsNullListFilter(parameter_name):
 
 # Register your models here.
 
+@admin.register(LinkedDeviceInfo)
+class LinkedDeviceInfoAdmin(admin.ModelAdmin):
+    list_display = [
+        'link_code',
+        'device_id',
+        'name',
+        'device_model',
+        'os',
+        'is_suspended',
+    ]
+    search_fields = [
+        'link_code',
+        'device_id',
+        'name',
+        'device_model',
+    ]
+    list_filter = [
+        'is_suspended',
+        'os',
+    ]
+
 @admin.register(PosDevice)
 class PosDeviceAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = [
@@ -57,7 +78,10 @@ class PosDeviceAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
     dynamic_raw_id_fields = [
-        'latest_transaction'
+        'linked_device',
+        'merchant',
+        'branch',
+        'latest_history_record'
     ]
 
     list_display = [
@@ -67,6 +91,16 @@ class PosDeviceAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         "merchant",
         "branch",
     ]
+
+    actions = [
+        "populate_latest_history_record",
+    ]
+
+    def populate_latest_history_record(self, request, queryset):
+        for device in queryset:
+            device.populate_latest_history_record()
+        self.message_user(request, f"Successfully populated latest history records for {queryset.count()} devices.")
+    populate_latest_history_record.short_description = "Populate latest history record for selected devices"
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
