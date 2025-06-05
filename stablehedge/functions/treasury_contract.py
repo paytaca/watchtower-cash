@@ -6,7 +6,7 @@ from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.exceptions import StablehedgeException
-from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey
+from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey, get_bch_transaction_objects
 from stablehedge.utils.blockchain import broadcast_transaction, get_tx_hash
 from stablehedge.utils.transaction import tx_model_to_cashscript
 from stablehedge.utils.encryption import encrypt_str, decrypt_wif_safe
@@ -72,32 +72,11 @@ def find_single_bch_utxo(treasury_contract_address:str, satoshis:int):
 
 
 def get_bch_utxos(treasury_contract_address:str, satoshis:int=None):
-    address = to_cash_address(treasury_contract_address, testnet=settings.BCH_NETWORK == "chipnet")
-    utxos = main_models.Transaction.objects.filter(
-        address__address=address,
-        token__name="bch",
-        spent=False,
+    return get_bch_transaction_objects(
+        treasury_contract_address,
+        satoshis=satoshis,
+        fee_sats_per_input=700,
     )
-    if satoshis is None:
-        return utxos
-
-    P2PKH_OUTPUT_FEE = 44
-    fee_sats_per_input = 700
-
-    subtotal = 0
-    sendable = 0 - (P2PKH_OUTPUT_FEE * 2) # 2 outputs for send and change
-    _utxos = []
-    for utxo in utxos:
-        subtotal += utxo.value
-        sendable += utxo.value - fee_sats_per_input
-        _utxos.append(utxo)
-
-        if sendable >= satoshis:
-            break
-
-
-    return _utxos
-
 
 def get_funding_wif_address(treasury_contract_address:str, token=False):
     funding_wif = get_funding_wif(treasury_contract_address)
