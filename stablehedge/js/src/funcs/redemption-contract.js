@@ -164,3 +164,37 @@ export async function unlockRedemptionContractWithNft(opts) {
   if (typeof transaction === 'string') return { success: false, error: transaction }
   return { success: true, tx_hex: await transaction.build() }
 }
+
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts
+ * @param {Number} [opts.locktime]
+ * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
+ * @param {import("cashscript").Output} [opts.feeFunderOutput]
+ * @param {import("cashscript").Utxo[]} opts.inputs
+ * @param {Number} opts.satoshis
+ */
+export async function consolidateRedemptionContract(opts) {
+  const redemptionContract = new RedemptionContract(opts?.contractOpts)
+
+  const feeFunderUtxo = parseUtxo(opts?.feeFunderUtxo)
+  if (!feeFunderUtxo.template) return { success: false, error: 'Invalid fee funder' }
+
+  const feeFunderOutput = opts?.feeFunderOutput
+    ? parseCashscriptOutput(opts?.feeFunderOutput)
+    : undefined
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+
+  const transaction = await redemptionContract.consolidate({
+    feeFunderUtxo,
+    feeFunderOutput,
+    inputs,
+    satoshis: opts?.satoshis,
+    locktime: opts?.locktime,
+  })
+
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build() }
+}

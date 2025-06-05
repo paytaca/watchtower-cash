@@ -1,5 +1,5 @@
 import { compileFile } from "cashc"
-import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate } from "cashscript"
+import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate, TransactionBuilder } from "cashscript"
 import { cashAddressToLockingBytecode, hexToBin } from "@bitauth/libauth"
 
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
@@ -495,5 +495,74 @@ export class RedemptionContract {
 
     transaction.withFeePerByte(feePerByte)
     return transaction
+  }
+
+  /**
+   * @param {Object} opts 
+   * @param {Number} [opts.locktime]
+   * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
+   * @param {import("cashscript").Output} [opts.feeFunderOutput]
+   * @param {import("cashscript").Utxo[]} opts.inputs
+   * @param {Number} [opts.satoshis] falsey value would mean to consolidate all inputs into 1 utxo
+   */
+  async consolidate(opts) {
+    const contract = this.getContract()
+    if (!contract.functions.consolidate) return 'Contract function not supported'
+
+    const cashtokenInputs = opts?.inputs?.filter(input => input?.token?.category === this.params.tokenCategory)
+    if (cashtokenInputs?.length > 1) return 'Multiple cashtoken inputs not supported'
+    const cashtokenInputIndex = opts?.inputs?.findIndex(input => input?.token?.category === this.params.tokenCategory)
+    if (cashtokenInputIndex > 0) return 'Cashtoken input must be at index 1'
+
+    const feeFunderUtxo = opts?.feeFunderUtxo
+    const feeFunderOutput = opts?.feeFunderOutput
+    const totalSats = opts.inputs.reduce((subtotal, utxo) => subtotal + utxo.satoshis, 0n)
+    const opData = numbersToCumulativeHexString([0n, ...opts?.inputs?.map(input => input.satoshis)])
+    const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
+
+    let consolidateParam = undefined
+    if (this.options.version === 'v3') {
+      consolidateParam = opts?.sendToRedemptionContract
+        ? hexToBin(this.params.redemptionContractBaseBytecode)
+        : new Uint8Array(0)
+    }
+    const builder = new TransactionBuilder({ provider: contract.provider })
+      .addInput(feeFunderUtxo, feeFunderUtxo.template.unlockP2PKH())
+      .addInputs(opts.inputs, contract.unlock.consolidate(consolidateParam))
+
+    if (feeFunderOutput) {
+      builder.addOutput(feeFunderOutput)
+    } else {
+      builder.addOutput({
+        to: feeFunderUtxo.template.unlockP2PKH().generateLockingBytecode(),
+        amount: feeFunderUtxo.satoshis
+      })
+    }
+
+    builder.addOutput({ to: opDataBytecode, amount: 0n })
+
+    let recipient = contract.address
+    if (this.options.version === 'v3' && opts?.sendToRedemptionContract) {
+      recipient = this.getRedemptionContract()?.getContract()?.address
+    }
+
+    const tokenData = cashtokenInputs?.[0]?.token
+    if (opts.satoshis) {
+      builder.addOutput({ to: recipient, amount: opts.satoshis, token: tokenData })
+      builder.addOutput({ to: contract.address, amount: totalSats - opts.satoshis })
+    } else {
+      builder.addOutput({ to: recipient, amount: totalSats, token: tokenData })
+    }
+
+    if (Number.isSafeInteger(opts?.locktime)) {
+      builder.setLocktime(opts?.locktime)
+    }
+
+    if (!feeFunderOutput) {
+      const txSize = builder.build().length
+      builder.outputs[0].amount -= BigInt(txSize / 2)
+    }
+
+    return builder
   }
 }

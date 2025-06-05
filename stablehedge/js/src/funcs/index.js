@@ -21,6 +21,7 @@ import {
   sweepRedemptionContract,
   transferRedemptionContractAssets,
   unlockRedemptionContractWithNft,
+  consolidateRedemptionContract,
 } from './redemption-contract.js'
 import { generatePriceMessage, parsePriceMessage } from './price-oracle.js'
 import { sweepUtxos, schnorrSign, signAuthKeyUtxo } from './transaction.js'
@@ -50,6 +51,7 @@ export default {
   sweepRedemptionContract,
   transferRedemptionContractAssets,
   unlockRedemptionContractWithNft,
+  consolidateRedemptionContract,
 
   parsePriceMessage,
   generatePriceMessage,
