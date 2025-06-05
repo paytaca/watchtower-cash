@@ -246,7 +246,12 @@ def get_funding_utxo_for_consolidation(treasury_contract_address:str, wif:str, u
     ).first()
 
 
-def consolidate_treasury_contract(treasury_contract_address:str, satoshis:int=None, funding_wif:str=None):
+def consolidate_treasury_contract(
+    treasury_contract_address:str,
+    satoshis:int=None,
+    funding_wif:str=None,
+    to_redemption_contract:bool=False
+):
     """
         Consolidate treasury contract utxos to a single tx
     """
@@ -277,6 +282,7 @@ def consolidate_treasury_contract(treasury_contract_address:str, satoshis:int=No
         feeFunderUtxo=funding_utxo_data,
         inputs=cashscript_utxos,
         satoshis=satoshis,
+        sendToRedemptionContract=to_redemption_contract,
     ))
 
     if "success" not in result or not result["success"]:
