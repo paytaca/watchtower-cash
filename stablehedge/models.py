@@ -91,6 +91,7 @@ class RedemptionContract(models.Model):
                 authKeyId=self.auth_token_id,
                 tokenCategory=self.fiat_token.category,
                 oraclePublicKey=self.price_oracle_pubkey,
+                treasuryContractAddress=self.treasury_contract.address if self.treasury_contract else None,
             ),
             options=dict(
                 network=self.network,
@@ -227,6 +228,9 @@ class TreasuryContract(models.Model):
                     self.pubkey5,
                 ],
                 anyhedgeBaseBytecode=self.anyhedge_base_bytecode,
+                redemptionTokenCategory=self.fiat_token.category if self.fiat_token else None,
+                oraclePublicKey=self.price_oracle_pubkey,
+                redemptionContractBaseBytecode=self.redemption_contract_base_bytecode,
             ),
             options=dict(
                 version=self.version,
