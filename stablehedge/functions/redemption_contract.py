@@ -8,9 +8,16 @@ from django.db.models import DecimalField
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
+from stablehedge.js.runner import ScriptFunctions
+from stablehedge.exceptions import StablehedgeException
 from stablehedge.utils.anyhedge import get_latest_oracle_price
+from stablehedge.utils.wallet import wif_to_cash_address, is_valid_wif, get_bch_transaction_objects
+from stablehedge.utils.transaction import tx_model_to_cashscript
 
 from main import models as main_models
+
+from .treasury_contract import get_funding_wif
+
 
 REDIS_STORAGE = settings.REDISKV
 
@@ -146,3 +153,80 @@ def get_volume_data(
     parsed_data = [*data]
     REDIS_STORAGE.set(REDIS_KEY, str(json.dumps(parsed_data, default=str)), ex=ttl)
     return parsed_data
+
+
+def get_bch_utxos(redemption_contract_adress:str, satoshis:int=None):
+    return get_bch_transaction_objects(
+        redemption_contract_address,
+        satoshis=satoshis,
+        fee_sats_per_input=400,
+    )
+
+
+def get_funding_utxo_for_consolidation(redemption_contract_address:str, wif:str, utxos_count:int):
+    redemption_contract = models.RedemptionContract.objects \
+        .filter(address=redemption_contract_address) \
+        .first()
+
+    if not wif and redemption_contract and redemption_contract.treasury_contract:
+        wif = get_funding_wif(redemption_contract.treasury_contract.address)
+
+    if not wif:
+        raise StablehedgeException("Funding WIF not set", code="funding_wif_not_set")
+    
+    if not is_valid_wif(wif):
+        raise StablehedgeException("Invalid funding WIF", code="invalid_funding_wif")
+
+    address = wif_to_cash_address(wif, testnet=settings.BCH_NETWORK == "chipnet")
+    return wif, main_models.Transaction.objects.filter(
+        address__address=address,
+        token__name="bch",
+        spent=False,
+        value__gte=1000 + utxos_count * 400,
+    ).first()
+
+def consolidate_redemption_contract(
+    redemption_contract_address:str,
+    with_reserve_utxo:bool=True,
+    funding_wif:str=None,
+):
+    redemption_contract = models.RedemptionContract.objects \
+        .filter(address=redemption_contract_address) \
+        .first()
+
+    if not redemption_contract:
+        raise StablehedgeException("Redemption contract not found", code="contract_not_found")
+
+    # get utxos
+    utxos = get_bch_utxos(redemption_contract_address, satoshis=satoshis)
+    if not len(utxos):
+        raise StablehedgeException("No UTXOs found", code="no_utxos")
+
+    reserve_utxo = find_fiat_token_utxos(redemption_contract).first()
+
+    utxos = [reserve_utxo, *utxos]
+    cashscript_utxos = [tx_model_to_cashscript(utxo) for utxo in utxos]
+
+    fee_funder_wif, funding_utxo = get_funding_utxo_for_consolidation(
+        treasury_contract_address, funding_wif, len(cashscript_utxos),
+    )
+    if not funding_utxo:
+        raise StablehedgeException("Funding UTXO not found", code="funding_utxo_not_found")
+
+    funding_utxo_data = tx_model_to_cashscript(funding_utxo)
+    funding_utxo_data["wif"] = fee_funder_wif
+
+    # create transaction
+    result = ScriptFunctions.consolidateRedemptionContract(dict(
+        contractOpts=redemption_contract.contract_opts,
+        locktime=0,
+        feeFunderUtxo=funding_utxo_data,
+        inputs=cashscript_utxos,
+        satoshis=satoshis,
+        sendToRedemptionContract=to_redemption_contract,
+    ))
+
+    if "success" not in result or not result["success"]:
+        raise StablehedgeException(result.get("error", "Unknown error"))
+
+    return result["tx_hex"]
