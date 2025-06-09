@@ -183,8 +183,8 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
     treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
     if not treasury_contract:
         return dict(success=False, error="Treasury contract not found")
-    elif not treasury_contract.version != models.TreasuryContract.Version.V2:
-        return dict(success=False, error="Treasury contract not v2")
+    elif treasury_contract.version not in [models.TreasuryContract.Version.V2, models.TreasuryContract.Version.V3]:
+        return dict(success=False, error="Treasury contract not v2 or v3")
 
     LOGGER.info(f"SHORT TREAURY CONTRACT | {treasury_contract_address}")
 
@@ -371,12 +371,16 @@ def rebalance_funds(treasury_contract_address:str):
         if not result["success"]:
             return result
 
-        success, txid_or_error = broadcast_transaction(result["tx_hex"])
-        if not success:
-            return dict(success=False, error=txid_or_error, tx_hex=result["tx_hex"])
+        tx_hexes = result.pop("transactions", [])
+        results = []
+        for tx_hex in tx_hexes:
+            success, txid_or_error = broadcast_transaction(tx_hex)
+            if success:
+                results.push((txid_or_error, None))
+            else:
+                results.push((txid_or_error, tx_hex))
 
-        result.pop("tx_hex", None)
-        result["txid"] = txid_or_error
+        result["transactions"] = transactions
         return result
 
     except (AnyhedgeException, StablehedgeException) as error:

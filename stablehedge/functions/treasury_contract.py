@@ -229,7 +229,8 @@ def consolidate_treasury_contract(
     treasury_contract_address:str,
     satoshis:int=None,
     funding_wif:str=None,
-    to_redemption_contract:bool=False
+    to_redemption_contract:bool=False,
+    locktime:int=0,
 ):
     """
         Consolidate treasury contract utxos to a single tx
@@ -257,7 +258,7 @@ def consolidate_treasury_contract(
     # create transaction
     result = ScriptFunctions.consolidateTreasuryContract(dict(
         contractOpts=treasury_contract.contract_opts,
-        locktime=0,
+        locktime=locktime,
         feeFunderUtxo=funding_utxo_data,
         inputs=cashscript_utxos,
         satoshis=satoshis,
