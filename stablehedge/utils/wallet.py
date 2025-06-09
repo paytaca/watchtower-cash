@@ -4,6 +4,7 @@ import binascii
 import hashlib
 import base58
 from django.conf import settings
+from django.db.models import Sum
 
 from cashaddress import convert
 
@@ -118,3 +119,19 @@ def get_bch_transaction_objects(address:str, satoshis:int=None, fee_sats_per_inp
 
     return _utxos
 
+
+def get_spendable_bch_sats(address:str, fee_sats_per_input:int=144):
+    utxos = get_bch_transaction_objects(address, fee_sats_per_input=fee_sats_per_input)
+
+    if isinstance(utxos, list):
+        total_sats = 0
+        for utxo in utxos:
+            total_sats += utxo.value
+
+        utxo_count = len(utxos)
+    else:
+        total_sats = utxos.aggregate(total_sats = Sum("value"))["total_sats"] or 0
+        utxo_count = utxos.count()
+
+    spendable_sats = total_sats - (fee_sats_per_input * utxo_count)
+    return dict(total=total_sats, spendable=spendable_sats, utxo_count=utxo_count)

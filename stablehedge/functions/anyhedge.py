@@ -25,6 +25,7 @@ from stablehedge.js.runner import ScriptFunctions
 
 from .treasury_contract import (
     get_spendable_sats,
+    get_unallocated_reserve_sats,
     find_single_bch_utxo,
     get_bch_utxos,
     save_signature_to_tx,
@@ -331,6 +332,13 @@ def _get_tvl_sats(treasury_contract_address:str):
     short_value_sats = decimal.Decimal(short_value_data["satoshis"])
     result["in_short"] = short_value_sats
     total += short_value_sats
+
+    unallocated_reserve_satoshis = None
+    unalloc_reserve_data = get_unallocated_reserve_sats(treasury_contract_address)
+    if "spendable" in unalloc_reserve_data:
+        unallocated_reserve_satoshis = decimal.Decimal(unalloc_reserve_data["spendable"])
+        total += unallocated_reserve_satoshis
+    result["unallocated_reserve_satoshis"] = unallocated_reserve_satoshis
 
     redeemable = models.RedemptionContract.objects \
         .annotate_redeemable() \

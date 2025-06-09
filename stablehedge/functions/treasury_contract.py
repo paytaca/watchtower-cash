@@ -1,12 +1,11 @@
 import logging
 from django.conf import settings
-from django.db.models import Sum
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.exceptions import StablehedgeException
-from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey, get_bch_transaction_objects
+from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey, get_bch_transaction_objects, get_spendable_bch_sats
 from stablehedge.utils.blockchain import broadcast_transaction, get_tx_hash
 from stablehedge.utils.transaction import tx_model_to_cashscript
 from stablehedge.utils.encryption import encrypt_str, decrypt_wif_safe
@@ -41,24 +40,15 @@ def save_signature_to_tx(
 
 
 def get_spendable_sats(treasury_contract_address:str):
-    utxos = get_bch_utxos(treasury_contract_address)
+    return get_spendable_bch_sats(treasury_contract_address, fee_sats_per_input=700)
 
-    if isinstance(utxos, list):
-        total_sats = 0
-        for utxo in utxos:
-            total_sats += utxo.value
 
-        utxo_count = len(utxos)
-    else:
-        total_sats = utxos.aggregate(total_sats = Sum("value"))["total_sats"] or 0
-        utxo_count = utxos.count()
- 
-    # estimate of sats used as fee when using the utxo
-    # need to improve
-    fee_sats_per_input = 500
-    spendable_sats = total_sats - (fee_sats_per_input * utxo_count)
+def get_unallocated_reserve_sats(treasury_contract_address:str):
+    redemption_contract_address = models.RedemptionContract.objects \
+        .filter(treasury_contract__address=treasury_contract_address) \
+        .values_list("address", flat=True).first()
 
-    return dict(total=total_sats, spendable=spendable_sats, utxo_count=utxo_count)
+    return get_spendable_bch_sats(redemption_contract_address, fee_sats_per_input=400)
 
 
 def find_single_bch_utxo(treasury_contract_address:str, satoshis:int):
