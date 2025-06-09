@@ -17,9 +17,10 @@ def subscribe_auth_key():
     LOGGER.info(f"Subscribing address holding auth keys: {address}")
     return subscribe_address(address)
 
-def get_auth_key_address():
+def get_auth_key_address(token=False):
     wif = get_auth_key_wallet_wif()
-    return wif_to_cash_address(wif)
+    is_chipnet=settings.BCH_NETWORK == "chipnet"
+    return wif_to_cash_address(wif, testnet=is_chipnet, token=token)
 
 def get_auth_key_utxo(token_category:str):
     address = get_auth_key_address()
