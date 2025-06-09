@@ -1,16 +1,18 @@
 import logging
 import requests
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
-from multisig.models import MultisigTransactionProposal, Signer
+from multisig.models import MultisigTransactionProposal, Signer, Signature
 from multisig.serializers import (
     MultisigTransactionProposalSerializer,
     SignatureSerializer
 )
 from multisig.models.wallet import MultisigWallet
+
 LOGGER = logging.getLogger(__name__)
 MAIN_JS_SERVER = 'http://localhost:3000'
 
@@ -109,21 +111,22 @@ class SignatureAddView(APIView):
             raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
         except MultisigTransactionProposal.DoesNotExist:
             raise NotFound(f"Signer with entity key {signer_entity_key} not found.")
-        
         data = request.data.copy()
-        
-        for input_index, signature_key_value in data:
-            signature_model_data = {
-                'transaction_proposal': proposal.id,
-                'signer': signer.id,
-                'input_index': input_index
-            }
-            for key, value in signature_key_value:
-                signature_model_data['signature_key'] = key
-                signature_model_data['signature_value'] = value
-                serializer = SignatureSerializer(data=signature_model_data)
-                if serializer.is_valid():
-                    signature = serializer.save()
-
-            return Response(SignatureSerializer(signature).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            signatures = []
+            for signature_item in data:
+                signature_instance, created = Signature.objects.get_or_create(
+                    signer=signer,
+                    transaction_proposal=proposal,
+                    input_index=int(signature_item['inputIndex']),
+                    defaults={
+                    'signer': signer,
+                    'transaction_proposal': proposal,
+                    'input_index': int(signature_item['inputIndex']),
+                    'signature_key': signature_item['sigKey'],
+                    'signature_value': signature_item['sigValue']
+                })
+                serializer = SignatureSerializer(signature_instance)
+                signatures.append(serializer.data)
+            return Response(signatures, status=status.HTTP_200_OK)
+       
