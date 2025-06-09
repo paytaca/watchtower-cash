@@ -155,7 +155,7 @@ def get_volume_data(
     return parsed_data
 
 
-def get_redemption_contract_bch_utxos(redemption_contract_adress:str, satoshis:int=None):
+def get_redemption_contract_bch_utxos(redemption_contract_address:str, satoshis:int=None):
     return get_bch_transaction_objects(
         redemption_contract_address,
         satoshis=satoshis,
@@ -168,7 +168,10 @@ def get_funding_utxo_for_consolidation(redemption_contract_address:str, wif:str,
         .filter(address=redemption_contract_address) \
         .first()
 
-    if not wif and redemption_contract and redemption_contract.treasury_contract:
+    if not redemption_contract:
+        raise StablehedgeException("Redemption contract not found", code="contract_not_found")
+
+    if not wif and redemption_contract.treasury_contract:
         wif = get_funding_wif(redemption_contract.treasury_contract.address)
 
     if not wif:
@@ -201,7 +204,7 @@ def consolidate_redemption_contract(
         raise StablehedgeException("Redemption contract not found", code="contract_not_found")
 
     if len(manual_utxos):
-        valid_utxos = [validate_utxo_data(utxo, raise_exception=False) for utxo in manual_utxos]
+        valid_utxos = [validate_utxo_data(utxo, raise_error=False) for utxo in manual_utxos]
         if not all(valid_utxos):
             raise StablehedgeException("Invalid manual UTXOs", code="invalid_manual_utxos")
         manual_utxos = [utxo_data_to_cashscript(utxo) for utxo in manual_utxos]
@@ -213,13 +216,14 @@ def consolidate_redemption_contract(
     # 1 1 => 1
     # get utxos
     if not len(manual_utxos) or append_manual_utxos:
-        utxos = get_redemption_contract_bch_utxos(redemption_contract_address, satoshis=satoshis)
-        if not len(utxos):
+        utxos = get_redemption_contract_bch_utxos(redemption_contract_address)
+        if not len(utxos) and (not append_manual_utxos or not len(manual_utxos)):
             raise StablehedgeException("No UTXOs found", code="no_utxos")
 
-        reserve_utxo = find_fiat_token_utxos(redemption_contract).first()
+        if with_reserve_utxo:
+            reserve_utxo = find_fiat_token_utxos(redemption_contract).first()
+            utxos = [reserve_utxo, *utxos]
 
-        utxos = [reserve_utxo, *utxos]
         cashscript_utxos = [tx_model_to_cashscript(utxo) for utxo in utxos]
 
         if append_manual_utxos:
@@ -229,7 +233,7 @@ def consolidate_redemption_contract(
 
 
     fee_funder_wif, funding_utxo = get_funding_utxo_for_consolidation(
-        redemption_contract.treasury_contract.address, funding_wif, len(cashscript_utxos),
+        redemption_contract.address, funding_wif, len(cashscript_utxos),
     )
     if not funding_utxo:
         raise StablehedgeException("Funding UTXO not found", code="funding_utxo_not_found")
@@ -243,8 +247,7 @@ def consolidate_redemption_contract(
         locktime=locktime,
         feeFunderUtxo=funding_utxo_data,
         inputs=cashscript_utxos,
-        satoshis=satoshis,
-        sendToRedemptionContract=to_redemption_contract,
+        # satoshis=satoshis,
     ))
 
     if "success" not in result or not result["success"]:
