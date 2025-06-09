@@ -1,6 +1,7 @@
 import { compileFile } from "cashc"
 import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate, TransactionBuilder } from "cashscript"
 import { cashAddressToLockingBytecode, hexToBin } from "@bitauth/libauth"
+import { scriptToBytecode } from "@cashscript/utils"
 
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
 import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
@@ -12,6 +13,7 @@ import { toTokenAddress } from "../../utils/crypto.js"
 import { decodePriceMessage, verifyPriceMessage } from "../../utils/price-oracle.js"
 import { calculateInputSize, satoshisToToken, tokenToSatoshis } from "../../utils/transaction.js"
 import { addPrecision, removePrecision } from "../../utils/transaction.js"
+import { numbersToCumulativeHexString } from "../../utils/math.js"
 
 export class RedemptionContract {
   /**
@@ -520,15 +522,9 @@ export class RedemptionContract {
     const opData = numbersToCumulativeHexString([0n, ...opts?.inputs?.map(input => input.satoshis)])
     const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
 
-    let consolidateParam = undefined
-    if (this.options.version === 'v3') {
-      consolidateParam = opts?.sendToRedemptionContract
-        ? hexToBin(this.params.redemptionContractBaseBytecode)
-        : new Uint8Array(0)
-    }
     const builder = new TransactionBuilder({ provider: contract.provider })
       .addInput(feeFunderUtxo, feeFunderUtxo.template.unlockP2PKH())
-      .addInputs(opts.inputs, contract.unlock.consolidate(consolidateParam))
+      .addInputs(opts.inputs, contract.unlock.consolidate())
 
     if (feeFunderOutput) {
       builder.addOutput(feeFunderOutput)
@@ -541,15 +537,11 @@ export class RedemptionContract {
 
     builder.addOutput({ to: opDataBytecode, amount: 0n })
 
-    let recipient = contract.address
-    if (this.options.version === 'v3' && opts?.sendToRedemptionContract) {
-      recipient = this.getRedemptionContract()?.getContract()?.address
-    }
-
     const tokenData = cashtokenInputs?.[0]?.token
+    const recipient = tokenData ? contract.tokenAddress : contract.address
     if (opts.satoshis) {
-      builder.addOutput({ to: recipient, amount: opts.satoshis, token: tokenData })
-      builder.addOutput({ to: contract.address, amount: totalSats - opts.satoshis })
+      builder.addOutput({ to: recipient, amount: BigInt(opts.satoshis), token: tokenData })
+      builder.addOutput({ to: contract.address, amount: totalSats - BigInt(opts.satoshis) })
     } else {
       builder.addOutput({ to: recipient, amount: totalSats, token: tokenData })
     }

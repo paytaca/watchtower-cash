@@ -601,8 +601,8 @@ export class TreasuryContract {
     }
 
     if (opts.satoshis) {
-      builder.addOutput({ to: recipient, amount: opts.satoshis })
-      builder.addOutput({ to: contract.address, amount: totalSats - opts.satoshis })
+      builder.addOutput({ to: recipient, amount: BigInt(opts.satoshis) })
+      builder.addOutput({ to: contract.address, amount: totalSats - BigInt(opts.satoshis) })
     } else {
       builder.addOutput({ to: recipient, amount: totalSats })
     }

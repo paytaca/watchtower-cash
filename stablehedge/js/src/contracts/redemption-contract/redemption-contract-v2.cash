@@ -109,8 +109,8 @@ contract RedemptionContract(
         if (tx.outputs.length == 4) {
             totalOutputSats = totalOutputSats + tx.outputs[3].value;
             require(
-                tx.outputs[2].lockingBytecode == inputLockScript ||
-                tx.outputs[2].lockingBytecode == treasuryContractLockingBytecode
+                tx.outputs[3].lockingBytecode == inputLockScript ||
+                tx.outputs[3].lockingBytecode == treasuryContractLockingBytecode
             );
         }
 
