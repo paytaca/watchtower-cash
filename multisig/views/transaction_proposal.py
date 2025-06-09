@@ -96,7 +96,7 @@ class MultisigTransactionProposalDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class SignatureAddView(APIView):
+class SignerSignaturesAddView(APIView):
 
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
@@ -106,10 +106,10 @@ class SignatureAddView(APIView):
     def post(self, request, proposal_identifier, signer_identifier):
         try:
             proposal = self.get_transaction_proposal(proposal_identifier)
-            signer = get_object_or_404(Signer, entity_key=signer_identifier)
+            signer = get_object_or_404(Signer, entity_key=signer_identifier, wallet=proposal.wallet)
         except MultisigTransactionProposal.DoesNotExist:
             raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
-        except MultisigTransactionProposal.DoesNotExist:
+        except Signer.DoesNotExist:
             raise NotFound(f"Signer with entity key {signer_entity_key} not found.")
         data = request.data.copy()
         with transaction.atomic():
@@ -129,4 +129,37 @@ class SignatureAddView(APIView):
                 serializer = SignatureSerializer(signature_instance)
                 signatures.append(serializer.data)
             return Response(signatures, status=status.HTTP_200_OK)
-       
+ 
+class SignaturesAddView(APIView):
+    def get_transaction_proposal(self, proposal_identifier):
+        if proposal_identifier.isdigit():
+            return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
+        return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
+
+    def post(self, request, proposal_identifier):
+        try:
+            proposal = self.get_transaction_proposal(proposal_identifier)
+        except MultisigTransactionProposal.DoesNotExist:
+            raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
+        data = request.data.copy()
+        with transaction.atomic():
+            signatures = []
+            for signature_item in data:
+                signer_entity_key =  signature_item['sigKey'].split('.')[0].replace('key', 'signer_')
+                signer = get_object_or_404(Signer, entity_key=signer_entity_key, wallet=proposal.wallet)
+                signature_instance, created = Signature.objects.get_or_create(
+                    signer=signer,
+                    transaction_proposal=proposal,
+                    input_index=int(signature_item['inputIndex']),
+                    defaults={
+                    'signer': signer,
+                    'transaction_proposal': proposal,
+                    'input_index': int(signature_item['inputIndex']),
+                    'signature_key': signature_item['sigKey'],
+                    'signature_value': signature_item['sigValue']
+                })
+                serializer = SignatureSerializer(signature_instance)
+                signatures.append(serializer.data)
+            return Response(signatures, status=status.HTTP_200_OK)
+
+

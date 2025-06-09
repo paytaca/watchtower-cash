@@ -6,7 +6,8 @@ from .views import (
   MultisigWalletDetailView,
   MultisigTransactionProposalListCreateView,
   MultisigTransactionProposalDetailView,
-  SignatureAddView
+  SignerSignaturesAddView,
+  SignaturesAddView
 )
 
 urlpatterns = [
@@ -16,5 +17,7 @@ urlpatterns = [
     path('wallets/<int:pk>/delete/', MultisigWalletDeleteAPIView.as_view(), name='wallet-delete'),
     path('wallets/<str:wallet_identifier>/transaction-proposals/', MultisigTransactionProposalListCreateView.as_view(), name='transaction-proposal-list-create'),
     path('transaction-proposals/<str:proposal_identifier>/', MultisigTransactionProposalDetailView.as_view(), name='transaction-proposal-detail'),
-    path('transaction-proposals/<str:proposal_identifier>/signatures/<str:signer_identifier>', SignatureAddView.as_view(), name='transaction-proposal-signature-add'),
+    path('transaction-proposals/<str:proposal_identifier>/', MultisigTransactionProposalDetailView.as_view(), name='transaction-proposal-detail'),
+    path('transaction-proposals/<str:proposal_identifier>/signatures/', SignaturesAddView.as_view(), name='transaction-proposal-signatures-add'),
+    path('transaction-proposals/<str:proposal_identifier>/signatures/<str:signer_identifier>', SignerSignaturesAddView.as_view(), name='transaction-proposal-signer-signatures-add')
 ]

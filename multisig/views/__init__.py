@@ -1,7 +1,8 @@
 from .transaction_proposal import (
     MultisigTransactionProposalListCreateView,
     MultisigTransactionProposalDetailView,
-    SignatureAddView,
+    SignaturesAddView,
+    SignerSignaturesAddView
 )
 
 from .wallet import (
@@ -14,7 +15,8 @@ from .wallet import (
 __all__ = [
     "MultisigTransactionProposalListCreateView",
     "MultisigTransactionProposalDetailView",
-    "SignatureAddView",
+    "SignaturesAddView",
+    "SignerSignaturesAddView",
     "MultisigWalletListCreateView",
     "MultisigWalletDetailView",
     "RenameMultisigWalletView",
