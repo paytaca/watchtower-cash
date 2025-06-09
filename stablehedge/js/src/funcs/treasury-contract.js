@@ -28,6 +28,7 @@ export function compileTreasuryContract(opts) {
     params: treasuryContract.params,
     options: treasuryContract.options,
     bytecode: contract.bytecode,
+    redemptionContractAddress: treasuryContract.getRedemptionContract()?.getContract()?.address,
   }
 }
 

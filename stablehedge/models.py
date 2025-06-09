@@ -235,6 +235,7 @@ class TreasuryContract(models.Model):
             ),
             options=dict(
                 version=self.version,
+                redemptionContractBaseBytecodeVersion=self.redemption_contract_version,
                 network=self.network,
                 addressType=address_type,
             ),

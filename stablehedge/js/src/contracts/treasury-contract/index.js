@@ -25,6 +25,7 @@ export class TreasuryContract {
    * @param {String} opts.params.redemptionContractBaseBytecode
    * @param {Object} opts.options
    * @param {'v1' | 'v2' | 'v3'} opts.options.version
+   * @param {String} opts.options.redemptionContractBaseBytecodeVersion
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
    */
@@ -42,6 +43,7 @@ export class TreasuryContract {
       network: opts?.options?.network || 'mainnet',
       addressType: opts?.options?.addressType,
       version: opts?.options?.version,
+      redemptionContractBaseBytecodeVersion: opts?.options?.redemptionContractBaseBytecodeVersion,
     }
   }
 
@@ -107,7 +109,7 @@ export class TreasuryContract {
 
     const contract = this.getContract()
 
-    return new RedemptionContract({
+    const rcManager = new RedemptionContract({
       params: {
         authKeyId: this.params.authKeyId,
         tokenCategory: this.params.redemptionTokenCategory,
@@ -115,11 +117,13 @@ export class TreasuryContract {
         treasuryContractAddress: contract.address,
       },
       options: {
-        version: 'v2',
+        version: this.options.redemptionContractBaseBytecodeVersion,
         addressType: this.options.addressType,
         network: this.options.network,
       }
     })
+
+    return rcManager
   }
 
   /**
