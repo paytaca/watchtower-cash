@@ -83,6 +83,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.RedemptionContract
         fields = [
+            "version",
             "address",
             "fiat_token",
             "auth_token_id",

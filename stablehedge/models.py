@@ -94,6 +94,7 @@ class RedemptionContract(models.Model):
                 treasuryContractAddress=self.treasury_contract.address if self.treasury_contract else None,
             ),
             options=dict(
+                version=self.version,
                 network=self.network,
                 addressType=address_type,
             ),
