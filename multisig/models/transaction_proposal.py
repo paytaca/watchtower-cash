@@ -32,3 +32,33 @@ class Signature(models.Model):
     signature_key = models.CharField(max_length=150, help_text="Concatenated template signer variable, sig algo and sighash. Example: key1.schnorr_signature.alloutputs")
     signature_value = models.CharField(max_length=150)
 
+class MultisigTransactionProposalStatus(models.Model):
+    
+    class StatusChoices(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CANCELLED = "cancelled", "Cancelled"
+        BROADCASTED = "broadcasted", "Broadcasted"
+
+    transaction_proposal = models.OneToOneField(
+        MultisigTransactionProposal,
+        on_delete=models.SET_NULL,
+        related_name="status",
+        null=True,
+        blank=True,
+    )
+    
+    transaction_hash = models.CharField(
+        max_length=64,
+        help_text="Computed hash of the unsigned transaction",
+        unique=True
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=StatusChoices.choices,
+        default=StatusChoices.PENDING
+    )
+    
+    @property
+    def is_transaction_proposal_synced(self):
+        return Boolean(self.transaction_proposal)
