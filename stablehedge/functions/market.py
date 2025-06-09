@@ -10,7 +10,7 @@ from stablehedge.utils.transaction import (
 
 from .auth_key import get_signed_auth_key_utxo
 from .redemption_contract import find_fiat_token_utxos, consolidate_redemption_contract
-from .treasury_contract import get_bch_utxos, consolidate_treasury_contract
+from .treasury_contract import get_bch_utxos, get_funding_wif, consolidate_treasury_contract
 
 
 def transfer_treasury_funds_to_redemption_contract(
@@ -89,23 +89,27 @@ def unmonitored_rebalance(
     if redemption_contract.version == models.RedemptionContract.Version.V1:
         raise StablehedgeException("Redemption contract is V1", code="invalid-redemption-contract-version")
 
+    fee_funder_wif = get_funding_wif(treasury_contract.address)
+
     tc_consolidate_tx = consolidate_treasury_contract(
         treasury_contract.address,
         satoshis=satoshis,
         to_redemption_contract=True,
+        funding_wif=fee_funder_wif,
         locktime=locktime,
     )
+    tc_consolidate_txid = get_tx_hash(tc_consolidate_tx)
 
+    tc_transaction_data = decode_raw_tx(tc_consolidate_tx)
     if not satoshis:
-        tc_transaction_data = decode_raw_tx(tc_consolidate_tx)
-        transferred_sats = tc_transaction_data["vout"][2]["value"] * 10 ** 8
+        transferred_sats = int(tc_transaction_data["vout"][2]["value"] * 10 ** 8)
     else:
         transferred_sats = satoshis
 
-    manual_utxo = dict(
-        txid=get_tx_hash(tc_consolidate_tx),
-        vout=2,
-        satoshis=transferred_sats,
+    manual_utxo = dict(txid=tc_consolidate_txid, vout=2, satoshis=transferred_sats)
+    funding_utxo_data = dict(
+        txid=tc_consolidate_txid, vout=0, wif=fee_funder_wif,
+        satoshis=int(tc_transaction_data["vout"][0]["value"] * 10 ** 8),
     )
 
     rc_consolidate_tx = consolidate_redemption_contract(
@@ -113,6 +117,7 @@ def unmonitored_rebalance(
         with_reserve_utxo=True,
         manual_utxos=[manual_utxo],
         append_manual_utxos=True,
+        funding_utxo_data=funding_utxo_data,
     )
 
     return dict(success=True, transactions=[tc_consolidate_tx, rc_consolidate_tx])

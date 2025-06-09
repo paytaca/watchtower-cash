@@ -376,11 +376,11 @@ def rebalance_funds(treasury_contract_address:str):
         for tx_hex in tx_hexes:
             success, txid_or_error = broadcast_transaction(tx_hex)
             if success:
-                results.push((txid_or_error, None))
+                results.append((txid_or_error, None))
             else:
-                results.push((txid_or_error, tx_hex))
+                results.append((txid_or_error, tx_hex))
 
-        result["transactions"] = transactions
+        result["transactions"] = results
         return result
 
     except (AnyhedgeException, StablehedgeException) as error:

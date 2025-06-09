@@ -12,7 +12,7 @@ from stablehedge.js.runner import ScriptFunctions
 from stablehedge.exceptions import StablehedgeException
 from stablehedge.utils.anyhedge import get_latest_oracle_price
 from stablehedge.utils.wallet import wif_to_cash_address, is_valid_wif, get_bch_transaction_objects
-from stablehedge.utils.transaction import tx_model_to_cashscript, utxo_data_to_cashscript, validate_utxo_data
+from stablehedge.utils.transaction import tx_model_to_cashscript, utxo_data_to_cashscript, validate_utxo_data, InvalidUtxoException
 
 from main import models as main_models
 
@@ -195,6 +195,7 @@ def consolidate_redemption_contract(
     locktime:int=0,
     manual_utxos:list=[],
     append_manual_utxos:bool=False,
+    funding_utxo_data:dict=None,
 ):
     redemption_contract = models.RedemptionContract.objects \
         .filter(address=redemption_contract_address) \
@@ -231,15 +232,25 @@ def consolidate_redemption_contract(
     else:
         cashscript_utxos = manual_utxos
 
+    if funding_utxo_data is not None:
+        try:
+            validate_utxo_data(funding_utxo_data, require_unlock="wif" not in funding_utxo_data)
+            funding_utxo_data = utxo_data_to_cashscript(funding_utxo_data)
+        except InvalidUtxoException as exception:
+            raise StablehedgeException(
+                f"Invalid funding UTXO data: {str(exception)}",
+                code="invalid_funding_utxo_data"
+            )
 
-    fee_funder_wif, funding_utxo = get_funding_utxo_for_consolidation(
-        redemption_contract.address, funding_wif, len(cashscript_utxos),
-    )
-    if not funding_utxo:
-        raise StablehedgeException("Funding UTXO not found", code="funding_utxo_not_found")
+    else:
+        fee_funder_wif, funding_utxo = get_funding_utxo_for_consolidation(
+            redemption_contract.address, funding_wif, len(cashscript_utxos),
+        )
+        if not funding_utxo:
+            raise StablehedgeException("Funding UTXO not found", code="funding_utxo_not_found")
 
-    funding_utxo_data = tx_model_to_cashscript(funding_utxo)
-    funding_utxo_data["wif"] = fee_funder_wif
+        funding_utxo_data = tx_model_to_cashscript(funding_utxo)
+        funding_utxo_data["wif"] = fee_funder_wif
 
     # create transaction
     result = ScriptFunctions.consolidateRedemptionContract(dict(
