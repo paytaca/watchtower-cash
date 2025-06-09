@@ -51,6 +51,8 @@ export class RedemptionContract {
     let cashscriptFilename = 'redemption-contract.cash';
     if (version === 'v2') {
       cashscriptFilename = 'redemption-contract-v2.cash';
+    } else if (version !== 'v1') {
+      cashscriptFilename = `redemption-contract-${version}.cash`;
     }
     const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
     return artifact;

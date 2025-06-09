@@ -14,7 +14,7 @@ export function getRedemptionContractArtifact() {
  */
 export function getRedemptionContractBaseBytecode(opts) {
   const version = opts?.version || 'v2'
-  const artifact = RedemptionContract.getArtifact()
+  const artifact = RedemptionContract.getArtifact(version)
   return {
     version: version,
     bytecode: baseBytecodeToHex(artifact.bytecode)
