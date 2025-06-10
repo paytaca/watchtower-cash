@@ -253,6 +253,7 @@ def consolidate_treasury_contract(
         inputs=cashscript_utxos,
         satoshis=satoshis,
         sendToRedemptionContract=to_redemption_contract,
+        redemptionContractAddress=treasury_contract.redemption_contract.address,
     ))
 
     if "success" not in result or not result["success"]:

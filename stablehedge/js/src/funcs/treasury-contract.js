@@ -281,6 +281,7 @@ export async function spendToAnyhedgeContract(opts) {
  * @param {Object} opts.contractOpts
  * @param {Number} [opts.locktime]
  * @param {Boolean} [opts.sendToRedemptionContract]
+ * @param {String} [opts.redemptionContractAddress]
  * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
  * @param {import("cashscript").Output} [opts.feeFunderOutput]
  * @param {import("cashscript").Utxo[]} opts.inputs
@@ -297,6 +298,12 @@ export async function consolidateTreasuryContract(opts) {
     : undefined
 
   const inputs = opts?.inputs?.map(parseUtxo)
+
+  if (opts?.sendToRedemptionContract && opts?.redemptionContractAddress) {
+    if (opts?.redemptionContractAddress !== treasuryContract.getRedemptionContract().getContract().address) {
+      return { success: false, error: 'Detected redemption contract address mismatch' }
+    }
+  }
 
   const transaction = await treasuryContract.consolidate({
     feeFunderUtxo,
