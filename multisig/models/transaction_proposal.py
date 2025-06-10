@@ -18,9 +18,10 @@ class MultisigTransactionProposal(models.Model):
     # proposed_by = models.ForeignKey(Signer, blank=True, null=True)
 
     def __str__(self):
-        return self.wallet.template.get("name", "Unnamed Wallet")
+        if self.metadata.get('prompt'):
+            return self.metadata['prompt']
+        return self.transaction_hash
     
-
 class Signature(models.Model):
     transaction_proposal = models.ForeignKey(
         MultisigTransactionProposal,
@@ -62,3 +63,16 @@ class MultisigTransactionProposalStatus(models.Model):
     @property
     def is_transaction_proposal_synced(self):
         return Boolean(self.transaction_proposal)
+
+def set_status(self, status=MultisigTransactionProposalStatus.StatusChoices.PENDING):
+    try:
+        self.status.status = status
+        self.status.save()
+    except MultisigTransactionProposalStatus.DoesNotExist:
+        MultisigTransactionProposalStatus.objects.create(
+            transaction_proposal=self,
+            transaction_hash=self.transaction_hash,
+            status=status
+        )
+
+MultisigTransactionProposal.set_status = set_status
