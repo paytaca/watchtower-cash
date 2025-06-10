@@ -193,6 +193,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
     list_display = [
         "__str__",
         "version",
+        "get_redemption_contract_check",
         "redemption_contract",
         "auth_token_id",
         "is_subscribed",
@@ -229,6 +230,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request) \
             .select_related("redemption_contract") \
+            .select_related("redemption_contract__fiat_token", "fiat_token") \
             .annotate_is_subscribed()
 
     def get_spendable_satoshis(self, obj):
@@ -239,6 +241,26 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         return spendable_sats
 
     get_spendable_satoshis.short_description = 'Spendable satoshis'
+
+    def get_redemption_contract_check(self, obj):
+        try:
+            redemption_contract = obj.redemption_contract
+        except models.TreasuryContract.redemption_contract.RelatedObjectDoesNotExist:
+            return obj.version == models.TreasuryContract.Version.V3
+
+        if not obj.fiat_token or obj.fiat_token.category != redemption_contract.fiat_token.category:
+            return False
+
+        if obj.auth_token_id != redemption_contract.auth_token_id:
+            return False
+
+        if obj.price_oracle_pubkey != redemption_contract.price_oracle_pubkey:
+            return False
+
+        return True 
+
+    get_redemption_contract_check.short_description = 'Redemption contract param check'
+    get_redemption_contract_check.boolean = True
 
     # @admin.display(ordering='is_subscribed') # for django 5.0
     def is_subscribed(self, obj):
