@@ -37,7 +37,7 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
         signatures_data = validated_data.pop('signatures', [])
         with transaction.atomic():
             proposal = MultisigTransactionProposal.objects.create(**validated_data)
-                        
+            proposal.set_status()            
             for sig_data in signatures_data:
                 for entity in proposal.wallet.template['entities'].items():
                     variable = sig_data['signature_key'].split('.')[0]
