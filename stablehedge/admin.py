@@ -10,9 +10,10 @@ from stablehedge.functions.treasury_contract import (
     sweep_funding_wif,
     get_spendable_sats,
 )
-from stablehedge.functions.redemption_contract import get_24hr_volume_data
+from stablehedge.functions.redemption_contract import get_24hr_volume_data, consolidate_redemption_contract
 from stablehedge.functions.transaction import update_redemption_contract_tx_trade_size
 from stablehedge.js.runner import ScriptFunctions
+from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import subscribe_address
 from stablehedge.tasks import check_and_short_funds
 
@@ -47,6 +48,7 @@ class RedemptionContractAdmin(admin.ModelAdmin):
 
     list_display = [
         "__str__",
+        "version",
         "price_oracle_pubkey",
         "fiat_token",
         "treasury_contract_address",
@@ -63,6 +65,7 @@ class RedemptionContractAdmin(admin.ModelAdmin):
         "subscribe",
         "update_utxos",
         "recalculate_24hr_volume",
+        "consolidate_to_reserve_utxo",
     ]
 
     def get_queryset(self, request):
@@ -105,6 +108,24 @@ class RedemptionContractAdmin(admin.ModelAdmin):
             result = get_24hr_volume_data(obj.address, force=True)
             messages.info(request, f"{obj.address} | {result}")
     recalculate_24hr_volume.short_description = "Recalculate 24 volume data"
+
+    def consolidate_to_reserve_utxo(self, request, queryset):
+        for obj in queryset.all():
+            if obj.version == models.RedemptionContract.Version.V1:
+                messages.warning(request, f"{obj.address} | Unable to consolidate with version: {obj.version}")
+                continue
+
+            try:
+                transaction = consolidate_redemption_contract(obj.address, with_reserve_utxo=True)
+                success, error_or_txid = broadcast_transaction(transaction)
+                if success:
+                    messages.success(request, f"{obj.address} | {error_or_txid}")
+                else:
+                    raise StablehedgeException(error_or_txid, code="invalid-transaction")
+            except StablehedgeException as exception:
+                messages.error(request, f"{obj.address} | {exception}")
+    consolidate_to_reserve_utxo.short_description = "Consolidate to reserve UTXO"
+
 
 @admin.register(models.RedemptionContractTransaction)
 class RedemptionContractTransactionAdmin(admin.ModelAdmin):
@@ -171,6 +192,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     list_display = [
         "__str__",
+        "version",
         "redemption_contract",
         "auth_token_id",
         "is_subscribed",
