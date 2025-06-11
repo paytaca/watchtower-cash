@@ -8,13 +8,14 @@ from rest_framework import status
 from rest_framework.exceptions import NotFound
 from multisig.models import MultisigTransactionProposal, Signer, Signature
 from multisig.serializers import (
+    MultisigWalletSerializer,
     MultisigTransactionProposalSerializer,
     SignatureSerializer
 )
 from multisig.models.wallet import MultisigWallet
 
 LOGGER = logging.getLogger(__name__)
-MAIN_JS_SERVER = 'http://localhost:3000'
+MAIN_JS_SERVER = 'http://localhost:3004'
 
 class MultisigTransactionProposalListCreateView(APIView):
 
@@ -86,12 +87,12 @@ class MultisigTransactionProposalDetailView(APIView):
         return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
 
     def get(self, request, proposal_identifier):
-        proposal = self.get_object(pk)
+        proposal = self.get_object(proposal_identifier)
         serializer = MultisigTransactionProposalSerializer(proposal)
         return Response(serializer.data)
 
-    def delete(self, request, pk):
-        proposal = self.get_object(pk)
+    def delete(self, request, proposal_identifier):
+        proposal = self.get_object(proposal_identifier)
         proposal.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -163,7 +164,29 @@ class SignaturesAddView(APIView):
             return Response(signatures, status=status.HTTP_200_OK)
 
 class BroadcastTransactionProposalView(APIView):
+    
+    def get_transaction_proposal(self, proposal_identifier):
+        if proposal_identifier.isdigit():
+            return get_object_or_404(MultisigTransactionProposal, id=int(proposal_identifier))
+        return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
 
-    def post(self, request, transaction_hash):
-        pass
+
+    def post(self, request, proposal_identifier):
+
+        proposal = self.get_transaction_proposal(proposal_identifier)
+        proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
+        wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
+        data = {
+            'multisigTransaction': proposal_serializer.data,
+            'multisigWallet': wallet_serializer.data
+        }
+        # finalize transaction
+        # update transaction_proposal add signed_transaction, txid
+        resp = requests.post(
+                f'{MAIN_JS_SERVER}/multisig/transaction/finalize',
+                json=data,
+                timeout=5
+            )
+        return Response(resp.json())
+ 
 
