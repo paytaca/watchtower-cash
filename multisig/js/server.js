@@ -13,7 +13,7 @@ import {
     hashTransaction,
     decodeTransactionCommon
 } from 'bitauth-libauth-v3'
-import * as Multisig from './lib/multisig/index.js'
+import * as Multisig from './multisig/index.js'
 
 const app = express()
 const port = 3004
