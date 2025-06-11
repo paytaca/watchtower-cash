@@ -3,6 +3,7 @@ import hashlib
 import json
 from django.db import models
 from django.contrib.postgres.fields import JSONField
+from django.utils import timezone
 
 LOGGER = logging.getLogger(__name__)
 
@@ -11,12 +12,17 @@ class MultisigWallet(models.Model):
     locking_data = JSONField(null=True, blank=True, help_text="Raw locking data")
     created_at = models.DateTimeField(auto_now_add=True)
     locking_bytecode = models.CharField(max_length=46, null=True, blank=True, unique=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, default=None)
 
     @property
     def required_signatures(self):
         m = int(self.template.get('scripts')['lock']['script'].split('\n')[0].split('_')[1])
         return m
-    
+
+    def soft_delete(self):
+        self.deleted_at = timezone.now()
+        self.save()
+
     def __str__(self):
         return self.template.get("name", "Unnamed Wallet")
 
