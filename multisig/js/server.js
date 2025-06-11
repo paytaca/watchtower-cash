@@ -1,3 +1,5 @@
+import structuredClone from '@ungap/structured-clone'
+
 import express from 'express'
 import {
     decodeCashAddress,
@@ -11,10 +13,14 @@ import {
     hexToBin,
     cashAddressToLockingBytecode,
     hashTransaction,
-    decodeTransactionCommon
+    decodeTransactionCommon,
+    stringify
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
 
+if (typeof global.structuredClone === 'undefined') {
+  global.structuredClone = structuredClone;
+}
 const app = express()
 const port = 3004
 
@@ -59,9 +65,10 @@ app.post('/multisig/utils/get-transaction-hash', async (req, res) => {
 
 app.post('/multisig/transaction/finalize', async (req, res) => {
    const { multisigTransaction, multisigWallet } =  req.body
-   console.log(multisigTransaction, multisigWallet)
-   const finalCompilation = Multisig.finalizeTransaction({ multisigTransaction, multisigWallet })
-   res.json(finalCompilation)
+   const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
+   const finalCompilation = Multisig.finalizeTransaction({ multisigTransaction: multisigTransactionImported, multisigWallet })
+      
+   res.json({ finalCompilation: stringify(finalCompilation)})
 })
 
 app.get('/test', async (req, res) => {
