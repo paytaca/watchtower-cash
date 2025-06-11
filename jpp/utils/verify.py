@@ -130,7 +130,7 @@ def get_tx_output_values(txids):
 def tx_exists(txid):
     if not __is_txid(txid): return False
     try:
-        transaction = bchn._get_raw_transaction(txid, 0)
+        transaction = bchn._get_raw_transaction(txid, 0, max_retries=2)
         return bool(transaction)
     except JSONRPCException as exception:
         if exception.code in [-5, -8]: # -5 -> doesnt exist, -8 -> invalid txid format(32byte hex)
