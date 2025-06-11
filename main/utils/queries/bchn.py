@@ -109,19 +109,21 @@ class BCHN(object):
 
     # Cache to prevent multiple requests when parsing transaction in '._parse_transaction()'
     @redis_cache(expiration_seconds=900)
-    def _get_raw_transaction(self, txid):
+    def _get_raw_transaction(self, txid, verbosity:int=2, max_retries:int=None):
         retries = 0
-        while retries < self.max_retries:
+        if max_retries is None:
+            max_retries = self.max_retries
+        while retries < max_retries:
             try:
                 connection = self._get_rpc_connection()
                 try:
-                    txn = connection.getrawtransaction(txid, 2)
+                    txn = connection.getrawtransaction(txid, verbosity)
                     return txn
                 finally:
                     self._close_connection(connection)
             except Exception as exception:
                 retries += 1
-                if retries >= self.max_retries:
+                if retries >= max_retries:
                     if 'No such mempool or blockchain transaction' in str(exception):
                         break
                     else:
@@ -275,6 +277,13 @@ class BCHN(object):
         finally:
             self._close_connection(connection)
     
+    def get_tx_output(self, txid:str, vout:int, include_mempool=True):
+        try:
+            connection = self._get_rpc_connection()
+            return connection.gettxout(txid, vout)
+        finally:
+            self._close_connection(connection)
+
     def get_input_details(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
         if previous_tx:
