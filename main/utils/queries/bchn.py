@@ -18,7 +18,7 @@ def redis_cache(expiration_seconds=3600):  # Add expiration as a parameter
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            key = f"{func.__name__}:{args}"
+            key = f"{func.__name__}:{args}:{kwargs}"
             cached_value = redis_client.get(key)
             
             if cached_value:
@@ -108,7 +108,7 @@ class BCHN(object):
             self._close_connection(connection)
 
     # Cache to prevent multiple requests when parsing transaction in '._parse_transaction()'
-    @redis_cache(expiration_seconds=900)
+    @redis_cache(expiration_seconds=60)
     def _get_raw_transaction(self, txid, verbosity:int=2, max_retries:int=None):
         retries = 0
         if max_retries is None:
