@@ -10,9 +10,18 @@ from ..serializers.wallet import MultisigWalletSerializer
 LOGGER = logging.getLogger(__name__)
 
 class MultisigWalletListCreateView(APIView):
+    
     def get(self, request):
+        
+        queryset = MultisigWallet.objects.filter(deleted_at__isnull=True)
+
+        include_deleted = request.query_params.get('include_deleted')
+
+        if include_deleted == '1' or include_deleted == 'true':
+            queryset = MultisigWallet.objects.all()
+        
         xpub = request.query_params.get('xpub')
-        queryset = MultisigWallet.objects.all()
+
         if xpub:
             queryset = queryset.filter(signers__xpub=xpub).distinct()
 
@@ -28,7 +37,7 @@ class MultisigWalletListCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class MultisigWalletDetailView(APIView):
-    
+   
     def get(self, request, identifier):
         try:
             if identifier.isdigit():
@@ -39,7 +48,24 @@ class MultisigWalletDetailView(APIView):
             raise NotFound(detail="Wallet not found.")
         serializer = MultisigWalletSerializer(wallet)
         return Response(serializer.data)
+    
+    def delete(self, request, identifier):
         
+        try:
+            if identifier.isdigit():
+                identifier_name = 'id'
+                wallet = MultisigWallet.objects.get(id=identifier)
+            else:
+                identifier_name = 'locking_bytecode'
+                wallet = MultisigWallet.objects.get(locking_bytecode=identifier)
+            
+            wallet.soft_delete()
+            return Response({"message": f"Wallet with {identifier_name}={identifier} deleted."}, status=status.HTTP_200_OK)
+
+        except MultisigWallet.DoesNotExist:
+            raise NotFound(detail="Wallet with {identifier_name}={identifier} Not Found.")
+        
+
 class RenameMultisigWalletView(APIView):
     def patch(self, request, pk):
         try:
@@ -60,7 +86,5 @@ class RenameMultisigWalletView(APIView):
         return Response({"id": wallet.id, "name": new_name}, status=status.HTTP_200_OK)
 
 class MultisigWalletDeleteAPIView(APIView):
-    def delete(self, request, pk, format=None):
-        wallet = get_object_or_404(MultisigWallet, pk=pk)
-        wallet.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+     
+   pass

@@ -162,4 +162,8 @@ class SignaturesAddView(APIView):
                 signatures.append(serializer.data)
             return Response(signatures, status=status.HTTP_200_OK)
 
+class BroadcastTransactionProposalView(APIView):
+
+    def post(self, request, transaction_hash):
+        pass
 
