@@ -32,7 +32,11 @@ class RedemptionContractForm(forms.ModelForm):
                 tokenCategory=self.cleaned_data["fiat_token"].category,
                 oraclePublicKey=self.cleaned_data["price_oracle_pubkey"],
             ),
-            options=dict(network=settings.BCH_NETWORK, addressType="p2sh32"),
+            options=dict(
+                network=settings.BCH_NETWORK,
+                addressType="p2sh32",
+                version=self.cleaned_data["version"],
+            ),
         ))
         self.cleaned_data["address"] = compile_data["address"]
 
