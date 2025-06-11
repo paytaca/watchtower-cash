@@ -129,7 +129,7 @@ class TreasuryContractForm(forms.ModelForm):
                 authKeyId=data["auth_token_id"],
                 pubkeys=pubkeys,
                 anyhedgeBaseBytecode=anyhedge_base_bytecode,
-                redemptionTokenCategory=data["fiat_token"].category,
+                redemptionTokenCategory=getattr(data.get("fiat_token"), "category", None),
                 oraclePublicKey=data["price_oracle_pubkey"],
                 redemptionContractBaseBytecode=redemption_contract_base_bytecode,
             ),
