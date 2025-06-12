@@ -83,9 +83,7 @@ export const getTotalBchChangeAmount = (tx, senderAddress, formatAddress, unit =
  * @param str - The stringified value to parse
  * @returns The reconstructed JavaScript value with proper types
  */
-export const parseStringified = (str) => {
-  // First, parse the basic JSON structure
-  const parsed = JSON.parse(str, (_, value) => {
+export const libauthStringifyReviver = (_, value) => {
     if (typeof value !== 'string') return value
 
     // Uint8Array pattern: "<Uint8Array: 0x...>"
@@ -115,9 +113,6 @@ export const parseStringified = (str) => {
     }
 
     return value
-  })
-
-  return parsed
 }
 
 /**
