@@ -15,7 +15,7 @@ from multisig.serializers import (
 from multisig.models.wallet import MultisigWallet
 
 LOGGER = logging.getLogger(__name__)
-MAIN_JS_SERVER = 'http://localhost:3004'
+MULTISIG_JS_SERVER = 'http://localhost:3004'
 
 class MultisigTransactionProposalListCreateView(APIView):
 
@@ -49,7 +49,7 @@ class MultisigTransactionProposalListCreateView(APIView):
         transaction_hash = None
         try:
             resp = requests.post(
-                f'{MAIN_JS_SERVER}/multisig/utils/get-transaction-hash',
+                f'{MULTISIG_JS_SERVER}/multisig/utils/get-transaction-hash',
                 data = {'transaction': request.data['transaction']}, timeout=5
             )
             resp = resp.json()
@@ -185,28 +185,36 @@ class BroadcastTransactionProposalView(APIView):
         # update transaction_proposal add signed_transaction, txid
         if not proposal.signed_transaction:
             resp = requests.post(
-                f'{MAIN_JS_SERVER}/multisig/transaction/finalize',
+                f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
                 json=data,
                 timeout=5
             )
             if resp.status_code != 200:
                 Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         
-        finalization_result = resp.json()
-        LOGGER.info(finalization_result)
-        if finalization_result['unsignedTransactionHash'] != proposal.transaction_hash:
-            return Response(
-                {
-                    'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
-
-        if finalization_result['success'] and finalization_result['vmVerificationResult']:
-            proposal.signed_transaction = finalization_result['signedTransaction']
-            proposal.signed_transaction_hash = finalization_result['signedTransactionHash']
-            proposal.save(update_fields=['signed_transaction', 'signed_transaction_hash'])    
+            finalization_result = resp.json()
+            
+            LOGGER.info(finalization_result)
+            if finalization_result['unsignedTransactionHash'] != proposal.transaction_hash:
+                return Response(
+                    {
+                        'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
         
-        return Response(resp.json())
+              
+            if finalization_result['success'] and finalization_result['vmVerificationResult']:
+                proposal.signed_transaction = finalization_result['signedTransaction']
+                proposal.signed_transaction_hash = finalization_result['signedTransactionHash']
+                proposal.save(update_fields=['signed_transaction', 'signed_transaction_hash'])    
+        
+        signing_progress_resp = requests.post(
+            f'{MULTISIG_JS_SERVER}/multisig/transaction/get-signing-progress',
+            json=data,
+            timeout=5
+        )
+ 
+        return Response({**signing_progress_resp.json()})
  
 
