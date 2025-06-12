@@ -68,7 +68,7 @@ app.post('/multisig/transaction/finalize', async (req, res) => {
    const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
    const finalCompilation = Multisig.finalizeTransaction({ multisigTransaction: multisigTransactionImported, multisigWallet })
       
-   res.json({ finalCompilation: stringify(finalCompilation)})
+   res.send(JSON.parse(stringify(finalCompilation)))
 })
 
 app.get('/test', async (req, res) => {
