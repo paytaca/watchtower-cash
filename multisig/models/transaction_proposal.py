@@ -20,6 +20,18 @@ class MultisigTransactionProposal(models.Model):
     txid = models.CharField(max_length=64, null=True, blank=True, help_text="Broadcasted signed transaction id", unique=True)
     # proposed_by = models.ForeignKey(Signer, blank=True, null=True)
     
+    class SigningProgress(models.TextChoices):
+        UNSIGNED = "unsigned", "unsigned"
+        PARTIALLY_SIGNED = "partially-signed", "partially-signed"
+        FULLY_SIGNED = "fully-signed", "fully-signed"
+    
+    signing_progress = models.CharField(
+        max_length=16,
+        choices=SigningProgress.choices,
+        blank=True,
+        null=True
+    )
+
     class StatusChoices(models.TextChoices):
         PENDING = "pending", "Pending"
         CANCELLED = "cancelled", "Cancelled"
