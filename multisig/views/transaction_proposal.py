@@ -2,6 +2,7 @@ import logging
 import requests
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -163,6 +164,81 @@ class SignaturesAddView(APIView):
                 signatures.append(serializer.data)
             return Response(signatures, status=status.HTTP_200_OK)
 
+class FinalizeTransactionProposalView(APIView):
+    
+    def get_transaction_proposal(self, proposal_identifier):
+        if proposal_identifier.isdigit():
+            return get_object_or_404(MultisigTransactionProposal, id=int(proposal_identifier))
+        return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
+    
+    def post(self, request, proposal_identifier):
+
+        proposal = self.get_transaction_proposal(proposal_identifier)
+        
+        
+        if proposal.signed_transaction:
+            return Response({
+                'signedTransaction': proposal.signed_transaction,
+                'signedTransactionHash': proposal.signed_transaction_hash,
+                'vmVerificationSuccess': True,
+                'success': True,
+            })
+        
+        proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
+        wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
+        data = {
+            'multisigTransaction': proposal_serializer.data,
+            'multisigWallet': wallet_serializer.data
+        }
+
+        try:
+            resp = requests.post(
+                f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
+                json=data,
+                timeout=5
+            )
+            if resp.status_code != 200:
+                Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+            final_compilation_result = resp.json()
+            
+            if final_compilation_result['unsignedTransactionHash'] != proposal.transaction_hash:
+                return Response(
+                    {
+                        'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+        
+              
+            if final_compilation_result['success'] and final_compilation_result['vmVerificationSuccess']:
+                proposal.signed_transaction = final_compilation_result['signedTransaction']
+                proposal.signed_transaction_hash = final_compilation_result['signedTransactionHash']
+                proposal.save(update_fields=['signed_transaction', 'signed_transaction_hash'])
+            
+
+            response_data = {
+              'signedTransaction': final_compilation_result.get('signedTransaction', ''),
+              'signedTransactionHash': final_compilation_result.get('signedTransactionHash', ''),
+              'success': final_compilation_result['success'],
+              'vmVerificationSuccess': final_compilation_result['vmVerificationSuccess']
+            }
+        
+            if final_compilation_result.get('errors'):
+                response_data['errors'] = final_compilation_result['errors']
+            return Response(response_data)
+
+        except Exception as e:
+            if not proposal.signed_transaction:
+                return Response(
+                    {
+                        'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+        
+
+
 class BroadcastTransactionProposalView(APIView):
     
     def get_transaction_proposal(self, proposal_identifier):
@@ -176,45 +252,61 @@ class BroadcastTransactionProposalView(APIView):
         proposal = self.get_transaction_proposal(proposal_identifier)
         proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
         wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
+        
         data = {
             'multisigTransaction': proposal_serializer.data,
             'multisigWallet': wallet_serializer.data
         }
 
-        # finalize transaction
-        # update transaction_proposal add signed_transaction, txid
         if not proposal.signed_transaction:
-            resp = requests.post(
-                f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
-                json=data,
-                timeout=5
-            )
-            if resp.status_code != 200:
-                Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        
-            finalization_result = resp.json()
-            
-            LOGGER.info(finalization_result)
-            if finalization_result['unsignedTransactionHash'] != proposal.transaction_hash:
-                return Response(
-                    {
-                        'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
-                    },
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+            try:
+                resp = requests.post(
+                    f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
+                    json=data,
+                    timeout=5
                 )
+                if resp.status_code != 200:
+                    Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+                final_compilation_result = resp.json()
+                
+                if final_compilation_result['unsignedTransactionHash'] != proposal.transaction_hash:
+                    return Response(
+                        {
+                            'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
+                        },
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE
+                    )
+            
+                  
+                if final_compilation_result['success'] and final_compilation_result['vmVerificationSuccess']:
+                    proposal.signed_transaction = final_compilation_result['signedTransaction']
+                    proposal.signed_transaction_hash = final_compilation_result['signedTransactionHash']
+                    proposal.save(update_fields=['signed_transaction', 'signed_transaction_hash'])
+
+            except Exception as e:
+                if not proposal.signed_transaction:
+                    return Response(
+                        {
+                            'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
+                        },
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE
+                    )
         
-              
-            if finalization_result['success'] and finalization_result['vmVerificationResult']:
-                proposal.signed_transaction = finalization_result['signedTransaction']
-                proposal.signed_transaction_hash = finalization_result['signedTransactionHash']
-                proposal.save(update_fields=['signed_transaction', 'signed_transaction_hash'])    
-        
+        url = request.build_absolute_uri(reverse('broadcast-transaction'))
         signing_progress_resp = requests.post(
             f'{MULTISIG_JS_SERVER}/multisig/transaction/get-signing-progress',
             json=data,
             timeout=5
         )
- 
-        return Response({**signing_progress_resp.json()})
+
+        LOGGER.info(url)
+        broadcast_resp = requests.post(
+            f'https://chipnet.watchtower.cash/api/broadcast',
+            json={ 'transaction': proposal.signed_transaction},
+            timeout=5
+        )
+        #LOGGER.info(broadcast_resp)
+        return Response({**signing_progress_resp.json(), **broadcast_resp.json()})
  
 
