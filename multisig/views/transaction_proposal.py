@@ -14,6 +14,7 @@ from multisig.serializers import (
     SignatureSerializer
 )
 from multisig.models.wallet import MultisigWallet
+import multisig.js_client as js_client
 
 LOGGER = logging.getLogger(__name__)
 MULTISIG_JS_SERVER = 'http://localhost:3004'
@@ -49,10 +50,11 @@ class MultisigTransactionProposalListCreateView(APIView):
         wallet = self.get_wallet(wallet_identifier)
         transaction_hash = None
         try:
-            resp = requests.post(
-                f'{MULTISIG_JS_SERVER}/multisig/utils/get-transaction-hash',
-                data = {'transaction': request.data['transaction']}, timeout=5
-            )
+            #resp = requests.post(
+            #    f'{MULTISIG_JS_SERVER}/multisig/utils/get-transaction-hash',
+            #    data = {'transaction': request.data['transaction']}, timeout=5
+            #)
+            resp = js_client.get_transaction_hash(request.data['transaction'])
             resp = resp.json()
             transaction_hash = resp.get('transaction_hash')
             LOGGER.info(transaction_hash)   
@@ -187,17 +189,18 @@ class FinalizeTransactionProposalView(APIView):
         
         proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
         wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
-        data = {
-            'multisigTransaction': proposal_serializer.data,
-            'multisigWallet': wallet_serializer.data
-        }
+        #data = {
+        #    'multisigTransaction': proposal_serializer.data,
+        #    'multisigWallet': wallet_serializer.data
+        #}
 
         try:
-            resp = requests.post(
-                f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
-                json=data,
-                timeout=5
-            )
+            #resp = requests.post(
+            #    f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
+            #    json=data,
+            #    timeout=5
+            #)
+            resp = js_client.finalize_transaction(proposal_serializer.data, wallet_serializer.data)
             if resp.status_code != 200:
                 Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         
@@ -255,18 +258,19 @@ class BroadcastTransactionProposalView(APIView):
         proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
         wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
         
-        data = {
-            'multisigTransaction': proposal_serializer.data,
-            'multisigWallet': wallet_serializer.data
-        }
+        #data = {
+        #    'multisigTransaction': proposal_serializer.data,
+        #    'multisigWallet': wallet_serializer.data
+        #}
 
         if not proposal.signed_transaction:
             try:
-                resp = requests.post(
-                    f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
-                    json=data,
-                    timeout=5
-                )
+                #resp = requests.post(
+                #    f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
+                #    json=data,
+                #    timeout=5
+                #)
+                resp = js_client.finalize_transaction(proposal_serializer.data, wallet_serializer.data)
                 if resp.status_code != 200:
                     Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             
@@ -296,12 +300,12 @@ class BroadcastTransactionProposalView(APIView):
                     )
         
         url = request.build_absolute_uri(reverse('broadcast-transaction'))
-        signing_progress_resp = requests.post(
-            f'{MULTISIG_JS_SERVER}/multisig/transaction/get-signing-progress',
-            json=data,
-            timeout=5
-        )
-
+        #signing_progress_resp = requests.post(
+        #    f'{MULTISIG_JS_SERVER}/multisig/transaction/get-signing-progress',
+        #    json=data,
+        #    timeout=5
+        #)
+        signing_progress_resp = js_client.get_signing_progress(proposal_serializer.data, wallet_serializer.data)
         # TODO: for local test only, replace with existing tx broadcast logic
         broadcast_resp = requests.post(
             f'https://chipnet.watchtower.cash/api/broadcast/',
@@ -311,7 +315,40 @@ class BroadcastTransactionProposalView(APIView):
         broadcast_resp = broadcast_resp.json()
         if broadcast_resp['success']:
             proposal.txid = broadcast_resp['txid']
-            proposal.save(update_fields=['txid'])
-        return Response({ **broadcast_resp, 'transactionProposalId': proposal.id, 'unsignedTransactionHash': proposal.transaction_hash })
-       
+            proposal.status = MultisigTransactionProposal.StatusChoices.BROADCASTED
+            proposal.broadcast = MultisigTransactionProposal.BroadcastStatus.DONE
+            proposal.save(update_fields=['txid', 'status', 'broadcast'])
+        LOGGER.info(broadcast_resp)
+        if broadcast_resp.get('error') and broadcast_resp.get('error','').find('txn-already-known') != -1:
+            if not proposal.txid:
+                proposal.txid = proposal.signed_transaction_hash
+            proposal.status = MultisigTransactionProposal.StatusChoices.BROADCASTED
+            proposal.broadcast = MultisigTransactionProposal.BroadcastStatus.DONE
+            proposal.save()
+        return Response({
+            **broadcast_resp,
+            'transactionProposal': proposal.id,
+            'unsignedTransactionHash': proposal.transaction_hash
+        })
+   
+class TransactionProposalStatusView(APIView):
 
+    def get_transaction_proposal(self, proposal_identifier):
+        if proposal_identifier.isdigit():
+            return get_object_or_404(MultisigTransactionProposal, id=int(proposal_identifier))
+        return get_object_or_404(MultisigTransactionProposal, transaction_hash=proposal_identifier)
+    
+    def get(self, request, proposal_identifier):
+        proposal = self.get_transaction_proposal(proposal_identifier)
+        proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
+        wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
+        signing_progress_resp = js_client.get_signing_progress(proposal_serializer.data, wallet_serializer.data) 
+        signing_progress_resp = signing_progress_resp.json()
+        response_data = {
+            'status': proposal.status,
+            'signingProgress': signing_progress_resp.get('signingProgress'),
+            'broadcast': proposal.broadcast,
+            'transactionProposal': proposal.id,
+            'wallet': proposal.wallet.id
+        }
+        return Response(response_data)

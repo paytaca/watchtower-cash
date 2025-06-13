@@ -8,20 +8,23 @@ LOGGER = logging.getLogger(__name__)
 
 class SignatureSerializer(serializers.ModelSerializer):
     signer = serializers.PrimaryKeyRelatedField(read_only=True)
-    transaction_proposal = serializers.PrimaryKeyRelatedField(read_only=True)
+    transactionProposal = serializers.PrimaryKeyRelatedField(source='transaction_proposal', read_only=True)
     inputIndex = serializers.IntegerField(source='input_index')
     sigKey = serializers.CharField(source='signature_key')
     sigValue = serializers.CharField(source='signature_value')
 
     class Meta:
         model = Signature
-        fields = ['id', 'signer', 'transaction_proposal', 'inputIndex', 'sigKey', 'sigValue']
-        read_only_fields = ['id', 'transaction_proposal']
+        fields = ['id', 'signer', 'transactionProposal', 'inputIndex', 'sigKey', 'sigValue']
+        read_only_fields = ['id', 'transactionProposal']
 
 class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
     wallet = serializers.PrimaryKeyRelatedField(read_only=True)
     signatures = SignatureSerializer(many=True)
     sourceOutputs = serializers.JSONField(source='source_outputs')
+    transactionHash = serializers.CharField(source='transaction_hash', read_only=True)
+    createdAt = serializers.CharField(source='created_at', read_only=True)
+    broadcast = serializers.CharField(read_only=True)
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -50,4 +53,4 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MultisigTransactionProposal
-        fields = ['id', 'wallet', 'transaction', 'transaction_hash', 'sourceOutputs', 'metadata', 'created_at', 'signatures']
+        fields = ['id', 'wallet', 'transaction', 'transactionHash', 'sourceOutputs', 'metadata', 'createdAt', 'signatures', 'broadcast']
