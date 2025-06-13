@@ -180,8 +180,9 @@ class FinalizeTransactionProposalView(APIView):
             return Response({
                 'signedTransaction': proposal.signed_transaction,
                 'signedTransactionHash': proposal.signed_transaction_hash,
+                'unsignedTransactionHash': proposal.transaction,
                 'vmVerificationSuccess': True,
-                'success': True,
+                'success': True
             })
         
         proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
@@ -220,6 +221,7 @@ class FinalizeTransactionProposalView(APIView):
             response_data = {
               'signedTransaction': final_compilation_result.get('signedTransaction', ''),
               'signedTransactionHash': final_compilation_result.get('signedTransactionHash', ''),
+              'unsignedTransactionHash': final_compilation_result.get('unsignedTransactionHash', proposal.transaction),
               'success': final_compilation_result['success'],
               'vmVerificationSuccess': final_compilation_result['vmVerificationSuccess']
             }
@@ -300,13 +302,16 @@ class BroadcastTransactionProposalView(APIView):
             timeout=5
         )
 
-        LOGGER.info(url)
+        # TODO: for local test only, replace with existing tx broadcast logic
         broadcast_resp = requests.post(
-            f'https://chipnet.watchtower.cash/api/broadcast',
+            f'https://chipnet.watchtower.cash/api/broadcast/',
             json={ 'transaction': proposal.signed_transaction},
             timeout=5
         )
-        #LOGGER.info(broadcast_resp)
-        return Response({**signing_progress_resp.json(), **broadcast_resp.json()})
- 
+        broadcast_resp = broadcast_resp.json()
+        if broadcast_resp['success']:
+            proposal.txid = broadcast_resp['txid']
+            proposal.save(update_fields=['txid'])
+        return Response({ **broadcast_resp, 'transactionProposalId': proposal.id, 'unsignedTransactionHash': proposal.transaction_hash })
+       
 
