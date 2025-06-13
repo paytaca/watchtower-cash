@@ -69,7 +69,7 @@ export const getUnlockingScriptId = ({ signatures, template, inputIndex }) => {
 }
 
 export const transactionBinObjectsToUint8Array = (transactionObject) => {
-  const transaction = JSON.parse(JSON.stringify(transactionObject))
+  const transaction = transactionObject
   transaction.inputs.forEach(input => {
     if (input.outpointTransactionHash && !(input?.outpointTransactionHash instanceof Uint8Array)) {
       input.outpointTransactionHash = Uint8Array.from(Object.values((input.outpointTransactionHash)))
@@ -104,7 +104,7 @@ export const transactionBinObjectsToUint8Array = (transactionObject) => {
 }
 
 export const generateTempId = multisigTransaction => {
-  let transaction = structuredClone(multisigTransaction.transaction)
+  let transaction = multisigTransaction.transaction
   transaction = transactionBinObjectsToUint8Array(transaction)
   return hashTransaction(transaction)
 }
@@ -137,7 +137,7 @@ export const identifySignersWithoutSignatures = ({
   multisigTransaction
 }) => {
   const { template, lockingData } = multisigWallet
-  const signatures = structuredClone(multisigTransaction.signatures)
+  const signatures = multisigTransaction.signatures
   signatures.forEach((signature) => {
     if (typeof signature.sigValue === 'string') {
       signature.sigValue = hexToBin(signature.sigValue)
@@ -147,7 +147,7 @@ export const identifySignersWithoutSignatures = ({
   })
 
   const transaction = transactionBinObjectsToUint8Array(
-    JSON.parse(JSON.stringify(multisigTransaction.transaction))
+    multisigTransaction.transaction
   )
   const compiler = getCompiler({ template })
   const unlockingScriptIds = Object.keys(template.scripts).filter(scriptId => scriptId !== 'lock')
@@ -237,7 +237,7 @@ export const finalizeTransaction = ({
 }) => {
   const { template, lockingData } = multisigWallet
 
-  const signatures = structuredClone(multisigTransaction.signatures)
+  const signatures = multisigTransaction.signatures
   signatures.forEach((signature) => {
     if (typeof signature.sigValue === 'string') {
       signature.sigValue = hexToBin(signature.sigValue)
@@ -304,11 +304,11 @@ export const finalizeTransaction = ({
   multisigTransaction.metadata.finalized = finalCompilation.success
   const vm = createVirtualMachineBch()
 
-  const verificationResult = vm.verify({
+  const verificationSuccess = vm.verify({
     sourceOutputs: sourceOutputs, transaction: finalCompilation.transaction
   })
 
-  if (verificationResult !== true) {
+  if (verificationSuccess !== true) {
     throw new Error('Transaction failed local vm verification')
   }
   const encodedTransaction = encodeTransactionCommon(finalCompilation.transaction)
@@ -317,7 +317,7 @@ export const finalizeTransaction = ({
   if (multisigTransaction.metadata.status < MultisigTransactionStatus.PENDING_FULLY_SIGNED) {
     multisigTransaction.metadata.status = MultisigTransactionStatus.PENDING_FULLY_SIGNED
   }
-  finalCompilation.vmVerificationResult = verificationResult
+  finalCompilation.vmVerificationSuccess = verificationSuccess
   finalCompilation.unsignedTransactionHash = hashTransaction(transaction)
   finalCompilation.signedTransaction = binToHex(encodedTransaction)
   finalCompilation.signedTransactionHash = hashTransaction(finalCompilation.signedTransaction)
@@ -435,7 +435,7 @@ export const refreshTransactionStatus = async ({ multisigWallet, multisigTransac
 }
 
 export const signatureValuesToUint8Array = ({ signatures }) => {
-  const s = structuredClone(signatures)
+  const s = signatures
   s.forEach((signature) => {
     if (typeof (signature.sigValue) === 'string') {
       signature.sigValue = hexToBin(signature.sigValue)
@@ -446,7 +446,7 @@ export const signatureValuesToUint8Array = ({ signatures }) => {
 }
 
 export const signatureValuesToHex = ({ signatures }) => {
- const s = structuredClone(signatures)
+ const s = signatures
  s.forEach((signature) => {
   if (typeof (signature.sig) === 'string') return
   signature.sigValue = binToHex(Uint8Array.from(Object.values(signature.sigValue)))
@@ -561,7 +561,7 @@ export const exportPstRaw = ({ multisigTransaction, address, addressIndex = 0, f
 
 export const exportPst = ({ multisigTransaction, address, addressIndex = 0, format = 'base64' }) => {
   const { origin, prompt, status } = multisigTransaction.metadata
-  const sourceOutputs = structuredClone(multisigTransaction.sourceOutputs)
+  const sourceOutputs = multisigTransaction.sourceOutputs
   sourceOutputs.forEach((utxo) => {
     console.log('typeof ', typeof (utxo.outpointTransactionHash))
     if (typeof (utxo.outpointTransactionHash) !== 'string') {
@@ -571,7 +571,7 @@ export const exportPst = ({ multisigTransaction, address, addressIndex = 0, form
       utxo.lockingBytecode = binToHex(Uint8Array.from(Object.values(utxo.lockingBytecode)))
     }
   })
-  const signatures = structuredClone(multisigTransaction.signatures)
+  const signatures = multisigTransaction.signatures
   signatures.forEach((signature) => {
     if (typeof (signature.sigValue) !== 'string') {
       signature.sigValue = binToHex(Uint8Array.from(Object.values(signature.sigValue)))
