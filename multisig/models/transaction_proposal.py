@@ -42,6 +42,17 @@ class MultisigTransactionProposal(models.Model):
         choices=StatusChoices.choices,
         default=StatusChoices.PENDING
     )
+    
+    class BroadcastStatus(models.TextChoices):
+        PENDING = "pending", "pending"
+        CANCELLED = "cancelled", "cancelled"
+        DONE = "done", "done"
+    
+    broadcast = models.CharField(
+        max_length=20,
+        choices=BroadcastStatus.choices,
+        default=BroadcastStatus.PENDING
+    )
        
     def __str__(self):
         if self.metadata.get('prompt'):
