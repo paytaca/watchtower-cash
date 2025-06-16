@@ -96,7 +96,10 @@ class MultisigTransactionProposalDetailView(APIView):
 
     def delete(self, request, proposal_identifier):
         proposal = self.get_object(proposal_identifier)
-        proposal.delete()
+        if not proposal.deleted_at:
+            proposal.soft_delete()
+        else:
+            proposal.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -319,14 +322,12 @@ class BroadcastTransactionProposalView(APIView):
         broadcast_resp = broadcast_resp.json()
         if broadcast_resp['success']:
             proposal.txid = broadcast_resp['txid']
-            proposal.status = MultisigTransactionProposal.StatusChoices.BROADCASTED
             proposal.broadcast_status = MultisigTransactionProposal.BroadcastStatus.DONE
-            proposal.save(update_fields=['txid', 'status', 'broadcast'])
+            proposal.save(update_fields=['txid', 'status', 'broadcast_status'])
         LOGGER.info(broadcast_resp)
         if broadcast_resp.get('error') and broadcast_resp.get('error','').find('txn-already-known') != -1:
             if not proposal.txid:
                 proposal.txid = proposal.signed_transaction_hash
-            proposal.status = MultisigTransactionProposal.StatusChoices.BROADCASTED
             proposal.broadcast_status = MultisigTransactionProposal.BroadcastStatus.DONE
             proposal.save()
         return Response({
@@ -349,7 +350,6 @@ class TransactionProposalStatusView(APIView):
         signing_progress_resp = js_client.get_signing_progress(proposal_serializer.data, wallet_serializer.data) 
         signing_progress_resp = signing_progress_resp.json()
         response_data = {
-            'status': proposal.status,
             'signingProgress': signing_progress_resp.get('signingProgress'),
             'broadcastStatus': proposal.broadcast_status,
             'transactionProposal': proposal.id,
