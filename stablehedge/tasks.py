@@ -31,6 +31,8 @@ from stablehedge.utils.transaction import extract_unlocking_script
 
 from anyhedge.utils.liquidity_provider import GeneralProtocolsLP
 from anyhedge.utils.contract import contract_data_to_obj
+from anyhedge.utils.contract import get_contract_status
+
 
 REDIS_STORAGE = settings.REDISKV
 GP_LP = GeneralProtocolsLP()
@@ -200,6 +202,11 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
         spendable_sats = balance_data["spendable"]
         shortable_sats = (spendable_sats - HEDGE_FUNDING_NETWORK_FEES - SETTLEMENT_SERVICE_FEE) * (1-MAX_PREMIUM_PCTG)
 
+        try:
+            duration_seconds = treasury_contract.short_position_rule.target_duration
+        except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
+            duration_seconds = 86_400 # seconds = 1 day
+
         create_result = create_short_contract(
             treasury_contract_address,
             satoshis=shortable_sats,
@@ -215,6 +222,11 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
         settlement_service = create_result["settlement_service"]
 
         contract_data_to_obj(contract_data)
+
+        contract_proposal_data = GP_LP.contract_data_to_proposal(contract_data)
+        proposal_data = GP_LP.propose_contract(contract_proposal_data)
+        data_str = GP_LP.json_parser.dumps(proposal_data, indent=2)
+        LOGGER.debug(f"SHORT | PROPOSAL | {treasury_contract_address} | {data_str}")
 
         wifs = get_wif_for_short_proposal(treasury_contract)
         short_pubkey = contract_data["parameters"]["shortMutualRedeemPublicKey"]
@@ -258,18 +270,9 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
         funding_amounts = ScriptFunctions.calculateTotalFundingSatoshis(dict(
             contractData=contract_data,
             anyhedgeVersion=contract_data["version"],
-            contributorNum=2, # wont be really useful
         ))
-
-        data_str = GP_LP.json_parser.dumps(short_proposal_data, indent=2)
+        data_str = GP_LP.json_parser.dumps(funding_amounts, indent=2)
         LOGGER.debug(f"FUNDING AMOUNTS | {treasury_contract_address} | {funding_amounts}")
-
-        contract_proposal_data = GP_LP.contract_data_to_proposal(contract_data)
-        service_fee_estimate = GP_LP.estimate_service_fee(
-            contract_proposal_data,
-            settlement_service=settlement_service,
-        )
-        proposal_data = GP_LP.propose_contract(contract_proposal_data)
 
         funding_sats = funding_amounts["shortFundingUtxoSats"]
         funding_utxo_build_result = build_or_find_funding_utxo(treasury_contract_address, satoshis=funding_sats)
