@@ -50,14 +50,9 @@ class MultisigTransactionProposalListCreateView(APIView):
         wallet = self.get_wallet(wallet_identifier)
         transaction_hash = None
         try:
-            #resp = requests.post(
-            #    f'{MULTISIG_JS_SERVER}/multisig/utils/get-transaction-hash',
-            #    data = {'transaction': request.data['transaction']}, timeout=5
-            #)
             resp = js_client.get_transaction_hash(request.data['transaction'])
             resp = resp.json()
             transaction_hash = resp.get('transaction_hash')
-            LOGGER.info(transaction_hash)   
         except Exception as e:
             return Response(
                 {
@@ -74,7 +69,7 @@ class MultisigTransactionProposalListCreateView(APIView):
             serializer = MultisigTransactionProposalSerializer(proposal.first())
             return Response(serializer.data, status=status.HTTP_200_OK)
 
-        serializer = MultisigTransactionProposalSerializer(data={ **request.data, 'transaction_hash': transaction_hash }, many=False)
+        serializer = MultisigTransactionProposalSerializer(data={ **request.data, 'transactionHash': transaction_hash }, many=False)
         if serializer.is_valid():
             serializer.save(wallet=wallet)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
