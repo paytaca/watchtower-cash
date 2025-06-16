@@ -4,7 +4,8 @@ from .transaction_proposal import (
     SignaturesAddView,
     SignerSignaturesAddView,
     BroadcastTransactionProposalView,
-    FinalizeTransactionProposalView
+    FinalizeTransactionProposalView,
+    TransactionProposalStatusView
 )
 
 from .wallet import (
@@ -21,6 +22,7 @@ __all__ = [
     "SignerSignaturesAddView",
     "BroadcastTransactionProposalView",
     "FinalizeTransactionProposalView",
+    "TransactionProposalStatusView",
     "MultisigWalletListCreateView",
     "MultisigWalletDetailView",
     "RenameMultisigWalletView",
