@@ -8,7 +8,8 @@ from .views import (
   SignerSignaturesAddView,
   SignaturesAddView,
   BroadcastTransactionProposalView,
-  FinalizeTransactionProposalView
+  FinalizeTransactionProposalView,
+  TransactionProposalStatusView
 )
 
 urlpatterns = [
@@ -20,5 +21,6 @@ urlpatterns = [
     path('transaction-proposals/<str:proposal_identifier>/signatures/', SignaturesAddView.as_view(), name='transaction-proposal-signatures-add'),
     path('transaction-proposals/<str:proposal_identifier>/signatures/<str:signer_identifier>/', SignerSignaturesAddView.as_view(), name='transaction-proposal-signer-signatures-add'),
     path('transaction-proposals/<str:proposal_identifier>/broadcast/', BroadcastTransactionProposalView.as_view(), name='transaction-proposal-broadcast'),
-    path('transaction-proposals/<str:proposal_identifier>/finalize/', FinalizeTransactionProposalView.as_view(), name='transaction-proposal-finalize')
+    path('transaction-proposals/<str:proposal_identifier>/finalize/', FinalizeTransactionProposalView.as_view(), name='transaction-proposal-finalize'),
+    path('transaction-proposals/<str:proposal_identifier>/status/', TransactionProposalStatusView.as_view(), name='transaction-proposal-status')
 ]
