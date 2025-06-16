@@ -32,23 +32,12 @@ class MultisigTransactionProposal(models.Model):
         null=True
     )
 
-    class StatusChoices(models.TextChoices):
-        PENDING = "pending", "Pending"
-        CANCELLED = "cancelled", "Cancelled"
-        BROADCASTED = "broadcasted", "Broadcasted"
-    
-    status = models.CharField(
-        max_length=20,
-        choices=StatusChoices.choices,
-        default=StatusChoices.PENDING
-    )
-    
     class BroadcastStatus(models.TextChoices):
         PENDING = "pending", "pending"
         CANCELLED = "cancelled", "cancelled"
         DONE = "done", "done"
     
-    broadcast = models.CharField(
+    broadcast_status = models.CharField(
         max_length=20,
         choices=BroadcastStatus.choices,
         default=BroadcastStatus.PENDING
