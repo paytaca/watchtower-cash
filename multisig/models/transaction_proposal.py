@@ -18,7 +18,13 @@ class MultisigTransactionProposal(models.Model):
     signed_transaction = models.TextField(null=True, blank=True, help_text="Signed transaction hex, final compilation result")
     signed_transaction_hash = models.CharField(null=True, blank=True, max_length=64, help_text="Computed hash of the signed transaction")
     txid = models.CharField(max_length=64, null=True, blank=True, help_text="Broadcasted signed transaction id", unique=True)
-    # proposed_by = models.ForeignKey(Signer, blank=True, null=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, default=None)
+
+    def soft_delete(self):
+        self.deleted_at = timezone.now()
+        self.save(update_fields=['deleted_at'])
+
+   # proposed_by = models.ForeignKey(Signer, blank=True, null=True)
     
     class SigningProgress(models.TextChoices):
         UNSIGNED = "unsigned", "unsigned"

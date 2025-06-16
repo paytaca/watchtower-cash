@@ -58,8 +58,12 @@ class MultisigWalletDetailView(APIView):
             else:
                 identifier_name = 'locking_bytecode'
                 wallet = MultisigWallet.objects.get(locking_bytecode=identifier)
-            
-            wallet.soft_delete()
+
+            if not wallet.deleted_at:
+                wallet.soft_delete()
+            else:
+                wallet.delete()
+
             return Response({"message": f"Wallet with {identifier_name}={identifier} deleted."}, status=status.HTTP_200_OK)
 
         except MultisigWallet.DoesNotExist:
