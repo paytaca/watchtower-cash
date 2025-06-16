@@ -72,12 +72,12 @@ export async function calculateTotalFundingSatoshis(opts) {
   const totalFundingSats = contractData?.parameters.payoutSats + settlementTxFee;
 
   return {
-    fundingOutputSats,
-    shortFundingSats,
-    longFundingSats,
-    treasuryContractInputSize,
-    shortFundingUtxoSats,
-    longFundingUtxoSats,
-    totalFundingSats,
+    fundingOutputSats: Number(fundingOutputSats),
+    shortFundingSats: Number(shortFundingSats),
+    longFundingSats: Number(longFundingSats),
+    treasuryContractInputSize: Number(treasuryContractInputSize),
+    shortFundingUtxoSats: Number(shortFundingUtxoSats),
+    longFundingUtxoSats: Number(longFundingUtxoSats),
+    totalFundingSats: Number(totalFundingSats),
   }
 }
