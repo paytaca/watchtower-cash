@@ -22,7 +22,7 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
     wallet = serializers.PrimaryKeyRelatedField(read_only=True)
     signatures = SignatureSerializer(many=True)
     sourceOutputs = serializers.JSONField(source='source_outputs')
-    transactionHash = serializers.CharField(source='transaction_hash', read_only=True)
+    transactionHash = serializers.CharField(source='transaction_hash')
     createdAt = serializers.CharField(source='created_at', read_only=True)
     broadcastStatus = serializers.CharField(source='broadcast_status', read_only=True)
 
