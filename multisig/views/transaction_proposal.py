@@ -115,10 +115,14 @@ class SignerSignaturesAddView(APIView):
             raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
         except Signer.DoesNotExist:
             raise NotFound(f"Signer with entity key {signer_entity_key} not found.")
-        data = request.data.copy()
+
+        if proposal.signing_progress == MultisigTransactionProposal.SigningProgress.FULLY_SIGNED:
+            signature_serializer = SignatureSerializer(proposal.signatures, many=True)
+            return Response(signature_serializer.data, status=HTTP_200_OK)
+
         with transaction.atomic():
             signatures = []
-            for signature_item in data:
+            for signature_item in request.data:
                 signature_instance, created = Signature.objects.get_or_create(
                     signer=signer,
                     transaction_proposal=proposal,
@@ -316,14 +320,14 @@ class BroadcastTransactionProposalView(APIView):
         if broadcast_resp['success']:
             proposal.txid = broadcast_resp['txid']
             proposal.status = MultisigTransactionProposal.StatusChoices.BROADCASTED
-            proposal.broadcast = MultisigTransactionProposal.BroadcastStatus.DONE
+            proposal.broadcast_status = MultisigTransactionProposal.BroadcastStatus.DONE
             proposal.save(update_fields=['txid', 'status', 'broadcast'])
         LOGGER.info(broadcast_resp)
         if broadcast_resp.get('error') and broadcast_resp.get('error','').find('txn-already-known') != -1:
             if not proposal.txid:
                 proposal.txid = proposal.signed_transaction_hash
             proposal.status = MultisigTransactionProposal.StatusChoices.BROADCASTED
-            proposal.broadcast = MultisigTransactionProposal.BroadcastStatus.DONE
+            proposal.broadcast_status = MultisigTransactionProposal.BroadcastStatus.DONE
             proposal.save()
         return Response({
             **broadcast_resp,
@@ -347,7 +351,7 @@ class TransactionProposalStatusView(APIView):
         response_data = {
             'status': proposal.status,
             'signingProgress': signing_progress_resp.get('signingProgress'),
-            'broadcast': proposal.broadcast,
+            'broadcastStatus': proposal.broadcast_status,
             'transactionProposal': proposal.id,
             'wallet': proposal.wallet.id
         }
