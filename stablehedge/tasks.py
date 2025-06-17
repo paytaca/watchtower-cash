@@ -285,7 +285,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
             anyhedgeVersion=contract_data["version"],
         ))
         data_str = GP_LP.json_parser.dumps(funding_amounts, indent=2)
-        LOGGER.debug(f"FUNDING AMOUNTS | {treasury_contract_address} | {funding_amounts}")
+        LOGGER.debug(f"FUNDING AMOUNTS | {treasury_contract_address} | {data_str}")
 
         funding_sats = funding_amounts["shortFundingUtxoSats"]
         funding_utxo_build_result = build_or_find_funding_utxo(treasury_contract_address, satoshis=funding_sats)
@@ -307,6 +307,10 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
                 dict(to=contract_data["address"], amount=funding_amounts["totalFundingSats"]),
             ]
         ))
+
+        data_str = GP_LP.json_parser.dumps(result, indent=2)
+        LOGGER.debug(f"SPEND TO ANYHEDGE | {treasury_contract_address} | {data_str}")
+
         if not result.get("success"):
             raise StablehedgeException(result.get("error", "Failed to build funding tx"))
 
@@ -319,14 +323,17 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
             unlockingBytecode=unlocking_bytecode,
         )
 
+        data_str = GP_LP.json_parser.dumps(funding_proposal, indent=2)
+        LOGGER.debug(f"FUNDING PROPOSAL | {treasury_contract_address} | {data_str}")
+
         if funding_utxo_tx:
+            LOGGER.debug(f"FUNDING UTXO TX | {treasury_contract_address} | {funding_utxo_tx}")
             success, error_or_txid = broadcast_transaction(funding_utxo_tx)
             if not success:
                 raise StablehedgeException(
                     f"Invalid funding utxo tx: {error_or_txid}", code="invalid_transaction"
                 )
     
-
         hedge_pos_obj = complete_short_proposal_funding(
             treasury_contract_address,
             contract_data,
