@@ -43,5 +43,9 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
                         entity_key=key,
                         xpub=value
                     )
-
+            else:
+                if wallet.deleted_at:
+                    wallet.deleted_at = None
+                    wallet.save(updated_fields=['deleted_at'])
+                    
         return wallet
