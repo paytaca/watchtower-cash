@@ -14,10 +14,11 @@ class MultisigTransactionProposal(models.Model):
     transaction_hash = models.CharField(max_length=64, help_text="Computed hash of the unsigned transaction hex", unique=True)
     source_outputs = JSONField(null=True, blank=True, help_text="The source utxos")
     metadata = JSONField(default=dict)
-    created_at = models.DateTimeField(auto_now_add=True)
     signed_transaction = models.TextField(null=True, blank=True, help_text="Signed transaction hex, final compilation result")
     signed_transaction_hash = models.CharField(null=True, blank=True, max_length=64, help_text="Computed hash of the signed transaction")
     txid = models.CharField(max_length=64, null=True, blank=True, help_text="Broadcasted signed transaction id", unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
 
     def soft_delete(self):
