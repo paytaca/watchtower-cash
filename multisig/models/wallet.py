@@ -4,15 +4,18 @@ import json
 from django.db import models
 from django.contrib.postgres.fields import JSONField
 from django.utils import timezone
+from django.core.validators import MinValueValidator
 
 LOGGER = logging.getLogger(__name__)
 
 class MultisigWallet(models.Model):
     template = JSONField(help_text="Wallet template")
     locking_data = JSONField(null=True, blank=True, help_text="Raw locking data")
-    created_at = models.DateTimeField(auto_now_add=True)
     locking_bytecode = models.CharField(max_length=46, null=True, blank=True, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
+    updated_at = models.DateTimeField(auto_now=True)
+    version = models.PositiveIntegerField(null=True, blank=True, default=0)
 
     @property
     def required_signatures(self):
