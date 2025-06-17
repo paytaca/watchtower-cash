@@ -86,12 +86,25 @@ def check_treasury_contract_short():
 
 @shared_task(queue=_QUEUE_TREASURY_CONTRACT, time_limit=_TASK_TIME_LIMIT)
 def short_treasury_contract_funds(treasury_contract_address:str):
+    version = models.TreasuryContract.objects \
+        .filter(address=treasury_contract_address) \
+        .values_list("version", flat=True) \
+        .first()
+
+    if version in [models.TreasuryContract.Version.V2, models.TreasuryContract.Version.V3]:
+        return short_v2_treasury_contract_funds(treasury_contract_address)
+    return short_v1_treasury_contract_funds(treasury_contract_address)
+
+
+@shared_task(queue=_QUEUE_TREASURY_CONTRACT, time_limit=_TASK_TIME_LIMIT)
+def short_v1_treasury_contract_funds(treasury_contract_address:str):
     REDIS_KEY = f"treasury-contract-short-pos-task-{treasury_contract_address}"
     if REDIS_STORAGE.exists(REDIS_KEY):
         return dict(success=False, error="Task key in use")
 
     LOGGER.info(f"SHORT TREAURY CONTRACT | {treasury_contract_address}")
     try:
+        raise Exception("BLOCK")
         REDIS_STORAGE.set(REDIS_KEY, "1", ex=120)
 
         treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
@@ -281,6 +294,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
 
         result = ScriptFunctions.spendToAnyhedgeContract(dict(
             contractOpts=treasury_contract.contract_opts,
+            contractData=contract_data,
             inputs=[
                 funding_utxo,
                 dict(
