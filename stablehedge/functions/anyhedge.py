@@ -250,7 +250,7 @@ def short_funds(treasury_contract_address:str, for_multisig=False, cap_tvl:float
         treasury_contract_address,
         satoshis=shortable_sats,
         low_liquidation_multiplier = 0.5,
-        high_liquidation_multiplier = 5.0,
+        high_liquidation_multiplier = 2.0,
         duration_seconds = duration_seconds,
     )
 
