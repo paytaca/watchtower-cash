@@ -1,6 +1,7 @@
 import logging
 import hashlib
 import json
+from django.utils import timezone
 from django.db import models
 from django.contrib.postgres.fields import JSONField
 from .wallet import MultisigWallet, Signer
