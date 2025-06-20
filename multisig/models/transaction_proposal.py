@@ -10,6 +10,8 @@ LOGGER = logging.getLogger(__name__)
 class MultisigTransactionProposal(models.Model):
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE)
     wallet_address_index = models.PositiveIntegerField(default=0, blank=True, null=True)
+    origin = models.CharField(max_length=250, blank=True, null=True, help_text="Where the transaction was created. Could be a dapp url or wallet name")
+    purpose = models.CharField(max_length=250, blank=True, null=True)
     transaction = models.TextField(help_text="Unsigned transaction hex")
     transaction_hash = models.CharField(max_length=64, help_text="Computed hash of the unsigned transaction hex", unique=True)
     source_outputs = JSONField(null=True, blank=True, help_text="The source utxos")

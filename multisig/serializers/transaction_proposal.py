@@ -25,7 +25,7 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
     transactionHash = serializers.CharField(source='transaction_hash')
     createdAt = serializers.CharField(source='created_at', read_only=True)
     broadcastStatus = serializers.CharField(source='broadcast_status', read_only=True)
-
+  
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         request = self.context.get('request')
@@ -53,4 +53,4 @@ class MultisigTransactionProposalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MultisigTransactionProposal
-        fields = ['id', 'wallet', 'transaction', 'transactionHash', 'sourceOutputs', 'metadata', 'createdAt', 'signatures', 'broadcastStatus']
+        fields = ['id', 'wallet', 'origin', 'purpose',  'transaction', 'transactionHash', 'sourceOutputs', 'metadata', 'createdAt', 'signatures', 'broadcastStatus']
