@@ -32,7 +32,13 @@ class MultisigTransactionProposalListCreateView(APIView):
         return wallet
 
     def get(self, request, wallet_identifier):
-        proposals = MultisigTransactionProposal.objects.all()
+
+        proposals = MultisigTransactionProposal.objects.all(deleted_at__isnull=True)
+        
+        include_deleted = request.query_params.get('include_deleted')
+        
+        if include_deleted == '1' or include_deleted == 'true':
+            proposals = MultisigTransactionProposal.objects.all()
         
         if wallet_identifier.isdigit():
             proposals = proposals.filter(wallet__id=int(wallet_identifier))
