@@ -17,14 +17,14 @@ redis_client = settings.REDISKV
 def redis_cache(expiration_seconds=3600):  # Add expiration as a parameter
     def decorator(func):
         @wraps(func)
-        def wrapper(*args):
-            key = f"{func.__name__}:{args}"
+        def wrapper(*args, **kwargs):
+            key = f"{func.__name__}:{args}:{kwargs}"
             cached_value = redis_client.get(key)
             
             if cached_value:
                 return json.loads(cached_value)  # Return cached value
             
-            result = func(*args)  # Call the function if not cached
+            result = func(*args, **kwargs)  # Call the function if not cached
             redis_client.set(key, json.dumps(result), ex=expiration_seconds)  # Auto-expire after X seconds
             return result
         return wrapper
@@ -108,20 +108,22 @@ class BCHN(object):
             self._close_connection(connection)
 
     # Cache to prevent multiple requests when parsing transaction in '._parse_transaction()'
-    @redis_cache(expiration_seconds=900)
-    def _get_raw_transaction(self, txid):
+    @redis_cache(expiration_seconds=60)
+    def _get_raw_transaction(self, txid, verbosity:int=2, max_retries:int=None):
         retries = 0
-        while retries < self.max_retries:
+        if max_retries is None:
+            max_retries = self.max_retries
+        while retries < max_retries:
             try:
                 connection = self._get_rpc_connection()
                 try:
-                    txn = connection.getrawtransaction(txid, 2)
+                    txn = connection.getrawtransaction(txid, verbosity)
                     return txn
                 finally:
                     self._close_connection(connection)
             except Exception as exception:
                 retries += 1
-                if retries >= self.max_retries:
+                if retries >= max_retries:
                     if 'No such mempool or blockchain transaction' in str(exception):
                         break
                     else:
@@ -275,6 +277,13 @@ class BCHN(object):
         finally:
             self._close_connection(connection)
     
+    def get_tx_output(self, txid:str, vout:int, include_mempool=True):
+        try:
+            connection = self._get_rpc_connection()
+            return connection.gettxout(txid, vout)
+        finally:
+            self._close_connection(connection)
+
     def get_input_details(self, txid, vout_index):
         previous_tx = self._get_raw_transaction(txid)
         if previous_tx:
