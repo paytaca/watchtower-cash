@@ -160,12 +160,20 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
         "outpointTransactionHash": funding_proposal["txHash"],
         "outpointIndex": funding_proposal["txIndex"],
         "satoshis": f'<bigint: {funding_proposal["txValue"]}n>',
-        "signature": funding_proposal["scriptSig"],
-        "publicKey": funding_proposal["publicKey"],
+        # "signature": funding_proposal["scriptSig"],
+        # "publicKey": funding_proposal["publicKey"],
         "takerSide": position,
         "dependencyTransactions": funding_proposal["inputTxHashes"],
         "oracleMessageSequence": oracle_message_sequence,
     }
+    if "publicKey" in funding_proposal:
+        data["publicKey"] = funding_proposal["publicKey"]
+        data["signature"] = funding_proposal["scriptSig"]
+    elif "unlockingScript" in funding_proposal:
+        data["unlockingScript"] = funding_proposal["unlockingScript"]
+    else:
+        raise Exception("Funding proposal missing publicKey or unlockingScript")
+
     try:
         resp = requests.post(
             urljoin(app_settings.ANYHEDGE_LP_BASE_URL, "/api/v2/fundContract"),

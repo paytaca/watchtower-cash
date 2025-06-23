@@ -321,7 +321,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
             txHash=funding_utxo["txid"],
             txIndex=funding_utxo["vout"],
             txValue=funding_utxo["satoshis"],
-            unlockingBytecode=unlocking_bytecode,
+            unlockingScript=unlocking_bytecode,
             inputTxHashes=input_tx_hashes,
         )
 
