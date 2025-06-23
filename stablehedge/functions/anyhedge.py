@@ -743,7 +743,10 @@ def complete_short_proposal_funding(
         LOGGER.exception(exception)
 
     if not funding_response.get("success"):
-        sweep_funding_wif(treasury_contract_address)
+        try:
+            sweep_funding_wif(treasury_contract_address)
+        except StablehedgeException:
+            pass
         raise AnyhedgeException(funding_response["error"], code="funding_error")
 
     hedge_pos_obj.funding_tx_hash = funding_response["fundingTransactionHash"]

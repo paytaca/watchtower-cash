@@ -112,7 +112,11 @@ def sweep_funding_wif(treasury_contract_address:str, force:bool=False):
     treasury_contract = models.TreasuryContract.objects \
         .filter(address=treasury_contract_address).first()
 
-    if treasury_contract.version == models.TreasuryContract.Version.V2 and not force:
+    allowed_versions = [
+        models.TreasuryContract.Version.V2,
+        models.TreasuryContract.Version.V3,
+    ]
+    if treasury_contract.version in allowed_versions and not force:
         raise StablehedgeException(
             "Sweep funding WIF is not supported for V2 contracts. Set force=True to allow.",
             code="v2_not_supported",
