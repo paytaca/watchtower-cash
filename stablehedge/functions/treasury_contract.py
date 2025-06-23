@@ -7,7 +7,7 @@ from stablehedge.js.runner import ScriptFunctions
 from stablehedge.exceptions import StablehedgeException
 from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey, get_bch_transaction_objects, get_spendable_bch_sats
 from stablehedge.utils.blockchain import broadcast_transaction, get_tx_hash
-from stablehedge.utils.transaction import tx_model_to_cashscript
+from stablehedge.utils.transaction import tx_model_to_cashscript, extract_input_tx_hashes, get_input_txids_from_txid
 from stablehedge.utils.encryption import encrypt_str, decrypt_wif_safe
 
 
@@ -268,14 +268,18 @@ def build_or_find_funding_utxo(treasury_contract_address:str, satoshis:int=0):
     """
     funding_utxo = find_single_bch_utxo(treasury_contract_address, satoshis=satoshis)
 
+    transaction = None
     if funding_utxo:
         utxo_data = tx_model_to_cashscript(funding_utxo)
+        input_tx_hashes = get_input_txids_from_txid(utxo_data["txid"])
     else:
         transaction = consolidate_treasury_contract(treasury_contract_address, satoshis=satoshis)
         txid = get_tx_hash(transaction)
         utxo_data = dict(txid=txid, vout=0, satoshis=satoshis)
+        input_tx_hashes = extract_input_tx_hashes(transaction)
 
     return dict(
         utxo=utxo_data,
         transaction=transaction,
+        input_tx_hashes=input_tx_hashes,
     )

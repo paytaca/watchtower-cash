@@ -291,6 +291,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
         funding_utxo_build_result = build_or_find_funding_utxo(treasury_contract_address, satoshis=funding_sats)
         funding_utxo = funding_utxo_build_result["utxo"]
         funding_utxo_tx = funding_utxo_build_result["transaction"]
+        input_tx_hashes = funding_utxo_build_result["input_tx_hashes"]
 
         result = ScriptFunctions.spendToAnyhedgeContract(dict(
             contractOpts=treasury_contract.contract_opts,
@@ -321,6 +322,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
             txIndex=funding_utxo["vout"],
             txValue=funding_utxo["satoshis"],
             unlockingBytecode=unlocking_bytecode,
+            inputTxHashes=input_tx_hashes,
         )
 
         data_str = GP_LP.json_parser.dumps(funding_proposal, indent=2)
@@ -333,7 +335,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
                 raise StablehedgeException(
                     f"Invalid funding utxo tx: {error_or_txid}", code="invalid_transaction"
                 )
-    
+
         hedge_pos_obj = complete_short_proposal_funding(
             treasury_contract_address,
             contract_data,

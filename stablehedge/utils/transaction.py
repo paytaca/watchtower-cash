@@ -181,3 +181,12 @@ def decode_raw_tx(tx_hex):
 def extract_unlocking_script(tx_hex, index=0):
     decoded_tx = NODE.BCH._decode_raw_transaction(tx_hex)
     return decoded_tx["vin"][index]["scriptSig"]["hex"]
+
+def extract_input_tx_hashes(tx_hex):
+    decoded_tx = NODE.BCH._decode_raw_transaction(tx_hex)
+    return [inp["txid"] for inp in decoded_tx["vin"]]
+
+
+def get_input_txids_from_txid(txid):
+    decoded_tx = NODE.BCH._get_raw_transaction(txid, verbosity=2)
+    return [inp["txid"] for inp in decoded_tx["vin"]]
