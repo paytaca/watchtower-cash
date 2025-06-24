@@ -33,7 +33,7 @@ class MultisigTransactionProposalListCreateView(APIView):
 
     def get(self, request, wallet_identifier):
 
-        proposals = MultisigTransactionProposal.objects.all(deleted_at__isnull=True)
+        proposals = MultisigTransactionProposal.objects.filter(deleted_at__isnull=True)
         
         include_deleted = request.query_params.get('include_deleted')
         
@@ -324,7 +324,7 @@ class BroadcastTransactionProposalView(APIView):
         if broadcast_resp['success']:
             proposal.txid = broadcast_resp['txid']
             proposal.broadcast_status = MultisigTransactionProposal.BroadcastStatus.DONE
-            proposal.save(update_fields=['txid', 'status', 'broadcast_status'])
+            proposal.save(update_fields=['txid', 'broadcast_status'])
         LOGGER.info(broadcast_resp)
         if broadcast_resp.get('error') and broadcast_resp.get('error','').find('txn-already-known') != -1:
             if not proposal.txid:

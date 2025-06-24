@@ -1,5 +1,5 @@
-
-import { hexToBin } from 'bitauth-libauth-v3'
+import Big from 'big.js'
+import { hexToBin, cashAddressToLockingBytecode, binToHex } from 'bitauth-libauth-v3'
 
 export const shortenString = (str, maxLength) => {
   // If the string is shorter than or equal to the maxLength, return it as is.
@@ -43,7 +43,10 @@ export const getTotalBchFee = (tx, unit = 'bch') => {
  * @param {function} formatAddress - Function to format output's address
  * @returns {number} - Change amount in satoshis.
  */
-export const getTotalBchChangeAmount = (tx, senderAddress, formatAddress, unit = 'bch') => {
+export const getTotalBchChangeAmount = (tx, senderAddress, unit = 'bch') => { 
+  console.log('TX', tx, senderAddress)
+  const senderLockingBytecode = binToHex(cashAddressToLockingBytecode(senderAddress).bytecode)
+  console.log('SENDER LOCKING BYTECODE', senderLockingBytecode)
   if (!tx || !Array.isArray(tx.inputs) || !Array.isArray(tx.outputs)) {
     throw new Error("Transaction must have 'inputs' and 'outputs' arrays.")
   }
@@ -52,99 +55,164 @@ export const getTotalBchChangeAmount = (tx, senderAddress, formatAddress, unit =
   }
   // Find outputs going back to the sender (i.e., change)
   const changeOutputs = tx.outputs.filter(output => {
-    if (formatAddress) {
-      return formatAddress(output.address) === senderAddress
+    console.log(binToHex(Uint8Array.from(Object.values(output.lockingBytecode))))
+    if (senderLockingBytecode === binToHex(Uint8Array.from(Object.values(output.lockingBytecode)))) {
+      console.log('Found')
+      return true
     }
-    return output.address === senderAddress
+    return false
+    //return senderLockingBytecode == binToHex(Uint8Array.from(Object.values(output.lockingBytecode)))
   })
-
-  if (changeOutputs.length === 0) {
-    return 0 // No change output
-  }
   // Sum the value of change outputs (some wallets may split change across multiple outputs)
   const amount = changeOutputs.reduce((total, output) => {
-    // if (typeof output.valueSatoshis !== 'number') {
-    //   throw new Error("Each output must have a numeric 'value' in satoshis.")
-    // }
-    return total + Number(output.valueSatoshis)
-  }, 0)
-  if (unit === 'bch') return amount / 1e8
+    total = total + BigInt(output.valueSatoshis)
+    return total
+  }, 0n)
+  console.log('CHAGNE AAMOUNT', amount)
+  if (unit === 'bch') return Big(amount) / Big(1e8)
   return amount
 }
 
 /**
- * Parses a libauth stringified value back into its original JavaScript types.
- * Handles special types formatted by the stringify function:
+ * Revives special types formatted by the stringify function:
  * - `<Uint8Array: 0x...>` → Uint8Array
  * - `<bigint: ...n>` → bigint
  * - `<function: ...>` → string representation (cannot fully reconstruct)
  * - `<symbol: ...>` → string representation (cannot fully reconstruct)
  *
- * @param str - The stringified value to parse
+ * @param { string } _ - Key
+ * @param { any } value
  * @returns The reconstructed JavaScript value with proper types
  */
 export const libauthStringifyReviver = (_, value) => {
-    if (typeof value !== 'string') return value
+  if (typeof value !== 'string') return value
 
-    // Uint8Array pattern: "<Uint8Array: 0x...>"
-    const uint8ArrayMatch = value.match(/^<Uint8Array: 0x([0-9a-f]+)>$/i)
-    if (uint8ArrayMatch) {
-      return hexToBin(uint8ArrayMatch[1])
-    }
+  // Uint8Array pattern: "<Uint8Array: 0x...>"
+  const uint8ArrayMatch = value.match(/^<Uint8Array: 0x([0-9a-f]+)>$/i)
+  if (uint8ArrayMatch) {
+    return hexToBin(uint8ArrayMatch[1])
+  }
 
-    // Bigint pattern: "<bigint: ...n>"
-    const bigintMatch = value.match(/^<bigint: (-?\d+)n>$/)
-    if (bigintMatch) {
-      return BigInt(bigintMatch[1])
-    }
+  // Bigint pattern: "<bigint: ...n>"
+  const bigintMatch = value.match(/^<bigint: (-?\d+)n>$/)
+  if (bigintMatch) {
+    return BigInt(bigintMatch[1])
+  }
 
-    // Function pattern: "<function: ...>"
-    const functionMatch = value.match(/^<function: (.+)>$/)
-    if (functionMatch) {
-      // Note: We can't reconstruct actual functions, just return the string representation
-      return { type: 'function', value: functionMatch[1] }
-    }
+  // Function pattern: "<function: ...>"
+  const functionMatch = value.match(/^<function: (.+)>$/)
+  if (functionMatch) {
+    // Note: We can't reconstruct actual functions, just return the string representation
+    return { type: 'function', value: functionMatch[1] }
+  }
 
-    // Symbol pattern: "<symbol: ...>"
-    const symbolMatch = value.match(/^<symbol: (.+)>$/)
-    if (symbolMatch) {
-      // Note: We can't reconstruct actual symbols, just return the string representation
-      return { type: 'symbol', value: symbolMatch[1] }
-    }
+  // Symbol pattern: "<symbol: ...>"
+  const symbolMatch = value.match(/^<symbol: (.+)>$/)
+  if (symbolMatch) {
+    // Note: We can't reconstruct actual symbols, just return the string representation
+    return { type: 'symbol', value: symbolMatch[1] }
+  }
 
-    return value
+  return value
 }
 
 /**
- * Parses a test vector string (output from stringifyTestVector) back into
- * proper JavaScript types.
- *
- * @param str - The stringified test vector to parse
- * @returns The reconstructed JavaScript value with proper types
- */
-export const parseTestVector = (str) => {
-  // Convert test vector format to something JSON.parse can handle
-  const jsonCompatible = str
-    .replace(/hexToBin\('([0-9a-f]+)'\)/gi, '"<Uint8Array: 0x$1>"')
-    .replace(/(\d+)n/g, '"<bigint: $1n>"')
-
-  return parseStringified(jsonCompatible)
-}
-
-// Example usage:
-/*
-const example = {
-  num: 42,
-  big: BigInt(123),
-  bytes: Uint8Array.from([1, 2, 3]),
-  fn: (x) => x * 2,
-  sym: Symbol('test')
-};
-
-const stringified = stringify(example);
-const parsed = parseStringified(stringified);
-
-const testVector = stringifyTestVector(example);
-const parsedTestVector = parseTestVector(testVector);
+  * @typedef { Object } MultisigSpec
+  * @property { Number } m
+  * @property { Number } n
 */
 
+/**
+ * Estimates the serialized size (in bytes) of a P2SH multisig input,
+ * taking into account whether the UTXO is a CashToken.
+ *
+ * @param { import('../../utils/utxo-utils').CommonUTXO } utxo
+ * @param { MultisigSpec } multisigSpec
+ * @param { 'ecdsa'|'schnorr' } [sigType='schnorr'] - Signature type to estimate size for.
+ * @returns {number} Estimated byte size of the input.
+ */
+export const estimateP2SHMultisigInputSize = (utxo, multisigSpec, sigType = 'schnorr') => {
+  const sigSize = sigType === 'ecdsa' ? 73 : 64 // ECDSA is DER-encoded
+  const sigPushSize = 1
+
+  const { m, n } = multisigSpec
+
+  if (typeof m !== 'number' || typeof n !== 'number') {
+    throw new Error('Multisig spec (m-of-n) is required')
+  }
+
+  const signatureBytes = m * (sigSize + sigPushSize)
+
+  const redeemScriptSize =
+    1 + // OP_m
+    (n * 33) + // pubkeys
+    1 + // OP_n
+    1 // OP_CHECKMULTISIG
+
+  const redeemScriptPushSize =
+    redeemScriptSize < 76
+      ? 1
+      : redeemScriptSize < 256
+        ? 2
+        : 3
+
+  const scriptSigSize =
+    1 + // OP_0 dummy
+    signatureBytes +
+    redeemScriptPushSize +
+    redeemScriptSize
+
+  let inputSize =
+    32 + // outpoint txid
+    4 + // outpoint index
+    1 + // scriptSig varint length
+    scriptSigSize +
+    4 // sequence
+
+  if (utxo.token) {
+    const TOKEN_INPUT_OVERHEAD = 10 // adjust as needed for BCH CashTokens
+    inputSize += TOKEN_INPUT_OVERHEAD
+  }
+
+  return inputSize
+}
+
+/**
+ * Estimate unlocking bytecode size (scriptSig) for a P2SH m-of-n multisig input.
+ *
+ * @param {number} m - Number of required signatures.
+ * @param {number} n - Total number of public keys.
+ * @param {'ecdsa' | 'schnorr'} [sigType='ecdsa'] - Signature type.
+ * @returns {number} Estimated scriptSig size in bytes.
+ */
+export const estimateUnlockingBytecodeSize = (m, n, sigType = 'ecdsa') => {
+  const sigSize = sigType === 'schnorr' ? 64 : 72 // avg sizes
+  const sigPushOverhead = 1 // push opcode per signature
+
+  const totalSigSize = m * (sigSize + sigPushOverhead)
+
+  const pubkeySize = 33 // compressed pubkeys
+
+  const redeemScriptSize =
+    1 + // OP_m
+    (n * pubkeySize) + // n pubkeys
+    1 + // OP_n
+    1 // OP_CHECKMULTISIG
+
+  const redeemScriptPushSize =
+    // eslint-disable-next-line multiline-ternary
+    redeemScriptSize < 0x4c ? 1 // direct push
+      // eslint-disable-next-line multiline-ternary
+      : redeemScriptSize <= 0xff ? 2 // OP_PUSHDATA1
+        // eslint-disable-next-line multiline-ternary
+        : redeemScriptSize <= 0xffff ? 3 // OP_PUSHDATA2
+          : 5 // OP_PUSHDATA4
+
+  const scriptSigSize =
+    1 + // OP_0
+    totalSigSize +
+    redeemScriptPushSize +
+    redeemScriptSize
+
+  return scriptSigSize
+}
