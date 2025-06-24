@@ -14,7 +14,7 @@ import {
     cashAddressToLockingBytecode,
     hashTransaction,
     decodeTransactionCommon,
-    stringify
+    stringify,
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
 
@@ -66,9 +66,15 @@ app.post('/multisig/utils/get-transaction-hash', async (req, res) => {
 app.post('/multisig/transaction/finalize', async (req, res) => {
    const { multisigTransaction, multisigWallet } =  req.body
    const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
-   const finalCompilation = Multisig.finalizeTransaction({ multisigTransaction: multisigTransactionImported, multisigWallet })
-      
+   const finalCompilation = Multisig.finalizeTransaction({ multisigTransaction: multisigTransactionImported, multisigWallet })      
    res.send(JSON.parse(stringify(finalCompilation)))
+})
+
+app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
+   const { multisigTransaction, multisigWallet } =  req.body
+   const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
+   const signingProgress = Multisig.getSigningProgress({ multisigWallet, multisigTransaction })
+   res.send({ signingProgress })
 })
 
 app.get('/test', async (req, res) => {
