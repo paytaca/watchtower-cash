@@ -33,7 +33,7 @@ class MultisigTransactionProposalListCreateView(APIView):
 
     def get(self, request, wallet_identifier):
 
-        proposals = MultisigTransactionProposal.objects.filter(deleted_at__isnull=True)
+        proposals = MultisigTransactionProposal.objects.filter(deleted_at__isnull=True, broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING)
         
         include_deleted = request.query_params.get('include_deleted')
         
@@ -79,7 +79,6 @@ class MultisigTransactionProposalListCreateView(APIView):
         if serializer.is_valid():
             serializer.save(wallet=wallet)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        LOGGER.info(serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -97,7 +96,10 @@ class MultisigTransactionProposalDetailView(APIView):
 
     def delete(self, request, proposal_identifier):
         proposal = self.get_object(proposal_identifier)
-        if not proposal.deleted_at:
+        permanently_delete = request.query_params.get('permanently_delete')
+        if permanently_delete == '1' or permanently_delete == 'true':
+            proposal.delete()
+        if not proposal.deleted_at and proposal.broadcast_status != MultisigTransactionProposal.BroadcastStatus.DONE:
             proposal.soft_delete()
         else:
             proposal.delete()
@@ -325,7 +327,6 @@ class BroadcastTransactionProposalView(APIView):
             proposal.txid = broadcast_resp['txid']
             proposal.broadcast_status = MultisigTransactionProposal.BroadcastStatus.DONE
             proposal.save(update_fields=['txid', 'broadcast_status'])
-        LOGGER.info(broadcast_resp)
         if broadcast_resp.get('error') and broadcast_resp.get('error','').find('txn-already-known') != -1:
             if not proposal.txid:
                 proposal.txid = proposal.signed_transaction_hash
