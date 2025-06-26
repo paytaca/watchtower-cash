@@ -125,9 +125,9 @@ class SignerSignaturesAddView(APIView):
         if proposal.signing_progress == MultisigTransactionProposal.SigningProgress.FULLY_SIGNED:
             signature_serializer = SignatureSerializer(proposal.signatures, many=True)
             return Response(signature_serializer.data, status=HTTP_200_OK)
-
+        
+        signatures = []
         with transaction.atomic():
-            signatures = []
             for signature_item in request.data:
                 signature_instance, created = Signature.objects.get_or_create(
                     signer=signer,
@@ -141,8 +141,11 @@ class SignerSignaturesAddView(APIView):
                     'signature_value': signature_item['sigValue']
                 })
                 serializer = SignatureSerializer(signature_instance)
-                signatures.append(serializer.data)
-            return Response(signatures, status=status.HTTP_200_OK)
+                if created:
+                    signatures.append(serializer.data)
+
+        return Response(signatures, status=status.HTTP_200_OK)
+    
  
 class SignaturesAddView(APIView):
     def get_transaction_proposal(self, proposal_identifier):
@@ -156,6 +159,7 @@ class SignaturesAddView(APIView):
         except MultisigTransactionProposal.DoesNotExist:
             raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
         data = request.data.copy()
+        signatures = []
         with transaction.atomic():
             signatures = []
             for signature_item in data:
@@ -174,7 +178,15 @@ class SignaturesAddView(APIView):
                 })
                 serializer = SignatureSerializer(signature_instance)
                 signatures.append(serializer.data)
-            return Response(signatures, status=status.HTTP_200_OK)
+
+        sync = request.query_params.get('sync', None)
+        if sync == 'true' or sync == '1':
+            existing_signatures = Signature.objects.filter(transaction_proposal=proposal)
+            if existing_signatures.exists():
+                existing_signatures_serializer = SignatureSerializer(existing_signatures, many=True)
+                signatures = [*existing_signatures_serializer.data]
+
+        return Response(signatures, status=status.HTTP_200_OK)
 
 class FinalizeTransactionProposalView(APIView):
     
