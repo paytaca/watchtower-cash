@@ -105,13 +105,14 @@ export const transactionBinObjectsToUint8Array = (transactionObject) => {
 export const generateTempProposalId = multisigTransaction => {
   let transaction = structuredClone(multisigTransaction.transaction)
   transaction = transactionBinObjectsToUint8Array(transaction)
-  return hashTransaction(transaction)
+  return hashTransaction(encodeTransactionCommon(transaction))
 }
 
 export const generateTransactionHash = multisigTransaction => {
   let transaction = structuredClone(multisigTransaction.transaction)
   transaction = transactionBinObjectsToUint8Array(transaction)
-  return hashTransaction(transaction)
+  const encoded = encodeTransactionCommon(transaction)
+  return hashTransaction(encoded)
 }
 
 export const createMultisigTransactionFromWCSessionRequest = ({ sessionRequest, addressIndex }) => {
@@ -300,7 +301,6 @@ export const finalizeTransaction = ({
       const unlockingScriptId = getUnlockingScriptId({
         signatures: multisigTransaction.signatures, template, inputIndex
       })
-      console.log('UNLOCKING SCRIPTID', unlockingScriptId)
       if (sourceOutput.token?.amount) {
         sourceOutput.token.amount = BigInt(sourceOutput.token.amount)
       }
@@ -311,12 +311,10 @@ export const finalizeTransaction = ({
         script: unlockingScriptId,
         token: sourceOutput.token
       }
-      console.log('INPUT', input)
     }
     sourceOutputs.push(sourceOutput)
   }
 
-  console.log('SOURCE OUTPUTS', sourceOutputs)
   // Type checks before tx generation
   sourceOutputs.forEach((output) => {
     output.valueSatoshis = BigInt(output.valueSatoshis)
@@ -340,31 +338,28 @@ export const finalizeTransaction = ({
   const finalCompilation = generateTransaction({
     ...transaction
   })
-  console.log('SIGNATURES', multisigTransaction.signatures)
-  console.log('FINAL COMPILATION', finalCompilation)
   if (!finalCompilation.success) {
-    const signersWithoutSignatures =
-      identifySignersWithoutSignatures({
-        multisigWallet,
-        multisigTransaction
-      })
-    multisigTransaction.metadata.signersWithoutSignatures = signersWithoutSignatures
+    //const signersWithoutSignatures =
+      //identifySignersWithoutSignatures({
+        //multisigWallet,
+       // multisigTransaction
+     // })
+    //multisigTransaction.metadata.signersWithoutSignatures = signersWithoutSignatures
     return finalCompilation
   }
 
-  multisigTransaction.metadata.finalized = finalCompilation.success
+  multisigTransaction.finalized = finalCompilation.success
   const vm = createVirtualMachineBch()
     const verificationResult = vm.verify({
     sourceOutputs: sourceOutputs, transaction: finalCompilation.transaction
   })
-  console.log('verification result', verificationResult)
   if (verificationResult !== true) {
     finalCompilation.vmVerificationError = verificationResult
     return finalCompilation 
   }
   const encodedTransaction = encodeTransactionCommon(finalCompilation.transaction)
   finalCompilation.vmVerificationSuccess = verificationResult
-  finalCompilation.unsignedTransactionHash = hashTransaction(transaction)
+  finalCompilation.unsignedTransactionHash = hashTransaction(encodeTransactionCommon(transaction))
   finalCompilation.signedTransaction = binToHex(encodedTransaction)
   finalCompilation.signedTransactionHash = hashTransaction(encodedTransaction)
   
@@ -427,7 +422,6 @@ export const signTransaction = ({
   }
 
   const signAttempt = generateTransaction({ ...transaction })
-  console.log('signAttempt', signAttempt)
   const signerSignatures = []
   for (const [inputIndex, error] of Object.entries(signAttempt.errors)) {
     const signerResolvedVariables = extractResolvedVariables({ ...signAttempt, errors: [error] })
@@ -449,12 +443,10 @@ export const signTransaction = ({
     }
     signerSignatures.push(signerSignatureForInput)
   }
-  multisigTransaction.metadata.status = MultisigTransactionStatus.PENDING_PARTIALLY_SIGNED
   const finalizationResult = finalizeTransaction({
     multisigWallet,
     multisigTransaction
   })
-  multisigTransaction.metadata.finalized = finalizationResult.success
   return { signer: signerEntityKey, signatures: signerSignatures }
 }
 
@@ -537,7 +529,7 @@ export const sourceOutputsValuesToUint8Array = ({ sourceOutputs }) => {
 
 export const combinePsts = ({ psts }) => {
   const sameTransactions = psts.every((pst) => {
-    return hashTransaction(pst.transaction) === hashTransaction(psts[0].transaction)
+    return hashTransaction(encodeTransactionCommon(pst.transaction)) === hashTransaction(encodeTransactionCommon(psts[0].transaction))
   })
   if (!sameTransactions) return
   const combinedPst = psts[0]
@@ -560,7 +552,6 @@ export const combinePsts = ({ psts }) => {
       }
     })
   }
-  console.log('sameTransactions', sameTransactions)
   return combinedPst
 }
 
@@ -604,7 +595,7 @@ export const importPst = ({ pst }) => {
     // inserting address to output
     output.address = lockingBytecodeToCashAddress({ bytecode: output.lockingBytecode }).address
   })
-  parsed.transactionHash = hashTransaction(parsed.transaction)
+  parsed.transactionHash = hashTransaction(encodeTransactionCommon(parsed.transaction))
   if (!parsed.id) {
     parsed.id = generateTempProposalId(parsed)
   }
@@ -643,10 +634,8 @@ export const exportPstRaw = ({
 }
 
 export const exportPst = ({ multisigTransaction, address, addressIndex = 0, format = 'base64' }) => {
-  console.log('EXPORT', multisigTransaction, address, addressIndex, format )
   const sourceOutputs = structuredClone(multisigTransaction.sourceOutputs)
   sourceOutputs.forEach((utxo) => {
-    console.log('typeof ', typeof (utxo.outpointTransactionHash))
     if (typeof (utxo.outpointTransactionHash) !== 'string') {
       utxo.outpointTransactionHash = binToHex(Uint8Array.from(Object.values(utxo.outpointTransactionHash)))
     }
@@ -661,7 +650,6 @@ export const exportPst = ({ multisigTransaction, address, addressIndex = 0, form
     }
   })
   const transaction = transactionBinObjectsToUint8Array(multisigTransaction.transaction)
-  console.log('EXPORT TRANSACTOIN', transaction)
   const pst = {
     id: multisigTransaction.id,
     transaction: binToHex(encodeTransactionCommon(transaction)),
