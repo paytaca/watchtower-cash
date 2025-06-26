@@ -6,31 +6,48 @@ import { generateProxyFunderContractWithArtifact } from "../contracts/liquidity-
 import { TreasuryContract } from "../contracts/treasury-contract/index.js";
 import { getBaseBytecode } from "./anyhedge.js";
 import { generateRandomWif, wifToPubkey } from "./crypto.js";
+import { MOCK_ORACLE_WIF } from "./price-oracle.js";
+import { RedemptionContract } from "../contracts/redemption-contract/index.js";
+import { baseBytecodeToHex } from "./contracts.js";
 
 
 /**
  * @param {Object} opts 
  * @param {String} opts.version
  * @param {String} [opts.anyhedgeVersion]
+ * @param {'p2sh32' | 'p2sh20'} [opts.addressType]
+ * @param {'mainnet' | 'chipnet'} [opts.network]
  */
 export function createTreasuryContract(opts) {
   const version = opts?.version || 'v2'
+  const addressType = opts?.addressType || 'p2sh32'
+  const network = opts?.network || 'mainnet'
   const { bytecode } = getBaseBytecode({ version: opts?.anyhedgeVersion })
   const authKeyId = generateRandomBytes(32);
+
   const wifs = Array.from({ length: 5 }).map(() => generateRandomWif())
   const pubkeys = wifs.map(wif => wifToPubkey(wif))
-  const contractParams = [authKeyId, ...pubkeys.map(hexToBin), hash256(hexToBin(bytecode))]
+
+  const rcArtifact = RedemptionContract.getArtifact('v2')
+  const redemptionContractBaseBytecode = baseBytecodeToHex(rcArtifact.bytecode)
+  const redemptionTokenCategory = binToHex(generateRandomBytes(32));
+  const oraclePublicKey = wifToPubkey(MOCK_ORACLE_WIF);
+
   const artifact = TreasuryContract.getArtifact(version)
-  const contract = new Contract(artifact, contractParams, { addressType: 'p2sh32' })
   const manager = new TreasuryContract({
     params: {
       authKeyId: binToHex(authKeyId),
       pubkeys,
       anyhedgeBaseBytecode: bytecode,
+
+      redemptionTokenCategory,
+      oraclePublicKey,
+      redemptionContractBaseBytecode,
     },
-    options: { version: version, addressType: 'p2sh32', network: 'mainnet' }
+    options: { version, addressType, network }
   })
 
+  const contract = manager.getContract()
 
   return {
     manager,
@@ -89,12 +106,14 @@ export function createProxyFunder(opts) {
  * @param {String} opts.longAddress
  * @param {String} opts.shortPubkey
  * @param {String} opts.longPubkey
- * @param {Object} opts.priceData
+ * @param {Object} [opts.priceData]
  * @param {String} opts.priceData.pubkey
  * @param {String} opts.priceData.message
  * @param {String} opts.priceData.message_timestamp
+ * @param {String} opts.priceData.signature
  * @param {Number} opts.liquidityFeePctg
  * @param {Number} opts.settlementServicePctg
+ * @param {Number} opts.nominalUnits
  */
 export async function createAnyhedgeContract(opts) {
   const priceData = opts?.priceData ? opts?.priceData : {
@@ -108,7 +127,7 @@ export async function createAnyhedgeContract(opts) {
   const contractData = await manager.createContract({
     makerSide: 'long',
     takerSide: 'short',
-    nominalUnits: 100,
+    nominalUnits: opts?.nominalUnits || 100,
     oraclePublicKey: priceData?.pubkey,
     startingOracleMessage: priceData?.message,
     startingOracleSignature: priceData?.signature,
