@@ -144,6 +144,13 @@ class SignerSignaturesAddView(APIView):
                 if created:
                     signatures.append(serializer.data)
 
+        sync = request.query_params.get('sync', None)
+        if sync == 'true' or sync == '1':
+            existing_signatures = Signature.objects.filter(transaction_proposal=proposal)
+            if existing_signatures.exists():
+                existing_signatures_serializer = SignatureSerializer(existing_signatures, many=True)
+                signatures = [*existing_signatures_serializer.data]
+
         return Response(signatures, status=status.HTTP_200_OK)
     
  

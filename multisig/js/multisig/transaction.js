@@ -588,7 +588,6 @@ export const importPst = ({ pst }) => {
   parsed.transaction = transactionBinObjectsToUint8Array(
     decoded
   )
-  console.log('parsed', parsed)
   parsed.signatures = signatureValuesToUint8Array({ signatures: parsed.signatures })
   parsed.sourceOutputs = sourceOutputsValuesToUint8Array({ sourceOutputs: parsed.sourceOutputs })
   if (parsed.sourceOutputs) {
