@@ -89,6 +89,31 @@ export function parseContractData(contractDataV2) {
   return contractDataV2
 }
 
+
+/**
+ * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
+ * @returns 
+ */
+export function contractDataToParameters(contractData) {
+  const contractParameters = contractData.parameters
+  return [
+    contractParameters.shortMutualRedeemPublicKey,
+    contractParameters.longMutualRedeemPublicKey,
+    contractParameters.enableMutualRedemption,
+    contractParameters.shortLockScript,
+    contractParameters.longLockScript,
+    contractParameters.oraclePublicKey,
+    contractParameters.nominalUnitsXSatsPerBch,
+    contractParameters.satsForNominalUnitsAtHighLiquidation,
+    contractParameters.payoutSats,
+    contractParameters.lowLiquidationPrice,
+    contractParameters.highLiquidationPrice,
+    contractParameters.startTimestamp,
+    contractParameters.maturityTimestamp,
+  ];
+}
+
+
 /**
  * @param {import("@generalprotocols/anyhedge").ContractDataV2} contractData 
  * @returns 

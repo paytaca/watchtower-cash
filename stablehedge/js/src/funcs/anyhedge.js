@@ -1,6 +1,8 @@
 import { getBaseBytecode, parseContractData } from "../utils/anyhedge.js";
-import { getLiquidityFee, getSettlementServiceFee, getProxyFunderInputSize } from "../utils/anyhedge-funding.js";
-import { P2PKH_INPUT_SIZE } from "cashscript/dist/constants.js";
+import { getLiquidityFee, getSettlementServiceFee, getProxyFunderInputSize, getAnyhedgeSettlementTxFeeSize, getTreasuryContractInputSize, getFeeSats } from "../utils/anyhedge-funding.js";
+import { cashAddressToLockingBytecode } from "@bitauth/libauth";
+import { TreasuryContract } from "../contracts/treasury-contract/index.js";
+
 
 /**
  * @param {Object} opts
@@ -79,5 +81,63 @@ export async function calculateTotalFundingSatoshis(opts) {
     shortFundingUtxoSats: Number(shortFundingUtxoSats),
     longFundingUtxoSats: Number(longFundingUtxoSats),
     totalFundingSats: Number(totalFundingSats),
+  }
+}
+
+/**
+ * @param {Object} opts
+ * @param {Object} [opts.contractOpts]
+ * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
+ * @returns 
+ */
+export function calculateFundingSatoshis(opts) {
+  const treasuryContract = opts?.contractOpts
+    ? new TreasuryContract(opts?.contractOpts)
+    : undefined
+
+  const contractData = parseContractData(opts?.contractData)
+
+  const settlementTxFee = getAnyhedgeSettlementTxFeeSize({ contractData })
+
+  // this is how much sats needed in anyhedge contract's UTXO
+  const fundingSatoshis = contractData.metadata.shortInputInSatoshis +
+                          contractData.metadata.longInputInSatoshis +
+                          settlementTxFee + 1332n;
+
+  const decodedAddress = cashAddressToLockingBytecode(contractData.address)
+  if (typeof decodedAddress === 'string') throw new Error(decodedAddress)
+  const outputSize = BigInt(decodedAddress.bytecode.byteLength) + 9n;
+  const tcInputSize = BigInt(getTreasuryContractInputSize({ contractData, treasuryContract }));
+
+  let addtlFeeSats = 0n;
+  const lpFee = getLiquidityFee(contractData);
+  if (lpFee) {
+    if (typeof lpFee === 'string') throw new Error(lpFee)
+    addtlFeeSats += getFeeSats(lpFee)
+  }
+
+  const settlementServiceFee = getSettlementServiceFee(contractData);
+  if (settlementServiceFee) {
+    if (typeof settlementServiceFee === 'string') throw new Error(settlementServiceFee)
+    addtlFeeSats += getFeeSats(settlementServiceFee);
+  }
+
+  const P2PKH_INPUT_SIZE = 148n; // in some libraries it's 141n but others is 148, just following anyhedge's constants.js
+  const p2shMinerFeeSatoshis = outputSize + P2PKH_INPUT_SIZE + tcInputSize + 10n;
+  const p2shTotalFundingSats = fundingSatoshis + addtlFeeSats + p2shMinerFeeSatoshis;
+  
+  const p2pkhMinerFeeSatoshis = outputSize + (P2PKH_INPUT_SIZE * 2n) + 10n;
+  const p2pkhTotalFundingSats = fundingSatoshis + addtlFeeSats + p2pkhMinerFeeSatoshis;
+
+
+  return {
+    fundingSatoshis,
+    settlementTxFee,
+    addtlFeeSats,
+
+    p2shMinerFeeSatoshis,
+    p2shTotalFundingSats,
+    p2pkhMinerFeeSatoshis,
+    p2pkhTotalFundingSats,
   }
 }
