@@ -59,8 +59,7 @@ app.post('/multisig/utils/derive-wallet-address', async (req, res) => {
 app.post('/multisig/utils/get-transaction-hash', async (req, res) => {
   // transaction hex
   const { transaction } = req.body
-  const decoded = decodeTransactionCommon(hexToBin(transaction))
-  res.send({ transaction_hash: hashTransaction(decoded) })
+  res.send({ transaction_hash: hashTransaction(hexToBin(transaction)) })
 })
 
 app.post('/multisig/transaction/finalize', async (req, res) => {
