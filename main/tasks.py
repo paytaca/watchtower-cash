@@ -58,6 +58,7 @@ import pytz
 
 import rampp2p.utils.transaction as rampp2p_utils
 from jpp.models import Invoice as JPPInvoice
+from main.utils.cache import clear_cache_for_spent_transactions
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1849,6 +1850,9 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
             )
 
             if not txn_check.exists(): continue
+            
+            # Clear cache before marking as spent
+            clear_cache_for_spent_transactions(txn_check)
             txn_check.update(spent=True, spending_txid=txid)
 
             txn_obj = txn_check.last()
@@ -1890,6 +1894,9 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         )
 
         if not txn_check.exists(): continue
+        
+        # Clear cache before marking as spent
+        clear_cache_for_spent_transactions(txn_check)
         txn_check.update(spent=True, spending_txid=txid)
 
     # Parse BCH tx outputs
@@ -2068,6 +2075,8 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
         if not force_create:
             txn_check = Transaction.objects.filter(txid=utxo['txid'], index=utxo['index'])
             if txn_check.exists() and not is_output:
+                # Clear cache before marking as spent
+                clear_cache_for_spent_transactions(txn_check)
                 txn_check.update(spent=True, spending_txid=txid)
                 continue
 
@@ -2100,9 +2109,10 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
             )
 
         if not is_output:
-            Transaction.objects \
-                .filter(txid=utxo['txid'], index=utxo['index']) \
-                .update(spent=True, spending_txid=txid)
+            txn_check = Transaction.objects.filter(txid=utxo['txid'], index=utxo['index'])
+            # Clear cache before marking as spent
+            clear_cache_for_spent_transactions(txn_check)
+            txn_check.update(spent=True, spending_txid=txid)
 
         tx_obj = Transaction.objects \
             .filter(txid=utxo['txid'], index=utxo['index']) \
@@ -2457,6 +2467,8 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                 if 'addresses' in ancestor_spubkey.keys():
                     address = ancestor_spubkey['addresses'][0]
                     spent_transactions = Transaction.objects.filter(txid=txid, index=index)
+                    # Clear cache before marking as spent
+                    clear_cache_for_spent_transactions(spent_transactions)
                     spent_transactions.update(spent=True, spending_txid=tx_hash)
 
                     # save wallet history only if tx is associated with a wallet

@@ -15,6 +15,7 @@ from main.tasks import (
     parse_tx_wallet_histories,
 )
 import paho.mqtt.client as mqtt
+from main.utils.cache import clear_cache_for_spent_transactions
 
 
 client_id = f"watchtower-{settings.BCH_NETWORK}-mempool-publisher"
@@ -69,6 +70,8 @@ def run():
                 index = _input.outpoint.index
                 spent_transactions = Transaction.objects.filter(txid=txid, index=index)
                 
+                # Clear cache before marking as spent
+                clear_cache_for_spent_transactions(spent_transactions)
                 spent_transactions.update(spent=True, spending_txid=tx_hash)
                 has_existing_wallet = spent_transactions.filter(wallet__isnull=False).exists()
                 has_subscribed_input = has_subscribed_input or has_existing_wallet
