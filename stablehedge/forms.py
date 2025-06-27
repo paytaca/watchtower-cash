@@ -132,7 +132,12 @@ class TreasuryContractForm(forms.ModelForm):
                 oraclePublicKey=data["price_oracle_pubkey"],
                 redemptionContractBaseBytecode=redemption_contract_base_bytecode,
             ),
-            options=dict(version=version, network=settings.BCH_NETWORK, addressType="p2sh32"),
+            options=dict(
+                version=version,
+                network=settings.BCH_NETWORK,
+                redemptionContractBaseBytecodeVersion=redemption_contract_version,
+                addressType="p2sh32",
+            ),
         )
 
         compile_data = ScriptFunctions.compileTreasuryContract(compile_opts)
