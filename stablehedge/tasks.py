@@ -104,7 +104,6 @@ def short_v1_treasury_contract_funds(treasury_contract_address:str):
 
     LOGGER.info(f"SHORT TREAURY CONTRACT | {treasury_contract_address}")
     try:
-        raise Exception("BLOCK")
         REDIS_STORAGE.set(REDIS_KEY, "1", ex=120)
 
         treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
@@ -279,10 +278,11 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
             raise StablehedgeException("Contract address from settlement service mismatched")
 
         contract_data = contract_data2
+        LOGGER.debug(f"SHORT PROPOSAL | CONTRACT FULL | {GP_LP.json_parser.dumps(contract_data, indent=2)}")
 
         funding_amounts = ScriptFunctions.calculateTotalFundingSatoshis(dict(
             contractData=contract_data,
-            anyhedgeVersion=contract_data["version"],
+            contractOpts=treasury_contract.contract_opts,
         ))
         data_str = GP_LP.json_parser.dumps(funding_amounts, indent=2)
         LOGGER.debug(f"FUNDING AMOUNTS | {treasury_contract_address} | {data_str}")
@@ -299,7 +299,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
             inputs=[
                 funding_utxo,
                 dict(
-                    txid="0" * 64, vout=0, satoshis=funding_amounts["longFundingSats"] + 141 + 35,
+                    txid="0" * 64, vout=0, satoshis=funding_amounts["longFundingSats"],
                     lockingBytecode="0" * 50, # p2pkh locking bytecode length = 25 bytes
                     unlockingBytecode="0" * (98 * 2), # 65 byte schnorr signature + 33 byte pubkey
                 ),

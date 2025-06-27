@@ -7,7 +7,7 @@ import { baseBytecodeToHex, encodeParameterBytecode } from "./contracts.js";
 import { TreasuryContract } from "../contracts/treasury-contract/index.js";
 
 
-const LP_FEE_NAME = 'Liquidity Premium'
+const LP_FEE_NAME = 'Liquidity premium'
 const SETTLEMENT_SERVICE_FEE_NAME = 'Settlement Service Fee'
 
 /**
@@ -82,24 +82,6 @@ export function getAnyhedgeSettlementTxFeeSize(opts) {
   }
 
   return settlementTxFee
-}
-
-/**
- * @param {Object} opts 
- * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
- * @param {String} opts.anyhedgeVersion
- */
-export function getProxyFunderInputSize(opts) {
-  const { contract } = createProxyFunder(opts)
-  const ahContract = opts?.contractData
-  const ahContractArgs = getContractParamBytecodes(ahContract)
-  
-  const proxyFunderInputSize = calculateInputSize(contract.functions.spendToContract(
-    hexToBin(ahContractArgs.bytecodesHex.slice(0, 4).reverse().join('')),
-    hexToBin(ahContractArgs.bytecodesHex.slice(5).reverse().join('')),
-  ))
-
-  return proxyFunderInputSize
 }
 
 /**

@@ -358,7 +358,7 @@ def create_short_contract(
     price_obj:anyhedge_models.PriceOracleMessage=None,
     satoshis:int=0,
     low_liquidation_multiplier:float=0.5,
-    high_liquidation_multiplier:float=5.0,
+    high_liquidation_multiplier:float=2.0,
     duration_seconds:int=60 * 60 * 2, # 2 hours
 ):
     treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()

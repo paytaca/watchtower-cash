@@ -139,7 +139,7 @@ export async function createAnyhedgeContract(opts) {
     longPayoutAddress: opts?.longAddress,
     maturityTimestamp: BigInt(priceData?.message_timestamp + 86_400),
     lowLiquidationPriceMultiplier: 0.5,
-    highLiquidationPriceMultiplier: 5,
+    highLiquidationPriceMultiplier: 2,
     enableMutualRedemption: 1n,
     isSimpleHedge: 0n,
   })
@@ -149,8 +149,8 @@ export async function createAnyhedgeContract(opts) {
     await manager.addContractFee(contractData, {
       address: opts?.longAddress,
       satoshis: liquidityFee,
-      name: 'Liquidity Premium',
-      description: 'LP Fee for long position',
+      name: 'Liquidity premium',
+      description: 'Provides counterparty liquidity at a premium.',
     })
   }
 

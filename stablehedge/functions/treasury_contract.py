@@ -113,7 +113,7 @@ def sweep_funding_wif(treasury_contract_address:str, force:bool=False):
         .filter(address=treasury_contract_address).first()
 
     allowed_versions = [models.TreasuryContract.Version.V1]
-    if treasury_contract.version in allowed_versions and not force:
+    if treasury_contract.version not in allowed_versions and not force:
         raise StablehedgeException(
             "Sweep funding WIF is not supported for V2 contracts. Set force=True to allow.",
             code="v2_not_supported",
@@ -272,12 +272,12 @@ def build_or_find_funding_utxo(treasury_contract_address:str, satoshis:int=0):
     transaction = None
     if funding_utxo:
         utxo_data = tx_model_to_cashscript(funding_utxo)
-        input_tx_hashes = get_input_txids_from_txid(utxo_data["txid"])
+        input_tx_hashes = [*set(get_input_txids_from_txid(utxo_data["txid"]))]
     else:
         transaction = consolidate_treasury_contract(treasury_contract_address, satoshis=satoshis)
         txid = get_tx_hash(transaction)
         utxo_data = dict(txid=txid, vout=0, satoshis=satoshis)
-        input_tx_hashes = extract_input_tx_hashes(transaction)
+        input_tx_hashes = [*set(extract_input_tx_hashes(transaction))]
 
     return dict(
         utxo=utxo_data,
