@@ -1,7 +1,8 @@
 import { getBaseBytecode, parseContractData } from "../utils/anyhedge.js";
-import { getLiquidityFee, getSettlementServiceFee, getProxyFunderInputSize, getAnyhedgeSettlementTxFeeSize, getTreasuryContractInputSize, getFeeSats } from "../utils/anyhedge-funding.js";
+import { getLiquidityFee, getSettlementServiceFee, getAnyhedgeSettlementTxFeeSize, getTreasuryContractInputSize, getFeeSats } from "../utils/anyhedge-funding.js";
 import { cashAddressToLockingBytecode } from "@bitauth/libauth";
 import { TreasuryContract } from "../contracts/treasury-contract/index.js";
+import { AnyHedgeManager } from "@generalprotocols/anyhedge";
 
 
 /**
@@ -28,81 +29,23 @@ export async function getArgsForTreasuryContract(opts) {
 
 /**
  * @param {Object} opts
- * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
- * @param {String} opts.anyhedgeVersion
- * @param {Number} [opts.treasuryContractInputSize=1100]
- * @param {Number} [opts.contributorNum] Set to 0 to assume p2pkh counterparty instead of P2P-LP contract
- * @returns 
- */
-export async function calculateTotalFundingSatoshis(opts) {
-  const contractData = parseContractData(opts?.contractData)
-  let shortFundingSats = contractData?.metadata?.shortInputInSatoshis;
-  let longFundingSats = contractData?.metadata?.longInputInSatoshis;
-
-  const settlementTxFee = 2030n;
-  // 1332 is DUST_LIMIT, when settlement prices for AH is at min/max
-  // 798 is for settlement tx fee, added a few sats for margin
-  // https://bitcoincashresearch.org/t/friday-night-challenge-worst-case-dust/1181/2
-  // 1332 + 698 = 2130
-  shortFundingSats += settlementTxFee;
-  const fundingOutputSats = shortFundingSats + longFundingSats;
-
-  const longLiquidityFee = getLiquidityFee(contractData)
-  if (typeof longLiquidityFee === 'string') return { error: longLiquidityFee }
-  if (longLiquidityFee) {
-    shortFundingSats += longLiquidityFee.satoshis + 45n; // 45 is output fee
-  }
-
-  const settlementServiceFee = getSettlementServiceFee(contractData)
-  if (typeof settlementServiceFee === 'string') return { error: settlementServiceFee }
-  if (settlementServiceFee) {
-    shortFundingSats += settlementServiceFee.satoshis + 45n; // 45 is output fee
-  }
-
-  // This is calculated using getTreasuryContractInputSize in src/utils/anyhedge-funding.js
-  // set to fixed since it's set in treasury contract's cashscript code
-  const treasuryContractInputSize = BigInt(opts?.treasuryContractInputSize || 1100n);
-  const shortFundingUtxoSats = shortFundingSats + treasuryContractInputSize;
-
-  let longFundingUtxoSats = longFundingSats + BigInt(P2PKH_INPUT_SIZE) + 35n; // 34 is p2pkh output fee
-  if (opts?.contributorNum) {
-    const proxyFunderInputSize = getProxyFunderInputSize(opts);
-    // 45 sats for p2sh32 output(no token)
-    longFundingUtxoSats = longFundingSats + BigInt(proxyFunderInputSize) + 45n;
-  }
-
-  const totalFundingSats = contractData?.parameters.payoutSats + settlementTxFee;
-
-  return {
-    fundingOutputSats: Number(fundingOutputSats),
-    shortFundingSats: Number(shortFundingSats),
-    longFundingSats: Number(longFundingSats),
-    treasuryContractInputSize: Number(treasuryContractInputSize),
-    shortFundingUtxoSats: Number(shortFundingUtxoSats),
-    longFundingUtxoSats: Number(longFundingUtxoSats),
-    totalFundingSats: Number(totalFundingSats),
-  }
-}
-
-/**
- * @param {Object} opts
  * @param {Object} [opts.contractOpts]
  * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
  * @returns 
  */
-export function calculateFundingSatoshis(opts) {
+export function calculateTotalFundingSatoshis(opts) {
   const treasuryContract = opts?.contractOpts
     ? new TreasuryContract(opts?.contractOpts)
     : undefined
 
   const contractData = parseContractData(opts?.contractData)
 
-  const settlementTxFee = getAnyhedgeSettlementTxFeeSize({ contractData })
+  const calculatedSettlementTxFee = getAnyhedgeSettlementTxFeeSize({ contractData })
 
   // this is how much sats needed in anyhedge contract's UTXO
-  const fundingSatoshis = contractData.metadata.shortInputInSatoshis +
+  const totalFundingSats = contractData.metadata.shortInputInSatoshis +
                           contractData.metadata.longInputInSatoshis +
-                          settlementTxFee + 1332n;
+                          calculatedSettlementTxFee + 1332n;
 
   const decodedAddress = cashAddressToLockingBytecode(contractData.address)
   if (typeof decodedAddress === 'string') throw new Error(decodedAddress)
@@ -124,20 +67,32 @@ export function calculateFundingSatoshis(opts) {
 
   const P2PKH_INPUT_SIZE = 148n; // in some libraries it's 141n but others is 148, just following anyhedge's constants.js
   const p2shMinerFeeSatoshis = outputSize + P2PKH_INPUT_SIZE + tcInputSize + 10n;
-  const p2shTotalFundingSats = fundingSatoshis + addtlFeeSats + p2shMinerFeeSatoshis;
+  const p2shTotalFundingSats = totalFundingSats + addtlFeeSats + p2shMinerFeeSatoshis;
   
   const p2pkhMinerFeeSatoshis = outputSize + (P2PKH_INPUT_SIZE * 2n) + 10n;
-  const p2pkhTotalFundingSats = fundingSatoshis + addtlFeeSats + p2pkhMinerFeeSatoshis;
+  const p2pkhTotalFundingSats = totalFundingSats + addtlFeeSats + p2pkhMinerFeeSatoshis;
 
+  const longFundingSats = contractData.metadata.longInputInSatoshis;
+
+  const manager = new AnyHedgeManager({ contractVersion: contractData.version })
+  const anyhedgeTotalFundingSats = manager.calculateTotalRequiredFundingSatoshis(contractData)
 
   return {
-    fundingSatoshis,
-    settlementTxFee,
-    addtlFeeSats,
+    totalFundingSats: Number(totalFundingSats),
 
-    p2shMinerFeeSatoshis,
-    p2shTotalFundingSats,
-    p2pkhMinerFeeSatoshis,
-    p2pkhTotalFundingSats,
+    shortFundingUtxoSats: Number(p2shTotalFundingSats - longFundingSats),
+    longFundingSats: Number(longFundingSats),
+
+    // data here just for reference
+    metadata: {
+      anyhedgeTotalFundingSats: Number(anyhedgeTotalFundingSats),
+      calculatedSettlementTxFee: Number(calculatedSettlementTxFee),
+      addtlFeeSats: Number(addtlFeeSats),
+
+      p2shMinerFeeSatoshis: Number(p2shMinerFeeSatoshis),
+      p2shTotalFundingSats: Number(p2shTotalFundingSats),
+      p2pkhMinerFeeSatoshis: Number(p2pkhMinerFeeSatoshis),
+      p2pkhTotalFundingSats: Number(p2pkhTotalFundingSats),
+    },
   }
 }
