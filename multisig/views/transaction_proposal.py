@@ -19,6 +19,9 @@ import multisig.js_client as js_client
 LOGGER = logging.getLogger(__name__)
 MULTISIG_JS_SERVER = 'http://localhost:3004'
 
+class MultisigTransactionProposalListView(APIView):
+    pass
+
 class MultisigTransactionProposalListCreateView(APIView):
 
     def get_wallet(self, wallet_identifier): 
@@ -59,6 +62,8 @@ class MultisigTransactionProposalListCreateView(APIView):
             resp = js_client.get_transaction_hash(request.data['transaction'])
             resp = resp.json()
             transaction_hash = resp.get('transaction_hash')
+            LOGGER.info('transaction_hash')
+            LOGGER.info(transaction_hash)
         except Exception as e:
             return Response(
                 {
@@ -69,7 +74,7 @@ class MultisigTransactionProposalListCreateView(APIView):
             )
         
 
-
+        
         proposal = MultisigTransactionProposal.objects.prefetch_related('signatures').filter(transaction_hash=transaction_hash)
         if proposal.exists():
             serializer = MultisigTransactionProposalSerializer(proposal.first())
@@ -211,7 +216,7 @@ class FinalizeTransactionProposalView(APIView):
             return Response({
                 'signedTransaction': proposal.signed_transaction,
                 'signedTransactionHash': proposal.signed_transaction_hash,
-                'unsignedTransactionHash': proposal.transaction,
+                'unsignedTransactionHash': proposal.transaction_hash,
                 'vmVerificationSuccess': True,
                 'success': True
             })
@@ -234,16 +239,7 @@ class FinalizeTransactionProposalView(APIView):
                 Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         
             final_compilation_result = resp.json()
-            
-            if final_compilation_result['unsignedTransactionHash'] != proposal.transaction_hash:
-                return Response(
-                    {
-                        'error': 'Internal service error. Proposal transaction hash does not match transaction being finalized' 
-                    },
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE
-                )
-        
-              
+                          
             if final_compilation_result['success'] and final_compilation_result['vmVerificationSuccess']:
                 proposal.signed_transaction = final_compilation_result['signedTransaction']
                 proposal.signed_transaction_hash = final_compilation_result['signedTransactionHash']
@@ -253,7 +249,7 @@ class FinalizeTransactionProposalView(APIView):
             response_data = {
               'signedTransaction': final_compilation_result.get('signedTransaction', ''),
               'signedTransactionHash': final_compilation_result.get('signedTransactionHash', ''),
-              'unsignedTransactionHash': final_compilation_result.get('unsignedTransactionHash', proposal.transaction),
+              'unsignedTransactionHash': proposal.transaction_hash,
               'success': final_compilation_result['success'],
               'vmVerificationSuccess': final_compilation_result['vmVerificationSuccess']
             }
