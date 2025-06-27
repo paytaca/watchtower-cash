@@ -34,7 +34,7 @@ export function createTreasuryContract(opts) {
   const oraclePublicKey = wifToPubkey(MOCK_ORACLE_WIF);
 
   const artifact = TreasuryContract.getArtifact(version)
-  const manager = new TreasuryContract({
+  const contractOpts = {
     params: {
       authKeyId: binToHex(authKeyId),
       pubkeys,
@@ -45,7 +45,8 @@ export function createTreasuryContract(opts) {
       redemptionContractBaseBytecode,
     },
     options: { version, addressType, network }
-  })
+  }
+  const manager = new TreasuryContract(contractOpts)
 
   const contract = manager.getContract()
 
@@ -56,6 +57,7 @@ export function createTreasuryContract(opts) {
     authKeyId: binToHex(authKeyId),
     pubkeys,
     wifs,
+    contractOpts,
   }
 }
 
