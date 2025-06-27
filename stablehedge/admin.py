@@ -246,7 +246,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         try:
             redemption_contract = obj.redemption_contract
         except models.TreasuryContract.redemption_contract.RelatedObjectDoesNotExist:
-            return obj.version == models.TreasuryContract.Version.V3
+            return obj.version == models.TreasuryContract.Version.V2
 
         if not obj.fiat_token or obj.fiat_token.category != redemption_contract.fiat_token.category:
             return False

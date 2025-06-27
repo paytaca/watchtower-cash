@@ -3,6 +3,16 @@ pragma cashscript ^0.8.0;
 // Smart Contract fingerprint
 // https://bitcoincashresearch.org/t/smart-contract-fingerprinting-a-method-for-pattern-recognition-and-analysis-in-bitcoin-cash/1441
 
+
+/**
+Values for references, refer here when seeing asterisk in parenthesis (*)
+    10B base tx fee - 4B version | 4B locktime | 2B input & output (we assume it only takes 1 byte each where both inputs dont exceed 253)
+    9B BCH output base size - 8B satoshis amount | 1B lockscript prefix | 0B token prefix
+    43B cashscript input base size - 32B txid | 4B index | 4B sequence | 3B unlocking script count (this is because it's likely greater than 255)
+    41B p2pkh input base size - 32B txid | 4B index | 4B sequence | 1B unlocking script count (this is because it's likely less than 255)
+    148B p2pkh input size - for ECDSA signatures, used by anyhedge's library. although schnorr(141B) is now more common
+ */
+
 contract TreasuryContractV2(
     bytes32 authKeyId, // 32 B token category of authkey nft
     pubkey pk1, // 33 B
@@ -11,6 +21,9 @@ contract TreasuryContractV2(
     pubkey pk4, // 33 B
     pubkey pk5, // 33 B
     bytes32 anyhedgeContractFingerprint, // 32 B smart contract fingerprint of anyhedge smart contract
+    bytes32 redemptionTokenCategory, // 32 B
+    bytes33 oraclePublicKey, // 33 B
+    bytes32 redemptionContractFingerprint, // 32 B smart contract fingerprint of redemption contract
 ) {
     // Based on Authguard
     // https://github.com/mr-zwets/AuthGuard/blob/c5115b0df05c868018cc433e1047f5c5f6c8f7f7/AuthGuard.cash
@@ -53,7 +66,7 @@ contract TreasuryContractV2(
         Based on the conditions above, the transaction fee is covered by the executor of the
         consolidate transaction to prevent abuse of this function and result in loss of funds.
     */
-    function consolidate() {
+    function consolidate(bytes redemptionContractBaseBytecode) {
         bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
         require(tx.inputs[0].lockingBytecode != inputLockScript);
 
@@ -76,10 +89,23 @@ contract TreasuryContractV2(
         int totalOutputSats = tx.outputs[2].value;
 
         require(tx.outputs.length <= 4);
-        require(tx.outputs[2].lockingBytecode == inputLockScript);
+        bytes recipientLockScript = inputLockScript;
+        if (redemptionContractBaseBytecode.length > 0) {
+            require(redemptionContractFingerprint == hash256(redemptionContractBaseBytecode));
+            bytes redemptionContractBytecode = bytes(35) + inputLockScript +
+                bytes(33) + oraclePublicKey +
+                bytes(32) + redemptionTokenCategory +
+                bytes(32) + authKeyId +
+                redemptionContractBaseBytecode;
+
+            bytes32 redemptionContractScriptHash = hash256(redemptionContractBytecode);
+            recipientLockScript = new LockingBytecodeP2SH32(redemptionContractScriptHash);
+        }
+        require(tx.outputs[2].lockingBytecode == recipientLockScript);
+
         if (tx.outputs.length == 4) {
             totalOutputSats = totalOutputSats + tx.outputs[3].value;
-            require(tx.outputs[2].lockingBytecode == tx.outputs[3].lockingBytecode);
+            require(tx.outputs[3].lockingBytecode == inputLockScript);
         }
 
         // 13 => 10 base fee + 3 OP_DATA length prefix + 4 OP_DATA prefix of 0x00000000
@@ -102,7 +128,7 @@ contract TreasuryContractV2(
         bytes shortPubkeyBytecode,
         bytes argsSegment1, // enableMutualRedemption + longPubkey
         bytes longLockScriptBytecode, // type bytes
-        bytes argsSegment2, // nominalUnitsXSatsPerBchBytecode + oraclePubkey
+        bytes nominalUnitsXSatsPerBchBytecode, // int type
         bytes satsForNominalUnitsAtHighLiquidationBytecode,
         int shortInputSats,
         int longInputSats,
@@ -115,6 +141,7 @@ contract TreasuryContractV2(
     ) {
         require(anyhedgeContractFingerprint == hash256(anyhedgeBaseBytecode));
         bytes thisLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
+        bytes longLockScript = longLockScriptBytecode.split(1)[1];
 
         int payoutSats = shortInputSats + longInputSats;
         bytes payoutSatsBytes = bytes(payoutSats);
@@ -125,7 +152,8 @@ contract TreasuryContractV2(
             lowPriceBytecode +
             bytes(payoutSatsBytes.length) + payoutSatsBytes +
             satsForNominalUnitsAtHighLiquidationBytecode +
-            argsSegment2 +
+            nominalUnitsXSatsPerBchBytecode +
+            bytes(33) + oraclePublicKey +
             longLockScriptBytecode + 
             bytes(35) + thisLockScript +
             argsSegment1 +
@@ -133,8 +161,8 @@ contract TreasuryContractV2(
 
         bytes contractBytecode = contractParametersBytecode + anyhedgeBaseBytecode;
         bytes32 scriptHash = hash256(contractBytecode);
-        bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);
-        require(tx.outputs[0].lockingBytecode == lockingBytecode);
+        bytes35 anyhedgeLockingBytecode = new LockingBytecodeP2SH32(scriptHash);
+        require(tx.outputs[0].lockingBytecode == anyhedgeLockingBytecode);
 
         // Require that the contract is not a simple hedge
         int satsForNominalUnitsAtHighLiquidation = int(satsForNominalUnitsAtHighLiquidationBytecode.split(1)[1]);
@@ -162,38 +190,60 @@ contract TreasuryContractV2(
         int priceMult = highPrice / lowPrice;
         require(priceMult >= 2);
 
-        // 1332 is DUST_LIMIT, when settlement prices for AH is at min/max
-        // https://bitcoincashresearch.org/t/friday-night-challenge-worst-case-dust/1181/2
-        //
-        // 698 is for settlement tx fee, added ~15-20 sats for margin
-        // value is based on minerCostInSatoshis in AH contract data
-        int settlementFee = 2030; // 1332 + 698 = 2030
+
+        /**
+        inputScriptSizeData = 211B addtl input script fee
+            164B AH payout parameters size: 16B price message | 64B signature | 2B length prefixes. multiplied by 2 for settlement & previous price message
+            4B for selector; an integer which determines what function to run in the smart contract 
+            43B cashscript input base size(*): input for AH settlement tx
+         */
+        /**
+        anyhedgeSettlementData = 1571B
+           211B inputScriptSizeData;
+           1332B DUST_LIMIT, when settlement prices for AH is at min/max https://bitcoincashresearch.org/t/friday-night-challenge-worst-case-dust/1181/2 
+           10B base tx fee(*); for AH settlement tx
+           9B BCH output base size(*); for short payout in AH settlement tx
+           9B BCH output base size(*); for long payout in AH settlement tx
+         */
+
+        int settlementFee = 1571 + contractBytecode.length + longLockScript.length + thisLockScript.length;
         int totalFundingSats = payoutSats + settlementFee;
         int longFundingSats = longInputSats; // long just needs the input sats while short covers all fee
 
-        // based on this contract's input size + base tx fee of 10 sats
-        // added ~5-10 sats for margin
-        // might have to change if source code changes (e.g. increases in size)
-        // did not include long funding fee, it should be covered by long
-        int shortFundingInputFee = 1100;
-        int shortFundingSats = shortInputSats + settlementFee + shortFundingInputFee;
+        /**
+        thisFundingTxData = 210; (NOTE: the addtl size from fees like LP fee and settlement fee is not yet here)
+            9B BCH output base size(*); for this tx's AH funding utxo
+            10B base tx fee(*); this funding tx
+            43B cashscript input base size(*); for short's funding input
+            148B p2pkh input size(*); for long's funding input, assuming it's p2pkh
+         */
+        int fundingTxFee = 210 + tx.inputs[this.activeInputIndex].unlockingBytecode.length + anyhedgeLockingBytecode.length;
+        int shortFundingSats = shortInputSats + settlementFee + fundingTxFee;
+
+        // liquidity provider fee
+        bytes lpFeeRecipient = 0x;
         if (longLiquidityFee > 0) {
-            int maxLiquidityFee = shortInputSats / 20; // this is 5% of short input sats
-            require(within(longLiquidityFee, 546, maxLiquidityFee));
-            shortFundingSats = shortFundingSats + longLiquidityFee + 45; // 45 is output fee
-            bytes longLockScript = longLockScriptBytecode.split(1)[1];
-            require(tx.outputs[1].value == longLiquidityFee);
-            require(tx.outputs[1].lockingBytecode == longLockScript);
+            lpFeeRecipient = longLockScript;
         } else if (longLiquidityFee < 0) {
-            require(tx.outputs[1].lockingBytecode == thisLockScript);
-            require(tx.outputs[1].value == longLiquidityFee * -1);
+            lpFeeRecipient = thisLockScript;
+        }
+        if (lpFeeRecipient.length > 0) {
+            int maxLiquidityFee = shortInputSats / 20; // this is 5% of short input sats
+            require(within(abs(longLiquidityFee), 546, maxLiquidityFee));
+            shortFundingSats = shortFundingSats + abs(longLiquidityFee) + lpFeeRecipient.length + 9; // 9B BCH output base size(*)
+            require(tx.outputs[1].lockingBytecode == lpFeeRecipient);
+            require(tx.outputs[1].value == abs(longLiquidityFee));
         }
 
+
+        // settlement service fee
         if (settlementServiceFee > 0) {
             // this is 0.75% of total funding sats
             int maxSettlementServiceFee = (totalFundingSats * 75 + 9999) / 10000;
-            shortFundingSats = shortFundingSats + settlementServiceFee + 45; // 45 is output fee
             require(within(settlementServiceFee, 546, maxSettlementServiceFee));
+
+            bytes settlementServiceFeeRecipient = tx.outputs[2].lockingBytecode;
+            shortFundingSats = shortFundingSats + settlementServiceFee + settlementServiceFeeRecipient.length + 9; // 9B BCH output base size(*)
             require(tx.outputs[2].value == settlementServiceFee);
             // TODO: might need to check recipient as well
         }
@@ -203,7 +253,7 @@ contract TreasuryContractV2(
 
         // will ensure treasury contract only has input 0
         require(this.activeInputIndex == 0);
-        require(within(tx.inputs[0].value, shortInputSats, shortFundingSats+1));
+        require(within(tx.inputs[0].value, shortInputSats, shortFundingSats + 10)); // added + 10 for error margin
         require(tx.inputs[1].value >= longFundingSats);
     }
 }

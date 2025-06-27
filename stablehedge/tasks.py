@@ -91,7 +91,7 @@ def short_treasury_contract_funds(treasury_contract_address:str):
         .values_list("version", flat=True) \
         .first()
 
-    if version in [models.TreasuryContract.Version.V2, models.TreasuryContract.Version.V3]:
+    if version in [models.TreasuryContract.Version.V2]:
         return short_v2_treasury_contract_funds(treasury_contract_address)
     return short_v1_treasury_contract_funds(treasury_contract_address)
 
@@ -198,8 +198,8 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
     treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
     if not treasury_contract:
         return dict(success=False, error="Treasury contract not found")
-    elif treasury_contract.version not in [models.TreasuryContract.Version.V2, models.TreasuryContract.Version.V3]:
-        return dict(success=False, error="Treasury contract not v2 or v3")
+    elif treasury_contract.version != models.TreasuryContract.Version.V2:
+        return dict(success=False, error="Treasury contract not v2")
 
     LOGGER.info(f"SHORT TREAURY CONTRACT | {treasury_contract_address}")
 

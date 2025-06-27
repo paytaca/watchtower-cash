@@ -24,7 +24,7 @@ export class TreasuryContract {
    * @param {String} opts.params.oraclePublicKey
    * @param {String} opts.params.redemptionContractBaseBytecode
    * @param {Object} opts.options
-   * @param {'v1' | 'v2' | 'v3'} opts.options.version
+   * @param {'v1' | 'v2' } opts.options.version
    * @param {String} opts.options.redemptionContractBaseBytecodeVersion
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
@@ -73,14 +73,9 @@ export class TreasuryContract {
       hexToBin(this.params?.pubkeys?.[4]),
     ]
 
-    if (['v2', 'v3'].includes(version)) {
+    if (version === 'v2') {
       contractParams.push(
-        hash256(hexToBin(this.params?.anyhedgeBaseBytecode))
-      )
-    }
-
-    if (version === 'v3') {
-      contractParams.push(
+        hash256(hexToBin(this.params?.anyhedgeBaseBytecode)),
         hexToBin(this.params?.redemptionTokenCategory).reverse(),
         hexToBin(this.params?.oraclePublicKey),
         hash256(hexToBin(this.params?.redemptionContractBaseBytecode)),
@@ -105,7 +100,7 @@ export class TreasuryContract {
   }
 
   getRedemptionContract() {
-    if (this.options.version !== 'v3') return
+    if (this.options.version !== 'v2') return
 
     const contract = this.getContract()
 
@@ -568,8 +563,8 @@ export class TreasuryContract {
   async consolidate(opts) {
     const contract = this.getContract()
     if (!contract.functions.consolidate) return 'Contract function not supported'
-    if (opts?.sendToRedemptionContract && this.options.version !== 'v3') {
-      return 'Consolidation to redemption contract is only supported in v3'
+    if (opts?.sendToRedemptionContract && this.options.version !== 'v2') {
+      return 'Consolidation to redemption contract is only supported in v2'
     }
 
     const feeFunderUtxo = opts?.feeFunderUtxo
@@ -579,7 +574,7 @@ export class TreasuryContract {
     const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
 
     let consolidateParam = undefined
-    if (this.options.version === 'v3') {
+    if (this.options.version === 'v2') {
       consolidateParam = opts?.sendToRedemptionContract
         ? hexToBin(this.params.redemptionContractBaseBytecode)
         : new Uint8Array(0)
@@ -600,7 +595,7 @@ export class TreasuryContract {
     builder.addOutput({ to: opDataBytecode, amount: 0n })
 
     let recipient = contract.address
-    if (this.options.version === 'v3' && opts?.sendToRedemptionContract) {
+    if (this.options.version === 'v2' && opts?.sendToRedemptionContract) {
       recipient = this.getRedemptionContract()?.getContract()?.address
     }
 

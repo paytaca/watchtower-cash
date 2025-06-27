@@ -17,7 +17,7 @@ const SETTLEMENT_SERVICE_FEE_NAME = 'Settlement Service Fee'
  * @param {String} opts.anyhedgeVersion
  */
 export function getTreasuryContractInputSize(opts) {
-  const treasuryContract = opts?.treasuryContract || createTreasuryContract({...opts, version: 'v3' })?.manager
+  const treasuryContract = opts?.treasuryContract || createTreasuryContract({...opts, version: 'v2' })?.manager
   const contract = treasuryContract.getContract();
   const contractData = opts?.contractData
   const params = prepareParamForTreasuryContract(
@@ -185,15 +185,12 @@ export function prepareParamForTreasuryContract(contractData, opts) {
       contractBaseBytecode = bytecode;
     }
 
-    const param5 = opts?.treasuryContractVersion === 'v3'
-      ? hexToBin(nominalUnitsXSatsPerBch)
-      : hexToBin(bytecodesHex.slice(5, 7).reverse().join(''))
     return [
       isHex(contractBaseBytecode) ? hexToBin(contractBaseBytecode) : contractBaseBytecode,
       hexToBin(shortMutualRedeemPublicKey),
       hexToBin(bytecodesHex.slice(1, 3).reverse().join('')),
       hexToBin(longLockScript),
-      param5,
+      hexToBin(nominalUnitsXSatsPerBch),
       hexToBin(satsForNominalUnitsAtHighLiquidation),
       contractData.metadata.shortInputInSatoshis,
       contractData.metadata.longInputInSatoshis,

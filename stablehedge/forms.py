@@ -48,7 +48,7 @@ class TreasuryContractForm(forms.ModelForm):
     )
     version = forms.ChoiceField(
         choices=models.TreasuryContract.Version.choices,
-        help_text="V3 will automatically create a RedemptionContract.V2",
+        help_text="V2 will automatically create a RedemptionContract.V2",
     )
     anyhedge_base_bytecode = forms.CharField(
         required=False, widget=forms.Textarea(attrs={'readonly': 'readonly'}),
@@ -87,15 +87,15 @@ class TreasuryContractForm(forms.ModelForm):
     def clean_fiat_token(self):
         version = self.cleaned_data.get("version")
         fiat_token = self.cleaned_data.get("fiat_token")
-        if version == "v3" and not fiat_token:
-            raise ValidationError("Required for V3")
+        if version == "v2" and not fiat_token:
+            raise ValidationError("Required for v2")
         return fiat_token
 
     def clean_price_oracle_pubkey(self):
         version = self.cleaned_data.get("version")
         price_oracle_pubkey = self.cleaned_data.get("price_oracle_pubkey")
-        if version == "v3" and not price_oracle_pubkey:
-            raise ValidationError("Required for V3")
+        if version == "v2" and not price_oracle_pubkey:
+            raise ValidationError("Required for v2")
         return price_oracle_pubkey
 
     def compile_contract_from_data(self, data):
@@ -114,12 +114,11 @@ class TreasuryContractForm(forms.ModelForm):
             data["pubkey1"], data["pubkey2"], data["pubkey3"], data["pubkey4"], data["pubkey5"]
         ]
 
-        if version in [TreasuryContract.Version.V2, TreasuryContract.Version.V3]:
+        if version in [TreasuryContract.Version.V2]:
             result = ScriptFunctions.getAnyhedgeBaseBytecode()
             anyhedge_base_bytecode = result["bytecode"]
             anyhedge_contract_version = result["version"]
 
-        if version == TreasuryContract.Version.V3:
             result = ScriptFunctions.getRedemptionContractBaseBytecode(RedemptionContract.Version.V2)
             redemption_contract_base_bytecode = result["bytecode"]
             redemption_contract_version = result["version"]
@@ -166,7 +165,7 @@ class TreasuryContractForm(forms.ModelForm):
     def save(self, *args, **kwargs):
         treasury_contract = super().save(*args, **kwargs)
 
-        if treasury_contract.version == models.TreasuryContract.Version.V3:
+        if treasury_contract.version == models.TreasuryContract.Version.V2:
             self.create_redemption_contract_from_treasury_contract(treasury_contract)
 
         return treasury_contract
