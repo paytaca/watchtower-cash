@@ -17,12 +17,15 @@ const SETTLEMENT_SERVICE_FEE_NAME = 'Settlement Service Fee'
  * @param {String} opts.anyhedgeVersion
  */
 export function getTreasuryContractInputSize(opts) {
-  const treasuryContract = opts?.treasuryContract || createTreasuryContract(opts)?.manager
+  const treasuryContract = opts?.treasuryContract || createTreasuryContract({...opts, version: 'v3' })?.manager
   const contract = treasuryContract.getContract();
   const contractData = opts?.contractData
+  const params = prepareParamForTreasuryContract(
+    contractData, { treasuryContractVersion: treasuryContract.options.version },
+  )
   const treasuryContractInputSize = calculateInputSize(contract.functions.spendToAnyhedge(
-    ...prepareParamForTreasuryContract(contractData),
-  ))
+    ...params,
+  )) - 1; // there is a +1n in the script for margin but we dont want this for this case
   return treasuryContractInputSize
 }
 
@@ -187,11 +190,11 @@ export function prepareParamForTreasuryContract(contractData, opts) {
       : hexToBin(bytecodesHex.slice(5, 7).reverse().join(''))
     return [
       isHex(contractBaseBytecode) ? hexToBin(contractBaseBytecode) : contractBaseBytecode,
-      shortMutualRedeemPublicKey,
+      hexToBin(shortMutualRedeemPublicKey),
       hexToBin(bytecodesHex.slice(1, 3).reverse().join('')),
       hexToBin(longLockScript),
       param5,
-      satsForNominalUnitsAtHighLiquidation,
+      hexToBin(satsForNominalUnitsAtHighLiquidation),
       contractData.metadata.shortInputInSatoshis,
       contractData.metadata.longInputInSatoshis,
       hexToBin(lowPrice),
