@@ -88,7 +88,3 @@ class RenameMultisigWalletView(APIView):
         wallet.save()
 
         return Response({"id": wallet.id, "name": new_name}, status=status.HTTP_200_OK)
-
-class MultisigWalletDeleteAPIView(APIView):
-     
-   pass
