@@ -11,8 +11,7 @@ from .transaction_proposal import (
 from .wallet import (
     MultisigWalletListCreateView,
     MultisigWalletDetailView,
-    RenameMultisigWalletView,
-    MultisigWalletDeleteAPIView,
+    RenameMultisigWalletView
 )
 
 __all__ = [
@@ -25,6 +24,5 @@ __all__ = [
     "TransactionProposalStatusView",
     "MultisigWalletListCreateView",
     "MultisigWalletDetailView",
-    "RenameMultisigWalletView",
-    "MultisigWalletDeleteAPIView",
+    "RenameMultisigWalletView"
 ]

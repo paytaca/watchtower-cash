@@ -2,6 +2,8 @@ import logging
 from bip_utils import Bip32Secp256k1
 from coincurve import PublicKey
 from bip_utils import Bip32Secp256k1, Hash160
+from collections import defaultdict
+
 LOGGER = logging.getLogger(__name__)
 def get_address_index(path: str) -> int:
     parts = path.strip().split("/")
@@ -80,3 +82,34 @@ def get_multisig_wallet_locking_script(template: dict, locking_data: dict):
     locking_script = get_locking_script(locking_bytecode)
 
     return locking_script
+
+# Signatures check utils
+
+def group_signatures_by_input(signatures):
+    """
+    Organize signatures by input index.
+    Returns: {input_index: set of signer IDs}
+    """
+    grouped = defaultdict(set)
+    for sig in signatures:
+        input_index = sig["inputIndex"]
+        signer = sig["signer"]
+        grouped[input_index].add(signer)
+    return grouped
+
+def is_input_fully_signed(input_index, grouped_signatures, required_m):
+    """
+    Check if a specific input has enough unique signatures.
+    """
+    signers = grouped_signatures.get(input_index, set())
+    return len(signers) >= required_m
+
+def is_transaction_fully_signed(signatures, required_signatures):
+    """
+    Check if all inputs in the transaction are fully signed.
+    """
+    grouped_signatures = group_signatures_by_input(signatures)
+    for input_index, required_m in required_signatures.items():
+        if not is_input_fully_signed(input_index, grouped_signatures, required_m):
+            return False
+    return True
