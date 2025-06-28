@@ -357,7 +357,8 @@ class BroadcastTransactionProposalView(APIView):
         return Response({
             **broadcast_resp,
             'transactionProposal': proposal.id,
-            'unsignedTransactionHash': proposal.transaction_hash
+            'unsignedTransactionHash': proposal.transaction_hash,
+            'txid': broadcast_resp.get('txid') or proposal.txid
         })
    
 class TransactionProposalStatusView(APIView):
@@ -377,6 +378,7 @@ class TransactionProposalStatusView(APIView):
             'signingProgress': signing_progress_resp.get('signingProgress'),
             'broadcastStatus': proposal.broadcast_status,
             'transactionProposal': proposal.id,
+            'txid': proposal.txid,
             'wallet': proposal.wallet.id
         }
         return Response(response_data)
