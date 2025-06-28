@@ -2,8 +2,8 @@ import logging
 from django.http import JsonResponse
 from django.conf import settings
 from redis import Redis
-from .crypto_utils import verify_signature, get_address_index
-from .models import Signer
+from .utils import verify_signature, get_address_index
+from .models.wallet import SignerHdPublicKey
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,37 +25,36 @@ class SignerVerificationMiddleware:
         if '/api/multisig/wallets' in request.path and request.method == 'POST':
             return self.get_response(request)
 
-        xpub = request.headers.get("X-Xpub")
-        derivation_path = request.headers.get("X-Derivation-Path")
-        signature = request.headers.get("X-Signature")
-        message = request.headers.get("X-Message")
-        algo = request.headers.get("X-Signature-Algo", "ecdsa")
+        auth = request.data.get('auth')
 
-        if not xpub or not signature or not message:
-            return JsonResponse({"detail": "Missing auth headers"}, status=400)
+        if not auth:
+            return JsonResponse({"detail": "Unauthorized"}, status=403)
         
-        signer_id = request.GET.get("signer_id")
+        message = auth.get("message")
+        signature = auth.get("signature")
+        signed_by = auth.get("signedBy")
+        algo = auth.get("algo")
 
-        if not signer_id:
-            return JsonResponse({"detail": "Missing signer record id"}, status=403)
+        # if not all([message, signature, signed_by]):
+        #     return JsonResponse({ "detail": "Unauthorized: message, signature, signer_entity_key required." }, status=403)
         
-        try:
-            signer = Signer.objects.get(id=signer_id)
-        except Signer.DoesNotExist:
-            return JsonResponse({"detail": "Signer not found in this wallet"}, status=403)
+        # try:
+        #     signer = SignerHdPublicKey.objects.get(wallet=, xpub=signer_entity_key)
+        # except Signer.DoesNotExist:
+        #     return JsonResponse({"detail": "Signer not found in this wallet"}, status=403)
 
-        # Extract nonce from the message (nonce:<nonce_value>`)
-        nonce = message.split("nonce:")[-1]
+        # # Extract nonce from the message (nonce:<nonce_value>`)
+        # nonce = message.split("nonce:")[-1]
         
-        nonce_valid = nonce_cache.get(nonce) is not None
-        if not nonce_valid:
-            return JsonResponse({"detail": "Invalid message"}, status=403)
+        # nonce_valid = nonce_cache.get(nonce) is not None
+        # if not nonce_valid:
+        #     return JsonResponse({"detail": "Invalid message"}, status=403)
 
-        address_index = get_address_index(signer.derivation_path)
+        # address_index = get_address_index(signer.derivation_path)
         
-        valid = verify_signature(message, signature, signer.xpub, address_index, algo)
-        if not valid:
-            return JsonResponse({"detail": "Signature verification failed"}, status=403)
-        request.signer = signer  
+        # valid = verify_signature(message, signature, signer.xpub, address_index, algo)
+        # if not valid:
+        #     return JsonResponse({"detail": "Signature verification failed"}, status=403)
+        # request.signer = signer  
         response = self.get_response(request)
         return response
