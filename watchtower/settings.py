@@ -91,6 +91,7 @@ INSTALLED_APPS=[
     'cts',
     'authentication',
     'stablehedge',
+    'multisig'
 ]
 
 MIDDLEWARE=[
