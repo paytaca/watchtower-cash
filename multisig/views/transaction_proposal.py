@@ -68,17 +68,25 @@ class MultisigTransactionProposalListCreateView(APIView):
             return Response(
                 {
                     "error": "Service unavailable",
-                    "details": "An internal dependency is currently down. Please try again later."
+                    "detail": "An internal dependency is currently down. Please try again later."
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
-        
-
         
         proposal = MultisigTransactionProposal.objects.prefetch_related('signatures').filter(transaction_hash=transaction_hash)
         if proposal.exists():
             serializer = MultisigTransactionProposalSerializer(proposal.first())
             return Response(serializer.data, status=status.HTTP_200_OK)
+
+        proposal = MultisigTransactionProposal.objects.prefetch_related('signatures').filter(
+            wallet=wallet,
+            broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING
+        )
+        if proposal.exists():
+            return Response(
+                { "detail": "A pending proposal already exists. Please broadcast or cancel it before creating a new one."},
+                status=status.HTTP_409_CONFLICT
+            )    
 
         serializer = MultisigTransactionProposalSerializer(data={ **request.data, 'transactionHash': transaction_hash }, many=False)
         if serializer.is_valid():
@@ -210,7 +218,6 @@ class FinalizeTransactionProposalView(APIView):
     def post(self, request, proposal_identifier):
 
         proposal = self.get_transaction_proposal(proposal_identifier)
-        
         
         if proposal.signed_transaction:
             return Response({
