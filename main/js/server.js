@@ -3,15 +3,7 @@ import {
     decodeCashAddress,
     encodeCashAddress,
     CashAddressType,
-    CashAddressNetworkPrefix,
-    importWalletTemplate,
-    walletTemplateToCompilerBCH,
-    lockingBytecodeToCashAddress,
-    binToHex,
-    hexToBin,
-    cashAddressToLockingBytecode,
-    hashTransaction,
-    decodeTransactionCommon
+    CashAddressNetworkPrefix
 } from '@bitauth/libauth'
 import ElectrumCashProvider from './utils/electrum-cash-provider.js'
 
@@ -112,40 +104,6 @@ app.get('/get-transactions/:address', async (req, res) => {
     res.send(response)
 })
 
-app.post('/multisig/utils/derive-wallet-address', async (req, res) => {
-    const { template, lockingData } = req.body
-    const { cashAddressNetworkPrefix } = req.query
-    const validTemplate = importWalletTemplate(template);
-    const compiler = walletTemplateToCompilerBCH(validTemplate);
-    const lockingBytecode = compiler.generateBytecode({
-        data: lockingData,
-        scriptId: lockingScript,
-        debug: true
-      })
-
-    const cashAddress = lockingBytecodeToCashAddress({
-        bytecode: lockingBytecode.bytecode,
-        prefix: cashAddressNetworkPrefix || CashAddressNetworkPrefix.mainnet
-    })
-    const tokenAddress = lockingBytecodeToCashAddress({
-        bytecode: lockingBytecode.bytecode,
-        prefix: cashAddressNetworkPrefix || CashAddressNetworkPrefix.mainnet,
-        tokenSupport: true
-    })
-
-    res.send({
-        cashAddress: cashAddress.address,
-        tokenAddress: tokenAddress.address,
-        payload: binToHex(cashAddress.payload)
-    })
-})
-
-app.post('/multisig/utils/get-transaction-hash', async (req, res) => {
-  // transaction hex
-  const { transaction } = req.body
-  const decoded = decodeTransactionCommon(hexToBin(transaction))
-  res.send({ transaction_hash: hashTransaction(decoded) })
-})
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
