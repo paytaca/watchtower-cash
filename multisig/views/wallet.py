@@ -1,13 +1,15 @@
 import logging
-
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
+from main.models import Transaction
+from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
 from ..models.wallet import MultisigWallet
-from ..serializers.wallet import MultisigWalletSerializer
+from ..serializers.wallet import MultisigWalletSerializer, MultisigWalletUtxoSerializer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -91,8 +93,52 @@ class RenameMultisigWalletView(APIView):
 
         return Response({"id": wallet.id, "name": new_name}, status=status.HTTP_200_OK)
 
-class MultisigWalletUtxosView(APIView):
+# class MultisigWalletUtxosView(APIView):
 
+#     def get(self, request, address):
+#         resp = js_client.get_wallet_utxos(address)
+#         return Response(resp.json())
+
+class MultisigWalletUtxosView(APIView):
+    serializer_class = MultisigWalletUtxoSerializer
+    pagination_class = CustomLimitOffsetPagination
     def get(self, request, address):
-        resp = js_client.get_wallet_utxos(address)
-        return Response(resp.json())
+        queryset = Transaction.objects.filter(spent=False, address__address=address)
+        
+        only_tokens = request.query_params.get('only_tokens')
+        if only_tokens == 'true':     # return only token utxos
+            queryset = queryset.filter(Q(amount__gt=0) | Q(cashtoken_ft__category__isnull=False) | Q(cashtoken_nft__category__isnull=False))
+        
+        token_type = request.query_params.get('token_type')
+        if token_type == 'ft':     # ft (may have capability also)
+            queryset = queryset.filter(Q(amount__gt=0) & Q(cashtoken_ft__category__isnull=False))
+
+        if token_type == 'nft':    # nft (may have ft also)
+            queryset = queryset.filter(Q(cashtoken_nft__category__isnull=False) & Q(cashtoken_nft__capability__isnull=False))
+
+        if token_type == 'hybrid': # strictly hybrid
+            queryset = queryset.filter(Q(amount__gt=0) & Q(cashtoken_ft__category__isnull=False) & Q(cashtoken_nft__category__isnull=False) & Q(cashtoken_nft__capability__isnull=False))
+
+        if token_type == 'nft' or token_type == 'hybrid':
+            capability = self.request.query_params.get('capability')
+            commitment = self.request.query_params.get('commitment')
+            commitment_ne = self.request.query_params.get('commitment_ne')
+            if capability:
+                queryset = queryset.filter(cashtoken_nft__capability=capability)
+            if commitment:
+                queryset = queryset.filter(cashtoken_nft__commitment=commitment)
+            if commitment_ne:
+                queryset = queryset.filter(~Q(cashtoken_nft__commitment=commitment_ne))
+        category = request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(~Q(cashtoken_nft__category=category))
+        
+        paginate = request.query_params.get('paginate', False)
+        if paginate:
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(queryset, request)
+            if page is not None:
+                serializer = self.serializer_class(page, many=True)
+                return paginator.get_paginated_response(serializer.data)
+        serializer = self.serializer_class(queryset, many=True)
+        return Response(serializer.data)
