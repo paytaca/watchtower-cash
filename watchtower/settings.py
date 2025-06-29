@@ -91,6 +91,7 @@ INSTALLED_APPS=[
     'cts',
     'authentication',
     'stablehedge',
+    'multisig'
 ]
 
 MIDDLEWARE=[
@@ -551,6 +552,11 @@ LOGGING = {
             'propagate': False    
         },
         'stablehedge': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'multisig': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
