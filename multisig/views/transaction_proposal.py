@@ -80,7 +80,8 @@ class MultisigTransactionProposalListCreateView(APIView):
 
         proposal = MultisigTransactionProposal.objects.prefetch_related('signatures').filter(
             wallet=wallet,
-            broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING
+            broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING,
+            deleted_at__isnull=True
         )
         if proposal.exists():
             return Response(
