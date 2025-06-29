@@ -9,10 +9,12 @@ from .views import (
   SignaturesAddView,
   BroadcastTransactionProposalView,
   FinalizeTransactionProposalView,
-  TransactionProposalStatusView
+  TransactionProposalStatusView,
+  MultisigWalletUtxosView
 )
 
 urlpatterns = [
+    path('wallets/utxos/<str:address>/', MultisigWalletUtxosView.as_view(), name='wallet-utxos'),
     path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
     path('wallets/<str:identifier>/', MultisigWalletDetailView.as_view(), name='wallet_detail') ,
     path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),

@@ -17,16 +17,68 @@ import {
     stringify,
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
+import { ElectrumClient } from '@electrum-cash/network'
 
 if (typeof global.structuredClone === 'undefined') {
   global.structuredClone = structuredClone;
 }
 const app = express()
 const port = 3004
-
 app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
+
+app.get('/multisig/wallet/utxos', async (req, res) => {
+
+   const util = await import('util')
+   const address = req.query.address
+   const filter  = 'include_tokens' 
+
+
+   let network = 'mainnet'
+   let hostname = 'electrum.imaginary.cash'
+   let utxos = []
+ 
+   if (address) {
+
+     if (address.startsWith('bchtest')) {
+        network = 'chipnet'
+        hostname = 'chipnet.bch.ninja'
+     }
+     const client = new ElectrumClient('Watchtower', '1.4.1', hostname)
+     try {
+      await client.connect()
+      utxos = await client.request('blockchain.address.listunspent', address, filter) 
+     } catch(e) {
+       console.log(e)
+     } finally {
+       client.disconnect()
+     }
+   }
+
+   utxos = utxos.map((utxo) => {
+     const watchtowerUtxo = {
+        txid: utxo.tx_hash,
+	vout: utxo.tx_pos,
+	value: utxo.value,
+	height: utxo.height
+     }
+     if (utxo.token_data) {
+       watchtowerUtxo.token = {
+          amount: utxo.token_data.amount,
+	  category: utxo.token_data.category
+       }
+       if (utxo.token_data.nft) {
+         watchtowerUtxo.token.nft = {
+           capability: utxo.token_data.nft.capability,
+	   commitment: utxo.token_data.nft.commitment
+	 }
+       }
+     }
+     return watchtowerUtxo
+   })
+   res.send(utxos)
+})
 
 app.post('/multisig/utils/derive-wallet-address', async (req, res) => {
     const { template, lockingData } = req.body

@@ -5,8 +5,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
+import multisig.js_client as js_client
 from ..models.wallet import MultisigWallet
 from ..serializers.wallet import MultisigWalletSerializer
+
 LOGGER = logging.getLogger(__name__)
 
 class MultisigWalletListCreateView(APIView):
@@ -88,3 +90,9 @@ class RenameMultisigWalletView(APIView):
         wallet.save()
 
         return Response({"id": wallet.id, "name": new_name}, status=status.HTTP_200_OK)
+
+class MultisigWalletUtxosView(APIView):
+
+    def get(self, request, address):
+        resp = js_client.get_wallet_utxos(address)
+        return Response(resp.json())

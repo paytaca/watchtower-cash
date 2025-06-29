@@ -25,3 +25,8 @@ def get_signing_progress(multisig_transaction, multisig_wallet):
         timeout=5
     )
 
+def get_wallet_utxos(address):
+    return requests.get(
+        f'{MULTISIG_JS_SERVER}/multisig/wallet/utxos?address={address}',
+        timeout=5
+    )
