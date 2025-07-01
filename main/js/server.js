@@ -3,7 +3,7 @@ import {
     decodeCashAddress,
     encodeCashAddress,
     CashAddressType,
-    CashAddressNetworkPrefix,
+    CashAddressNetworkPrefix
 } from '@bitauth/libauth'
 import ElectrumCashProvider from './utils/electrum-cash-provider.js'
 
@@ -82,6 +82,10 @@ function getTransactions(address, network=''){
 const app = express()
 const port = 3000
 
+app.use(express.json());
+
+app.use(express.urlencoded({ extended: true }));
+
 app.get('/validate-address/:address', (req, res) => {
     const isTokenAddress = req.query.token === 'True'
     const result = validateAddress(req.params.address, isTokenAddress)
@@ -99,6 +103,7 @@ app.get('/get-transactions/:address', async (req, res) => {
     const response = await getTransactions(req.params.address, network)
     res.send(response)
 })
+
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
