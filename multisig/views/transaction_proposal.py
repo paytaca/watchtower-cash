@@ -14,6 +14,7 @@ from multisig.serializers import (
     SignatureSerializer
 )
 from multisig.models.wallet import MultisigWallet
+from stablehedge.utils.blockchain import broadcast_transaction
 import multisig.js_client as js_client
 
 LOGGER = logging.getLogger(__name__)
@@ -340,12 +341,20 @@ class BroadcastTransactionProposalView(APIView):
         #)
         signing_progress_resp = js_client.get_signing_progress(proposal_serializer.data, wallet_serializer.data)
         # TODO: for local test only, replace with existing tx broadcast logic
-        broadcast_resp = requests.post(
-            f'https://chipnet.watchtower.cash/api/broadcast/',
-            json={ 'transaction': proposal.signed_transaction},
-            timeout=5
-        )
-        broadcast_resp = broadcast_resp.json()
+        #broadcast_resp = requests.post(
+        #    f'https://chipnet.watchtower.cash/api/broadcast/',
+        #    json={ 'transaction': proposal.signed_transaction},
+        #    timeout=5
+        #)
+
+        success, txid_or_error = broadcast_transaction(proposal.signed_transaction_hash)
+        broadcast_resp = {}
+        if not success:
+            broadcast_resp = dict(success=False, error=txid_or_error, tx_hex=proposal.signed_transaction_hash)
+        else:
+            broadcast_resp = dict(success=True, txid=txid_or_error)
+        
+        #broadcast_resp = broadcast_resp.json()
         if broadcast_resp['success']:
             proposal.txid = broadcast_resp['txid']
             proposal.broadcast_status = MultisigTransactionProposal.BroadcastStatus.DONE
