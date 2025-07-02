@@ -1,4 +1,4 @@
-import { getAnyhedgeBaseBytecode, calculateTotalFundingSatoshis } from './anyhedge.js'
+import { getAnyhedgeBaseBytecode, calculateTotalFundingSatoshis, getContractDataOutputs } from './anyhedge.js'
 import {
   compileTreasuryContract,
   getTreasuryContractArtifact,
@@ -30,6 +30,7 @@ import { transferTreasuryFundsToRedemptionContract } from './rebalancing.js'
 export default {
   getAnyhedgeBaseBytecode,
   calculateTotalFundingSatoshis,
+  getContractDataOutputs,
 
   getTreasuryContractArtifact,
   compileTreasuryContract,

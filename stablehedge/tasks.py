@@ -304,9 +304,7 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
                     unlockingBytecode="0" * (98 * 2), # 65 byte schnorr signature + 33 byte pubkey
                 ),
             ],
-            outputs=[
-                dict(to=contract_data["address"], amount=funding_amounts["totalFundingSats"]),
-            ]
+            outputs=ScriptFunctions.getContractDataOutputs(dict(contractData=contract_data))["outputs"],
         ))
 
         data_str = GP_LP.json_parser.dumps(result, indent=2)

@@ -3,6 +3,9 @@ import { getLiquidityFee, getSettlementServiceFee, getAnyhedgeSettlementTxFeeSiz
 import { cashAddressToLockingBytecode } from "@bitauth/libauth";
 import { TreasuryContract } from "../contracts/treasury-contract/index.js";
 import { AnyHedgeManager } from "@generalprotocols/anyhedge";
+import { constructFundingOutputs } from "@generalprotocols/anyhedge/build/lib/util/funding-util.js";
+import { libauthOutputToCashScriptOutput } from "cashscript/dist/utils.js";
+import { serializeOutput } from "../utils/crypto.js";
 
 
 /**
@@ -95,4 +98,17 @@ export function calculateTotalFundingSatoshis(opts) {
       p2pkhTotalFundingSats: Number(p2pkhTotalFundingSats),
     },
   }
+}
+
+/**
+ * @param {Object} opts
+ * @param {import("@generalprotocols/anyhedge").ContractData} opts.contractData
+ */
+export function getContractDataOutputs(opts) {
+  const contractData = parseContractData(opts?.contractData)
+  const outputs = constructFundingOutputs(contractData)
+    .map(libauthOutputToCashScriptOutput)
+    .map(serializeOutput)
+
+  return { success: true, outputs }
 }
