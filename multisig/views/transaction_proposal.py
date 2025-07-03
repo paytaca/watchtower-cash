@@ -333,24 +333,12 @@ class BroadcastTransactionProposalView(APIView):
                         status=status.HTTP_503_SERVICE_UNAVAILABLE
                     )
         
-        url = request.build_absolute_uri(reverse('broadcast-transaction'))
-        #signing_progress_resp = requests.post(
-        #    f'{MULTISIG_JS_SERVER}/multisig/transaction/get-signing-progress',
-        #    json=data,
-        #    timeout=5
-        #)
         signing_progress_resp = js_client.get_signing_progress(proposal_serializer.data, wallet_serializer.data)
-        # TODO: for local test only, replace with existing tx broadcast logic
-        #broadcast_resp = requests.post(
-        #    f'https://chipnet.watchtower.cash/api/broadcast/',
-        #    json={ 'transaction': proposal.signed_transaction},
-        #    timeout=5
-        #)
 
-        success, txid_or_error = broadcast_transaction(proposal.signed_transaction_hash)
+        success, txid_or_error = broadcast_transaction(proposal.signed_transaction)
         broadcast_resp = {}
         if not success:
-            broadcast_resp = dict(success=False, error=txid_or_error, tx_hex=proposal.signed_transaction_hash)
+            broadcast_resp = dict(success=False, error=txid_or_error, tx_hex=proposal.signed_transaction)
         else:
             broadcast_resp = dict(success=True, txid=txid_or_error)
         
