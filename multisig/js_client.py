@@ -31,9 +31,9 @@ def get_wallet_utxos(address):
         timeout=5
     )
 
-def verify_signature(message, xpub, signature):
+def verify_signature(message: str, public_key: str, signature: dict):
     return requests.post(
         f'{MULTISIG_JS_SERVER}/multisig/message/verify-signature',
-        json={ 'message': message, 'xpub': xpub, 'signature': signature},
+        json={ 'message': message, 'publicKey': public_key, 'signature': signature},
         timeout=5
     )

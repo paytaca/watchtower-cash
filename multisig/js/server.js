@@ -128,10 +128,10 @@ app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
 })
 
 app.post('/multisig/message/verify-signature', async (req, res) => {
-  const { message, xpub, signature } = req.body
+  const { message, publicKey, signature } = req.body
   const messageHash = sha256.hash(utf8ToBin(message))
-  const decodedPublicKey = decodeHdPublicKey(xpub)
-  const publicKey = deriveHdPathRelative(decodedPublicKey.node, '0')
+  // const decodedPublicKey = decodeHdPublicKey(xpub)
+  // const publicKey = deriveHdPathRelative(decodedPublicKey.node, '0')
   let result = {}
   if (signature.schnorr) {
     result = secp256k1.verifySignatureSchnorr(signature.schnorr, publicKey.publicKey, messageHash)
