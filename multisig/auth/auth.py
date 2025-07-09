@@ -140,11 +140,15 @@ class MultisigStatelessUser:
 class MultisigAuthentication(BaseAuthentication):
     def authenticate(self, request):
         public_key = request.headers.get('X-Auth-PubKey', '')
+        LOGGER.info(public_key)
         message = request.headers.get('X-Auth-Message', '')
         signature = request.headers.get('X-Auth-Signature', '')
         LOGGER.info(request.headers.__dict__)
-        if signature:
-            signature = parse_x_signature_header(signature)
+        
+        if not signature or not message or not public_key:
+            return None
+        
+        signature = parse_x_signature_header(signature)
         
         if not hasattr(request, 'resolver_match') or request.resolver_match == None:
             request.resolver_match = resolve(request.path_info)
@@ -181,4 +185,8 @@ class MultisigAuthentication(BaseAuthentication):
             'signature': signature,
             'message': message
         }
-        return (user, None)
+        user.verify_signature()
+        if not user.signature_verified:
+            raise AuthenticationFailed('Invalid signature')
+        return (user, user.auth_data)
+        
