@@ -14,6 +14,7 @@ import {
     stringify,
     secp256k1,
     sha256,
+    utf8ToBin
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
 import { ElectrumClient } from '@electrum-cash/network'
@@ -130,16 +131,18 @@ app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
 app.post('/multisig/message/verify-signature', async (req, res) => {
   const { message, publicKey, signature } = req.body
   const messageHash = sha256.hash(utf8ToBin(message))
-  // const decodedPublicKey = decodeHdPublicKey(xpub)
-  // const publicKey = deriveHdPathRelative(decodedPublicKey.node, '0')
-  let result = {}
+  let success = false
   if (signature.schnorr) {
-    result = secp256k1.verifySignatureSchnorr(signature.schnorr, publicKey.publicKey, messageHash)
+    success = secp256k1.verifySignatureSchnorr(
+      hexToBin(signature.schnorr), hexToBin(publicKey), messageHash
+    )
   }
   if (signature.der) {
-    result = secp256k1.verifySignatureDer(signature.schnorr, publicKey.publicKey, messageHash)
+    success = secp256k1.verifySignatureDER(
+      hexToBin(signature.der), hexToBin(publicKey), messageHash
+    )
   }
-  return res.send(result)
+  return res.send({ success })
 })
 
 app.get('/test', async (req, res) => {
