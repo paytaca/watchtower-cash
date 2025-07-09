@@ -1,6 +1,8 @@
 import logging
+from functools import wraps
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from multisig.auth.auth import MultisigAuthentication
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +12,7 @@ from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
 from ..models.wallet import MultisigWallet
 from ..serializers.wallet import MultisigWalletSerializer, MultisigWalletUtxoSerializer
+from ..auth.permission import IsCosigner
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,33 +45,33 @@ class MultisigWalletListCreateView(APIView):
     
 class MultisigWalletDetailView(APIView):
    
-    def get(self, request, identifier):
+    def get(self, request, wallet_identifier):
         try:
-            if identifier.isdigit():
-                wallet = MultisigWallet.objects.get(id=identifier)
+            if wallet_identifier.isdigit():
+                wallet = MultisigWallet.objects.get(id=wallet_identifier)
             else:
-                wallet = MultisigWallet.objects.get(locking_bytecode=identifier)
+                wallet = MultisigWallet.objects.get(locking_bytecode=wallet_identifier)
         except MultisigWallet.DoesNotExist:
             raise NotFound(detail="Wallet not found.")
         serializer = MultisigWalletSerializer(wallet)
         return Response(serializer.data)
     
-    def delete(self, request, identifier):
+    def delete(self, request, wallet_identifier):
         
         try:
-            if identifier.isdigit():
+            if wallet_identifier.isdigit():
                 identifier_name = 'id'
-                wallet = MultisigWallet.objects.get(id=identifier)
+                wallet = MultisigWallet.objects.get(id=wallet_identifier)
             else:
                 identifier_name = 'locking_bytecode'
-                wallet = MultisigWallet.objects.get(locking_bytecode=identifier)
+                wallet = MultisigWallet.objects.get(locking_bytecode=wallet_identifier)
 
             if not wallet.deleted_at:
                 wallet.soft_delete()
             else:
                 wallet.delete()
 
-            return Response({"message": f"Wallet with {identifier_name}={identifier} deleted."}, status=status.HTTP_200_OK)
+            return Response({"message": f"Wallet with {identifier_name}={wallet_identifier} deleted."}, status=status.HTTP_200_OK)
 
         except MultisigWallet.DoesNotExist:
             raise NotFound(detail="Wallet with {identifier_name}={identifier} Not Found.")
