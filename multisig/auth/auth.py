@@ -3,6 +3,11 @@ import logging
 from django.conf import settings
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.authentication import BaseAuthentication
+from django.conf import settings
+from django.urls import resolve
+from ..utils import derive_pubkey_from_xpub
+from ..models import MultisigWallet
+
 LOGGER = logging.getLogger(__name__)
 
 from ..js_client import verify_signature
@@ -134,12 +139,46 @@ class MultisigStatelessUser:
 
 class MultisigAuthentication(BaseAuthentication):
     def authenticate(self, request):
-        LOGGER.info(request.user)
-        # if not request.user:
-        #     raise AuthenticationFailed("Unauthorized, user must be cosigner")
-        # # elif not self.user.signer:
-        # #     raise AuthenticationFailed("Unauthorized, cosigner does not exist")
-        # elif not request.user.auth_data:
-        #     raise AuthenticationFailed("Unauthorized, missing auth data")
+        public_key = request.headers.get('X-Auth-PubKey', '')
+        message = request.headers.get('X-Auth-Message', '')
+        signature = request.headers.get('X-Auth-Signature', '')
+        LOGGER.info(request.headers.__dict__)
+        if signature:
+            signature = parse_x_signature_header(signature)
         
-        return None
+        if not hasattr(request, 'resolver_match') or request.resolver_match == None:
+            request.resolver_match = resolve(request.path_info)
+
+        wallet_identifier = request.resolver_match.kwargs.get('wallet_identifier')
+        proposal_identifier = request.resolver_match.kwargs.get('proposal_identifier')  
+        
+        wallet = None 
+        signer = None
+
+        if wallet_identifier:
+            if wallet_identifier.isdigit():
+                wallet = MultisigWallet.objects.prefetch_related('signers').filter(id = int(wallet_identifier)).first()
+            else:
+                wallet = MultisigWallet.objects.prefetch_related('signers').filter(locking_bytecode=wallet_identifier).first()
+        elif proposal_identifier:
+            if proposal_identifier.isdigit():
+                wallet = MultisigWallet.objects.prefetch_related('signers').filter(multisigtransactionproposal__id=int(proposal_identifier)).first()
+            else:
+                wallet = MultisigWallet.objects.prefetch_related('signers').filter(multisigtransactionproposal__locking_bytecode=proposal_identifier).first()        
+        
+        user = MultisigStatelessUser(wallet=wallet)
+
+        if wallet and public_key:
+            for signer in wallet.signers.all():
+                derived_public_key = derive_pubkey_from_xpub(signer.xpub, 0)
+                if public_key == derived_public_key:
+                    request.user.signer = signer
+                    break 
+                    
+        user.wallet = wallet
+        user.auth_data = {
+            'public_key': public_key,
+            'signature': signature,
+            'message': message
+        }
+        return (user, None)
