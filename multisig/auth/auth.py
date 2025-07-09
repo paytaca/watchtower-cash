@@ -138,12 +138,11 @@ class MultisigStatelessUser:
 
 
 class MultisigAuthentication(BaseAuthentication):
+    
     def authenticate(self, request):
         public_key = request.headers.get('X-Auth-PubKey', '')
-        LOGGER.info(public_key)
         message = request.headers.get('X-Auth-Message', '')
         signature = request.headers.get('X-Auth-Signature', '')
-        LOGGER.info(request.headers.__dict__)
         
         if not signature or not message or not public_key:
             return None

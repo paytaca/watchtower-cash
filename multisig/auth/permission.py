@@ -1,12 +1,17 @@
+import logging
 from rest_framework import permissions
+from django.conf import settings
+
+LOGGER = logging.getLogger(__name__)
 
 class IsCosigner(permissions.BasePermission):
     
-    def has_object_permission(self, request, view, obj):
-        # Read permissions are allowed to any request,
-        # so we'll always allow GET, HEAD or OPTIONS requests.
-        if request.method in permissions.SAFE_METHODS:
+    def has_permission(self, request, view):
+        if not getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE'):
             return True
-
-        # Write permissions are only allowed to the owner of the snippet.
-        return obj.owner == request.user
+        allow = False
+        if request.user and request.user.signer:
+            allow = True
+        if len((view.kwargs or {}).keys()) == 0 and request.method == 'GET': # not accessing specific resource
+            allow = True
+        return allow
