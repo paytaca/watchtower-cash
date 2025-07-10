@@ -8,6 +8,7 @@ from django.urls import resolve
 from ..utils import derive_pubkey_from_xpub
 from ..models import MultisigWallet
 
+
 LOGGER = logging.getLogger(__name__)
 
 from ..js_client import verify_signature
@@ -76,10 +77,10 @@ def is_valid_timestamp(timestamp: int):
     drift = get_timestamp_drift_limit()
     timestamp = normalize_timestamp(timestamp)
     if timestamp < now - drift:
-        return (False, "Timestamp is too old.")
+        return (False, f"Message timestamp too old. Value must be ±{drift}s from current UTC time.")
     if timestamp > now + drift:
-        return (False, "Timestamp is in the future.")
-    return (True, 'Timestamp valid')
+        return (False, f"Message timestamp drifted too far into the future. Value must be ±{drift}s from current UTC time.")
+    return (True, 'Ok')
 
 class MultisigStatelessUser:
     """
@@ -140,6 +141,12 @@ class MultisigStatelessUser:
 class MultisigAuthentication(BaseAuthentication):
     
     def authenticate(self, request):
+    
+        if not request.path.startswith('/api/multisig'):
+            return None
+        
+        if getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE', False) == False:
+            return (None, None)
         
         message = request.headers.get('X-Multisig-Auth-Message', '')
 

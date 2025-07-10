@@ -7,7 +7,7 @@ LOGGER = logging.getLogger(__name__)
 class IsCosigner(permissions.BasePermission):
     
     def has_permission(self, request, view):
-        if not getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE'):
+        if getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE', False) == False:
             return True
         allow = False
         if request.user and hasattr(request.user, 'signer'):
