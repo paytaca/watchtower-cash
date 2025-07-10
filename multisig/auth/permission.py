@@ -10,7 +10,7 @@ class IsCosigner(permissions.BasePermission):
         if not getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE'):
             return True
         allow = False
-        if request.user and request.user.signer:
+        if request.user and hasattr(request.user, 'signer'):
             allow = True
         if len((view.kwargs or {}).keys()) == 0 and request.method == 'GET': # not accessing specific resource
             allow = True
