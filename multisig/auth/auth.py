@@ -97,7 +97,7 @@ class MultisigStatelessUser:
             "<message>|<public_key>|<signature>"
 
             Where:
-                - <message> is "auth:<timestamp>" <timestamp> is a UTC Unix timestamp (e.g., 1720434000), should within range of server UTC timestamp
+                - <message> is "<context>:<timestamp>" <timestamp> is a UTC Unix timestamp (e.g., 1720434000), should within range of server UTC timestamp
                 - <public_key> is the compressed public key in hex format (e.g., '02ab...'), derive from xpub at address index 0
                 - <signature> the signature of the message, signed using the corresponding private key of <public_key>
             This message must be signed using the corresponding private key.
@@ -105,8 +105,8 @@ class MultisigStatelessUser:
     """
     signer = None
     wallet = None
-    auth_data = ''
-    signature_verified = False
+    auth_data = None
+    signature_verified = None
 
     def __init__(self, auth_data=None, signer=None, wallet=None):
         self.auth_data = auth_data
@@ -137,6 +137,62 @@ class MultisigStatelessUser:
         return self.auth_data.get('public_key')
     
 
+class PubKeySignatureMessageAuthentication(BaseAuthentication):
+    """
+    Authenticates a request by verifying a detached digital signature using a public key.
+
+    This authentication method is stateless and does not associate the request with a User.
+    It validates the integrity and freshness of a signed message (typically for proving identity or intent)
+    based on headers provided in the request.
+
+    Expected headers:
+        - X-Auth-Message: A string in the format '<context>:<timestamp>' e.g. multisig:1720434000, any:1720434000
+        - X-Auth-PubKey: The public key that corresponds to the private key used to sign the message
+        - X-Auth-Signature: The detached signature of the message with the ff format: 'schnorr=<signature>;der=<signature>'
+
+    Behavior:
+        - If any of the required headers are missing, the authentication class will return None
+          and allow other authentication classes to try.
+        - If the timestamp is outside the allowed drift range, the request is rejected with a 401 error.
+        - If the signature verification fails, the request is rejected with a 401 error.
+        - On successful verification, the request is considered authenticated (but anonymous), and
+          `(None, None)` is returned.
+
+    Notes:
+        - Signature verification is delegated to `verify_signature()`.
+        - Timestamp drift is validated using `is_valid_timestamp()`.
+        - This class is intended for use in systems that require stateless authentication without the need for user account
+
+    Returns:
+        - (None, None) on success, to indicate authentication passed without assigning a user.
+        - None if the signature headers are not present.
+        - Raises AuthenticationFailed if the message is expired or signature is invalid.
+    """
+    
+    def authenticate(self, request):
+       
+        message = request.headers.get('X-Auth-Message', '')
+
+        if message:
+            timestamp = message.split(':')[1]
+            is_valid, error = is_valid_timestamp(int(timestamp)) # short circuits if timestamp is > ±drift
+            if not is_valid:
+                raise AuthenticationFailed(error)
+
+        public_key = request.headers.get('X-Auth-PubKey', '')
+        signature = request.headers.get('X-Auth-Signature', '')
+        
+        if not signature or not message or not public_key:
+            raise AuthenticationFailed('Invalid credentials')
+        
+        signature = parse_x_signature_header(signature)
+
+        sig_verification_response = verify_signature(message, public_key, signature)
+        sig_verification_result = sig_verification_response.json()
+
+        if not sig_verification_result['success']:
+            raise AuthenticationFailed('Invalid signature')
+        return None
 
 class MultisigAuthentication(BaseAuthentication):
     
@@ -145,26 +201,19 @@ class MultisigAuthentication(BaseAuthentication):
         if not request.path.startswith('/api/multisig'):
             return None
         
+        message = request.headers.get('X-Auth-Message', '')
+        
+        if not message or message.split(':')[0] != 'multisig':
+            raise AuthenticationFailed('Invalid credential, invalid value for message')
+
         if getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE', False) == False:
             return (None, None)
-        
-        message = request.headers.get('X-Multisig-Auth-Message', '')
 
-        if message:
-            timestamp = message.split(':')[1]
-            is_valid, error = is_valid_timestamp(int(timestamp)) # short circuits if timestamp is > ±drift
-            if not is_valid:
-                raise AuthenticationFailed(error)
+        public_key = request.headers.get('X-Auth-PubKey', '')
+        signature = request.headers.get('X-Auth-Signature', '')
+        if not public_key or not signature:
+            raise AuthenticationFailed('Invalid credentials, missing public key or signature')
 
-        public_key = request.headers.get('X-Multisig-Auth-PubKey', '')
-        message = request.headers.get('X-Multisig-Auth-Message', '')
-        signature = request.headers.get('X-Multisig-Auth-Signature', '')
-        
-        if not signature or not message or not public_key:
-            return None
-        
-        signature = parse_x_signature_header(signature)
-        
         if not hasattr(request, 'resolver_match') or request.resolver_match == None:
             request.resolver_match = resolve(request.path_info)
 
@@ -187,21 +236,19 @@ class MultisigAuthentication(BaseAuthentication):
         
         user = MultisigStatelessUser(wallet=wallet)
 
+
         if wallet and public_key:
             for signer in wallet.signers.all():
                 derived_public_key = derive_pubkey_from_xpub(signer.xpub, 0)
                 if public_key == derived_public_key:
                     user.signer = signer
                     break 
-                    
+        
         user.wallet = wallet
         user.auth_data = {
             'public_key': public_key,
-            'signature': signature,
-            'message': message
+            'message': message,
+            'signature': parse_x_signature_header(signature)
         }
-        user.verify_signature()
-        if not user.signature_verified:
-            raise AuthenticationFailed('Invalid signature')
         return (user, user.auth_data)
         
