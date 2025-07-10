@@ -3,19 +3,23 @@ import requests
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
+from stablehedge.utils.blockchain import broadcast_transaction
+import multisig.js_client as js_client
 from multisig.models import MultisigTransactionProposal, Signer, Signature
 from multisig.serializers import (
     MultisigWalletSerializer,
     MultisigTransactionProposalSerializer,
     SignatureSerializer
 )
+from multisig.auth.auth import MultisigAuthentication
+from multisig.auth.permission import IsCosigner
 from multisig.models.wallet import MultisigWallet
-from stablehedge.utils.blockchain import broadcast_transaction
-import multisig.js_client as js_client
+
 
 LOGGER = logging.getLogger(__name__)
 MULTISIG_JS_SERVER = 'http://localhost:3004'
@@ -37,7 +41,10 @@ class MultisigTransactionProposalListCreateView(APIView):
 
     def get(self, request, wallet_identifier):
 
-        proposals = MultisigTransactionProposal.objects.filter(deleted_at__isnull=True, broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING)
+        proposals = MultisigTransactionProposal.objects.filter(
+            deleted_at__isnull=True,
+            broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING
+        )
         
         include_deleted = request.query_params.get('include_deleted')
         
@@ -133,13 +140,13 @@ class SignerSignaturesAddView(APIView):
             proposal = self.get_transaction_proposal(proposal_identifier)
             signer = get_object_or_404(Signer, entity_key=signer_identifier, wallet=proposal.wallet)
         except MultisigTransactionProposal.DoesNotExist:
-            raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
+            raise NotFound(f"MultisigTransactionProposal with id {proposal_identifier} not found.")
         except Signer.DoesNotExist:
-            raise NotFound(f"Signer with entity key {signer_entity_key} not found.")
+            raise NotFound(f"Signer {signer_identifier} not found.")
 
         if proposal.signing_progress == MultisigTransactionProposal.SigningProgress.FULLY_SIGNED:
             signature_serializer = SignatureSerializer(proposal.signatures, many=True)
-            return Response(signature_serializer.data, status=HTTP_200_OK)
+            return Response(signature_serializer.data, status=status.HTTP_200_OK)
         
         signatures = []
         with transaction.atomic():
