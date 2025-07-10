@@ -132,16 +132,22 @@ app.post('/multisig/message/verify-signature', async (req, res) => {
   const { message, publicKey, signature } = req.body
   const messageHash = sha256.hash(utf8ToBin(message))
   let success = false
-  if (signature.schnorr) {
-    success = secp256k1.verifySignatureSchnorr(
-      hexToBin(signature.schnorr), hexToBin(publicKey), messageHash
-    )
+  try {
+    if (signature.schnorr) {
+      success = secp256k1.verifySignatureSchnorr(
+        hexToBin(signature.schnorr), hexToBin(publicKey), messageHash
+      )
+    }
+    if (signature.der) {
+      success = secp256k1.verifySignatureDER(
+        hexToBin(signature.der), hexToBin(publicKey), messageHash
+      )
+    }  
+  } catch (error) {
+    console.log(error)
+    return res.send({ success: false, error: error })
   }
-  if (signature.der) {
-    success = secp256k1.verifySignatureDER(
-      hexToBin(signature.der), hexToBin(publicKey), messageHash
-    )
-  }
+  
   return res.send({ success })
 })
 
