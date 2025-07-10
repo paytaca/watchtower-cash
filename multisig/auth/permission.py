@@ -25,9 +25,9 @@ class IsCosignerOfNewMultisigWallet(permissions.BasePermission):
         if getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE', False) == False:
             return True
         
-        message = request.headers.get('X-Multisig-Auth-Message', '')
-        public_key = request.headers.get('X-Multisig-Auth-PubKey', '')
-        signature = request.headers.get('X-Multisig-Auth-Signature', '')
+        message = request.headers.get('X-Auth-Message', '')
+        public_key = request.headers.get('X-Auth-PubKey', '')
+        signature = request.headers.get('X-Auth-Signature', '')
 
         if not signature or not message or not public_key:
             return False

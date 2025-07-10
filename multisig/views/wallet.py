@@ -2,7 +2,7 @@ import logging
 from functools import wraps
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-from multisig.auth.auth import MultisigAuthentication
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,6 +10,7 @@ from rest_framework.exceptions import NotFound
 from main.models import Transaction
 from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
+from multisig.auth.auth import PubKeySignatureMessageAuthentication, MultisigAuthentication
 from ..models.wallet import MultisigWallet
 from ..serializers.wallet import MultisigWalletSerializer, MultisigWalletUtxoSerializer
 from ..auth.permission import IsCosigner, IsCosignerOfNewMultisigWallet
@@ -18,7 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 class MultisigWalletListCreateView(APIView):
     
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -55,7 +56,7 @@ class MultisigWalletListCreateView(APIView):
     
 class MultisigWalletDetailView(APIView):
    
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
 
     def get(self, request, wallet_identifier):
@@ -92,7 +93,7 @@ class MultisigWalletDetailView(APIView):
 
 class RenameMultisigWalletView(APIView):
 
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
 
     def patch(self, request, pk):

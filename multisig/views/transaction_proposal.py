@@ -16,7 +16,7 @@ from multisig.serializers import (
     MultisigTransactionProposalSerializer,
     SignatureSerializer
 )
-from multisig.auth.auth import MultisigAuthentication
+from multisig.auth.auth import PubKeySignatureMessageAuthentication, MultisigAuthentication
 from multisig.auth.permission import IsCosigner
 from multisig.models.wallet import MultisigWallet
 
@@ -28,7 +28,7 @@ class MultisigTransactionProposalListView(APIView):
     pass
 
 class MultisigTransactionProposalListCreateView(APIView):
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
 
     def get_wallet(self, wallet_identifier): 
@@ -107,7 +107,7 @@ class MultisigTransactionProposalListCreateView(APIView):
 
 
 class MultisigTransactionProposalDetailView(APIView):
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
     def get_object(self, proposal_identifier):
         if proposal_identifier.isdigit():
@@ -132,7 +132,7 @@ class MultisigTransactionProposalDetailView(APIView):
 
 
 class SignerSignaturesAddView(APIView):
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
@@ -181,7 +181,7 @@ class SignerSignaturesAddView(APIView):
     
  
 class SignaturesAddView(APIView):
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
@@ -224,7 +224,7 @@ class SignaturesAddView(APIView):
         return Response(signatures, status=status.HTTP_200_OK)
 
 class FinalizeTransactionProposalView(APIView):
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
@@ -283,7 +283,7 @@ class FinalizeTransactionProposalView(APIView):
 
 
 class BroadcastTransactionProposalView(APIView):
-    authentication_classes = [MultisigAuthentication]
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
     permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
