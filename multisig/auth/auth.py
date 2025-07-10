@@ -206,7 +206,7 @@ class MultisigAuthentication(BaseAuthentication):
         if not message or message.split(':')[0] != 'multisig':
             raise AuthenticationFailed('Invalid credential, invalid value for message')
 
-        if getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE', False) == False:
+        if getattr(settings, 'MULTISIG', {}).get('ENABLE_AUTH', False) == False:
             return (None, None)
 
         public_key = request.headers.get('X-Auth-PubKey', '')

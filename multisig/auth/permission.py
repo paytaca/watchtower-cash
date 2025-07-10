@@ -10,7 +10,7 @@ LOGGER = logging.getLogger(__name__)
 class IsCosigner(permissions.BasePermission):
     
     def has_permission(self, request, view):
-        if getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE', False) == False:
+        if getattr(settings, 'MULTISIG', {}).get('ENABLE_AUTH', False) == False:
             return True
         allow = False
         if request.user and hasattr(request.user, 'signer'):
@@ -22,7 +22,7 @@ class IsCosigner(permissions.BasePermission):
 class IsCosignerOfNewMultisigWallet(permissions.BasePermission):
 
     def has_permission(self, request, view):
-        if getattr(settings, 'MULTISIG_AUTH', {}).get('ENABLE', False) == False:
+        if getattr(settings, 'MULTISIG', {}).get('ENABLE_AUTH', False) == False:
             return True
         
         message = request.headers.get('X-Auth-Message', '')
