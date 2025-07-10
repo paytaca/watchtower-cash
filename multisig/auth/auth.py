@@ -140,9 +140,18 @@ class MultisigStatelessUser:
 class MultisigAuthentication(BaseAuthentication):
     
     def authenticate(self, request):
-        public_key = request.headers.get('X-Auth-PubKey', '')
-        message = request.headers.get('X-Auth-Message', '')
-        signature = request.headers.get('X-Auth-Signature', '')
+        
+        message = request.headers.get('X-Multisig-Auth-Message', '')
+
+        if message:
+            timestamp = message.split(':')[1]
+            is_valid, error = is_valid_timestamp(int(timestamp)) # short circuits if timestamp is > ±drift
+            if not is_valid:
+                raise AuthenticationFailed(error)
+
+        public_key = request.headers.get('X-Multisig-Auth-PubKey', '')
+        message = request.headers.get('X-Multisig-Auth-Message', '')
+        signature = request.headers.get('X-Multisig-Auth-Signature', '')
         
         if not signature or not message or not public_key:
             return None
@@ -175,7 +184,7 @@ class MultisigAuthentication(BaseAuthentication):
             for signer in wallet.signers.all():
                 derived_public_key = derive_pubkey_from_xpub(signer.xpub, 0)
                 if public_key == derived_public_key:
-                    request.user.signer = signer
+                    user.signer = signer
                     break 
                     
         user.wallet = wallet
