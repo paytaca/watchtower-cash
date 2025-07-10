@@ -16,10 +16,8 @@ from multisig.serializers import (
     MultisigTransactionProposalSerializer,
     SignatureSerializer
 )
-from multisig.auth.auth import MultisigAuthentication
-from multisig.auth.permission import IsCosigner
-from multisig.models.wallet import MultisigWallet
 
+from multisig.models.wallet import MultisigWallet
 
 LOGGER = logging.getLogger(__name__)
 MULTISIG_JS_SERVER = 'http://localhost:3004'
