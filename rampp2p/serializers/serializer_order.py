@@ -2,13 +2,56 @@ from PIL import Image
 from rest_framework import serializers
 from django.db.models import Q
 
-from .serializer_ad import SubsetAdSnapshotSerializer
+from .serializer_ad import SubsetAdSnapshotSerializer, PublicAdSnapshotSerializer
 from .serializer_payment import SubsetPaymentMethodSerializer
 from .serializer_transaction import TransactionSerializer
 import rampp2p.models as models
 
 import logging
 logger = logging.getLogger(__name__)
+
+class PublicOrderSerializer(serializers.ModelSerializer):
+    ad_snapshot = PublicAdSnapshotSerializer()
+    owner = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+    trade_type = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.Order
+        fields = [
+            'id',
+            'ad_snapshot',
+            'owner',
+            'trade_amount',
+            'currency',
+            'price',
+            'trade_type',
+            'status',
+            'is_cash_in',
+        ]
+    
+    def get_price(self, obj):
+        return obj.ad_snapshot.price
+         
+    def get_owner(self, obj):
+        return {
+            'id': obj.owner.id,
+            'name': obj.owner.name
+        }
+    
+    def get_trade_type(self, obj):
+        return obj.trade_type
+    
+    def get_status(self, obj):
+        return {
+            'value': obj.status.status,
+            'label': obj.status.get_status_display(),
+        }
+    
+    def get_currency(self, obj):
+        return obj.currency.symbol
 
 class OrderMemberSerializer(serializers.Serializer):
     id = serializers.IntegerField()

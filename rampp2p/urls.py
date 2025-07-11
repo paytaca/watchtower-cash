@@ -1,8 +1,13 @@
 from django.urls import path, re_path
 from rampp2p.views import *
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r'order/public', PublicOrdersViewSet, basename='public-orders')
+
 
 urlpatterns = [
-    
+    *router.urls,
     path('version/check/<str:platform>/', check_app_version),
     
     path('ad/', AdViewSet.as_view({'get': 'list', 'post': 'create'})),
@@ -32,6 +37,8 @@ urlpatterns = [
     path('currency/crypto/<int:pk>/', CryptoCurrencyViewSet.as_view({'get': 'retrieve'}), name='crypto-detail'),
 
     # Orders
+    # path('order/public/', PublicOrdersViewSet.as_view({'get': 'list'}), name='public-order-list-retrieve'),
+    # path('order/public/<int:pk>/', PublicOrdersViewSet.as_view({'get': 'retrieve'}), name='public-order-detail'),
     path('order/', OrderViewSet.as_view({'get': 'list', 'post': 'create'}), name='order-list-create'),
     path('order/<int:pk>/', OrderViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}), name='order-detail-edit'),
     path('order/<int:pk>/ad/snapshot/', AdSnapshotViewSet.as_view({'get': 'retrieve_by_order'})),
