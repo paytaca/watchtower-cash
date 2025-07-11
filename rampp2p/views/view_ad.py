@@ -710,6 +710,9 @@ class AdShareLinkView(View):
             price = f"{Decimal(ad.get_price()).quantize(Decimal('1.00')):,}"
             fiat_currency = ad.fiat_currency.symbol
 
+        # Determine the appropriate action word based on trade type
+        action_word = "buy" if trade_type == "sell" else "sell" if trade_type == "buy" else "order"
+        
         context = {
             "ad_id": ad_id,
             "exists": exists,
@@ -717,7 +720,7 @@ class AdShareLinkView(View):
             "price": price,
             "fiat_currency": fiat_currency,
             "title": f"This link opens a {trade_type} BCH ad!",
-            "description": f"This link opens a {trade_type} Bitcoin Cash (BCH) ad for {price} {fiat_currency} per BCH. You can order using the Paytaca wallet app."
+            "description": f"This link opens a {trade_type} Bitcoin Cash (BCH) ad for {price} {fiat_currency} per BCH. You can {action_word} using the Paytaca wallet app."
         }
         return render(request, "ad.html", context=context)
 

@@ -53,11 +53,14 @@ def _get_ct_balance(query, multiple_tokens=False):
     return _get_slp_balance(query, multiple_tokens)
 
 
-def _get_bch_balance(query):
+def _get_bch_balance(query, include_token_sats=False):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
     dust = 546 # / (10 ** 8)
-    query = query & Q(value__gt=dust) & Q(token__name='bch')
+    if include_token_sats:
+        query = query & Q(value__gt=dust)
+    else:
+        query = query & Q(value__gt=dust) & Q(token__name='bch')
     qs = Transaction.objects.filter(query)
     qs_count = qs.count()
     qs_balance = qs.aggregate(
@@ -98,6 +101,7 @@ class Balance(APIView):
         txid = kwargs.get('txid', '')
         tokenid_or_category = kwargs.get('tokenid_or_category', '')
         wallet_hash = kwargs.get('wallethash', '')
+        include_token_sats = request.GET.get('include_token_sats') == 'true' or False
 
         is_cashtoken_nft = False
         if index and txid:
@@ -175,7 +179,7 @@ class Balance(APIView):
         if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
-            qs_balance, qs_count = _get_bch_balance(query)
+            qs_balance, qs_count = _get_bch_balance(query, include_token_sats=include_token_sats)
             bch_balance = qs_balance['balance'] or 0
             bch_balance = bch_balance / (10 ** 8)
 
