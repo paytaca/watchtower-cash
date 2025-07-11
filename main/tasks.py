@@ -2720,12 +2720,17 @@ class MarketPriceTaskQueueManager(celery_app.Task):
             coin_id = deconstructed["coin_id"]
             currency = deconstructed["currency"]
 
-        query = AssetPriceLog.objects.filter(
-            currency=CoingeckoAPI.parse_currency(currency).upper(),
-            relative_currency=CoingeckoAPI.coin_id_to_asset_name(coin_id),
-            timestamp__gt = timezone.now()-timezone.timedelta(seconds=30),
-            timestamp__lte = timezone.now()+timezone.timedelta(seconds=30),
-        ).order_by("-timestamp")
+        filter_kwargs = {
+            'currency': CoingeckoAPI.parse_currency(currency).upper(),
+            'relative_currency': CoingeckoAPI.coin_id_to_asset_name(coin_id),
+            'timestamp__gt': timezone.now()-timezone.timedelta(seconds=30),
+            'timestamp__lte': timezone.now()+timezone.timedelta(seconds=30),
+        }
+        
+        if CoingeckoAPI.parse_currency(currency).upper() == 'ARS':
+            filter_kwargs['source'] = 'coingecko-yadio'
+            
+        query = AssetPriceLog.objects.filter(**filter_kwargs).order_by("-timestamp")
 
         if return_id: query = query.values_list("id", flat=True)
 

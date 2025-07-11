@@ -190,11 +190,16 @@ class PriceChartView(generics.GenericAPIView):
             relative_currency = 'BCH'
 
         min_timestamp = timezone.now() - timezone.timedelta(days=days)
-        data = AssetPriceLog.objects.filter(
-            currency=vs_currency,
-            relative_currency=relative_currency,
-            timestamp__gte=min_timestamp,
-        ).order_by("-timestamp").values("timestamp", "price_value")
+        filter_kwargs = {
+            'currency': vs_currency,
+            'relative_currency': relative_currency,
+            'timestamp__gte': min_timestamp,
+        }
+        
+        if vs_currency == 'ARS':
+            filter_kwargs['source'] = 'coingecko-yadio'
+            
+        data = AssetPriceLog.objects.filter(**filter_kwargs).order_by("-timestamp").values("timestamp", "price_value")
 
         serializer = self.serializer_class(data, many=True)
         return Response(serializer.data)
