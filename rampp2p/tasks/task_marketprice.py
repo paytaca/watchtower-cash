@@ -19,33 +19,38 @@ def update_market_prices():
     Returns:
         None
     """
-    # get subscribed fiat currencies
-    currencies = models.FiatCurrency.objects.all().values_list('symbol', flat=True)
 
-    # get market prices from coingecko
-    market_prices = get_latest_bch_prices_coingecko(currencies)
-    result_keys = []
-    
-    if market_prices:
-        result_keys = [e.upper() for e in list(market_prices.keys())]
+    try:
+        # get subscribed fiat currencies
+        currencies = models.FiatCurrency.objects.all().values_list('symbol', flat=True)
 
-    # get missing market prices from fullstack.cash
-    if len(result_keys) < len(currencies):
-        mcurrencies = list(set(currencies) - set(result_keys))
-        market_prices_fullstackcash = get_latest_bch_prices_fullstackcash(mcurrencies)
+        # get market prices from coingecko
+        market_prices = get_latest_bch_prices_coingecko(currencies)
+        result_keys = []
+        
         if market_prices:
-            market_prices.update(market_prices_fullstackcash)
-        else:
-            market_prices = market_prices_fullstackcash
+            result_keys = [e.upper() for e in list(market_prices.keys())]
 
-    for currency in market_prices:
-        price = market_prices.get(currency)
-        if price:
-            rate, _ = models.MarketPrice.objects.get_or_create(currency=currency.upper())
-            rate.price = price
-            rate.save()
-        data =  { 'currency': currency, 'price' : price }
-        send_market_price(data, currency)
+        # get missing market prices from fullstack.cash
+        if len(result_keys) < len(currencies):
+            mcurrencies = list(set(currencies) - set(result_keys))
+            market_prices_fullstackcash = get_latest_bch_prices_fullstackcash(mcurrencies)
+            if market_prices:
+                market_prices.update(market_prices_fullstackcash)
+            else:
+                market_prices = market_prices_fullstackcash
+
+        for currency in market_prices:
+            price = market_prices.get(currency)
+            if price:
+                rate, _ = models.MarketPrice.objects.get_or_create(currency=currency.upper())
+                rate.price = price
+                rate.save()
+            data =  { 'currency': currency, 'price' : price }
+            send_market_price(data, currency)
+            
+    except Exception as e:
+        logger.error(f"Error updating market prices: {e}")
 
 def get_latest_bch_prices_coingecko(currencies):
     """
