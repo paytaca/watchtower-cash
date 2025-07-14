@@ -71,7 +71,7 @@ class MultisigWalletDetailView(APIView):
         return Response(serializer.data)
     
     def delete(self, request, wallet_identifier):
-        permanently_delete = request.query_params.get('permanently', False)
+        permanently_delete = request.query_params.get('permanently_delete', False)
         try:
             if wallet_identifier.isdigit():
                 identifier_name = 'id'
