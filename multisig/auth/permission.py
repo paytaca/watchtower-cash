@@ -1,4 +1,5 @@
 import logging
+from multisig.auth.auth import parse_x_signature_header
 from multisig.js_client import verify_signature
 from multisig.utils import derive_pubkey_from_xpub
 from rest_framework import permissions
@@ -51,9 +52,9 @@ class IsCosignerOfNewMultisigWallet(permissions.BasePermission):
         if not auth_credential_public_key_is_cosigner:
             return False
         
+        signature = parse_x_signature_header(signature)
         sig_verification_response = verify_signature(message, public_key, signature)
         sig_verification_result = sig_verification_response.json()
-
         if sig_verification_result['success']:
             return True
         
