@@ -4,7 +4,7 @@ from rest_framework import serializers
 from typing import Dict
 from main.models import Transaction
 from ..models.wallet import MultisigWallet, Signer
-from ..utils import get_multisig_wallet_locking_script
+from ..utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,12 +39,19 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             
             if created:
                 hd_public_keys = locking_data.get('hdKeys', {}).get('hdPublicKeys', {})
+                request = self.context.get('request')
                 for key, value in hd_public_keys.items():
-                    Signer.objects.create(
+                    signer = Signer.objects.create(
                         wallet=wallet,
                         entity_key=key,
                         xpub=value
                     )
+                    if request:
+                      uploader_pubkey = request.headers.get('X-Auth-PubKey')
+                      derived_public_key = derive_pubkey_from_xpub(signer.xpub, 0)
+                      if uploader_pubkey == derived_public_key:
+                         wallet.created_by = signer
+                         wallet.save(update_fields=['created_by'])
             else:
                 if wallet.deleted_at:
                     wallet.deleted_at = None

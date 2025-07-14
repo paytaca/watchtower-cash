@@ -16,6 +16,7 @@ class MultisigWallet(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
     updated_at = models.DateTimeField(auto_now=True)
     version = models.PositiveIntegerField(null=True, blank=True, default=0)
+    created_by = models.ForeignKey('Signer', on_delete=models.SET_NULL, null=True, blank=True)
 
     @property
     def required_signatures(self):
