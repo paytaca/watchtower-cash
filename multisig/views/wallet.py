@@ -71,7 +71,7 @@ class MultisigWalletDetailView(APIView):
         return Response(serializer.data)
     
     def delete(self, request, wallet_identifier):
-        
+        permanently_delete = request.query_params.get('permanently', False)
         try:
             if wallet_identifier.isdigit():
                 identifier_name = 'id'
@@ -80,11 +80,10 @@ class MultisigWalletDetailView(APIView):
                 identifier_name = 'locking_bytecode'
                 wallet = MultisigWallet.objects.get(locking_bytecode=wallet_identifier)
 
-            if not wallet.deleted_at:
-                wallet.soft_delete()
-            else:
+            if permanently_delete == 'true' or permanently_delete == '1':
                 wallet.delete()
-
+            else:
+                wallet.soft_delete()
             return Response({"message": f"Wallet with {identifier_name}={wallet_identifier} deleted."}, status=status.HTTP_200_OK)
 
         except MultisigWallet.DoesNotExist:
