@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import ValidationError
 from main.models import Transaction
 from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
@@ -47,7 +48,8 @@ class MultisigWalletListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = MultisigWalletSerializer(data=request.data)
+        
+        serializer = MultisigWalletSerializer(data=request.data, context={"request": request})
         
         if serializer.is_valid():
             wallet = serializer.save()
@@ -89,7 +91,6 @@ class MultisigWalletDetailView(APIView):
         except MultisigWallet.DoesNotExist:
             raise NotFound(detail="Wallet with {identifier_name}={identifier} Not Found.")
         
-
 class RenameMultisigWalletView(APIView):
 
     authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
@@ -156,3 +157,4 @@ class MultisigWalletUtxosView(APIView):
                 return paginator.get_paginated_response(serializer.data)
         serializer = self.serializer_class(queryset, many=True)
         return Response(serializer.data)
+

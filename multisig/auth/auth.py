@@ -57,7 +57,7 @@ def normalize_timestamp(raw_ts):
     return ts
 
 def get_timestamp_drift_limit():
-    return getattr(settings, 'MULTISIG_AUTH', {}).get('TIMESTAMP_DRIFT_SECONDS', 60)
+    return getattr(settings, 'MULTISIG', {}).get('TIMESTAMP_DRIFT_SECONDS', 120)
 
 def get_timestamp_from_auth_data(auth_data):
     message, *ignore = auth_data.split('|')
@@ -181,7 +181,7 @@ class PubKeySignatureMessageAuthentication(BaseAuthentication):
 
         public_key = request.headers.get('X-Auth-PubKey', '')
         signature = request.headers.get('X-Auth-Signature', '')
-        
+
         if not signature or not message or not public_key:
             raise AuthenticationFailed('Invalid credentials')
         
