@@ -1,6 +1,8 @@
 import logging
+from functools import wraps
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,13 +10,25 @@ from rest_framework.exceptions import NotFound
 from main.models import Transaction
 from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
+from multisig.auth.auth import PubKeySignatureMessageAuthentication, MultisigAuthentication
 from ..models.wallet import MultisigWallet
 from ..serializers.wallet import MultisigWalletSerializer, MultisigWalletUtxoSerializer
+from ..auth.permission import IsCosigner, IsCosignerOfNewMultisigWallet
 
 LOGGER = logging.getLogger(__name__)
 
 class MultisigWalletListCreateView(APIView):
     
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsCosigner()]
+        elif self.request.method == 'POST':
+            return [IsCosignerOfNewMultisigWallet()]
+        else:
+            return super().get_permissions()
+
     def get(self, request):
         
         queryset = MultisigWallet.objects.filter(deleted_at__isnull=True)
@@ -42,39 +56,45 @@ class MultisigWalletListCreateView(APIView):
     
 class MultisigWalletDetailView(APIView):
    
-    def get(self, request, identifier):
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
+
+    def get(self, request, wallet_identifier):
         try:
-            if identifier.isdigit():
-                wallet = MultisigWallet.objects.get(id=identifier)
+            if wallet_identifier.isdigit():
+                wallet = MultisigWallet.objects.get(id=wallet_identifier)
             else:
-                wallet = MultisigWallet.objects.get(locking_bytecode=identifier)
+                wallet = MultisigWallet.objects.get(locking_bytecode=wallet_identifier)
         except MultisigWallet.DoesNotExist:
             raise NotFound(detail="Wallet not found.")
         serializer = MultisigWalletSerializer(wallet)
         return Response(serializer.data)
     
-    def delete(self, request, identifier):
-        
+    def delete(self, request, wallet_identifier):
+        permanently_delete = request.query_params.get('permanently_delete', False)
         try:
-            if identifier.isdigit():
+            if wallet_identifier.isdigit():
                 identifier_name = 'id'
-                wallet = MultisigWallet.objects.get(id=identifier)
+                wallet = MultisigWallet.objects.get(id=wallet_identifier)
             else:
                 identifier_name = 'locking_bytecode'
-                wallet = MultisigWallet.objects.get(locking_bytecode=identifier)
+                wallet = MultisigWallet.objects.get(locking_bytecode=wallet_identifier)
 
-            if not wallet.deleted_at:
-                wallet.soft_delete()
-            else:
+            if permanently_delete == 'true' or permanently_delete == '1':
                 wallet.delete()
-
-            return Response({"message": f"Wallet with {identifier_name}={identifier} deleted."}, status=status.HTTP_200_OK)
+            else:
+                wallet.soft_delete()
+            return Response({"message": f"Wallet with {identifier_name}={wallet_identifier} deleted."}, status=status.HTTP_200_OK)
 
         except MultisigWallet.DoesNotExist:
             raise NotFound(detail="Wallet with {identifier_name}={identifier} Not Found.")
         
 
 class RenameMultisigWalletView(APIView):
+
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
+
     def patch(self, request, pk):
         try:
             wallet = MultisigWallet.objects.get(pk=pk)
@@ -92,12 +112,6 @@ class RenameMultisigWalletView(APIView):
         wallet.save()
 
         return Response({"id": wallet.id, "name": new_name}, status=status.HTTP_200_OK)
-
-# class MultisigWalletUtxosView(APIView):
-
-#     def get(self, request, address):
-#         resp = js_client.get_wallet_utxos(address)
-#         return Response(resp.json())
 
 class MultisigWalletUtxosView(APIView):
     serializer_class = MultisigWalletUtxoSerializer

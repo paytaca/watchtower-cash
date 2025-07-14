@@ -3,19 +3,23 @@ import requests
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import NotFound
+from stablehedge.utils.blockchain import broadcast_transaction
+import multisig.js_client as js_client
 from multisig.models import MultisigTransactionProposal, Signer, Signature
 from multisig.serializers import (
     MultisigWalletSerializer,
     MultisigTransactionProposalSerializer,
     SignatureSerializer
 )
+from multisig.auth.auth import PubKeySignatureMessageAuthentication, MultisigAuthentication
+from multisig.auth.permission import IsCosigner
 from multisig.models.wallet import MultisigWallet
-from stablehedge.utils.blockchain import broadcast_transaction
-import multisig.js_client as js_client
+
 
 LOGGER = logging.getLogger(__name__)
 MULTISIG_JS_SERVER = 'http://localhost:3004'
@@ -24,6 +28,8 @@ class MultisigTransactionProposalListView(APIView):
     pass
 
 class MultisigTransactionProposalListCreateView(APIView):
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
 
     def get_wallet(self, wallet_identifier): 
         wallet = None
@@ -37,7 +43,10 @@ class MultisigTransactionProposalListCreateView(APIView):
 
     def get(self, request, wallet_identifier):
 
-        proposals = MultisigTransactionProposal.objects.filter(deleted_at__isnull=True, broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING)
+        proposals = MultisigTransactionProposal.objects.filter(
+            deleted_at__isnull=True,
+            broadcast_status=MultisigTransactionProposal.BroadcastStatus.PENDING
+        )
         
         include_deleted = request.query_params.get('include_deleted')
         
@@ -98,7 +107,8 @@ class MultisigTransactionProposalListCreateView(APIView):
 
 
 class MultisigTransactionProposalDetailView(APIView):
-
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
     def get_object(self, proposal_identifier):
         if proposal_identifier.isdigit():
             return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
@@ -122,7 +132,8 @@ class MultisigTransactionProposalDetailView(APIView):
 
 
 class SignerSignaturesAddView(APIView):
-
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
             return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
@@ -133,13 +144,13 @@ class SignerSignaturesAddView(APIView):
             proposal = self.get_transaction_proposal(proposal_identifier)
             signer = get_object_or_404(Signer, entity_key=signer_identifier, wallet=proposal.wallet)
         except MultisigTransactionProposal.DoesNotExist:
-            raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
+            raise NotFound(f"MultisigTransactionProposal with id {proposal_identifier} not found.")
         except Signer.DoesNotExist:
-            raise NotFound(f"Signer with entity key {signer_entity_key} not found.")
+            raise NotFound(f"Signer {signer_identifier} not found.")
 
         if proposal.signing_progress == MultisigTransactionProposal.SigningProgress.FULLY_SIGNED:
             signature_serializer = SignatureSerializer(proposal.signatures, many=True)
-            return Response(signature_serializer.data, status=HTTP_200_OK)
+            return Response(signature_serializer.data, status=status.HTTP_200_OK)
         
         signatures = []
         with transaction.atomic():
@@ -170,6 +181,8 @@ class SignerSignaturesAddView(APIView):
     
  
 class SignaturesAddView(APIView):
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
             return get_object_or_404(MultisigTransactionProposal, pk=proposal_identifier)
@@ -179,7 +192,7 @@ class SignaturesAddView(APIView):
         try:
             proposal = self.get_transaction_proposal(proposal_identifier)
         except MultisigTransactionProposal.DoesNotExist:
-            raise NotFound(f"MultisigTransactionProposal with id {proposal_id} not found.")
+            raise NotFound(f"MultisigTransactionProposal with id {proposal_identifier} not found.")
         data = request.data.copy()
         signatures = []
         with transaction.atomic():
@@ -211,7 +224,8 @@ class SignaturesAddView(APIView):
         return Response(signatures, status=status.HTTP_200_OK)
 
 class FinalizeTransactionProposalView(APIView):
-    
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
             return get_object_or_404(MultisigTransactionProposal, id=int(proposal_identifier))
@@ -232,17 +246,7 @@ class FinalizeTransactionProposalView(APIView):
         
         proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
         wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
-        #data = {
-        #    'multisigTransaction': proposal_serializer.data,
-        #    'multisigWallet': wallet_serializer.data
-        #}
-
         try:
-            #resp = requests.post(
-            #    f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
-            #    json=data,
-            #    timeout=5
-            #)
             resp = js_client.finalize_transaction(proposal_serializer.data, wallet_serializer.data)
             if resp.status_code != 200:
                 Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -279,7 +283,8 @@ class FinalizeTransactionProposalView(APIView):
 
 
 class BroadcastTransactionProposalView(APIView):
-    
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    permission_classes = [IsCosigner]
     def get_transaction_proposal(self, proposal_identifier):
         if proposal_identifier.isdigit():
             return get_object_or_404(MultisigTransactionProposal, id=int(proposal_identifier))
@@ -291,19 +296,9 @@ class BroadcastTransactionProposalView(APIView):
         proposal = self.get_transaction_proposal(proposal_identifier)
         proposal_serializer = MultisigTransactionProposalSerializer(proposal, many=False)
         wallet_serializer = MultisigWalletSerializer(proposal.wallet, many=False)
-        
-        #data = {
-        #    'multisigTransaction': proposal_serializer.data,
-        #    'multisigWallet': wallet_serializer.data
-        #}
 
         if not proposal.signed_transaction:
             try:
-                #resp = requests.post(
-                #    f'{MULTISIG_JS_SERVER}/multisig/transaction/finalize',
-                #    json=data,
-                #    timeout=5
-                #)
                 resp = js_client.finalize_transaction(proposal_serializer.data, wallet_serializer.data)
                 if resp.status_code != 200:
                     Response({'error': 'Internal service error' }, status=status.HTTP_503_SERVICE_UNAVAILABLE)

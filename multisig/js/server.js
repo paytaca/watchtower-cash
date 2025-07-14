@@ -2,19 +2,19 @@ import structuredClone from '@ungap/structured-clone'
 
 import express from 'express'
 import {
-    decodeCashAddress,
-    encodeCashAddress,
-    CashAddressType,
     CashAddressNetworkPrefix,
     importWalletTemplate,
     walletTemplateToCompilerBCH,
     lockingBytecodeToCashAddress,
     binToHex,
     hexToBin,
-    cashAddressToLockingBytecode,
+    decodeHdPublicKey,
+    deriveHdPathRelative,
     hashTransaction,
-    decodeTransactionCommon,
     stringify,
+    secp256k1,
+    sha256,
+    utf8ToBin
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
 import { ElectrumClient } from '@electrum-cash/network'
@@ -126,6 +126,29 @@ app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
    const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
    const signingProgress = Multisig.getSigningProgress({ multisigWallet, multisigTransaction })
    res.send({ signingProgress })
+})
+
+app.post('/multisig/message/verify-signature', async (req, res) => {
+  const { message, publicKey, signature } = req.body
+  const messageHash = sha256.hash(utf8ToBin(message))
+  let success = false
+  try {
+    if (signature.schnorr) {
+      success = secp256k1.verifySignatureSchnorr(
+        hexToBin(signature.schnorr), hexToBin(publicKey), messageHash
+      )
+    }
+    if (signature.der) {
+      success = secp256k1.verifySignatureDER(
+        hexToBin(signature.der), hexToBin(publicKey), messageHash
+      )
+    }  
+  } catch (error) {
+    console.log(error)
+    return res.send({ success: false, error: error })
+  }
+  
+  return res.send({ success })
 })
 
 app.get('/test', async (req, res) => {
