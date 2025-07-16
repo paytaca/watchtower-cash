@@ -315,5 +315,5 @@ export async function consolidateTreasuryContract(opts) {
   })
 
   if (typeof transaction === 'string') return { success: false, error: transaction }
-  return { success: true, tx_hex: await transaction.build() }
+  return { success: true, tx_hex: await transaction.build(), output_index: 2 }
 }

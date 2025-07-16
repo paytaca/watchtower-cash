@@ -260,7 +260,7 @@ def consolidate_treasury_contract(
     if "success" not in result or not result["success"]:
         raise StablehedgeException(result.get("error", "Unknown error"))
 
-    return result["tx_hex"]
+    return dict(tx_hex=result["tx_hex"], output_index=result["output_index"])
 
 
 def build_or_find_funding_utxo(treasury_contract_address:str, satoshis:int=0):
@@ -274,9 +274,11 @@ def build_or_find_funding_utxo(treasury_contract_address:str, satoshis:int=0):
         utxo_data = tx_model_to_cashscript(funding_utxo)
         input_tx_hashes = [*set(get_input_txids_from_txid(utxo_data["txid"]))]
     else:
-        transaction = consolidate_treasury_contract(treasury_contract_address, satoshis=satoshis)
+        consolidate_result = consolidate_treasury_contract(treasury_contract_address, satoshis=satoshis)
+        transaction = consolidate_result["tx_hex"]
+        index = consolidate_result["output_index"]
         txid = get_tx_hash(transaction)
-        utxo_data = dict(txid=txid, vout=0, satoshis=satoshis)
+        utxo_data = dict(txid=txid, vout=index, satoshis=satoshis)
         input_tx_hashes = [*set(extract_input_tx_hashes(transaction))]
 
     return dict(

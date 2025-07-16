@@ -91,22 +91,24 @@ def unmonitored_rebalance(
 
     fee_funder_wif = get_funding_wif(treasury_contract.address)
 
-    tc_consolidate_tx = consolidate_treasury_contract(
+    tc_consolidate_result = consolidate_treasury_contract(
         treasury_contract.address,
         satoshis=satoshis,
         to_redemption_contract=True,
         funding_wif=fee_funder_wif,
         locktime=locktime,
     )
+    tc_consolidate_tx = tc_consolidate_result["tx_hex"]
+    tc_consolidate_output_index = tc_consolidate_result["output_index"]
     tc_consolidate_txid = get_tx_hash(tc_consolidate_tx)
 
     tc_transaction_data = decode_raw_tx(tc_consolidate_tx)
     if not satoshis:
-        transferred_sats = int(tc_transaction_data["vout"][2]["value"] * 10 ** 8)
+        transferred_sats = int(tc_transaction_data["vout"][tc_consolidate_output_index]["value"] * 10 ** 8)
     else:
         transferred_sats = satoshis
 
-    manual_utxo = dict(txid=tc_consolidate_txid, vout=2, satoshis=transferred_sats)
+    manual_utxo = dict(txid=tc_consolidate_txid, vout=tc_consolidate_output_index, satoshis=transferred_sats)
     funding_utxo_data = dict(
         txid=tc_consolidate_txid, vout=0, wif=fee_funder_wif,
         satoshis=int(tc_transaction_data["vout"][0]["value"] * 10 ** 8),
