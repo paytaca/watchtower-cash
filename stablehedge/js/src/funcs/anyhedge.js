@@ -79,6 +79,7 @@ export function calculateTotalFundingSatoshis(opts) {
 
   const manager = new AnyHedgeManager({ contractVersion: contractData.version })
   const anyhedgeTotalFundingSats = manager.calculateTotalRequiredFundingSatoshis(contractData)
+  
 
   return {
     totalFundingSats: Number(totalFundingSats),
@@ -87,6 +88,11 @@ export function calculateTotalFundingSatoshis(opts) {
     longFundingSats: Number(longFundingSats),
 
     // data here just for reference
+    anyhedgeOriginalCalculations: {
+      anyhedgeTotalFundingSats: Number(anyhedgeTotalFundingSats),
+      short: Number(anyhedgeTotalFundingSats - longFundingSats),
+      long: Number(longFundingSats),
+    },
     metadata: {
       anyhedgeTotalFundingSats: Number(anyhedgeTotalFundingSats),
       calculatedSettlementTxFee: Number(calculatedSettlementTxFee),
