@@ -349,8 +349,8 @@ def get_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCont
         "transaction_type": tx_type,
         "price": round(price_value / 10 ** decimals, decimals),
         "currency": currency,
-        "satoshis": redemption_contract_tx.trade_size_in_satoshis,
-        "amount": redemption_contract_tx.trade_size_in_token_units,
+        "satoshis": str(redemption_contract_tx.trade_size_in_satoshis),
+        "amount": str(redemption_contract_tx.trade_size_in_token_units),
     }
 
     return dict(success=True, data=data, txid=txid)
@@ -376,19 +376,19 @@ def save_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCon
     result["new"] = created
     
     # remove later on
-    from django.conf import settings
-    if settings.BCH_NETWORK == "chipnet":
-        url = "https://chipnet.watchtower.cash/api/transactions/attributes/"
-    else:
-        url = "https://watchtower.cash/api/transactions/attributes/"
+    # from django.conf import settings
+    # if settings.BCH_NETWORK == "chipnet":
+    #     url = "https://chipnet.watchtower.cash/api/transactions/attributes/"
+    # else:
+    #     url = "https://watchtower.cash/api/transactions/attributes/"
     
-    _data = {
-        "txid": txid,
-        "wallet_hash": redemption_contract_tx.wallet_hash or "",
-        "key": "stablehedge_transaction",
-        "value": json.dumps(data),
-    }
-    import requests
-    requests.post(url, data=_data)
+    # _data = {
+    #     "txid": txid,
+    #     "wallet_hash": redemption_contract_tx.wallet_hash or "",
+    #     "key": "stablehedge_transaction",
+    #     "value": json.dumps(data),
+    # }
+    # import requests
+    # requests.post(url, data=_data)
 
     return result
