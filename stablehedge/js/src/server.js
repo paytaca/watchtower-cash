@@ -34,10 +34,14 @@ const server = http.createServer(async (req, res) => {
 
   try {
     parsedRequest.data = JSON.parse(parsedRequest.content)
-    Object.defineProperty(parsedRequest,'data',{enumerable:false});
+    Object.defineProperty(parsedRequest,'content', { enumerable:false });
   } catch {}
 
-  console.log(parsedRequest)
+  try{
+    console.log(util.inspect(parsedRequest, false, null, true));
+  } catch {
+    console.log(parsedRequest)
+  }
 
   try {
     const response = await requestHandler(parsedRequest)
