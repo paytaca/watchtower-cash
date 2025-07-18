@@ -202,6 +202,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     actions = [
         "recompile",
+        "verify_base_bytecodes",
         "subscribe",
         "subscribe_funding_wif",
         "update_utxos",
@@ -271,6 +272,20 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         for obj in queryset.all():
             created = subscribe_address(obj.address)
             messages.info(request, f"{obj} | new: {created}")
+
+    def verify_base_bytecodes(self, request, queryset):
+        for obj in queryset.all():
+            anyhedge_contract_match = "Not using bytecode"
+            if obj.anyhedge_contract_version:
+                result = ScriptFunctions.getAnyhedgeBaseBytecode(dict(version=obj.anyhedge_contract_version))
+                anyhedge_contract_match = result["bytecode"] == obj.anyhedge_base_bytecode
+
+            redemption_contract_match = "Not using bytecode"
+            if obj.redemption_contract_version:
+                result = ScriptFunctions.getRedemptionContractBaseBytecode(obj.redemption_contract_version)
+                redemption_contract_match = result["bytecode"] == obj.redemption_contract_base_bytecode                
+
+            messages.info(request, f"{obj} | Anyhedge: {anyhedge_contract_match} | Redemption Contract: {redemption_contract_match}")
 
     def subscribe_funding_wif(self, request, queryset):
         for obj in queryset.all():
