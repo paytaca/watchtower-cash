@@ -104,6 +104,8 @@ def utxo_data_to_cashscript(data:dict):
     if "locking_bytecode" in data and "unlocking_bytecode" in data:
         response["lockingBytecode"] = data["locking_bytecode"]
         response["unlockingBytecode"] = data["unlocking_bytecode"]
+    elif "wif" in data:
+        response["wif"] = data["wif"]
     
     return response
 
@@ -172,3 +174,19 @@ def token_to_satoshis(token_units, price_value):
     token_unit_sats_per_bch = token_units * 10 ** 8 # <units(sats per bch)> == <sats(units per bch)>
     satoshis = math.floor(token_unit_sats_per_bch / token_units_per_bch)
     return decimal.Decimal(satoshis)
+
+def decode_raw_tx(tx_hex):
+    return NODE.BCH._decode_raw_transaction(tx_hex)
+
+def extract_unlocking_script(tx_hex, index=0):
+    decoded_tx = NODE.BCH._decode_raw_transaction(tx_hex)
+    return decoded_tx["vin"][index]["scriptSig"]["hex"]
+
+def extract_input_tx_hashes(tx_hex):
+    decoded_tx = NODE.BCH._decode_raw_transaction(tx_hex)
+    return [inp["txid"] for inp in decoded_tx["vin"]]
+
+
+def get_input_txids_from_txid(txid):
+    decoded_tx = NODE.BCH._get_raw_transaction(txid, verbosity=2)
+    return [inp["txid"] for inp in decoded_tx["vin"]]

@@ -25,6 +25,7 @@ from stablehedge.js.runner import ScriptFunctions
 
 from .treasury_contract import (
     get_spendable_sats,
+    get_unallocated_reserve_sats,
     find_single_bch_utxo,
     get_bch_utxos,
     save_signature_to_tx,
@@ -249,7 +250,7 @@ def short_funds(treasury_contract_address:str, for_multisig=False, cap_tvl:float
         treasury_contract_address,
         satoshis=shortable_sats,
         low_liquidation_multiplier = 0.5,
-        high_liquidation_multiplier = 5.0,
+        high_liquidation_multiplier = 2.0,
         duration_seconds = duration_seconds,
     )
 
@@ -332,6 +333,13 @@ def _get_tvl_sats(treasury_contract_address:str):
     result["in_short"] = short_value_sats
     total += short_value_sats
 
+    unallocated_reserve_satoshis = None
+    unalloc_reserve_data = get_unallocated_reserve_sats(treasury_contract_address)
+    if "spendable" in unalloc_reserve_data:
+        unallocated_reserve_satoshis = decimal.Decimal(unalloc_reserve_data["spendable"])
+        total += unallocated_reserve_satoshis
+    result["unallocated_reserve_satoshis"] = unallocated_reserve_satoshis
+
     redeemable = models.RedemptionContract.objects \
         .annotate_redeemable() \
         .filter(treasury_contract__address=treasury_contract_address) \
@@ -350,7 +358,7 @@ def create_short_contract(
     price_obj:anyhedge_models.PriceOracleMessage=None,
     satoshis:int=0,
     low_liquidation_multiplier:float=0.5,
-    high_liquidation_multiplier:float=5.0,
+    high_liquidation_multiplier:float=2.0,
     duration_seconds:int=60 * 60 * 2, # 2 hours
 ):
     treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
@@ -694,8 +702,6 @@ def complete_short_proposal(treasury_contract_address:str):
     funding_utxo_tx_hex = funding_txs_data["funding_utxo_tx_hex"]
     funding_proposal = funding_txs_data["funding_proposal"]
 
-    oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
-
     if funding_utxo_tx_hex:
         success, error_or_txid = broadcast_transaction(funding_utxo_tx_hex)
         if not success:
@@ -706,8 +712,22 @@ def complete_short_proposal(treasury_contract_address:str):
             **short_proposal_data,
         )
 
-    # ideally these 2 steps should be last
-    # since it communicates with LP
+    return complete_short_proposal_funding(
+        treasury_contract_address,
+        contract_data,
+        settlement_service,
+        funding_proposal,
+        funding_utxo_tx_hex,
+    )
+
+
+def complete_short_proposal_funding(
+    treasury_contract_address:str,
+    contract_data:dict,
+    settlement_service:dict,
+    funding_proposal:dict,
+):
+    oracle_message_sequence = GP_LP.contract_data_to_proposal(contract_data)["contractStartingOracleMessageSequence"]
     hedge_pos_obj = save_contract_data(contract_data, settlement_service_data=settlement_service)
     funding_response = fund_hedge_position(
         contract_data,
@@ -723,7 +743,10 @@ def complete_short_proposal(treasury_contract_address:str):
         LOGGER.exception(exception)
 
     if not funding_response.get("success"):
-        sweep_funding_wif(treasury_contract_address)
+        try:
+            sweep_funding_wif(treasury_contract_address)
+        except StablehedgeException:
+            pass
         raise AnyhedgeException(funding_response["error"], code="funding_error")
 
     hedge_pos_obj.funding_tx_hash = funding_response["fundingTransactionHash"]

@@ -4,10 +4,15 @@ import { createSighashPreimage } from 'cashscript/dist/utils.js';
 import { cashscriptTxToLibauth } from '../utils/transaction.js';
 import { TreasuryContract } from '../contracts/treasury-contract/index.js'
 import { isValidWif, parseCashscriptOutput, parseUtxo, serializeOutput, serializeUtxo, wifToPubkey } from '../utils/crypto.js'
+import { parseContractData } from '../utils/anyhedge.js';
 
 
-export function getTreasuryContractArtifact() {
-  const artifact = TreasuryContract.getArtifact();
+/**
+ * @param {Object} opts
+ * @param {'v1' | 'v2'} opts.version
+ */
+export function getTreasuryContractArtifact(opts) {
+  const artifact = TreasuryContract.getArtifact(opts?.version);
   return { success: true, artifact }
 }
 
@@ -23,6 +28,7 @@ export function compileTreasuryContract(opts) {
     params: treasuryContract.params,
     options: treasuryContract.options,
     bytecode: contract.bytecode,
+    redemptionContractAddress: treasuryContract.getRedemptionContract()?.getContract()?.address,
   }
 }
 
@@ -242,4 +248,72 @@ export function signMutliSigTx(opts) {
     })
 
     return signatures
+}
+
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts
+ * @param {import('@generalprotocols/anyhedge').ContractDataV2} opts.contractData
+ * @param {Number} [opts.locktime]
+ * @param {import("cashscript").Utxo[]} opts.inputs
+ * @param {import("cashscript").Recipient[]} opts.outputs
+ */
+export async function spendToAnyhedgeContract(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+
+  const contractData = parseContractData(opts?.contractData)
+  const inputs = opts?.inputs?.map(parseUtxo)
+  const outputs = opts?.outputs?.map(parseCashscriptOutput)
+
+  const transaction = await treasuryContract.spendToAnyhedge({
+    contractData,
+    locktime: opts?.locktime,
+    inputs, outputs
+  })
+
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build() }
+}
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts
+ * @param {Number} [opts.locktime]
+ * @param {Boolean} [opts.sendToRedemptionContract]
+ * @param {String} [opts.redemptionContractAddress]
+ * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
+ * @param {import("cashscript").Output} [opts.feeFunderOutput]
+ * @param {import("cashscript").Utxo[]} opts.inputs
+ * @param {Number} opts.satoshis
+ */
+export async function consolidateTreasuryContract(opts) {
+  const treasuryContract = new TreasuryContract(opts?.contractOpts)
+
+  const feeFunderUtxo = parseUtxo(opts?.feeFunderUtxo)
+  if (!feeFunderUtxo.template) return { success: false, error: 'Invalid fee funder' }
+
+  const feeFunderOutput = opts?.feeFunderOutput
+    ? parseCashscriptOutput(opts?.feeFunderOutput)
+    : undefined
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+
+  if (opts?.sendToRedemptionContract && opts?.redemptionContractAddress) {
+    if (opts?.redemptionContractAddress !== treasuryContract.getRedemptionContract().getContract().address) {
+      return { success: false, error: 'Detected redemption contract address mismatch' }
+    }
+  }
+
+  const transaction = await treasuryContract.consolidate({
+    feeFunderUtxo,
+    feeFunderOutput,
+    inputs,
+    satoshis: opts?.satoshis,
+    locktime: opts?.locktime,
+    sendToRedemptionContract: opts?.sendToRedemptionContract,
+  })
+
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build(), output_index: 2 }
 }

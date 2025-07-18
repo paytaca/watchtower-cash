@@ -1,3 +1,4 @@
+import logging
 import time
 import functools
 import requests
@@ -10,6 +11,8 @@ from .parser import AnyhedgeJSONParser
 
 def ttl_hash(size=60*5):
     return round(time.time() / size)
+
+LOGGER = logging.getLogger("stablehedge")
 
 class GeneralProtocolsLP:
     json_parser = AnyhedgeJSONParser
@@ -43,7 +46,10 @@ class GeneralProtocolsLP:
     def liquidity_service_info(self, ttl_hash=ttl_hash(10)):
         print("Getting liquidity service")
         response = self._request("get", "/api/v2/liquidityServiceInformation")
-        return self.json_parser.parse(response.json())
+
+        result = self.json_parser.parse(response.json())
+        LOGGER.debug(f"LIQUIDITY SERVICE INFO | {response.url} | {self.json_parser.dumps(result, indent=2)}")
+        return result
 
     def estimate_service_fee(self, contract_creation_parameters:dict, settlement_service:dict=None):
         data = self.json_parser.dumps(contract_creation_parameters)
@@ -61,18 +67,29 @@ class GeneralProtocolsLP:
             )
         else:
             response = self._request("post", "/api/v2/estimateFee", data=data)
-        return self.json_parser.loads(response.content)
+        parsed_data = self.json_parser.dumps(self.json_parser.loads(data), indent=2)
+        result = self.json_parser.loads(response.content)
+        LOGGER.debug(f"ESTIMATE SERVICE FEE | {response.url} | {parsed_data} | {self.json_parser.dumps(result, indent=2)}")
+        return result
 
     def prepare_contract_position(self, oracle_public_key:str, pool_side:str):
         data = dict(oraclePublicKey=oracle_public_key, poolSide=pool_side)
         data = self.json_parser.dumps(data)
         response = self._request("post", "/api/v2/prepareContractPosition", data=data)
-        return self.json_parser.parse(response.json())
+
+        parsed_data = self.json_parser.dumps(self.json_parser.loads(data), indent=2)
+        result = self.json_parser.parse(response.json())
+        LOGGER.debug(f"PREPARE CONTRACT POSITION | {response.url} | {parsed_data} | {self.json_parser.dumps(result, indent=2)}")
+        return result
 
     def propose_contract(self, contract_proposal_data:dict):
         data = self.json_parser.dumps(contract_proposal_data)
         response = self._request("post", "/api/v2/proposeContract", data=data)
-        return self.json_parser.parse(response.json())
+        
+        parsed_data = self.json_parser.dumps(self.json_parser.loads(data), indent=2)
+        result = self.json_parser.parse(response.json())
+        LOGGER.debug(f"PROPOSE CONTRACT | {response.url} | {parsed_data} | {self.json_parser.dumps(result, indent=2)}")
+        return result
 
     def propose_hedge_position(self, hedge_pos_obj:models.HedgePosition):
         contract_proposal_data = self.hedge_position_to_proposal(hedge_pos_obj)

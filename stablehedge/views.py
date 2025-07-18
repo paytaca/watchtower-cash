@@ -10,6 +10,7 @@ from stablehedge import serializers
 from stablehedge.exceptions import StablehedgeException
 from stablehedge.functions.treasury_contract import (
     get_spendable_sats,
+    get_funding_wif,
     sweep_funding_wif,
 )
 from stablehedge.functions.anyhedge import (
@@ -34,6 +35,7 @@ from stablehedge.filters import (
 )
 from stablehedge.utils import response_serializers
 from stablehedge.utils.anyhedge import get_fiat_token_price_messages
+from stablehedge.utils.wallet import wif_to_pubkey, wif_to_cash_address
 from stablehedge.functions.redemption_contract import get_fiat_token_balances
 from stablehedge.pagination import CustomLimitOffsetPagination
 from stablehedge.js.runner import ScriptFunctions
@@ -241,10 +243,19 @@ class TreasuryContractViewSet(
             .select_related("redemption_contract") \
             .all()
 
-    @swagger_auto_schema(method="get", responses={200:response_serializers.ArtifactResponse})
+    @swagger_auto_schema(
+        method="get", responses={200:response_serializers.ArtifactResponse},
+        manual_parameters=[
+            openapi.Parameter(
+                'version', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                description="Version", enum=["v1", "v2"], default="v1",
+            ),
+        ],
+    )
     @decorators.action(methods=["get"], detail=False)
     def artifact(self, request, *args, **kwargs):
-        result = ScriptFunctions.getTreasuryContractArtifact()
+        version = str(request.query_params.get("version", "v1")).lower().strip()
+        result = ScriptFunctions.getTreasuryContractArtifact(dict(version=version))
 
         # remove unnecessary data for compiling the contract
         result["artifact"].pop("source", None)
@@ -388,12 +399,27 @@ class TreasuryContractViewSet(
     @swagger_auto_schema(
         method="post",
         responses={ 200:response_serializers.TxidSerializer },
+        manual_parameters=[
+            openapi.Parameter(
+                'force', openapi.IN_QUERY,
+                description="V2 treasury contract require force since it has different functionality",
+                type=openapi.TYPE_BOOLEAN, default=False,
+            ),
+        ],
     )
     @decorators.action(methods=["post"], detail=True)
     def sweep_proxy_funder(self, request, *args, **kwargs):
+        force = str(request.query_params.get("force", "")).lower().strip() == "true"
         instance = self.get_object()
-        txid = sweep_funding_wif(instance.address)
-        return Response({ "txid": txid })
+        try:
+            txid = sweep_funding_wif(instance.address, force=force)
+            return Response({ "txid": txid })
+        except StablehedgeException as exception:
+            result = {
+                "detail": str(exception),
+                "code": str(exception.code),
+            }
+            return Response(result, status=400)
 
     @swagger_auto_schema(
         method="post",
@@ -419,6 +445,19 @@ class TreasuryContractViewSet(
                 "code": str(exception.code),
             }
             return Response(result, status=400)
+
+    @decorators.action(methods=["get"], detail=True)
+    def proxy_funder(self, request, *args, **kwargs):
+        instance = self.get_object()
+        funding_wif = get_funding_wif(instance.address)
+        if not funding_wif:
+            return Response(dict(result="No proxy funder"))
+        
+        testnet = instance.address.startswith("bchtest")
+        pubkey = wif_to_pubkey(funding_wif)
+        address = wif_to_cash_address(funding_wif, testnet=testnet, token=False)
+        token_address = wif_to_cash_address(funding_wif, testnet=testnet, token=True)
+        return Response(dict(pubkey=pubkey, address=address, token_address=token_address))
 
 
 class TestUtilsViewSet(viewsets.GenericViewSet):

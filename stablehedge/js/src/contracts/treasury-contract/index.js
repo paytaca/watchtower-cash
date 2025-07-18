@@ -1,13 +1,17 @@
 import { compileFile } from "cashc"
-import { Contract, ElectrumNetworkProvider, SignatureAlgorithm, SignatureTemplate } from "cashscript"
+import { Contract, ElectrumNetworkProvider, HashType, SignatureAlgorithm, SignatureTemplate, TransactionBuilder } from "cashscript"
 import { binToHex, hexToBin, secp256k1 } from "@bitauth/libauth"
 
 import { calculateDust, createSighashPreimage, getOutputSize } from "cashscript/dist/utils.js"
 import { LOCKTIME_SIZE, P2PKH_INPUT_SIZE, VERSION_SIZE } from "cashscript/dist/constants.js"
-import { hash256 } from "@cashscript/utils"
+import { hash256, scriptToBytecode } from "@cashscript/utils"
 
 import { toTokenAddress } from "../../utils/crypto.js"
 import { calculateInputSize, cashscriptTxToLibauth } from "../../utils/transaction.js"
+import { numbersToCumulativeHexString } from "../../utils/math.js"
+import { prepareParamForTreasuryContract } from "../../utils/anyhedge-funding.js"
+
+import { RedemptionContract } from "../redemption-contract/index.js"
 
 export class TreasuryContract {
   /**
@@ -15,7 +19,13 @@ export class TreasuryContract {
    * @param {Object} opts.params
    * @param {String} opts.params.authKeyId
    * @param {String[]} opts.params.pubkeys
+   * @param {String} opts.params.anyhedgeBaseBytecode
+   * @param {String} opts.params.redemptionTokenCategory
+   * @param {String} opts.params.oraclePublicKey
+   * @param {String} opts.params.redemptionContractBaseBytecode
    * @param {Object} opts.options
+   * @param {'v1' | 'v2' } opts.options.version
+   * @param {String} opts.options.redemptionContractBaseBytecodeVersion
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
    */
@@ -23,11 +33,17 @@ export class TreasuryContract {
     this.params = {
       authKeyId: opts?.params?.authKeyId,
       pubkeys: opts?.params?.pubkeys,
+      anyhedgeBaseBytecode: opts?.params?.anyhedgeBaseBytecode,
+      redemptionTokenCategory: opts?.params?.redemptionTokenCategory,
+      oraclePublicKey: opts?.params?.oraclePublicKey,
+      redemptionContractBaseBytecode: opts?.params?.redemptionContractBaseBytecode,
     }
 
     this.options = {
       network: opts?.options?.network || 'mainnet',
       addressType: opts?.options?.addressType,
+      version: opts?.options?.version,
+      redemptionContractBaseBytecodeVersion: opts?.options?.redemptionContractBaseBytecodeVersion,
     }
   }
 
@@ -35,18 +51,19 @@ export class TreasuryContract {
     return this.options?.network === 'chipnet'
   }
   
-  static getArtifact() {
-    const cashscriptFilename = 'treasury-contract.cash';
+  static getArtifact(version) {
+    let cashscriptFilename = 'treasury-contract.cash';
+    if (version === 'v2') {
+      cashscriptFilename = 'treasury-contract-v2.cash';
+    } else if (version !== 'v1') {
+      cashscriptFilename = `treasury-contract-${version}.cash`;
+    }
     const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
     return artifact;
   }
-  
-  getContract() {
-    const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
-    const opts = { provider, addressType: this.options?.addressType }
 
-    const artifact = TreasuryContract.getArtifact()    
-
+  get contractParameters() {
+    const version = this.options.version
     const contractParams = [
       hexToBin(this.params?.authKeyId).reverse(),
       hexToBin(this.params?.pubkeys?.[0]),
@@ -55,12 +72,53 @@ export class TreasuryContract {
       hexToBin(this.params?.pubkeys?.[3]),
       hexToBin(this.params?.pubkeys?.[4]),
     ]
+
+    if (version === 'v2') {
+      contractParams.push(
+        hash256(hexToBin(this.params?.anyhedgeBaseBytecode)),
+        hexToBin(this.params?.redemptionTokenCategory).reverse(),
+        hexToBin(this.params?.oraclePublicKey),
+        hash256(hexToBin(this.params?.redemptionContractBaseBytecode)),
+      )
+    }
+    return contractParams
+  }
+
+  getContract() {
+    const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
+    const opts = { provider, addressType: this.options?.addressType }
+
+    const artifact = TreasuryContract.getArtifact(this.options?.version)
+
+    const contractParams = this.contractParameters
     const contract = new Contract(artifact, contractParams, opts);
 
     if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
     if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
 
     return contract
+  }
+
+  getRedemptionContract() {
+    if (this.options.version !== 'v2') return
+
+    const contract = this.getContract()
+
+    const rcManager = new RedemptionContract({
+      params: {
+        authKeyId: this.params.authKeyId,
+        tokenCategory: this.params.redemptionTokenCategory,
+        oraclePublicKey: this.params.oraclePublicKey,
+        treasuryContractAddress: contract.address,
+      },
+      options: {
+        version: this.options.redemptionContractBaseBytecodeVersion,
+        addressType: this.options.addressType,
+        network: this.options.network,
+      }
+    })
+
+    return rcManager
   }
 
   /**
@@ -463,6 +521,101 @@ export class TreasuryContract {
       })
       return binToHex(unlockingBytecode)
     })
+  }
+
+  /**
+   * @param {Object} opts
+   * @param {import("@generalprotocols/anyhedge").ContractDataV2} opts.contractData
+   * @param {Number} [opts.locktime]
+   * @param {import("cashscript").Utxo[]} opts.inputs
+   * @param {import("cashscript").Recipient[]} opts.outputs
+   */
+  async spendToAnyhedge(opts) {
+    const contract = this.getContract()
+    if (!contract.functions.spendToAnyhedge) return 'Contract function not supported'
+
+    const covenantParams = prepareParamForTreasuryContract(opts?.contractData)
+    const transaction = contract.functions.spendToAnyhedge(...covenantParams)
+
+    opts?.inputs?.forEach(input => {
+      input?.wif
+        ? transaction.fromP2PKH(input, new SignatureTemplate(input.wif))
+        : transaction.from(input)
+    })
+
+    transaction.to(opts?.outputs)
+
+    if (Number.isSafeInteger(opts?.locktime)) {
+      transaction.withTime(opts?.locktime)
+    }
+    return transaction
+  }
+
+  /**
+   * @param {Object} opts 
+   * @param {Number} [opts.locktime]
+   * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
+   * @param {import("cashscript").Output} [opts.feeFunderOutput]
+   * @param {import("cashscript").Utxo[]} opts.inputs
+   * @param {Boolean} [opts.sendToRedemptionContract]
+   * @param {Number} [opts.satoshis] falsey value would mean to consolidate all inputs into 1 utxo
+   */
+  async consolidate(opts) {
+    const contract = this.getContract()
+    if (!contract.functions.consolidate) return 'Contract function not supported'
+    if (opts?.sendToRedemptionContract && this.options.version !== 'v2') {
+      return 'Consolidation to redemption contract is only supported in v2'
+    }
+
+    const feeFunderUtxo = opts?.feeFunderUtxo
+    const feeFunderOutput = opts?.feeFunderOutput
+    const totalSats = opts.inputs.reduce((subtotal, utxo) => subtotal + utxo.satoshis, 0n)
+    const opData = numbersToCumulativeHexString([0n, ...opts?.inputs?.map(input => input.satoshis)])
+    const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
+
+    let consolidateParam = undefined
+    if (this.options.version === 'v2') {
+      consolidateParam = opts?.sendToRedemptionContract
+        ? hexToBin(this.params.redemptionContractBaseBytecode)
+        : new Uint8Array(0)
+    }
+    const builder = new TransactionBuilder({ provider: contract.provider })
+      .addInput(feeFunderUtxo, feeFunderUtxo.template.unlockP2PKH())
+      .addInputs(opts.inputs, contract.unlock.consolidate(consolidateParam))
+
+    if (feeFunderOutput) {
+      builder.addOutput(feeFunderOutput)
+    } else {
+      builder.addOutput({
+        to: feeFunderUtxo.template.unlockP2PKH().generateLockingBytecode(),
+        amount: feeFunderUtxo.satoshis
+      })
+    }
+
+    builder.addOutput({ to: opDataBytecode, amount: 0n })
+
+    let recipient = contract.address
+    if (this.options.version === 'v2' && opts?.sendToRedemptionContract) {
+      recipient = this.getRedemptionContract()?.getContract()?.address
+    }
+
+    if (opts.satoshis) {
+      builder.addOutput({ to: recipient, amount: BigInt(opts.satoshis) })
+      builder.addOutput({ to: contract.address, amount: totalSats - BigInt(opts.satoshis) })
+    } else {
+      builder.addOutput({ to: recipient, amount: totalSats })
+    }
+
+    if (Number.isSafeInteger(opts?.locktime)) {
+      builder.setLocktime(opts?.locktime)
+    }
+
+    if (!feeFunderOutput) {
+      const txSize = builder.build().length
+      builder.outputs[0].amount -= BigInt(txSize / 2)
+    }
+
+    return builder
   }
 }
 

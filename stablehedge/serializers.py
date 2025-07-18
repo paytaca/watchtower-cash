@@ -83,6 +83,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.RedemptionContract
         fields = [
+            "version",
             "address",
             "fiat_token",
             "auth_token_id",
@@ -396,6 +397,7 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
         model = models.TreasuryContract
         fields = [
             "redemption_contract_address",
+            "version",
             "address",
             "auth_token_id",
             "pubkey1",
@@ -403,6 +405,8 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
             "pubkey3",
             "pubkey4",
             "pubkey5",
+            "anyhedge_base_bytecode",
+            "anyhedge_contract_version",
             "funding_wif_pubkey",
         ]
 

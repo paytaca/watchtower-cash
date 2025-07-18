@@ -7,20 +7,35 @@ export function round(value, decimals=8, floor=true) {
 /**
  * Converts an integer to hexadecimal in little-endian notation
  * (e.g. 64**2, big endian => `0x1000`, little endian => `0x0010`)
- * @param {Number} num 
+ * @param {Number | BigInt} num 
  * @param {Number} bytelength 
  * @returns {String}
  */
 export function intToHexString(num=20, bytelength=20) {
-  let numHexBase = num.toString(16)
-  if (numHexBase.length % 2 != 0) numHexBase = '0' + numHexBase
-  let numBytes = Buffer.from(numHexBase, 'hex')
-  if (bytelength !== numBytes.length) {
-    numBytes = Buffer.concat([
-      Buffer.from(new Array(bytelength - numBytes.length).fill(0)),
-      numBytes,
-    ])
+  const hexString = num.toString(16).padStart(bytelength * 2, '0')
+  return reverseHex(hexString)
+}
+
+export function reverseHex(hex = '') {
+  if (hex.length % 2 !== 0) {
+    throw new Error("Hex string length must be even");
   }
-  numBytes.reverse()
-  return numBytes.toString('hex')
+  return hex.match(/../g).reverse().join('');
+}
+
+/**
+ * 
+ * @param {Number[] | BigInt[]} numbers 
+ * @param {Number} elementBytes 
+ */
+export function numbersToCumulativeHexString(numbers, elementBytes=4) {
+  let subtotal = 0n
+  const cumulativeSats = numbers.map(num => {
+    subtotal += BigInt(num);
+    return subtotal
+  })
+  cumulativeSats.unshift(0n)
+
+  const hexCumulatives = cumulativeSats.map(sats => intToHexString(sats, elementBytes))
+  return hexCumulatives.reduce((substr, satsHex) => substr + satsHex, '')
 }

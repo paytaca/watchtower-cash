@@ -1,10 +1,24 @@
 import { RedemptionContract } from '../contracts/redemption-contract/index.js'
+import { baseBytecodeToHex } from '../utils/contracts.js';
 import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 
 
 export function getRedemptionContractArtifact() {
   const artifact = RedemptionContract.getArtifact();
   return { success: true, artifact }
+}
+
+/**
+ * @param {Object} opts
+ * @param {Object} [opts.version=v2]
+ */
+export function getRedemptionContractBaseBytecode(opts) {
+  const version = opts?.version || 'v2'
+  const artifact = RedemptionContract.getArtifact(version)
+  return {
+    version: version,
+    bytecode: baseBytecodeToHex(artifact.bytecode)
+  }
 }
 
 /**
@@ -144,6 +158,40 @@ export async function unlockRedemptionContractWithNft(opts) {
   const transaction = await redemptionContract.unlockWithNft({
     keepGuarded: opts?.keepGuarded,
     inputs, outputs,
+    locktime: opts?.locktime,
+  })
+
+  if (typeof transaction === 'string') return { success: false, error: transaction }
+  return { success: true, tx_hex: await transaction.build() }
+}
+
+
+/**
+ * @param {Object} opts
+ * @param {Object} opts.contractOpts
+ * @param {Number} [opts.locktime]
+ * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
+ * @param {import("cashscript").Output} [opts.feeFunderOutput]
+ * @param {import("cashscript").Utxo[]} opts.inputs
+ * @param {Number} opts.satoshis
+ */
+export async function consolidateRedemptionContract(opts) {
+  const redemptionContract = new RedemptionContract(opts?.contractOpts)
+
+  const feeFunderUtxo = parseUtxo(opts?.feeFunderUtxo)
+  if (!feeFunderUtxo.template) return { success: false, error: 'Invalid fee funder' }
+
+  const feeFunderOutput = opts?.feeFunderOutput
+    ? parseCashscriptOutput(opts?.feeFunderOutput)
+    : undefined
+
+  const inputs = opts?.inputs?.map(parseUtxo)
+
+  const transaction = await redemptionContract.consolidate({
+    feeFunderUtxo,
+    feeFunderOutput,
+    inputs,
+    satoshis: opts?.satoshis,
     locktime: opts?.locktime,
   })
 

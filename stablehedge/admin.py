@@ -10,9 +10,10 @@ from stablehedge.functions.treasury_contract import (
     sweep_funding_wif,
     get_spendable_sats,
 )
-from stablehedge.functions.redemption_contract import get_24hr_volume_data
+from stablehedge.functions.redemption_contract import get_24hr_volume_data, consolidate_redemption_contract
 from stablehedge.functions.transaction import update_redemption_contract_tx_trade_size
 from stablehedge.js.runner import ScriptFunctions
+from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import subscribe_address
 from stablehedge.tasks import check_and_short_funds
 
@@ -47,17 +48,24 @@ class RedemptionContractAdmin(admin.ModelAdmin):
 
     list_display = [
         "__str__",
+        "version",
         "price_oracle_pubkey",
         "fiat_token",
         "treasury_contract_address",
         "is_subscribed",
     ]
 
+    list_filter = [
+        "version",
+    ]
+
+
     actions = [
         "recompile",
         "subscribe",
         "update_utxos",
         "recalculate_24hr_volume",
+        "consolidate_to_reserve_utxo",
     ]
 
     def get_queryset(self, request):
@@ -100,6 +108,24 @@ class RedemptionContractAdmin(admin.ModelAdmin):
             result = get_24hr_volume_data(obj.address, force=True)
             messages.info(request, f"{obj.address} | {result}")
     recalculate_24hr_volume.short_description = "Recalculate 24 volume data"
+
+    def consolidate_to_reserve_utxo(self, request, queryset):
+        for obj in queryset.all():
+            if obj.version == models.RedemptionContract.Version.V1:
+                messages.warning(request, f"{obj.address} | Unable to consolidate with version: {obj.version}")
+                continue
+
+            try:
+                transaction = consolidate_redemption_contract(obj.address, with_reserve_utxo=True)
+                success, error_or_txid = broadcast_transaction(transaction)
+                if success:
+                    messages.success(request, f"{obj.address} | {error_or_txid}")
+                else:
+                    raise StablehedgeException(error_or_txid, code="invalid-transaction")
+            except StablehedgeException as exception:
+                messages.error(request, f"{obj.address} | {exception}")
+    consolidate_to_reserve_utxo.short_description = "Consolidate to reserve UTXO"
+
 
 @admin.register(models.RedemptionContractTransaction)
 class RedemptionContractTransactionAdmin(admin.ModelAdmin):
@@ -166,6 +192,8 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     list_display = [
         "__str__",
+        "version",
+        "get_redemption_contract_check",
         "redemption_contract",
         "auth_token_id",
         "is_subscribed",
@@ -174,11 +202,17 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     actions = [
         "recompile",
+        "verify_base_bytecodes",
         "subscribe",
         "subscribe_funding_wif",
         "update_utxos",
         "sweep_funding_wif",
+        "force_sweep_funding_wif",
         "short_funds",
+    ]
+
+    list_filter = [
+        "version",
     ]
 
     def recompile(self, request, queryset):
@@ -197,6 +231,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request) \
             .select_related("redemption_contract") \
+            .select_related("redemption_contract__fiat_token", "fiat_token") \
             .annotate_is_subscribed()
 
     def get_spendable_satoshis(self, obj):
@@ -208,6 +243,26 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
     get_spendable_satoshis.short_description = 'Spendable satoshis'
 
+    def get_redemption_contract_check(self, obj):
+        try:
+            redemption_contract = obj.redemption_contract
+        except models.TreasuryContract.redemption_contract.RelatedObjectDoesNotExist:
+            return obj.version == models.TreasuryContract.Version.V2
+
+        if not obj.fiat_token or obj.fiat_token.category != redemption_contract.fiat_token.category:
+            return False
+
+        if obj.auth_token_id != redemption_contract.auth_token_id:
+            return False
+
+        if obj.price_oracle_pubkey != redemption_contract.price_oracle_pubkey:
+            return False
+
+        return True 
+
+    get_redemption_contract_check.short_description = 'Redemption contract param check'
+    get_redemption_contract_check.boolean = True
+
     # @admin.display(ordering='is_subscribed') # for django 5.0
     def is_subscribed(self, obj):
         return getattr(obj, "is_subscribed", None)
@@ -217,6 +272,20 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         for obj in queryset.all():
             created = subscribe_address(obj.address)
             messages.info(request, f"{obj} | new: {created}")
+
+    def verify_base_bytecodes(self, request, queryset):
+        for obj in queryset.all():
+            anyhedge_contract_match = "Not using bytecode"
+            if obj.anyhedge_contract_version:
+                result = ScriptFunctions.getAnyhedgeBaseBytecode(dict(version=obj.anyhedge_contract_version))
+                anyhedge_contract_match = result["bytecode"] == obj.anyhedge_base_bytecode
+
+            redemption_contract_match = "Not using bytecode"
+            if obj.redemption_contract_version:
+                result = ScriptFunctions.getRedemptionContractBaseBytecode(obj.redemption_contract_version)
+                redemption_contract_match = result["bytecode"] == obj.redemption_contract_base_bytecode                
+
+            messages.info(request, f"{obj} | Anyhedge: {anyhedge_contract_match} | Redemption Contract: {redemption_contract_match}")
 
     def subscribe_funding_wif(self, request, queryset):
         for obj in queryset.all():
@@ -234,6 +303,15 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         for obj in queryset.all():
             try:
                 txid = sweep_funding_wif(obj.address)
+                messages.info(request, f"Sweep | {obj} | {txid}")
+            except Exception as exception:
+                messages.error(request, f"Sweep | {obj} | {exception}")
+                LOGGER.exception(exception)
+
+    def force_sweep_funding_wif(self, request, queryset):
+        for obj in queryset.all():
+            try:
+                txid = sweep_funding_wif(obj.address, force=True)
                 messages.info(request, f"Sweep | {obj} | {txid}")
             except Exception as exception:
                 messages.error(request, f"Sweep | {obj} | {exception}")

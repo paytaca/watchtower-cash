@@ -1,6 +1,7 @@
 import logging
 import requests
 from functools import lru_cache
+from hashlib import sha256
 
 from stablehedge.apps import LOGGER
 
@@ -11,6 +12,14 @@ from main.utils.broadcast import send_post_broadcast_notifications
 
 def get_locktime():
     return NODE.BCH.get_latest_block()
+
+def get_tx_hash(tx_hex):
+    tx_hex_bytes = bytes.fromhex(tx_hex)
+    hash1 = sha256(tx_hex_bytes).digest()
+    hash2 = sha256(hash1).digest()
+    d = bytearray(hash2)
+    d.reverse()
+    return d.hex()
 
 
 def test_transaction_accept(transaction):

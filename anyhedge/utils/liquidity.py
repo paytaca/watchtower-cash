@@ -152,7 +152,7 @@ def find_close_matching_offer_suggestion(
 
 
 def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence, position="short"):
-    LOGGER.info(f"fund_hedge_position | {contract_data} | {funding_proposal} | {oracle_message_sequence} | {position}")
+    # LOGGER.info(f"fund_hedge_position | {contract_data} | {funding_proposal} | {oracle_message_sequence} | {position}")
     response = { "success": False, "fundingTransactionHash": "", "error": "" }
 
     data = {
@@ -160,20 +160,31 @@ def fund_hedge_position(contract_data, funding_proposal, oracle_message_sequence
         "outpointTransactionHash": funding_proposal["txHash"],
         "outpointIndex": funding_proposal["txIndex"],
         "satoshis": f'<bigint: {funding_proposal["txValue"]}n>',
-        "signature": funding_proposal["scriptSig"],
-        "publicKey": funding_proposal["publicKey"],
+        # "signature": funding_proposal["scriptSig"],
+        # "publicKey": funding_proposal["publicKey"],
         "takerSide": position,
         "dependencyTransactions": funding_proposal["inputTxHashes"],
         "oracleMessageSequence": oracle_message_sequence,
     }
+    if "publicKey" in funding_proposal:
+        data["publicKey"] = funding_proposal["publicKey"]
+        data["signature"] = funding_proposal["scriptSig"]
+    elif "unlockingScript" in funding_proposal:
+        data["unlockingScript"] = funding_proposal["unlockingScript"]
+    else:
+        raise Exception("Funding proposal missing publicKey or unlockingScript")
+
     try:
+        url = urljoin(app_settings.ANYHEDGE_LP_BASE_URL, "/api/v2/fundContract")
+        LOGGER.info(f"FUND CONTRACT API | {url} | {json.dumps(data, indent=4)}")
         resp = requests.post(
-            urljoin(app_settings.ANYHEDGE_LP_BASE_URL, "/api/v2/fundContract"),
+            url,
             data = json.dumps(data),
             headers = {'Content-type': 'application/json', 'Accept': 'text/plain'},
         )
         try:
             response_data = resp.json()
+            LOGGER.info(f"FUNDING RESP | {resp.status_code} | {resp.headers} | {response_data}")
         except json.JSONDecodeError as exception:
             LOGGER.error(f"FUNDING_RESP | {resp.status_code} | {resp.headers} | {resp.content}")
             raise exception

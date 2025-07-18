@@ -1,6 +1,7 @@
 import { compileFile } from "cashc"
-import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate } from "cashscript"
-import { hexToBin } from "@bitauth/libauth"
+import { Contract, ElectrumNetworkProvider, isUtxoP2PKH, SignatureTemplate, TransactionBuilder } from "cashscript"
+import { cashAddressToLockingBytecode, hexToBin } from "@bitauth/libauth"
+import { scriptToBytecode } from "@cashscript/utils"
 
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
 import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
@@ -12,6 +13,7 @@ import { toTokenAddress } from "../../utils/crypto.js"
 import { decodePriceMessage, verifyPriceMessage } from "../../utils/price-oracle.js"
 import { calculateInputSize, satoshisToToken, tokenToSatoshis } from "../../utils/transaction.js"
 import { addPrecision, removePrecision } from "../../utils/transaction.js"
+import { numbersToCumulativeHexString } from "../../utils/math.js"
 
 export class RedemptionContract {
   /**
@@ -20,7 +22,9 @@ export class RedemptionContract {
    * @param {String} opts.params.authKeyId
    * @param {String} opts.params.tokenCategory
    * @param {String} opts.params.oraclePublicKey
+   * @param {String} opts.params.treasuryContractAddress
    * @param {Object} opts.options
+   * @param {'v1' | 'v2'} opts.options.version
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
    */
@@ -29,11 +33,13 @@ export class RedemptionContract {
       authKeyId: opts?.params?.authKeyId,
       tokenCategory: opts?.params?.tokenCategory,
       oraclePublicKey: opts?.params?.oraclePublicKey,
+      treasuryContractAddress: opts?.params?.treasuryContractAddress,
     }
 
     this.options = {
       network: opts?.options?.network || 'mainnet',
       addressType: opts?.options?.addressType,
+      version: opts?.options?.version,
     }
   }
 
@@ -41,23 +47,37 @@ export class RedemptionContract {
     return this.options?.network === 'chipnet'
   }
 
-  static getArtifact() {
-    const cashscriptFilename = 'redemption-contract.cash';
+  static getArtifact(version) {
+    let cashscriptFilename = 'redemption-contract.cash';
+    if (version === 'v2') {
+      cashscriptFilename = 'redemption-contract-v2.cash';
+    } else if (version !== 'v1') {
+      cashscriptFilename = `redemption-contract-${version}.cash`;
+    }
     const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
     return artifact;
+  }
+
+  get contractParameters() {
+    const contractParams = [
+      hexToBin(this.params?.authKeyId).reverse(),
+      hexToBin(this.params?.tokenCategory).reverse(),
+      hexToBin(this.params?.oraclePublicKey),
+    ]
+
+    if (this.options.version === 'v2') {
+      const lockingBytecode = cashAddressToLockingBytecode(this.params.treasuryContractAddress)
+      contractParams.push(lockingBytecode.bytecode);
+    }
+
+    return contractParams
   }
 
   getContract() {
     const provider = new ElectrumNetworkProvider(this.isChipnet ? 'chipnet' : 'mainnet')
     const opts = { provider, addressType: this.options?.addressType }
-    const artifact = RedemptionContract.getArtifact();
-    // const artifact = redemptionContractArtifact
-    const contractParams = [
-      hexToBin(this.params.authKeyId).reverse(),
-      hexToBin(this.params?.tokenCategory).reverse(),
-      this.params?.oraclePublicKey,
-    ]
-    const contract = new Contract(artifact, contractParams, opts);
+    const artifact = RedemptionContract.getArtifact(this.options.version);
+    const contract = new Contract(artifact, this.contractParameters, opts);
 
     if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
     if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
@@ -479,5 +499,64 @@ export class RedemptionContract {
 
     transaction.withFeePerByte(feePerByte)
     return transaction
+  }
+
+  /**
+   * @param {Object} opts 
+   * @param {Number} [opts.locktime]
+   * @param {import("cashscript").UtxoP2PKH} opts.feeFunderUtxo
+   * @param {import("cashscript").Output} [opts.feeFunderOutput]
+   * @param {import("cashscript").Utxo[]} opts.inputs
+   * @param {Number} [opts.satoshis] falsey value would mean to consolidate all inputs into 1 utxo
+   */
+  async consolidate(opts) {
+    const contract = this.getContract()
+    if (!contract.functions.consolidate) return 'Contract function not supported'
+
+    const cashtokenInputs = opts?.inputs?.filter(input => input?.token?.category === this.params.tokenCategory)
+    if (cashtokenInputs?.length > 1) return 'Multiple cashtoken inputs not supported'
+    const cashtokenInputIndex = opts?.inputs?.findIndex(input => input?.token?.category === this.params.tokenCategory)
+    if (cashtokenInputIndex > 0) return 'Cashtoken input must be at index 1'
+
+    const feeFunderUtxo = opts?.feeFunderUtxo
+    const feeFunderOutput = opts?.feeFunderOutput
+    const totalSats = opts.inputs.reduce((subtotal, utxo) => subtotal + utxo.satoshis, 0n)
+    const opData = numbersToCumulativeHexString([0n, ...opts?.inputs?.map(input => input.satoshis)])
+    const opDataBytecode = scriptToBytecode([0x6a, hexToBin(opData)])
+
+    const builder = new TransactionBuilder({ provider: contract.provider })
+      .addInput(feeFunderUtxo, feeFunderUtxo.template.unlockP2PKH())
+      .addInputs(opts.inputs, contract.unlock.consolidate())
+
+    if (feeFunderOutput) {
+      builder.addOutput(feeFunderOutput)
+    } else {
+      builder.addOutput({
+        to: feeFunderUtxo.template.unlockP2PKH().generateLockingBytecode(),
+        amount: feeFunderUtxo.satoshis
+      })
+    }
+
+    builder.addOutput({ to: opDataBytecode, amount: 0n })
+
+    const tokenData = cashtokenInputs?.[0]?.token
+    const recipient = tokenData ? contract.tokenAddress : contract.address
+    if (opts.satoshis) {
+      builder.addOutput({ to: recipient, amount: BigInt(opts.satoshis), token: tokenData })
+      builder.addOutput({ to: contract.address, amount: totalSats - BigInt(opts.satoshis) })
+    } else {
+      builder.addOutput({ to: recipient, amount: totalSats, token: tokenData })
+    }
+
+    if (Number.isSafeInteger(opts?.locktime)) {
+      builder.setLocktime(opts?.locktime)
+    }
+
+    if (!feeFunderOutput) {
+      const txSize = builder.build().length
+      builder.outputs[0].amount -= BigInt(txSize / 2)
+    }
+
+    return builder
   }
 }

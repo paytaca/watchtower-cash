@@ -1,0 +1,140 @@
+pragma cashscript ^0.8.0;
+
+
+contract RedemptionContract(
+    bytes32 authKeyId,  // 32 B authkey nft id
+    bytes32 tokenCategory,  // 32 B token category of nft used for minting
+    pubkey  oraclePublicKey,  // 33 B, verifies message from oracle
+    bytes35 treasuryContractLockingBytecode, // 35 B, locking bytecode of treasury contract
+) {
+    function deposit(bytes priceMessage, datasig priceMessageSig, bool isInjectLiquidity) {
+        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));
+        int price = int(priceMessage.split(12)[1]);
+
+        require(tx.inputs[0].tokenCategory == tokenCategory);
+
+        // 1000 for tx fee and another 1000 for DUST in deposit output
+        int depositSats = tx.inputs[1].value - 1000 - 1000;
+
+        int satsPerBch = 100000000;
+        int tokenUnitSatsPerBch = depositSats * price;
+        int tokenAmount = int(tokenUnitSatsPerBch / satsPerBch);
+
+        if (!isInjectLiquidity) {
+            depositSats = depositSats / 2;
+            require(tx.outputs[2].value == depositSats);
+            require(tx.outputs[2].lockingBytecode == treasuryContractLockingBytecode);
+        }
+
+        require(tx.outputs[1].tokenCategory == tokenCategory);
+        require(tx.outputs[1].tokenAmount == tokenAmount);
+
+        require(tx.outputs[0].tokenCategory == tokenCategory);
+        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount - tokenAmount);
+        require(tx.outputs[0].value == tx.inputs[0].value + depositSats);
+    }
+
+    function redeem(bytes priceMessage, datasig priceMessageSig) {
+        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));
+        int price = int(priceMessage.split(12)[1]);
+
+        require(tx.inputs[0].tokenCategory == tokenCategory);
+        require(tx.inputs[1].tokenCategory == tokenCategory);
+
+        int satsPerBch = 100000000;
+        int tokenUnitSatsPerBch = tx.inputs[1].tokenAmount * satsPerBch;
+        int redeemSats = int(tokenUnitSatsPerBch / price);
+
+        require(tx.outputs[0].tokenCategory == tokenCategory);
+        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount + tx.inputs[1].tokenAmount);
+        require(tx.outputs[0].value == tx.inputs[0].value - redeemSats);
+        require(tx.outputs[1].value == redeemSats);
+        // DUST sats in redeem input is used as tx fee
+    }
+
+    /**
+        This allows contract to consolidate or create a UTXO with specific satoshis amount
+        This consolidate tx has the following requirements:
+            1. First input and output is used as fee funder for the consolidate tx.
+                This can be any wallet (e.g. p2sh, p2pkh)
+            2. All the inputs after input#0 must be from this smart contract
+            3. The output#1 has to be an OP_RETURN output
+            4. The OP_RETURN data must be of length 4 * inputs.length + 1
+            5. OP_RETURN data is a sequence of 4 byte numbers which represents cumulative amounts
+                of the inputs' satoshis amount.
+                This first 4 bytes is zero, the second 4 bytes is set as zero since
+                it represents input#0 and input#0 is not from this smart contract,
+                the third 4 bytes is the amount of input#1,
+                the fourth 4 bytes is the cumulative amount of the first two inputs, and so on.
+            6. This makes the last 4 bytes the cumulative amount of the smart contract's inputs.
+                Condition 1 above is a way to ensure that this condition is true.
+            7. output#2 and output#3 (if exists) must have a total satoshis equal to last 4 bytes
+                in the cumulitive amounts OP_RETURN data.
+            8. The recipient for output#2 and #3 should be this smart contract.
+
+        Based on the conditions above, the transaction fee is covered by the executor of the
+        consolidate transaction to prevent abuse of this function and result in loss of funds.
+    */
+    function consolidate() {
+        bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;
+        require(tx.inputs[0].lockingBytecode != inputLockScript);
+
+        // this ensures all inputs are from this smart contract's
+        // we check if adjacent inputs are from the same address
+        bytes prevInputLockScript = tx.inputs[max(this.activeInputIndex - 1, 1)].lockingBytecode;
+        bytes nextInputLockScript = tx.inputs[min(this.activeInputIndex + 1, tx.inputs.length - 1)].lockingBytecode;
+        require(inputLockScript == nextInputLockScript);
+        require(inputLockScript == prevInputLockScript);
+
+        bytes OP_DATA = tx.outputs[1].lockingBytecode;
+        bytes cumulativeAmounts = OP_DATA.split(OP_DATA.length - (tx.inputs.length+1) * 4)[1];
+
+        bytes segment = cumulativeAmounts.split(this.activeInputIndex * 4)[1].split(8)[0];
+        bytes prevCumulativeBytes, bytes cumulativeBytes = segment.split(4);
+        int inputAmount = int(cumulativeBytes) - int(prevCumulativeBytes);
+        require(tx.inputs[this.activeInputIndex].value == inputAmount);
+
+        if (tx.inputs[this.activeInputIndex].tokenCategory == tokenCategory) {
+            require(this.activeInputIndex == 1);
+            require(tx.outputs[2].tokenCategory == tokenCategory);
+            require(tx.inputs[this.activeInputIndex].tokenAmount == tx.outputs[2].tokenAmount);
+        }
+
+        int totalInputSats = int(cumulativeAmounts.split(cumulativeAmounts.length - 4)[1]);
+        int totalOutputSats = tx.outputs[2].value;
+
+        require(tx.outputs.length <= 4);
+        require(tx.outputs[2].lockingBytecode == inputLockScript);
+
+        if (tx.outputs.length == 4) {
+            totalOutputSats = totalOutputSats + tx.outputs[3].value;
+            require(
+                tx.outputs[3].lockingBytecode == inputLockScript ||
+                tx.outputs[3].lockingBytecode == treasuryContractLockingBytecode
+            );
+        }
+
+        // 13 => 10 base fee + 3 OP_DATA length prefix + 4 OP_DATA prefix of 0x00000000
+        // inputs.length * 800 => 796 input fee + 4 bytes from OP_DATA
+        // 45 bytes per output => BCH only with p2sh32 address
+        // int maxFee = 17 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);
+        int diff = totalInputSats - totalOutputSats;
+
+        // using '<=' instead of '==' so creator of transaction can still optimize fee size
+        // too small fees will just be rejected by min tx fee requirement
+        require(diff == 0);
+    }
+
+    // https://github.com/mr-zwets/AuthGuard/blob/c5115b0df05c868018cc433e1047f5c5f6c8f7f7/AuthGuard.cash
+    function unlockWithNft(bool keepGuarded) {
+        // Check that the second input holds the AuthKey NFT
+        require(tx.inputs[1].tokenCategory == authKeyId);
+        require(tx.inputs[1].tokenAmount == 0);
+
+        // if keepGuarded is false, the AuthHead can be released from the AuthGuard covenant
+        if(keepGuarded) {
+            // Self preservation of AuthGuard covenant as the first output
+            require(tx.outputs[0].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);
+        }
+    }
+}

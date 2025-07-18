@@ -1,0 +1,38 @@
+pragma cashscript ^0.8.0;
+
+contract LPContract(pubkey owner) {
+    function unlock(sig signature) {
+        require(checkSig(signature, owner));
+    }
+
+    // The checks in this function is from the base bytecode of ProxyFunder smart contract
+    // changes in that contract will have need adjustments here
+    function spendToFunder(bytes paramBytecodeSegment1, bytes paramBytecodeSegment2, bytes baseBytecode) {
+        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
+        bytes paramBytecode = paramBytecodeSegment1 + 
+            bytes(35) + thisLockScript +
+            paramBytecodeSegment2;
+
+        bytes contractBytecode = paramBytecode + baseBytecode;
+        bytes32 scriptHash = hash256(contractBytecode);
+        bytes35 lockingBytecode = new LockingBytecodeP2SH32(scriptHash);
+
+        require(tx.outputs[0].lockingBytecode == lockingBytecode);
+
+        // base bytecode starts with
+        // 5#79009c63c352a169c4519d02 or 01##79009c63c352a169c4519d02
+        bytes prefix, bytes segment1 = baseBytecode.split(1);
+        if (prefix == 0x01) {
+            segment1 = baseBytecode.split(2)[1];
+        }
+
+        bytes commonSegment1, bytes segment2 = segment1.split(12);
+        require(commonSegment1 == 0x79009c63c352a169c4519d02);
+
+        bytes commonSegment2, bytes segment3 = segment2.split(2)[1].split(20);
+        require(commonSegment2 == 0x00c67c94c3529c6301647851c69378947b757768);
+
+        bytes commonSegment3 = segment3.split(2)[1].split(7)[0];
+        require(commonSegment3 == 0x007f77527f7581);
+    }
+}

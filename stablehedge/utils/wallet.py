@@ -3,6 +3,8 @@ import bitcoin
 import binascii
 import hashlib
 import base58
+from django.conf import settings
+from django.db.models import Sum
 
 from cashaddress import convert
 
@@ -89,3 +91,47 @@ def wif_to_pubkey(wif):
 
 def is_valid_wif(wif:str):
     return bool(re.match("^(bch-wif\:)?[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$", wif))
+
+
+def get_bch_transaction_objects(address:str, satoshis:int=None, fee_sats_per_input:int=144):
+    address = to_cash_address(address, testnet=settings.BCH_NETWORK == "chipnet")
+    utxos = main_models.Transaction.objects.filter(
+        address__address=address,
+        token__name="bch",
+        spent=False,
+    )
+    if satoshis is None:
+        return utxos
+
+    P2PKH_OUTPUT_FEE = 44
+
+    subtotal = 0
+    sendable = 0 - (P2PKH_OUTPUT_FEE * 2) # 2 outputs for send and change
+    _utxos = []
+    for utxo in utxos:
+        subtotal += utxo.value
+        sendable += utxo.value - fee_sats_per_input
+        _utxos.append(utxo)
+
+        if sendable >= satoshis:
+            break
+
+
+    return _utxos
+
+
+def get_spendable_bch_sats(address:str, fee_sats_per_input:int=144):
+    utxos = get_bch_transaction_objects(address, fee_sats_per_input=fee_sats_per_input)
+
+    if isinstance(utxos, list):
+        total_sats = 0
+        for utxo in utxos:
+            total_sats += utxo.value
+
+        utxo_count = len(utxos)
+    else:
+        total_sats = utxos.aggregate(total_sats = Sum("value"))["total_sats"] or 0
+        utxo_count = utxos.count()
+
+    spendable_sats = total_sats - (fee_sats_per_input * utxo_count)
+    return dict(total=total_sats, spendable=spendable_sats, utxo_count=utxo_count)

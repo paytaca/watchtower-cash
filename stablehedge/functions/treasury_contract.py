@@ -1,14 +1,13 @@
 import logging
 from django.conf import settings
-from django.db.models import Sum
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.exceptions import StablehedgeException
-from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey
-from stablehedge.utils.blockchain import broadcast_transaction
-from stablehedge.utils.transaction import tx_model_to_cashscript
+from stablehedge.utils.wallet import to_cash_address, wif_to_cash_address, is_valid_wif, wif_to_pubkey, get_bch_transaction_objects, get_spendable_bch_sats
+from stablehedge.utils.blockchain import broadcast_transaction, get_tx_hash
+from stablehedge.utils.transaction import tx_model_to_cashscript, extract_input_tx_hashes, get_input_txids_from_txid
 from stablehedge.utils.encryption import encrypt_str, decrypt_wif_safe
 
 
@@ -41,24 +40,15 @@ def save_signature_to_tx(
 
 
 def get_spendable_sats(treasury_contract_address:str):
-    utxos = get_bch_utxos(treasury_contract_address)
+    return get_spendable_bch_sats(treasury_contract_address, fee_sats_per_input=700)
 
-    if isinstance(utxos, list):
-        total_sats = 0
-        for utxo in utxos:
-            total_sats += utxo.value
 
-        utxo_count = len(utxos)
-    else:
-        total_sats = utxos.aggregate(total_sats = Sum("value"))["total_sats"] or 0
-        utxo_count = utxos.count()
- 
-    # estimate of sats used as fee when using the utxo
-    # need to improve
-    fee_sats_per_input = 500
-    spendable_sats = total_sats - (fee_sats_per_input * utxo_count)
+def get_unallocated_reserve_sats(treasury_contract_address:str):
+    redemption_contract_address = models.RedemptionContract.objects \
+        .filter(treasury_contract__address=treasury_contract_address) \
+        .values_list("address", flat=True).first()
 
-    return dict(total=total_sats, spendable=spendable_sats, utxo_count=utxo_count)
+    return get_spendable_bch_sats(redemption_contract_address, fee_sats_per_input=400)
 
 
 def find_single_bch_utxo(treasury_contract_address:str, satoshis:int):
@@ -72,32 +62,11 @@ def find_single_bch_utxo(treasury_contract_address:str, satoshis:int):
 
 
 def get_bch_utxos(treasury_contract_address:str, satoshis:int=None):
-    address = to_cash_address(treasury_contract_address, testnet=settings.BCH_NETWORK == "chipnet")
-    utxos = main_models.Transaction.objects.filter(
-        address__address=address,
-        token__name="bch",
-        spent=False,
+    return get_bch_transaction_objects(
+        treasury_contract_address,
+        satoshis=satoshis,
+        fee_sats_per_input=700,
     )
-    if satoshis is None:
-        return utxos
-
-    P2PKH_OUTPUT_FEE = 44
-    fee_sats_per_input = 500
-
-    subtotal = 0
-    sendable = 0 - (P2PKH_OUTPUT_FEE * 2) # 2 outputs for send and change
-    _utxos = []
-    for utxo in utxos:
-        subtotal += utxo.value
-        sendable += utxo.value - fee_sats_per_input
-        _utxos.append(utxo)
-
-        if sendable >= satoshis:
-            break
-
-
-    return _utxos
-
 
 def get_funding_wif_address(treasury_contract_address:str, token=False):
     funding_wif = get_funding_wif(treasury_contract_address)
@@ -137,8 +106,19 @@ def get_funding_wif(treasury_contract_address:str):
     return decrypt_wif_safe(encrypted_funding_wif)
 
 
-def sweep_funding_wif(treasury_contract_address:str):
+def sweep_funding_wif(treasury_contract_address:str, force:bool=False):
     LOGGER.info(f"SWEEP FUNDING WIF | {treasury_contract_address}")
+
+    treasury_contract = models.TreasuryContract.objects \
+        .filter(address=treasury_contract_address).first()
+
+    allowed_versions = [models.TreasuryContract.Version.V1]
+    if treasury_contract.version not in allowed_versions and not force:
+        raise StablehedgeException(
+            "Sweep funding WIF is not supported for V2 contracts. Set force=True to allow.",
+            code="v2_not_supported",
+        )
+
     funding_wif = get_funding_wif(treasury_contract_address)
     funding_wif_address = get_funding_wif_address(treasury_contract_address)
 
@@ -216,3 +196,93 @@ def get_wif_for_short_proposal(treasury_contract:models.TreasuryContract):
     other_wifs = [_wif for _wif in wifs[1:] if _wif]
 
     return (wif1, *other_wifs[:2])
+
+def get_funding_utxo_for_consolidation(treasury_contract_address:str, wif:str, utxos_count:int):
+    if not wif:
+        wif = get_funding_wif(treasury_contract_address)
+
+    if not wif:
+        raise StablehedgeException("Funding WIF not set", code="funding_wif_not_set")
+    
+    if not is_valid_wif(wif):
+        raise StablehedgeException("Invalid funding WIF", code="invalid_funding_wif")
+
+    address = wif_to_cash_address(wif, testnet=settings.BCH_NETWORK == "chipnet")
+    return wif, main_models.Transaction.objects.filter(
+        address__address=address,
+        token__name="bch",
+        spent=False,
+        value__gte=1000 + utxos_count * 900,
+    ).first()
+
+
+def consolidate_treasury_contract(
+    treasury_contract_address:str,
+    satoshis:int=None,
+    funding_wif:str=None,
+    to_redemption_contract:bool=False,
+    locktime:int=0,
+):
+    """
+        Consolidate treasury contract utxos to a single tx
+    """
+    treasury_contract = models.TreasuryContract.objects.filter(address=treasury_contract_address).first()
+    if not treasury_contract:
+        raise StablehedgeException("Treasury contract not found", code="contract_not_found")
+
+    # get utxos
+    utxos = get_bch_utxos(treasury_contract_address, satoshis=satoshis)
+    if not len(utxos):
+        raise StablehedgeException("No UTXOs found", code="no_utxos")
+
+    cashscript_utxos = [tx_model_to_cashscript(utxo) for utxo in utxos]
+
+    fee_funder_wif, funding_utxo = get_funding_utxo_for_consolidation(
+        treasury_contract_address, funding_wif, len(cashscript_utxos),
+    )
+    if not funding_utxo:
+        raise StablehedgeException("Funding UTXO not found", code="funding_utxo_not_found")
+
+    funding_utxo_data = tx_model_to_cashscript(funding_utxo)
+    funding_utxo_data["wif"] = fee_funder_wif
+
+    # create transaction
+    result = ScriptFunctions.consolidateTreasuryContract(dict(
+        contractOpts=treasury_contract.contract_opts,
+        locktime=locktime,
+        feeFunderUtxo=funding_utxo_data,
+        inputs=cashscript_utxos,
+        satoshis=satoshis,
+        sendToRedemptionContract=to_redemption_contract,
+        redemptionContractAddress=treasury_contract.redemption_contract.address,
+    ))
+
+    if "success" not in result or not result["success"]:
+        raise StablehedgeException(result.get("error", "Unknown error"))
+
+    return dict(tx_hex=result["tx_hex"], output_index=result["output_index"])
+
+
+def build_or_find_funding_utxo(treasury_contract_address:str, satoshis:int=0):
+    """
+        Build or find funding utxo for treasury contract
+    """
+    funding_utxo = find_single_bch_utxo(treasury_contract_address, satoshis=satoshis)
+
+    transaction = None
+    if funding_utxo:
+        utxo_data = tx_model_to_cashscript(funding_utxo)
+        input_tx_hashes = [*set(get_input_txids_from_txid(utxo_data["txid"]))]
+    else:
+        consolidate_result = consolidate_treasury_contract(treasury_contract_address, satoshis=satoshis)
+        transaction = consolidate_result["tx_hex"]
+        index = consolidate_result["output_index"]
+        txid = get_tx_hash(transaction)
+        utxo_data = dict(txid=txid, vout=index, satoshis=satoshis)
+        input_tx_hashes = [*set(extract_input_tx_hashes(transaction))]
+
+    return dict(
+        utxo=utxo_data,
+        transaction=transaction,
+        input_tx_hashes=input_tx_hashes,
+    )

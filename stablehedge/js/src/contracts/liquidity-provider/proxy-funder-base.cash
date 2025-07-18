@@ -1,0 +1,37 @@
+pragma cashscript ^0.8.0;
+
+contract ProxyFunder(
+    bytes anyhedgeBaseBytecode,
+    bytes35 contributor1,
+    bytes contributions
+) {
+    function payout() {
+        require(tx.inputs.length <= 2);
+        require(tx.outputs.length == 1);
+
+        // fee = 510 base sats + 45 * numContributors
+        int fee = 555;
+        int val = (tx.inputs[0].value - fee);
+        if (tx.inputs.length == 2) {
+            int addtlFee = 100;
+            val = val + tx.inputs[1].value - addtlFee;
+        }
+
+        int contributor1BasisPts = int(contributions.split(0)[1].split(2)[0]);
+
+        require((val * contributor1BasisPts) / 10000 == tx.outputs[0].value);
+
+        require(tx.outputs[0].lockingBytecode == contributor1);
+    }
+
+    function spendToContract(bytes argsSegment1, bytes argsSegment2) {
+        bytes35 thisLockScript = new LockingBytecodeP2SH32(hash256(this.activeBytecode));
+        bytes contractParametersBytecode = argsSegment2 +
+            bytes(35) + thisLockScript +
+            argsSegment1;
+
+        bytes contractBytecode = contractParametersBytecode + anyhedgeBaseBytecode;
+        bytes35 anyhedgeLockscript = new LockingBytecodeP2SH32(hash256(contractBytecode));
+        require(tx.outputs[0].lockingBytecode == anyhedgeLockscript);
+    }
+}
