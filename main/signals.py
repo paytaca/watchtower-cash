@@ -69,6 +69,12 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
         category = None
         if instance.cashtoken_ft:
             category = instance.cashtoken_ft.category
+        elif instance.spent and instance.spending_txid:
+            # This is a spent input, try to get the category from the output
+            spent_tx = Transaction.objects.filter(txid=instance.txid, index=instance.index).first()
+            if spent_tx and spent_tx.cashtoken_ft:
+                category = spent_tx.cashtoken_ft.category
+        if category:
             ct_cache_key = f'wallet:balance:token:{wallet_hash}:{category}'
             cache.delete(ct_cache_key)
 

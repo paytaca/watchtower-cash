@@ -19,6 +19,9 @@ from main.utils.tx_fee import (
 )
 
 import logging
+import json
+from django.core.exceptions import ObjectDoesNotExist
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -53,11 +56,14 @@ def _get_ct_balance(query, multiple_tokens=False):
     return _get_slp_balance(query, multiple_tokens)
 
 
-def _get_bch_balance(query):
+def _get_bch_balance(query, include_token_sats=False):
     # Exclude dust amounts as they're likely to be SLP transactions
     # TODO: Needs another more sure way to exclude SLP transactions
     dust = 546 # / (10 ** 8)
-    query = query & Q(value__gt=dust) & Q(token__name='bch')
+    if include_token_sats:
+        query = query & Q(value__gt=dust)
+    else:
+        query = query & Q(value__gt=dust) & Q(token__name='bch')
     qs = Transaction.objects.filter(query)
     qs_count = qs.count()
     qs_balance = qs.aggregate(
@@ -98,6 +104,7 @@ class Balance(APIView):
         txid = kwargs.get('txid', '')
         tokenid_or_category = kwargs.get('tokenid_or_category', '')
         wallet_hash = kwargs.get('wallethash', '')
+        include_token_sats = request.GET.get('include_token_sats') == 'true' or False
 
         is_cashtoken_nft = False
         if index and txid:
@@ -144,21 +151,35 @@ class Balance(APIView):
                 qs_balance = _get_slp_balance(query, multiple_tokens=multiple)
 
             if is_token_addr:
-                if is_cashtoken_nft:
-                    token = CashNonFungibleToken.objects.get(
-                        category=category,
-                        current_index=index,
-                        current_txid=txid
-                    )
-                else:
-                    token = CashFungibleToken.objects.get(category=category)
-                
-                decimals = 0
-                if token.info:
-                    decimals = token.info.decimals
+                try:
+                    if is_cashtoken_nft:
+                        token = CashNonFungibleToken.objects.get(
+                            category=category,
+                            current_index=index,
+                            current_txid=txid
+                        )
+                    else:
+                        token = CashFungibleToken.objects.get(category=category)
+                    
+                    decimals = 0
+                    if token.info:
+                        decimals = token.info.decimals
+                except ObjectDoesNotExist:
+                    # Token not found, return zero balance
+                    data['balance'] = 0
+                    data['spendable'] = 0
+                    data['valid'] = True
+                    return Response(data=data, status=status.HTTP_200_OK)
             else:
-                token = Token.objects.get(tokenid=tokenid)
-                decimals = token.decimals
+                try:
+                    token = Token.objects.get(tokenid=tokenid)
+                    decimals = token.decimals
+                except ObjectDoesNotExist:
+                    # Token not found, return zero balance
+                    data['balance'] = 0
+                    data['spendable'] = 0
+                    data['valid'] = True
+                    return Response(data=data, status=status.HTTP_200_OK)
             
             balance = qs_balance['amount__sum'] or 0
             if balance > 0:
@@ -175,7 +196,7 @@ class Balance(APIView):
         if is_bch_address(bchaddress):
             data['address'] = bchaddress
             query = Q(address__address=data['address']) & Q(spent=False)
-            qs_balance, qs_count = _get_bch_balance(query)
+            qs_balance, qs_count = _get_bch_balance(query, include_token_sats=include_token_sats)
             bch_balance = qs_balance['balance'] or 0
             bch_balance = bch_balance / (10 ** 8)
 
@@ -188,7 +209,10 @@ class Balance(APIView):
             data['valid'] = True
 
         if wallet_hash:
-            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+            try:
+                wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+            except ObjectDoesNotExist:
+                return Response({'detail': 'Wallet not found'}, status=status.HTTP_404_NOT_FOUND)
             data['wallet'] = wallet_hash
 
             if wallet.wallet_type == 'slp':
@@ -204,14 +228,21 @@ class Balance(APIView):
                 if multiple:
                     pass
                 else:
-                    token = Token.objects.get(tokenid=tokenid_or_category)
-                    balance = qs_balance['amount__sum'] or 0
-                    if balance > 0 and token.decimals:
-                        balance = self.truncate(balance, token.decimals)
-                    data['balance'] = balance
-                    data['spendable'] = balance
-                    data['token_id'] = tokenid_or_category
-                    data['valid'] = True
+                    try:
+                        token = Token.objects.get(tokenid=tokenid_or_category)
+                        balance = qs_balance['amount__sum'] or 0
+                        if balance > 0 and token.decimals:
+                            balance = self.truncate(balance, token.decimals)
+                        data['balance'] = balance
+                        data['spendable'] = balance
+                        data['token_id'] = tokenid_or_category
+                        data['valid'] = True
+                    except ObjectDoesNotExist:
+                        # Token not found, return zero balance
+                        data['balance'] = 0
+                        data['spendable'] = 0
+                        data['token_id'] = tokenid_or_category
+                        data['valid'] = True
 
             elif wallet.wallet_type == 'bch':
 
@@ -279,33 +310,41 @@ class Balance(APIView):
                     if cached_data:
                         data = json.loads(cached_data) 
                     else:
-                        if is_cashtoken_nft:
-                            token = CashNonFungibleToken.objects.get(
-                                category=category,
-                                current_index=index,
-                                current_txid=txid
-                            )
-                        else:
-                            token = CashFungibleToken.objects.get(category=_category)
+                        try:
+                            if is_cashtoken_nft:
+                                token = CashNonFungibleToken.objects.get(
+                                    category=category,
+                                    current_index=index,
+                                    current_txid=txid
+                                )
+                            else:
+                                token = CashFungibleToken.objects.get(category=_category)
 
-                        balance = qs_balance['amount__sum'] or 0
-                        decimals = 0
-                        if token.info:
-                            decimals = token.info.decimals
+                            balance = qs_balance['amount__sum'] or 0
+                            decimals = 0
+                            if token.info:
+                                decimals = token.info.decimals
 
-                        if balance > 0:
-                            balance = self.truncate(balance, decimals)
+                            if balance > 0:
+                                balance = self.truncate(balance, decimals)
 
-                        data['balance'] = balance
-                        data['spendable'] = balance
-                        data['token_id'] = _category
-                        data['valid'] = True
-                        
-                        if is_cashtoken_nft:
-                            data['commitment'] = token.commitment
-                            data['capability'] = token.capability
+                            data['balance'] = balance
+                            data['spendable'] = balance
+                            data['token_id'] = _category
+                            data['valid'] = True
+                            
+                            if is_cashtoken_nft:
+                                data['commitment'] = token.commitment
+                                data['capability'] = token.capability
 
-                        cache.set(ct_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
+                            cache.set(ct_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
+                        except ObjectDoesNotExist:
+                            # Token not found, return zero balance
+                            data['balance'] = 0
+                            data['spendable'] = 0
+                            data['token_id'] = _category
+                            data['valid'] = True
+                            cache.set(ct_cache_key, json.dumps(data), ex=60 * 5) # 5 minutes
 
             # Update last_balance_check timestamp
             wallet.last_balance_check = timezone.now()
@@ -334,7 +373,10 @@ class SpendableBalance(APIView):
             query = Q(address__address=bchaddress) & Q(spent=False)
             qs_balance, qs_count = _get_bch_balance(query)
         elif wallet_hash:
-            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+            try:
+                wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+            except ObjectDoesNotExist:
+                return Response({'detail': 'Wallet not found'}, status=status.HTTP_404_NOT_FOUND)
             data['wallet'] = wallet_hash
             if wallet.wallet_type != 'bch':
                 return Response({ 'detail': 'Invalid wallet type' }, status=400)

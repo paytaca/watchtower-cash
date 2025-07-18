@@ -91,6 +91,7 @@ INSTALLED_APPS=[
     'cts',
     'authentication',
     'stablehedge',
+    'multisig'
 ]
 
 MIDDLEWARE=[
@@ -429,7 +430,10 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "timestamp",
     "public-key",
     "version",
-    "platform"
+    "platform",
+    "x-auth-pubkey",
+    "x-auth-message",
+    "x-auth-signature"
 ]
 
 REST_FRAMEWORK = {
@@ -551,6 +555,11 @@ LOGGING = {
             'propagate': False    
         },
         'stablehedge': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'multisig': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
@@ -745,4 +754,9 @@ STABLEHEDGE_FERNET_KEY = config('STABLEHEDGE_FERNET_KEY')
 STABLEHEDGE = {
     "FERNET_KEY": config('STABLEHEDGE_FERNET_KEY', ''),
     "AUTH_KEY_WALLET_WIF": config('STABLEHEDGE_AUTH_KEY_WALLET_WIF', ''),
+}
+
+MULTISIG = {
+    "ENABLE_AUTH": False,
+    "TIMESTAMP_DRIFT_SECONDS": 60 * 2  # ±60 * n seconds allowed
 }

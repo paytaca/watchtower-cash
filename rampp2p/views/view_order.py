@@ -1,6 +1,7 @@
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 
 from django.http import Http404
 from django.utils import timezone
@@ -25,6 +26,8 @@ from rampp2p.utils import satoshi_to_bch, bch_to_fiat
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
 from rampp2p.validators import *
+
+from rampp2p.pagination import StandardResultsSetPagination
 
 import logging
 logger = logging.getLogger(__name__)
@@ -110,6 +113,50 @@ class CashinOrderViewSet(viewsets.GenericViewSet):
         wallet_hash = request.query_params.get('wallet_hash')
         has_cashin_alerts = utils.check_has_cashin_alerts(wallet_hash)
         return Response({'has_cashin_alerts': has_cashin_alerts}, status=200)
+    
+class PublicOrdersViewSet(
+    mixins.ListModelMixin, 
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet
+):
+
+    """
+    A read-only public endpoint for orders with no sensitive data.
+    """
+    queryset = models.Order.objects.all()
+    serializer_class = serializers.PublicOrderSerializer
+    pagination_class = StandardResultsSetPagination
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_queryset(self):
+        wallet_hash = self.request.query_params.get('wallet_hash')
+
+        if not wallet_hash:
+            return models.Order.objects.none()  # Return an empty queryset if wallet_hash is not provided
+        
+        queryset = models.Order.objects.filter(
+            Q(owner__wallet_hash=wallet_hash) | 
+            Q(ad_snapshot__ad__owner__wallet_hash=wallet_hash)
+        ).distinct()
+
+        queryset = queryset.annotate(
+            last_status=Subquery(
+                models.Status.objects.filter(order=OuterRef('pk')).order_by('-created_at').values('status')[:1]
+            )
+        )
+
+        queryset = queryset.filter(
+            Q(last_status__in=[
+                StatusType.CONFIRMED, 
+                StatusType.ESCROW_PENDING, 
+                StatusType.ESCROWED,
+                StatusType.PAID_PENDING,
+                StatusType.PAID
+            ])
+        )
+        
+        return queryset
 
 class OrderViewSet(viewsets.GenericViewSet):
     authentication_classes = [TokenAuthentication]

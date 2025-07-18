@@ -121,7 +121,38 @@ class SubsetAdSnapshotSerializer(AdSnapshotSerializer):
     
     def get_appeal_cooldown(self, obj):
         return str(obj.appeal_cooldown_choice)
+    
+class PublicAdSnapshotSerializer(AdSnapshotSerializer):
+    """
+    Serializer for public ad snapshots.
 
+    This serializer extends the AdSnapshotSerializer but excludes payment methods
+    """
+
+    owner = serializers.SerializerMethodField()
+
+    class Meta(AdSnapshotSerializer.Meta):
+        fields = [
+            'id',
+            'owner',
+            'trade_type',
+            'price_type',
+            'price',
+            'market_price',
+            'trade_floor',
+            'trade_ceiling',
+            'trade_amount',
+            'trade_limits_in_fiat',
+            'payment_types',
+            'appeal_cooldown_choice'
+        ]
+    
+    def get_owner(self, obj: models.AdSnapshot):
+        return {
+            'id': obj.ad.owner.id,
+            'name': obj.ad.owner.name
+        }
+    
 class BaseAdSerializer(serializers.ModelSerializer):
     """
     Base serializer for ads.

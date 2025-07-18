@@ -5,7 +5,7 @@ from django.utils import timezone
 import logging
 logger = logging.getLogger(__name__)
 
-def send_push_notification(recipients: list, message: str, extra: list):
+def send_push_notification(recipients: list, message: str, extra: dict):
     logger.warning(f'Sending push notifications | recipients: {recipients} | message: {message} | extra: {extra}')
     notif_title = "P2P Exchange"
     send_push_notification_to_wallet_hashes(

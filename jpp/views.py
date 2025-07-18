@@ -283,6 +283,9 @@ class InvoiceViewSet(
             data = payment_request_pb.SerializeToString()
             return Response(data=data)
         elif renderers.TemplateHTMLRenderer.media_type in accepts:
+            instance_url = instance.get_absolute_uri(
+                self.request, url_type=Invoice.URL_TYPE_BITPAY,
+            )
             data = { "invoice": instance, "url": instance_url }
             return Response(data, template_name='jpp/invoice.html')
 

@@ -105,14 +105,14 @@ def get_latest_bch_rates(currencies=[]):
     response = {}
     for currency in currencies:
         if currency in bch_rates:
-            response[currency] = (
-                Decimal(bch_rates[currency]),
-                response_timestamp,
-                "coingecko",
-            )
-
             if currency == "ars":
                 currencies_to_convert.append(currency)
+            else:
+                response[currency] = (
+                    Decimal(bch_rates[currency]),
+                    response_timestamp,
+                    "coingecko",
+                )
         else:
             currencies_to_convert.append(currency)
 
@@ -140,6 +140,24 @@ def get_yadio_rate(currency=None, source_currency="USD"):
     Returns:
         {"rate": float, "timestamp": int, "request": str}
     """
+    
+    # Check if we have a recent price log (less than 10 seconds old)
+    ten_seconds_ago = tz.now() - timedelta(seconds=10)
+    latest_price_log = AssetPriceLog.objects.filter(
+        currency=currency.upper(),
+        relative_currency=source_currency.upper(),
+        timestamp__gte=ten_seconds_ago
+    ).order_by('-timestamp').first()
+    
+    if latest_price_log:
+        # Return cached data from the latest price log
+        return {
+            "rate": float(latest_price_log.price_value),
+            "timestamp": int(latest_price_log.timestamp.timestamp() * 1000),
+            "request": f"cached:{latest_price_log.source}"
+        }
+    
+    # If no recent data, make the API request
     return requests.get(f"https://api.yadio.io/rate/{currency}/{source_currency}", timeout=15).json()
 
 
