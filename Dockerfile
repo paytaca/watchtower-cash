@@ -7,6 +7,15 @@ RUN apt-get -y install build-essential sudo postgresql libpq-dev postgresql-clie
     wget -O /usr/local/bin/wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/8ed92e8cab83cfed76ff012ed4a36cef74b28096/wait-for-it.sh && \
     chmod +x /usr/local/bin/wait-for-it.sh
 
+# Next command needed for grpcio==1.34.0 build
+RUN apt-get install -y \
+    build-essential \
+    python3-dev \
+    libssl-dev \
+    libffi-dev \
+    libc-dev \
+    pkg-config
+
 RUN pip install --upgrade pip
 COPY ./requirements.txt requirements.txt
 # RUN pip install --no-cache-dir -r requirements.txt
