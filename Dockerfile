@@ -1,4 +1,4 @@
-FROM nikolaik/python-nodejs:python3.8-nodejs15-slim
+FROM nikolaik/python-nodejs:python3.8-nodejs16-slim
 
 RUN apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
 RUN apt-get update -y
@@ -11,12 +11,6 @@ RUN pip install --upgrade pip
 COPY ./requirements.txt requirements.txt
 # RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install -r requirements.txt
-
-# For running javascript
-RUN sudo apt install -y curl
-RUN sudo apt-get update --allow-releaseinfo-change
-RUN curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-RUN sudo apt install nodejs -y --allow-change-held-packages
 
 COPY ./main/js/package*.json /code/main/js/
 RUN npm install --prefix /code/main/js --legacy-peer-deps
