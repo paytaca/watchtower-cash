@@ -42,6 +42,32 @@ def save_subscription(address, subscriber_id):
     return created
 
 
+@trans.atomic
+def remove_duplicate_wallet_address_path(address_obj):
+    if not address_obj.wallet or not address_obj.address_path:
+        # Will only handle address objects with wallet and address paths since
+        # it might affect other addresses that actually dont have one like
+        # p2sh contracts
+        return
+
+    duplicates_qs = Address.objects.filter(
+        wallet=address_obj.wallet, address_path=address_obj.address_path,
+    ).exclude(pk = address_obj.pk)
+    subscriptions = Subscription.objects.filter(address__in=duplicates_qs)
+    recipients = Recipient.objects.filter(
+        id__in=subscriptions.filter(recipient__isnull=False)
+    )
+
+    (subs_deleted, _) = subscriptions.delete()
+    (recipients_deleted, _) = recipients.delete()
+    addresses_updated = duplicates_qs.update(wallet=None, address_path='')
+    return {
+        "subscriptions": subs_deleted,
+        "recipients": recipients_deleted,
+        "addresses": addresses_updated,
+    }
+
+
 def new_subscription(**kwargs):
     LOGGER.info(kwargs)
     response = {'success': False}
@@ -55,6 +81,7 @@ def new_subscription(**kwargs):
     web_url = kwargs.get('webhook_url', None)
     telegram_id = kwargs.get('telegram_id', None)
     chat_identity = kwargs.get('chat_identity', None)
+    remove_duplicate_path = kwargs.get('remove_duplicate_path', False)
 
     new_addresses = set()
     if address or addresses:
@@ -143,6 +170,10 @@ def new_subscription(**kwargs):
                                     wallet.save()
                                 address_obj.wallet = wallet
                                 address_obj.save()
+
+                        if remove_duplicate_path:
+                            result = remove_duplicate_wallet_address_path(address_obj)                            
+                            LOGGER.info(f"REMOVED ADRESS PATH DUPLICATES | {address_obj} | {result}")
 
                         try:
                             _, created = Subscription.objects.get_or_create(
