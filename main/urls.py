@@ -75,6 +75,7 @@ main_urls += [
     re_path(r"^vouchers/device-vaults/$", views.VoucherTempView.as_view(), name='vouchers-temp'),
 
     re_path(r"^wallet-addresses/(?P<wallethash>[\w+:]+)/$", views.WalletAddressesView.as_view(),name='wallet-addresses'),
+    re_path(r"^wallet-address-paths/(?P<wallethash>[\w+:]+)/$", views.WalletAddressPathsView.as_view(),name='wallet-address-paths'),
 
     # re_path(r"^tokens/(?P<tokenid>[\w+:]+)/$", views.TokensView.as_view(),name='tokens'),
     path('transaction/spender/', views.SpenderTransactionView.as_view(), name='find-transaction-spender'),

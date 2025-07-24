@@ -14,3 +14,4 @@ class SubscriberSerializer(serializers.Serializer):
     wallet_index = serializers.IntegerField(required=False, allow_null=True)
     address_index = serializers.IntegerField(required=False, allow_null=True)
     webhook_url = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    remove_duplicate_path = serializers.BooleanField(default=False)

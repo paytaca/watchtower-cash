@@ -47,3 +47,40 @@ class WalletAddressesView(APIView):
         wallet_addresses = wallet_addresses.order_by('address_path').values_list('address', flat=True)
 
         return Response(list(wallet_addresses))
+
+
+class WalletAddressPathsView(APIView):
+    @swagger_auto_schema(
+        operation_description="Returns the address paths of provided wallet hash",
+        responses={status.HTTP_200_OK: openapi.Response(
+            description="List of address paths",
+            examples={
+                'application/json': ['0/0', '1/0', '0/1', '1/1' ],
+
+            },
+            type=openapi.TYPE_ARRAY,
+            items=openapi.Items(type=openapi.TYPE_STRING)
+        )},
+        manual_parameters=[
+            openapi.Parameter('change_index', openapi.IN_QUERY, description="Filters based on change index of BIP44 derivation path. Set to 0 for external or deposit addresses, 1 for change addresses.", required=False, type=openapi.TYPE_INTEGER),
+            openapi.Parameter('address_index', openapi.IN_QUERY, description="Filters based on address_index of BIP44 derivation path.", required=False, type=openapi.TYPE_INTEGER),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        wallet_hash = kwargs.get('wallethash', '')
+        change_index = self.request.query_params.get('change_index', None)
+        address_index = self.request.query_params.get('address_index', '\d+')
+        queryset = Address.objects.filter(wallet__wallet_hash=wallet_hash)
+
+        address_path_filter = ''
+        
+        if change_index != None:
+            address_path_filter = address_path_filter + f'{change_index}/{address_index}'
+
+        if address_path_filter:
+            queryset = queryset.filter(
+                address_path__iregex=address_path_filter
+            )
+        queryset = queryset.order_by('address_path').values_list('address_path', flat=True)
+
+        return Response(list(queryset))
