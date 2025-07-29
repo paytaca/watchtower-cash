@@ -343,6 +343,7 @@ def get_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCont
     currency = redemption_contract_tx.redemption_contract.fiat_token.currency
     decimals = redemption_contract_tx.redemption_contract.fiat_token.decimals
 
+    trade_size_amount = round(redemption_contract_tx.trade_size_in_token_units / 10 ** decimals, decimals)
     data = {
         "id": redemption_contract_tx.id,
         "redemption_contract": redemption_contract_address,
@@ -350,7 +351,7 @@ def get_redemption_contract_tx_meta(redemption_contract_tx:models.RedemptionCont
         "price": round(price_value / 10 ** decimals, decimals),
         "currency": currency,
         "satoshis": str(redemption_contract_tx.trade_size_in_satoshis),
-        "amount": str(redemption_contract_tx.trade_size_in_token_units),
+        "amount": "{:.{}f}".format(trade_size_amount, decimals),
     }
 
     return dict(success=True, data=data, txid=txid)
