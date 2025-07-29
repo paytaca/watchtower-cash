@@ -11,7 +11,7 @@ from stablehedge.functions.treasury_contract import (
     get_spendable_sats,
 )
 from stablehedge.functions.redemption_contract import get_24hr_volume_data, consolidate_redemption_contract
-from stablehedge.functions.transaction import update_redemption_contract_tx_trade_size
+from stablehedge.functions.transaction import update_redemption_contract_tx_trade_size, save_redemption_contract_tx_meta
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import subscribe_address
@@ -148,6 +148,7 @@ class RedemptionContractTransactionAdmin(admin.ModelAdmin):
 
     actions = [
         "recalculate_trade_size",
+        "update_tx_meta",
     ]
 
     def recalculate_trade_size(self, request, queryset):
@@ -161,6 +162,17 @@ class RedemptionContractTransactionAdmin(admin.ModelAdmin):
 
         messages.info(request, f"Updated count: {count}")
     recalculate_trade_size.short_description = "Recalculate trade size"
+
+    def update_tx_meta(self, request, queryset):
+        count = 0
+        for obj in queryset:
+            result = save_redemption_contract_tx_meta(obj)
+            if count < 10:
+                messages.info(request, f"{result}")
+            count += 1
+
+        messages.info(request, f"Updated count: {count}")
+    update_tx_meta.short_description = "Update transaction meta attributes data"
 
 class TreasuryContractKeyInline(admin.StackedInline):
     model = models.TreasuryContractKey
