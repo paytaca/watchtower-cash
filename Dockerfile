@@ -34,7 +34,7 @@ COPY ./cts/js/package*.json /code/cts/js/
 RUN npm install --prefix /code/cts/js 
 
 COPY ./stablehedge/js/package*.json /code/stablehedge/js/
-RUN npm install --prefix /code/stablehedge/js --save-optional
+RUN npm install --prefix /code/stablehedge/js
 
 COPY ./multisig/js/package*.json /code/multisig/js/
 RUN npm install --prefix /code/multisig/js
