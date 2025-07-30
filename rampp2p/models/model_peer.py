@@ -24,40 +24,51 @@ class Peer(models.Model):
         OrderFeedback = apps.get_model('rampp2p', 'OrderFeedback')
         avg_rating = OrderFeedback.objects.filter(to_peer=self).aggregate(models.Avg('rating'))['rating__avg']
         return avg_rating
-    
-    def get_orders(self):
-        Order = apps.get_model('rampp2p', 'Order')
-        return Order.objects.filter(models.Q(ad_snapshot__ad__owner__id=self.id) | models.Q(owner__id=self.id)) 
-    
+
     def get_trade_count(self):
         return self.get_orders().count()
     
-    def count_orders_by_status(self, status: str, owned_only=False):
-        Status = apps.get_model('rampp2p', 'Status')
-        subquery = Status.objects.filter(order_id=models.OuterRef('id'))
-        if owned_only:
-            subquery = subquery.filter(created_by=self.wallet_hash)
-        subquery = subquery.order_by('-created_at').values('status')[:1]
-        user_orders = self.get_orders().annotate(latest_status=models.Subquery(subquery))
-
-        return user_orders.filter(status__status=status).count()
+    def get_orders(self, status=None, annotate_status_info=False):
+        Order = apps.get_model('rampp2p', 'Order')
+        orders = Order.objects.filter(models.Q(ad_snapshot__ad__owner__id=self.id) | models.Q(owner__id=self.id)) 
+        
+        if status or annotate_status_info:
+            Status = apps.get_model('rampp2p', 'Status')
+            # Use a single subquery to get the latest status record
+            latest_status_subquery = Status.objects.filter(
+                order_id=models.OuterRef('id')
+            ).order_by('-created_at')[:1]
+            
+            orders = orders.annotate(
+                latest_status=models.Subquery(latest_status_subquery.values('status')),
+                latest_status_created_by=models.Subquery(latest_status_subquery.values('created_by'))
+            )
+            
+            if status:
+                orders = orders.filter(latest_status=status)
+        return orders
     
-    def count_completed_orders(self):
-        completed_statuses = ['RLS', 'CNCL', 'RFN']
-        total_count = 0
-        for status in completed_statuses:
-            owned_only = status == 'CNCL'
-            total_count += self.count_orders_by_status(status, owned_only=owned_only)
+    def count_refunded_orders(self):
+        refunded_orders = self.get_orders(status='RFN')
+        # only count orders appealed by other peers
+        refunded_orders = refunded_orders.exclude(appeal__owner__wallet_hash=self.wallet_hash)
+        return refunded_orders.count()
 
-        return total_count
-    
+    def count_canceled_orders(self):
+        canceled_orders = self.get_orders(status='CNCL')
+        # only count orders canceled by this peer
+        canceled_orders = canceled_orders.filter(latest_status_created_by=self.wallet_hash)
+        return canceled_orders.count()
+
     def count_released_orders(self):
-        return self.count_orders_by_status('RLS')
-    
+        return self.get_orders(status='RLS').count()
+
     def get_completion_rate(self):
         # completion_rate = released_count / (released_count + canceled_count + refunded_count)
-        completed_count = self.count_completed_orders()
         released_count = self.count_released_orders()
+        canceled_count = self.count_canceled_orders()
+        refunded_count = self.count_refunded_orders()
+        completed_count = released_count + canceled_count + refunded_count
         completion_rate = 0
         if completed_count > 0:
             completion_rate = released_count / completed_count * 100
