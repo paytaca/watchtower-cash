@@ -149,7 +149,7 @@ DATABASES = {
         'PORT': POSTGRES_PORT,
         'USER': POSTGRES_USER,
         'PASSWORD': POSTGRES_PASSWORD,
-        'CONN_MAX_AGE': None,
+        'CONN_MAX_AGE': 300,  # 5 minutes instead of None (infinite)
         'CONN_HEALTH_CHECKS': True
     }
 }

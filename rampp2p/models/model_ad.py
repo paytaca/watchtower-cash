@@ -51,6 +51,7 @@ class Ad(models.Model):
 
     appeal_cooldown_choice = models.IntegerField(choices=CooldownChoices.choices, default=CooldownChoices.SIXTY)
     payment_methods = models.ManyToManyField(PaymentMethod, related_name='ads')
+    instructions = models.TextField(blank=True, null=True)
     is_public = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
