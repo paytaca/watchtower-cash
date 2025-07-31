@@ -366,6 +366,9 @@ class WriteAdSerializer(serializers.ModelSerializer):
 
     trade_limits_in_fiat = serializers.BooleanField(required=False)
     trade_amount_in_fiat = serializers.BooleanField(required=False)
+
+    instructions = serializers.CharField(required=False)
+
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all(), required=False)
     crypto_currency = serializers.PrimaryKeyRelatedField(queryset=models.CryptoCurrency.objects.all(), required=False)
     payment_methods = serializers.PrimaryKeyRelatedField(queryset=models.PaymentMethod.objects.all(), many=True, required=False)
@@ -390,6 +393,7 @@ class WriteAdSerializer(serializers.ModelSerializer):
             'trade_amount_fiat',
             'trade_limits_in_fiat',
             'trade_amount_in_fiat',
+            'instructions',
             'fiat_currency',
             'crypto_currency',
             'appeal_cooldown_choice',
