@@ -2625,7 +2625,10 @@ def get_latest_bch_prices_task(currencies=[]):
         assert isinstance(currency, str), f"[{index}] not a string: {currency}"
 
     currencies = [currency.upper().strip() for currency in currencies]
-    results = get_and_save_latest_bch_rates(currencies=currencies)
+    max_age = 30
+    if 'ARS' in currencies:
+        max_age = 300
+    results = get_and_save_latest_bch_rates(currencies=currencies, max_age=max_age)
     response = {}
     for currency, asset_price_log in results.items():
         response[currency] = {
@@ -2646,12 +2649,14 @@ def get_latest_bch_price(currency):
     """
     assert isinstance(currency, str), "currency param is not a string"
     currency = currency.upper().strip()
-
+    max_age = 30
+    if currency == 'ARS':
+        max_age = 300
     get_latest = lambda: AssetPriceLog.objects.filter(
         currency=currency,
         relative_currency="BCH",
-        timestamp__gt = timezone.now()-timezone.timedelta(seconds=30),
-        timestamp__lte = timezone.now()+timezone.timedelta(seconds=30),
+        timestamp__gt = timezone.now()-timezone.timedelta(seconds=max_age),
+        timestamp__lte = timezone.now()+timezone.timedelta(seconds=max_age),
     ).order_by("-timestamp").first()
 
     latest = get_latest()
