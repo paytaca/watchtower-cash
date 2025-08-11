@@ -187,7 +187,7 @@ def get_yadio_rates(currencies=[], source_currency="USD"):
 
 def get_and_save_latest_bch_rates(currencies=[], max_age=30):
     assert max_age > 0, "Max age must be positive"
-    assert max_age < 60, "Max age must not be more than 60seconds=1minute"
+    assert max_age <= 300, "Max age must not be more than 60seconds=1minute"
     response = {}
     fresh_rates = AssetPriceLog.objects.filter(
         relative_currency="BCH", currency__in=currencies,
