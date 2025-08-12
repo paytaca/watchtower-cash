@@ -4,9 +4,9 @@ from .models import (
     Memo
 )
 
-class RampShiftSerializer(serializers.ModelSerializer):
+class MemoSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Shift
+        model = Memo
         fields = [
             "id",
             "wallet_hash",

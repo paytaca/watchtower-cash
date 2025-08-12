@@ -7,10 +7,9 @@ from .models import (
 
 
 @admin.register(Memo)
-class ShiftAdmin(admin.ModelAdmin):    
+class MemoAdmin(admin.ModelAdmin):    
     list_display = [
         "wallet_hash",
-        "created_at",
-        "note",
+        "created_at",        
         "txid"
     ]

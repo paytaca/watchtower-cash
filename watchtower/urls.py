@@ -41,6 +41,7 @@ from cts.urls import urlpatterns as cts_urlpatterns
 from authentication.urls import urlpatterns as auth_urlpatterns
 from stablehedge.urls import urlpatterns as stablehedge_urlpatterns
 from multisig.urls import urlpatterns as multisig_urlpatterns
+from memos.urls import urlpatterns as memos_urlpatterns
 
 from main.views import TelegramBotView
 
@@ -92,6 +93,7 @@ urlpatterns = [
     url(r'^api/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     url(r'api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     url('api/multisig/', include(multisig_urlpatterns)),
+    url('api/memos', include(memos_urlpatterns))
 ]
 
 

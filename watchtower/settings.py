@@ -564,6 +564,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
+        },
+        'memos': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
         }
     },
 }
