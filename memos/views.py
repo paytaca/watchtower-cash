@@ -49,9 +49,38 @@ class MemoView(APIView):
 		logger.info(txid)
 
 		Model = self.serializer_class.Meta.model
-		data = {}
 
 		qs = Model.objects.filter(wallet_hash=wallet_hash, txid=txid)
-		logger.info(qs)
 
-		return Response({'success': True}, status=200)
+		response = {}
+		if qs.exists():
+			response = MemoSerializer(qs.first()).data
+		else:
+			return Response({'error': 'Memo not found'}, status=status.HTTP_404_NOT_FOUND)
+
+		logger.info(response)
+
+		return Response(response, status=200)
+
+	def patch(self, request):
+		data = request.data
+		wallet_hash = request.headers.get('wallet_hash')
+		txid = data['txid']
+		logger.info('wallet_hash: ' + wallet_hash)
+		logger.info(self.kwargs.get('pk'))
+
+		Model = self.serializer_class.Meta.model
+
+		qs = Model.objects.filter(wallet_hash=wallet_hash, txid=txid)
+
+		new_note = { "note": data['note']}
+		if qs.exists():
+			serializer = MemoSerializer(qs.first(), data=new_note, partial=True)
+			serializer.is_valid(raise_exception=True)
+			serializer.save()
+			logger.info(serializer.data)
+		else:
+			return Response({'error': 'Memo not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+		return Response(serializer.data, status=200)

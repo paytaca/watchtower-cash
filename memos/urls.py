@@ -9,7 +9,9 @@ from .views import (
 router = routers.DefaultRouter()
 
 urlpatterns = router.urls + [
-    re_path('', MemoView.as_view(), name="memo"),
+    re_path('', MemoView.as_view()),
+    # path(r'^(?P<pk>\d+)/$', MemoView.as_view()),
+    # re_path('/<int:pk>/', MemoView.as_view()),
     # re_path('shift', RampShiftView.as_view(), name="ramp-shift"),    
     # re_path(r'^history/(?P<wallet_hash>[\w+:]+)/$', RampShiftHistoryView.as_view(), name='shift-history'),
     # re_path('expire', RampShiftExpireView.as_view(), name='shift-expire'),
