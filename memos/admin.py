@@ -9,7 +9,7 @@ from .models import (
 @admin.register(Memo)
 class MemoAdmin(admin.ModelAdmin):    
     list_display = [
-        "wallet_hash",
-        "created_at",        
-        "txid"
+        "txid",
+        "created_at",
+        "wallet_hash"
     ]
