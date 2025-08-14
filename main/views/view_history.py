@@ -96,14 +96,15 @@ class WalletHistoryView(APIView):
 
         if not data:
             qs = WalletHistory.objects.exclude(amount=0)
-            qs = qs.filter(wallet=wallet)
             if posid:
                 try:
                     posid = int(posid)
                 except (TypeError, ValueError):
                     return Response(data=[f"invalid POS ID: {type(posid)}({posid})"], status=status.HTTP_400_BAD_REQUEST)
-
-                qs = qs.filter(pos_wallet_history__posid=posid)
+                    
+                qs = qs.filter_pos(wallet_hash, posid)
+            else:
+                qs = qs.filter(wallet=wallet)
 
             if record_type in ['incoming', 'outgoing']:
                 qs = qs.filter(record_type=record_type)
