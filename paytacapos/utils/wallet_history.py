@@ -50,8 +50,6 @@ def populate_pos_wallet_history(wallet_hash):
     results = {}
     for posid in posids:
         wallet_hisory_qs = WalletHistory.objects.filter_pos(wallet_hash, posid=int(posid))
-        print(f"{wallet_hash} | {posid} | {wallet_hisory_qs.values_list('id', flat=True)}")
-        print(f"{wallet_hisory_qs.query}")
         wallet_hisory_ids = wallet_hisory_qs.values_list("id", flat=True)
         for wallet_history_id in wallet_hisory_ids:
             PosWalletHistory.objects.update_or_create(

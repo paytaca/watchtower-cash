@@ -7,6 +7,7 @@ from django.db.models import (
 )
 from django.http import Http404
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_yasg import openapi
@@ -21,13 +22,13 @@ from rest_framework.exceptions import MethodNotAllowed
 from .serializers import *
 from .filters import *
 from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader, HasPaymentObjectPermission
-from .pagination import CustomLimitOffsetPagination
+from .pagination import CustomLimitOffsetPagination, WalletHistoryPageNumberPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout_address
 
 from .models import Location, Category, Merchant, PosDevice, CashOutPaymentMethod
-from main.models import Address, Transaction, WalletHistory
+from main.models import Address, Transaction, Wallet, WalletHistory
 from rampp2p.models import MarketPrice
 from .tasks import process_cashout_input_txns
 
@@ -444,6 +445,24 @@ class BranchViewSet(viewsets.ModelViewSet):
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove branches linked to a device")
         return super().destroy(request, *args, **kwargs)
+
+
+class PosWalletHistoryViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
+    serializer_class = PosWalletHistorySerializer
+
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = PosWalletHistoryFilter
+
+    pagination_class = WalletHistoryPageNumberPagination
+
+    def get_queryset(self):
+        wallet = Wallet.objects.filter(wallet_hash=self.kwargs["wallethash"]).first()
+        return WalletHistory.objects \
+            .filter(wallet=wallet, pos_wallet_history__isnull=False) \
+            .select_related("token") \
+            .annotate(posid=F("pos_wallet_history__posid")) \
+            .all()
+
 
 class CashOutViewSet(viewsets.ModelViewSet):
     queryset = CashOutOrder.objects.all()
