@@ -3,6 +3,7 @@ from rest_framework import serializers
 from main.models import WalletHistory
 
 __all__ = [
+    "WalletHistoryAttributeSerializer",
     "WalletHistorySerializer",
     "PaginatedWalletHistorySerializer",
 ]

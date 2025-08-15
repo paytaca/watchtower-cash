@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters
 
 from .models import *
-from django.db.models import Q
+from django.db.models import Q, OuterRef
 
 
 class PosDeviceFilter(filters.FilterSet):
@@ -82,3 +82,32 @@ class MerchantFilter(filters.FilterSet):
             Q(pubkey__isnull=value) |
             Q(index__isnull=value)
         )
+
+class PosWalletHistoryFilter(filters.FilterSet):
+    asset_id = filters.CharFilter(method="asset_id_filter")
+    posid = filters.NumberFilter(method="posid_filter")
+    type = filters.CharFilter(field_name="record_type")
+    txids = filters.CharFilter(method="txids_filter")
+    reference = filters.CharFilter(field_name="txid", lookup_expr="startswith")
+    include_attrs = filters.BooleanFilter(method="include_attrs_filter")
+
+    def posid_filter(self, queryset, name, value):
+        return queryset.filter(pos_wallet_history__posid=value)
+
+    def asset_id_filter(self, queryset, name, value):
+        if value == "bch":
+            return queryset.filter(cashtoken_ft__isnull=True, cashtoken_nft__isnull=True)
+        return queryset.filter(Q(cashtoken_ft_id=value) | Q(cashtoken_nft_id=value))
+
+    def txids_filter(self, queryset, name, value):
+        if isinstance(value, str) and value:
+            txids = [txid.strip() for txid in value.split(",") if txid]
+            return queryset.filter(txid__in=txids)
+        return queryset
+
+    def include_attrs_filter(self, queryset, name, value):
+        if value:
+            return queryset.annotate_attributes(
+                Q(wallet_hash="") | Q(wallet_hash=OuterRef("wallet__wallet_hash")),
+            )
+        return queryset

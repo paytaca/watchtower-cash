@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from rest_framework import pagination, response
 
+
 class CustomLimitOffsetPagination(pagination.LimitOffsetPagination):
     default_limit = 10
     max_limit = 50
@@ -42,3 +43,18 @@ class CustomLimitOffsetPagination(pagination.LimitOffsetPagination):
                 'results': schema,
             },
         }
+
+
+class WalletHistoryPageNumberPagination(pagination.PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+    def get_paginated_response(self, data):
+        return response.Response(OrderedDict([
+            ('page', self.page.number),
+            ('page_size', self.get_page_size(self.request)),
+            ('num_pages', self.page.paginator.num_pages),
+            ('has_next', self.page.has_next()),
+            ('history', data)
+        ]))

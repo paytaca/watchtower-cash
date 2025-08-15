@@ -1,3 +1,5 @@
+import pickle
+import base64
 from django.db.models import (
     F, Value,
     Func,
@@ -5,8 +7,10 @@ from django.db.models import (
     CharField,
     Max,
 )
+from django.conf import settings
 from django.http import Http404
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from drf_yasg import openapi
@@ -21,13 +25,13 @@ from rest_framework.exceptions import MethodNotAllowed
 from .serializers import *
 from .filters import *
 from .permissions import HasMerchantObjectPermission, HasMinPaytacaVersionHeader, HasPaymentObjectPermission
-from .pagination import CustomLimitOffsetPagination
+from .pagination import CustomLimitOffsetPagination, WalletHistoryPageNumberPagination
 from .utils.websocket import send_device_update
 from .utils.report import SalesSummary
 from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout_address
 
 from .models import Location, Category, Merchant, PosDevice, CashOutPaymentMethod
-from main.models import Address, Transaction, WalletHistory
+from main.models import Address, Transaction, Wallet, WalletHistory
 from rampp2p.models import MarketPrice
 from .tasks import process_cashout_input_txns
 
@@ -444,6 +448,69 @@ class BranchViewSet(viewsets.ModelViewSet):
         if instance.devices.count():
             raise exceptions.ValidationError("Unable to remove branches linked to a device")
         return super().destroy(request, *args, **kwargs)
+
+
+class PosWalletHistoryViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
+    serializer_class = PosWalletHistorySerializer
+
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = PosWalletHistoryFilter
+
+    pagination_class = WalletHistoryPageNumberPagination
+
+    def _get_wallet_hash(self):
+        return self.kwargs["wallethash"]
+
+    def get_queryset(self):
+        wallet = Wallet.objects.filter(wallet_hash=self._get_wallet_hash()).first()
+        return WalletHistory.objects \
+            .filter(wallet=wallet, pos_wallet_history__isnull=False) \
+            .select_related("token") \
+            .annotate(posid=F("pos_wallet_history__posid")) \
+            .all()
+
+    def get_cache_key(self):
+        # Serialize the object to binary
+        pickled_params = pickle.dumps(self.request.GET.dict())
+        # Convert binary to Base64 string
+        encoded_params = base64.b64encode(pickled_params).decode('utf-8')
+
+        wallet_hash = self._get_wallet_hash()
+        return f"wallet:history:{wallet_hash}:pos:{encoded_params}"
+
+    def get_cached_response(self):
+        cache = settings.REDISKV
+        cache_key = self.get_cache_key()
+
+        encoded_data = cache.get(cache_key)
+        if encoded_data is None:
+            return None
+
+        # Convert Base64 string back to binary
+        pickled_data = base64.b64decode(encoded_data)
+        # Deserialize the binary back to an object
+        return pickle.loads(pickled_data)
+
+    def save_cached_response(self, data):
+        cache = settings.REDISKV
+        cache_key = self.get_cache_key()
+
+        pickled_data = pickle.dumps(data)
+        # Convert binary to Base64 string
+        encoded_data = base64.b64encode(pickled_data).decode('utf-8')
+        cache.set(cache_key, encoded_data, ex=60 * 5)  # Cache for 5 minutes
+
+    def list(self, request, *args, **kwargs):
+        cached_data = self.get_cached_response()
+        if cached_data:
+            return Response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+
+        if response.status_code == 200:
+            self.save_cached_response(response.data)
+
+        return response
 
 class CashOutViewSet(viewsets.ModelViewSet):
     queryset = CashOutOrder.objects.all()

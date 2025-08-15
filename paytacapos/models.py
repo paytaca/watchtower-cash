@@ -534,3 +534,10 @@ class PayoutAddress(models.Model):
 
     def __str__(self):
         return str(self.address)
+
+class PosWalletHistory(models.Model):
+    wallet_history = models.OneToOneField(
+        "main.WalletHistory", on_delete=models.CASCADE,
+        related_name="pos_wallet_history",
+    )
+    posid = models.IntegerField(db_index=True)

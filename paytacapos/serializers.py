@@ -10,7 +10,8 @@ from django.db.models import Sum
 from rest_framework import serializers, exceptions
 from django.db.models import F
 
-from main.models import CashNonFungibleToken, Wallet, Address
+from main.models import CashNonFungibleToken, Wallet, Address, WalletHistory
+from main.serializers import WalletHistoryAttributeSerializer
 from anyhedge.utils.address import pubkey_to_cashaddr
 from rampp2p.models import MarketPrice
 
@@ -864,6 +865,33 @@ class MerchantVaultAddressSerializer(serializers.Serializer):
 class LatestPosIdSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
 
+
+class PosWalletHistorySerializer(serializers.ModelSerializer):
+    token_ticker = serializers.CharField(read_only=True, source="token.token_ticker")
+    ft_category = serializers.CharField(read_only=True, source="cashtoken_ft_id")
+    nft_category = serializers.CharField(read_only=True, source="cashtoken_nft_id")
+    attributes = WalletHistoryAttributeSerializer(many=True, read_only=True)
+    posid = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = WalletHistory
+        fields = [
+            "posid",
+            "record_type",
+            "txid",
+            "amount",
+            "token_ticker",
+            "ft_category",
+            "nft_category",
+            "tx_fee",
+            "senders",
+            "recipients",
+            "date_created",
+            "tx_timestamp",
+            "usd_price",
+            "attributes",
+            "market_prices",
+        ]
 
 class BaseCashOutTransactionSerializer(serializers.ModelSerializer):
     class Meta:
