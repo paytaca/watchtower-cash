@@ -1,8 +1,10 @@
 import re
+from django.conf import settings
 from paytacapos.models import PosWalletHistory, Merchant
 
 from main.models import WalletHistory, Wallet, Address
 
+cache = settings.REDISKV
 
 def __get_address_path_regex__():
     MAX_POS_DIGITS = 4
@@ -53,7 +55,8 @@ def populate_pos_wallet_history(wallet_hash):
         wallet_hisory_ids = wallet_hisory_qs.values_list("id", flat=True)
         for wallet_history_id in wallet_hisory_ids:
             PosWalletHistory.objects.update_or_create(
-                wallet_history_id=wallet_history_id, posid=posid,
+                wallet_history_id=wallet_history_id,
+                defaults=dict(posid=posid),
             )
         results[posid] = [*wallet_hisory_qs.values_list("txid", flat=True)]
     return results
@@ -63,7 +66,10 @@ def populate_pos_wallet_histories_with_merchant():
     """
     Run once to populate all existing merchants' POS wallet histories.
     """
+    CACHE_KEY = "pos_wallet_histories_rebuild"
     results = {}
     for wallet_hash in Merchant.objects.values_list("wallet_hash", flat=True).distinct():
+        if (cache.hexists(CACHE_KEY, wallet_hash)): continue
         results[wallet_hash] = populate_pos_wallet_history(wallet_hash)
+        cache.hset(CACHE_KEY, wallet_hash, 1)
     return results
