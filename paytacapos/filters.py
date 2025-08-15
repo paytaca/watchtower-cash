@@ -86,7 +86,7 @@ class MerchantFilter(filters.FilterSet):
 class PosWalletHistoryFilter(filters.FilterSet):
     asset_id = filters.CharFilter(method="asset_id_filter")
     posid = filters.NumberFilter(method="posid_filter")
-    record_type = filters.CharFilter()
+    type = filters.CharFilter(field_name="record_type")
     txids = filters.CharFilter(method="txids_filter")
     reference = filters.CharFilter(field_name="txid", lookup_expr="startswith")
     include_attrs = filters.BooleanFilter(method="include_attrs_filter")
