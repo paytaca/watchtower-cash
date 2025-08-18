@@ -717,7 +717,6 @@ def complete_short_proposal(treasury_contract_address:str):
         contract_data,
         settlement_service,
         funding_proposal,
-        funding_utxo_tx_hex,
     )
 
 

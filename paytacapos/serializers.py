@@ -62,6 +62,7 @@ class SummaryRecordSerializer(serializers.Serializer):
     total_market_value = serializers.FloatField(required=False)
     currency = serializers.CharField(required=False)
     count = serializers.IntegerField()
+    ft_category = serializers.CharField(required=False)
 
 
 class SalesSummarySerializer(serializers.Serializer):
