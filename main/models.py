@@ -805,8 +805,18 @@ class AssetPriceLog(models.Model):
     relative_currency = models.CharField(max_length=20, db_index=True)
     timestamp = models.DateTimeField(db_index=True)
     source = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    currency_ft_token = models.ForeignKey(
+        CashFungibleToken, on_delete=models.DO_NOTHING,
+        null=True, blank=True, db_constraint=False,
+        related_name="asset_price_logs",
+    )
+    relative_currency_ft_token = models.ForeignKey(
+        CashFungibleToken, on_delete=models.DO_NOTHING,
+        null=True, blank=True, db_constraint=False,
+        related_name="relative_asset_price_logs",
+    )
 
-    price_value = models.DecimalField(max_digits=15, decimal_places=3)
+    price_value = models.DecimalField(max_digits=25, decimal_places=8)
 
 
 class WalletPreferences(PostgresModel):
