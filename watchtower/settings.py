@@ -91,7 +91,8 @@ INSTALLED_APPS=[
     'cts',
     'authentication',
     'stablehedge',
-    'multisig'
+    'multisig',
+    'memos'
 ]
 
 MIDDLEWARE=[
@@ -560,6 +561,11 @@ LOGGING = {
             'propagate': False,
         },
         'multisig': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'memos': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
