@@ -10,6 +10,7 @@ from django.utils import timezone as tz
 from main.models import (
     AssetPriceLog,
     WalletHistory,
+    CashFungibleToken,
 )
 
 
@@ -423,3 +424,54 @@ class CoingeckoAPI:
                         price_data["id"] = asset_price_log.id
 
         return result
+
+
+def get_ft_bch_price_log(ft_category:str, timestamp=None):
+    relative_currency = "BCH"
+
+    if not timestamp:
+        timestamp = tz.now()
+
+    timestamp_range_low = timestamp - timedelta(seconds=30)
+    timestamp_range_high = timestamp + timedelta(seconds=30)
+
+    asset_price_log = AssetPriceLog.objects.filter(
+        timestamp__gt=timestamp_range_low,
+        timestamp__lt=timestamp_range_high,
+        currency_ft_token_id=ft_category,
+        relative_currency=relative_currency,
+    ).annotate(
+        diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
+    ).order_by("diff").first()
+
+    if asset_price_log:
+        return asset_price_log
+
+    ts = int(timestamp.timestamp())
+    response = requests.get(f"https://indexer.cauldron.quest/cauldron/price/{ft_category}/at/{ts}")
+
+    data = response.json()
+    if "price" not in data or "timestamp" not in data:
+        return None
+
+    ts_obj = tz.datetime.fromtimestamp(data["timestamp"]).replace(tzinfo=tz.pytz.UTC)
+    price__sats_per_token_unit = Decimal(data["price"]) # this is in sats per token unit
+    price__bch_per_token_unit = price__sats_per_token_unit / Decimal(10 ** 8)
+
+    ft_token_obj, _ = CashFungibleToken.objects.get_or_create(category=ft_category)
+    ft_token_obj.fetch_metadata()
+    price__bch_per_amount = price__bch_per_token_unit * 10 ** ft_token_obj.info.decimals
+    price_amount_per_bch = 1 / price__bch_per_amount
+
+    price_obj, _ = AssetPriceLog.objects.update_or_create(
+        relative_currency=relative_currency,
+        timestamp=ts_obj,
+        source="cauldron",
+        currency_ft_token=ft_token_obj,
+        defaults=dict(
+            currency=ft_token_obj.info.symbol,
+            price_value=price_amount_per_bch,
+        )
+    )
+    return price_obj
+

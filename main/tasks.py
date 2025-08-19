@@ -23,6 +23,7 @@ from main.utils.market_price import (
     get_and_save_latest_bch_rates,
     save_wallet_history_currency,
     CoingeckoAPI,
+    get_ft_bch_price_log,
 )
 from celery.exceptions import MaxRetriesExceededError 
 from main.utils.nft import (
@@ -2294,13 +2295,13 @@ def parse_wallet_history_market_values(wallet_history_id):
     if wallet_history_obj.tx_timestamp is None:
         return
 
-    # block for bch txs only
-    if wallet_history_obj.token.name != "bch":
+    # block for bch txs and ft cashtokens only
+    if wallet_history_obj.token.name != "bch" and not wallet_history_obj.cashtoken_ft:
         return
     
     # do not proceed if both usd_price and market_prices are already populated
-    if wallet_history_obj.usd_price and wallet_history_obj.market_prices:
-        return
+    # if wallet_history_obj.usd_price and wallet_history_obj.market_prices:
+    #     return
 
     LOGGER.info(" | ".join([
         f"WALLET_HISTORY_MARKET_VALUES",
@@ -2309,7 +2310,7 @@ def parse_wallet_history_market_values(wallet_history_id):
     ]))
 
     # resolves the currencies needed to store for the wallet history
-    currencies = []
+    currencies = ["USD", "PHP"]
     try:
         if wallet_history_obj.wallet and wallet_history_obj.wallet.preferences and wallet_history_obj.wallet.preferences.selected_currency:
             currencies.append(wallet_history_obj.wallet.preferences.selected_currency)
@@ -2317,6 +2318,7 @@ def parse_wallet_history_market_values(wallet_history_id):
         pass
 
     currencies = [c.upper() for c in currencies if isinstance(c, str) and len(c)]
+    print(f"currencies | {currencies}")
 
     market_prices = wallet_history_obj.market_prices or {}
     if wallet_history_obj.usd_price:
@@ -2335,19 +2337,33 @@ def parse_wallet_history_market_values(wallet_history_id):
         diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
     ).order_by("-diff")
 
+    print(f"asset_price_logs | {asset_price_logs}")
+
+    bch_to_asset_multiplier = 1
+    if wallet_history_obj.cashtoken_ft and currencies:
+        ft_bch_price_log = get_ft_bch_price_log(
+            wallet_history_obj.cashtoken_ft.category,
+            timestamp=timestamp,
+        )
+        if not ft_bch_price_log: return "No price"
+
+        bch_to_asset_multiplier = 1 / ft_bch_price_log.price_value
+
+
     # sorting above is closest timestamp last so the loop below ends up with the closest one
     for price_log in asset_price_logs:
-        market_prices[price_log.currency] = price_log.price_value
+        market_prices[price_log.currency] = price_log.price_value * bch_to_asset_multiplier
 
     # last resort for resolving prices, only for new txs
     missing_currencies = [c for c in currencies if c not in market_prices]
     tx_age = (timezone.now() - timestamp).total_seconds()
     if tx_age < 30 and len(missing_currencies):
         bch_rates = get_latest_bch_rates(currencies=missing_currencies)
+        print(f"bch_rates | {bch_rates}")
         for currency in missing_currencies:
             bch_rate = bch_rates.get(currency.lower(), None)
             if bch_rate:
-                market_prices[currency] = bch_rate[0]
+                market_prices[currency] = bch_rate[0] * bch_to_asset_multiplier
 
                 price_log_data = {
                     'currency': currency,

@@ -1,11 +1,13 @@
 from django.contrib.postgres.fields.jsonb import KeyTransform
 from django.db.models import (
+    Q,
     F,
     Sum,
     Count,
     CharField,
     FloatField,
     Value,
+    Func,
 )
 from django.db.models.functions import (
     Coalesce,
@@ -39,16 +41,16 @@ class SalesSummary(object):
         response = cls(wallet_hash=wallet_hash)
         WalletHistory = apps.get_model("main", "WalletHistory")
         queryset = WalletHistory.objects.filter(
+            Q(token__name="bch") | Q(cashtoken_ft__isnull=False),
             record_type=WalletHistory.INCOMING,
-            token__name="bch",
             wallet__wallet_hash=wallet_hash,
         )
 
         if isinstance(posid, int):
+            queryset = queryset.filter(pos_wallet_history__posid=posid)
             response.posid = posid
-            queryset = queryset.filter_pos(wallet_hash, posid=posid)
         else:
-            queryset = queryset.filter_pos(wallet_hash)
+            queryset = queryset.filter(pos_wallet_history__isnull=False)
 
         queryset = queryset.annotate(timestamp = Coalesce(F("tx_timestamp"), F("date_created")))
 
@@ -66,7 +68,17 @@ class SalesSummary(object):
 
         if currency:
             queryset = queryset.annotate(
-                value=F("amount") * Cast(KeyTransform(currency, "market_prices"), FloatField()),
+                decimals_mult = Cast(
+                    Func(
+                        Value(10),
+                        Coalesce(F("cashtoken_ft__info__decimals"), Value(0)),
+                        function="POWER",
+                    ),
+                    FloatField(),
+                )
+            )
+            queryset = queryset.annotate(
+                value=F("amount") * Cast(KeyTransform(currency, "market_prices"), FloatField()) / F("decimals_mult"),
             )
             fields["total_market_value"] = Sum(F("value"))
             fields["currency"] = Value(currency, output_field=CharField())
@@ -78,6 +90,8 @@ class SalesSummary(object):
         else:
             response.range_type = cls.RANGE_MONTH
 
+        annotate["asset_id"] = Coalesce(F("cashtoken_ft_id"), F("token__name"))
+        fields["ft_category"] = F("cashtoken_ft_id")
         queryset = queryset.annotate(**annotate)
         queryset = queryset.values(*annotate.keys())
         queryset = queryset.order_by(*["-" + key for key in annotate.keys()])
