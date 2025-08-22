@@ -1,8 +1,6 @@
 from django.urls import path, re_path
-from django.views.decorators.csrf import csrf_exempt
 from rest_framework import routers
 from main import views
-from django.conf.urls import url
 
 app_name = "main"
 
@@ -60,6 +58,7 @@ main_urls += [
     re_path(r"^utxo/wallet/(?P<wallethash>[\w+:]+)/$", views.UTXO.as_view(),name='wallet-utxo'),
     re_path(r"^utxo/wallet/(?P<wallethash>[\w+:]+)/(?P<tokenid_or_category>[\w+]+)/$", views.UTXO.as_view(),name='wallet-utxo-token'),
 
+    re_path(r"^history/contract/(?P<address>[\w+:]+)/$", views.ContractHistoryView.as_view(),name='contract-history'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/$", views.WalletHistoryView.as_view(),name='wallet-history'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/(?P<tokenid_or_category>[\w+]+)/$", views.WalletHistoryView.as_view(),name='wallet-history-ft-token'),
     re_path(r"^history/wallet/(?P<wallethash>[\w+:]+)/(?P<category>[\w+]+)/(?P<txid>[\w+]+)/(?P<index>[\w+]+)/$", views.WalletHistoryView.as_view(),name='wallet-history-ct-nft-token'),
@@ -71,8 +70,6 @@ main_urls += [
 
     re_path(r"^transactions/attributes/$", views.TransactionMetaAttributeView.as_view(),name='transaction-attributes'),
     re_path(r"^transactions/(?P<txid>[\w+]+)/$", views.TransactionDetailsView.as_view(),name='transaction-details'),
-
-    re_path(r"^vouchers/device-vaults/$", views.VoucherTempView.as_view(), name='vouchers-temp'),
 
     re_path(r"^wallet-addresses/(?P<wallethash>[\w+:]+)/$", views.WalletAddressesView.as_view(),name='wallet-addresses'),
     re_path(r"^wallet-address-paths/(?P<wallethash>[\w+:]+)/$", views.WalletAddressPathsView.as_view(),name='wallet-address-paths'),

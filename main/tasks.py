@@ -1486,6 +1486,157 @@ def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
     return processed_list
 
 
+@shared_task(queue='contract_history')
+def parse_contract_history(txid, address, tx_fee=None, senders=[], recipients=[]):
+    BCH_OR_SLP = 'bch_or_slp'
+    if type(tx_fee) is str:
+        tx_fee = float(tx_fee)
+
+    parser = HistoryParser(txid, address=address)
+    parsed_history = parser.parse()
+
+    for key, value in parsed_history.items():
+        record_type = value['record_type']
+        amount = value['diff']
+
+        processed_recipients = process_history_recpts_or_senders(recipients, key, BCH_OR_SLP)
+        processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
+
+        if record_type == 'outgoing':
+            if key == BCH_OR_SLP:
+                amount = abs(amount) - ((tx_fee / 100000000) or 0)
+                amount = round(amount, 8)
+            amount = abs(amount) * -1
+
+        if amount == 0: continue
+
+        bch_prefix = 'bitcoincash:'
+        if settings.BCH_NETWORK != 'mainnet':
+            bch_prefix = 'bchtest:'
+
+        txns = Transaction.objects.filter(
+            txid=txid,
+            address__address__startswith=bch_prefix
+        )
+        spent_txns = Transaction.objects.filter(
+            spending_txid=txid,
+            address__address__startswith=bch_prefix,
+        )
+
+        tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
+        date_created = txns.filter(date_created__isnull=False).aggregate(_max=models.Max('date_created'))['_max']
+
+        cashtoken_ft = None
+        cashtoken_nft = None
+        token_obj = None
+
+        ct_category = None
+        if key.startswith('ct/'):
+            ct_category = key.split('ct/')[1]
+
+        if key == BCH_OR_SLP:
+            txns = txns.filter(token__name='bch')
+            spent_txns = spent_txns.filter(token__name='bch')
+        elif ct_category:
+            _txns = txns.filter(
+                models.Q(cashtoken_ft__category=ct_category) | \
+                models.Q(cashtoken_nft__category=ct_category),
+            )
+            if _txns.exists():
+                txns = _txns
+                ft_tx = txns.filter(cashtoken_ft_id=ct_category).last()
+                if ft_tx:
+                    cashtoken_ft = ft_tx.cashtoken_ft
+                if not cashtoken_ft:
+                    nft_tx = txns.filter(cashtoken_nft__category=ct_category).last()
+                    if nft_tx:
+                        cashtoken_nft = nft_tx.cashtoken_nft
+            else:
+                # Get the cashtoken record if transaction does not have this info
+                ct_recipient = None
+                ct_index = None
+                for i, _recipient in enumerate(processed_recipients):
+                    ct_index = i
+                    if _recipient[2] == ct_category:
+                        ct_recipient = _recipient
+                        break
+
+                if key.startswith('ct') and ct_recipient:
+                    token_obj, _ = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+                    token_id = ct_recipient[2]
+                    nft_capability = ct_recipient[4]
+                    nft_commitment = ct_recipient[5]
+                    if token_id:
+                        if not cashtoken_ft:
+                            cashtoken_ft, _ = CashFungibleToken.objects.get_or_create(category=token_id)
+                            cashtoken_ft.fetch_metadata()
+                        if not cashtoken_nft and nft_capability:
+                            cashtoken_nft, _ = CashNonFungibleToken.objects.get_or_create(
+                                category=token_id,
+                                capability=nft_capability,
+                                commitment=nft_commitment,
+                                current_txid=txid,
+                                current_index=ct_index
+                            )
+
+        txn = txns.last()
+        spent_txn = spent_txns.last()
+
+        if not txn and not spent_txn: continue
+        if not token_obj:
+            _txn = txn or spent_txn
+            token_obj = _txn.token
+
+        _address = Address.objects.filter(address=address)
+        _address = _address.first()
+        
+        history_check = ContractHistory.objects.filter(
+            address=_address,
+            txid=txid,
+            token=token_obj,
+            cashtoken_ft=cashtoken_ft,
+            cashtoken_nft=cashtoken_nft
+        )
+        if history_check.exists():
+            history_check.update(
+                record_type=record_type,
+                amount=amount,
+                token=token_obj,
+                cashtoken_ft=cashtoken_ft,
+                cashtoken_nft=cashtoken_nft
+            )
+            if tx_fee and processed_senders and processed_recipients:
+                history_check.update(
+                    tx_fee=tx_fee,
+                    senders=processed_senders,
+                    recipients=processed_recipients
+                )
+            if tx_timestamp:
+                history_check.update(tx_timestamp=tx_timestamp)
+                resolve_wallet_history_usd_values.delay(txid=txid, is_contract=True)
+        else:
+            history = ContractHistory(
+                address=_address,
+                txid=txid,
+                record_type=record_type,
+                amount=amount,
+                token=token_obj,
+                cashtoken_ft=cashtoken_ft,
+                cashtoken_nft=cashtoken_nft,
+                tx_fee=tx_fee,
+                senders=processed_senders,
+                recipients=processed_recipients,
+                date_created=date_created,
+                tx_timestamp=tx_timestamp,
+            )
+
+            try:
+                history.save()
+                resolve_wallet_history_usd_values.delay(txid=txid, is_contract=True)
+            except IntegrityError as exc:
+                LOGGER.exception(exc)
+
+
 @shared_task(bind=True, queue='wallet_history_1')
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[], proceed_with_zero_amount=False):
     wallet_hash = wallet_handle.split('|')[1]
@@ -1503,7 +1654,7 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             WalletHistory.objects.filter(txid=txid).delete()
             return
 
-    parser = HistoryParser(txid, wallet_hash)
+    parser = HistoryParser(txid, wallet_hash=wallet_hash)
     parsed_history = parser.parse()
 
     if type(tx_fee) is str:
@@ -1792,6 +1943,7 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         wallets.append(wallet_type + '|' + wallet_hash)
 
     parse_slp = is_slp_address(address)
+    parse_contract = is_p2sh_address(address)
     bch_tx = NODE.BCH.get_transaction(txid)
     slp_tx = None
     if parse_slp:
@@ -1821,8 +1973,8 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         if 'outputs' in slp_tx:
             recipients['slp'] = [parse_utxo_to_tuple(i, is_slp=True) for i in slp_tx['outputs']]
 
-    # Parse BCH senders and recipients
-    if wallet_type == 'bch':
+    # Parse BCH senders and recipients or contracts
+    if wallet_type == 'bch' or parse_contract:
         senders['bch'] = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
         if 'outputs' in bch_tx:
             recipients['bch'] = [parse_utxo_to_tuple(i)for i in bch_tx['outputs']]
@@ -1954,6 +2106,15 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
                     senders['bch'],
                     recipients['bch']
                 )
+    
+    if parse_contract:
+        parse_contract_history.delay(
+            txid,
+            address,
+            tx_fee=tx_fee,
+            senders=senders['bch'],
+            recipients=recipients['bch']
+        )
     
     # Mark txn as processed
     Transaction.objects.filter(id=transaction_id).update(post_save_processed=timezone.now())
@@ -2189,10 +2350,12 @@ def find_wallet_history_missing_tx_timestamps():
 
 
 @shared_task(queue='wallet_history_2', max_retries=3)
-def resolve_wallet_history_usd_values(txid=None):
+def resolve_wallet_history_usd_values(txid=None, is_contract=False):
     CURRENCY = "USD"
     RELATIVE_CURRENCY = "BCH"
-    queryset = WalletHistory.objects.filter(
+    MODEL = ContractHistory if is_contract else WalletHistory
+
+    queryset = MODEL.objects.filter(
         token__name="bch",
         usd_price__isnull=True,
         tx_timestamp__isnull=False,
@@ -2211,7 +2374,7 @@ def resolve_wallet_history_usd_values(txid=None):
             continue
 
         (price_value, actual_timestamp, price_data_source) = price_value_data
-        wallet_histories = WalletHistory.objects.filter(
+        wallet_histories = MODEL.objects.filter(
             token__name="bch",
             tx_timestamp=timestamp,
         )

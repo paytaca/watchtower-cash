@@ -695,10 +695,6 @@ IMAGE_UPLOAD_ROOT = os.path.join(MEDIA_ROOT, IMAGE_UPLOAD_FOLDER)
 P2P_EXCHANGE_SLACKBOT_USER_TOKEN=config('P2P_EXCHANGE_SLACKBOT_USER_TOKEN', '')
 P2P_EXCHANGE_SLACK_CHANNEL=config('P2P_EXCHANGE_SLACK_CHANNEL', '#paytaca-p2pexchange-alerts')
 
-# payment vaults
-
-VAULT_EXPRESS_URL = 'http://localhost:3002/payment-vaults'
-
 # authentication
 FERNET_KEY = config('FERNET_KEY', '')
 

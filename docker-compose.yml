@@ -69,7 +69,6 @@ services:
       - /code/anyhedge/js/node_modules
       - /code/rampp2p/js/node_modules
       - /code/cts/js/node_modules
-      - /code/vouchers/js/node_modules
       - /code/stablehedge/js/node_modules
       - /code/main/js/node_modules
       - /code/multisig/js/node_modules

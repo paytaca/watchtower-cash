@@ -765,6 +765,102 @@ class WalletHistory(PostgresModel):
         }
 
 
+class ContractHistory(PostgresModel):
+    address = models.ForeignKey(
+        Address,
+        related_name='histories',
+        on_delete=models.CASCADE
+    )
+    txid = models.CharField(max_length=70, db_index=True)
+    record_type = models.CharField(
+        max_length=10,
+        blank=True,
+        db_index=True,
+        choices=WalletHistory.RECORD_TYPE_OPTIONS
+    )
+    amount = models.FloatField(default=0, db_index=True)
+    senders = ArrayField(ArrayField(models.CharField(max_length=70)), default=list, blank=True)
+    recipients = ArrayField(ArrayField(models.CharField(max_length=70)), default=list, blank=True)
+
+    token = models.ForeignKey(
+        Token,
+        related_name='contract_history_records',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    cashtoken_ft = models.ForeignKey(
+        CashFungibleToken,
+        on_delete=models.CASCADE,
+        related_name='contract_history_records',
+        null=True,
+        blank=True
+    )
+    cashtoken_nft = models.ForeignKey(
+        CashNonFungibleToken,
+        on_delete=models.CASCADE,
+        related_name='contract_history_records',
+        null=True,
+        blank=True
+    )
+    tx_fee = models.FloatField(null=True, blank=True)
+    tx_timestamp = models.DateTimeField(null=True,blank=True, db_index=True)
+    date_created = models.DateTimeField(default=timezone.now, db_index=True)
+
+    usd_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    market_prices = JSONField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Contract History'
+        verbose_name_plural = 'Contract Histories'
+        ordering = ['-tx_timestamp', '-date_created']
+        constraints = [
+            UniqueConstraint(
+                fields=['address', 'txid', 'token', 'amount', 'record_type'],
+                condition=Q(cashtoken_ft=None) & Q(cashtoken_nft=None),
+                name='both_ctft_ctnft_contract_none'
+            ),
+            UniqueConstraint(
+                fields=['address', 'txid', 'token', 'amount', 'record_type', 'cashtoken_nft'],
+                condition=Q(cashtoken_ft=None),
+                name='ctft_contract_none'
+            ),
+            UniqueConstraint(
+                fields=['address', 'txid', 'token', 'amount', 'record_type', 'cashtoken_ft'],
+                condition=Q(cashtoken_nft=None),
+                name='ctnft_contract_none'
+            ),
+            UniqueConstraint(
+                fields=['address', 'txid', 'token', 'amount', 'record_type', 'cashtoken_ft', 'cashtoken_nft'],
+                condition=Q(cashtoken_nft=None),
+                name='ctft_ctnft_not_contract_none'
+            )
+        ]
+
+    def __str__(self):
+        return self.txid
+
+    def save(self, *args, **kwargs):
+        def get_bch_fiat_prices():
+            response = None
+            
+            try:
+                response = requests.get('https://api.coinbase.com/v2/exchange-rates?currency=BCH')
+            except Exception as e:
+                return {}
+
+            response = response.json()
+            rates = response['data']['rates']
+            rates = map(
+                lambda item: (item[0], round(float(item[1]), 2)),
+                rates.items()
+            )
+            return dict(rates)
+        
+        self.market_prices = get_bch_fiat_prices()
+        super(ContractHistory,self).save(*args, **kwargs)
+
+
 class WalletNftToken(PostgresModel):
     wallet = models.ForeignKey(
         Wallet,

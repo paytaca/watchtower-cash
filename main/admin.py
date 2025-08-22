@@ -263,6 +263,17 @@ class ProjectAdmin(admin.ModelAdmin):
         return obj.transactions_count
 
 
+class ContractHistoryAdmin(admin.ModelAdmin):
+    list_display = [
+        'txid',
+        'address',
+        'record_type',
+        'amount',
+        'token',
+        'date_created'
+    ]
+
+
 class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
         'txid',
@@ -404,6 +415,7 @@ admin.site.register(Recipient, RecipientAdmin)
 admin.site.register(Address, AddressAdmin)
 admin.site.register(Wallet, WalletAdmin)
 admin.site.register(Project, ProjectAdmin)
+admin.site.register(ContractHistory, ContractHistoryAdmin)
 admin.site.register(WalletHistory, WalletHistoryAdmin)
 admin.site.register(WalletNftToken, WalletNftTokenAdmin)
 admin.site.register(TransactionBroadcast, TransactionBroadcastAdmin)
