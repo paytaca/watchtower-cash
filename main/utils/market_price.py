@@ -474,4 +474,3 @@ def get_ft_bch_price_log(ft_category:str, timestamp=None):
         )
     )
     return price_obj
-

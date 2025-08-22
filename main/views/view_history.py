@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db.models.functions import Substr, Cast, Floor
 from django.db.models import ExpressionWrapper, FloatField
 from rest_framework import status
-from main.models import Wallet, Address, WalletHistory, TransactionMetaAttribute
+from main.models import Wallet, Address, WalletHistory, ContractHistory
 from django.core.paginator import Paginator
 from main.serializers import PaginatedWalletHistorySerializer
 from main.throttles import RebuildHistoryThrottle
@@ -43,6 +43,49 @@ def retrieve_object(key, cache):
     pickled_data = base64.b64decode(encoded_data)
     # Deserialize the binary back to an object
     return pickle.loads(pickled_data)
+
+
+class ContractHistoryView(APIView):
+
+    def get(self, request, *args, **kwargs):
+        address = kwargs.get('address', None)
+        page = request.query_params.get('page', 1)
+        record_type = request.query_params.get('type', 'all')
+        
+        data = None
+        history = []
+        
+        address = Address.objects.get(address=address)
+        qs = ContractHistory.objects.exclude(amount=0)
+        qs = qs.filter(address=address)
+
+        if record_type in ['incoming', 'outgoing']:
+            qs = qs.filter(record_type=record_type)
+
+        qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
+        qs = qs.filter(token__name='bch')
+        history = qs.values(
+            'record_type',
+            'txid',
+            'amount',
+            'tx_fee',
+            'senders',
+            'recipients',
+            'date_created',
+            'tx_timestamp',
+            'usd_price',
+            'market_prices',
+        )
+
+        pages = Paginator(history, 10)
+        page_obj = pages.page(int(page))
+        data = {
+            'history': page_obj.object_list,
+            'page': page,
+            'num_pages': pages.num_pages,
+            'has_next': page_obj.has_next()
+        }
+        return Response(data=data, status=status.HTTP_200_OK)
 
 
 class WalletHistoryView(APIView):
