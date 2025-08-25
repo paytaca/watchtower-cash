@@ -1,19 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WatchTower</title>
+    <title>WatchTower.Cash - Complete Bitcoin Cash Infrastructure</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://watchtower.cash">
     <meta property="og:site_name" content="WatchTower.Cash">
-    <meta property="og:title" content="WatchTower.Cash">
+    <meta property="og:title" content="WatchTower.Cash - Complete Bitcoin Cash Infrastructure">
     <meta property="og:image" content="https://watchtower.cash/static/watchtower_diagram_preview.jpg">
-    <meta property="og:description" content="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain">
+    <meta property="og:description" content="Comprehensive blockchain infrastructure service providing real-time monitoring, DeFi tools, trading platforms, and advanced wallet solutions for Bitcoin Cash">
 
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:title" content="WatchTower.Cash">
-    <meta property="twitter:description" content="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain">
+    <meta property="twitter:title" content="WatchTower.Cash - Complete Bitcoin Cash Infrastructure">
+    <meta property="twitter:description" content="Comprehensive blockchain infrastructure service providing real-time monitoring, DeFi tools, trading platforms, and advanced wallet solutions for Bitcoin Cash">
     <meta property="twitter:image" content="https://watchtower.cash/static/watchtower_diagram_preview.jpg">
 
     <!-- Load required Bootstrap and BootstrapVue CSS -->
@@ -42,7 +42,7 @@
         
             <b-collapse id="nav-collapse" is-nav>
                 <b-navbar-nav class="ml-auto">
-                    <b-nav-item @click="alert('Under construction!')">Documentation</b-nav-item>
+                    <b-nav-item href="https://github.com/paytaca/watchtower-cash#readme" target="_blank">Documentation</b-nav-item>
                     <b-nav-item href="https://watchtower.cash/api/docs/" target="_blank">API Browser</b-nav-item>
                     <b-nav-item href="https://github.com/paytaca/watchtower-cash" target="_blank">Source Code</b-nav-item>
                     <b-nav-item href="//watchtower-cash.statuspal.io">
@@ -53,83 +53,115 @@
         </b-navbar>
         <b-jumbotron style="text-align: center;">
             <template #header>
-                <span style="font-size: 58px;">Watchtower</span>
+                <span style="font-size: 58px;">Watchtower.Cash</span>
             </template>
 
             <template #lead>
-                Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain
+                Comprehensive blockchain infrastructure service providing real-time monitoring, DeFi tools, trading platforms, and advanced wallet solutions for Bitcoin Cash
             </template>
-            <!-- <b-button variant="dark" href="#">Try It Now</b-button> -->
+            <b-button variant="dark" href="https://watchtower.cash/api/docs/" target="_blank">Explore APIs</b-button>
         </b-jumbotron>
         <b-container fluid>
             <b-row>
                 <b-col class="cards" xs="12" sm="12" md="6">
-                    <h4>Designed for Reliability at Scale</h4>
+                    <h4>🚀 Core Blockchain Infrastructure</h4>
                     <p>
                         Watchtower is built to guarantee 99.99% uptime and reliability regardless of scale.
                     </p>
                     <ul>
-                        <li>Watches only subscribed addresses preventing unnecessary waste of resources</li>
-                        <li>Uses multiple failover nodes / indexers as data sources</li>
-                        <li>Powered by a distributed parallel background task queue for scanning of blocks and sending of notifications</li>
-                        <li>Deployable to a Kubernetes cluster configured to be highly available and with automated horizontal scaling capability</li>
+                        <li>Real-time UTXO database for subscribed addresses</li>
+                        <li>Instant notifications via webhooks and WebSockets</li>
+                        <li>Transaction broadcasting and mempool monitoring</li>
+                        <li>Multiple failover nodes/indexers as data sources</li>
+                        <li>Distributed parallel background task queue</li>
                     </ul>
                 </b-col>
                 <b-col class="cards" xs="12" sm="12" md="6">
-                    <h4>Targeted Use Case</h4>
+                    <h4>💼 Advanced Financial Tools</h4>
                     <p>
-                        Watchtower is specifically built as a reliable backend to typical applications that integrate with BCH blockchain. 
-                        It aims to perform very well within a limited set of features that include:
+                        Complete DeFi and trading infrastructure for Bitcoin Cash applications:
                     </p>
                     <ul>
-                        <li>Highly available UTXO database</li>
-                        <li>Webhook notification system</li>
-                        <li>Two-way communication through websockets</li>
-                        <li>Broadcast of signed transactions</li>
-                        <li>HD wallet tracking</li>
-                        <li>Double spend proof notifications <b-badge>PLANNED</b-badge></li>
+                        <li><strong>Anyhedge Derivatives</strong> - Hedge contracts with oracle feeds</li>
+                        <li><strong>Stablehedge Treasury</strong> - Automated shorting & rebalancing</li>
+                        <li><strong>P2P Exchange Platform</strong> - Escrow contracts & arbitration</li>
+                        <li><strong>Multisig Wallets</strong> - M-of-N configurations with LibAuth</li>
+                        <li><strong>Merchant POS</strong> - Business payment processing</li>
                     </ul>
                 </b-col>
             </b-row>
             <hr>
             <b-row>
                 <b-col class="cards" xs="12" sm="12" md="6">
-                    <h4>Bridge to the BCH Blockchain</h4>
+                    <h4>🔌 Complete API Ecosystem</h4>
+                    <p>
+                        Comprehensive APIs covering every aspect of Bitcoin Cash infrastructure:
+                    </p>
+                    <ul>
+                        <li><strong>Blockchain APIs</strong> - Addresses, transactions, subscriptions</li>
+                        <li><strong>DeFi APIs</strong> - Contract management & settlement</li>
+                        <li><strong>Trading APIs</strong> - Order matching & market data</li>
+                        <li><strong>Wallet APIs</strong> - Multisig & HD wallet operations</li>
+                        <li><strong>Payment APIs</strong> - BIP70 & merchant tools</li>
+                        <li><strong>Real-time WebSockets</strong> - Live updates across all services</li>
+                    </ul>
+                </b-col>
+                <b-col class="cards" xs="12" sm="12" md="6">
+                    <h4>🏗️ Enterprise-Grade Architecture</h4>
+                    <p>
+                        Built for developers and businesses that need reliable blockchain infrastructure:
+                    </p>
+                    <ul>
+                        <li><strong>Scalable Design</strong> - Handles millions of addresses</li>
+                        <li><strong>High Availability</strong> - 99.99% uptime guarantee</li>
+                        <li><strong>Real-time Processing</strong> - Sub-second notification delivery</li>
+                        <li><strong>Multi-tenant Support</strong> - Country-specific features</li>
+                        <li><strong>Developer Tools</strong> - SDKs for JS, Python, and more</li>
+                    </ul>
+                </b-col>
+            </b-row>
+            <hr>
+            <b-row>
+                <b-col class="cards" xs="12" sm="12" md="6">
+                    <h4>🌉 Bridge to the BCH Blockchain</h4>
                     <p>
                         No matter how robust the BCH blockchain is, your app's performance is just as good as the bridge. Watchtower serves as your app's reliable bridge to the BCH blockchain.
                     </p>
                     <b-img src="/static/watchtower_diagram.png" fluid></b-img>
                 </b-col>
                 <b-col class="cards" xs="12" sm="12" md="6">
-                    <h4>Learn More</h4>
+                    <h4>📚 Get Started Today</h4>
                     <p>
-                        Learning resources and support
+                        Ready to build the future of Bitcoin Cash applications?
                     </p>
                     <ul>
                         <li>
-                            <a href="#" @click="alert('Under construction!')">
-                                Documentation
+                            <a href="https://github.com/paytaca/watchtower-cash#readme" target="_blank">
+                                📖 Complete Documentation
                             </a>
                         </li>
                         <li>
                             <a href="https://watchtower.cash/api/docs/" target="_blank">
-                                API Browser
+                                🔍 Interactive API Browser
                             </a>
                         </li>
                         <li>
                             <a href="https://github.com/paytaca/watchtower-cash" target="_blank">
-                                Source Code @ Github
+                                💻 Source Code on GitHub
                             </a>
                         </li>
                         <li>
                             <a href="https://t.me/WatchTowerCash" target="_blank">
-                                Telegram Support Group
+                                💬 Telegram Support Group
                             </a>
                         </li>
                         <li>
-                            <a class="sp-status" href="//watchtower-cash.statuspal.io">Status</a>
+                            <a class="sp-status" href="//watchtower-cash.statuspal.io">📊 System Status</a>
                         </li>
                     </ul>
+                    <b-button variant="success" href="https://watchtower.cash/api/docs/" target="_blank" class="mt-3">
+                        🚀 Start Building
+                    </b-button>
                 </b-col>
             </b-row>
             <hr>
@@ -137,7 +169,7 @@
                 <b-col>
                     <p>
                         Built with &#10084;&#65039; by 
-                        <span style="color: black;" @click="window.open('https://www.paytaca.com')">Paytaca</span>
+                        <span style="color: black; cursor: pointer;" @click="window.open('https://www.paytaca.com')">Paytaca</span>
                     </p>
                 </b-col>
             </b-row>
@@ -156,6 +188,21 @@
     <style>
         .cards {
             padding: 20px 30px;
+        }
+        .cards ul li {
+            margin-bottom: 8px;
+        }
+        .cards h4 {
+            color: #5bba74;
+            margin-bottom: 20px;
+        }
+        .btn-success {
+            background-color: #5bba74;
+            border-color: #5bba74;
+        }
+        .btn-success:hover {
+            background-color: #4a9d63;
+            border-color: #4a9d63;
         }
     </style>
     <script>
