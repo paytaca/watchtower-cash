@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.contrib.auth.models import User
 from rest_framework.views import APIView, View
 from rest_framework.response import Response
 from rest_framework import generics, status
@@ -94,4 +95,17 @@ class MemoView(APIView):
 
 		return Response({'status': 'successfully deleted', 'data': response}, status=200)
 
+class RegisterView(APIView):
+	def post(self, request):
+		wallet_hash = request.headers.get('wallet_hash')
+		memo_user_hash = request.headers.get('memo-user-hash')
 
+		if User.objects.filter(username=wallet_hash).exists():
+			return Response({'error': 'Username already exists'}, status=400)
+
+		user = User.objects.create_user(
+			username=wallet_hash,
+			password=memo_user_hash
+		)
+
+		return Response({'message': 'User created'}, status=200)
