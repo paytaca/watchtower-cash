@@ -93,9 +93,28 @@ class Invoice(models.Model):
 
 
 class InvoiceOutput(models.Model):
+    class Capability(models.TextChoices):
+        MUTABLE = "mutable"
+        NONE = "none"
+        MINTING = "minting"
+
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="outputs")
     amount = models.BigIntegerField()
     address = models.CharField(max_length=70)
+
+    category = models.CharField(max_length=70, null=True, blank=True)
+    token_amount = models.BigIntegerField(null=True, blank=True)
+    capability = models.CharField(choices=Capability.choices, max_length=10, null=True, blank=True)
+    commitment = models.CharField(max_length=40, null=True, blank=True)
+
+    def token(self):
+        """ For serializer """
+        if not self.category: return None
+
+        token_data = dict(category=self.category, amount=self.token_amount)
+        if self.capability:
+            token_data["nft"] = dict(capability=self.capability, commitment=self.commitment)
+        return token_data
 
 
 class InvoicePayment(models.Model):
