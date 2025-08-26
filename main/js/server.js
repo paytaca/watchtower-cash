@@ -3,7 +3,9 @@ import {
     decodeCashAddress,
     encodeCashAddress,
     CashAddressType,
-    CashAddressNetworkPrefix
+    CashAddressNetworkPrefix,
+    cashAddressToLockingBytecode,
+    binToHex
 } from '@bitauth/libauth'
 import ElectrumCashProvider from './utils/electrum-cash-provider.js'
 
@@ -78,6 +80,11 @@ function getTransactions(address, network=''){
         })
 }
 
+function addressToBytecode(address) {
+    const result = cashAddressToLockingBytecode(address)
+    if (typeof result === 'string') return { success: false, error: result }
+    return { success: true, bytecode: binToHex(result.bytecode) }
+}
 
 const app = express()
 const port = 3000
@@ -101,6 +108,11 @@ app.get('/convert-address/:address', (req, res) => {
 app.get('/get-transactions/:address', async (req, res) => {
     const network = req.query.network
     const response = await getTransactions(req.params.address, network)
+    res.send(response)
+})
+
+app.get('/to-locking-bytecode/:address', async (req, res) => {
+    const response = addressToBytecode(req.params.address)
     res.send(response)
 })
 
