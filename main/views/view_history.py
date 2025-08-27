@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db.models.functions import Substr, Cast, Floor
 from django.db.models import ExpressionWrapper, FloatField
 from rest_framework import status
-from main.models import Wallet, Address, WalletHistory, ContractHistory
+from main.models import Wallet, Address, WalletHistory, ContractHistory, TransactionMetaAttribute
 from django.core.paginator import Paginator
 from main.serializers import PaginatedWalletHistorySerializer
 from main.throttles import RebuildHistoryThrottle
@@ -98,7 +98,8 @@ class WalletHistoryView(APIView):
             openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
             openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="reference", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
-            openapi.Parameter(name="attr", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True, required=False),
+            openapi.Parameter(name="exclude_attr", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True, required=False),
+            openapi.Parameter(name="attribute", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
         ]
     )
     def get(self, request, *args, **kwargs):
@@ -112,6 +113,7 @@ class WalletHistoryView(APIView):
         posid = request.query_params.get("posid", None)
         txids = request.query_params.get("txids", "")
         reference = request.query_params.get("reference", "")
+        attribute = request.query_params.get("attribute", "")
         include_attrs = str(request.query_params.get("exclude_attr", "true")).strip().lower() == "true"
         
         is_cashtoken_nft = False
@@ -139,6 +141,13 @@ class WalletHistoryView(APIView):
 
         if not data:
             qs = WalletHistory.objects.exclude(amount=0)
+
+            wallet_txids_with_attrs = None
+            if attribute:
+                meta_attributes = TransactionMetaAttribute.objects.filter(wallet_hash=wallet_hash)
+                wallet_txids_with_attrs = meta_attributes.values('txid').distinct('txid')
+                qs = qs.filter(txid__in=wallet_txids_with_attrs)
+
             if posid:
                 try:
                     posid = int(posid)

@@ -272,7 +272,16 @@ class ContractHistoryAdmin(admin.ModelAdmin):
         'token',
         'date_created'
     ]
+    
+    search_fields = [
+        'txid',
+        'address',
+    ]
 
+    list_filter = [
+        'record_type',
+    ]
+    
 
 class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
