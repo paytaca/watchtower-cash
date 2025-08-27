@@ -47,10 +47,22 @@ def retrieve_object(key, cache):
 
 class ContractHistoryView(APIView):
 
+    @swagger_auto_schema(
+        responses={200: PaginatedWalletHistorySerializer},
+        manual_parameters=[
+            openapi.Parameter(name="page", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, default=1),
+            openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
+            openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         address = kwargs.get('address', None)
         page = request.query_params.get('page', 1)
         record_type = request.query_params.get('type', 'all')
+        txids = request.query_params.get("txids", "")
+
+        if isinstance(txids, str):
+            txids = [txid for txid in txids.split(",") if txid]
         
         data = None
         history = []
@@ -61,6 +73,8 @@ class ContractHistoryView(APIView):
 
         if record_type in ['incoming', 'outgoing']:
             qs = qs.filter(record_type=record_type)
+        if len(txids):
+            qs = qs.filter(txid__in=txids)
 
         qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
         qs = qs.filter(token__name='bch')
