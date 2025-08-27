@@ -1,12 +1,6 @@
-import json
-import base64
-import requests
-
-import traceback
-import bitcoin
-from cashaddress import convert
 from bitcoinrpc.authproxy import JSONRPCException
 
+from main.utils.address_converter import address_to_locking_bytecode
 from main.utils.queries.bchn import BCHN
 from main.utils.tx_fee import is_hex
 
@@ -19,113 +13,72 @@ class VerifyError(Exception):
     pass
 
 
-def verify_tx_hex(invoice_obj, tx_hex, verify_inputs=True):
-    tx = parse_tx_hex(tx_hex, with_input_values=verify_inputs)
+def compare_output(tx_output, invoice_output):
+    script_pubkey = address_to_locking_bytecode(invoice_output.address)
+    if script_pubkey != tx_output["scriptPubKey"]["hex"]:
+        return False
 
-    invoice_output_value_map = {} # Map<address:str, total_value:int>
-    for output in invoice_obj.outputs.all():
-        if not invoice_output_value_map.get(output.address, None):
-            invoice_output_value_map[output.address] = 0
-        invoice_output_value_map[output.address] += output.amount
+    satoshis = round(tx_output.get("value", 0) * 1e8)
+    if satoshis != invoice_output.amount:
+        return False
 
-    tx_output_value_map = {} # Map<address:str, total_value:int>
-    for output in tx["outs"]:
-        if not tx_output_value_map.get(output["address"], None):
-                tx_output_value_map[output["address"]] = 0
-        tx_output_value_map[output["address"]] += output["value"]
+    # address & amount would be equal at this point
+    # but if there is no tokenData it would only be equal if invoice_output has no category also
+    if "tokenData" not in tx_output:
+        return not bool(invoice_output.category)
 
-    for address, amount in invoice_output_value_map.items():
-        if address not in tx_output_value_map:
-            raise VerifyError(f"Expected output for '{address}'")
+    token_data = tx_output["tokenData"]
+    if token_data["category"] != invoice_output.category:
+        return False
 
-        if amount != tx_output_value_map[address]:
-            raise VerifyError(f"Expected {amount} satoshis for '{address}', got {tx_output_value_map[address]}")
+    if int(token_data["amount"]) != invoice_output.token_amount or 0:
+        return False
+    
+    if "nft" not in token_data:
+        return not bool(invoice_output.capability)
+    
+    nft_data = token_data["nft"]
+    if nft_data["capability"] != invoice_output.capability:
+        return False
 
-    if verify_inputs:
-        tx_total_input = tx["total_input"]
-        tx_total_output = tx["total_output"]
-        if tx_total_input < tx_total_output:
-            raise VerifyError(f"Total input {tx_total_input} satoshis is less than total output {tx_total_output} satoshis")
-
-        tx_fee = tx["tx_fee"]
-        expected_tx_fee = invoice_obj.required_fee_per_byte * tx["byte_count"]
-        if tx_fee < expected_tx_fee:
-            raise VerifyError(f"Expected tx fee of {expected_tx_fee} satoshis but got {tx_fee} satoshis")
+    if nft_data["commitment"] != invoice_output.commitment or "":
+        return False
 
     return True
 
 
-def parse_tx_hex(tx_hex, with_input_values=True):
-    tx = bitcoin.deserialize(tx_hex)
-    byte_count = len(tx_hex) / 2 # 1 byte (8bits) is 2 hex(4bits)
-    tx["byte_count"] = byte_count
-    tx["hash"] = bitcoin.txhash(tx_hex)
+def verify_tx_hex(invoice_obj, tx_hex, verify_inputs=True):
+    tx = bchn.build_tx_from_hex(tx_hex)
+    invoice_outputs = invoice_obj.outputs.all()
 
-    for output in tx["outs"]:
-        try:
-            output["address"] = convert.to_cash_address(
-                bitcoin.script_to_address(output["script"])
-            )
-        except Exception:
-            traceback.print_exc()
-
-    if with_input_values:
-        txids = [inp["outpoint"]["hash"] for inp in tx["ins"]]
-        tx_inp_value_map = get_tx_output_values(txids)
-        for inp in tx["ins"]:
-            outpoint_txid = inp["outpoint"]["hash"]
-            outpoint_index = inp["outpoint"]["index"]
-            value_map = tx_inp_value_map.get(outpoint_txid)
-            if not value_map:
+    matched_output_indices = []
+    for invoice_output in invoice_outputs:
+        found_match = False
+        for tx_output in tx["vout"]:
+            if tx_output["n"] in matched_output_indices:
                 continue
 
-            if outpoint_index in value_map:
-                inp["value"] = value_map[outpoint_index]
-    
-        tx_total_output = 0
-        for output in tx["outs"]:
-            tx_total_output += output["value"]
+            if compare_output(tx_output, invoice_output):
+                matched_output_indices.append(tx_output["n"])
+                found_match = True
+                break
 
-        tx_total_input = 0
-        for inp in tx["ins"]:
-            tx_total_input += inp["value"]
+        if not found_match:
+            raise VerifyError("Missing expected output" + f"{invoice_output}")
 
-        tx["total_output"] = tx_total_output
-        tx["total_input"] = tx_total_input
-        tx["tx_fee"] = tx_total_input - tx_total_output
+    if verify_inputs:
+        tx_total_input = int(sum([vin["value"] for vin in tx["vin"]]) * 1e8)
+        tx_total_output = int(sum([vout["value"] for vout in tx["vout"]]) * 1e8)
 
-    return tx
+        if tx_total_input < tx_total_output:
+            raise VerifyError(f"Total input {tx_total_input} satoshis is less than total output {tx_total_output} satoshis")
 
+        tx_fee = tx_total_input - tx_total_output
+        expected_tx_fee = invoice_obj.required_fee_per_byte * tx["size"]
+        if tx_fee < expected_tx_fee:
+            raise VerifyError(f"Expected tx fee of {expected_tx_fee} satoshis but got {tx_fee} satoshis")
 
-def get_tx_output_values(txids):
-    """
-    Parameters:
-        txids:str[] - array of txids
-            example: [ 'e4ae...0f3cd', '80b7...9c496' ]
-    Returns:
-        tx_output_map: Map<txid:str, Map<output_index:int, value:int>>
-    """
-
-    txids = list(set(txids))
-    txs_data = []
-    for txid in txids:
-        if not __is_txid(txid): continue
-
-        try:
-            txs_data.append(bchn.get_transaction(txid))
-        except Exception as exception:
-            txs_data.append(exception)
-
-    txs_map = {}
-    for tx_data in txs_data:
-        if not isinstance(tx_data, dict): continue
-
-        output_map = {}
-        for output in tx_data["outputs"]:
-            output_map[output["index"]] = output["value"]
-        txs_map[tx_data["txid"]] = output_map
-    return txs_map
-
+    return True
 
 def tx_exists(txid):
     if not __is_txid(txid): return False

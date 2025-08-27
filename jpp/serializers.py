@@ -59,9 +59,20 @@ class InvoiceVerifySerializer(serializers.Serializer):
         return self.instance
 
 
+class OutputTokenNftSerializer(serializers.Serializer):
+    capability = serializers.CharField()
+    commitment = serializers.CharField()
+
+class OutputTokenSerializer(serializers.Serializer):
+    category = serializers.CharField()
+    amount = serializers.IntegerField()
+    nft = OutputTokenNftSerializer(required=False)
+
+
 class OutputSerializer(serializers.Serializer):
     amount = serializers.IntegerField()
     address = serializers.CharField()
+    token = OutputTokenSerializer(required=False)
 
     class Meta:
         ref_name = "JPPOutputSerializer"
@@ -153,6 +164,7 @@ class InvoicePaymentSerializer(serializers.ModelSerializer):
                 InvoicePaymentRefundOutput.objects.create(**output_data)
 
         if not tx_exists(txid):
+            # raise serializers.ValidationError("Just rejecting broadcast")
             broadcast_response = broadcast_transaction(
                 raw_tx_hex,
                 invoice_uuid=self.invoice.uuid.hex,
@@ -255,6 +267,17 @@ class InvoiceSerializer(serializers.ModelSerializer):
             extra=extra,
         )
 
+    def flatten_output_data(self, output_data):
+        if "token" not in output_data: return output_data
+
+        token_data = output_data.pop("token")
+        output_data["category"] = token_data["category"]
+        output_data["token_amount"] = token_data["amount"]
+        if "nft" not in token_data: return output_data
+        nft_data = token_data.pop("nft")
+        output_data["capability"] = nft_data["capability"]
+        output_data["commitment"] = nft_data["commitment"]
+        return output_data
 
     @transaction.atomic
     def create(self, validated_data):
@@ -263,6 +286,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         instance = super().create(validated_data)
 
         for output_data in output_data_list:
+            output_data = self.flatten_output_data(output_data)
             output_data["invoice"] = instance
             InvoiceOutput.objects.create(**output_data)
 

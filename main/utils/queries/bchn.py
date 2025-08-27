@@ -153,6 +153,9 @@ class BCHN(object):
             if 'address' in _input_details:
                 txn['vin'][i]['address'] = _input_details['address']
 
+            if 'token_data' in _input_details:
+                txn['vin'][i]['tokenData'] = _input_details['token_data']
+
         txn['tx_fee'] = tx_fee
         txn['timestamp'] = None
         return txn
