@@ -20,6 +20,7 @@ from .utils.protobuf import (
     script_to_address,
     deserialize_payment_pb,
 )
+from .utils.notification import send_invoice_push_notification
 
 from .utils.verify import (
     VerifyError,
@@ -217,56 +218,6 @@ class InvoiceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("must have at least 1 output")
         return data
 
-    def send_push_notification(self, instance):
-        try:
-            address = instance.merchant_data["address"]
-        except (AttributeError, TypeError, KeyError):
-            return
-
-        wallet_hashes = Wallet.objects.filter(addresses__address=address) \
-            .values_list("wallet_hash", flat=True) \
-            .distinct()
-        address_path = Address.objects.filter(address=address) \
-            .values_list("address_path", flat=True) \
-            .first()
-
-        wallet_hashes = [*wallet_hashes]
-        if not wallet_hashes:
-            return
-
-        payment_url_params = urlencode({
-            "r": instance.get_absolute_uri(self.context["request"]),
-        })
-        extra = {
-            "type": NotificationTypes.PAYMENT_REQUEST,
-            "payment_url": f"bitcoincash:?{payment_url_params}",
-        }
-
-        if address_path:
-            extra["use_address_path"] = address_path
-
-        total_bch = abs(instance.total_bch)
-        total_bch = f'{total_bch:.5f}'.rstrip('0').rstrip('.')
-
-        title = "Payment Request"
-        message = f"You have a payment request of {total_bch} BCH"
-
-        broadcast_to_engagementhub({
-            'title': title,
-            'message': message,
-            'wallet_hash': wallet_hashes,
-            'notif_type': 'TR',
-            'extra_data': extra['payment_url'],
-            'date_posted': timezone.now().isoformat()
-        })
-
-        return send_push_notification_to_wallet_hashes(
-            wallet_hashes,
-            message,
-            title=title,
-            extra=extra,
-        )
-
     def flatten_output_data(self, output_data):
         if "token" not in output_data: return output_data
 
@@ -290,7 +241,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             output_data["invoice"] = instance
             InvoiceOutput.objects.create(**output_data)
 
-        self.send_push_notification(instance)
+        send_invoice_push_notification(instance, self.context["request"])
         return instance
 
 
