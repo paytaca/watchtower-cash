@@ -6,6 +6,10 @@ from rest_framework import generics, status
 from django.db.models import Q
 from django.conf import settings 
 
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+
 import json
 import requests
 import logging
@@ -19,7 +23,13 @@ from .serializers import (
 )
 
 class MemoView(APIView):
+	authentication_classes = [JWTAuthentication]
 	serializer_class = MemoSerializer
+
+	def get_permissions(self):
+		if self.request.method == 'GET':
+			return [AllowAny()]
+		return [IsAuthenticated()]
 
 	def post(self, request):
 		data = request.data
