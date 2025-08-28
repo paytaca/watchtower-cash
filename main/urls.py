@@ -17,6 +17,7 @@ router.register(r"payment-requests", views.PaymentRequestViewSet, basename="paym
 router.register(r"wallet/shard", views.WalletShardViewSet, basename="wallet-shard")
 router.register(r"app-control", views.AppControlViewSet, basename="app-control")
 router.register(r"transactions/outputs", views.TransactionOutputViewSet, basename="transaction-outputs")
+router.register(r"projects", views.ProjectViewSet, basename="projects")
 
 main_urls = router.urls
 
@@ -35,6 +36,8 @@ main_urls += [
     re_path(r"^blockchain/info/$", views.BlockChainView.as_view(), name='blockchain-info'),
 
     re_path(r"^live-updates/payment/$", views.LiveUpdatesPaymentView.as_view(), name='live-updates-payment'),
+
+    re_path(r"^projects/leaderboard/(?P<project_id>[\w+:-]+)/$", views.ProjectLeaderboardView.as_view(), name='project-leaderboard'),
 
     re_path(r"^address-info/bch/(?P<bchaddress>[\w+:]+)/$", views.AddressInfoView.as_view(),name='bch-address-info'),
     re_path(r"^balance/bch/(?P<bchaddress>[\w+:]+)/$", views.Balance.as_view(),name='bch-balance'),
@@ -84,7 +87,7 @@ main_urls += [
     path('version/check/<str:platform>/', views.check_app_version),
     path('nonce/', views.NonceAPIView.as_view()),
     path('wallet-address-app/', views.WalletAddressAppView.as_view()),
-    path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view())
+    path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view()),
 ]
 
 test_urls = [
