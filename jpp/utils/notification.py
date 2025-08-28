@@ -67,29 +67,34 @@ def resolve_invoice_notif_message(instance):
 
     token_amounts = {}
     nft_outputs = []
+    include_bch_amount_text = False
     for output in outputs:
+        # if there is non cashtoken output or cashtoken output with sats grater than CT dust
+        if not output.category or output.amount > 1000:
+            include_bch_amount_text = True
+
         if output.token_amount:
             category = output.category
             token_amounts[category] = token_amounts.get(category, 0) + output.token_amount
         elif output.capability:
             nft_outputs.append(output)
 
-
-    total_bch = abs(instance.total_bch)
-    total_bch = f'{total_bch:.5f}'.rstrip('0').rstrip('.')
-    amounts_text = [f"{total_bch} BCH"]
+    amounts_text = []
+    if include_bch_amount_text:
+        total_bch = abs(instance.total_bch)
+        total_bch = f'{total_bch:.5f}'.rstrip('0').rstrip('.')
+        amounts_text.append(f"{total_bch} BCH")
 
     token_amounts_text = []
     for category, amount in token_amounts.items():
-        if len(token_amounts_text) >= 3:
+        if len(token_amounts_text) >= 2:
             break
 
         formatted_amount = format_token_amount(category, amount)
-        print(f"{category} | {amount} | {formatted_amount}")
         if formatted_amount:
             token_amounts_text.append(formatted_amount)
 
-    other_token_count = len(token_amounts.keys()) - len(amounts_text) 
+    other_token_count = len(token_amounts.keys()) - len(token_amounts_text) 
     if other_token_count > 0:
         token_amounts_text.append(f"{other_token_count} fungible {'token' if other_token_count == 1 else 'tokens'}")
     amounts_text += token_amounts_text
