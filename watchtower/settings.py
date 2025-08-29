@@ -435,7 +435,10 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "platform",
     "x-auth-pubkey",
     "x-auth-message",
-    "x-auth-signature"
+    "x-auth-signature",
+    "x-authmemo-wallethash",
+    "x-authmemo-pass"
+
 ]
 
 REST_FRAMEWORK = {

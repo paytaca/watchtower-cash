@@ -107,8 +107,8 @@ class MemoView(APIView):
 
 class RegisterView(APIView):
 	def post(self, request):
-		wallet_hash = request.headers.get('wallet_hash')
-		memo_user_hash = request.headers.get('memo-user-hash')
+		wallet_hash = request.headers.get('x_authmemo_wallethash')
+		memo_user_hash = request.headers.get('x_authmemo_pass')
 
 		if User.objects.filter(username=wallet_hash).exists():
 			return Response({'error': 'Username already exists'}, status=400)
