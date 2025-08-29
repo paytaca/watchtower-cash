@@ -636,12 +636,12 @@ class WalletHistory(PostgresModel):
         (OUTGOING, 'Outgoing')
     ]
     senders = ArrayField(
-        ArrayField(models.CharField(max_length=70)),
+        ArrayField(models.CharField(max_length=100)),
         default=list,
         blank=True
     )
     recipients = ArrayField(
-        ArrayField(models.CharField(max_length=70)),
+        ArrayField(models.CharField(max_length=100)),
         default=list,
         blank=True
     )
@@ -779,8 +779,8 @@ class ContractHistory(PostgresModel):
         choices=WalletHistory.RECORD_TYPE_OPTIONS
     )
     amount = models.FloatField(default=0, db_index=True)
-    senders = ArrayField(ArrayField(models.CharField(max_length=70)), default=list, blank=True)
-    recipients = ArrayField(ArrayField(models.CharField(max_length=70)), default=list, blank=True)
+    senders = ArrayField(ArrayField(models.CharField(max_length=100)), default=list, blank=True)
+    recipients = ArrayField(ArrayField(models.CharField(max_length=100)), default=list, blank=True)
 
     token = models.ForeignKey(
         Token,
