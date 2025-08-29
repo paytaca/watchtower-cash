@@ -69,3 +69,11 @@ class PaginatedProjectLeaderboardSerializer(serializers.Serializer):
     num_pages = serializers.IntegerField()
     has_next = serializers.BooleanField()    
     leaderboard = ProjectSerializer(many=True)
+
+
+class ProjectWalletsSerializer(serializers.Serializer):
+    wallets = serializers.ListField(
+        child=serializers.CharField(
+            help_text="List of wallet hashes that belong to the project"
+        )
+    )

@@ -38,6 +38,7 @@ main_urls += [
     re_path(r"^live-updates/payment/$", views.LiveUpdatesPaymentView.as_view(), name='live-updates-payment'),
 
     re_path(r"^projects/leaderboard/(?P<project_id>[\w+:-]+)/$", views.ProjectLeaderboardView.as_view(), name='project-leaderboard'),
+    re_path(r"^projects/wallets/(?P<project_id>[\w+:-]+)/$", views.ProjectWalletsView.as_view(), name='project-wallets'),
 
     re_path(r"^address-info/bch/(?P<bchaddress>[\w+:]+)/$", views.AddressInfoView.as_view(),name='bch-address-info'),
     re_path(r"^balance/bch/(?P<bchaddress>[\w+:]+)/$", views.Balance.as_view(),name='bch-balance'),
