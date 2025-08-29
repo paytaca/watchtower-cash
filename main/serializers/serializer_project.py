@@ -68,4 +68,4 @@ class PaginatedProjectLeaderboardSerializer(serializers.Serializer):
     page_size = serializers.IntegerField()
     num_pages = serializers.IntegerField()
     has_next = serializers.BooleanField()    
-    history = ProjectSerializer(many=True)
+    leaderboard = ProjectSerializer(many=True)
