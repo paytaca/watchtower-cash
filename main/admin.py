@@ -250,7 +250,8 @@ class ProjectAdmin(admin.ModelAdmin):
         'date_created',
         'wallets',
         'addresses',
-        'transactions'
+        'transactions',
+        'publicize_wallets',
     ]
 
     def wallets(self, obj):
@@ -272,7 +273,16 @@ class ContractHistoryAdmin(admin.ModelAdmin):
         'token',
         'date_created'
     ]
+    
+    search_fields = [
+        'txid',
+        'address',
+    ]
 
+    list_filter = [
+        'record_type',
+    ]
+    
 
 class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [

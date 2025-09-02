@@ -131,6 +131,7 @@ class Project(PostgresModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, blank=True)
     date_created = models.DateTimeField(default=timezone.now)
+    publicize_wallets = models.BooleanField(default=False)
 
     def __str__(self):
         if self.name:

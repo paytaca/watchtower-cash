@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db.models.functions import Substr, Cast, Floor
 from django.db.models import ExpressionWrapper, FloatField
 from rest_framework import status
-from main.models import Wallet, Address, WalletHistory, ContractHistory
+from main.models import Wallet, Address, WalletHistory, ContractHistory, TransactionMetaAttribute
 from django.core.paginator import Paginator
 from main.serializers import PaginatedWalletHistorySerializer
 from main.throttles import RebuildHistoryThrottle
@@ -47,10 +47,22 @@ def retrieve_object(key, cache):
 
 class ContractHistoryView(APIView):
 
+    @swagger_auto_schema(
+        responses={200: PaginatedWalletHistorySerializer},
+        manual_parameters=[
+            openapi.Parameter(name="page", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, default=1),
+            openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
+            openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         address = kwargs.get('address', None)
         page = request.query_params.get('page', 1)
         record_type = request.query_params.get('type', 'all')
+        txids = request.query_params.get("txids", "")
+
+        if isinstance(txids, str):
+            txids = [txid for txid in txids.split(",") if txid]
         
         data = None
         history = []
@@ -61,6 +73,8 @@ class ContractHistoryView(APIView):
 
         if record_type in ['incoming', 'outgoing']:
             qs = qs.filter(record_type=record_type)
+        if len(txids):
+            qs = qs.filter(txid__in=txids)
 
         qs = qs.order_by(F('tx_timestamp').desc(nulls_last=True), F('date_created').desc(nulls_last=True))
         qs = qs.filter(token__name='bch')
@@ -98,7 +112,8 @@ class WalletHistoryView(APIView):
             openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
             openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="reference", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
-            openapi.Parameter(name="attr", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True, required=False),
+            openapi.Parameter(name="exclude_attr", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True, required=False),
+            openapi.Parameter(name="attribute", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
         ]
     )
     def get(self, request, *args, **kwargs):
@@ -112,6 +127,7 @@ class WalletHistoryView(APIView):
         posid = request.query_params.get("posid", None)
         txids = request.query_params.get("txids", "")
         reference = request.query_params.get("reference", "")
+        attribute = request.query_params.get("attribute", "")
         include_attrs = str(request.query_params.get("exclude_attr", "true")).strip().lower() == "true"
         
         is_cashtoken_nft = False
@@ -139,6 +155,12 @@ class WalletHistoryView(APIView):
 
         if not data:
             qs = WalletHistory.objects.exclude(amount=0)
+
+            if attribute:
+                meta_attributes = TransactionMetaAttribute.objects.filter(wallet_hash=wallet_hash)
+                wallet_txids_with_attrs = meta_attributes.values('txid').distinct('txid')
+                qs = qs.filter(txid__in=wallet_txids_with_attrs)
+
             if posid:
                 try:
                     posid = int(posid)
