@@ -250,7 +250,8 @@ class ProjectAdmin(admin.ModelAdmin):
         'date_created',
         'wallets',
         'addresses',
-        'transactions'
+        'transactions',
+        'publicize_wallets',
     ]
 
     def wallets(self, obj):

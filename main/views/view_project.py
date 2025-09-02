@@ -1,4 +1,4 @@
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, mixins, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -41,6 +41,10 @@ class ProjectWalletsView(APIView):
         active_days_threshold = request.query_params.get('active_days_threshold', 30)
         active = request.query_params.get('active', False)
         active = active.strip().lower() == 'true'
+
+        project = Project.objects.get(id=project_id)
+        if not project.publicize_wallets:
+            return Response({ 'error': 'Project does not publicize its wallets!' }, status=status.HTTP_400_BAD_REQUEST)
         
         transactions = WalletHistory.objects.filter(wallet__project_id=project_id)
 
