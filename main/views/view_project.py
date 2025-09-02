@@ -54,7 +54,7 @@ class ProjectWalletsView(APIView):
             transactions = transactions.filter(threshold_date__gt=timezone.now())
         
         transactions = transactions.annotate(wallet_hash=F('wallet__wallet_hash'))
-        transactions = transactions.distinct('wallet_hash')
+        transactions = transactions.order_by('wallet_hash').distinct('wallet_hash')
         data = transactions.values_list('wallet_hash', flat=True)
         return Response({ 'wallets': data })
 
