@@ -17,6 +17,9 @@ from django.db.models import *
 from django.utils import timezone
 from django.core.paginator import Paginator
 
+import logging
+LOGGER = logging.getLogger(__name__)
+
 
 class ProjectViewSet(
     viewsets.GenericViewSet,
@@ -51,7 +54,7 @@ class ProjectWalletsView(APIView):
         if active:
             transactions = transactions.annotate(
                 threshold_date=ExpressionWrapper(
-                    F('date_created') + timedelta(days=active_days_threshold),
+                    F('date_created') + timedelta(days=int(active_days_threshold)),
                     output_field=DateTimeField()
                 )
             )
