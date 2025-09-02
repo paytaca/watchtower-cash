@@ -66,6 +66,7 @@ INSTALLED_APPS=[
     'constance.backends.database',
     'rest_framework',
     'rest_framework.authtoken',
+    'rest_framework_simplejwt',
     'corsheaders',
     'django.contrib.admin',
     "django.contrib.postgres",
@@ -91,7 +92,8 @@ INSTALLED_APPS=[
     'cts',
     'authentication',
     'stablehedge',
-    'multisig'
+    'multisig',
+    'memos'
 ]
 
 MIDDLEWARE=[
@@ -433,7 +435,10 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "platform",
     "x-auth-pubkey",
     "x-auth-message",
-    "x-auth-signature"
+    "x-auth-signature",
+    "x-authmemo-wallethash",
+    "x-authmemo-pass"
+
 ]
 
 REST_FRAMEWORK = {
@@ -453,7 +458,15 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend'
-    ]
+    ],
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+    'SLIDING_TOKEN_LIFETIME': timedelta(days=30),
+    'SLIDING_TOKEN_REFRESH_LIFETIME_LATE_USER': timedelta(days=1),
+    'SLIDING_TOKEN_LIFETIME_LATE_USER': timedelta(days=30),
 }
 
 SWAGGER_SETTINGS = {
@@ -560,6 +573,11 @@ LOGGING = {
             'propagate': False,
         },
         'multisig': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'memos': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
