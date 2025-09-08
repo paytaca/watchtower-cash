@@ -89,6 +89,9 @@ main_urls += [
     path('nonce/', views.NonceAPIView.as_view()),
     path('wallet-address-app/', views.WalletAddressAppView.as_view()),
     path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view()),
+
+    # Asset Setting
+    path('app-setting/', views.AssetSettingView.as_view(), name="asset-setting")
 ]
 
 test_urls = [

@@ -455,3 +455,11 @@ class AppControlAdmin(admin.ModelAdmin):
     disable.short_description = "Disable selected apps"
 
 admin.site.register(AppControl, AppControlAdmin)
+
+class AssetSettingAdmin (admin.ModelAdmin):
+    list_display = [
+        'wallet_hash',
+        'custom_list',
+        'favorites'
+    ]
+admin.site.register(AssetSetting, AssetSettingAdmin)
