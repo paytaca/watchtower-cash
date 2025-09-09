@@ -48,7 +48,7 @@ class AssetOrderingView(APIView):
 			serializer.is_valid(raise_exception=True)
 			serializer.save()		
 		
-		return Response(serializer.data, status=200)
+		return Response(serializer.data["custom_list"], status=200)
 
 	def get(self, request):
 		wallet_hash = request.headers.get('wallet_hash')
@@ -94,7 +94,7 @@ class AssetFavoritesView(APIView):
 			serializer.is_valid(raise_exception=True)
 			serializer.save()		
 		
-		return Response(serializer.data, status=200)		
+		return Response(serializer.data["favorites"], status=200)		
 
 	def get(self, request):
 		wallet_hash = request.headers.get('wallet_hash')
