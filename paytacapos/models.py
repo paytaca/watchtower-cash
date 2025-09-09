@@ -214,30 +214,35 @@ class Merchant(models.Model):
 
     @property
     def last_transaction_date(self):
-        pos_devices_check = self.devices.filter(latest_history_record__isnull=False)
+        pos_devices_check = self.devices.filter(linked_device__isnull=False)
         pos_latest_tx_date = None
         wallet_latest_tx_date = None
 
         if pos_devices_check.exists():
             latest_records = []
             for pos in pos_devices_check:
-                latest_records.append(pos.latest_history_record.date_created)
-            pos_latest_tx_date = max(latest_records)
-            #pos_latest_records = WalletHistory.objects.filter(wallet__devices__in=pos_devices_check)
-            #pos_latest_tx_date = pos_latest_records.latest('date_created').date_created
-
-        wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
-        last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')
-        if last_tx:
-            wallet_latest_tx_date = last_tx.date_created
+                if pos.latest_history_record:
+                    latest_records.append(pos.latest_history_record.date_created)
+            if latest_records:
+                pos_latest_tx_date = max(latest_records)
+        else:
+            wallet = WalletHistory.objects.filter(wallet__wallet_hash=self.wallet_hash)
+            last_tx = wallet.filter(record_type=WalletHistory.INCOMING).latest('date_created')
+            if last_tx:
+                wallet_latest_tx_date = last_tx.date_created
 
         merchants_count = Merchant.objects.filter(wallet_hash=self.wallet_hash).count()
         if merchants_count == 1:
             # Return the latest date between pos_latest_tx_date and wallet_latest_tx_date
-            return max(filter(None, [pos_latest_tx_date, wallet_latest_tx_date]))
+            valid_dates = list(filter(None, [pos_latest_tx_date, wallet_latest_tx_date]))
+            if valid_dates:
+                return max(valid_dates)
+            else:
+                return None
         else:
             # Return the earliest date between pos_latest_tx_date and wallet_latest_tx_date
-            return min(filter(None, [pos_latest_tx_date, wallet_latest_tx_date]))
+            # return min(filter(None, [pos_latest_tx_date, wallet_latest_tx_date]))
+            return pos_latest_tx_date
 
     def get_main_branch(self):
         return self.branches.filter(is_main=True).first()
