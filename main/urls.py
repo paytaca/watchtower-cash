@@ -91,7 +91,9 @@ main_urls += [
     path('wallet-address-app-record-exists/', views.WalletAddressAppRecordExistsView.as_view()),
 
     # Asset Setting
-    path('app-setting/', views.AssetSettingView.as_view(), name="asset-setting")
+    path('app-setting/custom-list/', views.AssetOrderingView.as_view(), name="asset-ordering"),
+    path('app-setting/favorites/', views.AssetFavoritesView.as_view(), name="asset-ordering")
+
 ]
 
 test_urls = [
