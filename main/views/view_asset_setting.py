@@ -111,3 +111,50 @@ class AssetFavoritesView(APIView):
 			return Response({'error': 'Empty Asset Setting'}, status=status.HTTP_404_NOT_FOUND)
 
 		return Response(response["favorites"], status=200)
+
+
+class AssetUnlistedView(APIView):
+	serializer_class = AssetSettingSerializer
+
+	def post(self, request):
+		data = request.data
+		wallet_hash = request.headers.get('wallet_hash')
+
+		Model = self.serializer_class.Meta.model
+		qs = Model.objects.filter(wallet_hash=wallet_hash)
+
+		if qs.exists():
+			unlisted_list = { "unlisted_list": data['unlisted_list']}
+
+			serializer = AssetSettingSerializer(qs.first(), data=unlisted_list, partial=True)
+			serializer.is_valid(raise_exception=True)
+			serializer.save()
+		else:
+			#stage info
+			info = {
+				'wallet_hash': wallet_hash,
+				'unlisted_list': data['unlisted_list']				
+			}
+
+			serializer = AssetSettingSerializer(data=info)
+			serializer.is_valid(raise_exception=True)
+			serializer.save()		
+		
+		return Response(serializer.data["unlisted_list"], status=200)
+
+	def get(self, request):
+		wallet_hash = request.headers.get('wallet_hash')
+		# txid = request.query_params.get('txid')
+
+		Model = self.serializer_class.Meta.model
+
+		qs = Model.objects.filter(wallet_hash=wallet_hash)
+
+		response = {}
+		if qs.exists():
+			response = AssetSettingSerializer(qs.first()).data
+		else:
+			return Response({'error': 'Empty Asset Setting'}, status=status.HTTP_404_NOT_FOUND)
+
+		return Response(response["unlisted_list"], status=200)
+

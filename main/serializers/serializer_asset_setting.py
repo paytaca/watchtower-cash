@@ -7,5 +7,6 @@ class AssetSettingSerializer (serializers.ModelSerializer):
         fields = [
             "wallet_hash",
             "custom_list",
+            "unlisted_list",
             "favorites"
         ]

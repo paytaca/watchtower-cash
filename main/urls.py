@@ -92,7 +92,8 @@ main_urls += [
 
     # Asset Setting
     path('app-setting/custom-list/', views.AssetOrderingView.as_view(), name="asset-ordering"),
-    path('app-setting/favorites/', views.AssetFavoritesView.as_view(), name="asset-ordering")
+    path('app-setting/favorites/', views.AssetFavoritesView.as_view(), name="asset-favorites"),
+    path('app-setting/unlisted-list/', views.AssetUnlistedView.as_view(), name="asset-unlisted")
 
 ]
 
