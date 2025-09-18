@@ -157,7 +157,7 @@ class WalletHistoryView(APIView):
             qs = WalletHistory.objects.exclude(amount=0)
 
             if attribute:
-                meta_attributes = TransactionMetaAttribute.objects.filter(wallet_hash=wallet_hash)
+                meta_attributes = TransactionMetaAttribute.objects.filter(wallet_hash=wallet_hash, value=attribute)
                 wallet_txids_with_attrs = meta_attributes.values('txid').distinct('txid')
                 qs = qs.filter(txid__in=wallet_txids_with_attrs)
 
