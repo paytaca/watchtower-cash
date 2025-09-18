@@ -458,8 +458,6 @@ admin.site.register(AppControl, AppControlAdmin)
 
 class AssetSettingAdmin (admin.ModelAdmin):
     list_display = [
-        'wallet_hash',
-        'custom_list',
-        'favorites'
+        'wallet_hash'        
     ]
 admin.site.register(AssetSetting, AssetSettingAdmin)
