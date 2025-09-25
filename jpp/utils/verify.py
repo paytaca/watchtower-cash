@@ -1,3 +1,4 @@
+import math
 from bitcoinrpc.authproxy import JSONRPCException
 
 from main.utils.address_converter import address_to_locking_bytecode
@@ -75,6 +76,7 @@ def verify_tx_hex(invoice_obj, tx_hex, verify_inputs=True):
 
         tx_fee = tx_total_input - tx_total_output
         expected_tx_fee = invoice_obj.required_fee_per_byte * tx["size"]
+        expected_tx_fee = math.ceil(expected_tx_fee)
         if tx_fee < expected_tx_fee:
             raise VerifyError(f"Expected tx fee of {expected_tx_fee} satoshis but got {tx_fee} satoshis")
 
