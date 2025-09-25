@@ -21,6 +21,7 @@ class ProtobufRenderer(renderers.BaseRenderer):
         "application/octet-stream",
     ]
     format = "binary"
+    charset = None
 
     def render(self, data, *args, accepted_media_type=None, renderer_context=None, **kwargs):
         if isinstance(data, (dict, list, str)):
