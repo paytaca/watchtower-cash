@@ -34,17 +34,13 @@ class IsCosignerOfNewMultisigWallet(permissions.BasePermission):
             return False
         
         multisig_wallet = request.data
-        
-        try:
-            hd_public_keys = multisig_wallet['lockingData']['hdKeys']['hdPublicKeys']
-        except KeyError as ae:
-            LOGGER.info(ae)
-            raise ValidationError('Malformed multisig wallet lockingData')
-        
         auth_credential_public_key_is_cosigner = False
 
-        for signer_entity_key in hd_public_keys.keys():
-            derived_public_key = derive_pubkey_from_xpub(hd_public_keys[signer_entity_key], 0)
+        for signer in multisig_wallet.get('signers', []):
+            if signer.get('xpub') is None:
+                raise ValidationError('Malformed multisig wallet signers')
+            
+            derived_public_key = derive_pubkey_from_xpub(signer['xpub'], 0)
             if public_key == derived_public_key:
                 auth_credential_public_key_is_cosigner = True
                 break
