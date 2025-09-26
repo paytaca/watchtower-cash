@@ -4,7 +4,8 @@ from rest_framework import serializers
 from typing import Dict
 from main.models import Transaction
 from ..models.wallet import MultisigWallet, Signer
-from ..utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
+from ..utils import derive_pubkey_from_xpub
+from ..js_client import get_wallet_hash
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,36 +16,37 @@ class SignerSerializer(serializers.ModelSerializer):
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
     signers = SignerSerializer(many=True, read_only=True)
-    lockingData = serializers.JSONField(source='locking_data')
-    template = serializers.JSONField()
 
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'template', 'lockingData', 'signers', 'created_at', 'locking_bytecode']
+        fields = ['id', 'name', 'm', 'signers', 'created_at']
         read_only_fields = ['signers', 'created_at']
     
     def create(self, validated_data):
-        locking_data = validated_data.get('locking_data', {})
-        template = validated_data.get('template', {})
         with transaction.atomic():
-            locking_bytecode = get_multisig_wallet_locking_script(template, locking_data)
+            signers = validated_data.get('signers')
+            wallet_hash = get_wallet_hash({
+               'name': validated_data.get('name'),
+               'm': validated_data.get('m'),
+               'signers': signers
+            })
+
             wallet, created = MultisigWallet.objects.get_or_create(
-                locking_bytecode=locking_bytecode,
+                wallet_hash=wallet_hash,
                 defaults= {
-                    'template': template,
-                    'locking_data':locking_data,
-                    'locking_bytecode':locking_bytecode    
+                    'm': validated_data.get('m'),
+                    'name': validated_data.get('name'),
+                    'wallet_hash': validated_data.get('wallet_hash')
                 }
             )
             
             if created:
-                hd_public_keys = locking_data.get('hdKeys', {}).get('hdPublicKeys', {})
                 request = self.context.get('request')
-                for key, value in hd_public_keys.items():
-                    signer = Signer.objects.create(
+                for signer in signers:
+                    signer = Signer.objects.get_or_create(
                         wallet=wallet,
-                        entity_key=key,
-                        xpub=value
+                        xpub=signer['xpub'],
+                        name=signer['name']
                     )
                     if request:
                       uploader_pubkey = request.headers.get('X-Auth-PubKey')
