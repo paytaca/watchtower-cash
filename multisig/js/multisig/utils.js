@@ -30,10 +30,33 @@ export const getTotalBchOutputAmount = (tx, unit = 'bch') => {
   return amount
 }
 
+export const getTotalBchDebitAmount = (tx, senderAddresses, unit = 'bch') => {
+  const senderLockingBytecodes = senderAddresses.map(address => binToHex(cashAddressToLockingBytecode(address).bytecode))
+  const amount = tx.outputs.reduce((total, output) => {
+    if (senderLockingBytecodes.includes(binToHex(Uint8Array.from(Object.values(output.lockingBytecode))))) {
+      return total
+    }
+    return total + Number(output.valueSatoshis)
+  }, 0)
+  if (unit === 'bch') return amount / 1e8
+  return amount
+}
+
 export const getTotalBchFee = (tx, unit = 'bch') => {
   const amount = getTotalBchInputAmount(tx, 'satoshis') - getTotalBchOutputAmount(tx, 'satoshis')
   if (unit === 'bch') return amount / 1e8
   return amount
+}
+
+export const getTxRecipientsCount = (tx, senderAddresses) => {
+  const senderLockingBytecodes = senderAddresses.map(address => binToHex(cashAddressToLockingBytecode(address).bytecode))
+  const recipientCount = tx.outputs.reduce((count, output) => {
+    if (!senderLockingBytecodes.includes(binToHex(Uint8Array.from(Object.values(output.lockingBytecode))))) {
+      count = count + 1
+    }
+    return count
+  }, 0)
+  return recipientCount
 }
 
 /**
@@ -44,9 +67,7 @@ export const getTotalBchFee = (tx, unit = 'bch') => {
  * @returns {number} - Change amount in satoshis.
  */
 export const getTotalBchChangeAmount = (tx, senderAddress, unit = 'bch') => { 
-  console.log('TX', tx, senderAddress)
   const senderLockingBytecode = binToHex(cashAddressToLockingBytecode(senderAddress).bytecode)
-  console.log('SENDER LOCKING BYTECODE', senderLockingBytecode)
   if (!tx || !Array.isArray(tx.inputs) || !Array.isArray(tx.outputs)) {
     throw new Error("Transaction must have 'inputs' and 'outputs' arrays.")
   }
@@ -55,9 +76,7 @@ export const getTotalBchChangeAmount = (tx, senderAddress, unit = 'bch') => {
   }
   // Find outputs going back to the sender (i.e., change)
   const changeOutputs = tx.outputs.filter(output => {
-    console.log(binToHex(Uint8Array.from(Object.values(output.lockingBytecode))))
     if (senderLockingBytecode === binToHex(Uint8Array.from(Object.values(output.lockingBytecode)))) {
-      console.log('Found')
       return true
     }
     return false
@@ -68,7 +87,6 @@ export const getTotalBchChangeAmount = (tx, senderAddress, unit = 'bch') => {
     total = total + BigInt(output.valueSatoshis)
     return total
   }, 0n)
-  console.log('CHAGNE AAMOUNT', amount)
   if (unit === 'bch') return Big(amount) / Big(1e8)
   return amount
 }
