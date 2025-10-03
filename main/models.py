@@ -1009,3 +1009,9 @@ class AppControl(models.Model):
 
     def __str__(self):
         return self.feature_name
+
+class AssetSetting (models.Model):
+    wallet_hash = models.CharField(max_length=70, default="", unique=True, db_index=True)
+    custom_list = JSONField(default=dict)
+    unlisted_list = JSONField(default=dict)
+    favorites = JSONField(default=dict)
