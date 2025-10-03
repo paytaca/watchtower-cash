@@ -1,28 +1,30 @@
-pragma cashscript ^0.8.0;
+pragma cashscript ^0.11.0;
 
 
-contract RedemptionContract(
+contract RedemptionContractV3(
     bytes32 authKeyId,  // 32 B authkey nft id
     bytes32 tokenCategory,  // 32 B token category of nft used for minting
     pubkey  oraclePublicKey,  // 33 B, verifies message from oracle
     bytes35 treasuryContractLockingBytecode, // 35 B, locking bytecode of treasury contract
 ) {
-    function deposit(bytes priceMessage, datasig priceMessageSig, bool isInjectLiquidity) {
-        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));
-        int price = int(priceMessage.split(12)[1]);
-
+    function deposit(bytes priceMessage, datasig priceMessageSig, bool isInjectLiquidity, int fee) {
+        require(this.activeInputIndex == 0);
         require(tx.inputs[0].tokenCategory == tokenCategory);
+        require(fee >= 0);
 
         // 1000 for tx fee and another 1000 for DUST in deposit output
-        int depositSats = tx.inputs[1].value - 1000 - 1000;
+        int depositSats = tx.inputs[1].value - fee - 1000 - 1000;
 
-        int satsPerBch = 100000000;
+        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));
+        int price = int(priceMessage.split(12)[1]);
         int tokenUnitSatsPerBch = depositSats * price;
+
+        int satsPerBch = 100_000_000;
         int tokenAmount = int(tokenUnitSatsPerBch / satsPerBch);
 
         if (!isInjectLiquidity) {
             depositSats = depositSats / 2;
-            require(tx.outputs[2].value == depositSats);
+            require(tx.outputs[2].value == depositSats + fee);
             require(tx.outputs[2].lockingBytecode == treasuryContractLockingBytecode);
         }
 
@@ -41,7 +43,7 @@ contract RedemptionContract(
         require(tx.inputs[0].tokenCategory == tokenCategory);
         require(tx.inputs[1].tokenCategory == tokenCategory);
 
-        int satsPerBch = 100000000;
+        int satsPerBch = 100_000_000;
         int tokenUnitSatsPerBch = tx.inputs[1].tokenAmount * satsPerBch;
         int redeemSats = int(tokenUnitSatsPerBch / price);
 

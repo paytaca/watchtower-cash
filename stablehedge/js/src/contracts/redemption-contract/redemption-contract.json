@@ -1,0 +1,65 @@
+{
+  "contractName": "RedemptionContract",
+  "constructorInputs": [
+    {
+      "name": "authKeyId",
+      "type": "bytes32"
+    },
+    {
+      "name": "tokenCategory",
+      "type": "bytes32"
+    },
+    {
+      "name": "oraclePublicKey",
+      "type": "pubkey"
+    }
+  ],
+  "abi": [
+    {
+      "name": "deposit",
+      "inputs": [
+        {
+          "name": "priceMessage",
+          "type": "bytes"
+        },
+        {
+          "name": "priceMessageSig",
+          "type": "datasig"
+        },
+        {
+          "name": "isInjectLiquidity",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "redeem",
+      "inputs": [
+        {
+          "name": "priceMessage",
+          "type": "bytes"
+        },
+        {
+          "name": "priceMessageSig",
+          "type": "datasig"
+        }
+      ]
+    },
+    {
+      "name": "unlockWithNft",
+      "inputs": [
+        {
+          "name": "keepGuarded",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_3 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_5 OP_ROLL OP_5 OP_PICK OP_4 OP_ROLL OP_CHECKDATASIGVERIFY OP_3 OP_ROLL OP_12 OP_SPLIT OP_NIP OP_BIN2NUM OP_0 OP_UTXOTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY OP_1 OP_UTXOVALUE e803 OP_SUB e803 OP_SUB 00e1f505 OP_OVER OP_3 OP_ROLL OP_MUL OP_SWAP OP_DIV OP_5 OP_ROLL OP_NOTIF OP_OVER OP_2 OP_DIV OP_ROT OP_DROP OP_SWAP OP_2 OP_OUTPUTVALUE OP_2 OP_PICK OP_NUMEQUALVERIFY OP_ENDIF OP_1 OP_OUTPUTTOKENCATEGORY OP_4 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENAMOUNT OP_OVER OP_NUMEQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_4 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_UTXOTOKENAMOUNT OP_ROT OP_SUB OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE OP_0 OP_UTXOVALUE OP_ROT OP_ADD OP_NUMEQUAL OP_NIP OP_NIP OP_ELSE OP_3 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_5 OP_ROLL OP_5 OP_PICK OP_4 OP_ROLL OP_CHECKDATASIGVERIFY OP_3 OP_ROLL OP_12 OP_SPLIT OP_NIP OP_BIN2NUM OP_0 OP_UTXOTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY 00e1f505 OP_1 OP_UTXOTOKENAMOUNT OP_SWAP OP_MUL OP_SWAP OP_DIV OP_0 OP_OUTPUTTOKENCATEGORY OP_3 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_UTXOTOKENAMOUNT OP_1 OP_UTXOTOKENAMOUNT OP_ADD OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE OP_0 OP_UTXOVALUE OP_2 OP_PICK OP_SUB OP_NUMEQUALVERIFY OP_1 OP_OUTPUTVALUE OP_NUMEQUAL OP_NIP OP_NIP OP_ELSE OP_3 OP_ROLL OP_2 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_EQUALVERIFY OP_1 OP_UTXOTOKENAMOUNT OP_0 OP_NUMEQUALVERIFY OP_ROT OP_IF OP_0 OP_OUTPUTBYTECODE OP_INPUTINDEX OP_UTXOBYTECODE OP_EQUALVERIFY OP_ENDIF OP_2DROP OP_1 OP_ENDIF OP_ENDIF",
+  "source": "pragma cashscript ^0.8.0;\n\n\ncontract RedemptionContract(\n    bytes32 authKeyId,  // 32 B authkey nft id\n    bytes32 tokenCategory,  // 32 B token category of nft used for minting\n    pubkey  oraclePublicKey,  // 33 B, verifies message from oracle\n) {\n    function deposit(bytes priceMessage, datasig priceMessageSig, bool isInjectLiquidity) {\n        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));\n        int price = int(priceMessage.split(12)[1]);\n\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n\n        // 1000 for tx fee and another 1000 for DUST in deposit output\n        int depositSats = tx.inputs[1].value - 1000 - 1000;\n\n        int satsPerBch = 100000000;\n        int tokenUnitSatsPerBch = depositSats * price;\n        int tokenAmount = int(tokenUnitSatsPerBch / satsPerBch);\n\n        if (!isInjectLiquidity) {\n            depositSats = depositSats / 2;\n            require(tx.outputs[2].value == depositSats);\n        }\n\n        require(tx.outputs[1].tokenCategory == tokenCategory);\n        require(tx.outputs[1].tokenAmount == tokenAmount);\n\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount - tokenAmount);\n        require(tx.outputs[0].value == tx.inputs[0].value + depositSats);\n    }\n\n    function redeem(bytes priceMessage, datasig priceMessageSig) {\n        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));\n        int price = int(priceMessage.split(12)[1]);\n\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n        require(tx.inputs[1].tokenCategory == tokenCategory);\n\n        int satsPerBch = 100000000;\n        int tokenUnitSatsPerBch = tx.inputs[1].tokenAmount * satsPerBch;\n        int redeemSats = int(tokenUnitSatsPerBch / price);\n\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount + tx.inputs[1].tokenAmount);\n        require(tx.outputs[0].value == tx.inputs[0].value - redeemSats);\n        require(tx.outputs[1].value == redeemSats);\n        // DUST sats in redeem input is used as tx fee\n    }\n\n    // https://github.com/mr-zwets/AuthGuard/blob/c5115b0df05c868018cc433e1047f5c5f6c8f7f7/AuthGuard.cash\n    function unlockWithNft(bool keepGuarded) {\n        // Check that the second input holds the AuthKey NFT\n        require(tx.inputs[1].tokenCategory == authKeyId);\n        require(tx.inputs[1].tokenAmount == 0);\n\n        // if keepGuarded is false, the AuthHead can be released from the AuthGuard covenant\n        if(keepGuarded) {\n            // Self preservation of AuthGuard covenant as the first output\n            require(tx.outputs[0].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);\n        }\n    }\n}\n",
+  "compiler": {
+    "name": "cashc",
+    "version": "0.8.2"
+  },
+  "updatedAt": "2025-09-26T06:16:26.587Z"
+}

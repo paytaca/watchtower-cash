@@ -5,7 +5,7 @@ import { AnyHedgeManager } from "@generalprotocols/anyhedge";
 import { generateProxyFunderContractWithArtifact } from "../contracts/liquidity-provider/proxy-funder-gen.js";
 import { TreasuryContract } from "../contracts/treasury-contract/index.js";
 import { getBaseBytecode } from "./anyhedge.js";
-import { generateRandomWif, wifToPubkey } from "./crypto.js";
+import { generateRandomWif, pubkeyToAddress, toTokenAddress, wifToPubkey } from "./crypto.js";
 import { MOCK_ORACLE_WIF } from "./price-oracle.js";
 import { RedemptionContract } from "../contracts/redemption-contract/index.js";
 import { baseBytecodeToHex } from "./contracts.js";
@@ -164,4 +164,14 @@ export async function createAnyhedgeContract(opts) {
     })
   }
   return contractData
+}
+
+
+export function generateWallet() {
+  const wif = generateRandomWif();
+  const pubkey = wifToPubkey(wif);
+  const address = pubkeyToAddress(pubkey);
+  const tokenAddress = toTokenAddress(address);
+
+  return { wif, pubkey, address, tokenAddress }
 }

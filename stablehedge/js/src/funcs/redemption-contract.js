@@ -90,6 +90,8 @@ export async function transferRedemptionContractAssets(opts) {
  * @param {import('cashscript').Utxo} opts.reserveUtxo 
  * @param {import('cashscript').UtxoP2PKH} opts.depositUtxo
  * @param {String} [opts.treasuryContractAddress]
+ * @param {String} opts.recipientAddress
+ * @param {Number} [opts.fee]
  * @param {String} opts.priceMessage
  * @param {String} opts.priceMessageSig
  * @param {Number} [opts.locktime]
@@ -103,6 +105,7 @@ export async function deposit(opts) {
     depositUtxo,
     recipientAddress: opts?.recipientAddress,
     treasuryContractAddress: opts?.treasuryContractAddress,
+    fee: opts?.fee,
     priceMessage: opts?.priceMessage,
     priceMessageSig: opts?.priceMessageSig,
     locktime: opts?.locktime,
