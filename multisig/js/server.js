@@ -16,7 +16,12 @@ import {
     sha256,
     utf8ToBin
 } from 'bitauth-libauth-v3'
-import * as Multisig from './multisig/index.js'
+// import * as Multisig from './multisig/index.js'
+import {
+  importPst,
+  getWalletHash,
+  MultisigWallet,
+} from './multisig/index.js'
 import { ElectrumClient } from '@electrum-cash/network'
 
 if (typeof global.structuredClone === 'undefined') {
@@ -114,19 +119,19 @@ app.post('/multisig/utils/get-transaction-hash', async (req, res) => {
   res.send({ transaction_hash: hashTransaction(hexToBin(transaction)) })
 })
 
-app.post('/multisig/transaction/finalize', async (req, res) => {
-   const { multisigTransaction, multisigWallet } =  req.body
-   const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
-   const finalCompilation = Multisig.finalizeTransaction({ multisigTransaction: multisigTransactionImported, multisigWallet })      
-   res.send(JSON.parse(stringify(finalCompilation)))
-})
+// app.post('/multisig/transaction/finalize', async (req, res) => {
+//    const { multisigTransaction, multisigWallet } =  req.body
+//    const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
+//    const finalCompilation = Multisig.finalizeTransaction({ multisigTransaction: multisigTransactionImported, multisigWallet })      
+//    res.send(JSON.parse(stringify(finalCompilation)))
+// })
 
-app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
-   const { multisigTransaction, multisigWallet } =  req.body
-   const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
-   const signingProgress = Multisig.getSigningProgress({ multisigWallet, multisigTransaction })
-   res.send({ signingProgress })
-})
+// app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
+//    const { multisigTransaction, multisigWallet } =  req.body
+//    const multisigTransactionImported = Multisig.importPst({ pst: multisigTransaction })
+//    const signingProgress = Multisig.getSigningProgress({ multisigWallet, multisigTransaction })
+//    res.send({ signingProgress })
+// })
 
 app.post('/multisig/message/verify-signature', async (req, res) => {
   const { message, publicKey, signature } = req.body
@@ -149,6 +154,11 @@ app.post('/multisig/message/verify-signature', async (req, res) => {
   }
   
   return res.send({ success })
+})
+
+app.post('/multisig/wallet/get-wallet-hash', async (req, res) => {
+  const { multisigWallet } = req.body
+  res.send({ walletHash: getWalletHash(multisigWallet)}) 
 })
 
 app.get('/test', async (req, res) => {
