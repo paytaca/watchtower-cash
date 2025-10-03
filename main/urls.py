@@ -2,6 +2,11 @@ from django.urls import path, re_path
 from rest_framework import routers
 from main import views
 
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
 app_name = "main"
 
 
@@ -93,7 +98,10 @@ main_urls += [
     # Asset Setting
     path('app-setting/custom-list/', views.AssetOrderingView.as_view(), name="asset-ordering"),
     path('app-setting/favorites/', views.AssetFavoritesView.as_view(), name="asset-favorites"),
-    path('app-setting/unlisted-list/', views.AssetUnlistedView.as_view(), name="asset-unlisted")
+    path('app-setting/unlisted-list/', views.AssetUnlistedView.as_view(), name="asset-unlisted"),
+    re_path('app-setting/register/', views.RegisterView.as_view(), name="register-user"),
+    re_path('app-setting/auth/', TokenObtainPairView.as_view(), name="memo-auth" ),
+    re_path('app-setting/refresh/', TokenRefreshView.as_view(), name="refresh-auth"),
 
 ]
 

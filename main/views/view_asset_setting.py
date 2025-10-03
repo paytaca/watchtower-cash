@@ -22,7 +22,14 @@ from main.serializers import AssetSettingSerializer
 
 
 class AssetOrderingView(APIView):
+	authentication_classes = [JWTAuthentication]
 	serializer_class = AssetSettingSerializer
+
+	def get_permissions(self):
+		if self.request.method == 'GET':
+			return [AllowAny()]
+		return [IsAuthenticated()]
+
 	def post(self, request):
 
 		data = request.data
@@ -68,7 +75,13 @@ class AssetOrderingView(APIView):
 
 
 class AssetFavoritesView(APIView):
+	authentication_classes = [JWTAuthentication]
 	serializer_class = AssetSettingSerializer
+
+	def get_permissions(self):
+		if self.request.method == 'GET':
+			return [AllowAny()]
+		return [IsAuthenticated()]
 
 	def post(self, request):
 		data = request.data
@@ -114,7 +127,13 @@ class AssetFavoritesView(APIView):
 
 
 class AssetUnlistedView(APIView):
+	authentication_classes = [JWTAuthentication]
 	serializer_class = AssetSettingSerializer
+
+	def get_permissions(self):
+		if self.request.method == 'GET':
+			return [AllowAny()]
+		return [IsAuthenticated()]
 
 	def post(self, request):
 		data = request.data
@@ -158,3 +177,18 @@ class AssetUnlistedView(APIView):
 
 		return Response(response["unlisted_list"], status=200)
 
+
+class RegisterView(APIView):
+	def post(self, request):
+		wallet_hash = request.headers.get('x_auth_asset_wallethash')
+		password = request.headers.get('x_auth_asset_pass')
+
+		if User.objects.filter(username=wallet_hash).exists():
+			return Response({'error': 'Username already exists'}, status=400)
+
+		user = User.objects.create_user(
+			username=wallet_hash,
+			password=password
+		)
+
+		return Response({'message': 'User created'}, status=200)
