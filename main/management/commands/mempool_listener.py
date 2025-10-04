@@ -12,6 +12,7 @@ from main.tasks import (
     process_mempool_transaction_throttled
 )
 from main.utils.queries.bchn import BCHN
+from main.utils.redis_address_manager import BCHAddressManager
 
 
 LOGGER = logging.getLogger(__name__)
@@ -47,10 +48,18 @@ def _addresses_subscribed(tx_hex):
         _addrs = tx_out.get('scriptPubKey').get('addresses')
         if _addrs:
             tx_addresses += _addrs
-    addrs_check = Address.objects.filter(address__in=tx_addresses)
-    hedge_position_check = HedgePosition.objects.filter(address__in=tx_addresses)
-    if addrs_check.exists() or hedge_position_check.exists():
+    
+    # Check Redis for actively-listening addresses first (fastest)
+    if BCHAddressManager.is_any_address_active(tx_addresses):
+        LOGGER.info(f"Found active websocket listeners for addresses in transaction")
         subscribed = True
+    else:
+        # Fallback to database checks for addresses not tracked in Redis
+        addrs_check = Address.objects.filter(address__in=tx_addresses)
+        hedge_position_check = HedgePosition.objects.filter(address__in=tx_addresses)
+        if addrs_check.exists() or hedge_position_check.exists():
+            subscribed = True
+    
     return subscribed
 
 
