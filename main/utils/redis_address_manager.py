@@ -134,12 +134,14 @@ class BCHAddressManager:
             return False
             
         try:
-            # Convert addresses to bytes for Redis comparison
-            address_bytes = [addr.encode('utf-8') for addr in addresses]
-            return REDIS_CLIENT.smismember(_REDIS_NAME__BCH_ACTIVE_ADDRESSES, address_bytes)
+            # Use individual SISMEMBER checks (compatible with older Redis versions)
+            for address in addresses:
+                if REDIS_CLIENT.sismember(_REDIS_NAME__BCH_ACTIVE_ADDRESSES, address):
+                    return True
+            return False
         except Exception as e:
             LOGGER.error(f"Error checking address activity: {e}")
-            # Fallback to individual checks
+            # Fallback to individual checks using get_address_count
             for address in addresses:
                 if cls.is_address_active(address):
                     return True

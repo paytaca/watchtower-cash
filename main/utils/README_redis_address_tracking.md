@@ -30,7 +30,7 @@ The system consists of three main components:
 
 ### Performance Benefits
 - **Fast Redis lookups** instead of database queries for most address checks
-- **Bulk address checking** with `is_any_address_active()` method
+- **Bulk address checking** with `is_any_address_active()` method (compatible with Redis 2.6+)
 - **Automatic cleanup** of expired addresses
 
 ### Reliability
@@ -115,6 +115,7 @@ python manage.py test_address_tracking --address "bitcoincash:qtest123"
 The system uses the existing Redis configuration from `settings.py`:
 - `REDISKV` - Redis client for key-value operations
 - Database number varies by deployment (prod vs dev)
+- **Compatible with Redis 2.6+** (uses standard commands like SISMEMBER, SADD, SREM)
 
 ## Maintenance
 
