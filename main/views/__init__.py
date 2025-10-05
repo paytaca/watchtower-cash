@@ -26,3 +26,4 @@ from main.views.view_app_version import *
 from main.views.view_wallet_address_app import *
 from main.views.view_app_control import *
 from main.views.view_project import *
+from main.views.view_asset_setting import *

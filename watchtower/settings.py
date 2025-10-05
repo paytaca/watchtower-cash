@@ -437,7 +437,9 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-auth-message",
     "x-auth-signature",
     "x-authmemo-wallethash",
-    "x-authmemo-pass"
+    "x-authmemo-pass",
+    "x-auth-asset-wallethash",
+    "x-auth-asset-pass"
 
 ]
 
