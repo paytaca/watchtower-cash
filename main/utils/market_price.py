@@ -1,4 +1,5 @@
 import json
+import logging
 import requests
 import concurrent.futures
 from decimal import Decimal
@@ -12,6 +13,7 @@ from main.models import (
     WalletHistory,
     CashFungibleToken,
 )
+LOGGER = logging.getLogger(__name__)
 
 
 def fetch_currency_value_for_timestamp(timestamp, currency="USD", relative_currency="BCH"):
@@ -448,9 +450,29 @@ def get_ft_bch_price_log(ft_category:str, timestamp=None):
         return asset_price_log
 
     ts = int(timestamp.timestamp())
-    response = requests.get(f"https://indexer.cauldron.quest/cauldron/price/{ft_category}/at/{ts}")
+    try:
+        response = requests.get(
+            f"https://indexer.cauldron.quest/cauldron/price/{ft_category}/at/{ts}",
+            timeout=15,
+        )
+    except Exception as err:
+        LOGGER.error(f"Error requesting FT price from cauldron: {err}")
+        return None
 
-    data = response.json()
+    if not response.ok:
+        LOGGER.error(
+            f"Non-200 response from cauldron ({response.status_code}) for {ft_category} @ {ts}: "
+            f"{response.text[:200]}"
+        )
+        return None
+
+    try:
+        data = response.json()
+    except Exception as err:
+        LOGGER.error(
+            f"Invalid JSON from cauldron for {ft_category} @ {ts}: {err}; body: {response.text[:200]}"
+        )
+        return None
     if "price" not in data or "timestamp" not in data:
         return None
 
