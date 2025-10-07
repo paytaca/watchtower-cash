@@ -74,11 +74,20 @@ class VolumeDataSerializer(serializers.Serializer):
     satoshis = serializers.IntegerField()
     count = serializers.IntegerField()
 
+class RedemptionContractOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.RedemptionContractOption
+        fields =[
+            "deposit_fee_amount",
+            "redeem_fee_amount",
+        ]
+
 class RedemptionContractSerializer(serializers.ModelSerializer):
     fiat_token = FiatTokenSerializer()
     redeemable = serializers.IntegerField(read_only=True)
     reserve_supply = serializers.IntegerField(read_only=True)
     treasury_contract_address = serializers.CharField(read_only=True)
+    options = RedemptionContractOptionSerializer(read_only=True)
 
     class Meta:
         model = models.RedemptionContract
@@ -92,6 +101,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
             "redeemable",
             "reserve_supply",
             "treasury_contract_address",
+            "options",
         ]
 
         extra_kwargs = dict(

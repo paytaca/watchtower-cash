@@ -34,10 +34,18 @@ class FiatTokenAdmin(admin.ModelAdmin):
         "decimals",
     ]
 
+class RedemptionContractOptionInline(admin.StackedInline):
+    model = models.RedemptionContractOption
+    extra = 0
+
 
 @admin.register(models.RedemptionContract)
 class RedemptionContractAdmin(admin.ModelAdmin):
     form = forms.RedemptionContractForm
+
+    inlines = [
+        RedemptionContractOptionInline,
+    ]
 
     search_fields = [
         "address",

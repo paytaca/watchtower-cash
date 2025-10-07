@@ -120,6 +120,19 @@ class RedemptionContract(models.Model):
     def is_subscribed(self, value):
         self._is_subscribed = value
 
+class RedemptionContractOption(models.Model):
+    redemption_contract = models.ForeignKey(
+        RedemptionContract, on_delete=models.CASCADE, related_name="options",
+    )
+    deposit_fee_amount = models.DecimalField(
+        max_digits=12, decimal_places=4, default=0,
+        help_text="If fixed type, must be greater than 1. If percentage type, must be less than 1"
+    )
+    redeem_fee_amount = models.DecimalField(
+        max_digits=12, decimal_places=4, default=0,
+        help_text="If fixed type, must be greater than 1. If percentage type, must be less than 1"
+    )
+
 
 class RedemptionContractTransaction(models.Model):
     class Status(models.TextChoices):
