@@ -13,8 +13,8 @@ import { prepareParamForTreasuryContract } from "../../utils/anyhedge-funding.js
 
 import { RedemptionContract } from "../redemption-contract/index.js"
 
-import treasuryContractArtifact from './treasury-contract.json' with { type: 'json' }
-import treasuryContractV2Artifact from './treasury-contract-v2.json' with { type: 'json' }
+import treasuryContractArtifact from './treasury-contract.json' assert { type: 'json' }
+import treasuryContractV2Artifact from './treasury-contract-v2.json' assert { type: 'json' }
 
 export class TreasuryContract {
   /**

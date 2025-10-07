@@ -6,8 +6,8 @@ import { scriptToBytecode } from "@cashscript/utils"
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
 import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
 
-import redemptionContractArtifact from './redemption-contract.json' with { type: 'json'}
-import redemptionContractV2Artifact from './redemption-contract-v2.json' with { type: 'json'}
+import redemptionContractArtifact from './redemption-contract.json' assert { type: 'json'}
+import redemptionContractV2Artifact from './redemption-contract-v2.json' assert { type: 'json'}
 
 import { toTokenAddress } from "../../utils/crypto.js"
 import { decodePriceMessage, verifyPriceMessage } from "../../utils/price-oracle.js"
