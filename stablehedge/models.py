@@ -53,6 +53,7 @@ class RedemptionContract(models.Model):
     class Version(models.TextChoices):
         V1 = "v1"
         V2 = "v2"
+        V3 = "v3"
 
     objects = RedemptionContractQueryset.as_manager()
 
@@ -148,6 +149,7 @@ class RedemptionContractTransaction(models.Model):
     status = models.CharField(max_length=10, default=Status.PENDING, db_index=True)
     txid = models.CharField(max_length=64, null=True, blank=True)
     utxo = JSONField()
+    fee_sats = models.PositiveIntegerField(default=0)
     result_message = models.TextField(null=True, blank=True)
 
     retry_count = models.IntegerField(default=0)

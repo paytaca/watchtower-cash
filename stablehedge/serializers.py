@@ -248,6 +248,7 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
             "transaction_type",
             "txid",
             "utxo",
+            "fee_sats",
             "resolved_at",
             "created_at",
 
@@ -268,6 +269,10 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
 
         if not redemption_contract.verified:
             raise serializers.ValidationError("Contract is not verified")
+
+        if transaction_type == models.RedemptionContractTransaction.Type.REDEEM:
+            if data.get("fee_sats", 0) > 0:
+                raise serializers.ValidationError("Fee sats is not allowed during redeem")
 
         require_cashtoken = transaction_type == models.RedemptionContractTransaction.Type.REDEEM
         valid_utxo_data = validate_utxo_data(

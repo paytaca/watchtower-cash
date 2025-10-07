@@ -120,6 +120,7 @@ def create_deposit_tx(redemption_contract_tx:models.RedemptionContractTransactio
         treasuryContractAddress=redemption_contract.treasury_contract_address,
         priceMessage=price_message.message,
         priceMessageSig=price_message.signature,
+        fee=redemption_contract_tx.fee_sats,
         locktime=get_locktime(),
     ))
 
@@ -316,7 +317,8 @@ def update_redemption_contract_tx_trade_size(
         bch = token_units / price_value
         satoshis = round(bch * decimal.Decimal(10 ** 8))
     else:
-        satoshis = decimal.Decimal(redemption_contract_tx.utxo["satoshis"] - 2000)
+        fee_sats = redemption_contract_tx.fee_sats or 0
+        satoshis = decimal.Decimal(redemption_contract_tx.utxo["satoshis"] - 2000 - fee_sats)
         bch = satoshis / 10 ** 8
         token_units = round(bch * price_value)
 
