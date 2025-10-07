@@ -170,6 +170,7 @@ export class RedemptionContract {
    * @param {import("cashscript").Utxo} opts.reserveUtxo
    * @param {import("cashscript").UtxoP2PKH} opts.redeemUtxo
    * @param {String} opts.recipientAddress
+   * @param {Number} [opts.fee]
    * @param {String} opts.priceMessage
    * @param {String} opts.priceMessageSig
    * @param {Number} [opts.locktime]
@@ -179,6 +180,9 @@ export class RedemptionContract {
     if (opts?.redeemUtxo?.token?.category !== this.params.tokenCategory) return 'Redeem UTXO is not fiat token'
     if (!opts?.reserveUtxo) return 'Reserve UTXO not provided'
     if (opts?.reserveUtxo?.token?.category !== this.params.tokenCategory) return 'Reserve UTXO provided does not contain fiat token'
+    if (opts?.fee && this.options.version !== 'v3') {
+      return 'Provided fee on invalid transaction type or contract version'
+    }
 
     const priceMessageValid = verifyPriceMessage(
       opts?.priceMessage, opts?.priceMessageSig, this.params.oraclePublicKey, 
@@ -189,8 +193,9 @@ export class RedemptionContract {
     if (typeof priceData == 'string') return `Invalid price message: ${priceData}`
 
     const EXPECTED_TX_FEE = 1000n
+    const fee = opts?.fee ? BigInt(opts?.fee) : 0n;
     const tokenAmount = opts?.redeemUtxo?.token?.amount
-    const redeemSats = tokenToSatoshis(tokenAmount, priceData.price)
+    const redeemSats = tokenToSatoshis(tokenAmount, priceData.price) - fee;
 
     if (redeemSats < 546n) return 'Redeem amount too small'
 
@@ -203,7 +208,9 @@ export class RedemptionContract {
     const redeemUtxoTemplate = opts?.redeemUtxo?.template ??
       new SignatureTemplate(opts?.redeemUtxo?.wif)
 
-    const transaction = contract.functions.redeem(hexToBin(opts?.priceMessage), hexToBin(opts?.priceMessageSig))
+    const functionArgs = [hexToBin(opts?.priceMessage), hexToBin(opts?.priceMessageSig)];
+    if (this.options.version === 'v3') functionArgs.push(fee);
+    const transaction = contract.functions.redeem(...functionArgs)
       .from(opts?.reserveUtxo)
       .fromP2PKH(opts?.redeemUtxo, redeemUtxoTemplate)
       .to(contract.tokenAddress, remainingReserveSats, {

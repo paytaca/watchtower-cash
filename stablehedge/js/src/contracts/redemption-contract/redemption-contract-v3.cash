@@ -36,7 +36,7 @@ contract RedemptionContractV3(
         require(tx.outputs[0].value == tx.inputs[0].value + depositSats);
     }
 
-    function redeem(bytes priceMessage, datasig priceMessageSig) {
+    function redeem(bytes priceMessage, datasig priceMessageSig, int fee) {
         require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));
         int price = int(priceMessage.split(12)[1]);
 
@@ -45,7 +45,8 @@ contract RedemptionContractV3(
 
         int satsPerBch = 100_000_000;
         int tokenUnitSatsPerBch = tx.inputs[1].tokenAmount * satsPerBch;
-        int redeemSats = int(tokenUnitSatsPerBch / price);
+        int redeemSats = int(tokenUnitSatsPerBch / price) - fee;
+        require(redeemSats > 546);
 
         require(tx.outputs[0].tokenCategory == tokenCategory);
         require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount + tx.inputs[1].tokenAmount);

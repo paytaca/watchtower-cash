@@ -172,6 +172,7 @@ def create_redeem_tx(redemption_contract_tx:models.RedemptionContractTransaction
         recipientAddress=recipient_address,
         priceMessage=price_message.message,
         priceMessageSig=price_message.signature,
+        fee=redemption_contract_tx.fee_sats,
         locktime=get_locktime(),
     ))
 
@@ -316,6 +317,10 @@ def update_redemption_contract_tx_trade_size(
         token_units = decimal.Decimal(redemption_contract_tx.utxo["amount"])
         bch = token_units / price_value
         satoshis = round(bch * decimal.Decimal(10 ** 8))
+        # NOTE: fee_sats not included here, it's just deducted from the redeem satoshis;
+        #       which is the actual trade size in sats.
+        #       unlike deposit (below) where deposit sats is deducted by fee first before
+        #       fetching the payout token amount
     else:
         fee_sats = redemption_contract_tx.fee_sats or 0
         satoshis = decimal.Decimal(redemption_contract_tx.utxo["satoshis"] - 2000 - fee_sats)

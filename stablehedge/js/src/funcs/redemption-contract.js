@@ -122,6 +122,7 @@ export async function deposit(opts) {
  * @param {import('cashscript').Utxo} opts.reserveUtxo 
  * @param {import('cashscript').UtxoP2PKH} opts.redeemUtxo
  * @param {String} opts.recipientAddress
+ * @param {Number} [opts.fee]
  * @param {String} opts.priceMessage
  * @param {String} opts.priceMessageSig
  * @param {Number} [opts.locktime]
@@ -134,6 +135,7 @@ export async function redeem(opts) {
     reserveUtxo,
     redeemUtxo,
     recipientAddress: opts?.recipientAddress,
+    fee: opts?.fee,
     priceMessage: opts?.priceMessage,
     priceMessageSig: opts?.priceMessageSig,
     locktime: opts?.locktime,
