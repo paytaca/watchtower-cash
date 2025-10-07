@@ -280,6 +280,10 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
         if not redemption_contract.verified:
             raise serializers.ValidationError("Contract is not verified")
 
+        if transaction_type == models.RedemptionContractTransaction.Type.INJECT:
+            if data.get("fee_sats", 0) > 0:
+                raise serializers.ValidationError("Fee is not supported for selected transaction type")
+
         require_cashtoken = transaction_type == models.RedemptionContractTransaction.Type.REDEEM
         valid_utxo_data = validate_utxo_data(
             utxo_data,
