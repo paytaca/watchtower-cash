@@ -126,14 +126,23 @@ class RedemptionContractViewSet(
     def market_info_detail(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
-
-    @swagger_auto_schema(method="get", responses={200:response_serializers.ArtifactResponse})
+    @swagger_auto_schema(
+        method="get", responses={200:response_serializers.ArtifactResponse},
+        manual_parameters=[
+            openapi.Parameter(
+                'version', openapi.IN_QUERY, type=openapi.TYPE_STRING,
+                description="Version", enum=["v1", "v2"], default="v1",
+            ),
+        ],
+    )
     @decorators.action(methods=["get"], detail=False)
     def artifact(self, request, *args, **kwargs):
-        result = ScriptFunctions.getRedemptionContractArtifact()
+        version = str(request.query_params.get("version", "v1")).lower().strip()
+        result = ScriptFunctions.getRedemptionContractArtifact(dict(version=version))
 
         # remove unnecessary data for compiling the contract
         result["artifact"].pop("source", None)
+        result["artifact"].pop("debug", None)
         # result["artifact"].pop("compiler", None)
         # result["artifact"].pop("updatedAt", None)
 
@@ -259,6 +268,7 @@ class TreasuryContractViewSet(
 
         # remove unnecessary data for compiling the contract
         result["artifact"].pop("source", None)
+        result["artifact"].pop("debug", None)
         # result["artifact"].pop("compiler", None)
         # result["artifact"].pop("updatedAt", None)
 
