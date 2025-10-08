@@ -12,7 +12,7 @@ from stablehedge.functions.redemption_contract import (
     get_lifetime_volume_data,
 )
 from stablehedge.js.runner import ScriptFunctions
-from stablehedge.utils.blockchain import get_locktime
+from stablehedge.utils.blockchain import get_locktime, hash256_hex
 from stablehedge.utils.transaction import (
     validate_utxo_data,
     utxo_data_to_cashscript,
@@ -407,6 +407,9 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
         slug_field="address", source="redemption_contract",
     )
     funding_wif_pubkey = serializers.SerializerMethodField(read_only=True)
+    anyhedge_bytecode_fingerprint = serializers.SerializerMethodField()
+    fiat_token = FiatTokenSerializer(read_only=True)
+    redemption_contract_bytecode_fingerprint = serializers.SerializerMethodField()
 
     class Meta:
         model = models.TreasuryContract
@@ -420,14 +423,30 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
             "pubkey3",
             "pubkey4",
             "pubkey5",
-            "anyhedge_base_bytecode",
+            "anyhedge_bytecode_fingerprint",
             "anyhedge_contract_version",
+            "fiat_token",
+            "price_oracle_pubkey",
+            "redemption_contract_bytecode_fingerprint",
+            "redemption_contract_version",
             "funding_wif_pubkey",
         ]
 
         extra_kwargs = dict(
             address=dict(read_only=True),
         )
+
+    @swagger_serializer_method(serializer_or_field=serializers.CharField)
+    def get_anyhedge_bytecode_fingerprint(self, obj):
+        if obj.anyhedge_base_bytecode:
+            return hash256_hex(obj.anyhedge_base_bytecode)
+        return None
+
+    @swagger_serializer_method(serializer_or_field=serializers.CharField)
+    def get_redemption_contract_bytecode_fingerprint(self, obj):
+        if obj.anyhedge_base_bytecode:
+            return hash256_hex(obj.redemption_contract_base_bytecode)
+        return None
 
     @swagger_serializer_method(serializer_or_field=serializers.CharField)
     def get_funding_wif_pubkey(self, obj):
