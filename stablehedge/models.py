@@ -121,7 +121,7 @@ class RedemptionContract(models.Model):
         self._is_subscribed = value
 
 class RedemptionContractOption(models.Model):
-    redemption_contract = models.ForeignKey(
+    redemption_contract = models.OneToOneField(
         RedemptionContract, on_delete=models.CASCADE, related_name="options",
     )
     deposit_fee_amount = models.DecimalField(
