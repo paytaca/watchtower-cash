@@ -361,6 +361,7 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
             "price_value",
             "satoshis",
             "amount",
+            "fee_sats",
             "result_message",
             "resolved_at",
             "created_at",
@@ -369,7 +370,7 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
     @swagger_serializer_method(serializer_or_field=serializers.IntegerField)
     def get_satoshis(self, obj):
         try:
-            satoshis = obj.utxo["satoshis"] - 2000
+            satoshis = obj.utxo["satoshis"] - obj.fee_sats - 2000
             amount = obj.utxo.get("amount", 0)
         except (TypeError, KeyError) as exception:
             LOGGER.exception(exception)
@@ -381,12 +382,12 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
         if obj.transaction_type in [Type.DEPOSIT, Type.INJECT]:
             return satoshis
         elif obj.transaction_type in [Type.REDEEM]:
-            return token_to_satoshis(amount, price_units_per_bch)
+            return token_to_satoshis(amount, price_units_per_bch) - obj.fee_sats
 
     @swagger_serializer_method(serializer_or_field=serializers.IntegerField)
     def get_amount(self, obj):
         try:
-            satoshis = obj.utxo["satoshis"] - 2000
+            satoshis = obj.utxo["satoshis"] - obj.fee_sats - 2000
             amount = obj.utxo.get("amount", 0)
         except (TypeError, KeyError) as exception:
             LOGGER.exception(exception)
