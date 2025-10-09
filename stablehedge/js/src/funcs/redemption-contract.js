@@ -3,8 +3,12 @@ import { baseBytecodeToHex } from '../utils/contracts.js';
 import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 
 
-export function getRedemptionContractArtifact() {
-  const artifact = RedemptionContract.getArtifact();
+/**
+ * @param {Object} opts
+ * @param {'v1' | 'v2' | 'v3'} opts.version
+ */
+export function getRedemptionContractArtifact(opts) {
+  const artifact = RedemptionContract.getArtifact(opts?.version);
   return { success: true, artifact }
 }
 

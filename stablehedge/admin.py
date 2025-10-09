@@ -357,7 +357,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
         obj = queryset.first()
         try:
-            result = rebalance_funds(obj.address, min_sats=0)
+            result = rebalance_funds(obj.address)
             messages.info(request, f"{result}")
         except (StablehedgeException, AnyhedgeException) as exception:
             messages.error(f"Error: {exception}")
