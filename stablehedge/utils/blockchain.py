@@ -13,10 +13,15 @@ from main.utils.broadcast import send_post_broadcast_notifications
 def get_locktime():
     return NODE.BCH.get_latest_block()
 
-def get_tx_hash(tx_hex):
-    tx_hex_bytes = bytes.fromhex(tx_hex)
-    hash1 = sha256(tx_hex_bytes).digest()
+def hash256_hex(value_hex):
+    value_bytes = bytes.fromhex(value_hex)
+    hash1 = sha256(value_bytes).digest()
     hash2 = sha256(hash1).digest()
+    return hash2.hex()
+
+def get_tx_hash(tx_hex):
+    result = hash256_hex(tx_hex)
+    hash2 = bytes.fromhex(result)
     d = bytearray(hash2)
     d.reverse()
     return d.hex()

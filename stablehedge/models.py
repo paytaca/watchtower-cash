@@ -53,6 +53,7 @@ class RedemptionContract(models.Model):
     class Version(models.TextChoices):
         V1 = "v1"
         V2 = "v2"
+        V3 = "v3"
 
     objects = RedemptionContractQueryset.as_manager()
 
@@ -119,6 +120,19 @@ class RedemptionContract(models.Model):
     def is_subscribed(self, value):
         self._is_subscribed = value
 
+class RedemptionContractOption(models.Model):
+    redemption_contract = models.OneToOneField(
+        RedemptionContract, on_delete=models.CASCADE, related_name="options",
+    )
+    deposit_fee_amount = models.DecimalField(
+        max_digits=12, decimal_places=4, default=0,
+        help_text="If fixed type, must be greater than 1. If percentage type, must be less than 1"
+    )
+    redeem_fee_amount = models.DecimalField(
+        max_digits=12, decimal_places=4, default=0,
+        help_text="If fixed type, must be greater than 1. If percentage type, must be less than 1"
+    )
+
 
 class RedemptionContractTransaction(models.Model):
     class Status(models.TextChoices):
@@ -148,6 +162,7 @@ class RedemptionContractTransaction(models.Model):
     status = models.CharField(max_length=10, default=Status.PENDING, db_index=True)
     txid = models.CharField(max_length=64, null=True, blank=True)
     utxo = JSONField()
+    fee_sats = models.PositiveIntegerField(default=0)
     result_message = models.TextField(null=True, blank=True)
 
     retry_count = models.IntegerField(default=0)

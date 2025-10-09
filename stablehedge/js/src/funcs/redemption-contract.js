@@ -3,17 +3,21 @@ import { baseBytecodeToHex } from '../utils/contracts.js';
 import { parseCashscriptOutput, parseUtxo } from '../utils/crypto.js'
 
 
-export function getRedemptionContractArtifact() {
-  const artifact = RedemptionContract.getArtifact();
+/**
+ * @param {Object} opts
+ * @param {'v1' | 'v2' | 'v3'} opts.version
+ */
+export function getRedemptionContractArtifact(opts) {
+  const artifact = RedemptionContract.getArtifact(opts?.version);
   return { success: true, artifact }
 }
 
 /**
  * @param {Object} opts
- * @param {Object} [opts.version=v2]
+ * @param {Object} [opts.version=v3]
  */
 export function getRedemptionContractBaseBytecode(opts) {
-  const version = opts?.version || 'v2'
+  const version = opts?.version || 'v3'
   const artifact = RedemptionContract.getArtifact(version)
   return {
     version: version,
@@ -90,6 +94,8 @@ export async function transferRedemptionContractAssets(opts) {
  * @param {import('cashscript').Utxo} opts.reserveUtxo 
  * @param {import('cashscript').UtxoP2PKH} opts.depositUtxo
  * @param {String} [opts.treasuryContractAddress]
+ * @param {String} opts.recipientAddress
+ * @param {Number} [opts.fee]
  * @param {String} opts.priceMessage
  * @param {String} opts.priceMessageSig
  * @param {Number} [opts.locktime]
@@ -103,6 +109,7 @@ export async function deposit(opts) {
     depositUtxo,
     recipientAddress: opts?.recipientAddress,
     treasuryContractAddress: opts?.treasuryContractAddress,
+    fee: opts?.fee,
     priceMessage: opts?.priceMessage,
     priceMessageSig: opts?.priceMessageSig,
     locktime: opts?.locktime,
@@ -119,6 +126,7 @@ export async function deposit(opts) {
  * @param {import('cashscript').Utxo} opts.reserveUtxo 
  * @param {import('cashscript').UtxoP2PKH} opts.redeemUtxo
  * @param {String} opts.recipientAddress
+ * @param {Number} [opts.fee]
  * @param {String} opts.priceMessage
  * @param {String} opts.priceMessageSig
  * @param {Number} [opts.locktime]
@@ -131,6 +139,7 @@ export async function redeem(opts) {
     reserveUtxo,
     redeemUtxo,
     recipientAddress: opts?.recipientAddress,
+    fee: opts?.fee,
     priceMessage: opts?.priceMessage,
     priceMessageSig: opts?.priceMessageSig,
     locktime: opts?.locktime,

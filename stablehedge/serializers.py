@@ -12,7 +12,7 @@ from stablehedge.functions.redemption_contract import (
     get_lifetime_volume_data,
 )
 from stablehedge.js.runner import ScriptFunctions
-from stablehedge.utils.blockchain import get_locktime
+from stablehedge.utils.blockchain import get_locktime, hash256_hex
 from stablehedge.utils.transaction import (
     validate_utxo_data,
     utxo_data_to_cashscript,
@@ -74,11 +74,20 @@ class VolumeDataSerializer(serializers.Serializer):
     satoshis = serializers.IntegerField()
     count = serializers.IntegerField()
 
+class RedemptionContractOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.RedemptionContractOption
+        fields =[
+            "deposit_fee_amount",
+            "redeem_fee_amount",
+        ]
+
 class RedemptionContractSerializer(serializers.ModelSerializer):
     fiat_token = FiatTokenSerializer()
     redeemable = serializers.IntegerField(read_only=True)
     reserve_supply = serializers.IntegerField(read_only=True)
     treasury_contract_address = serializers.CharField(read_only=True)
+    options = RedemptionContractOptionSerializer(read_only=True)
 
     class Meta:
         model = models.RedemptionContract
@@ -92,6 +101,7 @@ class RedemptionContractSerializer(serializers.ModelSerializer):
             "redeemable",
             "reserve_supply",
             "treasury_contract_address",
+            "options",
         ]
 
         extra_kwargs = dict(
@@ -248,6 +258,7 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
             "transaction_type",
             "txid",
             "utxo",
+            "fee_sats",
             "resolved_at",
             "created_at",
 
@@ -268,6 +279,10 @@ class RedemptionContractTransactionSerializer(serializers.ModelSerializer):
 
         if not redemption_contract.verified:
             raise serializers.ValidationError("Contract is not verified")
+
+        if transaction_type == models.RedemptionContractTransaction.Type.INJECT:
+            if data.get("fee_sats", 0) > 0:
+                raise serializers.ValidationError("Fee is not supported for selected transaction type")
 
         require_cashtoken = transaction_type == models.RedemptionContractTransaction.Type.REDEEM
         valid_utxo_data = validate_utxo_data(
@@ -346,6 +361,7 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
             "price_value",
             "satoshis",
             "amount",
+            "fee_sats",
             "result_message",
             "resolved_at",
             "created_at",
@@ -354,7 +370,7 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
     @swagger_serializer_method(serializer_or_field=serializers.IntegerField)
     def get_satoshis(self, obj):
         try:
-            satoshis = obj.utxo["satoshis"] - 2000
+            satoshis = obj.utxo["satoshis"] - obj.fee_sats - 2000
             amount = obj.utxo.get("amount", 0)
         except (TypeError, KeyError) as exception:
             LOGGER.exception(exception)
@@ -366,12 +382,12 @@ class RedemptionContractTransactionHistorySerializer(serializers.ModelSerializer
         if obj.transaction_type in [Type.DEPOSIT, Type.INJECT]:
             return satoshis
         elif obj.transaction_type in [Type.REDEEM]:
-            return token_to_satoshis(amount, price_units_per_bch)
+            return token_to_satoshis(amount, price_units_per_bch) - obj.fee_sats
 
     @swagger_serializer_method(serializer_or_field=serializers.IntegerField)
     def get_amount(self, obj):
         try:
-            satoshis = obj.utxo["satoshis"] - 2000
+            satoshis = obj.utxo["satoshis"] - obj.fee_sats - 2000
             amount = obj.utxo.get("amount", 0)
         except (TypeError, KeyError) as exception:
             LOGGER.exception(exception)
@@ -392,6 +408,9 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
         slug_field="address", source="redemption_contract",
     )
     funding_wif_pubkey = serializers.SerializerMethodField(read_only=True)
+    anyhedge_bytecode_fingerprint = serializers.SerializerMethodField()
+    fiat_token = FiatTokenSerializer(read_only=True)
+    redemption_contract_bytecode_fingerprint = serializers.SerializerMethodField()
 
     class Meta:
         model = models.TreasuryContract
@@ -405,14 +424,30 @@ class TreasuryContractSerializer(serializers.ModelSerializer):
             "pubkey3",
             "pubkey4",
             "pubkey5",
-            "anyhedge_base_bytecode",
+            "anyhedge_bytecode_fingerprint",
             "anyhedge_contract_version",
+            "fiat_token",
+            "price_oracle_pubkey",
+            "redemption_contract_bytecode_fingerprint",
+            "redemption_contract_version",
             "funding_wif_pubkey",
         ]
 
         extra_kwargs = dict(
             address=dict(read_only=True),
         )
+
+    @swagger_serializer_method(serializer_or_field=serializers.CharField)
+    def get_anyhedge_bytecode_fingerprint(self, obj):
+        if obj.anyhedge_base_bytecode:
+            return hash256_hex(obj.anyhedge_base_bytecode)
+        return None
+
+    @swagger_serializer_method(serializer_or_field=serializers.CharField)
+    def get_redemption_contract_bytecode_fingerprint(self, obj):
+        if obj.anyhedge_base_bytecode:
+            return hash256_hex(obj.redemption_contract_base_bytecode)
+        return None
 
     @swagger_serializer_method(serializer_or_field=serializers.CharField)
     def get_funding_wif_pubkey(self, obj):

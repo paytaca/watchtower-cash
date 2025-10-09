@@ -119,9 +119,11 @@ class TreasuryContractForm(forms.ModelForm):
             anyhedge_base_bytecode = result["bytecode"]
             anyhedge_contract_version = result["version"]
 
-            result = ScriptFunctions.getRedemptionContractBaseBytecode(RedemptionContract.Version.V2)
-            redemption_contract_base_bytecode = result["bytecode"]
-            redemption_contract_version = result["version"]
+            rc_bytecode = ScriptFunctions.getRedemptionContractBaseBytecode(dict(
+                version=RedemptionContract.Version.V3,
+            ))
+            redemption_contract_base_bytecode = rc_bytecode["bytecode"]
+            redemption_contract_version = rc_bytecode["version"]
 
         compile_opts = dict(
             params=dict(

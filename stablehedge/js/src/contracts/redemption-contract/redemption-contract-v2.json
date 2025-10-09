@@ -1,0 +1,73 @@
+{
+  "contractName": "RedemptionContractV2",
+  "constructorInputs": [
+    {
+      "name": "authKeyId",
+      "type": "bytes32"
+    },
+    {
+      "name": "tokenCategory",
+      "type": "bytes32"
+    },
+    {
+      "name": "oraclePublicKey",
+      "type": "pubkey"
+    },
+    {
+      "name": "treasuryContractLockingBytecode",
+      "type": "bytes35"
+    }
+  ],
+  "abi": [
+    {
+      "name": "deposit",
+      "inputs": [
+        {
+          "name": "priceMessage",
+          "type": "bytes"
+        },
+        {
+          "name": "priceMessageSig",
+          "type": "datasig"
+        },
+        {
+          "name": "isInjectLiquidity",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "redeem",
+      "inputs": [
+        {
+          "name": "priceMessage",
+          "type": "bytes"
+        },
+        {
+          "name": "priceMessageSig",
+          "type": "datasig"
+        }
+      ]
+    },
+    {
+      "name": "consolidate",
+      "inputs": []
+    },
+    {
+      "name": "unlockWithNft",
+      "inputs": [
+        {
+          "name": "keepGuarded",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_4 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_6 OP_ROLL OP_6 OP_PICK OP_4 OP_ROLL OP_CHECKDATASIGVERIFY OP_4 OP_ROLL OP_12 OP_SPLIT OP_NIP OP_BIN2NUM OP_0 OP_UTXOTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY OP_1 OP_UTXOVALUE e803 OP_SUB e803 OP_SUB 00e1f505 OP_OVER OP_3 OP_ROLL OP_MUL OP_SWAP OP_DIV OP_6 OP_ROLL OP_NOTIF OP_OVER OP_2 OP_DIV OP_ROT OP_DROP OP_SWAP OP_2 OP_OUTPUTVALUE OP_2 OP_PICK OP_NUMEQUALVERIFY OP_2 OP_OUTPUTBYTECODE OP_5 OP_PICK OP_EQUALVERIFY OP_ENDIF OP_1 OP_OUTPUTTOKENCATEGORY OP_4 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENAMOUNT OP_OVER OP_NUMEQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_4 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_UTXOTOKENAMOUNT OP_ROT OP_SUB OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE OP_0 OP_UTXOVALUE OP_ROT OP_ADD OP_NUMEQUAL OP_NIP OP_NIP OP_NIP OP_ELSE OP_4 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_6 OP_ROLL OP_6 OP_PICK OP_4 OP_ROLL OP_CHECKDATASIGVERIFY OP_4 OP_ROLL OP_12 OP_SPLIT OP_NIP OP_BIN2NUM OP_0 OP_UTXOTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY 00e1f505 OP_1 OP_UTXOTOKENAMOUNT OP_SWAP OP_MUL OP_SWAP OP_DIV OP_0 OP_OUTPUTTOKENCATEGORY OP_3 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_0 OP_UTXOTOKENAMOUNT OP_1 OP_UTXOTOKENAMOUNT OP_ADD OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE OP_0 OP_UTXOVALUE OP_2 OP_PICK OP_SUB OP_NUMEQUALVERIFY OP_1 OP_OUTPUTVALUE OP_NUMEQUAL OP_NIP OP_NIP OP_NIP OP_ELSE OP_4 OP_PICK OP_2 OP_NUMEQUAL OP_IF OP_INPUTINDEX OP_UTXOBYTECODE OP_0 OP_UTXOBYTECODE OP_OVER OP_EQUAL OP_NOT OP_VERIFY OP_INPUTINDEX OP_1SUB OP_1 OP_MAX OP_UTXOBYTECODE OP_INPUTINDEX OP_1ADD OP_TXINPUTCOUNT OP_1SUB OP_MIN OP_UTXOBYTECODE OP_2 OP_PICK OP_EQUALVERIFY OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTBYTECODE OP_DUP OP_SIZE OP_NIP OP_TXINPUTCOUNT OP_1ADD OP_4 OP_MUL OP_SUB OP_SPLIT OP_NIP OP_DUP OP_INPUTINDEX OP_4 OP_MUL OP_SPLIT OP_NIP OP_8 OP_SPLIT OP_DROP OP_4 OP_SPLIT OP_BIN2NUM OP_SWAP OP_BIN2NUM OP_SUB OP_INPUTINDEX OP_UTXOVALUE OP_NUMEQUALVERIFY OP_INPUTINDEX OP_UTXOTOKENCATEGORY OP_4 OP_PICK OP_EQUAL OP_IF OP_INPUTINDEX OP_1 OP_NUMEQUALVERIFY OP_2 OP_OUTPUTTOKENCATEGORY OP_4 OP_PICK OP_EQUALVERIFY OP_INPUTINDEX OP_UTXOTOKENAMOUNT OP_2 OP_OUTPUTTOKENAMOUNT OP_NUMEQUALVERIFY OP_ENDIF OP_DUP OP_SIZE OP_NIP OP_4 OP_SUB OP_SPLIT OP_NIP OP_BIN2NUM OP_2 OP_OUTPUTVALUE OP_TXOUTPUTCOUNT OP_4 OP_LESSTHANOREQUAL OP_VERIFY OP_2 OP_OUTPUTBYTECODE OP_3 OP_PICK OP_EQUALVERIFY OP_TXOUTPUTCOUNT OP_4 OP_NUMEQUAL OP_IF OP_DUP OP_3 OP_OUTPUTVALUE OP_ADD OP_NIP OP_3 OP_OUTPUTBYTECODE OP_3 OP_PICK OP_EQUAL OP_3 OP_OUTPUTBYTECODE OP_8 OP_PICK OP_EQUAL OP_BOOLOR OP_VERIFY OP_ENDIF OP_SUB OP_0 OP_NUMEQUALVERIFY OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ELSE OP_4 OP_ROLL OP_3 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_EQUALVERIFY OP_1 OP_UTXOTOKENAMOUNT OP_0 OP_NUMEQUALVERIFY OP_3 OP_ROLL OP_IF OP_0 OP_OUTPUTBYTECODE OP_INPUTINDEX OP_UTXOBYTECODE OP_EQUALVERIFY OP_ENDIF OP_2DROP OP_DROP OP_1 OP_ENDIF OP_ENDIF OP_ENDIF",
+  "source": "pragma cashscript ^0.8.0;\n\n\ncontract RedemptionContract(\n    bytes32 authKeyId,  // 32 B authkey nft id\n    bytes32 tokenCategory,  // 32 B token category of nft used for minting\n    pubkey  oraclePublicKey,  // 33 B, verifies message from oracle\n    bytes35 treasuryContractLockingBytecode, // 35 B, locking bytecode of treasury contract\n) {\n    function deposit(bytes priceMessage, datasig priceMessageSig, bool isInjectLiquidity) {\n        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));\n        int price = int(priceMessage.split(12)[1]);\n\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n\n        // 1000 for tx fee and another 1000 for DUST in deposit output\n        int depositSats = tx.inputs[1].value - 1000 - 1000;\n\n        int satsPerBch = 100000000;\n        int tokenUnitSatsPerBch = depositSats * price;\n        int tokenAmount = int(tokenUnitSatsPerBch / satsPerBch);\n\n        if (!isInjectLiquidity) {\n            depositSats = depositSats / 2;\n            require(tx.outputs[2].value == depositSats);\n            require(tx.outputs[2].lockingBytecode == treasuryContractLockingBytecode);\n        }\n\n        require(tx.outputs[1].tokenCategory == tokenCategory);\n        require(tx.outputs[1].tokenAmount == tokenAmount);\n\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount - tokenAmount);\n        require(tx.outputs[0].value == tx.inputs[0].value + depositSats);\n    }\n\n    function redeem(bytes priceMessage, datasig priceMessageSig) {\n        require(checkDataSig(priceMessageSig, priceMessage, oraclePublicKey));\n        int price = int(priceMessage.split(12)[1]);\n\n        require(tx.inputs[0].tokenCategory == tokenCategory);\n        require(tx.inputs[1].tokenCategory == tokenCategory);\n\n        int satsPerBch = 100000000;\n        int tokenUnitSatsPerBch = tx.inputs[1].tokenAmount * satsPerBch;\n        int redeemSats = int(tokenUnitSatsPerBch / price);\n\n        require(tx.outputs[0].tokenCategory == tokenCategory);\n        require(tx.outputs[0].tokenAmount == tx.inputs[0].tokenAmount + tx.inputs[1].tokenAmount);\n        require(tx.outputs[0].value == tx.inputs[0].value - redeemSats);\n        require(tx.outputs[1].value == redeemSats);\n        // DUST sats in redeem input is used as tx fee\n    }\n\n    /**\n        This allows contract to consolidate or create a UTXO with specific satoshis amount\n        This consolidate tx has the following requirements:\n            1. First input and output is used as fee funder for the consolidate tx.\n                This can be any wallet (e.g. p2sh, p2pkh)\n            2. All the inputs after input#0 must be from this smart contract\n            3. The output#1 has to be an OP_RETURN output\n            4. The OP_RETURN data must be of length 4 * inputs.length + 1\n            5. OP_RETURN data is a sequence of 4 byte numbers which represents cumulative amounts\n                of the inputs' satoshis amount.\n                This first 4 bytes is zero, the second 4 bytes is set as zero since\n                it represents input#0 and input#0 is not from this smart contract,\n                the third 4 bytes is the amount of input#1,\n                the fourth 4 bytes is the cumulative amount of the first two inputs, and so on.\n            6. This makes the last 4 bytes the cumulative amount of the smart contract's inputs.\n                Condition 1 above is a way to ensure that this condition is true.\n            7. output#2 and output#3 (if exists) must have a total satoshis equal to last 4 bytes\n                in the cumulitive amounts OP_RETURN data.\n            8. The recipient for output#2 and #3 should be this smart contract.\n\n        Based on the conditions above, the transaction fee is covered by the executor of the\n        consolidate transaction to prevent abuse of this function and result in loss of funds.\n    */\n    function consolidate() {\n        bytes inputLockScript = tx.inputs[this.activeInputIndex].lockingBytecode;\n        require(tx.inputs[0].lockingBytecode != inputLockScript);\n\n        // this ensures all inputs are from this smart contract's\n        // we check if adjacent inputs are from the same address\n        bytes prevInputLockScript = tx.inputs[max(this.activeInputIndex - 1, 1)].lockingBytecode;\n        bytes nextInputLockScript = tx.inputs[min(this.activeInputIndex + 1, tx.inputs.length - 1)].lockingBytecode;\n        require(inputLockScript == nextInputLockScript);\n        require(inputLockScript == prevInputLockScript);\n\n        bytes OP_DATA = tx.outputs[1].lockingBytecode;\n        bytes cumulativeAmounts = OP_DATA.split(OP_DATA.length - (tx.inputs.length+1) * 4)[1];\n\n        bytes segment = cumulativeAmounts.split(this.activeInputIndex * 4)[1].split(8)[0];\n        bytes prevCumulativeBytes, bytes cumulativeBytes = segment.split(4);\n        int inputAmount = int(cumulativeBytes) - int(prevCumulativeBytes);\n        require(tx.inputs[this.activeInputIndex].value == inputAmount);\n\n        if (tx.inputs[this.activeInputIndex].tokenCategory == tokenCategory) {\n            require(this.activeInputIndex == 1);\n            require(tx.outputs[2].tokenCategory == tokenCategory);\n            require(tx.inputs[this.activeInputIndex].tokenAmount == tx.outputs[2].tokenAmount);\n        }\n\n        int totalInputSats = int(cumulativeAmounts.split(cumulativeAmounts.length - 4)[1]);\n        int totalOutputSats = tx.outputs[2].value;\n\n        require(tx.outputs.length <= 4);\n        require(tx.outputs[2].lockingBytecode == inputLockScript);\n\n        if (tx.outputs.length == 4) {\n            totalOutputSats = totalOutputSats + tx.outputs[3].value;\n            require(\n                tx.outputs[3].lockingBytecode == inputLockScript ||\n                tx.outputs[3].lockingBytecode == treasuryContractLockingBytecode\n            );\n        }\n\n        // 13 => 10 base fee + 3 OP_DATA length prefix + 4 OP_DATA prefix of 0x00000000\n        // inputs.length * 800 => 796 input fee + 4 bytes from OP_DATA\n        // 45 bytes per output => BCH only with p2sh32 address\n        // int maxFee = 17 + (tx.inputs.length * 800) + ((tx.outputs.length - 1) * 45);\n        int diff = totalInputSats - totalOutputSats;\n\n        // using '<=' instead of '==' so creator of transaction can still optimize fee size\n        // too small fees will just be rejected by min tx fee requirement\n        require(diff == 0);\n    }\n\n    // https://github.com/mr-zwets/AuthGuard/blob/c5115b0df05c868018cc433e1047f5c5f6c8f7f7/AuthGuard.cash\n    function unlockWithNft(bool keepGuarded) {\n        // Check that the second input holds the AuthKey NFT\n        require(tx.inputs[1].tokenCategory == authKeyId);\n        require(tx.inputs[1].tokenAmount == 0);\n\n        // if keepGuarded is false, the AuthHead can be released from the AuthGuard covenant\n        if(keepGuarded) {\n            // Self preservation of AuthGuard covenant as the first output\n            require(tx.outputs[0].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);\n        }\n    }\n}\n",
+  "compiler": {
+    "name": "cashc",
+    "version": "0.8.2"
+  },
+  "updatedAt": "2025-09-26T06:24:46.550Z"
+}

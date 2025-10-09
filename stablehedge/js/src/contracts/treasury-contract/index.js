@@ -13,6 +13,9 @@ import { prepareParamForTreasuryContract } from "../../utils/anyhedge-funding.js
 
 import { RedemptionContract } from "../redemption-contract/index.js"
 
+import treasuryContractArtifact from './treasury-contract.json' assert { type: 'json' }
+import treasuryContractV2Artifact from './treasury-contract-v2.json' assert { type: 'json' }
+
 export class TreasuryContract {
   /**
    * @param {Object} opts
@@ -52,13 +55,15 @@ export class TreasuryContract {
   }
   
   static getArtifact(version) {
-    let cashscriptFilename = 'treasury-contract.cash';
+    let artifactOrFileName = treasuryContractArtifact;
     if (version === 'v2') {
-      cashscriptFilename = 'treasury-contract-v2.cash';
+      artifactOrFileName = treasuryContractV2Artifact;
     } else if (version !== 'v1') {
-      cashscriptFilename = `treasury-contract-${version}.cash`;
+      artifactOrFileName = `treasury-contract-${version}.cash`;
     }
-    const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
+
+    if (typeof artifactOrFileName !== 'string') return artifactOrFileName
+    const artifact = compileFile(new URL(artifactOrFileName, import.meta.url));
     return artifact;
   }
 

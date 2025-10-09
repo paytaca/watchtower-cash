@@ -15,7 +15,7 @@ from stablehedge.functions.transaction import update_redemption_contract_tx_trad
 from stablehedge.js.runner import ScriptFunctions
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import subscribe_address
-from stablehedge.tasks import check_and_short_funds
+from stablehedge.tasks import check_and_short_funds, rebalance_funds
 
 from main.tasks import get_bch_utxos
 
@@ -34,10 +34,18 @@ class FiatTokenAdmin(admin.ModelAdmin):
         "decimals",
     ]
 
+class RedemptionContractOptionInline(admin.StackedInline):
+    model = models.RedemptionContractOption
+    extra = 0
+
 
 @admin.register(models.RedemptionContract)
 class RedemptionContractAdmin(admin.ModelAdmin):
     form = forms.RedemptionContractForm
+
+    inlines = [
+        RedemptionContractOptionInline,
+    ]
 
     search_fields = [
         "address",
@@ -221,6 +229,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         "sweep_funding_wif",
         "force_sweep_funding_wif",
         "short_funds",
+        "rebalance",
     ]
 
     list_filter = [
@@ -294,7 +303,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
             redemption_contract_match = "Not using bytecode"
             if obj.redemption_contract_version:
-                result = ScriptFunctions.getRedemptionContractBaseBytecode(obj.redemption_contract_version)
+                result = ScriptFunctions.getRedemptionContractBaseBytecode(dict(version=obj.redemption_contract_version))
                 redemption_contract_match = result["bytecode"] == obj.redemption_contract_base_bytecode                
 
             messages.info(request, f"{obj} | Anyhedge: {anyhedge_contract_match} | Redemption Contract: {redemption_contract_match}")
@@ -337,6 +346,18 @@ class TreasuryContractAdmin(admin.ModelAdmin):
         obj = queryset.first()
         try:
             result = check_and_short_funds(obj.address, min_sats=0)
+            messages.info(request, f"{result}")
+        except (StablehedgeException, AnyhedgeException) as exception:
+            messages.error(f"Error: {exception}")
+
+    def rebalance(self, request, queryset):
+        if queryset.count() > 1:
+            messages.error(request, f"Select only 1")
+            return
+
+        obj = queryset.first()
+        try:
+            result = rebalance_funds(obj.address)
             messages.info(request, f"{result}")
         except (StablehedgeException, AnyhedgeException) as exception:
             messages.error(f"Error: {exception}")
