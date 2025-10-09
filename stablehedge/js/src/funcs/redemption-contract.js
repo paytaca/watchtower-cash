@@ -14,10 +14,10 @@ export function getRedemptionContractArtifact(opts) {
 
 /**
  * @param {Object} opts
- * @param {Object} [opts.version=v2]
+ * @param {Object} [opts.version=v3]
  */
 export function getRedemptionContractBaseBytecode(opts) {
-  const version = opts?.version || 'v2'
+  const version = opts?.version || 'v3'
   const artifact = RedemptionContract.getArtifact(version)
   return {
     version: version,
