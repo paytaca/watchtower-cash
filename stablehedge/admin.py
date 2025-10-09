@@ -303,7 +303,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
             redemption_contract_match = "Not using bytecode"
             if obj.redemption_contract_version:
-                result = ScriptFunctions.getRedemptionContractBaseBytecode(obj.redemption_contract_version)
+                result = ScriptFunctions.getRedemptionContractBaseBytecode(dict(version=obj.redemption_contract_version))
                 redemption_contract_match = result["bytecode"] == obj.redemption_contract_base_bytecode                
 
             messages.info(request, f"{obj} | Anyhedge: {anyhedge_contract_match} | Redemption Contract: {redemption_contract_match}")
