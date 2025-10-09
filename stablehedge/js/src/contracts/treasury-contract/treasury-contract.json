@@ -1,0 +1,64 @@
+{
+  "contractName": "TreasuryContract",
+  "constructorInputs": [
+    {
+      "name": "authKeyId",
+      "type": "bytes32"
+    },
+    {
+      "name": "pk1",
+      "type": "pubkey"
+    },
+    {
+      "name": "pk2",
+      "type": "pubkey"
+    },
+    {
+      "name": "pk3",
+      "type": "pubkey"
+    },
+    {
+      "name": "pk4",
+      "type": "pubkey"
+    },
+    {
+      "name": "pk5",
+      "type": "pubkey"
+    }
+  ],
+  "abi": [
+    {
+      "name": "unlockWithNft",
+      "inputs": [
+        {
+          "name": "keepGuarded",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "unlockWithMultiSig",
+      "inputs": [
+        {
+          "name": "sig1",
+          "type": "sig"
+        },
+        {
+          "name": "sig2",
+          "type": "sig"
+        },
+        {
+          "name": "sig3",
+          "type": "sig"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_6 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_1 OP_UTXOTOKENCATEGORY OP_EQUALVERIFY OP_1 OP_UTXOTOKENAMOUNT OP_0 OP_NUMEQUALVERIFY OP_6 OP_ROLL OP_IF OP_0 OP_OUTPUTBYTECODE OP_INPUTINDEX OP_UTXOBYTECODE OP_EQUALVERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ELSE OP_6 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_0 OP_7 OP_ROLL OP_8 OP_ROLL OP_9 OP_ROLL OP_3 OP_6 OP_ROLL OP_7 OP_ROLL OP_8 OP_ROLL OP_9 OP_ROLL OP_10 OP_ROLL OP_5 OP_CHECKMULTISIG OP_NIP OP_ENDIF",
+  "source": "pragma cashscript ^0.8.0;\n\ncontract TreasuryContract(\n    bytes32 authKeyId, // 32 B token category of authkey nft\n    pubkey pk1,\n    pubkey pk2,\n    pubkey pk3,\n    pubkey pk4,\n    pubkey pk5,\n) {\n    // Based on Authguard\n    // https://github.com/mr-zwets/AuthGuard/blob/c5115b0df05c868018cc433e1047f5c5f6c8f7f7/AuthGuard.cash\n    function unlockWithNft(bool keepGuarded) {\n        // Check that the first input holds the AuthKey NFT\n        require(tx.inputs[1].tokenCategory == authKeyId);\n        require(tx.inputs[1].tokenAmount == 0);\n\n        // if keepGuarded is false, the AuthHead can be released from the AuthGuard covenant\n        if(keepGuarded){\n            // Self preservation of AuthGuard covenant as the first output\n            require(tx.outputs[0].lockingBytecode == tx.inputs[this.activeInputIndex].lockingBytecode);\n        }\n    }\n\n    function unlockWithMultiSig(sig sig1, sig sig2, sig sig3) {\n        require(checkMultiSig([sig1, sig2, sig3], [pk1, pk2, pk3, pk4, pk5]));\n    }\n}\n",
+  "compiler": {
+    "name": "cashc",
+    "version": "0.8.0"
+  },
+  "updatedAt": "2025-09-26T06:30:39.110Z"
+}

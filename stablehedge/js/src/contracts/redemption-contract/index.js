@@ -6,8 +6,8 @@ import { scriptToBytecode } from "@cashscript/utils"
 import { P2PKH_INPUT_SIZE, VERSION_SIZE, LOCKTIME_SIZE } from 'cashscript/dist/constants.js'
 import { calculateDust, getOutputSize } from "cashscript/dist/utils.js"
 
-// import redemptionContractArtifact from './redemption-contract.json'
-// import redemptionContractCode from './redemption-contract.cash'
+import redemptionContractArtifact from './redemption-contract.json' assert { type: 'json'}
+import redemptionContractV2Artifact from './redemption-contract-v2.json' assert { type: 'json'}
 
 import { toTokenAddress } from "../../utils/crypto.js"
 import { decodePriceMessage, verifyPriceMessage } from "../../utils/price-oracle.js"
@@ -24,7 +24,7 @@ export class RedemptionContract {
    * @param {String} opts.params.oraclePublicKey
    * @param {String} opts.params.treasuryContractAddress
    * @param {Object} opts.options
-   * @param {'v1' | 'v2'} opts.options.version
+   * @param {'v1' | 'v2' | 'v3'} opts.options.version
    * @param {'mainnet' | 'chipnet'} opts.options.network
    * @param {'p2sh20' | 'p2sh32'} opts.options.addressType
    */
@@ -48,13 +48,15 @@ export class RedemptionContract {
   }
 
   static getArtifact(version) {
-    let cashscriptFilename = 'redemption-contract.cash';
+    let artifactOrFileName = redemptionContractArtifact;
     if (version === 'v2') {
-      cashscriptFilename = 'redemption-contract-v2.cash';
+      artifactOrFileName = redemptionContractV2Artifact;
     } else if (version !== 'v1') {
-      cashscriptFilename = `redemption-contract-${version}.cash`;
+      artifactOrFileName = `redemption-contract-${version}.cash`;
     }
-    const artifact = compileFile(new URL(cashscriptFilename, import.meta.url));
+
+    if (typeof artifactOrFileName !== 'string') return artifactOrFileName
+    const artifact = compileFile(new URL(artifactOrFileName, import.meta.url));
     return artifact;
   }
 
@@ -65,7 +67,7 @@ export class RedemptionContract {
       hexToBin(this.params?.oraclePublicKey),
     ]
 
-    if (this.options.version === 'v2') {
+    if (this.options.version !== 'v1') {
       const lockingBytecode = cashAddressToLockingBytecode(this.params.treasuryContractAddress)
       contractParams.push(lockingBytecode.bytecode);
     }
@@ -91,6 +93,7 @@ export class RedemptionContract {
    * @param {import("cashscript").UtxoP2PKH} opts.depositUtxo
    * @param {String} [opts.treasuryContractAddress] if no address is provided, it is injecting liquidity
    * @param {String} opts.recipientAddress
+   * @param {Number} [opts.fee]
    * @param {String} opts.priceMessage
    * @param {String} opts.priceMessageSig
    * @param {Number} [opts.locktime]
@@ -100,6 +103,9 @@ export class RedemptionContract {
     if (opts?.depositUtxo?.token) return 'Deposit UTXO has a token'
     if (!opts?.reserveUtxo) return 'Reserve UTXO not provided'
     if (opts?.reserveUtxo?.token?.category !== this.params.tokenCategory) return 'Reserve UTXO provided does not contain fiat token'
+    if (opts?.fee && (!opts?.treasuryContractAddress || this.options.version !== 'v3')) {
+      return 'Provided fee on invalid transaction type or contract version'
+    }
 
     const priceMessageValid = verifyPriceMessage(
       opts?.priceMessage, opts?.priceMessageSig, this.params.oraclePublicKey, 
@@ -111,10 +117,11 @@ export class RedemptionContract {
 
     const isInjectLiquidity = !opts?.treasuryContractAddress
     const reserveSupplyTokens = opts?.reserveUtxo?.token?.amount
+    const fee = opts?.fee ? BigInt(opts?.fee) : 0n;
 
     const HARDCODED_FEE = 1000n
     const releaseOutputSats = 1000n
-    const totalDepositSats = opts?.depositUtxo?.satoshis - releaseOutputSats - HARDCODED_FEE
+    const totalDepositSats = opts?.depositUtxo?.satoshis - releaseOutputSats - HARDCODED_FEE - fee;
     const depositSats = isInjectLiquidity ? totalDepositSats : totalDepositSats / 2n;
     const releaseOutputTokens = satoshisToToken(totalDepositSats, priceData.price)
     
@@ -127,7 +134,14 @@ export class RedemptionContract {
     const recipientAddress = toTokenAddress(opts?.recipientAddress)
 
     const contract = this.getContract()
-    const transaction = contract.functions.deposit(hexToBin(opts?.priceMessage), hexToBin(opts?.priceMessageSig), isInjectLiquidity)
+    const functionArgs = [
+      hexToBin(opts?.priceMessage),
+      hexToBin(opts?.priceMessageSig),
+      isInjectLiquidity,
+    ]
+    if (this.options.version === 'v3') functionArgs.push(fee)
+
+    const transaction = contract.functions.deposit(...functionArgs)
       .from(opts?.reserveUtxo)
       .fromP2PKH(opts?.depositUtxo, depositUtxoTemplate)
       .to(contract.tokenAddress, opts?.reserveUtxo.satoshis + depositSats, {
@@ -141,7 +155,7 @@ export class RedemptionContract {
       })
 
     if (!isInjectLiquidity) {
-      transaction.to(opts?.treasuryContractAddress, depositSats)
+      transaction.to(opts?.treasuryContractAddress, depositSats + fee)
     }
 
     transaction.withHardcodedFee(HARDCODED_FEE)
@@ -156,6 +170,7 @@ export class RedemptionContract {
    * @param {import("cashscript").Utxo} opts.reserveUtxo
    * @param {import("cashscript").UtxoP2PKH} opts.redeemUtxo
    * @param {String} opts.recipientAddress
+   * @param {Number} [opts.fee]
    * @param {String} opts.priceMessage
    * @param {String} opts.priceMessageSig
    * @param {Number} [opts.locktime]
@@ -165,6 +180,9 @@ export class RedemptionContract {
     if (opts?.redeemUtxo?.token?.category !== this.params.tokenCategory) return 'Redeem UTXO is not fiat token'
     if (!opts?.reserveUtxo) return 'Reserve UTXO not provided'
     if (opts?.reserveUtxo?.token?.category !== this.params.tokenCategory) return 'Reserve UTXO provided does not contain fiat token'
+    if (opts?.fee && this.options.version !== 'v3') {
+      return 'Provided fee on invalid transaction type or contract version'
+    }
 
     const priceMessageValid = verifyPriceMessage(
       opts?.priceMessage, opts?.priceMessageSig, this.params.oraclePublicKey, 
@@ -175,8 +193,9 @@ export class RedemptionContract {
     if (typeof priceData == 'string') return `Invalid price message: ${priceData}`
 
     const EXPECTED_TX_FEE = 1000n
+    const fee = opts?.fee ? BigInt(opts?.fee) : 0n;
     const tokenAmount = opts?.redeemUtxo?.token?.amount
-    const redeemSats = tokenToSatoshis(tokenAmount, priceData.price)
+    const redeemSats = tokenToSatoshis(tokenAmount, priceData.price) - fee;
 
     if (redeemSats < 546n) return 'Redeem amount too small'
 
@@ -189,7 +208,9 @@ export class RedemptionContract {
     const redeemUtxoTemplate = opts?.redeemUtxo?.template ??
       new SignatureTemplate(opts?.redeemUtxo?.wif)
 
-    const transaction = contract.functions.redeem(hexToBin(opts?.priceMessage), hexToBin(opts?.priceMessageSig))
+    const functionArgs = [hexToBin(opts?.priceMessage), hexToBin(opts?.priceMessageSig)];
+    if (this.options.version === 'v3') functionArgs.push(fee);
+    const transaction = contract.functions.redeem(...functionArgs)
       .from(opts?.reserveUtxo)
       .fromP2PKH(opts?.redeemUtxo, redeemUtxoTemplate)
       .to(contract.tokenAddress, remainingReserveSats, {

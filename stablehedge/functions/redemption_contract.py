@@ -133,10 +133,15 @@ def get_volume_data(
             except (TypeError, AttributeError, decimal.InvalidOperation) as exception:
                 LOGGER.exception(exception)
 
+    token_category_subquery = models.RedemptionContract.objects \
+        .filter(address=redemption_contract_address) \
+        .values("fiat_token__category")[:1]
+    token_category_filter = Q(redemption_contract__fiat_token__category=token_category_subquery)
+
     data = models.RedemptionContractTransaction.objects \
         .filter(
             *filter_args,
-            redemption_contract__address=redemption_contract_address,
+            token_category_filter,
             status=models.RedemptionContractTransaction.Status.SUCCESS,
             txid__isnull=False,
         ) \
