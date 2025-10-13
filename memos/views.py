@@ -61,7 +61,7 @@ class MemoView(APIView):
 		if qs.exists():
 			response = MemoSerializer(qs.first()).data
 		else:
-			return Response({'error': 'Memo not found'}, status=status.HTTP_404_NOT_FOUND)
+			return Response({'error': 'Memo not found'}, status=200)
 
 		return Response(response, status=200)
 
