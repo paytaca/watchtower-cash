@@ -4,13 +4,13 @@ from main.models import Project, WalletHistory, TransactionMetaAttribute
 
 
 def get_transactions_by_attributes(project_id, attribute_value):
-    project = Project.objects.get(id=project_id)
-    wallet_hashes = project.wallets.values('wallet_hash').distinct('wallet_hash')
-    meta_attributes = TransactionMetaAttribute.objects.filter(wallet_hash__in=wallet_hashes)
-    meta_attributes = meta_attributes.filter(value=attribute_value)
-    wallet_txids_with_attrs = meta_attributes.values('txid').distinct('txid')
-    transactions = WalletHistory.objects.filter(wallet__project_id=project.id)
-    return transactions.filter(txid__in=wallet_txids_with_attrs)
+    meta_attributes = TransactionMetaAttribute.objects.filter(value=attribute_value)
+    txids_with_attrs = meta_attributes.distinct('txid').values_list('txid', flat=True)
+    txids_with_attrs = list(txids_with_attrs)
+    return WalletHistory.objects.filter(
+        wallet__project_id=project_id,
+        txid__in=txids_with_attrs
+    )
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -55,7 +55,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             other_txns_count = {
                 'cashdrop_collect': cashdrop_collect_txns.count(),
                 'quest_nft_collect': quest_nft_collect_txns.count(),
-                'quest_payment': quest_payment_txns,
+                'quest_payment': quest_payment_txns.count(),
                 'vault_collect': vault_collect_txns.count(),
                 'vault_payment': vault_payment_txns.count(),
             }
