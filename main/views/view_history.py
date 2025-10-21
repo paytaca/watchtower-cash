@@ -108,6 +108,7 @@ class WalletHistoryView(APIView):
         responses={200: PaginatedWalletHistorySerializer},
         manual_parameters=[
             openapi.Parameter(name="page", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, default=1),
+            openapi.Parameter(name="page_size", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, default=10),
             openapi.Parameter(name="posid", type=openapi.TYPE_NUMBER, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default="all", enum=["incoming", "outgoing"]),
             openapi.Parameter(name="txids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
@@ -123,6 +124,7 @@ class WalletHistoryView(APIView):
         index = kwargs.get('index', None)
         txid = kwargs.get('txid', None)
         page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 10)
         record_type = request.query_params.get('type', 'all')
         posid = request.query_params.get("posid", None)
         txids = request.query_params.get("txids", "")
@@ -265,7 +267,7 @@ class WalletHistoryView(APIView):
             if wallet.version == 1:
                 return Response(data=history, status=status.HTTP_200_OK)
             else:
-                pages = Paginator(history, 10)
+                pages = Paginator(history, page_size)
                 page_obj = pages.page(int(page))
                 data = {
                     'history': page_obj.object_list,
