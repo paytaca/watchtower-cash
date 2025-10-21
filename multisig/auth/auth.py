@@ -227,12 +227,12 @@ class MultisigAuthentication(BaseAuthentication):
             if wallet_identifier.isdigit():
                 wallet = MultisigWallet.objects.prefetch_related('signers').filter(id = int(wallet_identifier)).first()
             else:
-                wallet = MultisigWallet.objects.prefetch_related('signers').filter(locking_bytecode=wallet_identifier).first()
+                wallet = MultisigWallet.objects.prefetch_related('signers').filter(wallet_hash=wallet_identifier).first()
         elif proposal_identifier:
             if proposal_identifier.isdigit():
                 wallet = MultisigWallet.objects.prefetch_related('signers').filter(multisigtransactionproposal__id=int(proposal_identifier)).first()
             else:
-                wallet = MultisigWallet.objects.prefetch_related('signers').filter(multisigtransactionproposal__locking_bytecode=proposal_identifier).first()        
+                wallet = MultisigWallet.objects.prefetch_related('signers').filter(multisigtransactionproposal__wallet_hash=proposal_identifier).first()        
         
         user = MultisigStatelessUser(wallet=wallet)
 
