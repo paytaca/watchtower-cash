@@ -358,6 +358,7 @@ export const generateFilename = multisigWallet => {
  */
 export const derivePublicKeys = ({ signers, addressDerivationPath = '0/0', bip67Sort = true }) => {
   const _signers = structuredClone(signers)
+  console.log('SIGNERS', _signers)
   const signersWithPublicKeys = _signers.map(signer => {
     const decodedHdPublicKey = decodeHdPublicKey(signer.xpub, addressDerivationPath)
     const { publicKey } = deriveHdPathRelative(decodedHdPublicKey.node, addressDerivationPath)
@@ -403,6 +404,7 @@ export const createWallet = ({ name, m, signers }) => {
  * @returns {string} - Locking bytecode at 0/0 in hex
  */
 export const getWalletUUID = multisigWallet => {
+  console.log('multisigwallet', multisigWallet)
   const lockingData = getLockingData({ signers: multisigWallet.signers, addressDerivationPath: '0/0' })
   const template = createTemplate({ ...multisigWallet })
   const lockingBytecode = getLockingBytecode({ lockingData, template, hex: true })

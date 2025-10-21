@@ -627,6 +627,7 @@ export class Pst {
         index: inputIndex,
         publicKey: inputUnlockingBytecode.data.bytecode[keyVariable],
         publicKeyBip32DerivationPath: this.inputs[inputIndex].addressPath || '0/0',
+        publicKeyRelativePath: this.inputs[inputIndex].addressPath || '0/0',
         publicKeyRedeemScriptSlot: Number(keyVariable.split('.')[0].replace('key','')),
         signer: signer.name,
         sigHash: value.slice(-1),
@@ -837,7 +838,8 @@ export class Pst {
       inputs: this.inputs,
       network: this.options?.provider?.network,
       wallet: this.wallet,
-      walletHash: getWalletHash(this.wallet)
+      walletHash: getWalletHash(this.wallet),
+      syncing: this.syncing
     }
 
     if (this.signedTransactionHash) {
@@ -882,7 +884,19 @@ export class Pst {
    */
   async save(sync) {
     if (!this.options?.store) return
+    console.log('this store', this.options.store)
     return await this.options.store.dispatch('multisig/savePst', { pst: this, sync })
+  }
+
+  /**
+   * @param {function} done - Optional callback to be called when syncing is done.
+   */
+  async sync(done) {
+ 
+    if (!this.options?.store) return
+    await this.options.store.dispatch('multisig/syncPst', { pst: this })
+    done?.()
+    
   }
 
   static fromObject(pst, options) {
