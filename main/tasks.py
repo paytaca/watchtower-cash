@@ -2592,7 +2592,6 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
         tx = NODE.BCH.build_tx_from_hex(tx_hex)
 
         output_addresses = []
-        tx
         for output in tx['vout']:
             if 'scriptPubKey' in output.keys():
                 if 'addresses' in output['scriptPubKey']:
@@ -2649,11 +2648,12 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
             tx_check = Transaction.objects.filter(txid=txid, index=index)
             if tx_check.exists():
-                ancestor_tx = NODE.BCH._get_raw_transaction(txid)
-                ancestor_spubkey = ancestor_tx['vout'][index]['scriptPubKey']
+                address = None
+                for tx in tx_check:
+                    if not tx.address: continue
+                    address = tx.address.address
 
-                if 'addresses' in ancestor_spubkey.keys():
-                    address = ancestor_spubkey['addresses'][0]
+                if address:
                     # save wallet history only if tx is associated with a wallet
                     if tx_check.first().wallet:
                         save_histories = True
