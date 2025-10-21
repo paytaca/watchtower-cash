@@ -2633,6 +2633,15 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
         save_histories = False
         inputs_data = []
 
+        inputs_filter = Q()
+        for _input in inputs:
+            inputs_filter = inputs_filter | models.Q(txid=_input['txid'], index=_input['vout'])
+        spent_transactions = Transaction.objects.filter(inputs_filter)
+
+        # Clear cache before marking as spent
+        clear_cache_for_spent_transactions(spent_transactions)
+        spent_transactions.update(spent=True, spending_txid=tx_hash)
+
         for _input in inputs:
             txid = _input['txid']
             value = round(_input['value'] * (10 ** 8))
@@ -2645,11 +2654,6 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                 if 'addresses' in ancestor_spubkey.keys():
                     address = ancestor_spubkey['addresses'][0]
-                    spent_transactions = Transaction.objects.filter(txid=txid, index=index)
-                    # Clear cache before marking as spent
-                    clear_cache_for_spent_transactions(spent_transactions)
-                    spent_transactions.update(spent=True, spending_txid=tx_hash)
-
                     # save wallet history only if tx is associated with a wallet
                     if tx_check.first().wallet:
                         save_histories = True
