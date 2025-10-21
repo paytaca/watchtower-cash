@@ -10,7 +10,8 @@ from .views import (
   BroadcastTransactionProposalView,
   FinalizeTransactionProposalView,
   TransactionProposalStatusView,
-  MultisigWalletUtxosView
+  MultisigWalletUtxosView,
+  MultisigWalletSyncView
 )
 
 urlpatterns = [
@@ -18,6 +19,7 @@ urlpatterns = [
     path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
     path('wallets/<str:wallet_identifier>/', MultisigWalletDetailView.as_view(), name='wallet_detail') ,
     path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),
+    path('wallets/<str:wallet_identifier>/sync/', MultisigWalletSyncView.as_view(), name='wallet-sync'),
     path('wallets/<str:wallet_identifier>/transaction-proposals/', MultisigTransactionProposalListCreateView.as_view(), name='transaction-proposal-list-create'),
     path('transaction-proposals/<str:proposal_identifier>/', MultisigTransactionProposalDetailView.as_view(), name='transaction-proposal-detail'),
     path('transaction-proposals/<str:proposal_identifier>/signatures/', SignaturesAddView.as_view(), name='transaction-proposal-signatures-add'),
