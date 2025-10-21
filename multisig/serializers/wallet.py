@@ -12,15 +12,15 @@ LOGGER = logging.getLogger(__name__)
 class SignerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Signer
-        fields = ['entity_key', 'xpub']
+        fields = ['xpub', 'name']
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
-    signers = SignerSerializer(many=True, read_only=True)
+    signers = SignerSerializer(many=True)
 
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'name', 'm', 'signers', 'created_at']
-        read_only_fields = ['signers', 'created_at']
+        fields = ['id', 'name', 'm', 'signers', 'networks', 'created_at']
+        read_only_fields = ['created_at']
     
     def create(self, validated_data):
         with transaction.atomic():
@@ -36,23 +36,24 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
                 defaults= {
                     'm': validated_data.get('m'),
                     'name': validated_data.get('name'),
-                    'wallet_hash': validated_data.get('wallet_hash')
+                    'wallet_hash': wallet_hash,
+                    'networks': validated_data.get('networks', { 'mainnet': {}, 'chipnet': {} } )
                 }
             )
             
             if created:
                 request = self.context.get('request')
                 for signer in signers:
-                    signer = Signer.objects.get_or_create(
+                    signer_instance, _ = Signer.objects.get_or_create(
                         wallet=wallet,
                         xpub=signer['xpub'],
                         name=signer['name']
                     )
                     if request:
                       uploader_pubkey = request.headers.get('X-Auth-PubKey')
-                      derived_public_key = derive_pubkey_from_xpub(signer.xpub, 0)
+                      derived_public_key = derive_pubkey_from_xpub(signer_instance.xpub, 0)
                       if uploader_pubkey == derived_public_key:
-                         wallet.created_by = signer
+                         wallet.created_by = signer_instance
                          wallet.save(update_fields=['created_by'])
             else:
                 if wallet.deleted_at:
