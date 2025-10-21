@@ -2655,12 +2655,10 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                 if address:
                     # save wallet history only if tx is associated with a wallet
-                    if tx_check.first().wallet:
+                    if tx_check.filter(wallet__isnull=False).exists():
                         save_histories = True
 
-                    subscription = Subscription.objects.filter(
-                        address__address=address
-                    )
+                    subscription = Subscription.objects.filter(address__address=address)
                     if subscription.exists():
                         inputs_data.append({
                             "token": "bch",
