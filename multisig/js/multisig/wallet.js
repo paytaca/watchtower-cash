@@ -131,12 +131,12 @@ import {
   hexToBin,
   sha256,
   cashAddressToLockingBytecode,
-  compileScript
+  compileScript,
+  base58AddressToLockingBytecode
 } from 'bitauth-libauth-v3'
 import Big from 'big.js'
 
 import { createTemplate } from './template.js'
-import { base58AddressToLockingBytecode } from '@bitauth/libauth'
 import { commonUtxoToLibauthInput, commonUtxoToLibauthOutput, selectUtxos } from './utxo.js'
 import { estimateFee, getMofNDustThreshold, MultisigTransactionBuilder, recipientsToLibauthTransactionOutputs } from './transaction-builder.js'
 import { Pst } from './pst.js'
