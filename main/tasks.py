@@ -2649,9 +2649,9 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
             tx_check = Transaction.objects.filter(txid=txid, index=index)
             if tx_check.exists():
                 address = None
-                for tx in tx_check:
-                    if not tx.address: continue
-                    address = tx.address.address
+                for _tx in tx_check:
+                    if not _tx.address: continue
+                    address = _tx.address.address
 
                 if address:
                     # save wallet history only if tx is associated with a wallet
