@@ -6,8 +6,9 @@ from django.utils import timezone
 from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import (
-    Q, Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery, IntegerField, Avg, Value
+    Q, Count, F, ExpressionWrapper, DecimalField, Case, Func, When, OuterRef, Subquery, IntegerField, Avg
 )
+from django.db.models.functions import Coalesce
 from django.conf import settings
 from django.views import View
 from django.shortcuts import render
@@ -89,20 +90,8 @@ class CashInAdViewSet(viewsets.GenericViewSet):
             )
         )
 
-        # Annotate owner's average rating for sorting
-        avg_rating_subq = models.OrderFeedback.objects.filter(
-            to_peer=OuterRef('owner')
-        ).values('to_peer').annotate(avg=Avg('rating')).values('avg')[:1]
-        queryset = queryset.annotate(owner_rating=Subquery(avg_rating_subq))
-
-        # Annotate owner's trade count for sorting
-        trade_count_subq = models.Order.objects.filter(
-            Q(ad_snapshot__ad__owner=OuterRef('owner')) | Q(owner=OuterRef('owner'))
-        ).values('ad_snapshot__ad__owner').annotate(cnt=Count('id')).values('cnt')[:1]
-        queryset = queryset.annotate(owner_trade_count=Subquery(trade_count_subq))
-
-        # prioritize ads with higher ratings and more trades, then online ads
-        queryset = queryset.order_by('-owner_rating', '-owner_trade_count', '-last_online_at', 'price')
+        # prioritize online ads
+        queryset = queryset.order_by('-last_online_at', 'price')
         
         # fetch related payment methods
         ads_with_payment_methods = queryset.prefetch_related('payment_methods')
@@ -152,10 +141,11 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         '''
         wallet_hash = request.query_params.get('wallet_hash')
         currency = request.query_params.get('currency')
+        order_by = request.query_params.get('order_by')
 
         try: 
             currency = models.FiatCurrency.objects.get(symbol=currency)
-            queryset = self.get_queryset(currency, wallet_hash)
+            queryset = self.get_queryset(currency, wallet_hash, order_by)
             queryset = self.filter_preset_available_ads(queryset, currency)
 
             # Count ads per payment_type
@@ -188,12 +178,13 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         currency = request.query_params.get('currency')
         by_fiat = request.query_params.get('by_fiat')
         by_fiat = by_fiat == 'true'
+        order_by = request.query_params.get('order_by')
 
         try:
             fiat = models.FiatCurrency.objects.get(symbol=currency)
             bch = models.CryptoCurrency.objects.get(symbol="BCH")
 
-            queryset = self.get_queryset(fiat, wallet_hash)
+            queryset = self.get_queryset(fiat, wallet_hash, order_by)
             queryset = queryset.filter(payment_methods__payment_type_id=payment_type_id)
 
             ads_by_amount = {}
@@ -246,7 +237,7 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         except (models.PaymentMethod.DoesNotExist, models.FiatCurrency.DoesNotExist) as err:
             return Response({'error': err.args[0]}, status=status.HTTP_400_BAD_REQUEST)    
 
-    def get_queryset(self, currency, wallet_hash):
+    def get_queryset(self, currency, wallet_hash, order_by=None):
         ''' Retrieves the viewset queryset. Filters public SELL ads of a given currency, excluding ads 
         created by caller (wallet_hash), and ads with owners offline for more than 24 hours. '''
 
@@ -280,20 +271,31 @@ class CashInAdViewSet(viewsets.GenericViewSet):
         queryset = queryset.annotate(last_online_at=F('owner__last_online_at'))
         queryset = queryset.filter(last_online_at__gte=timezone.now() - timedelta(days=1))
 
-        # Annotate owner's average rating for sorting
-        avg_rating_subq = models.OrderFeedback.objects.filter(
-            to_peer=OuterRef('owner')
-        ).values('to_peer').annotate(avg=Avg('rating')).values('avg')[:1]
-        queryset = queryset.annotate(owner_rating=Subquery(avg_rating_subq))
+        # Apply smart ordering if order_by=priority
+        if order_by == 'priority':
+            # Annotate owner's average rating for sorting (NULL ratings treated as 0)
+            avg_rating_subq = models.OrderFeedback.objects.filter(
+                to_peer=OuterRef('owner')
+            ).values('to_peer').annotate(avg=Avg('rating')).values('avg')[:1]
+            queryset = queryset.annotate(
+                owner_rating_raw=Subquery(avg_rating_subq),
+                owner_rating=Coalesce(Subquery(avg_rating_subq), 0.0)
+            )
 
-        # Annotate owner's trade count for sorting
-        trade_count_subq = models.Order.objects.filter(
-            Q(ad_snapshot__ad__owner=OuterRef('owner')) | Q(owner=OuterRef('owner'))
-        ).values('ad_snapshot__ad__owner').annotate(cnt=Count('id')).values('cnt')[:1]
-        queryset = queryset.annotate(owner_trade_count=Subquery(trade_count_subq))
+            # Annotate owner's trade count for sorting (NULL counts treated as 0)
+            trade_count_subq = models.Order.objects.filter(
+                Q(ad_snapshot__ad__owner=OuterRef('owner')) | Q(owner=OuterRef('owner'))
+            ).values('ad_snapshot__ad__owner').annotate(cnt=Count('id')).values('cnt')[:1]
+            queryset = queryset.annotate(
+                owner_trade_count_raw=Subquery(trade_count_subq),
+                owner_trade_count=Coalesce(Subquery(trade_count_subq), 0)
+            )
 
-        # prioritize ads with higher ratings and more trades, then best price and recently online
-        queryset = queryset.order_by('-owner_rating', '-owner_trade_count', 'price', '-last_online_at')
+            # prioritize ads with higher ratings and more trades, then best price and recently online
+            queryset = queryset.order_by('-owner_rating', '-owner_trade_count', 'price', '-last_online_at')
+        else:
+            # Default ordering by price and online status
+            queryset = queryset.order_by('price', '-last_online_at')
 
         return queryset
     
@@ -446,6 +448,7 @@ class AdViewSet(viewsets.GenericViewSet):
             payment_types = request.query_params.getlist('payment_types')
             time_limits = request.query_params.getlist('time_limits')
             price_order = request.query_params.get('price_order')
+            order_by = request.query_params.get('order_by')
             query_name = request.query_params.get('query_name')
             order_amount = request.query_params.get('order_amount')
             order_amount_currency = request.query_params.get('order_amount_currency')
@@ -533,28 +536,40 @@ class AdViewSet(viewsets.GenericViewSet):
 
             ''' Orders ads by price (if owned=True) or by created_at (if owned=False).
                 Default order is ascending, descending if trade type is BUY. 
-                price_order filter overrides this order '''
+                price_order filter overrides this order.
+                If order_by=priority, smart ordering is applied prioritizing rating and trade count. '''
             if not owned:
-                # Annotate owner's average rating for sorting
-                avg_rating_subq = models.OrderFeedback.objects.filter(
-                    to_peer=OuterRef('owner')
-                ).values('to_peer').annotate(avg=Avg('rating')).values('avg')[:1]
-                queryset = queryset.annotate(owner_rating=Subquery(avg_rating_subq))
-
-                # Annotate owner's trade count for sorting
-                trade_count_subq = models.Order.objects.filter(
-                    Q(ad_snapshot__ad__owner=OuterRef('owner')) | Q(owner=OuterRef('owner'))
-                ).values('ad_snapshot__ad__owner').annotate(cnt=Count('id')).values('cnt')[:1]
-                queryset = queryset.annotate(owner_trade_count=Subquery(trade_count_subq))
-
                 order_field = 'price'
                 if trade_type == models.TradeType.BUY: 
                     order_field = '-price'
                 if price_order is not None:
                     order_field = 'price' if price_order == 'ascending' else '-price'
                 
-                # Prioritize by rating and trade count first, then by price
-                queryset = queryset.order_by('-owner_rating', '-owner_trade_count', order_field, 'created_at')
+                # Apply smart ordering if order_by=priority
+                if order_by == 'priority':
+                    # Annotate owner's average rating for sorting (NULL ratings treated as 0)
+                    avg_rating_subq = models.OrderFeedback.objects.filter(
+                        to_peer=OuterRef('owner')
+                    ).values('to_peer').annotate(avg=Avg('rating')).values('avg')[:1]
+                    queryset = queryset.annotate(
+                        owner_rating_raw=Subquery(avg_rating_subq),
+                        owner_rating=Coalesce(Subquery(avg_rating_subq), 0.0)
+                    )
+
+                    # Annotate owner's trade count for sorting (NULL counts treated as 0)
+                    trade_count_subq = models.Order.objects.filter(
+                        Q(ad_snapshot__ad__owner=OuterRef('owner')) | Q(owner=OuterRef('owner'))
+                    ).values('ad_snapshot__ad__owner').annotate(cnt=Count('id')).values('cnt')[:1]
+                    queryset = queryset.annotate(
+                        owner_trade_count_raw=Subquery(trade_count_subq),
+                        owner_trade_count=Coalesce(Subquery(trade_count_subq), 0)
+                    )
+
+                    # Prioritize by rating and trade count first, then by price
+                    queryset = queryset.order_by('-owner_rating', '-owner_trade_count', order_field, 'created_at')
+                else:
+                    # Default ordering by price and creation date
+                    queryset = queryset.order_by(order_field, 'created_at')
             else:
                 queryset = queryset.filter(Q(owner__wallet_hash=wallet_hash)).order_by('-created_at')
 
