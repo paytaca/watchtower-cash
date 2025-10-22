@@ -10,26 +10,33 @@ from ..js_client import get_wallet_hash
 LOGGER = logging.getLogger(__name__)
 
 class SignerSerializer(serializers.ModelSerializer):
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     class Meta:
         model = Signer
-        fields = ['xpub', 'name']
+        fields = ['xpub', 'name', 'createdAt', 'updatedAt']
+       
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
     signers = SignerSerializer(many=True)
-
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'name', 'm', 'signers', 'networks', 'created_at']
-        read_only_fields = ['created_at']
-    
+        fields = ['id', 'name', 'm', 'signers', 'networks', 'createdAt', 'updatedAt']
+        
     def create(self, validated_data):
         with transaction.atomic():
             signers = validated_data.get('signers')
-            wallet_hash = get_wallet_hash({
+
+            get_wallet_hash_response = get_wallet_hash({
                'name': validated_data.get('name'),
                'm': validated_data.get('m'),
                'signers': signers
             })
+
+            wallet_hash = get_wallet_hash_response.json().get('walletHash')
 
             wallet, created = MultisigWallet.objects.get_or_create(
                 wallet_hash=wallet_hash,
