@@ -588,7 +588,7 @@ class WalletHistoryQuerySet(PostgresQuerySet):
 
         if raw_pos_id is not None:
             vault_payments = TransactionMetaAttribute.objects.filter(
-                key=f'vault_payment_{raw_pos_id}',
+                key__startswith=f'vault_payment_{raw_pos_id}',
                 wallet_hash=wallet_hash
             ).values('txid')
             filter_arg |= Q(txid__in=vault_payments)

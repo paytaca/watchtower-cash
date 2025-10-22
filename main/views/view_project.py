@@ -21,6 +21,13 @@ import logging
 LOGGER = logging.getLogger(__name__)
 
 
+@swagger_auto_schema(
+    responses={ 200: ProjectSerializer },
+    manual_parameters=[
+        openapi.Parameter(name="wallet_hash", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default=None),
+        openapi.Parameter(name="basis_date", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, default=None),
+    ]    
+)
 class ProjectViewSet(
     viewsets.GenericViewSet,
     mixins.ListModelMixin,
