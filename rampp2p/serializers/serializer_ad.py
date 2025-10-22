@@ -182,7 +182,8 @@ class BaseAdSerializer(serializers.ModelSerializer):
             'trade_ceiling',
             'trade_amount',
             'trade_limits_in_fiat',
-            'appeal_cooldown'
+            'appeal_cooldown',
+            'description'
         ]
     
     def get_appeal_cooldown(self, instance: models.Ad):
@@ -368,6 +369,7 @@ class WriteAdSerializer(serializers.ModelSerializer):
     trade_amount_in_fiat = serializers.BooleanField(required=False)
 
     instructions = serializers.CharField(required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
 
     fiat_currency = serializers.PrimaryKeyRelatedField(queryset=models.FiatCurrency.objects.all(), required=False)
     crypto_currency = serializers.PrimaryKeyRelatedField(queryset=models.CryptoCurrency.objects.all(), required=False)
@@ -394,6 +396,7 @@ class WriteAdSerializer(serializers.ModelSerializer):
             'trade_limits_in_fiat',
             'trade_amount_in_fiat',
             'instructions',
+            'description',
             'fiat_currency',
             'crypto_currency',
             'appeal_cooldown_choice',
