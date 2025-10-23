@@ -21,6 +21,7 @@ from .utils.protobuf import (
     deserialize_payment_pb,
 )
 from .utils.notification import send_invoice_push_notification
+from .utils.websocket import send_invoice_payment_update
 
 from .utils.verify import (
     VerifyError,
@@ -174,6 +175,9 @@ class InvoicePaymentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     broadcast_response.get("error", "Failed to broadcast transaction")
                 )
+
+        # Send WebSocket notification to connected clients
+        send_invoice_payment_update(self.invoice, instance)
 
         return instance
 

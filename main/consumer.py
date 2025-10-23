@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class Consumer(WebsocketConsumer):
+    """
+    SECURITY: This consumer is READ-ONLY. It does not implement receive() to prevent
+    clients from sending fake transaction updates that could be relayed to others.
+    """
 
     def connect(self):
         self.wallet_hash = self.scope['url_route']['kwargs'].get('wallet_hash')

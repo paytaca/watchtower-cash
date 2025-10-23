@@ -583,6 +583,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
+        },
+        'jpp': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
         }
     },
 }

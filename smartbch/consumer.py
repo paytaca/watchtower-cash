@@ -81,6 +81,10 @@ class ConsumerAddressCounter:
 
 
 class TransactionTransferUpdatesConsumer(WebsocketConsumer):
+    """
+    SECURITY: This consumer is READ-ONLY. It does not implement receive() to prevent
+    clients from sending fake transaction updates that could be relayed to others.
+    """
     CONTRACT_ADDRESS_LOOKUP_NAME = "contract_address"
 
     def connect(self):

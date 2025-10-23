@@ -58,6 +58,29 @@
       display: flex;
       align-items: center;
     }
+    .payment-status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 5px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .payment-status.paid {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .payment-status.pending {
+      background-color: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeaa7;
+    }
+    .payment-details {
+      margin-top: 10px;
+      font-size: 14px;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
@@ -73,6 +96,10 @@
         <span>Expires in:</span>
         <span id="timer"></span>
       </div>
+      <div id="payment-status" class="payment-status pending" style="display: none;">
+        <div id="status-text">Awaiting Payment...</div>
+        <div id="payment-details" class="payment-details"></div>
+      </div>
     </div>
   </div>
   <div class="footer">
@@ -85,6 +112,61 @@
   </div>
   <script type="text/javascript">
     new QRCode(document.getElementById("qrcode"), "{{ url }}");
+  </script>
+  <script>
+    // WebSocket connection for real-time payment updates
+    (function() {
+      const invoiceUuid = "{{ invoice.uuid.hex }}";
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/jpp/invoice/${invoiceUuid}/`;
+      
+      console.log('Connecting to WebSocket:', wsUrl);
+      const ws = new WebSocket(wsUrl);
+      
+      ws.onopen = function() {
+        console.log('WebSocket connected - listening for payment updates');
+        document.getElementById('payment-status').style.display = 'block';
+      };
+      
+      ws.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        console.log('Payment update received:', data);
+        
+        if (data.type === 'payment_received') {
+          const statusDiv = document.getElementById('payment-status');
+          const statusText = document.getElementById('status-text');
+          const paymentDetails = document.getElementById('payment-details');
+          
+          statusDiv.classList.remove('pending');
+          statusDiv.classList.add('paid');
+          statusText.textContent = '✓ Payment Received!';
+          
+          let detailsHtml = `<div>Transaction ID: ${data.txid.substring(0, 20)}...${data.txid.substring(data.txid.length - 20)}</div>`;
+          if (data.memo) {
+            detailsHtml += `<div>Memo: ${data.memo}</div>`;
+          }
+          detailsHtml += `<div>Time: ${new Date(data.paid_at).toLocaleString()}</div>`;
+          
+          paymentDetails.innerHTML = detailsHtml;
+          
+          // Optionally hide QR code after payment
+          document.getElementById('qrcode').style.opacity = '0.3';
+        }
+      };
+      
+      ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+      };
+      
+      ws.onclose = function() {
+        console.log('WebSocket disconnected');
+      };
+      
+      // Clean up on page unload
+      window.addEventListener('beforeunload', function() {
+        ws.close();
+      });
+    })();
   </script>
   <script>
     function padNumDigits(num, digits=2) {
