@@ -27,7 +27,7 @@ def send_invoice_payment_update(invoice_obj, payment_obj):
             'invoice': serializer.data,
             'txid': payment_obj.txid,
             'paid_at': str(payment_obj.paid_at),
-            'memo': payment_obj.memo,
+            'memo': payment_obj.memo or invoice_obj.memo,  # Fall back to invoice memo if payment memo is null
         }
         
         logger.info(f"Sending WebSocket update for invoice {invoice_obj.uuid.hex}, txid: {payment_obj.txid}")

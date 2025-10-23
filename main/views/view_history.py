@@ -211,27 +211,17 @@ class WalletHistoryView(APIView):
                             )
                         )
 
-                    history = history.rename_annotations(
-                        _token='token_id_or_category'
-                    ).values(
-                        'record_type',
-                        'txid',
-                        'amount',
-                        'token',
-                        'tx_fee',
-                        'senders',
-                        'recipients',
-                        'date_created',
-                        'tx_timestamp',
-                        'usd_price',
-                        'market_prices',
-                        'attributes',
-                    )
-                else:
-                    qs = qs.filter(token__tokenid=token_id_or_category)
-
-                    history = qs.annotate(
-                        _token=F('token__tokenid')
+                    from memos.models import Memo
+                    from django.db.models import Subquery, OuterRef
+                    
+                    # Subquery to get encrypted memo for each transaction
+                    memo_subquery = Memo.objects.filter(
+                        txid=OuterRef('txid'),
+                        wallet_hash=wallet_hash
+                    ).values('note')[:1]
+                    
+                    history = history.annotate(
+                        encrypted_memo=Subquery(memo_subquery)
                     ).rename_annotations(
                         _token='token_id_or_category'
                     ).values(
@@ -247,10 +237,54 @@ class WalletHistoryView(APIView):
                         'usd_price',
                         'market_prices',
                         'attributes',
+                        'encrypted_memo',
+                    )
+                else:
+                    from memos.models import Memo
+                    from django.db.models import Subquery, OuterRef
+                    
+                    # Subquery to get encrypted memo for each transaction
+                    memo_subquery = Memo.objects.filter(
+                        txid=OuterRef('txid'),
+                        wallet_hash=wallet_hash
+                    ).values('note')[:1]
+                    
+                    qs = qs.filter(token__tokenid=token_id_or_category)
+
+                    history = qs.annotate(
+                        _token=F('token__tokenid'),
+                        encrypted_memo=Subquery(memo_subquery)
+                    ).rename_annotations(
+                        _token='token_id_or_category'
+                    ).values(
+                        'record_type',
+                        'txid',
+                        'amount',
+                        'token',
+                        'tx_fee',
+                        'senders',
+                        'recipients',
+                        'date_created',
+                        'tx_timestamp',
+                        'usd_price',
+                        'market_prices',
+                        'attributes',
+                        'encrypted_memo',
                     )
             else:
+                from memos.models import Memo
+                from django.db.models import Subquery, OuterRef
+                
+                # Subquery to get encrypted memo for each transaction
+                memo_subquery = Memo.objects.filter(
+                    txid=OuterRef('txid'),
+                    wallet_hash=wallet_hash
+                ).values('note')[:1]
+                
                 qs = qs.filter(token__name='bch')
-                history = qs.values(
+                history = qs.annotate(
+                    encrypted_memo=Subquery(memo_subquery)
+                ).values(
                     'record_type',
                     'txid',
                     'amount',
@@ -262,6 +296,7 @@ class WalletHistoryView(APIView):
                     'usd_price',
                     'market_prices',
                     'attributes',
+                    'encrypted_memo',
                 )
 
             if wallet.version == 1:
