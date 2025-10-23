@@ -248,11 +248,10 @@ class InvoiceViewSet(
     )
 
     renderer_classes = [
+        renderers.JSONRenderer,
         BitPayPaymentOptionsRenderer,
         BitPayPaymentRequestRenderer,
         BComPaymentRequestRenderer,
-        renderers.TemplateHTMLRenderer,
-        *api_settings.DEFAULT_RENDERER_CLASSES,
     ]
 
     def get_accept_list(self):
@@ -269,6 +268,8 @@ class InvoiceViewSet(
     def retrieve(self, request, *args, **kwargs):
         accepts = self.get_accept_list()
         instance = self.get_object()
+        
+        # Check for specific payment protocol media types first
         if MediaTypes.BitPay.PaymentOptions in accepts:
             instance_url = instance.get_absolute_uri(
                 self.request, url_type=Invoice.URL_TYPE_BITPAY,
@@ -282,13 +283,8 @@ class InvoiceViewSet(
             payment_request_pb = serialize_invoice(instance, payment_url=instance_url)
             data = payment_request_pb.SerializeToString()
             return Response(data=data)
-        elif renderers.TemplateHTMLRenderer.media_type in accepts:
-            instance_url = instance.get_absolute_uri(
-                self.request, url_type=Invoice.URL_TYPE_BITPAY,
-            )
-            data = { "invoice": instance, "url": instance_url }
-            return Response(data, template_name='jpp/invoice.html')
 
+        # Default to JSON response for all other cases (including browser access)
         return super().retrieve(request, *args, **kwargs)
 
 
