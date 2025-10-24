@@ -5,11 +5,12 @@ from multisig.models.wallet import Signer, MultisigWallet
 class Pst(models.Model):
     name = models.CharField(max_length=255)
     purpose = models.TextField()
+    unsigned_transaction_hash = models.CharField(max_length=100, null=True, blank=True)
     unsigned_transaction_hex = models.TextField()
     signed_transaction_hex=models.TextField()
     txid = models.CharField(max_length=64, null=True, blank=True, help_text='Transaction ID after broadcast')
     wallet = models.ForeignKey(MultisigWallet, related_name='psts', on_delete=models.CASCADE)
-    creator = models.ForeignKey(Signer, on_delete=models.SET_NULL, blank=True, null=True)
+    uploader = models.ForeignKey(Signer, on_delete=models.SET_NULL, blank=True, null=True)
 
     class BroadcastStatus(models.TextChoices):
         PENDING = "pending", "pending"
@@ -34,7 +35,7 @@ class SourceOutputToken(models.Model):
     nft = models.OneToOneField(SourceOutputTokenNft, on_delete=models.SET_NULL, null=True, blank=True)
 
 class SourceOutput(models.Model):
-    value_satoshis = models.PositiveBigIntegerField()
+    value_satoshis = models.BigIntegerField()
     token = models.OneToOneField(SourceOutputToken, on_delete=models.SET_NULL, null=True, blank=True)
     locking_bytecode = models.CharField(max_length=150)
 
@@ -43,7 +44,7 @@ class Input(models.Model):
     index = models.PositiveSmallIntegerField(help_text='Input index in the transaction')
     outpoint_index = models.PositiveSmallIntegerField()
     outpoint_transaction_hash = models.CharField(max_length=64)
-    sequence_number = models.PositiveBigIntegerField()
+    sequence_number = models.BigIntegerField()
     source_output = models.OneToOneField(SourceOutput, on_delete=models.SET_NULL, null=True, blank=True)
     locking_bytecode_relative_path = models.CharField(max_length=5, help_text='This is the source output\'s address relative-path')
 
@@ -52,7 +53,7 @@ class Output(models.Model):
     index = models.PositiveSmallIntegerField(help_text='Output index in the transaction')
     locking_bytecode = models.CharField(max_length=150)
     locking_bytecode_relative_path = models.CharField(max_length=5, help_text='BIP32 path relative to the account')
-    value_satoshis = models.PositiveBigIntegerField()
+    value_satoshis = models.BigIntegerField()
     token = models.OneToOneField(SourceOutputToken, on_delete=models.SET_NULL, null=True, blank=True)
     purpose = models.CharField(max_length=80, blank=True, null=True, help_text='E.g. change')
 
