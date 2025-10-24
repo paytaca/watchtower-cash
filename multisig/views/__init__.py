@@ -5,14 +5,19 @@ from .transaction_proposal import (
     SignerSignaturesAddView,
     BroadcastTransactionProposalView,
     FinalizeTransactionProposalView,
-    TransactionProposalStatusView
+    TransactionProposalStatusView,
 )
 
 from .wallet import (
     MultisigWalletListCreateView,
     MultisigWalletDetailView,
     RenameMultisigWalletView,
-    MultisigWalletUtxosView
+    MultisigWalletUtxosView,
+    MultisigWalletSyncView,
+)
+
+from .pst import (
+    PstSyncView
 )
 
 __all__ = [
@@ -26,5 +31,7 @@ __all__ = [
     "MultisigWalletListCreateView",
     "MultisigWalletDetailView",
     "RenameMultisigWalletView"
-    "MultisigWalletUtxosView"
+    "MultisigWalletUtxosView",
+    "MultisigWalletSyncView",
+    "PstSyncView"
 ]
