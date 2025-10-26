@@ -24,6 +24,19 @@ class WalletPreferencesViewSet(
     def get_queryset(self):
         return self.get_model().objects.prefetch_related("wallet").all()
 
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            self.get_object()
+        except Http404:
+            wallet_hash = self.kwargs[self.lookup_field]
+            try:
+                wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+                self.get_model().objects.get_or_create(wallet=wallet)
+            except Wallet.DoesNotExist:
+                raise Http404
+
+        return super().retrieve(request, *args, **kwargs)
+
     def update(self, request, *args, **kwargs):
         try:
             self.get_object()
