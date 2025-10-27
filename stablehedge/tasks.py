@@ -2,6 +2,7 @@ import time
 import json
 from celery import shared_task
 from django.conf import settings
+from bitcash import Key
 
 from stablehedge import models
 from stablehedge.apps import LOGGER
@@ -300,8 +301,9 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
                 funding_utxo,
                 dict(
                     txid="0" * 64, vout=0, satoshis=funding_amounts["longFundingSats"],
-                    lockingBytecode="0" * 50, # p2pkh locking bytecode length = 25 bytes
-                    unlockingBytecode="0" * (98 * 2), # 65 byte schnorr signature + 33 byte pubkey
+                    wif = Key().to_wif(),
+                    # lockingBytecode="0" * 50, # p2pkh locking bytecode length = 25 bytes
+                    # unlockingBytecode="0" * (98 * 2), # 65 byte schnorr signature + 33 byte pubkey
                 ),
             ],
             outputs=ScriptFunctions.getContractDataOutputs(dict(contractData=contract_data))["outputs"],
@@ -386,6 +388,7 @@ def rebalance_funds(treasury_contract_address:str):
         if transferrable > required_sats:
             satoshis_to_transfer = int(required_sats)
 
+        LOGGER.debug(f"REBALANCE | {treasury_contract_address} | TRANSFERRING {satoshis_to_transfer} satoshis")
         result = transfer_treasury_funds_to_redemption_contract(
             treasury_contract_address, satoshis=satoshis_to_transfer
         )
