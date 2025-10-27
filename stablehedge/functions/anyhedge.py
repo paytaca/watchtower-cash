@@ -24,6 +24,8 @@ from stablehedge.utils.transaction import (
 from stablehedge.js.runner import ScriptFunctions
 
 from .treasury_contract import (
+    get_treasury_contract_shorting_rules,
+    get_latest_short_or_deposit,
     get_spendable_sats,
     get_unallocated_reserve_sats,
     find_single_bch_utxo,
@@ -67,6 +69,32 @@ DUST_SATS = 546
 MINIMUM_BALANCE_FOR_SHORT = DUST_SATS + (DUST_SATS / MAX_PREMIUM_PCTG) + \
                             HEDGE_FUNDING_NETWORK_FEES + \
                             SETTLEMENT_SERVICE_FEE
+
+
+def validate_treasury_contract_for_shorting(treasury_contract):
+    rules = get_treasury_contract_shorting_rules(treasury_contract)
+    min_sats = rules["min_sats"]
+    min_interval = rules["minimum_interval"]
+
+    balance_data = get_spendable_sats(treasury_contract.address)
+    spendable = balance_data["spendable"]
+    actual_min_sats = max(min_sats, MINIMUM_BALANCE_FOR_SHORT)
+
+    if actual_min_sats and spendable >= actual_min_sats:
+        return dict(valid=True, message="Balance met")
+
+    if not min_interval:
+        return dict(valid=True, message="Balance not met", min_sats=actual_min_sats, spendable=spendable)
+
+    last_deposit = get_latest_short_or_deposit(treasury_contract)
+
+    if not last_deposit:
+        return dict(valid=True, message="Min Interval met")
+
+    if (last_deposit + min_interval) <= timezone.now():
+        return dict(valid=True, message="Min Interval met")
+
+    return dict(valid=False, message="No condition met")
 
 
 def get_or_create_short_proposal(treasury_contract_address:str):

@@ -114,14 +114,8 @@ def resolve_transaction(obj: models.RedemptionContractTransaction):
             obj.transaction_type == models.RedemptionContractTransaction.Type.DEPOSIT and \
             obj.redemption_contract.treasury_contract_address:
 
-            try:
-                min_sats = obj.redemption_contract.treasury_contract.short_position_rule.target_satoshis
-            except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
-                min_sats = 10 ** 8
-
             result = check_and_short_funds(
                 obj.redemption_contract.treasury_contract_address,
-                min_sats=min_sats,
                 background_task=True,
             )
             LOGGER.info(f"RedemptionContractTransaction#{obj.id} | SHORT PROPOSAL | {result}")

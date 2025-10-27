@@ -11,6 +11,7 @@ from stablehedge.functions.anyhedge import (
     AnyhedgeException,
     StablehedgeException,
     MINIMUM_BALANCE_FOR_SHORT,
+    validate_treasury_contract_for_shorting,
     get_short_contract_proposal,
     create_short_proposal,
     create_short_contract,
@@ -44,15 +45,14 @@ _QUEUE_TREASURY_CONTRACT = "stablehedge__treasury_contract"
 
 def check_and_short_funds(
     treasury_contract_address:str,
-    min_sats:int=10 ** 8,
+    force:bool=False,
     background_task:bool=False,
 ):
-    balance_data = get_spendable_sats(treasury_contract_address)
-    spendable = balance_data["spendable"]
-    
-    actual_min_sats = max(min_sats, MINIMUM_BALANCE_FOR_SHORT)
-    if not spendable or spendable < actual_min_sats:
-        return dict(success=True, message="Balance not met", min_sats=actual_min_sats, spendable=spendable)
+    if not force:
+        treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+        validation_result = validate_treasury_contract_for_shorting(treasury_contract)
+        if not validation_result["valid"]:
+            return validation_result
 
     LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | ATTEMPT RUN")
     if background_task:
@@ -67,17 +67,7 @@ def check_and_short_funds(
 def check_treasury_contract_short():
     results = []
     for treasury_contract in models.TreasuryContract.objects.filter():
-        try:
-            min_sats = treasury_contract.short_position_rule.target_satoshis
-        except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
-            min_sats = 10 ** 8
-
-        result = check_and_short_funds(
-            treasury_contract.address,
-            min_sats=min_sats,
-            background_task=True,
-        )
-
+        result = check_and_short_funds(treasury_contract.address, background_task=True)
         results.append(
             (treasury_contract.address, result),
         )
