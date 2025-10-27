@@ -83,15 +83,17 @@ def validate_treasury_contract_for_shorting(treasury_contract):
     if actual_min_sats and spendable >= actual_min_sats:
         return dict(valid=True, message="Balance met")
 
-    if not min_interval:
-        return dict(valid=True, message="Balance not met", min_sats=actual_min_sats, spendable=spendable)
+    if spendable < MINIMUM_BALANCE_FOR_SHORT or not min_interval:
+        return dict(valid=False, message="Balance not met", min_sats=actual_min_sats, spendable=spendable)
 
     last_deposit = get_latest_short_or_deposit(treasury_contract)
 
     if not last_deposit:
-        return dict(valid=True, message="Min Interval met")
+        return dict(valid=False, message="Min Interval met")
 
-    if (last_deposit + min_interval) <= timezone.now():
+    now = timezone.now()
+    LOGGER.debug(f"Treasury Contract Min Interval Validate | {treasury_contract.address} | {last_deposit + min_interval} <= {now}")
+    if (last_deposit + min_interval) <= now:
         return dict(valid=True, message="Min Interval met")
 
     return dict(valid=False, message="No condition met")

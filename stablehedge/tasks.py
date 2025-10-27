@@ -54,7 +54,7 @@ def check_and_short_funds(
         if not validation_result["valid"]:
             return validation_result
 
-    LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | ATTEMPT RUN")
+    LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | ATTEMPT RUN | {validation_result}")
     if background_task:
         task = short_treasury_contract_funds.delay(treasury_contract_address)
         result = dict(success=True, task_id=task.id)
