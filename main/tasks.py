@@ -86,9 +86,10 @@ def send_telegram_message(message, chat_id):
 
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
-def client_acknowledgement(self, txid):
-    this_transaction = Transaction.objects.filter(id=txid)
-    third_parties = []
+def client_acknowledgement(self, tx_obj_id):
+    LOGGER.info(f"Client ACK: Transaction#{tx_obj_id}")
+
+    this_transaction = Transaction.objects.filter(id=tx_obj_id)
     if this_transaction.exists():
         transaction = this_transaction.first()
         block = None
@@ -246,8 +247,6 @@ def client_acknowledgement(self, txid):
                                 "data": data
                             }
                         )
-
-    return third_parties
 
 
 def get_cashtoken_meta_data(
