@@ -81,8 +81,8 @@ export class RedemptionContract {
     const artifact = RedemptionContract.getArtifact(this.options.version);
     const contract = new Contract(artifact, this.contractParameters, opts);
 
-    if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
-    if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
+    // if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
+    // if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
 
     return contract
   }
