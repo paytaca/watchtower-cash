@@ -138,7 +138,6 @@ export function getContractParamBytecodes(contractData) {
   
   const { artifact } = getArtifact({ version: contractData.version })
   const bytecodesHex = encodeParameterBytecode(artifact, parameters);
-  bytecodesHex.reverse();
   return {
     bytecodesHex,
     shortMutualRedeemPublicKey: bytecodesHex[0],
