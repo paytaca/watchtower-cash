@@ -323,6 +323,6 @@ class TreasuryContractShortPositionRule(models.Model):
 
     minimum_interval = models.DurationField(
         default=timedelta(seconds=0),
-        help_text="Set a duration since last short/deposit to short again, even if target satoshis is not met",
+        help_text="Field format DD HH:mm:ss. Set a duration since last short maturity or deposit to short again, even if target satoshis is not met",
     )
     # may add more columns for more complex rules

@@ -48,6 +48,7 @@ def check_and_short_funds(
     force:bool=False,
     background_task:bool=False,
 ):
+    validation_result = dict(force=force)
     if not force:
         treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
         validation_result = validate_treasury_contract_for_shorting(treasury_contract)

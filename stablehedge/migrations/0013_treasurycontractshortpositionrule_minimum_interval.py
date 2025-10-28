@@ -14,6 +14,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='treasurycontractshortpositionrule',
             name='minimum_interval',
-            field=models.DurationField(default=datetime.timedelta(0), help_text='Set a duration since last short/deposit to short again, even if target satoshis is not met'),
+            field=models.DurationField(default=datetime.timedelta(0), help_text='Field format DD HH:mm:ss. Set a duration since last short maturity or deposit to short again, even if target satoshis is not met'),
         ),
     ]
