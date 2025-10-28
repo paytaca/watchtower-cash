@@ -421,6 +421,10 @@ def create_short_contract(
     )
     LOGGER.debug(f"SHORT PROPOSAL | INTENT | {GP_LP.json_parser.dumps(intent, indent=2)}")
 
+    expected_sats = intent[0]
+    if satoshis < expected_sats:
+        return dict(success=False, error=f"Did not meet minimum expected satoshis. {satoshis} < {expected_sats}")
+
     satoshis = intent[0]
     low_liquidation_multiplier = intent[1]
     high_liquidation_multiplier = intent[2]
