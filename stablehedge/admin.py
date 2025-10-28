@@ -345,7 +345,7 @@ class TreasuryContractAdmin(admin.ModelAdmin):
 
         obj = queryset.first()
         try:
-            result = check_and_short_funds(obj.address, min_sats=0)
+            result = check_and_short_funds(obj.address, force=True)
             messages.info(request, f"{result}")
         except (StablehedgeException, AnyhedgeException) as exception:
             messages.error(f"Error: {exception}")

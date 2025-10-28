@@ -38,7 +38,7 @@ const server = http.createServer(async (req, res) => {
   } catch {}
 
   try{
-    console.log(util.inspect(parsedRequest, false, null, true));
+    console.log(JSON.stringify(parsedRequest, undefined, 2));
   } catch {
     console.log(parsedRequest)
   }

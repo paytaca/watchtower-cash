@@ -1,5 +1,7 @@
 import logging
+from datetime import timedelta
 from django.conf import settings
+from django.utils import timezone
 
 from stablehedge.apps import LOGGER
 from stablehedge import models
@@ -12,6 +14,48 @@ from stablehedge.utils.encryption import encrypt_str, decrypt_wif_safe
 
 
 from main import models as main_models
+from anyhedge import models as anyhedge_models
+
+def get_treasury_contract_shorting_rules(treasury_contract:models.TreasuryContract):
+    try:
+        short_position_rule = treasury_contract.short_position_rule
+        min_sats = short_position_rule.target_satoshis
+        minimum_interval = short_position_rule.minimum_interval
+
+    except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
+        min_sats = 10 ** 8
+        minimum_interval = timedelta(seconds=0)
+
+    return dict(
+        min_sats=min_sats,
+        minimum_interval=minimum_interval,
+    )
+
+def get_latest_short_or_deposit(treasury_contract:models.TreasuryContract):
+    redemption_contract = treasury_contract.redemption_contract
+    last_deposit = redemption_contract.transactions \
+        .filter(transaction_type=models.RedemptionContractTransaction.Type.DEPOSIT) \
+        .filter(status=models.RedemptionContractTransaction.Status.SUCCESS) \
+        .order_by("-resolved_at") \
+        .values_list("resolved_at", flat=True) \
+        .first()
+
+    last_short_maturity = anyhedge_models.HedgePosition.objects \
+        .filter(short_address=treasury_contract.address) \
+        .filter(funding_tx_hash__isnull=False) \
+        .order_by("-maturity_timestamp") \
+        .values_list("maturity_timestamp", flat=True) \
+        .first()
+
+    if last_deposit is None:
+        return last_short_maturity
+    if last_short_maturity is None:
+        return last_deposit
+
+    last_short_maturity = timezone.make_aware(last_short_maturity)
+    last_deposit = timezone.make_aware(last_deposit)
+    return max()
+        
 
 def save_signature_to_tx(
     treasury_contract:models.TreasuryContract,

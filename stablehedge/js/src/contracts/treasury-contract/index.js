@@ -98,8 +98,8 @@ export class TreasuryContract {
     const contractParams = this.contractParameters
     const contract = new Contract(artifact, contractParams, opts);
 
-    if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
-    if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
+    // if (contract.opcount > 201) console.warn(`Opcount must be at most 201. Got ${contract.opcount}`)
+    // if (contract.bytesize > 520) console.warn(`Bytesize must be at most 520. Got ${contract.bytesize}`)
 
     return contract
   }

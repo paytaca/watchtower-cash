@@ -2,6 +2,7 @@ import time
 import json
 from celery import shared_task
 from django.conf import settings
+from bitcash import Key
 
 from stablehedge import models
 from stablehedge.apps import LOGGER
@@ -10,6 +11,7 @@ from stablehedge.functions.anyhedge import (
     AnyhedgeException,
     StablehedgeException,
     MINIMUM_BALANCE_FOR_SHORT,
+    validate_treasury_contract_for_shorting,
     get_short_contract_proposal,
     create_short_proposal,
     create_short_contract,
@@ -43,17 +45,17 @@ _QUEUE_TREASURY_CONTRACT = "stablehedge__treasury_contract"
 
 def check_and_short_funds(
     treasury_contract_address:str,
-    min_sats:int=10 ** 8,
+    force:bool=False,
     background_task:bool=False,
 ):
-    balance_data = get_spendable_sats(treasury_contract_address)
-    spendable = balance_data["spendable"]
-    
-    actual_min_sats = max(min_sats, MINIMUM_BALANCE_FOR_SHORT)
-    if not spendable or spendable < actual_min_sats:
-        return dict(success=True, message="Balance not met", min_sats=actual_min_sats, spendable=spendable)
+    validation_result = dict(force=force)
+    if not force:
+        treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+        validation_result = validate_treasury_contract_for_shorting(treasury_contract)
+        if not validation_result["valid"]:
+            return validation_result
 
-    LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | ATTEMPT RUN")
+    LOGGER.debug(f"SHORT PROPOSAL | {treasury_contract_address} | ATTEMPT RUN | {validation_result}")
     if background_task:
         task = short_treasury_contract_funds.delay(treasury_contract_address)
         result = dict(success=True, task_id=task.id)
@@ -66,17 +68,7 @@ def check_and_short_funds(
 def check_treasury_contract_short():
     results = []
     for treasury_contract in models.TreasuryContract.objects.filter():
-        try:
-            min_sats = treasury_contract.short_position_rule.target_satoshis
-        except models.TreasuryContract.short_position_rule.RelatedObjectDoesNotExist:
-            min_sats = 10 ** 8
-
-        result = check_and_short_funds(
-            treasury_contract.address,
-            min_sats=min_sats,
-            background_task=True,
-        )
-
+        result = check_and_short_funds(treasury_contract.address, background_task=True)
         results.append(
             (treasury_contract.address, result),
         )
@@ -300,8 +292,9 @@ def short_v2_treasury_contract_funds(treasury_contract_address:str):
                 funding_utxo,
                 dict(
                     txid="0" * 64, vout=0, satoshis=funding_amounts["longFundingSats"],
-                    lockingBytecode="0" * 50, # p2pkh locking bytecode length = 25 bytes
-                    unlockingBytecode="0" * (98 * 2), # 65 byte schnorr signature + 33 byte pubkey
+                    wif = Key().to_wif(),
+                    # lockingBytecode="0" * 50, # p2pkh locking bytecode length = 25 bytes
+                    # unlockingBytecode="0" * (98 * 2), # 65 byte schnorr signature + 33 byte pubkey
                 ),
             ],
             outputs=ScriptFunctions.getContractDataOutputs(dict(contractData=contract_data))["outputs"],
@@ -386,6 +379,7 @@ def rebalance_funds(treasury_contract_address:str):
         if transferrable > required_sats:
             satoshis_to_transfer = int(required_sats)
 
+        LOGGER.debug(f"REBALANCE | {treasury_contract_address} | TRANSFERRING {satoshis_to_transfer} satoshis")
         result = transfer_treasury_funds_to_redemption_contract(
             treasury_contract_address, satoshis=satoshis_to_transfer
         )

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.db import models
 from django.apps import apps
 from django.contrib.postgres.fields import JSONField
@@ -318,5 +319,10 @@ class TreasuryContractShortPositionRule(models.Model):
     target_duration = models.BigIntegerField(
         default=86_400,
         help_text="Preferred duration, in seconds, when creating short positions. May not be followed due to LP constraints",
+    )
+
+    minimum_interval = models.DurationField(
+        default=timedelta(seconds=0),
+        help_text="Field format DD HH:mm:ss. Set a duration since last short maturity or deposit to short again, even if target satoshis is not met",
     )
     # may add more columns for more complex rules

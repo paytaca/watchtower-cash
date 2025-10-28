@@ -13,6 +13,10 @@ export function encodeParameterBytecode(artifact, parameters) {
     return binToHex(scriptToBytecode([script]))
   })
 
+  // Patch breaking change for upgrading cashscript version from 0.11.0-next.4 to 0.11.5
+  // Added this .reverse() to keep original order of parameters as expected at the time this function was written
+  bytecodesHex.reverse();
+
   return bytecodesHex
 }
 

@@ -167,8 +167,8 @@ export async function createAnyhedgeContract(opts) {
 }
 
 
-export function generateWallet() {
-  const wif = generateRandomWif();
+export function generateWallet(wif) {
+  if (!wif) wif = generateRandomWif();
   const pubkey = wifToPubkey(wif);
   const address = pubkeyToAddress(pubkey);
   const tokenAddress = toTokenAddress(address);
