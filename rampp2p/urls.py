@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 router.register(r'order/public', PublicOrdersViewSet, basename='public-orders')
+router.register(r'appeal/public', PublicAppealsViewSet, basename='public-appeals')
 
 
 urlpatterns = [
