@@ -1,4 +1,8 @@
+import base64
+import pickle
+
 from django.conf import settings
+
 from main.models import Transaction
 
 
@@ -79,3 +83,49 @@ def clear_cache_for_spent_transactions(transaction_queryset):
         history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
         if history_cache_keys:
             cache.delete(*history_cache_keys) 
+
+
+def clear_pos_wallet_history_cache(wallet_hash, posid):
+    """Invalidate cached POS wallet history responses for a specific POS ID."""
+    if posid is None:
+        return
+
+    cache = settings.REDISKV
+
+    pos_history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:pos:*')
+    if not pos_history_cache_keys:
+        return
+
+    target_posid = str(posid)
+
+    for cache_key in pos_history_cache_keys:
+        # Redis may return bytes keys; normalise to str for parsing
+        if isinstance(cache_key, bytes):
+            try:
+                decoded_key = cache_key.decode('utf-8')
+            except UnicodeDecodeError:
+                continue
+        else:
+            decoded_key = cache_key
+
+        if ':pos:' not in decoded_key:
+            continue
+
+        encoded_params = decoded_key.split(':pos:', 1)[1]
+
+        try:
+            request_params = pickle.loads(base64.b64decode(encoded_params))
+        except Exception:
+            # Skip keys we cannot decode safely
+            continue
+
+        request_posid = request_params.get('posid')
+        if request_posid is None:
+            continue
+
+        if str(request_posid) != target_posid:
+            continue
+
+        # Delete cached response and corresponding count entry
+        cache.delete(cache_key)
+        cache.delete(f"{decoded_key}:count")
