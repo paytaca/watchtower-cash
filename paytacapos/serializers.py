@@ -868,11 +868,47 @@ class LatestPosIdSerializer(serializers.Serializer):
 
 
 class PosWalletHistorySerializer(serializers.ModelSerializer):
-    token_ticker = serializers.CharField(read_only=True, source="token.token_ticker")
-    ft_category = serializers.CharField(read_only=True, source="cashtoken_ft_id")
-    nft_category = serializers.CharField(read_only=True, source="cashtoken_nft_id")
-    attributes = WalletHistoryAttributeSerializer(many=True, read_only=True)
+    token_ticker = serializers.CharField(
+        read_only=True, 
+        source="token.token_ticker",
+        allow_null=True
+    )
+    ft_category = serializers.CharField(
+        read_only=True, 
+        source="cashtoken_ft_id",
+        allow_null=True
+    )
+    nft_category = serializers.CharField(
+        read_only=True, 
+        source="cashtoken_nft_id",
+        allow_null=True
+    )
+    attributes = serializers.SerializerMethodField()
     posid = serializers.IntegerField(read_only=True)
+    
+    def get_attributes(self, obj):
+        """
+        Efficiently handle attributes using prefetched data if available.
+        This avoids N+1 queries when attributes are prefetched in the queryset.
+        """
+        # Check if attributes were prefetched
+        if hasattr(obj, '_prefetched_objects_cache') and \
+           'attributes' in obj._prefetched_objects_cache:
+            return WalletHistoryAttributeSerializer(
+                obj.attributes.all(), many=True
+            ).data
+        
+        # Check if attributes are already loaded
+        if hasattr(obj, 'attributes'):
+            try:
+                # This will use cached data if available
+                attrs = obj.attributes.all()
+                if attrs:
+                    return WalletHistoryAttributeSerializer(attrs, many=True).data
+            except Exception:
+                pass
+        
+        return []
 
     class Meta:
         model = WalletHistory

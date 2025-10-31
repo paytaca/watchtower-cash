@@ -699,6 +699,13 @@ class WalletHistory(PostgresModel):
         verbose_name = 'Wallet history'
         verbose_name_plural = 'Wallet histories'
         ordering = ['-tx_timestamp', '-date_created']
+        indexes = [
+            models.Index(
+                fields=['wallet', '-tx_timestamp', '-date_created'],
+                name='wallet_history_wallet_time_idx',
+                condition=Q(wallet__isnull=False)
+            ),
+        ]
         constraints = [
             UniqueConstraint(
                 fields=['wallet', 'txid', 'token', 'amount', 'record_type'],

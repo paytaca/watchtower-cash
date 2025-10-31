@@ -1,13 +1,16 @@
 import pickle
 import base64
+import json
 from django.db.models import (
     F, Value,
     Func,
     ExpressionWrapper,
     CharField,
     Max,
+    Prefetch,
 )
 from django.conf import settings
+from django.core.cache import cache
 from django.http import Http404
 from django.db import transaction
 from django.db.models import F
@@ -31,7 +34,7 @@ from .utils.report import SalesSummary
 from .utils.cash_out import fetch_unspent_merchant_transactions, generate_payout_address
 
 from .models import Location, Category, Merchant, PosDevice, CashOutPaymentMethod
-from main.models import Address, Transaction, Wallet, WalletHistory
+from main.models import Address, Transaction, Wallet, WalletHistory, TransactionMetaAttribute
 from rampp2p.models import MarketPrice
 from .tasks import process_cashout_input_txns
 
@@ -462,12 +465,43 @@ class PosWalletHistoryViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
         return self.kwargs["wallethash"]
 
     def get_queryset(self):
-        wallet = Wallet.objects.filter(wallet_hash=self._get_wallet_hash()).first()
+        wallet_hash = self._get_wallet_hash()
+        
+        # Cache wallet lookup to avoid repeated queries
+        cache_key = f"wallet_id:{wallet_hash}"
+        wallet_id = cache.get(cache_key)
+        
+        if wallet_id is None:
+            try:
+                wallet = Wallet.objects.only('id').get(wallet_hash=wallet_hash)
+                wallet_id = wallet.id
+                cache.set(cache_key, wallet_id, timeout=3600)  # Cache for 1 hour
+            except Wallet.DoesNotExist:
+                wallet_id = None
+        
+        if wallet_id is None:
+            return WalletHistory.objects.none()
+        
+        # Optimized queryset with proper eager loading
         return WalletHistory.objects \
-            .filter(wallet=wallet, pos_wallet_history__isnull=False) \
-            .select_related("token") \
-            .annotate(posid=F("pos_wallet_history__posid")) \
-            .all()
+            .filter(
+                wallet_id=wallet_id,
+                pos_wallet_history__isnull=False
+            ) \
+            .select_related(
+                'token',
+                'cashtoken_ft',
+                'cashtoken_nft',
+                'pos_wallet_history'
+            ) \
+            .only(
+                'id', 'txid', 'record_type', 'amount', 'tx_fee',
+                'tx_timestamp', 'date_created', 'usd_price', 'market_prices',
+                'senders', 'recipients',
+                'token_id', 'cashtoken_ft_id', 'cashtoken_nft_id',
+                'wallet_id'
+            ) \
+            .annotate(posid=F('pos_wallet_history__posid'))
 
     def get_cache_key(self):
         # Serialize the object to binary
@@ -479,34 +513,74 @@ class PosWalletHistoryViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
         return f"wallet:history:{wallet_hash}:pos:{encoded_params}"
 
     def get_cached_response(self):
-        cache = settings.REDISKV
+        redis_cache = settings.REDISKV
         cache_key = self.get_cache_key()
 
-        encoded_data = cache.get(cache_key)
-        if encoded_data is None:
+        cached_data = redis_cache.get(cache_key)
+        if cached_data is None:
             return None
 
-        # Convert Base64 string back to binary
-        pickled_data = base64.b64decode(encoded_data)
-        # Deserialize the binary back to an object
-        return pickle.loads(pickled_data)
+        # Try JSON first (faster deserialization)
+        try:
+            if isinstance(cached_data, bytes):
+                cached_data = cached_data.decode('utf-8')
+            return json.loads(cached_data)
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            # Fallback to pickle for backward compatibility
+            try:
+                pickled_data = base64.b64decode(cached_data)
+                return pickle.loads(pickled_data)
+            except Exception:
+                return None
 
     def save_cached_response(self, data):
-        cache = settings.REDISKV
+        redis_cache = settings.REDISKV
         cache_key = self.get_cache_key()
 
-        pickled_data = pickle.dumps(data)
-        # Convert binary to Base64 string
-        encoded_data = base64.b64encode(pickled_data).decode('utf-8')
-        cache.set(cache_key, encoded_data, ex=60 * 5)  # Cache for 5 minutes
+        # Use JSON instead of pickle for faster serialization
+        try:
+            json_data = json.dumps(data)
+            # Cache for 30 minutes instead of 5
+            redis_cache.set(cache_key, json_data, ex=60 * 30)
+        except (TypeError, ValueError):
+            # Fallback to pickle if JSON serialization fails
+            pickled_data = pickle.dumps(data)
+            encoded_data = base64.b64encode(pickled_data).decode('utf-8')
+            redis_cache.set(cache_key, encoded_data, ex=60 * 30)
 
     def list(self, request, *args, **kwargs):
+        # Check full response cache first
         cached_data = self.get_cached_response()
         if cached_data:
             return Response(cached_data)
 
-        response = super().list(request, *args, **kwargs)
+        # Optimize pagination by caching count separately
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Cache count separately for faster subsequent paginated requests
+        count_cache_key = f"{self.get_cache_key()}:count"
+        count = cache.get(count_cache_key)
+        
+        if count is None:
+            count = queryset.count()
+            # Cache count for 10 minutes
+            cache.set(count_cache_key, count, timeout=600)
+        
+        # Continue with normal pagination
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response = self.get_paginated_response(serializer.data)
+            
+            # Cache the full response
+            if response.status_code == 200:
+                self.save_cached_response(response.data)
+            
+            return response
 
+        serializer = self.get_serializer(queryset, many=True)
+        response = Response(serializer.data)
+        
         if response.status_code == 200:
             self.save_cached_response(response.data)
 
