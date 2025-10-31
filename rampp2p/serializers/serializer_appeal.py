@@ -75,3 +75,4 @@ class AppealSerializer(BaseAppealSerializer):
             read_at = order_member.first().read_at
             return str(read_at) if read_at != None else read_at
         return None
+

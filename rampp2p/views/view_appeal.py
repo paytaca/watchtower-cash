@@ -1,6 +1,8 @@
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, mixins
 from rest_framework.response import Response
 from rest_framework.decorators import action
+
+from rest_framework.permissions import AllowAny
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
@@ -16,6 +18,8 @@ from rampp2p.validators import *
 from rampp2p.utils.handler import update_order_status
 from rampp2p.utils.notifications import send_push_notification
 from rampp2p.viewcodes import WSGeneralMessageType
+
+from rampp2p.pagination import StandardResultsSetPagination
 
 import math
 
@@ -296,3 +300,37 @@ class AppealViewSet(viewsets.GenericViewSet):
             wallet_hash != order.ad_snapshot.ad.owner.wallet_hash and
             wallet_hash != order.arbiter.wallet_hash):
             raise ValidationError('User not allowed to perform this action')
+
+class PublicAppealsViewSet(
+    mixins.ListModelMixin, 
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet
+):
+
+    """
+    A read-only public endpoint for orders with no sensitive data.
+    """
+    queryset = models.Appeal.objects.all()
+    serializer_class = serializers.AppealSerializer
+    pagination_class = StandardResultsSetPagination
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_queryset(self):
+        wallet_hash = self.request.query_params.get('wallet_hash')        
+
+        try: 
+            arbiter = models.Arbiter.objects.get(wallet_hash=wallet_hash)
+        except:
+            arbiter = None
+        
+        if not wallet_hash or not arbiter:
+            return models.Appeal.objects.none()  # Return an empty queryset if wallet_hash is not provided                
+        
+        arbiter_order_ids = list(models.Order.objects.filter(arbiter__wallet_hash=arbiter.wallet_hash).values_list('id', flat=True))
+        queryset = models.Appeal.objects.filter(order__pk__in=arbiter_order_ids).order_by('-created_at').distinct()
+
+        # get pending appeals
+        queryset = queryset.exclude(resolved_at__isnull=False)
+        
+        return queryset
