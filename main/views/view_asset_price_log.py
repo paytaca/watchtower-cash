@@ -219,6 +219,83 @@ class PriceChartView(generics.GenericAPIView):
         return market_price_task.get_latest(pair_name=pair_name)
 
 
+class AssetPriceLogDetailView(generics.RetrieveAPIView):
+    """
+    Retrieve a single AssetPriceLog record by ID with enriched asset information
+    """
+    serializer_class = serializers.UnifiedAssetPriceSerializer
+    permission_classes = [AllowAny]
+    queryset = AssetPriceLog.objects.all()
+    lookup_field = 'id'
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Determine asset type and enrich data
+        asset_data = self._enrich_price_log(instance)
+        
+        serializer = self.get_serializer(asset_data)
+        return Response(serializer.data)
+    
+    def _enrich_price_log(self, price_log):
+        """
+        Transform AssetPriceLog into enriched format with asset information
+        """
+        # Check if this is a BCH price (no FT token reference)
+        if not price_log.currency_ft_token and not price_log.relative_currency_ft_token:
+            # This is a BCH/fiat price
+            return {
+                'id': price_log.id,
+                'asset': 'BCH',
+                'asset_type': 'bch',
+                'asset_name': 'Bitcoin Cash',
+                'asset_symbol': 'BCH',
+                'currency': price_log.currency,
+                'price_value': price_log.price_value,
+                'timestamp': price_log.timestamp,
+                'source': price_log.source,
+                'source_ids': None,
+                'calculation': None,
+            }
+        
+        # This is a token price
+        token = price_log.currency_ft_token
+        if token:
+            # Token is the main currency (e.g., TOKEN/BCH or TOKEN/USD)
+            token_category = token.category
+            token_name = token.info.name if token.info else None
+            token_symbol = token.info.symbol if token.info else None
+            
+            return {
+                'id': price_log.id,
+                'asset': f'ct/{token_category}',
+                'asset_type': 'cashtoken',
+                'asset_name': token_name,
+                'asset_symbol': token_symbol,
+                'currency': price_log.relative_currency,
+                'price_value': price_log.price_value,
+                'timestamp': price_log.timestamp,
+                'source': price_log.source,
+                'source_ids': None,
+                'calculation': 'calculated' if price_log.source == 'calculated' else None,
+            }
+        
+        # Fallback: return basic info
+        return {
+            'id': price_log.id,
+            'asset': price_log.currency,
+            'asset_type': 'unknown',
+            'asset_name': None,
+            'asset_symbol': None,
+            'currency': price_log.relative_currency,
+            'price_value': price_log.price_value,
+            'timestamp': price_log.timestamp,
+            'source': price_log.source,
+            'source_ids': None,
+            'calculation': None,
+        }
+
+
 class UnifiedAssetPriceView(generics.GenericAPIView):
     """
     Unified API endpoint for getting prices of both BCH and tokens

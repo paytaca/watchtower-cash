@@ -2502,8 +2502,11 @@ def parse_wallet_history_market_values(wallet_history_id):
         bch_to_asset_multiplier = 1
         if wallet_history_obj.cashtoken_ft and price_log.currency_ft_token:
             # Token/fiat price stored directly
+            # price_log.price_value is stored as "tokens per fiat" (e.g., 531 MUSD per 1 PHP)
+            # but client expects "fiat per token" (e.g., 0.00188 PHP per 1 MUSD)
             if price_log.currency_ft_token.category == wallet_history_obj.cashtoken_ft.category:
-                market_prices[price_log.currency] = float(price_log.price_value)
+                # Invert to get fiat per token
+                market_prices[price_log.currency] = float(1 / price_log.price_value)
         else:
             # BCH/fiat price
             market_prices[price_log.currency] = float(price_log.price_value)

@@ -300,7 +300,8 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet',
         'token',
         'cashtoken_ft',
-        'cashtoken_nft'
+        'cashtoken_nft',
+        'price_log'
     ]
 
     search_fields = [
@@ -401,7 +402,7 @@ class CashNonFungibleTokenAdmin(admin.ModelAdmin):
         return None
     
 
-class TransactionBroadcastAdmin(admin.ModelAdmin):
+class TransactionBroadcastAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     list_display = [
         'txid',
         'num_retries',
@@ -409,6 +410,40 @@ class TransactionBroadcastAdmin(admin.ModelAdmin):
         'date_succeeded',
         'price_log'
     ]
+
+    dynamic_raw_id_fields = [
+        'price_log'
+    ]
+
+
+class AssetPriceLogAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    list_display = [
+        'id',
+        'currency',
+        'relative_currency',
+        'price_value',
+        'timestamp',
+        'source'
+    ]
+
+    list_filter = [
+        'currency',
+        'relative_currency',
+        'source'
+    ]
+
+    search_fields = [
+        'currency',
+        'relative_currency',
+        'source'
+    ]
+
+    dynamic_raw_id_fields = [
+        'currency_ft_token',
+        'relative_currency_ft_token'
+    ]
+
+    ordering = ['-timestamp']
 
 
 admin.site.unregister(User)
@@ -430,6 +465,7 @@ admin.site.register(ContractHistory, ContractHistoryAdmin)
 admin.site.register(WalletHistory, WalletHistoryAdmin)
 admin.site.register(WalletNftToken, WalletNftTokenAdmin)
 admin.site.register(TransactionBroadcast, TransactionBroadcastAdmin)
+admin.site.register(AssetPriceLog, AssetPriceLogAdmin)
 
 class AppVersionAdmin(admin.ModelAdmin):
     list_display = ('latest_version', 'min_required_version', 'platform', 'release_date')
