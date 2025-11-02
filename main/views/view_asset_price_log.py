@@ -1,6 +1,7 @@
 import time
 import logging
 import celery
+from decimal import Decimal
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -12,8 +13,9 @@ from watchtower.celery import app as celery_app
 from rest_framework.permissions import AllowAny
 from rest_framework import generics
 from main import serializers
-from main.models import AssetPriceLog
+from main.models import AssetPriceLog, CashFungibleToken
 from main.tasks import get_latest_bch_price, market_price_task
+from main.utils.market_price import get_ft_bch_price_log
 
 
 
@@ -215,3 +217,181 @@ class PriceChartView(generics.GenericAPIView):
             market_price_task.delay()
 
         return market_price_task.get_latest(pair_name=pair_name)
+
+
+class UnifiedAssetPriceView(generics.GenericAPIView):
+    """
+    Unified API endpoint for getting prices of both BCH and tokens
+    """
+    serializer_class = serializers.UnifiedAssetPriceSerializer
+    permission_classes = [AllowAny,]
+
+    @swagger_auto_schema(
+        responses={200: serializer_class(many=True)},
+        manual_parameters=[
+            openapi.Parameter(
+                name="assets", 
+                type=openapi.TYPE_STRING, 
+                in_=openapi.IN_QUERY, 
+                required=True,
+                description="Comma-separated list of assets. Use 'BCH' for Bitcoin Cash or token category hashes"
+            ),
+            openapi.Parameter(
+                name="vs_currencies", 
+                type=openapi.TYPE_STRING, 
+                in_=openapi.IN_QUERY, 
+                required=True,
+                description="Comma-separated list of currencies (USD, PHP, BCH, etc.)"
+            ),
+            openapi.Parameter(
+                name="include_calculated",
+                type=openapi.TYPE_BOOLEAN,
+                in_=openapi.IN_QUERY,
+                required=False,
+                description="Include calculated token/fiat prices (default: true)"
+            ),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        # Parse parameters
+        assets_param = request.query_params.get('assets', '')
+        currencies_param = request.query_params.get('vs_currencies', '')
+        include_calculated = request.query_params.get('include_calculated', 'true').lower() == 'true'
+        
+        assets = [a.strip() for a in assets_param.split(",") if a.strip()]
+        currencies = [c.strip().upper() for c in currencies_param.split(",") if c.strip()]
+        
+        if not assets or not currencies:
+            raise exceptions.APIException("Both assets and vs_currencies are required")
+        
+        results = []
+        
+        # Process each asset-currency pair
+        for asset in assets:
+            for currency in currencies:
+                price_data = self._get_price(asset, currency, include_calculated)
+                if price_data:
+                    results.extend(price_data)
+        
+        serializer = self.serializer_class(results, many=True)
+        return Response({"prices": serializer.data})
+    
+    def _get_price(self, asset, currency, include_calculated=True):
+        """
+        Get price for an asset in a given currency.
+        Returns list of price data dictionaries.
+        """
+        results = []
+        
+        # Check if asset is BCH
+        if asset.upper() == 'BCH':
+            # BCH price in fiat currency
+            if currency != 'BCH':
+                price_log = get_latest_bch_price(currency)
+                if price_log:
+                    results.append({
+                        'id': price_log.id,
+                        'asset': 'BCH',
+                        'asset_type': 'bch',
+                        'asset_name': 'Bitcoin Cash',
+                        'asset_symbol': 'BCH',
+                        'currency': currency,
+                        'price_value': price_log.price_value,
+                        'timestamp': price_log.timestamp,
+                        'source': price_log.source,
+                    })
+            else:
+                # BCH/BCH = 1
+                results.append({
+                    'id': None,
+                    'asset': 'BCH',
+                    'asset_type': 'bch',
+                    'asset_name': 'Bitcoin Cash',
+                    'asset_symbol': 'BCH',
+                    'currency': 'BCH',
+                    'price_value': Decimal('1.0'),
+                    'timestamp': timezone.now(),
+                    'source': 'constant',
+                })
+        else:
+            # Asset is a token category
+            # Handle both formats: "ct/<category>" or just "<category>"
+            if asset.startswith('ct/'):
+                token_category = asset[3:]  # Remove 'ct/' prefix
+            else:
+                token_category = asset
+            
+            # Get token info
+            try:
+                token = CashFungibleToken.objects.get(category=token_category)
+                token_name = token.info.name if token.info else None
+                token_symbol = token.info.symbol if token.info else None
+            except CashFungibleToken.DoesNotExist:
+                token_name = None
+                token_symbol = None
+            
+            # Token price in BCH
+            if currency == 'BCH':
+                price_log = get_ft_bch_price_log(token_category)
+                if price_log:
+                    results.append({
+                        'id': price_log.id,
+                        'asset': f'ct/{token_category}',
+                        'asset_type': 'cashtoken',
+                        'asset_name': token_name,
+                        'asset_symbol': token_symbol,
+                        'currency': 'BCH',
+                        'price_value': price_log.price_value,
+                        'timestamp': price_log.timestamp,
+                        'source': price_log.source,
+                    })
+            else:
+                # Token price in fiat - need to calculate via BCH
+                if include_calculated:
+                    token_bch_price = get_ft_bch_price_log(token_category)
+                    bch_fiat_price = get_latest_bch_price(currency)
+                    
+                    if token_bch_price and bch_fiat_price:
+                        # Calculate token/fiat price
+                        # token_bch_price.price_value = amount of tokens per 1 BCH
+                        # bch_fiat_price.price_value = amount of fiat per 1 BCH
+                        # Result: amount of tokens per 1 fiat unit
+                        calculated_price = token_bch_price.price_value / bch_fiat_price.price_value
+                        calculated_timestamp = min(token_bch_price.timestamp, bch_fiat_price.timestamp)
+                        
+                        # Save calculated price to database
+                        try:
+                            token_obj = CashFungibleToken.objects.get(category=token_category)
+                        except CashFungibleToken.DoesNotExist:
+                            token_obj = None
+                        
+                        # Create or update calculated price record
+                        price_log, created = AssetPriceLog.objects.update_or_create(
+                            currency=currency,
+                            relative_currency='BCH',
+                            currency_ft_token=token_obj,
+                            source='calculated',
+                            timestamp=calculated_timestamp,
+                            defaults={
+                                'price_value': calculated_price,
+                            }
+                        )
+                        
+                        results.append({
+                            'id': price_log.id,
+                            'asset': f'ct/{token_category}',
+                            'asset_type': 'cashtoken',
+                            'asset_name': token_name,
+                            'asset_symbol': token_symbol,
+                            'currency': currency,
+                            'price_value': calculated_price,
+                            'timestamp': calculated_timestamp,
+                            'source': 'calculated',
+                            'source_ids': {
+                                'token_bch_price_id': token_bch_price.id,
+                                'bch_fiat_price_id': bch_fiat_price.id,
+                            },
+                            'calculation': f'token/{currency} = (token/BCH) / (BCH/{currency})',
+                        })
+        
+        return results
