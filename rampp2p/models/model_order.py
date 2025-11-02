@@ -26,6 +26,12 @@ class Order(models.Model):
     expires_at = models.DateTimeField(null=True)
     is_cash_in = models.BooleanField(default=False, db_index=True)
 
+    class Meta:
+        indexes = [
+            # Optimize Order model for trade count calculations
+            models.Index(fields=['ad_snapshot'], name='rampp2p_order_ad_snapshot_idx'),
+        ]
+
     def __str__(self):
         return f'{self.id}'
     
@@ -170,6 +176,12 @@ class OrderFeedback(models.Model):
     comment = models.CharField(max_length=4000, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     modified_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            # Optimize OrderFeedback for rating calculations
+            models.Index(fields=['to_peer', 'rating'], name='rampp2p_feedback_rating_idx'),
+        ]
 
     def __str__(self):
         return str(self.id)

@@ -694,6 +694,12 @@ class WalletHistory(PostgresModel):
 
     usd_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     market_prices = JSONField(null=True, blank=True)
+    price_log = models.ForeignKey(
+        'AssetPriceLog',
+        on_delete=models.SET_NULL,
+        null=True, blank=True, db_constraint=False,
+        related_name='wallet_histories'
+    )
 
     class Meta:
         verbose_name = 'Wallet history'
@@ -953,6 +959,12 @@ class TransactionBroadcast(PostgresModel):
     date_received = models.DateTimeField(default=timezone.now)
     date_succeeded = models.DateTimeField(null=True, blank=True, db_index=True)
     error = models.TextField()
+    price_log = models.ForeignKey(
+        'AssetPriceLog',
+        on_delete=models.SET_NULL,
+        null=True, blank=True, db_constraint=False,
+        related_name='transaction_broadcasts'
+    )
 
     def __str__(self):
         return self.txid

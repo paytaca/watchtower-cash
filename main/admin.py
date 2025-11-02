@@ -406,7 +406,8 @@ class TransactionBroadcastAdmin(admin.ModelAdmin):
         'txid',
         'num_retries',
         'date_received',
-        'date_succeeded'
+        'date_succeeded',
+        'price_log'
     ]
 
 

@@ -58,6 +58,27 @@ class Ad(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(blank=True, null=True)
 
+    class Meta:
+        indexes = [
+            # Individual indexes on frequently filtered fields
+            models.Index(fields=['deleted_at'], name='rampp2p_ad_deleted_at_idx'),
+            models.Index(fields=['is_public'], name='rampp2p_ad_is_public_idx'),
+            models.Index(fields=['price_type'], name='rampp2p_ad_price_type_idx'),
+            models.Index(fields=['appeal_cooldown_choice'], name='rampp2p_ad_appeal_cooldown_idx'),
+            models.Index(fields=['trade_limits_in_fiat'], name='rampp2p_ad_trade_limits_idx'),
+            models.Index(fields=['created_at'], name='rampp2p_ad_created_at_idx'),
+            # Indexes on trade amount fields
+            models.Index(fields=['trade_amount_sats'], name='rampp2p_ad_trade_amt_sats_idx'),
+            models.Index(fields=['trade_amount_fiat'], name='rampp2p_ad_trade_amt_fiat_idx'),
+            # Composite index for the most common query pattern
+            models.Index(fields=['deleted_at', 'is_public', 'trade_type', 'fiat_currency'], name='rampp2p_ad_common_query_idx'),
+            # Composite indexes for trade amount filtering patterns
+            models.Index(fields=['trade_limits_in_fiat', 'trade_amount_sats'], name='rampp2p_ad_trade_sats_idx'),
+            models.Index(fields=['trade_limits_in_fiat', 'trade_amount_fiat'], name='rampp2p_ad_trade_fiat_idx'),
+            # Composite index for public ads filtering with ordering
+            models.Index(fields=['is_public', 'deleted_at', 'created_at'], name='rampp2p_ad_public_listing_idx'),
+        ]
+
     def __str__(self):
         return str(self.id)
 

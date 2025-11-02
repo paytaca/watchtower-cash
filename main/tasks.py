@@ -1823,6 +1823,11 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 tx_timestamp=tx_timestamp,
             )
 
+            # Check if this transaction has a price_log from broadcast
+            txn_broadcast = TransactionBroadcast.objects.select_related('price_log').filter(txid=txid).first()
+            if txn_broadcast and txn_broadcast.price_log:
+                history.price_log = txn_broadcast.price_log
+
             try:
                 history.save()
 
@@ -2450,7 +2455,11 @@ def parse_wallet_history_market_values(wallet_history_id):
     if not wallet_history_id:
         return
     try:
-        wallet_history_obj = WalletHistory.objects.get(id=wallet_history_id)
+        wallet_history_obj = WalletHistory.objects.select_related(
+            'price_log',
+            'price_log__currency_ft_token',
+            'price_log__currency_ft_token__info'
+        ).get(id=wallet_history_id)
     except WalletHistory.DoesNotExist:
         return
 
@@ -2485,6 +2494,45 @@ def parse_wallet_history_market_values(wallet_history_id):
     market_prices = wallet_history_obj.market_prices or {}
     if wallet_history_obj.usd_price:
         market_prices["USD"] = wallet_history_obj.usd_price
+
+    # NEW: Use price_log if available (from broadcast API)
+    if wallet_history_obj.price_log:
+        price_log = wallet_history_obj.price_log
+        
+        bch_to_asset_multiplier = 1
+        if wallet_history_obj.cashtoken_ft and price_log.currency_ft_token:
+            # Token/fiat price stored directly
+            if price_log.currency_ft_token.category == wallet_history_obj.cashtoken_ft.category:
+                market_prices[price_log.currency] = float(price_log.price_value)
+        else:
+            # BCH/fiat price
+            market_prices[price_log.currency] = float(price_log.price_value)
+            
+            # Get token/BCH conversion if needed
+            if wallet_history_obj.cashtoken_ft:
+                ft_bch_log = get_ft_bch_price_log(
+                    wallet_history_obj.cashtoken_ft.category,
+                    timestamp=wallet_history_obj.tx_timestamp
+                )
+                if ft_bch_log:
+                    bch_to_asset_multiplier = 1 / ft_bch_log.price_value
+                    market_prices[price_log.currency] = float(price_log.price_value * bch_to_asset_multiplier)
+        
+        wallet_history_obj.market_prices = market_prices
+        if "USD" in market_prices and not wallet_history_obj.usd_price:
+            wallet_history_obj.usd_price = Decimal(market_prices["USD"])
+        for currency, price in wallet_history_obj.market_prices.items():
+            if isinstance(price, Decimal):
+                wallet_history_obj.market_prices[currency] = float(price)
+        wallet_history_obj.save()
+        
+        return {
+            "id": wallet_history_obj.id,
+            "txid": wallet_history_obj.txid,
+            "tx_timestamp": str(wallet_history_obj.tx_timestamp),
+            "market_prices": market_prices,
+            "used_price_log_id": price_log.id
+        }
 
     # check for existing price logs that can be used
     timestamp = wallet_history_obj.tx_timestamp

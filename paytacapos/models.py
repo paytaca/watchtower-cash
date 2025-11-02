@@ -546,3 +546,9 @@ class PosWalletHistory(models.Model):
         related_name="pos_wallet_history",
     )
     posid = models.IntegerField(db_index=True)
+
+    class Meta:
+        indexes = [
+            # Add composite index on PosWalletHistory for faster joins
+            models.Index(fields=['wallet_history', 'posid'], name='paytacapos_pwh_wh_posid_idx'),
+        ]
