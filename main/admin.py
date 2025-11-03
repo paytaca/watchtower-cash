@@ -423,7 +423,8 @@ class AssetPriceLogAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'relative_currency',
         'price_value',
         'timestamp',
-        'source'
+        'source',
+        'has_source_logs'
     ]
 
     list_filter = [
@@ -444,6 +445,11 @@ class AssetPriceLogAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     ]
 
     ordering = ['-timestamp']
+    
+    def has_source_logs(self, obj):
+        return bool(obj.source_price_logs)
+    has_source_logs.boolean = True
+    has_source_logs.short_description = 'Has Sources'
 
 
 admin.site.unregister(User)

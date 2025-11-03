@@ -261,10 +261,20 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
         # This is a token price
         token = price_log.currency_ft_token
         if token:
-            # Token is the main currency (e.g., TOKEN/BCH or TOKEN/USD)
+            # Token price (stored as currency=fiat, relative_currency=BCH, currency_ft_token=token)
+            # e.g., PHP/BCH with token reference = token/PHP price
             token_category = token.category
             token_name = token.info.name if token.info else None
             token_symbol = token.info.symbol if token.info else None
+            
+            # Get source_ids for calculated prices
+            source_ids = price_log.source_price_logs
+            calculation = None
+            if price_log.source == 'calculated':
+                if source_ids:
+                    calculation = f'token/{price_log.currency} = (token/BCH) / (BCH/{price_log.currency})'
+                else:
+                    calculation = 'calculated'
             
             return {
                 'id': price_log.id,
@@ -272,12 +282,12 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
                 'asset_type': 'cashtoken',
                 'asset_name': token_name,
                 'asset_symbol': token_symbol,
-                'currency': price_log.relative_currency,
+                'currency': price_log.currency,
                 'price_value': price_log.price_value,
                 'timestamp': price_log.timestamp,
                 'source': price_log.source,
-                'source_ids': None,
-                'calculation': 'calculated' if price_log.source == 'calculated' else None,
+                'source_ids': source_ids,
+                'calculation': calculation,
             }
         
         # Fallback: return basic info
@@ -443,6 +453,11 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                             token_obj = None
                         
                         # Create or update calculated price record
+                        source_ids = {
+                            'token_bch_price_id': token_bch_price.id,
+                            'bch_fiat_price_id': bch_fiat_price.id,
+                        }
+                        
                         price_log, created = AssetPriceLog.objects.update_or_create(
                             currency=currency,
                             relative_currency='BCH',
@@ -451,6 +466,7 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                             timestamp=calculated_timestamp,
                             defaults={
                                 'price_value': calculated_price,
+                                'source_price_logs': source_ids,
                             }
                         )
                         
@@ -464,10 +480,7 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                             'price_value': calculated_price,
                             'timestamp': calculated_timestamp,
                             'source': 'calculated',
-                            'source_ids': {
-                                'token_bch_price_id': token_bch_price.id,
-                                'bch_fiat_price_id': bch_fiat_price.id,
-                            },
+                            'source_ids': source_ids,
                             'calculation': f'token/{currency} = (token/BCH) / (BCH/{currency})',
                         })
         

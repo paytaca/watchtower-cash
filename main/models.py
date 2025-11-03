@@ -927,6 +927,9 @@ class AssetPriceLog(models.Model):
     )
 
     price_value = models.DecimalField(max_digits=25, decimal_places=8)
+    
+    # Source price logs used for calculated prices
+    source_price_logs = JSONField(null=True, blank=True, help_text="IDs of source price logs used in calculation")
 
 
 class WalletPreferences(PostgresModel):
