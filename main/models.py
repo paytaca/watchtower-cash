@@ -930,6 +930,7 @@ class AssetPriceLog(models.Model):
     
     # Source price logs used for calculated prices
     source_price_logs = JSONField(null=True, blank=True, help_text="IDs of source price logs used in calculation")
+    calculation = models.CharField(max_length=200, null=True, blank=True, help_text="Calculation formula for derived prices")
 
 
 class WalletPreferences(PostgresModel):

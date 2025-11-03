@@ -424,6 +424,7 @@ class AssetPriceLogAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'price_value',
         'timestamp',
         'source',
+        'calculation',
         'has_source_logs'
     ]
 
@@ -436,7 +437,8 @@ class AssetPriceLogAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = [
         'currency',
         'relative_currency',
-        'source'
+        'source',
+        'calculation'
     ]
 
     dynamic_raw_id_fields = [

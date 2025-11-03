@@ -267,14 +267,9 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
             token_name = token.info.name if token.info else None
             token_symbol = token.info.symbol if token.info else None
             
-            # Get source_ids for calculated prices
+            # Get source_ids and calculation for calculated prices
             source_ids = price_log.source_price_logs
-            calculation = None
-            if price_log.source == 'calculated':
-                if source_ids:
-                    calculation = f'token/{price_log.currency} = (token/BCH) / (BCH/{price_log.currency})'
-                else:
-                    calculation = 'calculated'
+            calculation = price_log.calculation if price_log.source == 'calculated' else None
             
             return {
                 'id': price_log.id,
@@ -457,6 +452,7 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                             'token_bch_price_id': token_bch_price.id,
                             'bch_fiat_price_id': bch_fiat_price.id,
                         }
+                        calculation_formula = f'token/{currency} = (tokens/BCH) / ({currency}/BCH)'
                         
                         price_log, created = AssetPriceLog.objects.update_or_create(
                             currency=currency,
@@ -467,6 +463,7 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                             defaults={
                                 'price_value': calculated_price,
                                 'source_price_logs': source_ids,
+                                'calculation': calculation_formula,
                             }
                         )
                         
@@ -481,7 +478,7 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                             'timestamp': calculated_timestamp,
                             'source': 'calculated',
                             'source_ids': source_ids,
-                            'calculation': f'token/{currency} = (token/BCH) / (BCH/{currency})',
+                            'calculation': calculation_formula,
                         })
         
         return results
