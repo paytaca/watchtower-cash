@@ -969,6 +969,10 @@ class TransactionBroadcast(PostgresModel):
         null=True, blank=True, db_constraint=False,
         related_name='transaction_broadcasts'
     )
+    output_fiat_amounts = JSONField(
+        null=True, blank=True,
+        help_text='Map of output index to fiat amount details. Format: {"0": {"fiat_amount": "100.50", "fiat_currency": "PHP", "recipient": "bitcoincash:qr..."}}'
+    )
 
     def __str__(self):
         return self.txid

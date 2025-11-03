@@ -408,12 +408,18 @@ class TransactionBroadcastAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'num_retries',
         'date_received',
         'date_succeeded',
-        'price_log'
+        'price_log',
+        'has_fiat_amounts'
     ]
 
     dynamic_raw_id_fields = [
         'price_log'
     ]
+    
+    def has_fiat_amounts(self, obj):
+        return bool(obj.output_fiat_amounts)
+    has_fiat_amounts.boolean = True
+    has_fiat_amounts.short_description = 'Has Fiat Amounts'
 
 
 class AssetPriceLogAdmin(DynamicRawIDMixin, admin.ModelAdmin):

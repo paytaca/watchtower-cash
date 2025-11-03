@@ -88,6 +88,8 @@ main_urls += [
     # re_path(r"^tokens/(?P<tokenid>[\w+:]+)/$", views.TokensView.as_view(),name='tokens'),
     path('transaction/spender/', views.SpenderTransactionView.as_view(), name='find-transaction-spender'),
     path('broadcast/', views.BroadcastViewSet.as_view(), name="broadcast-transaction"),
+    path('broadcast/output-fiat-amounts/', views.TransactionOutputFiatAmountsView.as_view(), name="broadcast-output-fiat-amounts"),
+    re_path(r'^broadcast/output-fiat-amounts/(?P<txid>[\w+]+)/$', views.TransactionOutputFiatAmountsView.as_view(), name="broadcast-output-fiat-amounts-detail"),
 
     path('wallet/shard/get/', views.WalletShardViewSet.as_view({'get': 'get_first_shard'}), name='wallet-shard-get-shard'),
     
