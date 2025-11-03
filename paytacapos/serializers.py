@@ -928,6 +928,7 @@ class PosWalletHistorySerializer(serializers.ModelSerializer):
             "usd_price",
             "attributes",
             "market_prices",
+            "fiat_amounts",
         ]
 
 class BaseCashOutTransactionSerializer(serializers.ModelSerializer):

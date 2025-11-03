@@ -237,6 +237,7 @@ class WalletHistoryView(APIView):
                         'usd_price',
                         'market_prices',
                         'attributes',
+                        'fiat_amounts',
                         'encrypted_memo',
                     )
                 else:
@@ -269,6 +270,7 @@ class WalletHistoryView(APIView):
                         'usd_price',
                         'market_prices',
                         'attributes',
+                        'fiat_amounts',
                         'encrypted_memo',
                     )
             else:
@@ -296,6 +298,7 @@ class WalletHistoryView(APIView):
                     'usd_price',
                     'market_prices',
                     'attributes',
+                    'fiat_amounts',
                     'encrypted_memo',
                 )
 

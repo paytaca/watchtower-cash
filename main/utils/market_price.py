@@ -232,10 +232,12 @@ def save_wallet_history_currency(wallet_hash, currency):
     if not currency:
         return
 
+    # Updated to handle both BCH and CashToken FT transactions
     queryset = WalletHistory.objects.filter(
         wallet__wallet_hash=wallet_hash,
-        token__name="bch",
         tx_timestamp__isnull=False,
+    ).filter(
+        models.Q(token__name="bch") | models.Q(cashtoken_ft__isnull=False)
     )
 
     if currency == "USD":
@@ -270,9 +272,18 @@ def save_wallet_history_currency(wallet_hash, currency):
             timestamp__lte = timestamp_range_high,
         ).annotate(
             diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
-        ).order_by("-diff")
+        ).order_by("diff")
 
         closest = asset_price_logs.first()
+        
+        # If no price found in the time window, try to find the closest one
+        if not closest:
+            closest = AssetPriceLog.objects.filter(
+                currency=currency,
+                relative_currency="BCH",
+            ).annotate(
+                diff=models.Func(models.F("timestamp"), timestamp, function="GREATEST") - models.Func(models.F("timestamp"), timestamp, function="LEAST")
+            ).order_by("diff").first()
         if closest:
             results.append(f"{timestamp} | {closest.price_value} | {currency}")
             queryset_block = queryset.filter(
@@ -281,10 +292,27 @@ def save_wallet_history_currency(wallet_hash, currency):
             )
             for wallet_history in queryset_block:
                 market_prices = wallet_history.market_prices or {}
-                market_prices[currency] = float(closest.price_value)
+                
+                # For BCH transactions, use the price directly
+                # For token transactions, need to convert via token/BCH rate
+                price_for_asset = float(closest.price_value)
+                
+                if wallet_history.cashtoken_ft:
+                    # This is a token transaction, need to get token/BCH rate
+                    ft_bch_log = get_ft_bch_price_log(
+                        wallet_history.cashtoken_ft.category,
+                        timestamp=wallet_history.tx_timestamp
+                    )
+                    if ft_bch_log:
+                        # closest.price_value is fiat/BCH
+                        # ft_bch_log.price_value is tokens/BCH
+                        # We need fiat/token = (fiat/BCH) / (tokens/BCH)
+                        price_for_asset = float(closest.price_value / ft_bch_log.price_value)
+                
+                market_prices[currency] = price_for_asset
                 wallet_history.market_prices = market_prices
                 if currency == "USD" and wallet_history.usd_price is None:
-                    wallet_history.usd_price = closest.price_value
+                    wallet_history.usd_price = price_for_asset
                 wallet_history.save()
 
     return results

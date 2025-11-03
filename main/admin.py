@@ -293,6 +293,7 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'token',
         'cashtoken',
         'capability',
+        'has_fiat_amounts',
         'date_created'
     ]
 
@@ -316,6 +317,11 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         if obj.cashtoken_nft:
             return obj.cashtoken_nft.capability
         return None
+    
+    def has_fiat_amounts(self, obj):
+        return bool(obj.fiat_amounts)
+    has_fiat_amounts.boolean = True
+    has_fiat_amounts.short_description = 'Has Fiat Amt'
 
 
 class WalletNftTokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):

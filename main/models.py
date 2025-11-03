@@ -700,6 +700,10 @@ class WalletHistory(PostgresModel):
         null=True, blank=True, db_constraint=False,
         related_name='wallet_histories'
     )
+    fiat_amounts = JSONField(
+        null=True, blank=True,
+        help_text='User-entered fiat amounts by currency. Format: {"PHP": 100.50, "USD": 1.75}'
+    )
 
     class Meta:
         verbose_name = 'Wallet history'

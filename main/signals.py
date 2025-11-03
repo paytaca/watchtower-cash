@@ -16,6 +16,7 @@ from main.models import (
     WalletHistory,
     WalletHistoryQuerySet,
     Address,
+    TransactionBroadcast,
 )
 from main.tasks import (
     transaction_post_save_task,
@@ -155,3 +156,79 @@ def wallet_history_post_save(sender, instance=None, created=False, **kwargs):
             cashtoken_ft=instance.cashtoken_ft,
             cashtoken_nft=instance.cashtoken_nft,
         ).exclude(id=instance.id).delete()
+
+
+@receiver(post_save, sender=TransactionBroadcast, dispatch_uid='main.signals.update_wallet_history_fiat_amounts')
+def transaction_broadcast_post_save(sender, instance=None, created=False, **kwargs):
+    """
+    Update WalletHistory fiat_amounts when TransactionBroadcast.output_fiat_amounts is saved.
+    Processes both incoming and outgoing transactions.
+    """
+    if not instance or not instance.output_fiat_amounts:
+        return
+    
+    # Find all WalletHistory records for this transaction
+    wallet_histories = WalletHistory.objects.filter(
+        txid=instance.txid
+    ).select_related('wallet')
+    
+    for history in wallet_histories:
+        if not history.wallet:
+            continue
+        
+        fiat_amounts = {}
+        
+        if history.record_type == WalletHistory.INCOMING:
+            # Sum fiat amounts for outputs going to this wallet
+            for output_idx, output_data in instance.output_fiat_amounts.items():
+                recipient = output_data.get('recipient')
+                if not recipient:
+                    continue
+                
+                # Check if this recipient address belongs to the wallet
+                if Address.objects.filter(wallet=history.wallet, address=recipient).exists():
+                    fiat_currency = output_data.get('fiat_currency')
+                    fiat_amount = output_data.get('fiat_amount')
+                    
+                    if fiat_currency and fiat_amount:
+                        amount_float = float(fiat_amount)
+                        if fiat_currency in fiat_amounts:
+                            fiat_amounts[fiat_currency] += amount_float
+                        else:
+                            fiat_amounts[fiat_currency] = amount_float
+        
+        elif history.record_type == WalletHistory.OUTGOING:
+            # For outgoing, only set if ALL inputs are from this wallet
+            # Get senders from the history record
+            all_inputs_from_wallet = True
+            for sender in history.senders:
+                if sender and sender[0]:
+                    if not Address.objects.filter(wallet=history.wallet, address=sender[0]).exists():
+                        all_inputs_from_wallet = False
+                        break
+            
+            if all_inputs_from_wallet:
+                # Sum fiat amounts for outputs NOT going back to this wallet (exclude change)
+                for output_idx, output_data in instance.output_fiat_amounts.items():
+                    recipient = output_data.get('recipient')
+                    if not recipient:
+                        continue
+                    
+                    # Skip if recipient is a change address (back to wallet)
+                    if Address.objects.filter(wallet=history.wallet, address=recipient).exists():
+                        continue
+                    
+                    fiat_currency = output_data.get('fiat_currency')
+                    fiat_amount = output_data.get('fiat_amount')
+                    
+                    if fiat_currency and fiat_amount:
+                        amount_float = float(fiat_amount)
+                        if fiat_currency in fiat_amounts:
+                            fiat_amounts[fiat_currency] += amount_float
+                        else:
+                            fiat_amounts[fiat_currency] = amount_float
+        
+        # Update fiat_amounts if we found any
+        if fiat_amounts:
+            history.fiat_amounts = fiat_amounts
+            history.save(update_fields=['fiat_amounts'])

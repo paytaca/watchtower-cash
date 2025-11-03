@@ -33,6 +33,8 @@ class WalletHistorySerializer(serializers.ModelSerializer):
             "tx_timestamp",
             "usd_price",
             "attributes",
+            "market_prices",
+            "fiat_amounts",
         ]
 
 
