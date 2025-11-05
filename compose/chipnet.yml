@@ -37,6 +37,7 @@ services:
       REMOTE_PORT: 60001
   postgres:
     image: "postgres:11.1-alpine"
+    command: -c "max_connections=400"
     volumes:
       - watchtower_db_data:/var/lib/postgresql/data
     env_file:
