@@ -8,6 +8,7 @@ from django.utils import timezone
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from main.utils.redis_block_setter import *
+from main.utils.logging import log_signal_activity
 from main.models import (
     BlockHeight,
     Transaction,
@@ -52,6 +53,7 @@ def blockheight_post_save(sender, instance=None, created=False, **kwargs):
         
 
 @receiver(post_save, sender=Transaction, dispatch_uid='main.tasks.transaction_post_save_task')
+@log_signal_activity()
 def transaction_post_save(sender, instance=None, created=False, **kwargs):
     address = instance.address.address
     blockheight_id = None

@@ -17,6 +17,7 @@ from main.utils.ipfs import (
     get_ipfs_cid_from_url,
     ipfs_gateways,
 )
+from main.utils.logging import get_stack_frames, format_stack_frame
 from main.utils.market_price import (
     fetch_currency_value_for_timestamp,
     get_latest_bch_rates,
@@ -87,7 +88,9 @@ def send_telegram_message(message, chat_id):
 
 @shared_task(bind=True, queue='client_acknowledgement', max_retries=3)
 def client_acknowledgement(self, tx_obj_id):
-    LOGGER.info(f"Client ACK: Transaction#{tx_obj_id}")
+    stack_frames = get_stack_frames(1, 5)
+    trigger_info = "\n".join([format_stack_frame(frame) for frame in stack_frames])
+    LOGGER.info(f"Client ACK: Transaction#{tx_obj_id}. Triggered from {trigger_info}")
 
     this_transaction = Transaction.objects.filter(id=tx_obj_id)
     if this_transaction.exists():
@@ -378,7 +381,6 @@ def save_record(
     blockheightid=None,
     index=0,
     new_subscription=False,
-    spent_txids=[],
     inputs=None,
     spending_txid=None,
     tx_timestamp=None,
@@ -422,7 +424,7 @@ def save_record(
     if not subscription.exists() and not force_create:
         return None, None
 
-    LOGGER.info(f'Saving txid: {transactionid} | {transaction_address}')
+    LOGGER.info(f'Saving txid: {transactionid} | #{index} | {transaction_address}')
     rampp2p_utils.process_transaction(transactionid, transaction_address, inputs=inputs)
 
     address_obj, _ = Address.objects.get_or_create(address=transaction_address)
