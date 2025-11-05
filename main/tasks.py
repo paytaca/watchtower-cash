@@ -424,7 +424,9 @@ def save_record(
     if not subscription.exists() and not force_create:
         return None, None
 
-    LOGGER.info(f'Saving txid: {transactionid} | #{index} | {transaction_address}')
+    stack_frames = get_stack_frames(1, 5)
+    trigger_info = "\n\t >> ".join([format_stack_frame(frame) for frame in stack_frames])
+    LOGGER.info(f'Saving txid: {transactionid} | #{index} | {transaction_address}\nTriggered from {trigger_info}')
     rampp2p_utils.process_transaction(transactionid, transaction_address, inputs=inputs)
 
     address_obj, _ = Address.objects.get_or_create(address=transaction_address)
@@ -1640,6 +1642,9 @@ def parse_contract_history(txid, address, tx_fee=None, senders=[], recipients=[]
 
 @shared_task(bind=True, queue='wallet_history_1')
 def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], recipients=[], proceed_with_zero_amount=False):
+    stack_frames = get_stack_frames(1, 5)
+    trigger_info = "\n\t >> ".join([format_stack_frame(frame) for frame in stack_frames])
+    LOGGER.info(f"PARSING WALLET HISTORY | {txid} | {wallet_handle}\nTriggered from {trigger_info}")
     wallet_hash = wallet_handle.split('|')[1]
     
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
