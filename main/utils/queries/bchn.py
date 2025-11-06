@@ -160,6 +160,17 @@ class BCHN(object):
         txn['timestamp'] = None
         return txn
 
+    def parse_transaction_from_hex(self, tx_hex, tx_fee=None, include_hex=False, include_no_address=True):
+        txn = self._decode_raw_transaction(tx_hex)
+
+        parsed_txn = self._parse_transaction(txn, include_hex=include_hex, include_no_address=include_no_address)
+        if 'tx_fee' not in parsed_txn:
+            if not tx_fee:
+                tx_fee = math.ceil(txn['size'] * settings.TX_FEE_RATE)
+            parsed_txn['tx_fee'] = tx_fee
+
+        return parsed_txn
+
     @retry(max_retries=3)
     def get_transaction(self, tx_hash, include_hex=False, include_no_address=False):
         txn = self._get_raw_transaction(tx_hash)
@@ -188,6 +199,7 @@ class BCHN(object):
         transaction['inputs'] = []
 
         for tx_input in txn['vin']:
+            # Coinbase transactions are reward to miners when there is a new block mined
             if 'coinbase' in tx_input:
                 transaction['inputs'].append(tx_input)
                 continue
@@ -255,7 +267,7 @@ class BCHN(object):
                 details['address'] = script_pubkey['addresses'][0]
             elif script_pubkey.get('type') == 'nulldata':
                 # remove first characters '6a'
-                details['op_return'] = script_pubkey['hex'][:2]
+                details['op_return'] = script_pubkey['hex'][2:]
             else:
                 details['script'] = script_pubkey.get('hex')
 

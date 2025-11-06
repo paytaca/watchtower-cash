@@ -59,7 +59,7 @@ from io import BytesIO
 import pytz
 
 import rampp2p.utils.transaction as rampp2p_utils
-from jpp.models import Invoice as jpp_invoice_uuid
+from jpp.models import Invoice as JPPInvoice
 from main.utils.transaction_processing import mark_transaction_inputs_as_spent, mark_transactions_as_spent
 
 
