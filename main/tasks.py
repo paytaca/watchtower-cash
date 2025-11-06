@@ -59,8 +59,8 @@ from io import BytesIO
 import pytz
 
 import rampp2p.utils.transaction as rampp2p_utils
-from jpp.models import Invoice as JPPInvoice
-from main.utils.cache import clear_cache_for_spent_transactions
+from jpp.models import Invoice as jpp_invoice_uuid
+from main.utils.transaction_processing import mark_transaction_inputs_as_spent, mark_transactions_as_spent
 
 
 LOGGER = logging.getLogger(__name__)
@@ -2089,6 +2089,9 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
     parsed_tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
     Transaction.objects.filter(txid=txid, tx_timestamp__isnull=True).update(tx_timestamp=parsed_tx_timestamp)
 
+    # Mark BCH tx inputs as spent
+    mark_transaction_inputs_as_spent(bch_tx)
+
     # Extract tx_fee, senders, and recipients
     tx_fee = bch_tx['tx_fee']
     senders = { 'bch': [], 'slp': [] }
@@ -2124,16 +2127,13 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
     if parse_slp:
         # Mark SLP tx inputs as spent
         for tx_input in slp_tx['inputs']:
+            # Marking Transction object as spent is already done earlier in this function
+
             txn_check = Transaction.objects.filter(
                 txid=tx_input['txid'],
                 index=tx_input['spent_index'],
             )
-
             if not txn_check.exists(): continue
-            
-            # Clear cache before marking as spent
-            clear_cache_for_spent_transactions(txn_check)
-            txn_check.update(spent=True, spending_txid=txid)
 
             txn_obj = txn_check.last()
             if txn_obj.token.is_nft:
@@ -2165,19 +2165,6 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
 
                 if created:
                     client_acknowledgement(obj_id)
-
-    # Mark BCH tx inputs as spent
-    for tx_input in bch_tx['inputs']:
-        txn_check = Transaction.objects.filter(
-            txid=tx_input['txid'],
-            index=tx_input['spent_index'],
-        )
-
-        if not txn_check.exists(): continue
-        
-        # Clear cache before marking as spent
-        clear_cache_for_spent_transactions(txn_check)
-        txn_check.update(spent=True, spending_txid=txid)
 
     # Parse BCH tx outputs
     for tx_output in bch_tx['outputs']:
@@ -2340,6 +2327,9 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
     if 'timestamp' in bch_tx.keys():
         tx_timestamp = bch_tx['timestamp']
 
+    # Mark inputs as spent
+    mark_transaction_inputs_as_spent(bch_tx)
+
     # parse inputs and outputs to desired structure
     inputs = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
     outputs = [parse_utxo_to_tuple(i) for i in bch_tx['outputs']]
@@ -2361,12 +2351,9 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
         # force create a transaction output record
         if i == len(utxos) and not has_saved_output: force_create = True
 
-        if not force_create:
+        if not force_create and not is_output:
             txn_check = Transaction.objects.filter(txid=utxo['txid'], index=utxo['index'])
-            if txn_check.exists() and not is_output:
-                # Clear cache before marking as spent
-                clear_cache_for_spent_transactions(txn_check)
-                txn_check.update(spent=True, spending_txid=txid)
+            if txn_check.exists():
                 continue
 
             inp_wallet_hash = Address.objects.filter(address=utxo['address']).values_list("wallet__wallet_hash", flat=True).first()
@@ -2396,12 +2383,6 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
                 tx_timestamp=tx_timestamp if is_output else None,
                 force_create=force_create,
             )
-
-        if not is_output:
-            txn_check = Transaction.objects.filter(txid=utxo['txid'], index=utxo['index'])
-            # Clear cache before marking as spent
-            clear_cache_for_spent_transactions(txn_check)
-            txn_check.update(spent=True, spending_txid=txid)
 
         tx_obj = Transaction.objects \
             .filter(txid=utxo['txid'], index=utxo['index']) \
@@ -2805,14 +2786,9 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
         save_histories = False
         inputs_data = []
 
-        inputs_filter = Q()
-        for _input in inputs:
-            inputs_filter = inputs_filter | models.Q(txid=_input['txid'], index=_input['vout'])
-        spent_transactions = Transaction.objects.filter(inputs_filter)
-
-        # Clear cache before marking as spent
-        clear_cache_for_spent_transactions(spent_transactions)
-        spent_transactions.update(spent=True, spending_txid=tx_hash)
+        # Build list of (txid, index) tuples for marking as spent
+        spent_transactions_list = [(_input['txid'], _input['vout']) for _input in inputs]
+        mark_transactions_as_spent(spent_transactions_list, tx_hash)
 
         for _input in inputs:
             txid = _input['txid']
