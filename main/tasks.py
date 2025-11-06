@@ -2314,7 +2314,7 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
 
     LOGGER.info(f"PARSE TX WALLET HISTORIES: {txid}")
     if txn_details:
-        bch_tx = NODE.BCH._parse_transaction(txn_details)
+        bch_tx = txn_details
     else:
         bch_tx = NODE.BCH.get_transaction(txid)
 
@@ -2743,20 +2743,19 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
     proceed = False
     tx = None
     if tx_hex and immediate:
-        tx = NODE.BCH.build_tx_from_hex(tx_hex)
+        tx = NODE.BCH.parse_transaction_from_hex(tx_hex)
 
         output_addresses = []
-        for output in tx['vout']:
-            if 'scriptPubKey' in output.keys():
-                if 'addresses' in output['scriptPubKey']:
-                    output_addresses += output['scriptPubKey']['addresses']
+        for output in tx['outputs']:
+            if 'address' in output.keys():
+                output_addresses.append(output['address'])
         output_addresses_check = Address.objects.filter(address__in=output_addresses)
 
 
         if output_addresses_check.exists():
             proceed = True
         else:
-            input_txids = [x['txid'] for x in tx['vin'] if 'txid' in x.keys()]
+            input_txids = [x['txid'] for x in tx['inputs'] if 'txid' in x.keys()]
             input_txids_check = Transaction.objects.filter(txid__in=input_txids)
             if input_txids_check.exists():
                 proceed = True
@@ -2768,7 +2767,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
     if proceed:
         if not tx:
-            tx = NODE.BCH._get_raw_transaction(tx_hash)
+            tx = NODE.BCH.get_transaction(tx_hash)
 
         # if passed through the throttled task queue
         # skip processing if it already has at least 1 confirmation
@@ -2777,8 +2776,8 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                 LOGGER.info('Skipped confirmed tx: ' + str(tx_hash))
                 return
 
-        inputs = tx['vin']
-        outputs = tx['vout']
+        inputs = tx['inputs']
+        outputs = tx['outputs']
 
         if 'coinbase' in inputs[0].keys():
             return
@@ -2786,14 +2785,13 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
         save_histories = False
         inputs_data = []
 
-        # Build list of (txid, index) tuples for marking as spent
-        spent_transactions_list = [(_input['txid'], _input['vout']) for _input in inputs]
-        mark_transactions_as_spent(spent_transactions_list, tx_hash)
+        # Mark inputs as spent
+        mark_transaction_inputs_as_spent(tx)
 
         for _input in inputs:
             txid = _input['txid']
-            value = round(_input['value'] * (10 ** 8))
-            index = _input['vout']
+            value = _input['value']
+            index = _input['spent_index']
 
             tx_check = Transaction.objects.filter(txid=txid, index=index)
             if tx_check.exists():
@@ -2818,16 +2816,14 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                         })
 
         for output in outputs:
-            scriptPubKey = output['scriptPubKey']
-
-            if 'addresses' in scriptPubKey.keys():
-                bchaddress = scriptPubKey['addresses'][0]
+            if 'address' in output:
+                bchaddress = output['address']
 
                 address_check = Address.objects.filter(address=bchaddress)
                 if address_check.exists():
-                    value = round(output['value'] * (10 ** 8))
+                    value = output['value']
                     source = NODE.BCH.source
-                    index = output['n']
+                    index = output['index']
 
                     token_id = 'bch'
                     amount = ''
@@ -2835,10 +2831,10 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                     created = False
                     obj_id = None
 
-                    if 'tokenData' in output.keys():
+                    if 'token_data' in output.keys() and output['token_data']:
                         saved_token_data = process_cashtoken_tx(
-                            output['tokenData'],
-                            output['scriptPubKey']['addresses'][0],
+                            output['token_data'],
+                            bchaddress,
                             tx_hash,
                             index=index,
                             value=value
@@ -2897,8 +2893,8 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             except Address.DoesNotExist:
                                 pass
                             # If NFT, include NFT data (capability and commitment)
-                            if 'nft' in output['tokenData'].keys():
-                                data['nft'] = output['tokenData']['nft']
+                            if 'nft' in output['token_data'].keys():
+                                data['nft'] = output['token_data']['nft']
 
                         try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
