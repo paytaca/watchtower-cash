@@ -2726,28 +2726,29 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
             txid = _input['txid']
             value = _input['value']
             index = _input['spent_index']
+            address = _input.get('address')
 
-            tx_check = Transaction.objects.filter(txid=txid, index=index)
-            if tx_check.exists():
-                address = None
-                for _tx in tx_check:
-                    if not _tx.address: continue
-                    address = _tx.address.address
+            subscribed_address_obj = None
+            if address:
+                subscribed_address_obj = Address.objects.filter(address=address, subscriptions__isnull=False).first()
+            else:
+                transaction = Transaction.objects.filter(txid=txid, index=index).first()
+                if transaction and transaction.address and transaction.address.subscriptions.exists():
+                    subscribed_address_obj = transaction.address
 
-                if address:
-                    # save wallet history only if tx is associated with a wallet
-                    if tx_check.filter(wallet__isnull=False).exists():
-                        save_histories = True
+            if subscribed_address_obj:
+                inputs_data.append({
+                    "token": "bch",
+                    "address": address,
+                    "value": value,
+                    "outpoint_txid": txid,
+                    "outpoint_index": index,
+                })
 
-                    subscription = Subscription.objects.filter(address__address=address)
-                    if subscription.exists():
-                        inputs_data.append({
-                            "token": "bch",
-                            "address": address,
-                            "value": value,
-                            "outpoint_txid": txid,
-                            "outpoint_index": index,
-                        })
+                # save wallet history only if tx is associated with a wallet
+                if subscribed_address_obj.wallet_id:
+                    save_histories = True
+
 
         for output in outputs:
             if 'address' in output:
