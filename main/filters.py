@@ -52,6 +52,7 @@ class TokensViewSetFilter(BaseFilterBackend):
     ADDRESS_QUERY_NAME = "address"
     HAS_BALANCE_QUERY_NAME = "has_balance"
     EXCLUDE_TOKEN_IDS_QUERY_NAME = "exclude_token_ids"
+    TOKEN_IDS_QUERY_NAME = "token_ids"
     TOKEN_TYPE_QUERY_NAME = "token_type"
 
     def _parse_query_param(self, request, query_param, is_list=True, separator=",") -> (str, any):
@@ -187,6 +188,16 @@ class TokensViewSetFilter(BaseFilterBackend):
                 _exclude_token_ids_filter = self._case_insensitive_list_filter(name="tokenid", values=exclude_token_ids)
             queryset = queryset.exclude(_exclude_token_ids_filter)
         return queryset
+    
+    def filter_queryset_by_token_ids(self, request, queryset, view):
+        token_ids = self._parse_query_param(request, self.TOKEN_IDS_QUERY_NAME, is_list=True)
+        if len(token_ids):
+            if queryset.model in [CashFungibleToken, CashNonFungibleToken]:
+                _token_ids_filter = self._case_insensitive_list_filter(name="category", values=token_ids)
+            else:
+                _token_ids_filter = self._case_insensitive_list_filter(name="tokenid", values=token_ids)
+            queryset = queryset.filter(_token_ids_filter)
+        return queryset
 
     def filter_queryset_by_token_type(self, request, queryset, view):
         token_type = self._parse_query_param(request, self.TOKEN_TYPE_QUERY_NAME, is_list=False)
@@ -263,6 +274,16 @@ class TokensViewSetFilter(BaseFilterBackend):
                 "in": "query",
                 "title": self.EXCLUDE_TOKEN_IDS_QUERY_NAME.capitalize(),
                 "description": f"Exclude tokenids separated by comma ','",
+                "schema": {
+                    "type": "string",
+                }
+            },
+            {
+                "name": self.TOKEN_IDS_QUERY_NAME,
+                "required": False,
+                "in": "query",
+                "title": self.TOKEN_IDS_QUERY_NAME.capitalize(),
+                "description": f"Filter tokenids separated by comma ','",
                 "schema": {
                     "type": "string",
                 }
