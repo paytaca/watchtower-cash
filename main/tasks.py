@@ -51,6 +51,7 @@ from main.utils.queries.node import Node
 from main.utils.queries.parse_utils import (
     parse_utxo_to_tuple,
     extract_tx_utxos,
+    flatten_output_data,
 )
 from Crypto.Hash import SHA256  # pycryptodome
 import paho.mqtt.client as mqtt
@@ -561,73 +562,94 @@ def save_record(
         return transaction_obj.id, transaction_created
 
 
-def process_cashtoken_tx(
-    token_data,
-    address,
+def process_output(
+    output_data,
     txid,
     block_id=None,
-    index=0,
     timestamp=None,
+    source=None,
     force_create=False,
-    value=0
+    inputs=None,
+    send_client_acknowledgement=True
 ):
-    token_id = token_data['category']
-    amount = None
+    """
+    Process a single transaction output (BCH or CashToken).
+        Created to keep DRY principle. Found functions processs_cashtoken_tx, save_record, & send_client_acknowledgement
+        keep getting called in the same pattern multiple times.
+    Args:
+        output_data: See BCHN._parse_output() for expected structure
+        txid: Transaction ID (required)
+        block_id: Block height ID (optional)
+        timestamp: Transaction timestamp (optional)
+        source: Transaction source (defaults to NODE.BCH.source)
+        force_create: Force create transaction even if not subscribed (default: False)
+        inputs: Input data for save_record (optional)
+        send_client_acknowledgement: Whether to call client_acknowledgement if created (default: True)
+    """
     created = False
+    # Extract required fields from output_data
+    (index, address, value, category, amount, capability, commitment) = flatten_output_data(output_data)
+    is_cashtoken = bool(category)
+    is_cashtoken_nft = bool(category and capability)
 
-    if 'amount' in token_data.keys():
-        amount = int(token_data['amount'])
+    if not address:
+        # Handle op_return or script outputs (no address)
+        # These typically don't need to be saved as transactions
+        return {
+            'transaction_id': None,
+            'created': False,
+            'token_id': 'bch',
+            'decimals': None,
+            'amount': '',
+            'value': value
+        }
 
-    if 'nft' in token_data.keys():
-        # save nft transaction
-        nft_data = token_data['nft']
-        capability = nft_data['capability']
-        commitment = nft_data['commitment']
+    # Default source
+    if source is None:
+        source = NODE.BCH.source
 
-        obj_id, created = save_record(
-            token_id,
-            address,
-            txid,
-            NODE.BCH.source,
-            amount=amount,
-            value=value,
-            blockheightid=block_id,
-            tx_timestamp=timestamp,
-            index=index,
-            is_cashtoken=True,
-            is_cashtoken_nft=True,
-            capability=capability,
-            commitment=commitment,
-            force_create=force_create
-        )
-    else:
-        # save fungible token transaction
-        obj_id, created = save_record(
-            token_id,
-            address,
-            txid,
-            NODE.BCH.source,
-            amount=amount,
-            value=value,
-            blockheightid=block_id,
-            tx_timestamp=timestamp,
-            index=index,
-            is_cashtoken=True,
-            force_create=force_create
-        )
+    tokenid = 'bch'
+    return_tokenid = 'bch'
+    if category:
+        tokenid = category
+        return_tokenid = 'ct/' + category
 
+    obj_id, created = save_record(
+        tokenid,
+        address,
+        txid,
+        source,
+        amount=amount,
+        value=value,
+        blockheightid=block_id,
+        tx_timestamp=timestamp,
+        index=index,
+        is_cashtoken=is_cashtoken,
+        is_cashtoken_nft=is_cashtoken_nft,
+        capability=capability,
+        commitment=commitment,
+        force_create=force_create,
+        inputs=inputs,
+    )
+
+    # Send client acknowledgement if requested and transaction was created
+    if created and send_client_acknowledgement:
+        client_acknowledgement(obj_id)
+
+    # not sure why decimals should only be provided if created,
+    # but keeping it this way to keep logic during refactor
     decimals = None
     if created:
         txn_obj = Transaction.objects.get(id=obj_id)
         decimals = txn_obj.get_token_decimals()
-        client_acknowledgement(obj_id)
     
     return {
         'transaction_id': obj_id,
         'created': created,
-        'token_id': 'ct/' + token_id,
+        'token_id': return_tokenid,
         'decimals': decimals,
-        'amount': amount or ''
+        'amount': amount or '',
+        'value': value
     }
 
 def resolve_ct_nft_genesis(cashtoken:CashNonFungibleToken, txid=""):
@@ -734,17 +756,16 @@ def save_minting_nft_transaction(transaction:dict, minting_input_index:int):
     if "capability" not in minting_input["token_data"]["nft"]: return
     if minting_input["token_data"]["nft"]["capability"] != "minting": return
 
-    process_result = process_cashtoken_tx(
-        minting_input["token_data"],
-        minting_input["address"],
-        minting_input["txid"],
-        index=minting_input["spent_index"],
-        value=minting_input["value"],
-        force_create=True,
+    # minting_input seems to have similar structure as
+    # expected output_data when inspected during refactor
+    minting_input_as_output_data = { **minting_input, "index": minting_input["spent_index"] }
+    process_output(
+        minting_input_as_output_data,
+        minting_input["txid"], force_create=True,
     )
 
     # using this method of update to skip triggering post save signals
-    # process_cashtoken_tx will probably fire it already
+    # process_output will probably fire it already
     Transaction.objects.filter(id=process_result["transaction_id"]).update(
         spending_txid=transaction["txid"],
         spent=True,
@@ -785,34 +806,15 @@ def query_transaction(txid, block_id, for_slp=False):
             index = output['n']
 
             if 'addresses' in output['scriptPubKey'].keys():
-                address = output['scriptPubKey']['addresses'][0]
-                value = round(output['value'] * (10 ** 8))
-                
-                if 'tokenData' in output.keys():
-                    process_cashtoken_tx(
-                        output['tokenData'],
-                        address,
-                        txid,
-                        block_id=block_id,
-                        index=index,
-                        timestamp=transaction['time'],
-                        value=value
-                    )
-                else:
-                    # save bch transaction
-                    obj_id, created = save_record(
-                        'bch',
-                        address,
-                        txid,
-                        NODE.BCH.source,
-                        value=value,
-                        blockheightid=block_id,
-                        tx_timestamp=transaction['time'],
-                        index=index
-                    )
-                    if created:
-                        client_acknowledgement(obj_id)
+                parsed_output = NODE.BCH._parse_output(output)
 
+                process_output(
+                    parsed_output,
+                    txid,
+                    block_id=block_id,
+                    timestamp=transaction['time'],
+                    source=NODE.BCH.source,
+                )
 
 @shared_task(bind=True, queue='manage_blocks')
 def ready_to_accept(self, block_number, txs_count):
@@ -915,31 +917,13 @@ def save_transaction(tx, block_id=None):
         address = output['address']
         value = output['value']
 
-        if output.get('token_data'):
-            process_cashtoken_tx(
-                output['token_data'],
-                address,
-                txid,
-                block_id=block_id,
-                index=index,
-                timestamp=tx['timestamp'],
-                value=value
-            )
-        else:
-            # save bch transaction
-            obj_id, created = save_record(
-                'bch',
-                address,
-                txid,
-                NODE.BCH.source,
-                value=value,
-                blockheightid=block_id,
-                tx_timestamp=tx['timestamp'],
-                index=index
-            )
-            if created:
-                client_acknowledgement(obj_id)
-
+        process_output(
+            output,
+            txid,
+            block_id=block_id,
+            timestamp=tx['timestamp'],
+            source=NODE.BCH.source,
+        )
 
 @shared_task(bind=True, queue='get_latest_block')
 def get_latest_block(self):
@@ -960,27 +944,7 @@ def get_bch_utxos(self, address):
             index = output['tx_pos']
             block = output['height']
             tx_hash = output['tx_hash']
-            is_nft = False
-            is_cashtoken = False
-            commitment = ''
-            capability = ''
             value = output['value']
-            amount = None
-
-            if 'token_data' in output.keys():
-                token_data = output['token_data']
-                token_id = token_data['category']
-                is_cashtoken = True
-
-                if 'amount' in token_data.keys():
-                    amount = int(token_data['amount'])
-
-                if 'nft' in token_data.keys():
-                    is_nft = True
-                    capability = token_data['nft']['capability']
-                    commitment = token_data['nft']['commitment']
-            else:
-                token_id = 'bch'
 
             block, created = BlockHeight.objects.get_or_create(number=block)
             transaction_check = Transaction.objects.filter(
@@ -1002,23 +966,21 @@ def get_bch_utxos(self, address):
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
             else:
-                _, created = save_record(
-                    token_id,
-                    address,
+                # Keep track of token_data structure if there are changes in source data
+                # Refer to function docstring for expected structure
+                output_data = {
+                    'index': index,
+                    'value': value,
+                    'address': address,
+                    'token_data': output['token_data'],
+                }
+                processed_output_data = process_output(
+                    output_data,
                     tx_hash,
-                    NODE.BCH.source,
-                    value=value,
-                    amount=amount,
-                    blockheightid=block.id,
-                    index=index,
-                    new_subscription=True,
-                    is_cashtoken=is_cashtoken,
-                    is_cashtoken_nft=is_nft,
-                    commitment=commitment,
-                    capability=capability
+                    block_id=block.id,
+                    source=NODE.BCH.source,
                 )
-                # transaction_obj = Transaction.objects.filter(id=txn_id)
-
+                created = processed_output_data['created']
                 if created:
                     if not block.requires_full_scan:
                         qs = BlockHeight.objects.filter(id=block.id)
@@ -1028,14 +990,10 @@ def get_bch_utxos(self, address):
             parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
-        Transaction.objects.filter(
-            address__address=address,
-            spent=False
-        ).exclude(
-            id__in=saved_utxo_ids
-        ).update(
-            spent=True
-        )
+        Transaction.objects \
+            .filter(address__address=address, spent=False) \
+            .exclude(id__in=saved_utxo_ids) \
+            .update(spent=True)
 
     except Exception as exc:
         try:
@@ -2175,30 +2133,13 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
         )
 
         if not txn_check.exists():
-            if tx_output['token_data']:
-                process_cashtoken_tx(
-                    tx_output['token_data'],
-                    tx_output['address'],
-                    bch_tx['txid'],
-                    block_id=blockheight_id,
-                    index=tx_output['index'],
-                    timestamp=bch_tx['timestamp'],
-                    value=tx_output['value']
-                )
-            else:
-                value = tx_output['value']
-                obj_id, created = save_record(
-                    'bch',
-                    tx_output['address'],
-                    bch_tx['txid'],
-                    NODE.BCH.source,
-                    value=value,
-                    blockheightid=blockheight_id,
-                    index=tx_output['index'],
-                    tx_timestamp=bch_tx['timestamp']
-                )
-                if created:
-                    client_acknowledgement(obj_id)
+            process_output(
+                tx_output,
+                bch_tx['txid'],
+                block_id=blockheight_id,
+                timestamp=bch_tx['timestamp'],
+                source=NODE.BCH.source,
+            )
 
     # Call task to parse wallet history
     for wallet_handle in set(wallets):
@@ -2362,27 +2303,20 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
 
         if is_output: has_saved_output = True
 
-        if utxo['token_data']:
-            process_cashtoken_tx(
-                utxo['token_data'],
-                utxo['address'],
-                utxo['txid'],
-                index=utxo['index'],
-                timestamp=tx_timestamp if is_output else None,
-                force_create=force_create,
-                value=utxo['value'],
-            )
-        else:
-            save_record(
-                'bch',
-                utxo['address'],
-                utxo['txid'],
-                NODE.BCH.source,
-                value=utxo['value'],
-                index=utxo['index'],
-                tx_timestamp=tx_timestamp if is_output else None,
-                force_create=force_create,
-            )
+        # utxo variable here is similar to BCHN._parse_output()
+        # so it's okay to pass the dict as it is
+        #
+        # send_client_acknowledgement is conditional somehow,
+        # added this condition to keep logic before refactoring
+        send_client_acknowledgement = bool(utxo['token_data'])
+        process_output(
+            utxo,
+            utxo['txid'],
+            timestamp=tx_timestamp if is_output else None,
+            source=NODE.BCH.source,
+            force_create=force_create,
+            send_client_acknowledgement=send_client_acknowledgement,
+        )
 
         tx_obj = Transaction.objects \
             .filter(txid=utxo['txid'], index=utxo['index']) \
@@ -2822,57 +2756,25 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                 address_check = Address.objects.filter(address=bchaddress)
                 if address_check.exists():
                     value = output['value']
-                    source = NODE.BCH.source
-                    index = output['index']
 
-                    token_id = 'bch'
-                    amount = ''
-                    decimals = None
-                    created = False
-                    obj_id = None
-
-                    if 'token_data' in output.keys() and output['token_data']:
-                        saved_token_data = process_cashtoken_tx(
-                            output['token_data'],
-                            bchaddress,
-                            tx_hash,
-                            index=index,
-                            value=value
-                        )
-                        token_id = saved_token_data['token_id']
-                        decimals = saved_token_data['decimals']
-                        amount = str(saved_token_data['amount'])
-                        created = saved_token_data['created']
-                        obj_id = saved_token_data['transaction_id']
+                    if 'time' in tx.keys():
+                        timestamp = tx['time']
                     else:
-                        args = (
-                            token_id,
-                            bchaddress,
-                            tx_hash,
-                            source
-                        )
-                        if 'time' in tx.keys():
-                            timestamp = tx['time']
-                        else:
-                            timestamp = timezone.now().timestamp()
-                        obj_id, created = save_record(
-                            *args,
-                            value=value,
-                            blockheightid=None,
-                            index=index,
-                            inputs=inputs_data,
-                            tx_timestamp=timestamp
-                        )
-                        # has_updated_output = has_updated_output or created
+                        timestamp = timezone.now().timestamp()
 
-                        if obj_id:
-                            txn_obj = Transaction.objects.get(id=obj_id)
-                            decimals = txn_obj.get_token_decimals()
+                    processed_output_data = process_output(
+                        output,
+                        tx_hash,
+                        timestamp=timestamp,
+                        source=NODE.BCH.source,
+                        inputs=inputs_data,
+                    )
+                    token_id = processed_output_data['token_id']
+                    decimals = processed_output_data['decimals']
+                    amount = str(processed_output_data['amount'])
+                    created = processed_output_data['created']
+                    obj_id = processed_output_data['transaction_id']
 
-                            # save wallet history only if tx is associated with a wallet
-                            if txn_obj.wallet:
-                                save_histories = True
-                        
                     if obj_id and created:
                         # Publish MQTT message
                         data = {
@@ -2898,6 +2800,8 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                         try:
                             LOGGER.info('Sending MQTT message: ' + str(data))
+                            # Somehow this topic will only be used when output is cashtoken,
+                            # keeping it this way to preserve logic during refactor
                             if addr_obj and addr_obj.wallet and addr_obj.wallet.wallet_hash:
                                 hash_obj = SHA256.new(addr_obj.wallet.wallet_hash.encode('utf-8'))
                                 hashed_wallet_hash = hash_obj.hexdigest()
@@ -2907,13 +2811,6 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                             publish_message(topic, data, qos=1)
                         except:
                             LOGGER.error(f"Failed to send mqtt for tx | {tx_hash} | {bchaddress}")
-
-                        try:
-                            client_acknowledgement(obj_id)
-                        except:
-                            LOGGER.error('Failed to send client acknowledgement for txid:' + str(tx_hash))
-
-        # mqtt_client.loop_stop()
 
         if save_histories:
             LOGGER.info(f"Parsing wallet history of tx({tx_hash})")

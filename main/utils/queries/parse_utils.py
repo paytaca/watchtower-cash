@@ -31,3 +31,33 @@ def parse_utxo_to_tuple(data:dict, is_slp=False):
     if is_slp: return (data['address'], data['amount'])
 
     return (data['address'], data['value'], data['token_data'])
+
+
+def flatten_output_data(output_data:dict):
+    """
+        Flatten output details needed for transaction processing
+        output_data should be the same as BCHN._parse_output() data structure
+
+        returns tuple(index, address, satoshis, category, token_units, capability, commitment)
+    """
+    address = output_data.get("address")
+    index = output_data['index']
+    value = output_data['value']  # Already in satoshis from _parse_output
+
+    token_data_tuple = flatten_token_data(output_data.get("token_data"))
+    return (index, address, value, *token_data_tuple)
+
+
+def flatten_token_data(output_token_data:dict):
+    if not isinstance(output_token_data, dict) or "category" not in output_token_data:
+        return (None, None, None, None)
+    
+    category = output_token_data["category"]
+    token_units = output_token_data.get("amount")
+    capability = None
+    commitment = None
+    if isinstance(output_token_data.get("nft"), dict):
+        capability = output_token_data["nft"].get("capability")
+        commitment = output_token_data["nft"].get("commitment")
+
+    return (category, token_units, capability, commitment)
