@@ -2758,8 +2758,8 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                 if address_check.exists():
                     value = output['value']
 
-                    if 'time' in tx.keys():
-                        timestamp = tx['time']
+                    if 'timestamp' in tx.keys():
+                        timestamp = tx['timestamp']
                     else:
                         timestamp = timezone.now().timestamp()
 
