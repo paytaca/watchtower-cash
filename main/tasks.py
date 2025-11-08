@@ -383,6 +383,7 @@ def save_record(
     index=0,
     new_subscription=False,
     inputs=None,
+    save_inputs=True,
     spending_txid=None,
     tx_timestamp=None,
     force_create=False,
@@ -547,7 +548,7 @@ def save_record(
         transaction_obj.save()
         
         # save the transaction_obj's inputs if provided
-        if inputs is not None:
+        if inputs is not None and save_inputs:
             for tx_input in inputs:
                 save_record(
                     tx_input["token"],
@@ -570,6 +571,8 @@ def process_output(
     source=None,
     force_create=False,
     inputs=None,
+    save_inputs=True,
+    spending_txid=None,
     send_client_acknowledgement=True
 ):
     """
@@ -630,6 +633,8 @@ def process_output(
         commitment=commitment,
         force_create=force_create,
         inputs=inputs,
+        save_inputs=save_inputs,
+        spending_txid=spending_txid,
     )
 
     # Send client acknowledgement if requested and transaction was created
@@ -651,6 +656,26 @@ def process_output(
         'amount': amount or '',
         'value': value
     }
+
+
+def process_input(input_data, spending_txid, **kwargs):
+    """
+        Process an input data to be saved as a transaction and set the spending txid
+        Args:
+            input_data: See inputs structure in BCHN._parse_transaction() for expected value
+            spending_txid: Transaction ID of the spending transaction
+            **kwargs: Additional arguments to pass to process_output
+    """
+    txid = input_data['txid']
+    output_data = {
+        'address': input_data['address'],
+        'index': input_data['spent_index'],
+        'value': input_data['value'],
+        'token_data': input_data['token_data'],
+    }
+
+    return process_output(output_data, txid, spending_txid=spending_txid, **kwargs)
+
 
 def resolve_ct_nft_genesis(cashtoken:CashNonFungibleToken, txid=""):
     """
@@ -2744,6 +2769,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                     "outpoint_txid": txid,
                     "outpoint_index": index,
                 })
+                process_input(_input, txid, source=NODE.BCH.source)
 
                 # save wallet history only if tx is associated with a wallet
                 if subscribed_address_obj.wallet_id:
@@ -2769,6 +2795,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                         timestamp=timestamp,
                         source=NODE.BCH.source,
                         inputs=inputs_data,
+                        save_inputs=False,
                     )
                     token_id = processed_output_data['token_id']
                     decimals = processed_output_data['decimals']
