@@ -53,12 +53,15 @@ The core steps that are done during transaction processing are as follows:
     2. `save_record` - Single Input level only, conditional since no access to whole transaction data
 
 2. **SAVE_TX_RECORD step** (Did not read whole code, assumed that only the main function is doing this)
-    1. `process_cashtoken_tx` - For Cashtoken outputs, directly calls `save_record`
-    2. `save_record` - The main task doing this. Called multiple times:
-        1. `save_record` - Called recursively for inputs, if data provided in parameters.
-        2. `transaction_post_save_task` - All outputs, seems recursive.
-        3. `parse_tx_wallet_histories`  - Per output, and possibly 1 input.
-        4. `_process_mempool_transaction` - All outputs, includes input data causing recursive calls
+    1. `save_record` - The main task doing this. Called multiple times:
+        1. `process_output` - For BCH and Cashtoken outputs.
+        2. `save_record` - Called recursively for inputs, if data provided in parameters.
+        3. `transaction_post_save_task` - All outputs (SLP)
+    2. `process_output` - For Cashtoken & BCH outputs, directly calls `save_record`:
+        1. `save_transaction` - Per output.
+        2. `transaction_post_save_task` - All outputs (BCH/Cashtoken).
+        3. `parse_tx_wallet_histories`  - Per output, and input if subscribed.
+        4. `_process_mempool_transaction` - All inputs & outputs. Inputs are saved if an input's address is subscribed.
 3. **TOKEN_METADATA step**
     1. `get_cashtoken_meta_data`  - For Cashtokens, called in `save_record` for single input/output only
     2. `get_token_meta_data`  - For SLP, called in `save_record` , `update_nft_owner` , `parse_wallet_history` 
