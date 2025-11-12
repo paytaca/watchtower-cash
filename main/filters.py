@@ -7,6 +7,7 @@ from django_filters import rest_framework as filters
 
 from main.models import (
     Transaction,
+    TransactionMetaAttribute,
     CashNonFungibleToken,
     CashFungibleToken,
     Token,
@@ -18,11 +19,14 @@ class CashNftFilter(filters.FilterSet):
         method='capabilities_filter',
         help_text='Filter by list of values separated by comma',
     )
-
     has_group = filters.BooleanFilter(
         method='has_group_filter',
         help_text='Filter NFTs that has a group. ' +  \
             'NFT belong to a group if there is a `minting` capability with the same category',
+    )
+    is_purelypeer_nft = filters.BooleanFilter(
+        method='is_purelypeer_nft_filter',
+        help_text='Filter PurelyPeer tagged NFTs'
     )
 
     class Meta:
@@ -31,7 +35,19 @@ class CashNftFilter(filters.FilterSet):
             'capability',
             'commitment',
             'category',
+            'is_purelypeer_nft',
         )
+
+    def is_purelypeer_nft_filter(self, queryset, name, value):
+        if not isinstance(value, bool):
+            return queryset
+    
+        purelypeer_tagged_txids = TransactionMetaAttribute.objects.filter(value="Collected CashDrop NFT")
+        if value:
+            qs = queryset.filter(transaction__txid__in=purelypeer_tagged_txids)
+        else:
+            qs = queryset.exclude(transaction__txid__in=purelypeer_tagged_txids)
+        return qs.distinct('category')
 
     def capabilities_filter(self, queryset, name, value):
         if not isinstance(value, str):
@@ -187,6 +203,7 @@ class TokensViewSetFilter(BaseFilterBackend):
                 _exclude_token_ids_filter = self._case_insensitive_list_filter(name="tokenid", values=exclude_token_ids)
             queryset = queryset.exclude(_exclude_token_ids_filter)
         return queryset
+    
 
     def filter_queryset_by_token_type(self, request, queryset, view):
         token_type = self._parse_query_param(request, self.TOKEN_TYPE_QUERY_NAME, is_list=False)
