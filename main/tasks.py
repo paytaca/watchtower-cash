@@ -2769,7 +2769,7 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
                     "outpoint_txid": txid,
                     "outpoint_index": index,
                 })
-                process_input(_input, txid, source=NODE.BCH.source)
+                process_input(_input, tx_hash, source=NODE.BCH.source)
 
                 # save wallet history only if tx is associated with a wallet
                 if subscribed_address_obj.wallet_id:
