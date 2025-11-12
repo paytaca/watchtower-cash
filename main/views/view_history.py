@@ -10,7 +10,7 @@ import pickle
 import base64
 from django.conf import settings
 from django.db.models.functions import Substr, Cast, Floor
-from django.db.models import ExpressionWrapper, FloatField
+from django.db.models import ExpressionWrapper, FloatField, Subquery, OuterRef
 from rest_framework import status
 from main.models import Wallet, Address, WalletHistory, ContractHistory, TransactionMetaAttribute
 from django.core.paginator import Paginator
@@ -21,6 +21,47 @@ from main.tasks import (
 )
 
 POS_ID_MAX_DIGITS = 4
+
+
+def get_memo_subquery(wallet_hash):
+    """Create a subquery to get encrypted memo for each transaction."""
+    from memos.models import Memo
+    return Memo.objects.filter(
+        txid=OuterRef('txid'),
+        wallet_hash=wallet_hash
+    ).values('note')[:1]
+
+
+def expand_token_from_dict(item, token_id_key, token_category_key=None, token_tokenid_key=None, token_decimals_key=None):
+    """
+    Expand token field from dictionary item with annotated token fields.
+    
+    Args:
+        item: Dictionary from .values() query
+        token_id_key: Key for token ID (e.g., '_token_id')
+        token_category_key: Key for token category (for CashTokens, same as token_id)
+        token_tokenid_key: Key for SLP tokenid (for SLP tokens)
+        token_decimals_key: Key for token decimals
+    """
+    token_id = item.pop(token_id_key)
+    token_decimals = item.pop(token_decimals_key) if token_decimals_key else None
+    
+    if token_category_key:
+        # CashToken (NFT or FT)
+        token_category = item.pop(token_category_key)
+        item['token'] = {
+            'id': token_id,
+            'asset_id': f"ct/{token_category}",
+            'decimals': token_decimals if token_decimals is not None else 0
+        }
+    elif token_tokenid_key:
+        # SLP Token
+        token_tokenid = item.pop(token_tokenid_key)
+        item['token'] = {
+            'id': token_id,
+            'asset_id': f"slp/{token_tokenid}" if token_tokenid else None,
+            'decimals': token_decimals if token_decimals is not None else 0
+        }
 
 
 def store_object(key, obj, cache):
@@ -67,7 +108,10 @@ class ContractHistoryView(APIView):
         data = None
         history = []
         
-        address = Address.objects.get(address=address)
+        try:
+            address = Address.objects.get(address=address)
+        except Address.DoesNotExist:
+            return Response(data={'error': 'Address not found'}, status=status.HTTP_404_NOT_FOUND)
         qs = ContractHistory.objects.exclude(amount=0)
         qs = qs.filter(address=address)
 
@@ -134,26 +178,32 @@ class WalletHistoryView(APIView):
         
         is_cashtoken_nft = False
         if index and txid:
-            index = int(index)
-            is_cashtoken_nft = True
+            try:
+                index = int(index)
+                is_cashtoken_nft = True
+            except (TypeError, ValueError):
+                return Response(data={'error': f'invalid index: {index}'}, status=status.HTTP_400_BAD_REQUEST)
 
         if isinstance(txids, str):
             txids = [txid for txid in txids.split(",") if txid]
 
-        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        try:
+            wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+        except Wallet.DoesNotExist:
+            return Response(data={'error': 'Wallet not found'}, status=status.HTTP_404_NOT_FOUND)
 
         cache_key = None
         history = []
         data = None
-        use_cache = record_type == 'all' and not index and not txids and not reference
+        use_cache = record_type == 'all' and not index and not txids and not reference and not attribute
         
         if wallet.version > 1:
             if use_cache:
                 cache = settings.REDISKV
-                cache_key = f'wallet:history:{wallet_hash}:all:{str(page)}'
-                cached_data = cache.get(cache_key)
-                if cached_data:
-                    data = retrieve_object(cached_data, cache)
+                # Include page_size and token_id_or_category in cache key to avoid collisions
+                token_key = token_id_or_category or category or 'bch'
+                cache_key = f'wallet:history:{wallet_hash}:{token_key}:{str(page)}:{str(page_size)}'
+                data = retrieve_object(cache_key, cache)
 
         if not data:
             qs = WalletHistory.objects.exclude(amount=0)
@@ -196,12 +246,12 @@ class WalletHistoryView(APIView):
                             cashtoken_nft__category=category,
                             cashtoken_nft__current_index=index,
                             cashtoken_nft__current_txid=txid
-                        )
+                        ).select_related('cashtoken_nft', 'cashtoken_nft__info')
                         history = qs.annotate(
                             _token=F('cashtoken_nft__category')
                         )
                     else:
-                        qs = qs.filter(cashtoken_ft__category=token_id_or_category)
+                        qs = qs.filter(cashtoken_ft__category=token_id_or_category).select_related('cashtoken_ft', 'cashtoken_ft__info')
                         history = qs.annotate(
                             _token=F('cashtoken_ft__category'),
                             amount=ExpressionWrapper(
@@ -211,52 +261,79 @@ class WalletHistoryView(APIView):
                             )
                         )
 
-                    from memos.models import Memo
-                    from django.db.models import Subquery, OuterRef
+                    memo_subquery = get_memo_subquery(wallet_hash)
                     
-                    # Subquery to get encrypted memo for each transaction
-                    memo_subquery = Memo.objects.filter(
-                        txid=OuterRef('txid'),
-                        wallet_hash=wallet_hash
-                    ).values('note')[:1]
+                    if is_cashtoken_nft:
+                        history = history.annotate(
+                            encrypted_memo=Subquery(memo_subquery),
+                            _token_id=F('cashtoken_nft__category'),
+                            _token_category=F('cashtoken_nft__category'),
+                            _token_decimals=F('cashtoken_nft__info__decimals')
+                        ).values(
+                            'record_type',
+                            'txid',
+                            'amount',
+                            'token',
+                            'tx_fee',
+                            'senders',
+                            'recipients',
+                            'date_created',
+                            'tx_timestamp',
+                            'usd_price',
+                            'market_prices',
+                            'attributes',
+                            'fiat_amounts',
+                            'encrypted_memo',
+                            '_token_id',
+                            '_token_category',
+                            '_token_decimals',
+                        )
+                    else:
+                        history = history.annotate(
+                            encrypted_memo=Subquery(memo_subquery),
+                            _token_id=F('cashtoken_ft__category'),
+                            _token_category=F('cashtoken_ft__category'),
+                            _token_decimals=F('cashtoken_ft__info__decimals')
+                        ).values(
+                            'record_type',
+                            'txid',
+                            'amount',
+                            'token',
+                            'tx_fee',
+                            'senders',
+                            'recipients',
+                            'date_created',
+                            'tx_timestamp',
+                            'usd_price',
+                            'market_prices',
+                            'attributes',
+                            'fiat_amounts',
+                            'encrypted_memo',
+                            '_token_id',
+                            '_token_category',
+                            '_token_decimals',
+                        )
                     
-                    history = history.annotate(
-                        encrypted_memo=Subquery(memo_subquery)
-                    ).rename_annotations(
-                        _token='token_id_or_category'
-                    ).values(
-                        'record_type',
-                        'txid',
-                        'amount',
-                        'token',
-                        'tx_fee',
-                        'senders',
-                        'recipients',
-                        'date_created',
-                        'tx_timestamp',
-                        'usd_price',
-                        'market_prices',
-                        'attributes',
-                        'fiat_amounts',
-                        'encrypted_memo',
-                    )
+                    # Post-process to expand token field
+                    history = list(history)
+                    for item in history:
+                        expand_token_from_dict(
+                            item,
+                            token_id_key='_token_id',
+                            token_category_key='_token_category',
+                            token_decimals_key='_token_decimals'
+                        )
                 else:
-                    from memos.models import Memo
-                    from django.db.models import Subquery, OuterRef
+                    memo_subquery = get_memo_subquery(wallet_hash)
                     
-                    # Subquery to get encrypted memo for each transaction
-                    memo_subquery = Memo.objects.filter(
-                        txid=OuterRef('txid'),
-                        wallet_hash=wallet_hash
-                    ).values('note')[:1]
-                    
-                    qs = qs.filter(token__tokenid=token_id_or_category)
+                    qs = qs.filter(token__tokenid=token_id_or_category).select_related('token')
 
                     history = qs.annotate(
                         _token=F('token__tokenid'),
-                        encrypted_memo=Subquery(memo_subquery)
-                    ).rename_annotations(
-                        _token='token_id_or_category'
+                        encrypted_memo=Subquery(memo_subquery),
+                        _token_id=F('token__id'),
+                        _token_tokenid=F('token__tokenid'),
+                        _token_decimals=F('token__decimals')
                     ).values(
                         'record_type',
                         'txid',
@@ -272,24 +349,34 @@ class WalletHistoryView(APIView):
                         'attributes',
                         'fiat_amounts',
                         'encrypted_memo',
+                        '_token_id',
+                        '_token_tokenid',
+                        '_token_decimals',
                     )
+                    
+                    # Post-process to expand token field
+                    history = list(history)
+                    for item in history:
+                        expand_token_from_dict(
+                            item,
+                            token_id_key='_token_id',
+                            token_tokenid_key='_token_tokenid',
+                            token_decimals_key='_token_decimals'
+                        )
             else:
-                from memos.models import Memo
-                from django.db.models import Subquery, OuterRef
+                memo_subquery = get_memo_subquery(wallet_hash)
                 
-                # Subquery to get encrypted memo for each transaction
-                memo_subquery = Memo.objects.filter(
-                    txid=OuterRef('txid'),
-                    wallet_hash=wallet_hash
-                ).values('note')[:1]
-                
-                qs = qs.filter(token__name='bch')
+                qs = qs.filter(token__name='bch').select_related('token')
                 history = qs.annotate(
-                    encrypted_memo=Subquery(memo_subquery)
+                    encrypted_memo=Subquery(memo_subquery),
+                    _token_id=F('token__id'),
+                    _token_tokenid=F('token__tokenid'),
+                    _token_decimals=F('token__decimals')
                 ).values(
                     'record_type',
                     'txid',
                     'amount',
+                    'token',
                     'tx_fee',
                     'senders',
                     'recipients',
@@ -300,7 +387,20 @@ class WalletHistoryView(APIView):
                     'attributes',
                     'fiat_amounts',
                     'encrypted_memo',
+                    '_token_id',
+                    '_token_tokenid',
+                    '_token_decimals',
                 )
+                
+                # Post-process to expand token field
+                history = list(history)
+                for item in history:
+                    expand_token_from_dict(
+                        item,
+                        token_id_key='_token_id',
+                        token_tokenid_key='_token_tokenid',
+                        token_decimals_key='_token_decimals'
+                    )
 
             if wallet.version == 1:
                 return Response(data=history, status=status.HTTP_200_OK)
