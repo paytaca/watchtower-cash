@@ -784,7 +784,7 @@ def save_minting_nft_transaction(transaction:dict, minting_input_index:int):
     # minting_input seems to have similar structure as
     # expected output_data when inspected during refactor
     minting_input_as_output_data = { **minting_input, "index": minting_input["spent_index"] }
-    process_output(
+    process_result = process_output(
         minting_input_as_output_data,
         minting_input["txid"], force_create=True,
     )
