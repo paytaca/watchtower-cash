@@ -145,23 +145,29 @@ def get_yadio_rate(currency=None, source_currency="USD"):
         {"rate": float, "timestamp": int, "request": str}
     """
     
-    # Check if we have a recent price log (less than 10 seconds old)
-    ten_seconds_ago = tz.now() - timedelta(seconds=10)
-    latest_price_log = AssetPriceLog.objects.filter(
-        currency=currency.upper(),
-        relative_currency=source_currency.upper(),
-        timestamp__gte=ten_seconds_ago
-    ).order_by('-timestamp').first()
+    # IMPORTANT: Don't cache USD rates from database
+    # The database only stores currency/BCH rates, not currency/USD rates.
+    # Caching USD rates could return incorrect ARS/BCH values instead of ARS/USD values,
+    # which would cause incorrect calculations (e.g., multiplying ARS/BCH * USD/BCH instead of ARS/USD * USD/BCH)
+    if source_currency.upper() != "USD":
+        # Only cache non-USD rates (e.g., if we ever cache BCH rates)
+        ten_seconds_ago = tz.now() - timedelta(seconds=10)
+        latest_price_log = AssetPriceLog.objects.filter(
+            currency=currency.upper(),
+            relative_currency=source_currency.upper(),
+            timestamp__gte=ten_seconds_ago
+        ).order_by('-timestamp').first()
+        
+        if latest_price_log:
+            # Return cached data from the latest price log
+            return {
+                "rate": float(latest_price_log.price_value),
+                "timestamp": int(latest_price_log.timestamp.timestamp() * 1000),
+                "request": f"cached:{latest_price_log.source}"
+            }
     
-    if latest_price_log:
-        # Return cached data from the latest price log
-        return {
-            "rate": float(latest_price_log.price_value),
-            "timestamp": int(latest_price_log.timestamp.timestamp() * 1000),
-            "request": f"cached:{latest_price_log.source}"
-        }
-    
-    # If no recent data, make the API request
+    # Always fetch USD rates from API (no database cache)
+    # If no recent data for non-USD rates, make the API request
     return requests.get(f"https://api.yadio.io/rate/{currency}/{source_currency}", timeout=15).json()
 
 
