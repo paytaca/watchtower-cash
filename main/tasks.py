@@ -528,9 +528,34 @@ def save_record(
                 transaction_obj.tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
 
         except IntegrityError as exc:
-            LOGGER.error('ERROR in saving txid: ' + transactionid)
-            LOGGER.error(str(exc))
-            return None, None
+            # Race condition: another process created the record concurrently
+            # Fetch the existing record and continue processing
+            LOGGER.warning(f'Race condition detected for txid: {transactionid} | #{index} | {transaction_address}. Fetching existing record.')
+            try:
+                transaction_obj = Transaction.objects.get(
+                    txid=transactionid,
+                    address=address_obj,
+                    index=index
+                )
+                transaction_created = False
+                
+                # Still update fields that might have changed
+                transaction_obj.amount = amount
+                transaction_obj.value = int(value)
+                
+                if spending_txid:
+                    transaction_obj.spending_txid = spending_txid
+                    transaction_obj.spent = True
+                
+                if transaction_obj.source != source:
+                    transaction_obj.source = source
+                
+                if tx_timestamp:
+                    transaction_obj.tx_timestamp = datetime.fromtimestamp(tx_timestamp).replace(tzinfo=pytz.UTC)
+            except Transaction.DoesNotExist:
+                # This shouldn't happen, but handle it gracefully
+                LOGGER.error(f'ERROR in saving txid: {transactionid} - Record not found after IntegrityError')
+                return None, None
 
         if blockheightid is not None:
             transaction_obj.blockheight_id = blockheightid

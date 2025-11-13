@@ -351,9 +351,13 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
         # Process each asset-currency pair
         for asset in assets:
             for currency in currencies:
-                price_data = self._get_price(asset, currency, include_calculated)
-                if price_data:
-                    results.extend(price_data)
+                try:
+                    price_data = self._get_price(asset, currency, include_calculated)
+                    if price_data:
+                        results.extend(price_data)
+                except Exception as exc:
+                    LOGGER.error(f"Error getting price for asset={asset}, currency={currency}: {exc}", exc_info=True)
+                    # Continue processing other asset-currency pairs instead of failing completely
         
         serializer = self.serializer_class(results, many=True)
         return Response({"prices": serializer.data})
@@ -414,71 +418,77 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
             
             # Token price in BCH
             if currency == 'BCH':
-                price_log = get_ft_bch_price_log(token_category)
-                if price_log:
-                    results.append({
-                        'id': price_log.id,
-                        'asset': f'ct/{token_category}',
-                        'asset_type': 'cashtoken',
-                        'asset_name': token_name,
-                        'asset_symbol': token_symbol,
-                        'currency': 'BCH',
-                        'price_value': price_log.price_value,
-                        'timestamp': price_log.timestamp,
-                        'source': price_log.source,
-                    })
-            else:
-                # Token price in fiat - need to calculate via BCH
-                if include_calculated:
-                    token_bch_price = get_ft_bch_price_log(token_category)
-                    bch_fiat_price = get_latest_bch_price(currency)
-                    
-                    if token_bch_price and bch_fiat_price:
-                        # Calculate token/fiat price
-                        # token_bch_price.price_value = amount of tokens per 1 BCH
-                        # bch_fiat_price.price_value = amount of fiat per 1 BCH
-                        # Result: amount of tokens per 1 fiat unit
-                        calculated_price = token_bch_price.price_value / bch_fiat_price.price_value
-                        calculated_timestamp = min(token_bch_price.timestamp, bch_fiat_price.timestamp)
-                        
-                        # Save calculated price to database
-                        try:
-                            token_obj = CashFungibleToken.objects.get(category=token_category)
-                        except CashFungibleToken.DoesNotExist:
-                            token_obj = None
-                        
-                        # Create or update calculated price record
-                        source_ids = {
-                            'token_bch_price_id': token_bch_price.id,
-                            'bch_fiat_price_id': bch_fiat_price.id,
-                        }
-                        calculation_formula = f'token/{currency} = (tokens/BCH) / ({currency}/BCH)'
-                        
-                        price_log, created = AssetPriceLog.objects.update_or_create(
-                            currency=currency,
-                            relative_currency='BCH',
-                            currency_ft_token=token_obj,
-                            source='calculated',
-                            timestamp=calculated_timestamp,
-                            defaults={
-                                'price_value': calculated_price,
-                                'source_price_logs': source_ids,
-                                'calculation': calculation_formula,
-                            }
-                        )
-                        
+                try:
+                    price_log = get_ft_bch_price_log(token_category)
+                    if price_log:
                         results.append({
                             'id': price_log.id,
                             'asset': f'ct/{token_category}',
                             'asset_type': 'cashtoken',
                             'asset_name': token_name,
                             'asset_symbol': token_symbol,
-                            'currency': currency,
-                            'price_value': calculated_price,
-                            'timestamp': calculated_timestamp,
-                            'source': 'calculated',
-                            'source_ids': source_ids,
-                            'calculation': calculation_formula,
+                            'currency': 'BCH',
+                            'price_value': price_log.price_value,
+                            'timestamp': price_log.timestamp,
+                            'source': price_log.source,
                         })
+                except Exception as exc:
+                    LOGGER.error(f"Error getting BCH price for token {token_category}: {exc}", exc_info=True)
+            else:
+                # Token price in fiat - need to calculate via BCH
+                if include_calculated:
+                    try:
+                        token_bch_price = get_ft_bch_price_log(token_category)
+                        bch_fiat_price = get_latest_bch_price(currency)
+                        
+                        if token_bch_price and bch_fiat_price:
+                            # Calculate token/fiat price
+                            # token_bch_price.price_value = amount of tokens per 1 BCH
+                            # bch_fiat_price.price_value = amount of fiat per 1 BCH
+                            # Result: amount of tokens per 1 fiat unit
+                            calculated_price = token_bch_price.price_value / bch_fiat_price.price_value
+                            calculated_timestamp = min(token_bch_price.timestamp, bch_fiat_price.timestamp)
+                            
+                            # Save calculated price to database
+                            try:
+                                token_obj = CashFungibleToken.objects.get(category=token_category)
+                            except CashFungibleToken.DoesNotExist:
+                                token_obj = None
+                            
+                            # Create or update calculated price record
+                            source_ids = {
+                                'token_bch_price_id': token_bch_price.id,
+                                'bch_fiat_price_id': bch_fiat_price.id,
+                            }
+                            calculation_formula = f'token/{currency} = (tokens/BCH) / ({currency}/BCH)'
+                            
+                            price_log, created = AssetPriceLog.objects.update_or_create(
+                                currency=currency,
+                                relative_currency='BCH',
+                                currency_ft_token=token_obj,
+                                source='calculated',
+                                timestamp=calculated_timestamp,
+                                defaults={
+                                    'price_value': calculated_price,
+                                    'source_price_logs': source_ids,
+                                    'calculation': calculation_formula,
+                                }
+                            )
+                            
+                            results.append({
+                                'id': price_log.id,
+                                'asset': f'ct/{token_category}',
+                                'asset_type': 'cashtoken',
+                                'asset_name': token_name,
+                                'asset_symbol': token_symbol,
+                                'currency': currency,
+                                'price_value': calculated_price,
+                                'timestamp': calculated_timestamp,
+                                'source': 'calculated',
+                                'source_ids': source_ids,
+                                'calculation': calculation_formula,
+                            })
+                    except Exception as exc:
+                        LOGGER.error(f"Error calculating fiat price for token {token_category} in {currency}: {exc}", exc_info=True)
         
         return results

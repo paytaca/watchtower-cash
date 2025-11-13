@@ -1,6 +1,7 @@
 import json
 import logging
 import requests
+import time
 import concurrent.futures
 from decimal import Decimal
 from datetime import timedelta, datetime
@@ -509,8 +510,65 @@ def get_ft_bch_price_log(ft_category:str, timestamp=None):
     price__bch_per_token_unit = price__sats_per_token_unit / Decimal(10 ** 8)
 
     ft_token_obj, _ = CashFungibleToken.objects.get_or_create(category=ft_category)
-    ft_token_obj.fetch_metadata()
-    price__bch_per_amount = price__bch_per_token_unit * 10 ** ft_token_obj.info.decimals
+    
+    # Force fetch metadata with retries if it's missing
+    # This is critical for accurate price calculations - incorrect decimals can cause payment errors
+    max_retries = 3
+    retry_delay = 0.5  # Start with 0.5 seconds
+    
+    for attempt in range(max_retries):
+        # Refresh from DB to get latest info
+        ft_token_obj.refresh_from_db()
+        
+        if ft_token_obj.info and ft_token_obj.info.decimals is not None:
+            # Metadata exists and has decimals, we're good
+            break
+        
+        # Metadata missing, try to fetch it
+        if attempt < max_retries - 1:
+            LOGGER.warning(
+                f"Token {ft_category} metadata missing (attempt {attempt + 1}/{max_retries}). "
+                f"Force fetching metadata..."
+            )
+            ft_token_obj.fetch_metadata()
+            # Wait before checking again (exponential backoff)
+            time.sleep(retry_delay)
+            retry_delay *= 2  # Exponential backoff: 0.5s, 1s, 2s
+        else:
+            # Final attempt failed
+            LOGGER.error(
+                f"CRITICAL: Token {ft_category} has no metadata info after {max_retries} attempts. "
+                f"Cannot calculate price safely without decimals. Returning None to prevent payment errors."
+            )
+            return None
+    
+    # Final check after retries
+    ft_token_obj.refresh_from_db()
+    if not ft_token_obj.info:
+        LOGGER.error(
+            f"CRITICAL: Token {ft_category} metadata still missing after retries. "
+            f"Returning None to prevent payment errors."
+        )
+        return None
+    
+    if ft_token_obj.info.decimals is None:
+        LOGGER.error(
+            f"CRITICAL: Token {ft_category} metadata missing decimals field. "
+            f"Cannot calculate price safely. Returning None to prevent payment errors."
+        )
+        return None
+    
+    if not ft_token_obj.info.symbol:
+        LOGGER.warning(
+            f"Token {ft_category} has no symbol in metadata. "
+            f"Using category hash as fallback for display only."
+        )
+        currency_symbol = ft_category[:8]
+    else:
+        currency_symbol = ft_token_obj.info.symbol
+    
+    decimals = ft_token_obj.info.decimals
+    price__bch_per_amount = price__bch_per_token_unit * 10 ** decimals
     price_amount_per_bch = 1 / price__bch_per_amount
 
     price_obj, _ = AssetPriceLog.objects.update_or_create(
@@ -519,7 +577,7 @@ def get_ft_bch_price_log(ft_category:str, timestamp=None):
         source="cauldron",
         currency_ft_token=ft_token_obj,
         defaults=dict(
-            currency=ft_token_obj.info.symbol,
+            currency=currency_symbol,
             price_value=price_amount_per_bch,
         )
     )
