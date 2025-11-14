@@ -43,6 +43,7 @@ class CashNftFilter(filters.FilterSet):
             return queryset
     
         purelypeer_tagged_txids = TransactionMetaAttribute.objects.filter(value="Collected CashDrop NFT")
+        purelypeer_tagged_txids = purelypeer_tagged_txids.values('txid')
         if value:
             qs = queryset.filter(transaction__txid__in=purelypeer_tagged_txids)
         else:
