@@ -79,6 +79,7 @@ The core steps that are done during transaction processing are as follows:
     1. `parse_wallet_history` - Main function for wallets. Called in multiple areas:
         1. `parse_wallet_history` - For all wallets in inputs/outputs
         2. `parse_tx_wallet_histories` - For all wallets in inputs/outputs
+        3. `_process_mempool_transaction` - Called if any input or output address has a wallet (ensures WalletHistory is created for all wallet-involved transactions)
     2. `parse_contract_history` - Main function for smart contracts. Called once in `transaction_post_save_task` 
 7. **MARKET_PRICES step** (Did not read whole code yet)
     1. `parse_wallet_history_market_values` - Main function that does this step. Mostly works for transactions less than 30 seconds old. Or if historical price is available in `AssetPriceLog` . Called in `parse_wallet_history` . Referenced in `send_wallet_history_push_notification_task` but this task is not used anywhere.
