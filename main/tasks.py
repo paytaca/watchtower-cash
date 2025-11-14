@@ -2807,6 +2807,11 @@ def _process_mempool_transaction(tx_hash, tx_hex=None, immediate=False, force=Fa
 
                 address_check = Address.objects.filter(address=bchaddress)
                 if address_check.exists():
+                    # Check if output address has a wallet and set save_histories accordingly
+                    addr_obj = address_check.first()
+                    if addr_obj.wallet_id:
+                        save_histories = True
+                    
                     value = output['value']
 
                     if 'timestamp' in tx.keys():
