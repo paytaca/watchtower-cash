@@ -953,9 +953,9 @@ def save_transaction(tx, block_id=None):
     """
     tx_check = Transaction.objects.filter(txid=tx['txid'])
     if tx_check.exists():
-        tx_obj = tx_check.last()
-        tx_obj.block_id = block_id
-        tx_obj.save()
+        # Update all transactions with this txid to have the blockheight
+        if block_id is not None:
+            Transaction.objects.filter(txid=tx['txid']).update(blockheight_id=block_id)
         return
     
     txid = tx['txid']
