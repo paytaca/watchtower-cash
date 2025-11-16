@@ -18,7 +18,10 @@ class HistoryParser(object):
             input_txns_filter = Q(address__address=self.address)
 
         input_txns_filter = input_txns_filter & Q(spending_txid=self.txid)
-        inputs = Transaction.objects.filter(
+        # Optimized: Add select_related to reduce queries
+        inputs = Transaction.objects.select_related(
+            'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+        ).filter(
             input_txns_filter
         ).exclude(
             txid=self.txid
@@ -31,7 +34,10 @@ class HistoryParser(object):
             ct_input_txns_filter = Q(address__address=self.address)
 
         ct_input_txns_filter = ct_input_txns_filter & Q(spending_txid=self.txid, cashtoken_ft__isnull=False)
-        ct_fungible_inputs = Transaction.objects.filter(ct_input_txns_filter)
+        # Optimized: Add select_related to reduce queries
+        ct_fungible_inputs = Transaction.objects.select_related(
+            'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+        ).filter(ct_input_txns_filter)
         return inputs, ct_fungible_inputs
 
 
@@ -41,7 +47,10 @@ class HistoryParser(object):
             output_txns_filter = Q(address__address=self.address)
 
         output_txns_filter = output_txns_filter & Q(txid=self.txid)
-        outputs = Transaction.objects.filter(output_txns_filter).exclude(
+        # Optimized: Add select_related to reduce queries
+        outputs = Transaction.objects.select_related(
+            'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+        ).filter(output_txns_filter).exclude(
             token__tokenid=settings.WT_DEFAULT_CASHTOKEN_ID
         )
 
@@ -50,7 +59,10 @@ class HistoryParser(object):
             ct_output_txns_filter = Q(address__address=self.address)
 
         ct_output_txns_filter = ct_output_txns_filter & Q(txid=self.txid, cashtoken_ft__isnull=False)
-        ct_fungible_outputs = Transaction.objects.filter(ct_output_txns_filter)
+        # Optimized: Add select_related to reduce queries
+        ct_fungible_outputs = Transaction.objects.select_related(
+            'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+        ).filter(ct_output_txns_filter)
         return outputs, ct_fungible_outputs
 
 

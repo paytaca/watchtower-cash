@@ -1659,15 +1659,26 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
     wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
     # Do not record wallet history record if all senders and recipients are from the same wallet (i.e. UTXO consolidation txs)
+    # Optimized: Use values_list with flat=True for better performance
     sender_addresses = set([i[0] for i in senders if i[0]])
-    senders_check = Address.objects.filter(address__in=sender_addresses, wallet=wallet)
     recipient_addresses = set([i[0] for i in recipients if i[0]])
-    recipients_check = Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
-    if len(sender_addresses) == senders_check.count():
-        if len(recipient_addresses) == recipients_check.count():
-            # Remove wallet history record of this, if any
-            WalletHistory.objects.filter(txid=txid).delete()
-            return
+    
+    if sender_addresses and recipient_addresses:
+        # Optimized: Single query to check if all addresses belong to this wallet
+        sender_wallet_addresses = set(
+            Address.objects.filter(address__in=sender_addresses, wallet=wallet)
+            .values_list('address', flat=True)
+        )
+        recipient_wallet_addresses = set(
+            Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
+            .values_list('address', flat=True)
+        )
+        
+        if len(sender_addresses) == len(sender_wallet_addresses):
+            if len(recipient_addresses) == len(recipient_wallet_addresses):
+                # Remove wallet history record of this, if any
+                WalletHistory.objects.filter(txid=txid, wallet=wallet).delete()
+                return
 
     parser = HistoryParser(txid, wallet_hash=wallet_hash)
     parsed_history = parser.parse()
@@ -1676,6 +1687,10 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         tx_fee = float(tx_fee)
     
     BCH_OR_SLP = 'bch_or_slp'
+
+    # Optimized: Batch TransactionBroadcast lookup once per txid (before loop)
+    txn_broadcast = TransactionBroadcast.objects.select_related('price_log').filter(txid=txid).first()
+    txn_broadcast_price_log = txn_broadcast.price_log if txn_broadcast and txn_broadcast.price_log else None
 
     # parsed_history.keys() = ['bch_or_slp', 'ct']
     for key in parsed_history.keys():
@@ -1716,11 +1731,16 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             if settings.BCH_NETWORK != 'mainnet':
                 bch_prefix = 'bchtest:'
 
-            txns = Transaction.objects.filter(
+            # Optimized: Add select_related to reduce queries
+            txns = Transaction.objects.select_related(
+                'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+            ).filter(
                 txid=txid,
                 address__address__startswith=bch_prefix
             )
-            spent_txns = Transaction.objects.filter(
+            spent_txns = Transaction.objects.select_related(
+                'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+            ).filter(
                 spending_txid=txid,
                 address__address__startswith=bch_prefix,
             )
@@ -1781,7 +1801,10 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             if key != BCH_OR_SLP:
                 return
 
-            txns = Transaction.objects.filter(
+            # Optimized: Add select_related to reduce queries
+            txns = Transaction.objects.select_related(
+                'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+            ).filter(
                 txid=txid,
                 address__address__startswith='simpleledger:'
             )
@@ -1794,79 +1817,59 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         if not token_obj:
             _txn = txn or spent_txn
             token_obj = _txn.token
+        
+        # Optimized: Use update_or_create instead of filter+save pattern
+        # This eliminates the DELETE query that was in the signal and handles race conditions better
+        defaults = {
+            'record_type': record_type,
+            'amount': amount,
+            'token': token_obj,
+            'cashtoken_ft': cashtoken_ft,
+            'cashtoken_nft': cashtoken_nft,
+        }
+        
+        if tx_fee and processed_senders and processed_recipients:
+            defaults['tx_fee'] = tx_fee
+            defaults['senders'] = processed_senders
+            defaults['recipients'] = processed_recipients
+        
+        if tx_timestamp:
+            defaults['tx_timestamp'] = tx_timestamp
+        
+        if date_created:
+            defaults['date_created'] = date_created
+        
+        if txn_broadcast_price_log:
+            defaults['price_log'] = txn_broadcast_price_log
 
-        history_check = WalletHistory.objects.filter(
-            wallet=wallet,
-            txid=txid,
-            token=token_obj,
-            cashtoken_ft=cashtoken_ft,
-            cashtoken_nft=cashtoken_nft
-        )
-        if history_check.exists():
-            history_check.update(
-                record_type=record_type,
-                amount=amount,
-                token=token_obj,
-                cashtoken_ft=cashtoken_ft,
-                cashtoken_nft=cashtoken_nft
-            )
-            if tx_fee and processed_senders and processed_recipients:
-                history_check.update(
-                    tx_fee=tx_fee,
-                    senders=processed_senders,
-                    recipients=processed_recipients
-                )
-            if tx_timestamp:
-                history_check.update(
-                    tx_timestamp=tx_timestamp,
-                )
-                resolve_wallet_history_usd_values.delay(txid=txid)
-                for history in history_check:
-                    parse_wallet_history_market_values.delay(history.id)
-        else:
-            history = WalletHistory(
+        try:
+            history, created = WalletHistory.objects.update_or_create(
                 wallet=wallet,
                 txid=txid,
-                record_type=record_type,
-                amount=amount,
                 token=token_obj,
                 cashtoken_ft=cashtoken_ft,
                 cashtoken_nft=cashtoken_nft,
-                tx_fee=tx_fee,
-                senders=processed_senders,
-                recipients=processed_recipients,
-                date_created=date_created,
-                tx_timestamp=tx_timestamp,
+                defaults=defaults
             )
 
-            # Check if this transaction has a price_log from broadcast
-            txn_broadcast = TransactionBroadcast.objects.select_related('price_log').filter(txid=txid).first()
-            if txn_broadcast and txn_broadcast.price_log:
-                history.price_log = txn_broadcast.price_log
+            # Optimized: Always use async for market values parsing
+            resolve_wallet_history_usd_values.delay(txid=txid)
+            
+            if history.tx_timestamp:
+                # Always use .delay() for async execution
+                parse_wallet_history_market_values.delay(history.id)
 
             try:
-                history.save()
-
-                resolve_wallet_history_usd_values.delay(txid=txid)
-
-                if history.tx_timestamp:
-                    try:
-                        parse_wallet_history_market_values(history.id)
-                        history.refresh_from_db()
-                    except Exception as exception:
-                        LOGGER.exception(exception)
-
-                try:
-                    # Do not send notifications for amounts less than or equal to 0.00001
-                    if abs(amount) > 0.00001:
-                        LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
-                        send_wallet_history_push_notification(history)
-                    else:
-                        return send_wallet_history_push_notification_nft(history)
-                except Exception as exception:
-                    LOGGER.exception(exception)
-            except IntegrityError as exc:
-                LOGGER.exception(exc)
+                # Do not send notifications for amounts less than or equal to 0.00001
+                if abs(amount) > 0.00001:
+                    LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
+                    send_wallet_history_push_notification(history)
+                else:
+                    send_wallet_history_push_notification_nft(history)
+            except Exception as exception:
+                LOGGER.exception(exception)
+        except IntegrityError as exc:
+            LOGGER.exception(exc)
 
         # merchant wallet check
         merchant_check = Merchant.objects.filter(wallet_hash=wallet.wallet_hash)

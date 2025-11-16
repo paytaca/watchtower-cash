@@ -205,17 +205,8 @@ def transaction_meta_attr_post_save(sender, instance=None, created=False, **kwar
 @receiver(post_save, sender=WalletHistory, dispatch_uid='main.tasks.wallet_history_post_save')
 def wallet_history_post_save(sender, instance=None, created=False, **kwargs):
     if created:
-        # Delete earlier wallet history records for the same txid, wallet, & record type
-        WalletHistory.objects.filter(
-            txid=instance.txid,
-            wallet=instance.wallet,
-            record_type=instance.record_type,
-            token=instance.token,
-            cashtoken_ft=instance.cashtoken_ft,
-            cashtoken_nft=instance.cashtoken_nft,
-        ).exclude(id=instance.id).delete()
-        
         # Clear wallet history cache for this wallet to ensure fresh data
+        # Note: Deletion of earlier records is now handled in parse_wallet_history using update_or_create
         if instance.wallet:
             # Determine asset key for cache clearing
             asset_key = None

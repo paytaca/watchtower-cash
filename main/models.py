@@ -503,6 +503,13 @@ class Transaction(PostgresModel):
             'index'
         ]
         ordering = ['-date_created']
+        indexes = [
+            models.Index(
+                fields=['spending_txid', 'address'],
+                name='txn_spending_txid_addr_idx',
+                condition=Q(spending_txid__isnull=False) & ~Q(spending_txid='')
+            ),
+        ]
 
     def __str__(self):
         return self.txid
