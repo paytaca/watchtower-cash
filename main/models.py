@@ -700,10 +700,6 @@ class WalletHistory(PostgresModel):
         null=True, blank=True, db_constraint=False,
         related_name='wallet_histories'
     )
-    fiat_amounts = JSONField(
-        null=True, blank=True,
-        help_text='User-entered fiat amounts by currency. Format: {"PHP": 100.50, "USD": 1.75}'
-    )
 
     class Meta:
         verbose_name = 'Wallet history'
@@ -781,6 +777,79 @@ class WalletHistory(PostgresModel):
             "currency": default_currency,
             "value": round(usd_price * self.amount, 2),
         }
+
+    @property
+    def fiat_amounts(self):
+        """
+        Computed property that derives fiat amounts from TransactionBroadcast.output_fiat_amounts.
+        Always returns the current value from the corresponding TransactionBroadcast record.
+        This ensures there is no mismatch between WalletHistory and TransactionBroadcast data.
+        """
+        from main.models import TransactionBroadcast
+        
+        if not self.wallet or not self.txid:
+            return None
+        
+        try:
+            txn_broadcast = TransactionBroadcast.objects.get(txid=self.txid)
+        except TransactionBroadcast.DoesNotExist:
+            return None
+        
+        if not txn_broadcast.output_fiat_amounts:
+            return None
+        
+        fiat_amounts = {}
+        
+        if self.record_type == WalletHistory.INCOMING:
+            # Sum fiat amounts for outputs going to this wallet
+            for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
+                recipient = output_data.get('recipient')
+                if not recipient:
+                    continue
+                
+                # Check if this recipient address belongs to the wallet
+                if Address.objects.filter(wallet=self.wallet, address=recipient).exists():
+                    fiat_currency = output_data.get('fiat_currency')
+                    fiat_amount = output_data.get('fiat_amount')
+                    
+                    if fiat_currency and fiat_amount:
+                        amount_float = float(fiat_amount)
+                        if fiat_currency in fiat_amounts:
+                            fiat_amounts[fiat_currency] += amount_float
+                        else:
+                            fiat_amounts[fiat_currency] = amount_float
+        
+        elif self.record_type == WalletHistory.OUTGOING:
+            # For outgoing, only set if ALL inputs are from this wallet
+            all_inputs_from_wallet = True
+            for sender in self.senders:
+                if sender and sender[0]:
+                    if not Address.objects.filter(wallet=self.wallet, address=sender[0]).exists():
+                        all_inputs_from_wallet = False
+                        break
+            
+            if all_inputs_from_wallet:
+                # Sum fiat amounts for outputs NOT going back to this wallet (exclude change)
+                for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
+                    recipient = output_data.get('recipient')
+                    if not recipient:
+                        continue
+                    
+                    # Skip if recipient is a change address (back to wallet)
+                    if Address.objects.filter(wallet=self.wallet, address=recipient).exists():
+                        continue
+                    
+                    fiat_currency = output_data.get('fiat_currency')
+                    fiat_amount = output_data.get('fiat_amount')
+                    
+                    if fiat_currency and fiat_amount:
+                        amount_float = float(fiat_amount)
+                        if fiat_currency in fiat_amounts:
+                            fiat_amounts[fiat_currency] += amount_float
+                        else:
+                            fiat_amounts[fiat_currency] = amount_float
+        
+        return fiat_amounts if fiat_amounts else None
 
 
 class ContractHistory(PostgresModel):

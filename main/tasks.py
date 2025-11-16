@@ -1822,64 +1822,6 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 resolve_wallet_history_usd_values.delay(txid=txid)
                 for history in history_check:
                     parse_wallet_history_market_values.delay(history.id)
-            
-            # Check if this transaction has output_fiat_amounts from broadcast
-            txn_broadcast = TransactionBroadcast.objects.filter(txid=txid).first()
-            if txn_broadcast and txn_broadcast.output_fiat_amounts:
-                fiat_amounts = {}
-                
-                if record_type == 'incoming':
-                    # For incoming transactions, sum fiat amounts for outputs going to this wallet
-                    for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
-                        recipient = output_data.get('recipient')
-                        if not recipient:
-                            continue
-                        
-                        # Check if this recipient address belongs to the wallet
-                        if Address.objects.filter(wallet=wallet, address=recipient).exists():
-                            fiat_currency = output_data.get('fiat_currency')
-                            fiat_amount = output_data.get('fiat_amount')
-                            
-                            if fiat_currency and fiat_amount:
-                                amount_float = float(fiat_amount)
-                                if fiat_currency in fiat_amounts:
-                                    fiat_amounts[fiat_currency] += amount_float
-                                else:
-                                    fiat_amounts[fiat_currency] = amount_float
-                
-                elif record_type == 'outgoing':
-                    # For outgoing transactions, only set fiat_amounts if ALL inputs are from this wallet
-                    all_inputs_from_wallet = True
-                    for sender in processed_senders:
-                        if sender and sender[0]:
-                            if not Address.objects.filter(wallet=wallet, address=sender[0]).exists():
-                                all_inputs_from_wallet = False
-                                break
-                    
-                    if all_inputs_from_wallet:
-                        # Sum fiat amounts for outputs NOT going back to this wallet (exclude change)
-                        for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
-                            recipient = output_data.get('recipient')
-                            if not recipient:
-                                continue
-                            
-                            # Skip if recipient is a change address (back to wallet)
-                            if Address.objects.filter(wallet=wallet, address=recipient).exists():
-                                continue
-                            
-                            fiat_currency = output_data.get('fiat_currency')
-                            fiat_amount = output_data.get('fiat_amount')
-                            
-                            if fiat_currency and fiat_amount:
-                                amount_float = float(fiat_amount)
-                                if fiat_currency in fiat_amounts:
-                                    fiat_amounts[fiat_currency] += amount_float
-                                else:
-                                    fiat_amounts[fiat_currency] = amount_float
-                
-                # Update fiat_amounts if we found any
-                if fiat_amounts:
-                    history_check.update(fiat_amounts=fiat_amounts)
         else:
             history = WalletHistory(
                 wallet=wallet,
@@ -1900,64 +1842,6 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             txn_broadcast = TransactionBroadcast.objects.select_related('price_log').filter(txid=txid).first()
             if txn_broadcast and txn_broadcast.price_log:
                 history.price_log = txn_broadcast.price_log
-            
-            # Check if this transaction has output_fiat_amounts from broadcast
-            if txn_broadcast and txn_broadcast.output_fiat_amounts:
-                fiat_amounts = {}
-                
-                if record_type == 'incoming':
-                    # For incoming transactions, sum fiat amounts for outputs going to this wallet
-                    for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
-                        recipient = output_data.get('recipient')
-                        if not recipient:
-                            continue
-                        
-                        # Check if this recipient address belongs to the wallet
-                        if Address.objects.filter(wallet=wallet, address=recipient).exists():
-                            fiat_currency = output_data.get('fiat_currency')
-                            fiat_amount = output_data.get('fiat_amount')
-                            
-                            if fiat_currency and fiat_amount:
-                                amount_float = float(fiat_amount)
-                                if fiat_currency in fiat_amounts:
-                                    fiat_amounts[fiat_currency] += amount_float
-                                else:
-                                    fiat_amounts[fiat_currency] = amount_float
-                
-                elif record_type == 'outgoing':
-                    # For outgoing transactions, only set fiat_amounts if ALL inputs are from this wallet
-                    # Check if all input addresses belong to this wallet
-                    all_inputs_from_wallet = True
-                    for sender in processed_senders:
-                        if sender and sender[0]:  # sender[0] is the address
-                            if not Address.objects.filter(wallet=wallet, address=sender[0]).exists():
-                                all_inputs_from_wallet = False
-                                break
-                    
-                    if all_inputs_from_wallet:
-                        # Sum fiat amounts for outputs NOT going back to this wallet (exclude change)
-                        for output_idx, output_data in txn_broadcast.output_fiat_amounts.items():
-                            recipient = output_data.get('recipient')
-                            if not recipient:
-                                continue
-                            
-                            # Skip if recipient is a change address (back to wallet)
-                            if Address.objects.filter(wallet=wallet, address=recipient).exists():
-                                continue
-                            
-                            fiat_currency = output_data.get('fiat_currency')
-                            fiat_amount = output_data.get('fiat_amount')
-                            
-                            if fiat_currency and fiat_amount:
-                                amount_float = float(fiat_amount)
-                                if fiat_currency in fiat_amounts:
-                                    fiat_amounts[fiat_currency] += amount_float
-                                else:
-                                    fiat_amounts[fiat_currency] = amount_float
-                
-                # Set fiat_amounts if we found any
-                if fiat_amounts:
-                    history.fiat_amounts = fiat_amounts
 
             try:
                 history.save()

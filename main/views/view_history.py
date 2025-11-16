@@ -282,7 +282,6 @@ class WalletHistoryView(APIView):
                             'usd_price',
                             'market_prices',
                             'attributes',
-                            'fiat_amounts',
                             'encrypted_memo',
                             '_token_id',
                             '_token_category',
@@ -307,7 +306,6 @@ class WalletHistoryView(APIView):
                             'usd_price',
                             'market_prices',
                             'attributes',
-                            'fiat_amounts',
                             'encrypted_memo',
                             '_token_id',
                             '_token_category',
@@ -323,6 +321,32 @@ class WalletHistoryView(APIView):
                             token_category_key='_token_category',
                             token_decimals_key='_token_decimals'
                         )
+                    
+                    # Add fiat_amounts from computed property
+                    # Collect unique txids to fetch WalletHistory objects efficiently
+                    history_txids = {item['txid'] for item in history}
+                    wallet_histories_list = list(WalletHistory.objects.filter(
+                        txid__in=history_txids,
+                        wallet=wallet
+                    ).select_related('wallet', 'token'))
+                    
+                    # Create a lookup dict - use (txid, record_type, wallet_id) as key since amounts might have precision differences
+                    wallet_histories_lookup = {}
+                    for h in wallet_histories_list:
+                        # Primary key: (txid, record_type, wallet_id)
+                        key = (h.txid, h.record_type, h.wallet_id)
+                        if key not in wallet_histories_lookup:
+                            wallet_histories_lookup[key] = h
+                    
+                    # Add fiat_amounts to each item
+                    for item in history:
+                        key = (item['txid'], item['record_type'], wallet.id)
+                        if key in wallet_histories_lookup:
+                            wallet_history_obj = wallet_histories_lookup[key]
+                            # Get fiat_amounts from the computed property
+                            item['fiat_amounts'] = wallet_history_obj.fiat_amounts
+                        else:
+                            item['fiat_amounts'] = None
                 else:
                     memo_subquery = get_memo_subquery(wallet_hash)
                     
@@ -347,7 +371,6 @@ class WalletHistoryView(APIView):
                         'usd_price',
                         'market_prices',
                         'attributes',
-                        'fiat_amounts',
                         'encrypted_memo',
                         '_token_id',
                         '_token_tokenid',
@@ -363,6 +386,32 @@ class WalletHistoryView(APIView):
                             token_tokenid_key='_token_tokenid',
                             token_decimals_key='_token_decimals'
                         )
+                    
+                    # Add fiat_amounts from computed property
+                    # Collect unique txids to fetch WalletHistory objects efficiently
+                    history_txids = {item['txid'] for item in history}
+                    wallet_histories_list = list(WalletHistory.objects.filter(
+                        txid__in=history_txids,
+                        wallet=wallet
+                    ).select_related('wallet', 'token'))
+                    
+                    # Create a lookup dict - use (txid, record_type, wallet_id) as key since amounts might have precision differences
+                    wallet_histories_lookup = {}
+                    for h in wallet_histories_list:
+                        # Primary key: (txid, record_type, wallet_id)
+                        key = (h.txid, h.record_type, h.wallet_id)
+                        if key not in wallet_histories_lookup:
+                            wallet_histories_lookup[key] = h
+                    
+                    # Add fiat_amounts to each item
+                    for item in history:
+                        key = (item['txid'], item['record_type'], wallet.id)
+                        if key in wallet_histories_lookup:
+                            wallet_history_obj = wallet_histories_lookup[key]
+                            # Get fiat_amounts from the computed property
+                            item['fiat_amounts'] = wallet_history_obj.fiat_amounts
+                        else:
+                            item['fiat_amounts'] = None
             else:
                 memo_subquery = get_memo_subquery(wallet_hash)
                 
@@ -385,7 +434,6 @@ class WalletHistoryView(APIView):
                     'usd_price',
                     'market_prices',
                     'attributes',
-                    'fiat_amounts',
                     'encrypted_memo',
                     '_token_id',
                     '_token_tokenid',
@@ -401,6 +449,37 @@ class WalletHistoryView(APIView):
                         token_tokenid_key='_token_tokenid',
                         token_decimals_key='_token_decimals'
                     )
+                
+                # Add fiat_amounts from computed property
+                # Collect unique txids to fetch WalletHistory objects efficiently
+                history_txids = {item['txid'] for item in history}
+                wallet_histories_list = list(WalletHistory.objects.filter(
+                    txid__in=history_txids,
+                    wallet=wallet
+                ).select_related('wallet', 'token'))
+                
+                # Create a lookup dict - use (txid, record_type, wallet_id) as key since amounts might have precision differences
+                # For outgoing transactions, amounts are stored as negative in DB, but we'll match by record_type
+                wallet_histories_lookup = {}
+                for h in wallet_histories_list:
+                    # Primary key: (txid, record_type, wallet_id)
+                    key = (h.txid, h.record_type, h.wallet_id)
+                    # If multiple records exist for same key, prefer the one that matches the amount
+                    if key not in wallet_histories_lookup:
+                        wallet_histories_lookup[key] = h
+                    else:
+                        # If we already have one, keep the first match (they should be the same anyway)
+                        pass
+                
+                # Add fiat_amounts to each item
+                for item in history:
+                    key = (item['txid'], item['record_type'], wallet.id)
+                    if key in wallet_histories_lookup:
+                        wallet_history_obj = wallet_histories_lookup[key]
+                        # Get fiat_amounts from the computed property
+                        item['fiat_amounts'] = wallet_history_obj.fiat_amounts
+                    else:
+                        item['fiat_amounts'] = None
 
             if wallet.version == 1:
                 return Response(data=history, status=status.HTTP_200_OK)
