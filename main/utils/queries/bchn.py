@@ -199,23 +199,29 @@ class BCHN(object):
         transaction['inputs'] = []
         total_input_sats = 0
         total_output_sats = 0
+        can_calculate_fee = True
 
         for tx_input in txn['vin']:
             # Coinbase transactions are reward to miners when there is a new block mined
             if 'coinbase' in tx_input:
                 transaction['inputs'].append(tx_input)
+                can_calculate_fee = False  # Coinbase has no fee
                 continue
 
             input_txid = tx_input['txid']
+            value = None
 
             if 'prevout' in tx_input.keys():
                 prevout = tx_input['prevout']
-                value = prevout['value']
-                # Convert BCH to satoshis if needed (value < 100000000 likely means BCH)
-                if isinstance(value, (int, float)) and value < 100000000:
-                    total_input_sats += round(value * (10 ** 8))
+                if 'value' in prevout:
+                    value = prevout['value']
+                    # Convert BCH to satoshis if needed (value < 100000000 likely means BCH)
+                    if isinstance(value, (int, float)) and value < 100000000:
+                        total_input_sats += round(value * (10 ** 8))
+                    else:
+                        total_input_sats += value
                 else:
-                    total_input_sats += value
+                    can_calculate_fee = False
                 
                 input_token_data = None
                 scriptPubKey = prevout['scriptPubKey']
@@ -225,16 +231,20 @@ class BCHN(object):
                 else:
                     _input_details = self.get_input_details(input_txid, tx_input['vout'])
                     # for multisig input prevouts (no address given on data)
-                    input_address = _input_details.get('address')
+                    input_address = _input_details.get('address') if _input_details else None
 
                 if 'tokenData' in prevout.keys():
                     input_token_data = prevout['tokenData']
             else:
                 _input_details = self.get_input_details(input_txid, tx_input['vout'])
-                value = _input_details.get('value')
-                total_input_sats += value
-                input_token_data = _input_details.get('token_data')
-                input_address = _input_details.get('address')
+                if _input_details and 'value' in _input_details:
+                    value = _input_details.get('value')
+                    total_input_sats += value
+                else:
+                    can_calculate_fee = False
+                
+                input_token_data = _input_details.get('token_data') if _input_details else None
+                input_address = _input_details.get('address') if _input_details else None
 
             if not include_no_address and not input_address:
                 continue
@@ -261,8 +271,14 @@ class BCHN(object):
             if 'value' in data:
                 total_output_sats += data['value']
 
-        # Calculate fee from inputs and outputs
-        transaction['tx_fee'] = total_input_sats - total_output_sats
+        # Calculate fee: prefer calculated, then RPC fee, then estimate
+        if can_calculate_fee and total_input_sats > 0:
+            transaction['tx_fee'] = total_input_sats - total_output_sats
+        elif 'fee' in txn:
+            transaction['tx_fee'] = round(txn['fee'] * (10 ** 8))
+        else:
+            # Last resort: estimate (should be rare)
+            transaction['tx_fee'] = math.ceil(txn['size'] * settings.TX_FEE_RATE)
         
         return transaction
 
