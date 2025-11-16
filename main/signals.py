@@ -1,7 +1,7 @@
 import logging
 from django.conf import settings
 from django.db import transaction
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
@@ -23,6 +23,7 @@ from main.tasks import (
     transaction_post_save_task,
     update_wallet_history_currency,
 )
+from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -93,6 +94,61 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
     )
 
 
+@receiver(pre_delete, sender=Transaction, dispatch_uid='main.signals.transaction_pre_delete')
+@log_signal_activity()
+def transaction_pre_delete(sender, instance=None, **kwargs):
+    """
+    Clear cache for all wallets involved when a transaction is deleted.
+    This ensures balance and history caches are invalidated for both senders and recipients.
+    """
+    if not instance:
+        return
+    
+    txid = instance.txid
+    
+    # Find all transactions with the same txid to get all wallets involved
+    # This includes the one being deleted and any others with the same txid
+    all_transactions = Transaction.objects.filter(txid=txid).select_related(
+        'address__wallet', 'cashtoken_ft', 'cashtoken_nft'
+    )
+    
+    # Collect unique wallet hashes and token categories
+    unique_wallet_hashes = set()
+    token_categories = set()
+    
+    for txn in all_transactions:
+        # Collect wallet hashes from addresses
+        if txn.address and txn.address.wallet:
+            unique_wallet_hashes.add(txn.address.wallet.wallet_hash)
+        
+        # Collect token categories
+        if txn.cashtoken_ft:
+            token_categories.add(txn.cashtoken_ft.category)
+        if txn.cashtoken_nft:
+            token_categories.add(txn.cashtoken_nft.category)
+    
+    # Also check for wallets from transactions that spent this transaction's outputs
+    # These are transactions where spending_txid = txid (they spent outputs from this transaction)
+    # This covers both:
+    # 1. Transactions that used this transaction's outputs as inputs
+    # 2. The inputs to this transaction (if this transaction spent them)
+    spending_transactions = Transaction.objects.filter(spending_txid=txid).select_related('address__wallet')
+    for txn in spending_transactions:
+        if txn.address and txn.address.wallet:
+            unique_wallet_hashes.add(txn.address.wallet.wallet_hash)
+    
+    # Clear balance and history cache for all wallets involved
+    for wallet_hash in unique_wallet_hashes:
+        # Clear BCH balance for all wallets, and token balance only for tokens involved
+        if token_categories:
+            clear_wallet_balance_cache(wallet_hash, token_categories)
+        else:
+            # Only clear BCH balance if no tokens are involved
+            clear_wallet_balance_cache(wallet_hash, [])
+        # Clear all history cache for the wallet
+        clear_wallet_history_cache(wallet_hash)
+
+
 @receiver(post_save, sender=WalletPreferences, dispatch_uid='main.tasks.update_wallet_history_currency')
 def walletpreferences_post_save(sender, instance=None, created=False, **kwargs):
     if instance and instance.selected_currency and instance.wallet:
@@ -158,3 +214,21 @@ def wallet_history_post_save(sender, instance=None, created=False, **kwargs):
             cashtoken_ft=instance.cashtoken_ft,
             cashtoken_nft=instance.cashtoken_nft,
         ).exclude(id=instance.id).delete()
+        
+        # Clear wallet history cache for this wallet to ensure fresh data
+        if instance.wallet:
+            # Determine asset key for cache clearing
+            asset_key = None
+            if instance.cashtoken_ft:
+                asset_key = instance.cashtoken_ft.category
+            elif instance.cashtoken_nft:
+                asset_key = instance.cashtoken_nft.category
+            elif instance.token:
+                # For BCH or SLP tokens, use token info_id or 'bch'
+                if instance.token.name == 'bch':
+                    asset_key = 'bch'
+                else:
+                    asset_key = instance.token.info_id if instance.token.info_id else None
+            
+            # Clear cache for the specific asset, or all if asset_key is None
+            clear_wallet_history_cache(instance.wallet.wallet_hash, asset_key)

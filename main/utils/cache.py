@@ -85,6 +85,58 @@ def clear_cache_for_spent_transactions(transaction_queryset):
             cache.delete(*history_cache_keys) 
 
 
+def clear_wallet_balance_cache(wallet_hash, token_categories=None):
+    """
+    Clear wallet balance cache for a given wallet hash.
+    Always clears BCH balance cache.
+    If token_categories is provided (list/set), clears token balance cache for those categories.
+    If token_categories is None, clears all token balance caches for the wallet.
+    """
+    if not wallet_hash:
+        return
+    
+    cache = settings.REDISKV
+    
+    # Always clear BCH balance
+    bch_cache_key = f'wallet:balance:bch:{wallet_hash}'
+    cache.delete(bch_cache_key)
+    
+    # Clear token balance cache
+    if token_categories is None:
+        # Clear all token balance caches for this wallet
+        token_cache_keys = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
+        if token_cache_keys:
+            cache.delete(*token_cache_keys)
+    elif token_categories:
+        # Clear only specific token categories
+        for category in token_categories:
+            if category:  # Skip None/empty categories
+                token_cache_key = f'wallet:balance:token:{wallet_hash}:{category}'
+                cache.delete(token_cache_key)
+
+
+def clear_wallet_history_cache(wallet_hash, asset_key=None):
+    """
+    Clear wallet history cache for a given wallet hash.
+    If asset_key is provided, only clears cache for that specific asset.
+    If asset_key is None, clears all history cache for the wallet.
+    """
+    if not wallet_hash:
+        return
+    
+    cache = settings.REDISKV
+    
+    if asset_key:
+        # Clear cache for specific asset (all pages)
+        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
+    else:
+        # Clear all history cache for the wallet (all assets, all pages)
+        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+    
+    if history_cache_keys:
+        cache.delete(*history_cache_keys)
+
+
 def clear_pos_wallet_history_cache(wallet_hash, posid):
     """Invalidate cached POS wallet history responses for a specific POS ID."""
     if posid is None:

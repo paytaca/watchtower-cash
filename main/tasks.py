@@ -39,6 +39,7 @@ from main.utils.push_notification import (
     send_wallet_history_push_notification,
     send_wallet_history_push_notification_nft
 )
+from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
@@ -2015,6 +2016,35 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
             models.F('wallet__wallet_hash'),
         )) \
         .values_list('wallet_handle', flat=True)
+
+    # Clear wallet history cache for all wallets involved (both senders and recipients)
+    # This ensures cached histories are invalidated when new transactions are created
+    unique_wallet_hashes = set()
+    for wallet_handle in set(wallets):
+        wallet_hash = wallet_handle.split('|')[1] if '|' in wallet_handle else None
+        if wallet_hash:
+            unique_wallet_hashes.add(wallet_hash)
+    
+    # Collect all token categories involved in this transaction
+    # This includes CashTokens (FT and NFT) from all transaction records with this txid
+    token_categories = set()
+    transactions_in_tx = Transaction.objects.filter(txid=txid).select_related('cashtoken_ft', 'cashtoken_nft')
+    for txn in transactions_in_tx:
+        if txn.cashtoken_ft:
+            token_categories.add(txn.cashtoken_ft.category)
+        if txn.cashtoken_nft:
+            token_categories.add(txn.cashtoken_nft.category)
+    
+    # Clear balance and history cache for all wallets involved
+    # Clear BCH balance for all wallets, and token balance only for tokens involved
+    for wallet_hash in unique_wallet_hashes:
+        # Clear BCH balance for all wallets, and token balance only if there are tokens in the transaction
+        if token_categories:
+            clear_wallet_balance_cache(wallet_hash, token_categories)
+        else:
+            # Only clear BCH balance if no tokens are involved
+            clear_wallet_balance_cache(wallet_hash, [])
+        clear_wallet_history_cache(wallet_hash)
 
     if parse_slp:
         # Mark SLP tx inputs as spent
