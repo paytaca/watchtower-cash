@@ -197,6 +197,8 @@ class BCHN(object):
             transaction["hex"] = txn["hex"]
 
         transaction['inputs'] = []
+        total_input_sats = 0
+        total_output_sats = 0
 
         for tx_input in txn['vin']:
             # Coinbase transactions are reward to miners when there is a new block mined
@@ -209,6 +211,12 @@ class BCHN(object):
             if 'prevout' in tx_input.keys():
                 prevout = tx_input['prevout']
                 value = prevout['value']
+                # Convert BCH to satoshis if needed (value < 100000000 likely means BCH)
+                if isinstance(value, (int, float)) and value < 100000000:
+                    total_input_sats += round(value * (10 ** 8))
+                else:
+                    total_input_sats += value
+                
                 input_token_data = None
                 scriptPubKey = prevout['scriptPubKey']
 
@@ -224,6 +232,7 @@ class BCHN(object):
             else:
                 _input_details = self.get_input_details(input_txid, tx_input['vout'])
                 value = _input_details.get('value')
+                total_input_sats += value
                 input_token_data = _input_details.get('token_data')
                 input_address = _input_details.get('address')
 
@@ -248,9 +257,13 @@ class BCHN(object):
             if not include_no_address and not data.get('address'):
                 continue
             transaction['outputs'].append(data)
+            # Sum output values (already in satoshis from _parse_output)
+            if 'value' in data:
+                total_output_sats += data['value']
 
-        if 'fee' in txn:
-            transaction['tx_fee'] = round(txn['fee'] * (10 ** 8))
+        # Calculate fee from inputs and outputs
+        transaction['tx_fee'] = total_input_sats - total_output_sats
+        
         return transaction
 
     def _parse_output(self, tx_output):
