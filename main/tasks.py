@@ -442,7 +442,11 @@ def save_record(
     with trans.atomic():
         transaction_created = False
         cashtoken = None
-        ct_nft_hash_fungible = bool(is_cashtoken_nft and amount)
+        try:
+            parsed_amount = int(amount)
+        except (TypeError, ValueError):
+            parsed_amount = None
+        ct_nft_hash_fungible = bool(is_cashtoken_nft and parsed_amount)
 
         if token.lower() == 'bch':
             token_obj, created = Token.objects.get_or_create(name=token)
