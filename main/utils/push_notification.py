@@ -3,9 +3,24 @@ from django.conf import settings
 from django.utils import timezone
 from main.utils.broadcast import broadcast_to_engagementhub
 from main.models import Transaction, WalletHistory
+from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def send_wallet_history_push_notification(wallet_history_obj):
+    # Check transaction age - skip if older than 1 hour
+    transaction_date = wallet_history_obj.tx_timestamp if wallet_history_obj.tx_timestamp else wallet_history_obj.date_created
+    if transaction_date:
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        if transaction_date < one_hour_ago:
+            logger.warning(
+                f"Skipping push notification for transaction {wallet_history_obj.txid}: "
+                f"transaction is older than 1 hour (age: {timezone.now() - transaction_date})"
+            )
+            return None
+    
     fiat_value = None
     decimals = 0
     if wallet_history_obj.cashtoken_ft:
@@ -60,6 +75,17 @@ def send_wallet_history_push_notification(wallet_history_obj):
         )
 
 def send_wallet_history_push_notification_nft(wallet_history_obj):
+    # Check transaction age - skip if older than 1 hour
+    transaction_date = wallet_history_obj.tx_timestamp if wallet_history_obj.tx_timestamp else wallet_history_obj.date_created
+    if transaction_date:
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        if transaction_date < one_hour_ago:
+            logger.warning(
+                f"Skipping push notification for NFT transaction {wallet_history_obj.txid}: "
+                f"transaction is older than 1 hour (age: {timezone.now() - transaction_date})"
+            )
+            return None
+    
     transaction = Transaction.objects.filter(
         txid=wallet_history_obj.txid,
         cashtoken_nft_id__isnull=False
