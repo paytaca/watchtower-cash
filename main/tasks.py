@@ -365,7 +365,15 @@ def get_cashtoken_meta_data(
 
     if not is_nft or nft_has_fungible:
         _cashtoken, _ = CashFungibleToken.objects.get_or_create(category=category)
-        _cashtoken.fetch_metadata()
+        # Only fetch metadata if it doesn't exist, and handle errors gracefully
+        if not _cashtoken.info:
+            try:
+                _cashtoken.fetch_metadata()
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f'Error fetching cashtoken metadata for {category}: {str(e)}')
+                # Continue even if metadata fetch failed
 
         if not is_nft: cashtoken = _cashtoken
 
@@ -1585,7 +1593,13 @@ def parse_contract_history(txid, address, tx_fee=None, senders=[], recipients=[]
                     if token_id:
                         if not cashtoken_ft:
                             cashtoken_ft, _ = CashFungibleToken.objects.get_or_create(category=token_id)
-                            cashtoken_ft.fetch_metadata()
+                            # Only fetch metadata if it doesn't exist, and handle errors gracefully
+                            if not cashtoken_ft.info:
+                                try:
+                                    cashtoken_ft.fetch_metadata()
+                                except Exception as e:
+                                    LOGGER.warning(f'Error fetching cashtoken metadata for {token_id}: {str(e)}')
+                                    # Continue with cashtoken_ft even if metadata fetch failed
                         if not cashtoken_nft and nft_capability:
                             cashtoken_nft, _ = CashNonFungibleToken.objects.get_or_create(
                                 category=token_id,
@@ -1660,265 +1674,302 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
     LOGGER.info(f"PARSING WALLET HISTORY | {txid} | {wallet_handle}\nTriggered from {trigger_info}")
     wallet_hash = wallet_handle.split('|')[1]
     
-    wallet = Wallet.objects.get(wallet_hash=wallet_hash)
-
-    # Do not record wallet history record if all senders and recipients are from the same wallet (i.e. UTXO consolidation txs)
-    # Optimized: Use values_list with flat=True for better performance
-    sender_addresses = set([i[0] for i in senders if i[0]])
-    recipient_addresses = set([i[0] for i in recipients if i[0]])
+    # Redis-based deduplication: prevent concurrent execution for the same txid+wallet
+    # This ensures the task runs only once even if triggered multiple times
+    _REDIS_KEY_TTL = 300  # 5 minutes
+    _REDIS_NAME__WALLET_HISTORY_PARSING = 'wallet_history:parsing'
+    lock_key = f"{txid}:{wallet_hash}"
     
-    if sender_addresses and recipient_addresses:
-        # Optimized: Single query to check if all addresses belong to this wallet
-        sender_wallet_addresses = set(
-            Address.objects.filter(address__in=sender_addresses, wallet=wallet)
-            .values_list('address', flat=True)
-        )
-        recipient_wallet_addresses = set(
-            Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
-            .values_list('address', flat=True)
-        )
-        
-        if len(sender_addresses) == len(sender_wallet_addresses):
-            if len(recipient_addresses) == len(recipient_wallet_addresses):
-                # Remove wallet history record of this, if any
-                WalletHistory.objects.filter(txid=txid, wallet=wallet).delete()
-                return
-
-    parser = HistoryParser(txid, wallet_hash=wallet_hash)
-    parsed_history = parser.parse()
-
-    if type(tx_fee) is str:
-        tx_fee = float(tx_fee)
+    # Check if this task is already running
+    active_parsing = REDIS_STORAGE.smembers(_REDIS_NAME__WALLET_HISTORY_PARSING)
+    if isinstance(active_parsing, set):
+        active_parsing = {item.decode() if isinstance(item, bytes) else item for item in active_parsing}
+    else:
+        active_parsing = set()
     
-    BCH_OR_SLP = 'bch_or_slp'
+    if lock_key in active_parsing:
+        LOGGER.info(f"Wallet history parsing for {txid} | {wallet_handle} is already being processed by another task, skipping")
+        return f"already_parsing: {lock_key}"
+    
+    # Add to active parsing set
+    REDIS_STORAGE.sadd(_REDIS_NAME__WALLET_HISTORY_PARSING, lock_key)
+    REDIS_STORAGE.expire(_REDIS_NAME__WALLET_HISTORY_PARSING, _REDIS_KEY_TTL)
+    
+    try:
+        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
 
-    # Optimized: Batch TransactionBroadcast lookup once per txid (before loop)
-    txn_broadcast = TransactionBroadcast.objects.select_related('price_log').filter(txid=txid).first()
-    txn_broadcast_price_log = txn_broadcast.price_log if txn_broadcast and txn_broadcast.price_log else None
-
-    # parsed_history.keys() = ['bch_or_slp', 'ct']
-    for key in parsed_history.keys():
-        ct_category = None
-        if key.startswith("ct/"):
-            ct_category = key.split("ct/")[1]
-
-        data = parsed_history[key]
-        record_type = data['record_type']
-        amount = data['diff']
-        change_address = data['change_address']
-
-        _recipients = None
-        if change_address:
-            _recipients = [info for info in recipients if info[0] != change_address]
-
-        processed_recipients = process_history_recpts_or_senders(_recipients or recipients, key, BCH_OR_SLP)
-        processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
-
-        if wallet.wallet_type == 'bch':
-            # Correct the amount for outgoing, subtract the miner fee if given and maintain negative sign
-            if record_type == 'outgoing':
-                if key == BCH_OR_SLP:
-                    amount = abs(amount) - ((tx_fee / 100000000) or 0)
-                    amount = round(amount, 8)
-                amount = abs(amount) * -1
-
-            # Don't save a record if resulting amount is zero
-            is_zero_amount = amount == 0
-            if is_zero_amount and not proceed_with_zero_amount:
-                # skip this key and continue with the next key
-                continue
-
-            if is_zero_amount:
-                record_type = ''
-
-            bch_prefix = 'bitcoincash:'
-            if settings.BCH_NETWORK != 'mainnet':
-                bch_prefix = 'bchtest:'
-
-            # Optimized: Add select_related to reduce queries
-            txns = Transaction.objects.select_related(
-                'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
-            ).filter(
-                txid=txid,
-                address__address__startswith=bch_prefix
+        # Do not record wallet history record if all senders and recipients are from the same wallet (i.e. UTXO consolidation txs)
+        # Optimized: Use values_list with flat=True for better performance
+        sender_addresses = set([i[0] for i in senders if i[0]])
+        recipient_addresses = set([i[0] for i in recipients if i[0]])
+        
+        if sender_addresses and recipient_addresses:
+            # Optimized: Single query to check if all addresses belong to this wallet
+            sender_wallet_addresses = set(
+                Address.objects.filter(address__in=sender_addresses, wallet=wallet)
+                .values_list('address', flat=True)
             )
-            spent_txns = Transaction.objects.select_related(
-                'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
-            ).filter(
-                spending_txid=txid,
-                address__address__startswith=bch_prefix,
+            recipient_wallet_addresses = set(
+                Address.objects.filter(address__in=recipient_addresses, wallet=wallet)
+                .values_list('address', flat=True)
             )
-
-            tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
-            date_created = txns.filter(date_created__isnull=False).aggregate(_max=models.Max('date_created'))['_max']
-
-            cashtoken_ft = None
-            cashtoken_nft = None
-            token_obj = None
-
-            if key == BCH_OR_SLP:
-                txns = txns.filter(token__name='bch')
-                spent_txns = spent_txns.filter(token__name='bch')
-            elif ct_category:
-                _txns = txns.filter(
-                    models.Q(cashtoken_ft__category=ct_category) | \
-                    models.Q(cashtoken_nft__category=ct_category),
-                )
-                if _txns.exists():
-                    txns = _txns
-                    ft_tx = txns.filter(cashtoken_ft_id=ct_category).last()
-                    if ft_tx:
-                        cashtoken_ft = ft_tx.cashtoken_ft
-                    if not cashtoken_ft:
-                        nft_tx = txns.filter(cashtoken_nft__category=ct_category).last()
-                        if nft_tx:
-                            cashtoken_nft = nft_tx.cashtoken_nft
-                else:
-                    # Get the cashtoken record if transaction does not have this info
-                    ct_recipient = None
-                    ct_index = None
-                    for i, _recipient in enumerate(processed_recipients):
-                        ct_index = i
-                        if _recipient[2] == ct_category:
-                            ct_recipient = _recipient
-                            break
-
-                    if key.startswith("ct") and ct_recipient:
-                        token_obj, _ = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
-                        token_id = ct_recipient[2]
-                        nft_capability = ct_recipient[4]
-                        nft_commitment = ct_recipient[5]
-                        if token_id:
-                            if not cashtoken_ft:
-                                cashtoken_ft, _ = CashFungibleToken.objects.get_or_create(category=token_id)
-                                cashtoken_ft.fetch_metadata()
-                            if not cashtoken_nft and nft_capability:
-                                cashtoken_nft, _ = CashNonFungibleToken.objects.get_or_create(
-                                    category=token_id,
-                                    capability=nft_capability,
-                                    commitment=nft_commitment,
-                                    current_txid=txid,
-                                    current_index=ct_index
-                                )
-
-        elif wallet.wallet_type == 'slp':
-            if key != BCH_OR_SLP:
-                return
-
-            # Optimized: Add select_related to reduce queries
-            txns = Transaction.objects.select_related(
-                'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
-            ).filter(
-                txid=txid,
-                address__address__startswith='simpleledger:'
-            )
-
-        txn = txns.last()
-        spent_txn = spent_txns.last()
-
-        if not txn and not spent_txn: continue
-
-        if not token_obj:
-            _txn = txn or spent_txn
-            token_obj = _txn.token
-        
-        # Optimized: Use update_or_create instead of filter+save pattern
-        # This eliminates the DELETE query that was in the signal and handles race conditions better
-        defaults = {
-            'record_type': record_type,
-            'amount': amount,
-            'token': token_obj,
-            'cashtoken_ft': cashtoken_ft,
-            'cashtoken_nft': cashtoken_nft,
-        }
-        
-        if tx_fee and processed_senders and processed_recipients:
-            defaults['tx_fee'] = tx_fee
-            defaults['senders'] = processed_senders
-            defaults['recipients'] = processed_recipients
-        
-        if tx_timestamp:
-            defaults['tx_timestamp'] = tx_timestamp
-        
-        if date_created:
-            defaults['date_created'] = date_created
-        
-        if txn_broadcast_price_log:
-            defaults['price_log'] = txn_broadcast_price_log
-
-        try:
-            history, created = WalletHistory.objects.update_or_create(
-                wallet=wallet,
-                txid=txid,
-                token=token_obj,
-                cashtoken_ft=cashtoken_ft,
-                cashtoken_nft=cashtoken_nft,
-                defaults=defaults
-            )
-
-            # Optimized: Always use async for market values parsing
-            resolve_wallet_history_usd_values.delay(txid=txid)
             
-            if history.tx_timestamp:
-                # Always use .delay() for async execution
-                parse_wallet_history_market_values.delay(history.id)
+            if len(sender_addresses) == len(sender_wallet_addresses):
+                if len(recipient_addresses) == len(recipient_wallet_addresses):
+                    # Remove wallet history record of this, if any
+                    WalletHistory.objects.filter(txid=txid, wallet=wallet).delete()
+                    return
+
+        parser = HistoryParser(txid, wallet_hash=wallet_hash)
+        parsed_history = parser.parse()
+
+        if type(tx_fee) is str:
+            tx_fee = float(tx_fee)
+        
+        BCH_OR_SLP = 'bch_or_slp'
+
+        # Optimized: Batch TransactionBroadcast lookup once per txid (before loop)
+        txn_broadcast = TransactionBroadcast.objects.select_related('price_log').filter(txid=txid).first()
+        txn_broadcast_price_log = txn_broadcast.price_log if txn_broadcast and txn_broadcast.price_log else None
+
+        # parsed_history.keys() = ['bch_or_slp', 'ct']
+        for key in parsed_history.keys():
+            ct_category = None
+            if key.startswith("ct/"):
+                ct_category = key.split("ct/")[1]
+
+            data = parsed_history[key]
+            record_type = data['record_type']
+            amount = data['diff']
+            change_address = data['change_address']
+
+            _recipients = None
+            if change_address:
+                _recipients = [info for info in recipients if info[0] != change_address]
+
+            processed_recipients = process_history_recpts_or_senders(_recipients or recipients, key, BCH_OR_SLP)
+            processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
+
+            if wallet.wallet_type == 'bch':
+                # Correct the amount for outgoing, subtract the miner fee if given and maintain negative sign
+                if record_type == 'outgoing':
+                    if key == BCH_OR_SLP:
+                        amount = abs(amount) - ((tx_fee / 100000000) or 0)
+                        amount = round(amount, 8)
+                    amount = abs(amount) * -1
+
+                # Don't save a record if resulting amount is zero
+                is_zero_amount = amount == 0
+                if is_zero_amount and not proceed_with_zero_amount:
+                    # skip this key and continue with the next key
+                    continue
+
+                if is_zero_amount:
+                    record_type = ''
+
+                bch_prefix = 'bitcoincash:'
+                if settings.BCH_NETWORK != 'mainnet':
+                    bch_prefix = 'bchtest:'
+
+                # Optimized: Add select_related to reduce queries
+                txns = Transaction.objects.select_related(
+                    'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+                ).filter(
+                    txid=txid,
+                    address__address__startswith=bch_prefix
+                )
+                spent_txns = Transaction.objects.select_related(
+                    'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+                ).filter(
+                    spending_txid=txid,
+                    address__address__startswith=bch_prefix,
+                )
+
+                tx_timestamp = txns.filter(tx_timestamp__isnull=False).aggregate(_max=models.Max('tx_timestamp'))['_max']
+                date_created = txns.filter(date_created__isnull=False).aggregate(_max=models.Max('date_created'))['_max']
+
+                cashtoken_ft = None
+                cashtoken_nft = None
+                token_obj = None
+
+                if key == BCH_OR_SLP:
+                    txns = txns.filter(token__name='bch')
+                    spent_txns = spent_txns.filter(token__name='bch')
+                elif ct_category:
+                    _txns = txns.filter(
+                        models.Q(cashtoken_ft__category=ct_category) | \
+                        models.Q(cashtoken_nft__category=ct_category),
+                    )
+                    if _txns.exists():
+                        txns = _txns
+                        ft_tx = txns.filter(cashtoken_ft_id=ct_category).last()
+                        if ft_tx:
+                            cashtoken_ft = ft_tx.cashtoken_ft
+                        if not cashtoken_ft:
+                            nft_tx = txns.filter(cashtoken_nft__category=ct_category).last()
+                            if nft_tx:
+                                cashtoken_nft = nft_tx.cashtoken_nft
+                    else:
+                        # Get the cashtoken record if transaction does not have this info
+                        ct_recipient = None
+                        ct_index = None
+                        for i, _recipient in enumerate(processed_recipients):
+                            ct_index = i
+                            if _recipient[2] == ct_category:
+                                ct_recipient = _recipient
+                                break
+
+                        if key.startswith("ct") and ct_recipient:
+                            token_obj, _ = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+                            token_id = ct_recipient[2]
+                            nft_capability = ct_recipient[4]
+                            nft_commitment = ct_recipient[5]
+                            if token_id:
+                                if not cashtoken_ft:
+                                    cashtoken_ft, _ = CashFungibleToken.objects.get_or_create(category=token_id)
+                                    # Only fetch metadata if it doesn't exist, and handle errors gracefully
+                                    if not cashtoken_ft.info:
+                                        try:
+                                            cashtoken_ft.fetch_metadata()
+                                        except Exception as e:
+                                            LOGGER.warning(f'Error fetching cashtoken metadata for {token_id}: {str(e)}')
+                                            # Continue with cashtoken_ft even if metadata fetch failed
+                                if not cashtoken_nft and nft_capability:
+                                    cashtoken_nft, _ = CashNonFungibleToken.objects.get_or_create(
+                                        category=token_id,
+                                        capability=nft_capability,
+                                        commitment=nft_commitment,
+                                        current_txid=txid,
+                                        current_index=ct_index
+                                    )
+
+            elif wallet.wallet_type == 'slp':
+                if key != BCH_OR_SLP:
+                    return
+
+                # Optimized: Add select_related to reduce queries
+                txns = Transaction.objects.select_related(
+                    'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+                ).filter(
+                    txid=txid,
+                    address__address__startswith='simpleledger:'
+                )
+
+            txn = txns.last()
+            spent_txn = spent_txns.last()
+
+            if not txn and not spent_txn: continue
+
+            if not token_obj:
+                _txn = txn or spent_txn
+                token_obj = _txn.token
+            
+            # Optimized: Use update_or_create instead of filter+save pattern
+            # This eliminates the DELETE query that was in the signal and handles race conditions better
+            defaults = {
+                'record_type': record_type,
+                'amount': amount,
+                'token': token_obj,
+                'cashtoken_ft': cashtoken_ft,
+                'cashtoken_nft': cashtoken_nft,
+            }
+            
+            if tx_fee and processed_senders and processed_recipients:
+                defaults['tx_fee'] = tx_fee
+                defaults['senders'] = processed_senders
+                defaults['recipients'] = processed_recipients
+            
+            if tx_timestamp:
+                defaults['tx_timestamp'] = tx_timestamp
+            
+            if date_created:
+                defaults['date_created'] = date_created
+            
+            if txn_broadcast_price_log:
+                defaults['price_log'] = txn_broadcast_price_log
 
             try:
-                # Do not send notifications for amounts less than or equal to 0.00001
-                if abs(amount) > 0.00001:
-                    LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
-                    send_wallet_history_push_notification(history)
-                else:
-                    send_wallet_history_push_notification_nft(history)
-            except Exception as exception:
-                LOGGER.exception(exception)
-        except IntegrityError as exc:
-            LOGGER.exception(exc)
-
-        # merchant wallet check
-        merchant_check = Merchant.objects.filter(wallet_hash=wallet.wallet_hash)
-        if merchant_check.exists():
-            for merchant in merchant_check.all():
-                merchant.last_update = timezone.now()
-                merchant.active = True
-                merchant.save()
-
-                # update latest_transaction in POS devices
-                pos_devices = PosDevice.objects.filter(merchant=merchant)
-                for device in pos_devices:
-                    device.populate_latest_history_record()
-
-        # for older token records
-        if (
-            txn and
-            txn.token and
-            txn.token.tokenid and
-            txn.token.tokenid != settings.WT_DEFAULT_CASHTOKEN_ID and
-            (txn.token.token_type is None or txn.token.mint_amount is None)
-        ):
-            get_token_meta_data(txn.token.tokenid, async_image_download=True)
-            txn.token.refresh_from_db()
-
-        if txn and txn.token and txn.token.is_nft:
-            if record_type == 'incoming':
-                wallet_nft_token, created = WalletNftToken.objects.get_or_create(
+                history, created = WalletHistory.objects.update_or_create(
                     wallet=wallet,
-                    token=txn.token,
-                    acquisition_transaction=txn
+                    txid=txid,
+                    token=token_obj,
+                    cashtoken_ft=cashtoken_ft,
+                    cashtoken_nft=cashtoken_nft,
+                    defaults=defaults
                 )
-            elif record_type == 'outgoing':
-                wallet_nft_token_check = WalletNftToken.objects.filter(
-                    wallet=wallet,
-                    token=txn.token,
-                    date_dispensed__isnull=True
-                )
-                if wallet_nft_token_check.exists():
-                    wallet_nft_token = wallet_nft_token_check.last()
-                    wallet_nft_token.date_dispensed = txn.date_created
-                    wallet_nft_token.dispensation_transaction = txn
-                    wallet_nft_token.save()
 
-            update_nft_owner.delay(txn.token.tokenid)
+                # Optimized: Always use async for market values parsing
+                resolve_wallet_history_usd_values.delay(txid=txid)
+                
+                if history.tx_timestamp:
+                    # Always use .delay() for async execution
+                    parse_wallet_history_market_values.delay(history.id)
+
+                # Only send push notifications for newly created records to prevent duplicates
+                # when the same transaction is processed multiple times
+                if created:
+                    try:
+                        # Do not send notifications for amounts less than or equal to 0.00001
+                        if abs(amount) > 0.00001:
+                            LOGGER.info(f"PUSH_NOTIF: wallet_history for #{history.txid} | {history.amount}")
+                            send_wallet_history_push_notification(history)
+                        else:
+                            send_wallet_history_push_notification_nft(history)
+                    except Exception as exception:
+                        LOGGER.exception(exception)
+            except IntegrityError as exc:
+                LOGGER.exception(exc)
+
+            # merchant wallet check
+            merchant_check = Merchant.objects.filter(wallet_hash=wallet.wallet_hash)
+            if merchant_check.exists():
+                for merchant in merchant_check.all():
+                    merchant.last_update = timezone.now()
+                    merchant.active = True
+                    merchant.save()
+
+                    # update latest_transaction in POS devices
+                    pos_devices = PosDevice.objects.filter(merchant=merchant)
+                    for device in pos_devices:
+                        device.populate_latest_history_record()
+
+            # for older token records
+            if (
+                txn and
+                txn.token and
+                txn.token.tokenid and
+                txn.token.tokenid != settings.WT_DEFAULT_CASHTOKEN_ID and
+                (txn.token.token_type is None or txn.token.mint_amount is None)
+            ):
+                # Check if token already has metadata before fetching
+                if not txn.token.token_type or not txn.token.mint_amount:
+                    # Only fetch if metadata is missing - make it async so it doesn't block
+                    get_token_meta_data.delay(txn.token.tokenid, async_image_download=True)
+                # Don't refresh from DB here since we're not waiting for the async task
+
+            if txn and txn.token and txn.token.is_nft:
+                if record_type == 'incoming':
+                    wallet_nft_token, created = WalletNftToken.objects.get_or_create(
+                        wallet=wallet,
+                        token=txn.token,
+                        acquisition_transaction=txn
+                    )
+                elif record_type == 'outgoing':
+                    wallet_nft_token_check = WalletNftToken.objects.filter(
+                        wallet=wallet,
+                        token=txn.token,
+                        date_dispensed__isnull=True
+                    )
+                    if wallet_nft_token_check.exists():
+                        wallet_nft_token = wallet_nft_token_check.last()
+                        wallet_nft_token.date_dispensed = txn.date_created
+                        wallet_nft_token.dispensation_transaction = txn
+                        wallet_nft_token.save()
+
+                update_nft_owner.delay(txn.token.tokenid)
+    finally:
+        # Remove from active parsing set
+        REDIS_STORAGE.srem(_REDIS_NAME__WALLET_HISTORY_PARSING, lock_key)
 
 @shared_task(queue='client_acknowledgement')
 def send_wallet_history_push_notification_task(wallet_history_id):
