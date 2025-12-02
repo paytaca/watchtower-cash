@@ -149,12 +149,13 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
     gcm_send_response = None
     apns_send_response = None
     try:
-        multi_wallet_indices = gcm_devices.values_list("device_wallets__multi_wallet_index", flat=True).distinct()
-        print(f"GCM indices: {multi_wallet_indices}")
-        for multi_wallet_index in multi_wallet_indices:
+        gcm_wallets = gcm_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
+        print(f"GCM wallets: {gcm_wallets}")
+        for wallet_hash, multi_wallet_index in gcm_wallets:
             if not isinstance(gcm_message.data, dict):
                 gcm_message.data = {}
 
+            gcm_message.data["wallet_hash"] = wallet_hash
             gcm_message.data["multi_wallet_index"] = str(multi_wallet_index)
 
             filtered_gcm_devices = filter_device_queryset_by_wallet_index(
@@ -178,10 +179,11 @@ def send_push_notification_to_wallet_hashes(wallet_hash_list, message, **kwargs)
         gcm_send_response = exception
 
     try:
-        multi_wallet_indices = apns_devices.values_list("device_wallets__multi_wallet_index", flat=True).distinct()
-        print(f"APNS indices: {multi_wallet_indices}")
-        for multi_wallet_index in multi_wallet_indices:
+        apns_wallets = apns_devices.values_list("device_wallets__wallet_hash", "device_wallets__multi_wallet_index").distinct()
+        print(f"APNS wallets: {apns_wallets}")
+        for wallet_hash, multi_wallet_index in apns_wallets:
             if "extra" not in apns_kwargs: apns_kwargs["extra"] = {}
+            apns_kwargs["extra"]["wallet_hash"] = wallet_hash
             apns_kwargs["extra"]["multi_wallet_index"] = multi_wallet_index
 
             filtered_apns_devices = filter_device_queryset_by_wallet_index(

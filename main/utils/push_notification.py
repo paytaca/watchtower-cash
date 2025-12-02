@@ -46,8 +46,7 @@ def send_wallet_history_push_notification(wallet_history_obj):
     }
 
     if incoming:
-        # title = "Payment Received" if incoming else "Payment Sent"
-        title = "Payment Received"
+        title = "Received"
         if token_name.lower() == "bch":
             amount = abs(wallet_history_obj.amount)
         else:

@@ -46,7 +46,7 @@ def send_transaction_transfer_push_notification(tx_transfer_obj):
         )
 
     if recipient_wallet:
-        recipient_title = "Payment Received"
+        recipient_title = "Received"
         recipient_message = f"SmartBCH: Received {tx_transfer_obj.normalized_amount} {tx_transfer_obj.unit_symbol}"
         if is_nft:
             recipient_title = "NFT Received"
