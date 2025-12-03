@@ -1481,6 +1481,21 @@ def bulk_rebroadcast():
         )
 
 
+@shared_task(queue='broadcast', max_retries=2)
+def send_post_broadcast_notifications_task(transaction, extra_data=None):
+    """Send post-broadcast notifications (MQTT and WebSocket) asynchronously.
+    
+    This task is used to avoid blocking the HTTP response when MQTT operations
+    take a long time or timeout.
+    """
+    from main.utils.broadcast import send_post_broadcast_notifications
+    try:
+        return send_post_broadcast_notifications(transaction, extra_data)
+    except Exception as exc:
+        LOGGER.exception(f"Error sending post-broadcast notifications: {exc}")
+        raise
+
+
 def process_history_recpts_or_senders(_list, key, BCH_OR_SLP):
     processed_list = []
     if _list:
@@ -3195,3 +3210,13 @@ def get_latest_market_price_task(coin_id:str, currency:str):
         market_price_task.delay().wait(timeout=30, interval=1)
 
     return MarketPriceTaskQueueManager.get_latest(coin_id=coin_id, currency=currency)
+
+
+@shared_task(queue='mqtt_publish')
+def publish_subscribed_addresses_to_mqtt_task(addresses_list):
+    """
+    Async task to publish subscribed addresses to MQTT.
+    Accepts a list of address strings to avoid passing model instances.
+    """
+    from main.utils.subscription import _publish_subscribed_addresses_to_mqtt_sync
+    return _publish_subscribed_addresses_to_mqtt_sync(addresses_list)

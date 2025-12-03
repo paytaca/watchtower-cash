@@ -8,18 +8,19 @@ class RecipientHandler(object):
         self.telegram_id = telegram_id
 
     def find(self):
+        # Optimized: use .first() directly instead of .exists() + .first() to avoid two queries
         if self.web_url and self.telegram_id:
-            qs = Recipient.objects.filter(Q(web_url=self.web_url) & Q(telegram_id=self.telegram_id))
-            if not qs.exists(): return 'create'
-            return qs.first()
+            recipient = Recipient.objects.filter(Q(web_url=self.web_url) & Q(telegram_id=self.telegram_id)).first()
+            if not recipient: return 'create'
+            return recipient
         if self.web_url:
-            qs = Recipient.objects.filter(web_url=self.web_url)
-            if not qs.exists(): return 'create'
-            return qs.first()
+            recipient = Recipient.objects.filter(web_url=self.web_url).first()
+            if not recipient: return 'create'
+            return recipient
         if self.telegram_id:
-            qs = Recipient.objects.filter(telegram_id=self.telegram_id)
-            if not qs.exists(): return 'create'
-            return qs.first()
+            recipient = Recipient.objects.filter(telegram_id=self.telegram_id).first()
+            if not recipient: return 'create'
+            return recipient
         return None
     
     def get_or_create(self):

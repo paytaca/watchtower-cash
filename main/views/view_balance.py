@@ -1,9 +1,10 @@
 from django.conf import settings
 from drf_yasg.utils import swagger_auto_schema
 from main.models import Transaction, Wallet, Token, CashFungibleToken, CashNonFungibleToken
-from django.db.models import Q, Sum, F
+from django.db.models import Q, Sum, F, Count
 from django.utils import timezone
 from django.db.models.functions import Coalesce
+from django.db import models
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
@@ -62,13 +63,21 @@ def _get_bch_balance(query, include_token_sats=False):
     dust = 546 # / (10 ** 8)
     if include_token_sats:
         query = query & Q(value__gt=dust)
+        # Use select_related to optimize the query
+        qs = Transaction.objects.filter(query).select_related('address', 'token')
     else:
         query = query & Q(value__gt=dust) & Q(token__name='bch')
-    qs = Transaction.objects.filter(query)
-    qs_count = qs.count()
-    qs_balance = qs.aggregate(
-        balance=Coalesce(Sum('value'), 0)
+        # Use select_related to optimize the token join
+        qs = Transaction.objects.filter(query).select_related('address', 'token')
+    
+    # Get both count and sum in a single query using annotations
+    # This avoids executing the query twice
+    qs_annotated = qs.aggregate(
+        balance=Coalesce(Sum('value'), 0),
+        count=Count('id')
     )
+    qs_count = qs_annotated.get('count', 0)
+    qs_balance = {'balance': qs_annotated.get('balance', 0)}
     return qs_balance, qs_count
 
 class Balance(APIView):
@@ -195,18 +204,30 @@ class Balance(APIView):
         
         if is_bch_address(bchaddress):
             data['address'] = bchaddress
-            query = Q(address__address=data['address']) & Q(spent=False)
-            qs_balance, qs_count = _get_bch_balance(query, include_token_sats=include_token_sats)
-            bch_balance = qs_balance['balance'] or 0
-            bch_balance = bch_balance / (10 ** 8)
+            
+            # Add caching for address-based balance queries
+            cache = settings.REDISKV
+            cache_key = f'address:balance:bch:{bchaddress}:{include_token_sats}'
+            cached_data = cache.get(cache_key)
+            
+            if cached_data:
+                data = json.loads(cached_data)
+            else:
+                query = Q(address__address=data['address']) & Q(spent=False)
+                qs_balance, qs_count = _get_bch_balance(query, include_token_sats=include_token_sats)
+                bch_balance = qs_balance['balance'] or 0
+                bch_balance = bch_balance / (10 ** 8)
 
-            data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
-            data['spendable'] = satoshi_to_bch(data['spendable'])
-            data['spendable'] = max(data['spendable'], 0)
-            data['spendable'] = self.truncate(data['spendable'], 8)
+                data['spendable'] = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+                data['spendable'] = satoshi_to_bch(data['spendable'])
+                data['spendable'] = max(data['spendable'], 0)
+                data['spendable'] = self.truncate(data['spendable'], 8)
 
-            data['balance'] = self.truncate(bch_balance, 8)
-            data['valid'] = True
+                data['balance'] = self.truncate(bch_balance, 8)
+                data['valid'] = True
+                
+                # Cache for 5 minutes (same as wallet balance cache)
+                cache.set(cache_key, json.dumps(data), ex=60 * 5)
 
         if wallet_hash:
             try:

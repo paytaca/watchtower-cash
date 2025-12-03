@@ -16,7 +16,7 @@ from main.models import (
     Wallet
 )
 from main import mqtt
-from main.tasks import get_slp_utxos, get_bch_utxos
+from main.tasks import get_slp_utxos, get_bch_utxos, publish_subscribed_addresses_to_mqtt_task
 
 import logging
 import web3
@@ -102,9 +102,9 @@ def new_subscription(**kwargs):
                 proceed = False
                 project = None
                 if project_id:
-                    project_check = Project.objects.filter(id=project_id)
-                    if project_check.exists():
-                        project = project_check.first()
+                    # Optimized: use .first() directly instead of .exists() + .first() to avoid two queries
+                    project = Project.objects.filter(id=project_id).first()
+                    if project:
                         proceed = True
                     else:
                         response['error'] = 'project_does_not_exist'
@@ -134,6 +134,7 @@ def new_subscription(**kwargs):
                             address=address,
                             token_address=token_address
                         )
+                        # Store address string for async MQTT publishing
                         new_addresses.add(address_obj.address)
 
                         if project:
@@ -151,12 +152,11 @@ def new_subscription(**kwargs):
                                     address_obj.wallet_index = int(path)
                                     address_obj.address_path = path
                                     wallet_version = 1
-                                wallet_check = Wallet.objects.filter(
+                                # Optimized: use .last() directly instead of .exists() + .last() to avoid two queries
+                                wallet = Wallet.objects.filter(
                                     wallet_hash=wallet_hash
-                                )
-                                if wallet_check.exists():
-                                    wallet = wallet_check.last()
-                                else:
+                                ).last()
+                                if not wallet:
                                     wallet = Wallet(
                                         wallet_hash=wallet_hash,
                                         version=wallet_version
@@ -199,13 +199,27 @@ def new_subscription(**kwargs):
                 response['error'] = 'invalid_address'
 
         if response['success'] and new_addresses:
-            publish_subscribed_addresses_to_mqtt(new_addresses)
+            # Publish to MQTT asynchronously to avoid blocking the request
+            publish_subscribed_addresses_to_mqtt_task.delay(list(new_addresses))
 
     LOGGER.info(response)
     return response
 
 
 def publish_subscribed_addresses_to_mqtt(addresses:list):
+    """
+    Synchronous version - kept for backward compatibility.
+    For new subscriptions, use the async task instead.
+    """
+    return _publish_subscribed_addresses_to_mqtt_sync(addresses)
+
+
+def _publish_subscribed_addresses_to_mqtt_sync(addresses:list):
+    """
+    Internal function that does the actual MQTT publishing.
+    Can be called synchronously or from async task.
+    """
+    # Optimized: use select_related to avoid N+1 queries
     address_objs = Address.objects.filter(address__in=addresses) \
         .select_related("wallet")
 
@@ -254,7 +268,18 @@ def resolve_pos_data(wallet_hash, address_path):
     posid = receiving_address_index % MIN_POS_ADDRESS_INDEX
 
     PosDevice = apps.get_model("paytacapos", "PosDevice")
-    pos_device = PosDevice.objects.filter(wallet_hash=wallet_hash, posid=posid).first()
+    # Optimized: use select_related to fetch all related objects in one query
+    # This avoids N+1 queries for merchant, location, category, and branch
+    pos_device = PosDevice.objects.filter(
+        wallet_hash=wallet_hash, 
+        posid=posid
+    ).select_related(
+        'merchant',
+        'merchant__location',
+        'merchant__category',
+        'branch'
+    ).first()
+    
     if not pos_device:
         return
     
@@ -268,8 +293,9 @@ def resolve_pos_data(wallet_hash, address_path):
         response['location'] = None
 
         if merchant.location:
-            location_model = apps.get_model("paytacapos", "Location")
-            location = location_model.objects.get(pk=merchant.location.pk)
+            # Optimized: merchant.location is already loaded via select_related,
+            # no need for a separate query
+            location = merchant.location
 
             if location.longitude and location.latitude:
                 response['location'] = dict(

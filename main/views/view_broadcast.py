@@ -5,9 +5,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from main import serializers
 from main.models import TransactionBroadcast, AssetPriceLog
-from main.utils.broadcast import send_post_broadcast_notifications
 from main.utils.queries.node import Node
-from main.tasks import broadcast_transaction
+from main.tasks import broadcast_transaction, send_post_broadcast_notifications_task
 import logging
 
 NODE = Node()
@@ -45,7 +44,7 @@ class BroadcastViewSet(generics.GenericAPIView):
                     )
                     txn_broadcast.save()
                     broadcast_transaction.delay(transaction, txid, txn_broadcast.id)
-                    send_post_broadcast_notifications(transaction)
+                    send_post_broadcast_notifications_task.delay(transaction)
                     response['txid'] = txid
                     response['success'] = True
                 else:
