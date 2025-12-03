@@ -38,7 +38,18 @@ class HistoryParser(object):
         ct_fungible_inputs = Transaction.objects.select_related(
             'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
         ).filter(ct_input_txns_filter)
-        return inputs, ct_fungible_inputs
+        
+        ct_nft_input_txns_filter = Q(wallet__wallet_hash=self.wallet_hash)
+        if self.address:
+            ct_nft_input_txns_filter = Q(address__address=self.address)
+        
+        ct_nft_input_txns_filter = ct_nft_input_txns_filter & Q(spending_txid=self.txid, cashtoken_nft__isnull=False)
+        # Optimized: Add select_related to reduce queries
+        ct_nft_inputs = Transaction.objects.select_related(
+            'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+        ).filter(ct_nft_input_txns_filter)
+        
+        return inputs, ct_fungible_inputs, ct_nft_inputs
 
 
     def get_relevant_outputs(self):
@@ -63,7 +74,18 @@ class HistoryParser(object):
         ct_fungible_outputs = Transaction.objects.select_related(
             'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
         ).filter(ct_output_txns_filter)
-        return outputs, ct_fungible_outputs
+        
+        ct_nft_output_txns_filter = Q(wallet__wallet_hash=self.wallet_hash)
+        if self.address:
+            ct_nft_output_txns_filter = Q(address__address=self.address)
+        
+        ct_nft_output_txns_filter = ct_nft_output_txns_filter & Q(txid=self.txid, cashtoken_nft__isnull=False)
+        # Optimized: Add select_related to reduce queries
+        ct_nft_outputs = Transaction.objects.select_related(
+            'token', 'cashtoken_ft', 'cashtoken_nft', 'address', 'address__wallet'
+        ).filter(ct_nft_output_txns_filter)
+        
+        return outputs, ct_fungible_outputs, ct_nft_outputs
 
 
     def get_total_amount(self, qs, is_bch=True):
@@ -146,9 +168,73 @@ class HistoryParser(object):
         return results
 
 
+    def parse_ct_nft(self, ct_nft_inputs, ct_nft_outputs):
+        """
+        Parse CashToken NFT transactions.
+        NFTs are unique items identified by category, capability, and commitment.
+        Returns a dict with keys like 'ct_nft/{category}/{capability}/{commitment}'
+        """
+        change_address = None
+        if self.wallet_hash:
+            change_address = self.get_change_address(ct_nft_inputs, ct_nft_outputs)
+        
+        # Group NFTs by unique identifier (category, capability, commitment)
+        # For each unique NFT, count inputs vs outputs
+        nft_inputs_map = {}  # { (category, capability, commitment): count }
+        nft_outputs_map = {}  # { (category, capability, commitment): count }
+        
+        if ct_nft_inputs.exists():
+            for txn in ct_nft_inputs:
+                if txn.cashtoken_nft:
+                    key = (
+                        txn.cashtoken_nft.category,
+                        txn.cashtoken_nft.capability or '',
+                        txn.cashtoken_nft.commitment or ''
+                    )
+                    nft_inputs_map[key] = nft_inputs_map.get(key, 0) + 1
+        
+        if ct_nft_outputs.exists():
+            for txn in ct_nft_outputs:
+                if txn.cashtoken_nft:
+                    key = (
+                        txn.cashtoken_nft.category,
+                        txn.cashtoken_nft.capability or '',
+                        txn.cashtoken_nft.commitment or ''
+                    )
+                    nft_outputs_map[key] = nft_outputs_map.get(key, 0) + 1
+        
+        # Get all unique NFT identifiers
+        all_nft_keys = set(nft_inputs_map.keys()) | set(nft_outputs_map.keys())
+        
+        results = {}
+        for nft_key in all_nft_keys:
+            category, capability, commitment = nft_key
+            input_count = nft_inputs_map.get(nft_key, 0)
+            output_count = nft_outputs_map.get(nft_key, 0)
+            
+            # For NFTs, diff is: +1 for incoming (output exists, no input), -1 for outgoing (input exists, no output)
+            # If both exist, it's a transfer within the wallet (diff = 0)
+            diff = output_count - input_count
+            
+            # Create key: ct_nft/{category}/{capability}/{commitment}
+            # If capability or commitment is empty, still include them for uniqueness
+            nft_key_str = f"ct_nft/{category}/{capability}/{commitment}"
+            
+            results[nft_key_str] = dict(
+                record_type=self.get_record_type(diff),
+                change_address=change_address,
+                diff=float(diff),  # Convert to float for consistency
+                category=category,
+                capability=capability if capability else None,
+                commitment=commitment if commitment else None,
+            )
+        
+        return results
+
+
     def parse(self):
-        outputs, ct_outputs = self.get_relevant_outputs()
-        inputs, ct_inputs = self.get_relevant_inputs()
+        outputs, ct_outputs, ct_nft_outputs = self.get_relevant_outputs()
+        inputs, ct_inputs, ct_nft_inputs = self.get_relevant_inputs()
 
         total_outputs = 0
         total_inputs = 0
@@ -169,4 +255,5 @@ class HistoryParser(object):
                 'diff': diff
             },
             **self.parse_ct(ct_inputs, ct_outputs),
+            **self.parse_ct_nft(ct_nft_inputs, ct_nft_outputs),
         }

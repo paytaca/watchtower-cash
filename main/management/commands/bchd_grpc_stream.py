@@ -34,6 +34,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 def run():
+    if getattr(settings, 'DISABLE_BCHD', True):
+        LOGGER.error("BCHD is disabled via DISABLE_BCHD setting. Cannot run bchd_grpc_stream.")
+        return
+    
     source = 'bchd-grpc-stream'
     bchd_node = settings.BCHD_NODE
 

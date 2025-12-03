@@ -662,6 +662,9 @@ BCHN_NODE = f'http://{RPC_USER}:{BCHN_RPC_PASSWORD}@{BCHN_HOST}:8332'
 # BCHD_NODE = f'http://{RPC_USER}:{BCHD_RPC_PASSWORD}@bchd:18334'
 BCHD_NODE = 'bchd.greyh.at:8335'
 
+# Disable BCHD connections (defaults to True)
+DISABLE_BCHD = config('DISABLE_BCHD', default=True, cast=bool)
+
 WT_DEFAULT_CASHTOKEN_ID = 'wt_cashtoken_token_id'
 
 bcmr_url_type = ''

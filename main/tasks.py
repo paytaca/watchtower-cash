@@ -839,6 +839,9 @@ def save_minting_nft_transaction(transaction:dict, minting_input_index:int):
 @shared_task(queue='query_transaction')
 def query_transaction(txid, block_id, for_slp=False):
     if for_slp:
+        if not NODE.SLP:
+            LOGGER.warning("BCHD is disabled, cannot query SLP transaction")
+            return
         transaction = NODE.SLP._get_raw_transaction(txid)
 
         for output in transaction.outputs:
@@ -1068,6 +1071,9 @@ def get_bch_utxos(self, address):
 
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_slp_utxos(self, address):
+    if not NODE.SLP:
+        LOGGER.warning("BCHD is disabled, cannot get SLP UTXOs")
+        return
     try:
         outputs = NODE.SLP.get_utxos(address)
         saved_utxo_ids = []
@@ -1264,6 +1270,10 @@ def get_token_meta_data(self, token_id, async_image_download=False):
     try:
         if token_id != settings.WT_DEFAULT_CASHTOKEN_ID:
             t = Token.objects.get(tokenid=token_id)
+
+            if not NODE.SLP:
+                LOGGER.warning("BCHD is disabled, cannot fetch token metadata")
+                return
 
             LOGGER.info(f'Fetching token metadata from {NODE.SLP.source}...')
 
@@ -1732,16 +1742,34 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
         txn_broadcast = TransactionBroadcast.objects.select_related('price_log').filter(txid=txid).first()
         txn_broadcast_price_log = txn_broadcast.price_log if txn_broadcast and txn_broadcast.price_log else None
 
-        # parsed_history.keys() = ['bch_or_slp', 'ct']
+        # parsed_history.keys() = ['bch_or_slp', 'ct', 'ct_nft']
         for key in parsed_history.keys():
             ct_category = None
-            if key.startswith("ct/"):
+            is_nft_key = False
+            nft_category = None
+            nft_capability = None
+            nft_commitment = None
+            
+            if key.startswith("ct_nft/"):
+                is_nft_key = True
+                # Parse: ct_nft/{category}/{capability}/{commitment}
+                parts = key.split("ct_nft/")[1].split("/")
+                nft_category = parts[0] if len(parts) > 0 else None
+                nft_capability = parts[1] if len(parts) > 1 and parts[1] else None
+                nft_commitment = parts[2] if len(parts) > 2 and parts[2] else None
+            elif key.startswith("ct/"):
                 ct_category = key.split("ct/")[1]
 
             data = parsed_history[key]
             record_type = data['record_type']
             amount = data['diff']
             change_address = data['change_address']
+            
+            # For NFT keys, extract additional metadata if available
+            if is_nft_key:
+                nft_category = data.get('category', nft_category)
+                nft_capability = data.get('capability', nft_capability)
+                nft_commitment = data.get('commitment', nft_commitment)
 
             _recipients = None
             if change_address:
@@ -1751,12 +1779,22 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
             processed_senders = process_history_recpts_or_senders(senders, key, BCH_OR_SLP)
 
             if wallet.wallet_type == 'bch':
+                # For NFTs, set amount to 1.0 or -1.0 (counted, not summed)
+                if is_nft_key:
+                    if record_type == 'incoming':
+                        amount = 1.0
+                    elif record_type == 'outgoing':
+                        amount = -1.0
+                    else:
+                        amount = float(amount)  # Keep as-is if record_type is empty
+                
                 # Correct the amount for outgoing, subtract the miner fee if given and maintain negative sign
                 if record_type == 'outgoing':
                     if key == BCH_OR_SLP:
                         amount = abs(amount) - ((tx_fee / 100000000) or 0)
                         amount = round(amount, 8)
-                    amount = abs(amount) * -1
+                    elif not is_nft_key:  # NFTs already have correct amount set above
+                        amount = abs(amount) * -1
 
                 # Don't save a record if resulting amount is zero
                 is_zero_amount = amount == 0
@@ -1795,6 +1833,39 @@ def parse_wallet_history(self, txid, wallet_handle, tx_fee=None, senders=[], rec
                 if key == BCH_OR_SLP:
                     txns = txns.filter(token__name='bch')
                     spent_txns = spent_txns.filter(token__name='bch')
+                elif is_nft_key and nft_category:
+                    # Handle CashToken NFT transactions
+                    # Filter by category, capability, and commitment to match the specific NFT
+                    nft_filter = models.Q(cashtoken_nft__category=nft_category)
+                    if nft_capability:
+                        nft_filter = nft_filter & models.Q(cashtoken_nft__capability=nft_capability)
+                    else:
+                        nft_filter = nft_filter & models.Q(cashtoken_nft__capability__isnull=True)
+                    
+                    if nft_commitment:
+                        nft_filter = nft_filter & models.Q(cashtoken_nft__commitment=nft_commitment)
+                    else:
+                        nft_filter = nft_filter & models.Q(cashtoken_nft__commitment__isnull=True)
+                    
+                    _txns = txns.filter(nft_filter)
+                    _spent_txns = spent_txns.filter(nft_filter)
+                    if _txns.exists() or _spent_txns.exists():
+                        if _txns.exists():
+                            txns = _txns
+                        if _spent_txns.exists():
+                            spent_txns = _spent_txns
+                        nft_tx = txns.filter(cashtoken_nft__isnull=False).last()
+                        if not nft_tx:
+                            nft_tx = spent_txns.filter(cashtoken_nft__isnull=False).last()
+                        if nft_tx and nft_tx.cashtoken_nft:
+                            cashtoken_nft = nft_tx.cashtoken_nft
+                            # Set token_obj to default CashToken token for NFTs
+                            if not token_obj:
+                                token_obj, _ = Token.objects.get_or_create(tokenid=settings.WT_DEFAULT_CASHTOKEN_ID)
+                            # Amount already set correctly above for NFTs
+                    else:
+                        # No matching Transaction found - skip (Transaction required, same as FTs)
+                        continue
                 elif ct_category:
                     _txns = txns.filter(
                         models.Q(cashtoken_ft__category=ct_category) | \
@@ -2025,9 +2096,12 @@ def transaction_post_save_task(self, address, transaction_id, blockheight_id=Non
     bch_tx = NODE.BCH.get_transaction(txid)
     slp_tx = None
     if parse_slp:
-        slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
+        if not NODE.SLP:
+            LOGGER.warning("BCHD is disabled, cannot parse SLP transaction")
+        else:
+            slp_tx = NODE.SLP.get_transaction(txid, parse_slp=True)
 
-    if parse_slp and not isinstance(slp_tx, dict) and not slp_tx.get('valid'):
+    if parse_slp and slp_tx and not isinstance(slp_tx, dict) and not slp_tx.get('valid'):
         self.retry(countdown=5)
         return transaction_id
 

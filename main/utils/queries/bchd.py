@@ -17,7 +17,12 @@ LOGGER = logging.getLogger(__name__)
 class BCHDQuery(object):
 
     def __init__(self):
-        self.base_url = settings.BCHD_NODE
+        if getattr(settings, 'DISABLE_BCHD', True):
+            self.disabled = True
+            self.base_url = None
+        else:
+            self.disabled = False
+            self.base_url = settings.BCHD_NODE
 
         # if settings.BCH_NETWORK != 'mainnet':
         #     self.rpc_connection = AuthServiceProxy(self.base_url)
@@ -38,7 +43,13 @@ class BCHDQuery(object):
             11: 'SLP_V1_NFT1_UNIQUE_CHILD_SEND'
         }
 
+    def _check_disabled(self):
+        """Raise exception if BCHD is disabled"""
+        if self.disabled:
+            raise RuntimeError("BCHD is disabled via DISABLE_BCHD setting")
+
     def get_latest_block(self, include_transactions=True, full_transactions=False):
+        self._check_disabled()
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -52,6 +63,7 @@ class BCHDQuery(object):
             return latest_block
 
     def get_block(self, block, full_transactions=False):
+        self._check_disabled()
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -191,6 +203,7 @@ class BCHDQuery(object):
         return transaction
 
     def _get_raw_transaction(self, transaction_hash):
+        self._check_disabled()
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -210,11 +223,13 @@ class BCHDQuery(object):
                 return None
 
     def get_transaction(self, transaction_hash, parse_slp=False):
+        self._check_disabled()
         txn = self._get_raw_transaction(transaction_hash)
         if txn:
             return self._parse_transaction(txn, parse_slp=parse_slp)
 
     def get_utxos(self, address):
+        self._check_disabled()
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -228,6 +243,7 @@ class BCHDQuery(object):
             return resp.outputs
 
     def get_transactions_count(self, blockheight):
+        self._check_disabled()
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -243,6 +259,7 @@ class BCHDQuery(object):
             return len(trs)
 
     def get_address_transactions(self, address, limit=None, offset=None):
+        self._check_disabled()
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))
 
@@ -260,6 +277,7 @@ class BCHDQuery(object):
             return resp
 
     def broadcast_transaction(self, transaction):
+        self._check_disabled()
         txn_bytes = bytes.fromhex(transaction)
         cert = ssl.get_server_certificate(self.base_url.split(':'))
         creds = grpc.ssl_channel_credentials(root_certificates=str.encode(cert))

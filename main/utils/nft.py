@@ -1,6 +1,10 @@
 import json, base64, requests
 from main.models import Token
 from main.utils.queries.bchd import BCHDQuery
+from django.conf import settings
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 
 def bitdb_query(query):
@@ -32,6 +36,10 @@ def find_token_utxo(tokenid):
         # this implies the token, if exists, has not been sent
         # so we get the recipient when the token is minted
         txid = tokenid
+
+    if getattr(settings, 'DISABLE_BCHD', True):
+        LOGGER.warning("BCHD is disabled, cannot find token UTXO")
+        return None
 
     bchd = BCHDQuery()
     tx = bchd._get_raw_transaction(txid)
@@ -99,6 +107,10 @@ def find_minting_baton(tokenid):
 
     if not txid:
         return
+
+    if getattr(settings, 'DISABLE_BCHD', True):
+        LOGGER.warning("BCHD is disabled, cannot find minting baton")
+        return None
 
     bchd = BCHDQuery()
     tx = bchd.get_transaction(txid, parse_slp=True)
