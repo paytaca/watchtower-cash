@@ -37,8 +37,24 @@ def send_wallet_history_push_notification(wallet_history_obj):
             token_name = "BCH"
         decimals = wallet_history_obj.token.decimals
         fiat_value = wallet_history_obj.fiat_value or wallet_history_obj.usd_value
+        
+        # If fiat_value is not available and transaction is recent, try to populate it synchronously
+        if not fiat_value and wallet_history_obj.tx_timestamp:
+            tx_age = (timezone.now() - wallet_history_obj.tx_timestamp).total_seconds()
+            # Only try to populate for transactions less than 30 seconds old to avoid blocking
+            if tx_age < 30:
+                try:
+                    # Lazy import to avoid circular import (main.tasks imports this module)
+                    from main.tasks import parse_wallet_history_market_values
+                    parse_wallet_history_market_values(wallet_history_obj.id)
+                    wallet_history_obj.refresh_from_db()
+                    fiat_value = wallet_history_obj.fiat_value or wallet_history_obj.usd_value
+                except Exception as exception:
+                    logger.warning(
+                        f"Failed to populate fiat value for push notification {wallet_history_obj.txid}: {exception}"
+                    )
 
-    incoming = wallet_history_obj.amount >= 0
+    incoming = wallet_history_obj.record_type == WalletHistory.INCOMING
     extra = {
         "txid": wallet_history_obj.txid,
         "type": NotificationTypes.MAIN_TRANSACTION,
@@ -90,7 +106,7 @@ def send_wallet_history_push_notification_nft(wallet_history_obj):
         cashtoken_nft_id__isnull=False
     )
 
-    if transaction.exists() and wallet_history_obj.amount >= 0:
+    if transaction.exists() and wallet_history_obj.record_type == WalletHistory.INCOMING:
         title = 'NFT Received'
         message = f'Received {transaction.get().cashtoken_nft.info.name}'
         extra = {
