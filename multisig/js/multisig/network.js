@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { CashAddressNetworkPrefix, decodeCashAddress } from "bitauth-libauth-v3";
-import { MultisigWallet } from './wallet';
+import { MultisigWallet } from './wallet.js';
 import { ElectrumNetworkProvider } from 'cashscript';
 
 /**
