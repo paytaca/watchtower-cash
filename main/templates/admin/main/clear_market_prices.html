@@ -1,0 +1,174 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/changelists.css" %}">
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+
+<div class="content-main">
+    <div class="right-part">
+        <form action="" method="post">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                <ul class="errorlist">
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            
+            <fieldset class="module aligned">
+                {% for field in form %}
+                    <div class="form-row {% if field.errors %} errors {% endif %}">
+                        {% if field.errors %}
+                            <ul class="errorlist">
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                        <div>
+                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {% if field.field.widget.input_type == 'checkbox' %}
+                                {{ field }}
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
+                            {% if field.field.help_text %}
+                                <div class="help">{{ field.field.help_text|safe }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </fieldset>
+            
+            <div class="submit-row">
+                <input class="default" type="submit" value="Process"/>
+            </div>
+        </form>
+    </div>
+
+    {% if error %}
+        <div class="module">
+            <h2>Error</h2>
+            <div class="form-row">
+                <p style="color: red;">{{ error }}</p>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if result %}
+        <div class="module" style="margin-top: 20px;">
+            <h2>Results</h2>
+            
+            {% if result.success %}
+                <div class="form-row" style="padding: 15px; background-color: {% if result.dry_run %}#fff3cd{% else %}#d4edda{% endif %}; border-left: 4px solid {% if result.dry_run %}#ffc107{% else %}#28a745{% endif %}; border-radius: 4px;">
+                    <strong style="font-size: 1.1em; color: {% if result.dry_run %}#856404{% else %}#155724{% endif %};">
+                        {{ result.message }}
+                    </strong>
+                </div>
+                
+                <div class="form-row" style="margin-top: 15px;">
+                    <strong>Category:</strong> {{ result.category }}
+                </div>
+                
+                <div class="form-row">
+                    <strong>Total Records Found:</strong> {{ result.count }}
+                </div>
+                
+                <div class="form-row">
+                    <strong>Records with market_prices:</strong> {{ result.records_with_prices_count }}
+                </div>
+                
+                <div class="form-row">
+                    <strong>Records without market_prices:</strong> {{ result.records_without_prices_count }}
+                </div>
+                
+                {% if not result.dry_run and result.updated_count is not None %}
+                <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #d1ecf1; border-left: 4px solid #0c5460;">
+                    <strong>Records Updated:</strong> 
+                    <span style="font-size: 1.1em; font-weight: bold; color: #0c5460;">
+                        {{ result.updated_count }}
+                    </span>
+                </div>
+                {% endif %}
+                
+                {% if result.dry_run and result.preview_records %}
+                <div class="module" style="margin-top: 20px;">
+                    <h3>Preview of Records That Would Be Updated (showing first 10):</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                        <thead>
+                            <tr>
+                                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">ID</th>
+                                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">TXID</th>
+                                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Market Prices</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in result.preview_records %}
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ record.id }}</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ record.txid|truncatechars:30 }}</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                    <pre style="margin: 0; font-size: 11px; max-width: 400px; overflow-x: auto;">{{ record.market_prices|default:"{}" }}</pre>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if result.more_records > 0 %}
+                    <p style="margin-top: 10px; color: #666;">
+                        ... and {{ result.more_records }} more record(s)
+                    </p>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+            {% else %}
+                <div class="form-row" style="padding: 15px; background-color: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">
+                    <strong style="color: #721c24;">{{ result.message }}</strong>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .module table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    
+    .module table th,
+    .module table td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .module table th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+    }
+    
+    .module h2 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    
+    .module h3 {
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
+    
+    pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        background: #f5f5f5;
+        padding: 5px;
+        border-radius: 3px;
+    }
+</style>
+{% endblock content %}

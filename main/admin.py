@@ -1,6 +1,11 @@
 from django.contrib.auth.models import User, Group
 from django.contrib.admin import DateFieldListFilter
 from django.contrib import admin
+from django import forms
+from django.urls import path
+from django.shortcuts import render
+from django.contrib import messages
+from decimal import Decimal
 from main.models import *
 from main.tasks import (
     client_acknowledgement,
@@ -10,6 +15,7 @@ from main.tasks import (
     get_slp_utxos,
     parse_tx_wallet_histories
 )
+from main.management.commands.tx_fiat_amounts import get_tx_with_fiat_amounts
 
 from dynamic_raw_id.admin import DynamicRawIDMixin
 from django.utils.html import format_html
@@ -20,6 +26,63 @@ import json
 
 admin.site.site_header = 'WatchTower.Cash Admin'
 REDIS_STORAGE = settings.REDISKV
+
+
+class TxFiatAmountsForm(forms.Form):
+    txid = forms.CharField(
+        label="Transaction ID",
+        max_length=64,
+        help_text="Enter the transaction ID (txid) to analyze",
+        required=True
+    )
+    currency = forms.CharField(
+        label="Currency",
+        max_length=10,
+        initial="PHP",
+        help_text="Enter the currency code (e.g., PHP, USD)",
+        required=True
+    )
+
+
+class ClearMarketPricesForm(forms.Form):
+    category = forms.CharField(
+        label="Cashtoken Category",
+        max_length=64,
+        help_text="Enter the cashtoken category to clear market_prices for",
+        required=True
+    )
+    dry_run = forms.BooleanField(
+        label="Dry Run",
+        required=False,
+        initial=True,
+        help_text="Preview what would be updated without actually making changes"
+    )
+
+
+class ClearWalletCachesForm(forms.Form):
+    wallet_hash = forms.CharField(
+        label="Wallet Hash",
+        max_length=70,
+        help_text="Enter the wallet hash to clear all caches for",
+        required=True
+    )
+
+
+class ViewWalletBalanceHistoryForm(forms.Form):
+    wallet_hash = forms.CharField(
+        label="Wallet Hash",
+        max_length=70,
+        help_text="Enter the wallet hash to view balance and history",
+        required=True
+    )
+    history_limit = forms.IntegerField(
+        label="History Limit",
+        initial=20,
+        min_value=1,
+        max_value=100,
+        help_text="Number of recent history records to display (1-100)",
+        required=True
+    )
 
 class TokenAdmin(DynamicRawIDMixin, admin.ModelAdmin):
     search_fields = ['tokenid']
@@ -80,6 +143,8 @@ class BlockHeightAdmin(admin.ModelAdmin):
 
 
 class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
+    change_list_template = 'admin/main/transaction_changelist.html'
+    
     search_fields = [
         'token__name',
         'cashtoken_ft__info__name',
@@ -119,6 +184,126 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'spent',
         'date_created'
     ]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('tx-fiat-amounts/', self.tx_fiat_amounts_view, name='main_transaction_tx_fiat_amounts'),
+        ]
+        return custom_urls + urls
+
+    def tx_fiat_amounts_view(self, request):
+        form = TxFiatAmountsForm()
+        tx_data = None
+        error = None
+        assessment = None
+
+        if request.method == 'POST':
+            form = TxFiatAmountsForm(request.POST)
+            if form.is_valid():
+                txid = form.cleaned_data['txid'].strip()
+                currency = form.cleaned_data['currency'].strip().upper()
+                
+                try:
+                    tx_data = get_tx_with_fiat_amounts(txid, currency=currency)
+                    
+                    # Calculate gain/loss assessment for cashout
+                    if tx_data and tx_data.get('outputs') and len(tx_data['outputs']) > 0:
+                        total_input_amount = Decimal(str(tx_data.get('total_input_amount', 0) or 0))
+                        
+                        # First output is the cashout transaction
+                        cashout_output = tx_data['outputs'][0]
+                        cashout_amount = Decimal(str(cashout_output.get('amount', 0) or 0))
+                        
+                        # Second output is change (if exists)
+                        change_amount = Decimal('0')
+                        if len(tx_data['outputs']) > 1:
+                            change_output = tx_data['outputs'][1]
+                            change_amount = Decimal(str(change_output.get('amount', 0) or 0))
+                        
+                        # Net received = cashout amount (what merchant gets)
+                        net_received = cashout_amount
+                        
+                        # Total output amount (cashout + change)
+                        total_output_amount = Decimal(str(tx_data.get('total_output_amount', 0) or 0))
+                        
+                        # Calculate gain/loss only if we have valid input and output amounts
+                        if total_input_amount > 0 and cashout_amount is not None:
+                            gain_loss = net_received - total_input_amount
+                            percentage = (gain_loss / total_input_amount) * 100
+                            
+                            # Calculate gain portion of cashout (if gain)
+                            # The gain portion is proportional to the cashout amount relative to total output
+                            # If cashout is a subset of total output (e.g., with change), 
+                            # the gain should be proportionally allocated
+                            gain_portion_of_cashout = None
+                            gain_portion_percentage = None
+                            if gain_loss >= 0 and total_input_amount > 0:
+                                # Calculate total gain (difference between total output and total input)
+                                total_gain = total_output_amount - total_input_amount
+                                
+                                if total_gain > 0 and total_output_amount > 0:
+                                    # Gain portion of cashout = (cashout / total_output) * total_gain
+                                    # This proportionally allocates the gain to the cashout amount
+                                    gain_portion_of_cashout = (float(cashout_amount) / float(total_output_amount)) * float(total_gain)
+                                    # Also calculate as percentage of cashout
+                                    if cashout_amount > 0:
+                                        gain_portion_percentage = (gain_portion_of_cashout / float(cashout_amount)) * 100
+                                elif total_gain > 0:
+                                    # If total_output is 0 or invalid, fall back to simple calculation
+                                    gain_portion_of_cashout = float(gain_loss)
+                                    if cashout_amount > 0:
+                                        gain_portion_percentage = (gain_portion_of_cashout / float(cashout_amount)) * 100
+                            
+                            # Calculate loss percentage over total inputs (if loss)
+                            # This represents what percentage of the original amount was lost
+                            # Used for calculating merchant reimbursement
+                            loss_percentage_over_inputs = None
+                            reimbursement_amount = None
+                            total_after_reimbursement = None
+                            if gain_loss < 0:
+                                # Loss percentage: (loss / total_input_amount) * 100
+                                loss_percentage_over_inputs = abs(float(percentage))
+                                # Reimbursement amount = the loss amount (what needs to be paid back)
+                                reimbursement_amount = abs(float(gain_loss))
+                                # Total after reimbursement = cashout + reimbursement = total_input_amount
+                                total_after_reimbursement = float(cashout_amount) + reimbursement_amount
+                            
+                            assessment = {
+                                'total_input_amount': float(total_input_amount),
+                                'cashout_amount': float(cashout_amount),
+                                'change_amount': float(change_amount),
+                                'net_received': float(net_received),
+                                'gain_loss': float(gain_loss),
+                                'percentage': float(percentage),
+                                'is_gain': gain_loss >= 0,
+                                'currency': currency,
+                                'gain_portion_of_cashout': gain_portion_of_cashout,
+                                'gain_portion_percentage': gain_portion_percentage,
+                                'loss_percentage_over_inputs': loss_percentage_over_inputs,
+                                'reimbursement_amount': reimbursement_amount,
+                                'total_after_reimbursement': total_after_reimbursement,
+                            }
+                        
+                except Exception as e:
+                    error = str(e)
+                    messages.error(request, f"Error processing transaction: {error}")
+
+        tx_data_json = None
+        if tx_data:
+            tx_data_json = json.dumps(tx_data, indent=4, default=str)
+
+        context = {
+            'title': 'Cashout Assessment',
+            'form': form,
+            'tx_data': tx_data,
+            'tx_data_json': tx_data_json,
+            'assessment': assessment,
+            'error': error,
+            'opts': self.model._meta,
+            'has_view_permission': self.has_view_permission(request),
+        }
+        return render(request, 'admin/main/tx_fiat_amounts.html', context)
 
     def capability(self, obj):
         if obj.cashtoken_nft:
@@ -234,6 +419,202 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet_hash'
     ]
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('clear-wallet-caches/', self.clear_wallet_caches_view, name='main_wallet_clear_wallet_caches'),
+            path('view-wallet-balance-history/', self.view_wallet_balance_history_view, name='main_wallet_view_balance_history'),
+        ]
+        return custom_urls + urls
+
+    def clear_wallet_caches_view(self, request):
+        form = ClearWalletCachesForm()
+        result = None
+        error = None
+
+        if request.method == 'POST':
+            form = ClearWalletCachesForm(request.POST)
+            if form.is_valid():
+                wallet_hash = form.cleaned_data['wallet_hash'].strip()
+                
+                try:
+                    from main.utils.cache import clear_wallet_balance_cache, clear_wallet_history_cache
+                    from django.conf import settings
+                    
+                    cache = settings.REDISKV
+                    
+                    # Count caches before clearing
+                    bch_balance_key = f'wallet:balance:bch:{wallet_hash}'
+                    token_balance_keys = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
+                    history_keys = cache.keys(f'wallet:history:{wallet_hash}:*')
+                    
+                    bch_balance_exists = cache.exists(bch_balance_key)
+                    token_balance_count = len(token_balance_keys) if token_balance_keys else 0
+                    history_count = len(history_keys) if history_keys else 0
+                    total_cache_count = (1 if bch_balance_exists else 0) + token_balance_count + history_count
+                    
+                    # Clear all caches
+                    clear_wallet_balance_cache(wallet_hash, token_categories=None)
+                    clear_wallet_history_cache(wallet_hash, asset_key=None)
+                    
+                    # Verify caches were cleared
+                    bch_balance_exists_after = cache.exists(bch_balance_key)
+                    token_balance_keys_after = cache.keys(f'wallet:balance:token:{wallet_hash}:*')
+                    history_keys_after = cache.keys(f'wallet:history:{wallet_hash}:*')
+                    
+                    token_balance_count_after = len(token_balance_keys_after) if token_balance_keys_after else 0
+                    history_count_after = len(history_keys_after) if history_keys_after else 0
+                    
+                    result = {
+                        'success': True,
+                        'message': f'Successfully cleared all caches for wallet: {wallet_hash}',
+                        'wallet_hash': wallet_hash,
+                        'bch_balance_cleared': bch_balance_exists,
+                        'token_balance_count': token_balance_count,
+                        'history_count': history_count,
+                        'total_cleared': total_cache_count,
+                        'bch_balance_remaining': bch_balance_exists_after,
+                        'token_balance_remaining': token_balance_count_after,
+                        'history_remaining': history_count_after,
+                    }
+                    
+                except Exception as e:
+                    error = str(e)
+                    messages.error(request, f"Error clearing wallet caches: {error}")
+
+        context = {
+            'title': 'Clear Wallet Caches',
+            'form': form,
+            'result': result,
+            'error': error,
+            'opts': self.model._meta,
+            'has_view_permission': self.has_view_permission(request),
+        }
+        return render(request, 'admin/main/clear_wallet_caches.html', context)
+
+    def view_wallet_balance_history_view(self, request):
+        form = ViewWalletBalanceHistoryForm()
+        wallet_data = None
+        error = None
+
+        if request.method == 'POST':
+            form = ViewWalletBalanceHistoryForm(request.POST)
+            if form.is_valid():
+                wallet_hash = form.cleaned_data['wallet_hash'].strip()
+                history_limit = form.cleaned_data['history_limit']
+                
+                try:
+                    from django.db.models import Q, Sum, F
+                    from django.db.models.functions import Coalesce
+                    from main.utils.tx_fee import get_tx_fee_sats, bch_to_satoshi, satoshi_to_bch
+                    from django.conf import settings
+                    import json
+                    
+                    # Get wallet
+                    try:
+                        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+                    except Wallet.DoesNotExist:
+                        error = f'Wallet not found: {wallet_hash}'
+                        wallet_data = None
+                    else:
+                        wallet_data = {
+                            'wallet_hash': wallet.wallet_hash,
+                            'wallet_type': wallet.wallet_type,
+                            'project': str(wallet.project) if wallet.project else None,
+                            'date_created': wallet.date_created,
+                            'last_balance_check': wallet.last_balance_check,
+                            'last_utxo_scan_succeeded': wallet.last_utxo_scan_succeeded,
+                        }
+                        
+                        # Get BCH balance
+                        if wallet.wallet_type == 'bch':
+                            query = Q(wallet=wallet) & Q(spent=False)
+                            qs_balance = Transaction.objects.filter(query).aggregate(
+                                balance=Coalesce(Sum('value'), 0)
+                            )
+                            bch_balance = (qs_balance['balance'] or 0) / (10 ** 8)
+                            qs_count = Transaction.objects.filter(query).count()
+                            
+                            spendable = int(bch_to_satoshi(bch_balance)) - get_tx_fee_sats(p2pkh_input_count=qs_count)
+                            spendable = satoshi_to_bch(spendable)
+                            spendable = max(spendable, 0)
+                            
+                            wallet_data['bch_balance'] = round(bch_balance, 8)
+                            wallet_data['bch_spendable'] = round(spendable, 8)
+                            wallet_data['bch_utxo_count'] = qs_count
+                            
+                            # Get token balances
+                            token_balances = []
+                            token_query = Q(wallet=wallet) & Q(spent=False) & Q(cashtoken_ft__isnull=False)
+                            token_transactions = Transaction.objects.filter(token_query).select_related('cashtoken_ft', 'cashtoken_ft__info')
+                            
+                            # Group by category
+                            from collections import defaultdict
+                            token_groups = defaultdict(lambda: {'amount': 0, 'info': None})
+                            
+                            for tx in token_transactions:
+                                if tx.cashtoken_ft:
+                                    category = tx.cashtoken_ft.category
+                                    token_groups[category]['amount'] += tx.amount
+                                    if not token_groups[category]['info'] and tx.cashtoken_ft.info:
+                                        token_groups[category]['info'] = {
+                                            'name': tx.cashtoken_ft.info.name,
+                                            'symbol': tx.cashtoken_ft.info.symbol,
+                                            'decimals': tx.cashtoken_ft.info.decimals,
+                                        }
+                            
+                            for category, data in token_groups.items():
+                                decimals = data['info']['decimals'] if data['info'] else 0
+                                balance = round(data['amount'], decimals)
+                                token_balances.append({
+                                    'category': category,
+                                    'balance': balance,
+                                    'name': data['info']['name'] if data['info'] else 'Unknown',
+                                    'symbol': data['info']['symbol'] if data['info'] else 'N/A',
+                                    'decimals': decimals,
+                                })
+                            
+                            wallet_data['token_balances'] = token_balances
+                        
+                        # Get wallet history
+                        history = WalletHistory.objects.filter(wallet=wallet).exclude(amount=0).order_by(
+                            '-tx_timestamp', '-date_created'
+                        )[:history_limit].select_related('token', 'cashtoken_ft', 'cashtoken_nft')
+                        
+                        history_list = []
+                        for record in history:
+                            history_list.append({
+                                'id': record.id,
+                                'txid': record.txid,
+                                'record_type': record.record_type,
+                                'amount': record.amount,
+                                'tx_fee': record.tx_fee,
+                                'tx_timestamp': record.tx_timestamp,
+                                'date_created': record.date_created,
+                                'token_name': record.token.name if record.token else None,
+                                'cashtoken_category': record.cashtoken_ft.category if record.cashtoken_ft else None,
+                                'usd_price': float(record.usd_price) if record.usd_price else None,
+                            })
+                        
+                        wallet_data['history'] = history_list
+                        wallet_data['history_count'] = len(history_list)
+                        wallet_data['total_history_count'] = WalletHistory.objects.filter(wallet=wallet).exclude(amount=0).count()
+                        wallet_data['has_usd_prices'] = any(record.get('usd_price') for record in history_list)
+                        
+                except Exception as e:
+                    error = str(e)
+                    messages.error(request, f"Error viewing wallet: {error}")
+
+        context = {
+            'title': 'View Wallet Balance & History',
+            'form': form,
+            'wallet_data': wallet_data,
+            'error': error,
+            'opts': self.model._meta,
+            'has_view_permission': self.has_view_permission(request),
+        }
+        return render(request, 'admin/main/view_wallet_balance_history.html', context)
+
     def rescan_utxos(self, request, queryset):
         for wallet in queryset:
             addresses = wallet.addresses.all()
@@ -309,6 +690,108 @@ class WalletHistoryAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet__wallet_hash',
         'txid'
     ]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('clear-market-prices/', self.clear_market_prices_view, name='main_wallethistory_clear_market_prices'),
+        ]
+        return custom_urls + urls
+
+    def clear_market_prices_view(self, request):
+        form = ClearMarketPricesForm()
+        result = None
+        error = None
+
+        if request.method == 'POST':
+            form = ClearMarketPricesForm(request.POST)
+            if form.is_valid():
+                category = form.cleaned_data['category'].strip()
+                dry_run = form.cleaned_data['dry_run']
+                
+                try:
+                    from django.db import transaction as db_transaction
+                    
+                    # Query WalletHistory records with the specified cashtoken category
+                    queryset = WalletHistory.objects.filter(
+                        cashtoken_ft__category=category
+                    ).select_related('cashtoken_ft')
+                    
+                    count = queryset.count()
+                    
+                    if count == 0:
+                        result = {
+                            'success': False,
+                            'message': f'No WalletHistory records found for cashtoken category: {category}',
+                            'count': 0,
+                            'records_with_prices_count': 0,
+                            'dry_run': dry_run
+                        }
+                    else:
+                        # Show records that will be updated
+                        records_with_prices = queryset.exclude(market_prices__isnull=True).exclude(market_prices={})
+                        records_with_prices_count = records_with_prices.count()
+                        
+                        if dry_run:
+                            # Show preview of records that would be updated
+                            preview_records = []
+                            for record in records_with_prices[:10]:  # Show first 10
+                                preview_records.append({
+                                    'id': record.id,
+                                    'txid': record.txid,
+                                    'market_prices': record.market_prices
+                                })
+                            
+                            result = {
+                                'success': True,
+                                'message': 'DRY RUN - No changes were made',
+                                'count': count,
+                                'records_with_prices_count': records_with_prices_count,
+                                'records_without_prices_count': count - records_with_prices_count,
+                                'dry_run': True,
+                                'preview_records': preview_records,
+                                'more_records': max(0, records_with_prices_count - 10)
+                            }
+                        else:
+                            # Actually clear market_prices
+                            if records_with_prices_count > 0:
+                                with db_transaction.atomic():
+                                    updated = queryset.update(market_prices=None)
+                                
+                                result = {
+                                    'success': True,
+                                    'message': f'Successfully cleared market_prices for {updated} WalletHistory record(s)',
+                                    'count': count,
+                                    'records_with_prices_count': records_with_prices_count,
+                                    'records_without_prices_count': count - records_with_prices_count,
+                                    'updated_count': updated,
+                                    'dry_run': False
+                                }
+                            else:
+                                result = {
+                                    'success': True,
+                                    'message': 'No records with market_prices to clear',
+                                    'count': count,
+                                    'records_with_prices_count': 0,
+                                    'records_without_prices_count': count,
+                                    'dry_run': False
+                                }
+                    
+                    result['category'] = category
+                    
+                except Exception as e:
+                    error = str(e)
+                    messages.error(request, f"Error clearing market prices: {error}")
+
+        context = {
+            'title': 'Clear Market Prices',
+            'form': form,
+            'result': result,
+            'error': error,
+            'opts': self.model._meta,
+            'has_view_permission': self.has_view_permission(request),
+        }
+        return render(request, 'admin/main/clear_market_prices.html', context)
 
     def cashtoken(self, obj):
         return obj.cashtoken_ft or obj.cashtoken_nft or None

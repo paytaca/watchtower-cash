@@ -1,0 +1,187 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" type="text/css" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
+
+{% block coltype %}colMS{% endblock %}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    {% if app_list %}
+        {% for app in app_list %}
+            <div class="app-{{ app.app_label }} module">
+                <table>
+                    <caption>
+                        <a href="{{ app.app_url }}" class="section" title="{% blocktrans with name=app.name %}Models in the {{ name }} application{% endblocktrans %}">{{ app.name }}</a>
+                    </caption>
+                    {% for model in app.models %}
+                        <tr class="model-{{ model.object_name|lower }}">
+                            {% if model.admin_url %}
+                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
+                            {% else %}
+                                <th scope="row">{{ model.name }}</th>
+                            {% endif %}
+
+                            {% if model.add_url %}
+                                <td><a href="{{ model.add_url }}" class="addlink">{% trans 'Add' %}</a></td>
+                            {% else %}
+                                <td>&nbsp;</td>
+                            {% endif %}
+
+                            {% if model.admin_url %}
+                                {% if model.view_only %}
+                                    <td><a href="{{ model.admin_url }}" class="viewlink">{% trans 'View' %}</a></td>
+                                {% else %}
+                                    <td><a href="{{ model.admin_url }}" class="changelink">{% trans 'Change' %}</a></td>
+                                {% endif %}
+                            {% else %}
+                                <td>&nbsp;</td>
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        {% empty %}
+            <p>{% trans "You don't have permission to view or edit anything." %}</p>
+        {% endfor %}
+    {% else %}
+        <p>{% trans "You don't have permission to view or edit anything." %}</p>
+    {% endif %}
+</div>
+
+<div class="module" style="margin-top: 20px; clear: both;">
+    <table style="width: 100%;">
+        <caption style="font-size: 18px; font-weight: bold; margin-bottom: 15px; text-align: left;">
+            <a href="#" class="section" title="Tools">Tools</a>
+        </caption>
+        <tbody>
+            <tr>
+                <td style="padding: 10px;">
+                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
+                        <h3 style="margin-top: 0;">
+                            <a href="{% url 'admin:main_transaction_tx_fiat_amounts' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
+                                📊 Cashout Assessment
+                            </a>
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
+                            Analyze transaction inputs and outputs with fiat amounts. Calculate gain/loss for merchant cashouts with proportional gain allocation and loss reimbursement calculations.
+                        </p>
+                        <div style="margin-top: 10px;">
+                            <a href="{% url 'admin:main_transaction_tx_fiat_amounts' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
+                                Open Tool →
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 10px;">
+                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
+                        <h3 style="margin-top: 0;">
+                            <a href="{% url 'admin:main_wallethistory_clear_market_prices' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
+                                🗑️ Clear Market Prices
+                            </a>
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
+                            Clear market_prices for WalletHistory records matching a specific cashtoken category. Preview changes with dry-run mode before applying.
+                        </p>
+                        <div style="margin-top: 10px;">
+                            <a href="{% url 'admin:main_wallethistory_clear_market_prices' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
+                                Open Tool →
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 10px;">
+                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
+                        <h3 style="margin-top: 0;">
+                            <a href="{% url 'admin:main_wallet_clear_wallet_caches' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
+                                🧹 Clear Wallet Caches
+                            </a>
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
+                            Clear all caches (balance and history) for a wallet given its wallet hash. Useful for forcing fresh data retrieval.
+                        </p>
+                        <div style="margin-top: 10px;">
+                            <a href="{% url 'admin:main_wallet_clear_wallet_caches' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
+                                Open Tool →
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 10px;">
+                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9;">
+                        <h3 style="margin-top: 0;">
+                            <a href="{% url 'admin:main_wallet_view_balance_history' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
+                                💰 View Wallet Balance & History
+                            </a>
+                        </h3>
+                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
+                            View wallet information, BCH balance, token balances, and recent transaction history for a given wallet hash.
+                        </p>
+                        <div style="margin-top: 10px;">
+                            <a href="{% url 'admin:main_wallet_view_balance_history' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
+                                Open Tool →
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<style>
+    .module table {
+        width: 100%;
+    }
+    
+    .module .addlink:hover {
+        background: #205067 !important;
+    }
+    
+    .module h3 a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block sidebar %}
+<div id="content-related">
+    <div class="module" id="recent-actions-module">
+        <h2>{% trans 'Recent actions' %}</h2>
+        <h3>{% trans 'My actions' %}</h3>
+        {% load log %}
+        {% get_admin_log 10 as admin_log for_user user %}
+        {% if not admin_log %}
+        <p>{% trans 'None available' %}</p>
+        {% else %}
+        <ul class="actionlist">
+        {% for entry in admin_log %}
+        <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %}changelink{% endif %}{% if entry.is_deletion %}deletelink{% endif %}">
+            {% if entry.is_deletion or not entry.get_admin_url %}
+                {{ entry.object_repr }}
+            {% else %}
+                <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+            {% endif %}
+            <br>
+            {% if entry.content_type %}
+                <span class="mini quiet">{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %}</span>
+            {% else %}
+                <span class="mini quiet">{% trans 'Unknown content' %}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,171 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/changelists.css" %}">
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+
+<div class="content-main">
+    <div class="right-part">
+        <form action="" method="post">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                <ul class="errorlist">
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            
+            <fieldset class="module aligned">
+                {% for field in form %}
+                    <div class="form-row {% if field.errors %} errors {% endif %}">
+                        {% if field.errors %}
+                            <ul class="errorlist">
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                        <div>
+                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.field.help_text %}
+                                <div class="help">{{ field.field.help_text|safe }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </fieldset>
+            
+            <div class="submit-row">
+                <input class="default" type="submit" value="Clear Caches"/>
+            </div>
+        </form>
+    </div>
+
+    {% if error %}
+        <div class="module">
+            <h2>Error</h2>
+            <div class="form-row">
+                <p style="color: red;">{{ error }}</p>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if result %}
+        <div class="module" style="margin-top: 20px;">
+            <h2>Results</h2>
+            
+            {% if result.success %}
+                <div class="form-row" style="padding: 15px; background-color: #d4edda; border-left: 4px solid #28a745; border-radius: 4px;">
+                    <strong style="font-size: 1.1em; color: #155724;">
+                        {{ result.message }}
+                    </strong>
+                </div>
+                
+                <div class="form-row" style="margin-top: 15px;">
+                    <strong>Wallet Hash:</strong> {{ result.wallet_hash }}
+                </div>
+                
+                <div class="module" style="margin-top: 20px;">
+                    <h3>Cache Clearing Summary</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                        <thead>
+                            <tr>
+                                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Cache Type</th>
+                                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Cleared</th>
+                                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>BCH Balance Cache</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                    {% if result.bch_balance_cleared %}Yes{% else %}No (was not cached){% endif %}
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                    {% if result.bch_balance_remaining %}
+                                        <span style="color: #dc3545;">⚠️ Still exists</span>
+                                    {% else %}
+                                        <span style="color: #28a745;">✓ Cleared</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Token Balance Caches</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ result.token_balance_count }} cache(s)</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                    {% if result.token_balance_remaining > 0 %}
+                                        <span style="color: #dc3545;">⚠️ {{ result.token_balance_remaining }} remaining</span>
+                                    {% else %}
+                                        <span style="color: #28a745;">✓ All cleared</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Wallet History Caches</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ result.history_count }} cache(s)</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                    {% if result.history_remaining > 0 %}
+                                        <span style="color: #dc3545;">⚠️ {{ result.history_remaining }} remaining</span>
+                                    {% else %}
+                                        <span style="color: #28a745;">✓ All cleared</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr style="background-color: #f9f9f9;">
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Total</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>{{ result.total_cleared }} cache(s)</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                    {% if result.bch_balance_remaining or result.token_balance_remaining > 0 or result.history_remaining > 0 %}
+                                        <span style="color: #ffc107;">⚠️ Some caches may remain</span>
+                                    {% else %}
+                                        <span style="color: #28a745;">✓ All cleared successfully</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+            {% else %}
+                <div class="form-row" style="padding: 15px; background-color: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">
+                    <strong style="color: #721c24;">{{ result.message }}</strong>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .module table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    
+    .module table th,
+    .module table td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .module table th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+    }
+    
+    .module h2 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    
+    .module h3 {
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
+</style>
+{% endblock content %}

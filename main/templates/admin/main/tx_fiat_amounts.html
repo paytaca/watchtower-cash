@@ -1,0 +1,297 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/changelists.css" %}">
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+
+<div class="content-main">
+    <div class="right-part">
+        <form action="" method="post">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                <ul class="errorlist">
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            
+            <fieldset class="module aligned">
+                {% for field in form %}
+                    <div class="form-row {% if field.errors %} errors {% endif %}">
+                        {% if field.errors %}
+                            <ul class="errorlist">
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                        <div>
+                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.field.help_text %}
+                                <div class="help">{{ field.field.help_text|safe }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </fieldset>
+            
+            <div class="submit-row">
+                <input class="default" type="submit" value="Analyze Cashout"/>
+            </div>
+        </form>
+    </div>
+
+    {% if error %}
+        <div class="module">
+            <h2>Error</h2>
+            <div class="form-row">
+                <p style="color: red;">{{ error }}</p>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if tx_data %}
+        <div class="module">
+            <h2>Transaction Data</h2>
+            
+            <div class="form-row">
+                <strong>Transaction ID:</strong> {{ tx_data.txid }}
+            </div>
+            
+            <div class="form-row">
+                <strong>Currency:</strong> {{ tx_data.currency }}
+            </div>
+            
+            {% if tx_data.timestamp %}
+            <div class="form-row">
+                <strong>Timestamp:</strong> {{ tx_data.timestamp }}
+            </div>
+            {% endif %}
+            
+            <div class="form-row">
+                <strong>Total Input Amount:</strong> {{ tx_data.total_input_amount }} {{ tx_data.currency }}
+            </div>
+            
+            <div class="form-row">
+                <strong>Total Output Amount:</strong> {{ tx_data.total_output_amount }} {{ tx_data.currency }}
+            </div>
+
+            {% if assessment %}
+            <div class="module assessment-box" style="margin-top: 20px; padding: 20px; border: 2px solid {% if assessment.is_gain %}#4CAF50{% else %}#f44336{% endif %}; border-radius: 5px; background-color: {% if assessment.is_gain %}#e8f5e9{% else %}#ffebee{% endif %};">
+                <h2 style="margin-top: 0; color: {% if assessment.is_gain %}#2e7d32{% else %}#c62828{% endif %};">
+                    Cashout Assessment
+                </h2>
+                
+                <div class="assessment-details">
+                    <div class="form-row">
+                        <strong>Total Input Amount (Cost Basis):</strong> 
+                        <span style="font-size: 1.1em;">{{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    <div class="form-row">
+                        <strong>Cashout Amount (Output 0):</strong> 
+                        <span style="font-size: 1.1em;">{{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    {% if assessment.change_amount > 0 %}
+                    <div class="form-row">
+                        <strong>Change Amount (Output 1):</strong> 
+                        <span style="font-size: 1.1em;">{{ assessment.change_amount|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="form-row">
+                        <strong>Net Received:</strong> 
+                        <span style="font-size: 1.1em; font-weight: bold;">{{ assessment.net_received|floatformat:2 }} {{ assessment.currency }}</span>
+                    </div>
+                    
+                    <hr style="margin: 15px 0; border: 1px solid #ccc;">
+                    
+                    <div class="form-row" style="margin-top: 15px;">
+                        <strong style="font-size: 1.2em;">{{ assessment.is_gain|yesno:"GAIN,LOSS" }}:</strong> 
+                        <span style="font-size: 1.3em; font-weight: bold; color: {% if assessment.is_gain %}#2e7d32{% else %}#c62828{% endif %};">
+                            {{ assessment.gain_loss|floatformat:2 }} {{ assessment.currency }}
+                            ({{ assessment.percentage|floatformat:2 }}%)
+                        </span>
+                    </div>
+                    
+                    {% if assessment.is_gain and assessment.gain_portion_of_cashout is not None %}
+                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #e8f5e9; border-left: 4px solid #4CAF50;">
+                        <strong>Gain Portion of Cashout:</strong> 
+                        <span style="font-size: 1.1em; font-weight: bold; color: #2e7d32;">
+                            {{ assessment.gain_portion_of_cashout|floatformat:2 }} {{ assessment.currency }}
+                            {% if assessment.gain_portion_percentage is not None %}
+                            ({{ assessment.gain_portion_percentage|floatformat:2 }}% of cashout)
+                            {% endif %}
+                        </span>
+                        <div class="help" style="margin-top: 5px; color: #666;">
+                            This is how much of the cashout amount ({{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}) is proportionally due to gain. 
+                            Calculated as: (Cashout Amount / Total Output Amount) × Total Gain.
+                            This proportionally allocates the gain to the cashout when there are multiple outputs (e.g., change).
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if not assessment.is_gain and assessment.loss_percentage_over_inputs is not None %}
+                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #ffebee; border-left: 4px solid #f44336;">
+                        <strong>Loss Percentage Over Total Inputs:</strong> 
+                        <span style="font-size: 1.1em; font-weight: bold; color: #c62828;">
+                            {{ assessment.loss_percentage_over_inputs|floatformat:2 }}%
+                        </span>
+                        <div class="help" style="margin-top: 5px; color: #666;">
+                            This represents what percentage of the original amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}) was lost.
+                        </div>
+                        
+                        <div class="form-row" style="margin-top: 10px;">
+                            <strong>Reimbursement Amount (Loss to Bear):</strong> 
+                            <span style="font-size: 1.1em; font-weight: bold; color: #c62828;">
+                                {{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}
+                            </span>
+                            <div class="help" style="margin-top: 5px; color: #666;">
+                                Amount to pay back to merchant to guarantee they receive what their customers paid.
+                            </div>
+                        </div>
+                        
+                        {% if assessment.total_after_reimbursement is not None %}
+                        <div class="form-row" style="margin-top: 10px; padding: 8px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                            <strong>Merchant Total After Reimbursement:</strong> 
+                            <span style="font-size: 1.1em; font-weight: bold; color: #856404;">
+                                {{ assessment.total_after_reimbursement|floatformat:2 }} {{ assessment.currency }}
+                            </span>
+                            <div class="help" style="margin-top: 5px; color: #666;">
+                                Cashout ({{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}) + Reimbursement ({{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}) = Total Input Amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }})
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if tx_data.inputs %}
+            <div class="module">
+                <h3>Inputs</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>TXID</th>
+                            <th>Value (sats)</th>
+                            <th>Price ({{ tx_data.currency }})</th>
+                            <th>Amount ({{ tx_data.currency }})</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vin in tx_data.inputs %}
+                        <tr>
+                            <td>{{ vin.txid|truncatechars:20 }}</td>
+                            <td>{{ vin.value }}</td>
+                            <td>{% if vin.price %}{{ vin.price }}{% else %}N/A{% endif %}</td>
+                            <td>{% if vin.amount %}{{ vin.amount }}{% else %}N/A{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            {% if tx_data.outputs %}
+            <div class="module">
+                <h3>Outputs</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Index</th>
+                            <th>Type</th>
+                            <th>Address</th>
+                            <th>Value (sats)</th>
+                            <th>Price ({{ tx_data.currency }})</th>
+                            <th>Amount ({{ tx_data.currency }})</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vout in tx_data.outputs %}
+                        <tr>
+                            <td>{% if vout.index is not None %}{{ vout.index }}{% else %}{{ forloop.counter0 }}{% endif %}</td>
+                            <td>
+                                {% if forloop.counter0 == 0 %}
+                                    <strong style="color: #1976d2;">Cashout</strong>
+                                {% elif forloop.counter0 == 1 %}
+                                    <span style="color: #666;">Change</span>
+                                {% else %}
+                                    <span style="color: #999;">Other</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if vout.address %}{{ vout.address|truncatechars:30 }}{% else %}N/A{% endif %}</td>
+                            <td>{{ vout.value }}</td>
+                            <td>{% if vout.price %}{{ vout.price }}{% else %}N/A{% endif %}</td>
+                            <td>{% if vout.amount %}{{ vout.amount }}{% else %}N/A{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <div class="module">
+                <h3>Raw JSON Data</h3>
+                <pre style="background: #f5f5f5; padding: 10px; overflow-x: auto;">{{ tx_data_json }}</pre>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .module table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    
+    .module table th,
+    .module table td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .module table th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+    }
+    
+    .module h2 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    
+    .module h3 {
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
+    
+    pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .assessment-box {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .assessment-details .form-row {
+        margin: 10px 0;
+        padding: 8px 0;
+    }
+    
+    .assessment-details hr {
+        border: none;
+        border-top: 1px solid #ccc;
+        margin: 15px 0;
+    }
+</style>
+{% endblock content %}

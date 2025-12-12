@@ -1,0 +1,235 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/changelists.css" %}">
+<link rel="stylesheet" type="text/css" href="{% static "admin/css/forms.css" %}">
+
+<div class="content-main">
+    <div class="right-part">
+        <form action="" method="post">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                <ul class="errorlist">
+                    {% for error in form.non_field_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            
+            <fieldset class="module aligned">
+                {% for field in form %}
+                    <div class="form-row {% if field.errors %} errors {% endif %}">
+                        {% if field.errors %}
+                            <ul class="errorlist">
+                                {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                        <div>
+                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.field.help_text %}
+                                <div class="help">{{ field.field.help_text|safe }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </fieldset>
+            
+            <div class="submit-row">
+                <input class="default" type="submit" value="View Wallet"/>
+            </div>
+        </form>
+    </div>
+
+    {% if error %}
+        <div class="module">
+            <h2>Error</h2>
+            <div class="form-row">
+                <p style="color: red;">{{ error }}</p>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if wallet_data %}
+        <div class="module" style="margin-top: 20px;">
+            <h2>Wallet Information</h2>
+            
+            <div class="form-row">
+                <strong>Wallet Hash:</strong> {{ wallet_data.wallet_hash }}
+            </div>
+            
+            <div class="form-row">
+                <strong>Wallet Type:</strong> {{ wallet_data.wallet_type|upper }}
+            </div>
+            
+            {% if wallet_data.project %}
+            <div class="form-row">
+                <strong>Project:</strong> {{ wallet_data.project }}
+            </div>
+            {% endif %}
+            
+            <div class="form-row">
+                <strong>Date Created:</strong> {{ wallet_data.date_created }}
+            </div>
+            
+            {% if wallet_data.last_balance_check %}
+            <div class="form-row">
+                <strong>Last Balance Check:</strong> {{ wallet_data.last_balance_check }}
+            </div>
+            {% endif %}
+            
+            {% if wallet_data.last_utxo_scan_succeeded is not None %}
+            <div class="form-row">
+                <strong>Last UTXO Scan:</strong> 
+                <span style="color: {% if wallet_data.last_utxo_scan_succeeded %}#28a745{% else %}#dc3545{% endif %};">
+                    {% if wallet_data.last_utxo_scan_succeeded %}✓ Succeeded{% else %}✗ Failed{% endif %}
+                </span>
+            </div>
+            {% endif %}
+            
+            {% if wallet_data.wallet_type == 'bch' %}
+            <div class="module" style="margin-top: 20px;">
+                <h3>BCH Balance</h3>
+                <div class="form-row" style="padding: 15px; background-color: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
+                    <div style="font-size: 1.2em;">
+                        <strong>Balance:</strong> 
+                        <span style="color: #1976d2; font-weight: bold;">{{ wallet_data.bch_balance|floatformat:8 }} BCH</span>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <strong>Spendable:</strong> 
+                        <span style="color: #1976d2; font-weight: bold;">{{ wallet_data.bch_spendable|floatformat:8 }} BCH</span>
+                    </div>
+                    <div style="margin-top: 10px; color: #666; font-size: 0.9em;">
+                        UTXO Count: {{ wallet_data.bch_utxo_count }}
+                    </div>
+                </div>
+            </div>
+            
+            {% if wallet_data.token_balances %}
+            <div class="module" style="margin-top: 20px;">
+                <h3>Token Balances</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Category</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Name</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Symbol</th>
+                            <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for token in wallet_data.token_balances %}
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ token.category|truncatechars:20 }}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ token.name }}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ token.symbol }}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">{{ token.balance|floatformat:token.decimals }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% endif %}
+            
+            {% if wallet_data.history %}
+            <div class="module" style="margin-top: 20px;">
+                <h3>Wallet History (showing {{ wallet_data.history_count }} of {{ wallet_data.total_history_count }} records)</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">TXID</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Type</th>
+                            <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Amount</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Token</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">Timestamp</th>
+                            {% if wallet_data.has_usd_prices %}
+                            <th style="padding: 8px; text-align: right; border-bottom: 1px solid #ddd; background-color: #f5f5f5;">USD Price</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in wallet_data.history %}
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                <a href="{% url 'admin:main_transaction_changelist' %}?q={{ record.txid }}" target="_blank" style="color: #417690;">
+                                    {{ record.txid|truncatechars:20 }}
+                                </a>
+                            </td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                <span style="color: {% if record.record_type == 'incoming' %}#28a745{% else %}#dc3545{% endif %}; font-weight: bold;">
+                                    {{ record.record_type|upper }}
+                                </span>
+                            </td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-weight: bold;">
+                                {{ record.amount|floatformat:8 }}
+                            </td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                {% if record.cashtoken_category %}
+                                    {{ record.cashtoken_category|truncatechars:15 }}
+                                {% elif record.token_name %}
+                                    {{ record.token_name }}
+                                {% else %}
+                                    BCH
+                                {% endif %}
+                            </td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                {% if record.tx_timestamp %}
+                                    {{ record.tx_timestamp }}
+                                {% else %}
+                                    {{ record.date_created }}
+                                {% endif %}
+                            </td>
+                            {% if wallet_data.has_usd_prices %}
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">
+                                {% if record.usd_price %}
+                                    ${{ record.usd_price|floatformat:2 }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .module table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    
+    .module table th,
+    .module table td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .module table th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+    }
+    
+    .module h2 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+    
+    .module h3 {
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
+</style>
+{% endblock content %}

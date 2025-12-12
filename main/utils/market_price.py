@@ -303,6 +303,7 @@ def save_wallet_history_currency(wallet_hash, currency):
                 # For BCH transactions, use the price directly
                 # For token transactions, need to convert via token/BCH rate
                 price_for_asset = float(closest.price_value)
+                can_set_price = True  # Track if we can safely set the price
                 
                 if wallet_history.cashtoken_ft:
                     # This is a token transaction, need to get token/BCH rate
@@ -315,12 +316,18 @@ def save_wallet_history_currency(wallet_hash, currency):
                         # ft_bch_log.price_value is tokens/BCH
                         # We need fiat/token = (fiat/BCH) / (tokens/BCH)
                         price_for_asset = float(closest.price_value / ft_bch_log.price_value)
+                    else:
+                        # Token price unavailable - cannot set market_prices for this token
+                        can_set_price = False
                 
-                market_prices[currency] = price_for_asset
-                wallet_history.market_prices = market_prices
-                if currency == "USD" and wallet_history.usd_price is None:
-                    wallet_history.usd_price = price_for_asset
-                wallet_history.save()
+                # Only set market_prices if we have valid price data
+                # (BCH always works, tokens only if we have token/BCH rate)
+                if can_set_price:
+                    market_prices[currency] = price_for_asset
+                    wallet_history.market_prices = market_prices
+                    if currency == "USD" and wallet_history.usd_price is None:
+                        wallet_history.usd_price = price_for_asset
+                    wallet_history.save()
 
     return results
 

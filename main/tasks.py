@@ -2645,7 +2645,10 @@ def parse_wallet_history_market_values(wallet_history_id):
         market_prices["USD"] = wallet_history_obj.usd_price
 
     # Initialize bch_to_asset_multiplier - will be set if needed
-    bch_to_asset_multiplier = 1
+    # For BCH: multiplier = 1 (no conversion needed)
+    # For tokens: multiplier = None initially, must be set from token/BCH price
+    is_token = wallet_history_obj.cashtoken_ft is not None
+    bch_to_asset_multiplier = 1 if not is_token else None
     
     # NEW: Use price_log if available (from broadcast API)
     if wallet_history_obj.price_log:
@@ -2671,6 +2674,11 @@ def parse_wallet_history_market_values(wallet_history_id):
                 if ft_bch_log:
                     bch_to_asset_multiplier = 1 / ft_bch_log.price_value
                     market_prices[price_log.currency] = float(price_log.price_value * bch_to_asset_multiplier)
+                else:
+                    # Token price unavailable - remove this currency from market_prices if it was set
+                    # (it was set as BCH price, which is incorrect for tokens)
+                    if price_log.currency in market_prices:
+                        del market_prices[price_log.currency]
         
         # DON'T return early - continue to calculate other currencies below
 
@@ -2695,42 +2703,46 @@ def parse_wallet_history_market_values(wallet_history_id):
         print(f"asset_price_logs | {asset_price_logs}")
 
         # Calculate bch_to_asset_multiplier if not already set and we have a token
-        if bch_to_asset_multiplier == 1 and wallet_history_obj.cashtoken_ft and missing_currencies_from_logs:
-            ft_bch_price_log = get_ft_bch_price_log(
-                wallet_history_obj.cashtoken_ft.category,
-                timestamp=timestamp,
-            )
-            if not ft_bch_price_log: 
-                # If we can't get token price, we can't calculate token/fiat prices
-                # But we already have at least one currency from price_log, so continue
-                pass
-            else:
-                bch_to_asset_multiplier = 1 / ft_bch_price_log.price_value
-
-        # sorting above is closest timestamp last so the loop below ends up with the closest one
-        for price_log_item in asset_price_logs:
-            if price_log_item.currency not in market_prices:  # Only set if not already set
-                market_prices[price_log_item.currency] = price_log_item.price_value * bch_to_asset_multiplier
-
-    # last resort for resolving prices, only for new txs
-    missing_currencies = [c for c in currencies if c not in market_prices]
-    tx_age = (timezone.now() - timestamp).total_seconds()
-    if tx_age < 30 and len(missing_currencies):
-        # Calculate bch_to_asset_multiplier if not already set and we have a token
-        if bch_to_asset_multiplier == 1 and wallet_history_obj.cashtoken_ft:
+        if bch_to_asset_multiplier is None and wallet_history_obj.cashtoken_ft and missing_currencies_from_logs:
             ft_bch_price_log = get_ft_bch_price_log(
                 wallet_history_obj.cashtoken_ft.category,
                 timestamp=timestamp,
             )
             if ft_bch_price_log:
                 bch_to_asset_multiplier = 1 / ft_bch_price_log.price_value
+            # If we can't get token price, bch_to_asset_multiplier stays None
+            # and we won't populate market_prices for tokens
+
+        # sorting above is closest timestamp last so the loop below ends up with the closest one
+        # Only populate market_prices if we have a valid multiplier (1 for BCH, or calculated for tokens)
+        if bch_to_asset_multiplier is not None:
+            for price_log_item in asset_price_logs:
+                if price_log_item.currency not in market_prices:  # Only set if not already set
+                    market_prices[price_log_item.currency] = price_log_item.price_value * bch_to_asset_multiplier
+
+    # last resort for resolving prices, only for new txs
+    missing_currencies = [c for c in currencies if c not in market_prices]
+    tx_age = (timezone.now() - timestamp).total_seconds()
+    if tx_age < 30 and len(missing_currencies):
+        # Calculate bch_to_asset_multiplier if not already set and we have a token
+        if bch_to_asset_multiplier is None and wallet_history_obj.cashtoken_ft:
+            ft_bch_price_log = get_ft_bch_price_log(
+                wallet_history_obj.cashtoken_ft.category,
+                timestamp=timestamp,
+            )
+            if ft_bch_price_log:
+                bch_to_asset_multiplier = 1 / ft_bch_price_log.price_value
+            # If we can't get token price, bch_to_asset_multiplier stays None
+            # and we won't populate market_prices for tokens
         
-        bch_rates = get_latest_bch_rates(currencies=missing_currencies)
-        print(f"bch_rates | {bch_rates}")
-        for currency in missing_currencies:
-            bch_rate = bch_rates.get(currency.lower(), None)
-            if bch_rate:
-                market_prices[currency] = bch_rate[0] * bch_to_asset_multiplier
+        # Only populate market_prices if we have a valid multiplier (1 for BCH, or calculated for tokens)
+        if bch_to_asset_multiplier is not None:
+            bch_rates = get_latest_bch_rates(currencies=missing_currencies)
+            print(f"bch_rates | {bch_rates}")
+            for currency in missing_currencies:
+                bch_rate = bch_rates.get(currency.lower(), None)
+                if bch_rate:
+                    market_prices[currency] = bch_rate[0] * bch_to_asset_multiplier
 
                 price_log_data = {
                     'currency': currency,
