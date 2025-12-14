@@ -50,3 +50,4 @@ def memo_pre_delete(sender, instance=None, **kwargs):
             exc_info=True
         )
 
+

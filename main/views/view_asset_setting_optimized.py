@@ -104,14 +104,49 @@ class AssetFavoritesView(APIView):
         wallet_hash = request.headers.get('wallet_hash')
         Model = self.serializer_class.Meta.model
         
+        # Validate and normalize favorites data
+        favorites_data = data.get('favorites', [])
+        
+        # Ensure it's a list
+        if not isinstance(favorites_data, list):
+            return Response(
+                {'error': 'favorites must be a list'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Normalize the structure: ensure each item has {"id": str, "favorite": int}
+        normalized_favorites = []
+        for item in favorites_data:
+            if isinstance(item, dict):
+                item_id = item.get('id')
+                favorite_value = item.get('favorite', 0)
+                
+                # Normalize favorite to int (0 or 1)
+                if isinstance(favorite_value, str):
+                    try:
+                        favorite_value = int(favorite_value)
+                    except (ValueError, TypeError):
+                        favorite_value = 0
+                elif not isinstance(favorite_value, (int, float)):
+                    favorite_value = 0
+                else:
+                    favorite_value = 1 if favorite_value == 1 else 0
+                
+                # Only include items with valid id
+                if item_id:
+                    normalized_favorites.append({
+                        'id': str(item_id).strip(),
+                        'favorite': int(favorite_value)
+                    })
+        
         try:
             asset_setting = Model.objects.get(wallet_hash=wallet_hash)
-            favorites = {"favorites": data['favorites']}
+            favorites = {"favorites": normalized_favorites}
             serializer = AssetSettingSerializer(asset_setting, data=favorites, partial=True)
         except Model.DoesNotExist:
             info = {
                 'wallet_hash': wallet_hash,
-                'favorites': data['favorites']
+                'favorites': normalized_favorites
             }
             serializer = AssetSettingSerializer(data=info)
         
@@ -128,9 +163,11 @@ class AssetFavoritesView(APIView):
         
         # Try cache first
         cache_key = f'asset_favorites:{wallet_hash}'
-        favorites = cache.get(cache_key)
+        cached_favorites = cache.get(cache_key)
         
-        if favorites is not None:
+        if cached_favorites is not None:
+            # Cache hit - return the list (None in cache means empty list)
+            favorites = cached_favorites if isinstance(cached_favorites, list) else []
             return Response(favorites, status=200)
         
         # Cache miss - query database
@@ -141,8 +178,15 @@ class AssetFavoritesView(APIView):
             asset_setting = Model.objects.only('favorites').get(wallet_hash=wallet_hash)
             favorites = asset_setting.favorites
             
+            # Ensure favorites is a list (should be after migration)
+            if not isinstance(favorites, list):
+                favorites = []
+            
+            # Normalize empty list to None for cache consistency
+            cache_value = None if len(favorites) == 0 else favorites
+            
             # Cache for 1 hour
-            cache.set(cache_key, favorites, timeout=3600)
+            cache.set(cache_key, cache_value, timeout=3600)
             
             return Response(favorites, status=200)
         except Model.DoesNotExist:
