@@ -1,9 +1,11 @@
 import base64
 import pickle
+import math
 
 from django.conf import settings
+from django.db.models import F, Q
 
-from main.models import Transaction
+from main.models import Transaction, WalletHistory, Wallet
 
 
 def clear_transaction_cache(transaction_instance):
@@ -181,3 +183,142 @@ def clear_pos_wallet_history_cache(wallet_hash, posid):
         # Delete cached response and corresponding count entry
         cache.delete(cache_key)
         cache.delete(f"{decoded_key}:count")
+
+
+def clear_wallet_history_cache_for_txid(wallet_hash, txid):
+    """
+    Clear wallet history cache for specific pages that contain a given transaction.
+    This is more efficient than clearing all pages, as it only clears the pages
+    where the transaction actually appears.
+    
+    Args:
+        wallet_hash: The wallet hash
+        txid: The transaction ID to find and clear cache for
+    """
+    if not wallet_hash or not txid:
+        return
+    
+    try:
+        wallet = Wallet.objects.get(wallet_hash=wallet_hash)
+    except Wallet.DoesNotExist:
+        return
+    
+    cache = settings.REDISKV
+    
+    # Find all WalletHistory records for this txid and wallet
+    # A transaction can appear in multiple records (different tokens/assets)
+    history_records = WalletHistory.objects.filter(
+        wallet=wallet,
+        txid=txid
+    ).exclude(amount=0).select_related('token', 'cashtoken_ft', 'cashtoken_nft')
+    
+    if not history_records.exists():
+        return
+    
+    # Common page sizes used in the API
+    common_page_sizes = [10, 20, 50, 100]
+    
+    # For each unique asset/token, find which pages contain this transaction
+    for record in history_records:
+        # Determine the token_key (same logic as in view_history.py)
+        token_key = 'bch'  # default
+        if record.cashtoken_ft:
+            token_key = record.cashtoken_ft.category
+        elif record.cashtoken_nft:
+            token_key = record.cashtoken_nft.category
+        elif record.token:
+            if record.token.name == 'bch':
+                token_key = 'bch'
+            else:
+                token_key = record.token.tokenid or str(record.token.id)
+        
+        # Build the base queryset matching the view's logic
+        # This matches the filtering in WalletHistoryView.get() for record_type='all'
+        base_qs = WalletHistory.objects.exclude(amount=0).filter(wallet=wallet)
+        
+        # Order by same fields as the view (tx_timestamp desc, date_created desc)
+        base_qs = base_qs.order_by(
+            F('tx_timestamp').desc(nulls_last=True),
+            F('date_created').desc(nulls_last=True)
+        )
+        
+        # Filter by token_key
+        if token_key == 'bch':
+            base_qs = base_qs.filter(
+                cashtoken_ft__isnull=True,
+                cashtoken_nft__isnull=True,
+                token__name='bch'
+            )
+        else:
+            # For tokens, filter by the specific token
+            # Try to match by category first (for cashtokens), then by tokenid/id
+            base_qs = base_qs.filter(
+                Q(cashtoken_ft__category=token_key) |
+                Q(cashtoken_nft__category=token_key) |
+                Q(token__tokenid=token_key) |
+                Q(token__id=token_key)
+            )
+        
+        # Get the position of this transaction in the ordered list
+        # We need to count how many records come before it
+        record_timestamp = record.tx_timestamp
+        record_date_created = record.date_created
+        
+        # Count records that come before this one in the ordering
+        # Ordering is: tx_timestamp DESC (nulls_last=True), date_created DESC (nulls_last=True)
+        # So records with:
+        # - Later timestamp come first
+        # - Same timestamp but later date_created come first  
+        # - NULL timestamps come last
+        if record_timestamp is None:
+            # If this record has NULL timestamp, it's at the end
+            # Count all records with non-NULL timestamps
+            position = base_qs.exclude(tx_timestamp__isnull=True).count()
+        else:
+            # Count records that come before this one:
+            # 1. Records with later timestamp (non-null)
+            # 2. Records with same timestamp but later date_created (non-null)
+            # 3. Records with same timestamp and date_created but lower ID (for tiebreaking)
+            position_qs = base_qs.filter(tx_timestamp__isnull=False)
+            
+            # Records with later timestamp
+            later_timestamp_count = position_qs.filter(tx_timestamp__gt=record_timestamp).count()
+            
+            # Records with same timestamp but later date_created
+            same_timestamp_qs = position_qs.filter(tx_timestamp=record_timestamp)
+            if record_date_created is None:
+                # If our record has NULL date_created, count all with non-NULL date_created
+                later_date_count = same_timestamp_qs.exclude(date_created__isnull=True).count()
+            else:
+                # Count records with same timestamp but later date_created, or same date but lower ID
+                later_date_count = same_timestamp_qs.filter(
+                    Q(date_created__isnull=False) & (
+                        Q(date_created__gt=record_date_created) |
+                        (Q(date_created=record_date_created) & Q(id__lt=record.id))
+                    )
+                ).count()
+            
+            position = later_timestamp_count + later_date_count
+        
+        # Calculate which pages this transaction appears on for each page size
+        # The transaction appears on page = floor(position / page_size) + 1
+        # Clear the page it's on, plus one page before and after to be safe
+        pages_to_clear = set()
+        for page_size in common_page_sizes:
+            page_num = math.floor(position / page_size) + 1
+            # Clear the page it's on, plus one page before and after to be safe
+            for offset in [-1, 0, 1]:
+                page = page_num + offset
+                if page > 0:  # Page numbers start at 1
+                    pages_to_clear.add((page, page_size))
+        
+        # Clear the specific cache keys for this token_key
+        for page, page_size in pages_to_clear:
+            cache_key = f'wallet:history:{wallet_hash}:{token_key}:{page}:{page_size}'
+            cache.delete(cache_key)
+        
+        # Also clear the "all" combined history cache if it exists
+        # (for when all=true parameter is used)
+        for page, page_size in pages_to_clear:
+            cache_key = f'wallet:history:{wallet_hash}:all:{page}:{page_size}'
+            cache.delete(cache_key)

@@ -3,7 +3,7 @@
 
 {% block extrastyle %}{{ block.super }}<link rel="stylesheet" type="text/css" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
 
-{% block coltype %}colMS{% endblock %}
+{% block coltype %}colM{% endblock %}
 
 {% block bodyclass %}{{ block.super }} dashboard{% endblock %}
 
@@ -12,176 +12,545 @@
 {% block content %}
 <div id="content-main">
     {% if app_list %}
-        {% for app in app_list %}
-            <div class="app-{{ app.app_label }} module">
-                <table>
-                    <caption>
-                        <a href="{{ app.app_url }}" class="section" title="{% blocktrans with name=app.name %}Models in the {{ name }} application{% endblocktrans %}">{{ app.name }}</a>
-                    </caption>
-                    {% for model in app.models %}
-                        <tr class="model-{{ model.object_name|lower }}">
-                            {% if model.admin_url %}
-                                <th scope="row"><a href="{{ model.admin_url }}">{{ model.name }}</a></th>
-                            {% else %}
-                                <th scope="row">{{ model.name }}</th>
-                            {% endif %}
-
-                            {% if model.add_url %}
-                                <td><a href="{{ model.add_url }}" class="addlink">{% trans 'Add' %}</a></td>
-                            {% else %}
-                                <td>&nbsp;</td>
-                            {% endif %}
-
-                            {% if model.admin_url %}
-                                {% if model.view_only %}
-                                    <td><a href="{{ model.admin_url }}" class="viewlink">{% trans 'View' %}</a></td>
-                                {% else %}
-                                    <td><a href="{{ model.admin_url }}" class="changelink">{% trans 'Change' %}</a></td>
-                                {% endif %}
-                            {% else %}
-                                <td>&nbsp;</td>
-                            {% endif %}
-                        </tr>
-                    {% endfor %}
-                </table>
-            </div>
-        {% empty %}
-            <p>{% trans "You don't have permission to view or edit anything." %}</p>
-        {% endfor %}
+        <div class="apps-grid">
+            {% for app in app_list %}
+                <div class="app-card app-{{ app.app_label }}">
+                    <div class="app-header">
+                        <h2 class="app-title">
+                            <a href="{{ app.app_url }}" class="section" title="{% blocktrans with name=app.name %}Models in the {{ name }} application{% endblocktrans %}">
+                                {{ app.name }}
+                            </a>
+                        </h2>
+                    </div>
+                    <div class="app-models">
+                        {% for model in app.models %}
+                            <div class="model-item model-{{ model.object_name|lower }}">
+                                <div class="model-name">
+                                    {% if model.admin_url %}
+                                        <a href="{{ model.admin_url }}" class="model-link">{{ model.name }}</a>
+                                    {% else %}
+                                        <span class="model-text">{{ model.name }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="model-actions">
+                                    {% if model.add_url %}
+                                        <a href="{{ model.add_url }}" class="action-btn add-btn" title="{% trans 'Add' %}">
+                                            <span class="action-icon">+</span>
+                                            <span class="action-text">{% trans 'Add' %}</span>
+                                        </a>
+                                    {% endif %}
+                                    {% if model.admin_url %}
+                                        {% if model.view_only %}
+                                            <a href="{{ model.admin_url }}" class="action-btn view-btn" title="{% trans 'View' %}">
+                                                <span class="action-icon">👁</span>
+                                                <span class="action-text">{% trans 'View' %}</span>
+                                            </a>
+                                        {% else %}
+                                            <a href="{{ model.admin_url }}" class="action-btn change-btn" title="{% trans 'Change' %}">
+                                                <span class="action-icon">✏️</span>
+                                                <span class="action-text">{% trans 'Change' %}</span>
+                                            </a>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% empty %}
+                <p class="no-permission">{% trans "You don't have permission to view or edit anything." %}</p>
+            {% endfor %}
+        </div>
     {% else %}
-        <p>{% trans "You don't have permission to view or edit anything." %}</p>
+        <p class="no-permission">{% trans "You don't have permission to view or edit anything." %}</p>
     {% endif %}
 </div>
 
-<div class="module" style="margin-top: 20px; clear: both;">
-    <table style="width: 100%;">
-        <caption style="font-size: 18px; font-weight: bold; margin-bottom: 15px; text-align: left;">
-            <a href="#" class="section" title="Tools">Tools</a>
-        </caption>
-        <tbody>
-            <tr>
-                <td style="padding: 10px;">
-                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
-                        <h3 style="margin-top: 0;">
-                            <a href="{% url 'admin:main_transaction_tx_fiat_amounts' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
-                                📊 Cashout Assessment
-                            </a>
-                        </h3>
-                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
-                            Analyze transaction inputs and outputs with fiat amounts. Calculate gain/loss for merchant cashouts with proportional gain allocation and loss reimbursement calculations.
-                        </p>
-                        <div style="margin-top: 10px;">
-                            <a href="{% url 'admin:main_transaction_tx_fiat_amounts' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
-                                Open Tool →
-                            </a>
-                        </div>
-                    </div>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 10px;">
-                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
-                        <h3 style="margin-top: 0;">
-                            <a href="{% url 'admin:main_wallethistory_clear_market_prices' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
-                                🗑️ Clear Market Prices
-                            </a>
-                        </h3>
-                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
-                            Clear market_prices for WalletHistory records matching a specific cashtoken category. Preview changes with dry-run mode before applying.
-                        </p>
-                        <div style="margin-top: 10px;">
-                            <a href="{% url 'admin:main_wallethistory_clear_market_prices' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
-                                Open Tool →
-                            </a>
-                        </div>
-                    </div>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 10px;">
-                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9; margin-bottom: 15px;">
-                        <h3 style="margin-top: 0;">
-                            <a href="{% url 'admin:main_wallet_clear_wallet_caches' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
-                                🧹 Clear Wallet Caches
-                            </a>
-                        </h3>
-                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
-                            Clear all caches (balance and history) for a wallet given its wallet hash. Useful for forcing fresh data retrieval.
-                        </p>
-                        <div style="margin-top: 10px;">
-                            <a href="{% url 'admin:main_wallet_clear_wallet_caches' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
-                                Open Tool →
-                            </a>
-                        </div>
-                    </div>
-                </td>
-            </tr>
-            <tr>
-                <td style="padding: 10px;">
-                    <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #f9f9f9;">
-                        <h3 style="margin-top: 0;">
-                            <a href="{% url 'admin:main_wallet_view_balance_history' %}" style="color: #417690; text-decoration: none; font-size: 16px;">
-                                💰 View Wallet Balance & History
-                            </a>
-                        </h3>
-                        <p style="margin: 5px 0 0 0; color: #666; font-size: 13px;">
-                            View wallet information, BCH balance, token balances, and recent transaction history for a given wallet hash.
-                        </p>
-                        <div style="margin-top: 10px;">
-                            <a href="{% url 'admin:main_wallet_view_balance_history' %}" class="addlink" style="display: inline-block; padding: 8px 12px; background: #417690; color: white; text-decoration: none; border-radius: 4px; font-size: 13px;">
-                                Open Tool →
-                            </a>
-                        </div>
-                    </div>
-                </td>
-            </tr>
-        </tbody>
-    </table>
+<div class="tools-section">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 class="tools-title" style="margin: 0; padding-bottom: 10px; border-bottom: 2px solid #417690;">Tools</h2>
+        <a href="{% url 'admin:recent_actions' %}" class="recent-actions-link" style="display: inline-block; padding: 8px 16px; background: #417690; color: #fff; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: 500; transition: background 0.2s;">
+            View Recent Actions →
+        </a>
+    </div>
+    <div class="tools-grid">
+        <div class="tool-card">
+            <div class="tool-icon">📊</div>
+            <h3 class="tool-name">
+                <a href="{% url 'admin:main_transaction_tx_fiat_amounts' %}">Cashout Assessment</a>
+            </h3>
+            <p class="tool-description">
+                Analyze transaction inputs and outputs with fiat amounts. Calculate gain/loss for merchant cashouts with proportional gain allocation and loss reimbursement calculations.
+            </p>
+            <a href="{% url 'admin:main_transaction_tx_fiat_amounts' %}" class="tool-button">
+                Open Tool →
+            </a>
+        </div>
+        <div class="tool-card">
+            <div class="tool-icon">🗑️</div>
+            <h3 class="tool-name">
+                <a href="{% url 'admin:main_wallethistory_clear_market_prices' %}">Clear Market Prices</a>
+            </h3>
+            <p class="tool-description">
+                Clear market_prices for WalletHistory records matching a specific cashtoken category. Preview changes with dry-run mode before applying.
+            </p>
+            <a href="{% url 'admin:main_wallethistory_clear_market_prices' %}" class="tool-button">
+                Open Tool →
+            </a>
+        </div>
+        <div class="tool-card">
+            <div class="tool-icon">🧹</div>
+            <h3 class="tool-name">
+                <a href="{% url 'admin:main_wallet_clear_wallet_caches' %}">Clear Wallet Caches</a>
+            </h3>
+            <p class="tool-description">
+                Clear all caches (balance and history) for a wallet given its wallet hash. Useful for forcing fresh data retrieval.
+            </p>
+            <a href="{% url 'admin:main_wallet_clear_wallet_caches' %}" class="tool-button">
+                Open Tool →
+            </a>
+        </div>
+        <div class="tool-card">
+            <div class="tool-icon">💰</div>
+            <h3 class="tool-name">
+                <a href="{% url 'admin:main_wallet_view_balance_history' %}">View Wallet Balance & History</a>
+            </h3>
+            <p class="tool-description">
+                View wallet information, BCH balance, token balances, and recent transaction history for a given wallet hash.
+            </p>
+            <a href="{% url 'admin:main_wallet_view_balance_history' %}" class="tool-button">
+                Open Tool →
+            </a>
+        </div>
+    </div>
 </div>
 
 <style>
-    .module table {
-        width: 100%;
+    /* Apps Grid Layout */
+    .apps-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
     }
-    
-    .module .addlink:hover {
-        background: #205067 !important;
+
+    /* App Card Styling */
+    .app-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
     }
-    
-    .module h3 a:hover {
+
+    .app-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .app-header {
+        background: linear-gradient(135deg, #417690 0%, #205067 100%);
+        padding: 15px 20px;
+        border-bottom: 2px solid #205067;
+    }
+
+    .app-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .app-title a {
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .app-title a:hover {
         text-decoration: underline;
+    }
+
+    .app-models {
+        padding: 10px 0;
+    }
+
+    .model-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+    }
+
+    .model-item:last-child {
+        border-bottom: none;
+    }
+
+    .model-item:hover {
+        background-color: #f9f9f9;
+    }
+
+    .model-name {
+        flex: 1;
+    }
+
+    .model-link {
+        color: #417690;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 14px;
+    }
+
+    .model-link:hover {
+        color: #205067;
+        text-decoration: underline;
+    }
+
+    .model-text {
+        color: #333;
+        font-size: 14px;
+    }
+
+    .model-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s;
+        white-space: nowrap;
+        color: #fff !important;
+    }
+
+    .add-btn {
+        background: #417690;
+        color: #fff !important;
+    }
+    
+    .add-btn,
+    .add-btn * {
+        color: #fff !important;
+    }
+
+    .add-btn:hover {
+        background: #205067;
+        color: #fff !important;
+    }
+    
+    .add-btn:hover * {
+        color: #fff !important;
+    }
+
+    .change-btn {
+        background: #5b80b2;
+        color: #fff !important;
+    }
+    
+    .change-btn,
+    .change-btn * {
+        color: #fff !important;
+    }
+
+    .change-btn:hover {
+        background: #417690;
+        color: #fff !important;
+    }
+    
+    .change-btn:hover * {
+        color: #fff !important;
+    }
+
+    .view-btn {
+        background: #6c757d;
+        color: #fff !important;
+    }
+    
+    .view-btn,
+    .view-btn * {
+        color: #fff !important;
+    }
+
+    .view-btn:hover {
+        background: #5a6268;
+        color: #fff !important;
+    }
+    
+    .view-btn:hover * {
+        color: #fff !important;
+    }
+
+    .action-icon {
+        font-size: 14px;
+        color: #fff !important;
+    }
+
+    .action-text {
+        font-size: 12px !important;
+        color: #fff !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: inline !important;
+        font-weight: 500 !important;
+    }
+    
+    .action-btn .action-text,
+    .action-btn span.action-text {
+        color: #fff !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    
+    /* Ensure text is visible in all button states */
+    .action-btn:not(:hover) .action-text,
+    .action-btn:not(:hover) span.action-text {
+        color: #fff !important;
+        opacity: 1 !important;
+    }
+    
+    .add-btn:not(:hover) .action-text,
+    .change-btn:not(:hover) .action-text,
+    .view-btn:not(:hover) .action-text {
+        color: #fff !important;
+        opacity: 1 !important;
+    }
+
+    /* Tools Section */
+    .tools-section {
+        margin-top: 40px;
+        clear: both;
+    }
+
+    .tools-title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #417690;
+        margin: 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #417690;
+    }
+
+    .tools-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+    }
+
+    .tool-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .tool-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .tool-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+
+    .tool-name {
+        margin: 0 0 10px 0;
+        font-size: 18px;
+    }
+
+    .tool-name a {
+        color: #417690;
+        text-decoration: none;
+    }
+
+    .tool-name a:hover {
+        color: #205067;
+        text-decoration: underline;
+    }
+
+    .tool-description {
+        color: #666;
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0 0 15px 0;
+    }
+
+    .tool-button {
+        display: inline-block;
+        padding: 10px 16px;
+        background: #417690;
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        transition: background 0.2s;
+    }
+    
+    .tool-button,
+    .tool-button * {
+        color: #fff !important;
+    }
+
+    .tool-button:hover {
+        background: #205067;
+        color: #fff !important;
+    }
+    
+    .tool-button:hover * {
+        color: #fff !important;
+    }
+    
+    /* Ensure text is visible in all states */
+    .tool-button:not(:hover) {
+        color: #fff !important;
+    }
+    
+    .tool-button:not(:hover) * {
+        color: #fff !important;
+    }
+
+    .no-permission {
+        padding: 20px;
+        color: #666;
+        font-size: 14px;
+    }
+
+    /* Sidebar Styling */
+    #content-related {
+        float: right;
+        width: 300px;
+        margin-left: 20px;
+    }
+
+    .recent-actions-module {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .sidebar-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #417690;
+        margin: 0 0 10px 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #417690;
+    }
+
+    .sidebar-subtitle {
+        font-size: 14px;
+        font-weight: 500;
+        color: #666;
+        margin: 0 0 15px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .actionlist {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .action-item {
+        padding: 12px 0;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+    }
+
+    .action-item:last-child {
+        border-bottom: none;
+    }
+
+    .action-item:hover {
+        background-color: #f9f9f9;
+        margin: 0 -10px;
+        padding-left: 10px;
+        padding-right: 10px;
+        border-radius: 4px;
+    }
+
+    .action-content {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .action-object,
+    .action-object-link {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+        text-decoration: none;
+    }
+
+    .action-object-link:hover {
+        color: #417690;
+        text-decoration: underline;
+    }
+
+    .action-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .action-type {
+        font-size: 12px;
+        color: #999;
+        text-transform: capitalize;
+    }
+
+    .action-add .action-object-link::before {
+        content: "➕ ";
+        color: #28a745;
+    }
+
+    .action-change .action-object-link::before {
+        content: "✏️ ";
+        color: #417690;
+    }
+
+    .action-delete .action-object::before {
+        content: "🗑️ ";
+        color: #dc3545;
+    }
+
+    .no-actions {
+        color: #999;
+        font-size: 13px;
+        font-style: italic;
+        margin: 0;
+    }
+
+    /* Main content uses full width */
+    #content-main {
+        width: 100%;
+        float: none;
+    }
+
+    /* Responsive adjustments */
+
+    @media (max-width: 768px) {
+        .apps-grid,
+        .tools-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 {% endblock %}
 
-{% block sidebar %}
-<div id="content-related">
-    <div class="module" id="recent-actions-module">
-        <h2>{% trans 'Recent actions' %}</h2>
-        <h3>{% trans 'My actions' %}</h3>
-        {% load log %}
-        {% get_admin_log 10 as admin_log for_user user %}
-        {% if not admin_log %}
-        <p>{% trans 'None available' %}</p>
-        {% else %}
-        <ul class="actionlist">
-        {% for entry in admin_log %}
-        <li class="{% if entry.is_addition %}addlink{% endif %}{% if entry.is_change %}changelink{% endif %}{% if entry.is_deletion %}deletelink{% endif %}">
-            {% if entry.is_deletion or not entry.get_admin_url %}
-                {{ entry.object_repr }}
-            {% else %}
-                <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
-            {% endif %}
-            <br>
-            {% if entry.content_type %}
-                <span class="mini quiet">{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %}</span>
-            {% else %}
-                <span class="mini quiet">{% trans 'Unknown content' %}</span>
-            {% endif %}
-        </li>
-        {% endfor %}
-        </ul>
-        {% endif %}
-    </div>
-</div>
-{% endblock %}
+{% block sidebar %}{% endblock %}

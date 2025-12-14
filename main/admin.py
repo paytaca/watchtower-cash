@@ -25,7 +25,42 @@ import json
 
 
 admin.site.site_header = 'WatchTower.Cash Admin'
+admin.site.site_title = 'WatchTower.Cash Admin'
 REDIS_STORAGE = settings.REDISKV
+
+
+def recent_actions_view(request):
+    """Custom admin view for recent actions"""
+    from django.contrib.admin.models import LogEntry
+    
+    # Get recent actions for the current user
+    admin_log = LogEntry.objects.filter(user=request.user).select_related('content_type', 'user')[:50]
+    
+    context = {
+        **admin.site.each_context(request),
+        'title': 'Recent Actions',
+        'admin_log': admin_log,
+        'opts': {'app_label': 'admin', 'model_name': 'logentry'},
+        'has_view_permission': True,
+        'has_add_permission': False,
+        'has_change_permission': False,
+        'has_delete_permission': False,
+    }
+    
+    return render(request, 'admin/recent_actions.html', context)
+
+
+# Patch admin site to add recent actions URL
+_original_get_urls = admin.site.get_urls
+
+def get_urls_with_recent_actions(self):
+    urls = _original_get_urls()
+    custom_urls = [
+        path('recent-actions/', self.admin_view(recent_actions_view), name='recent_actions'),
+    ]
+    return custom_urls + urls
+
+admin.site.get_urls = get_urls_with_recent_actions.__get__(admin.site, type(admin.site))
 
 
 class TxFiatAmountsForm(forms.Form):

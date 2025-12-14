@@ -91,3 +91,5 @@ class Command(BaseCommand):
                 f'Successfully cleared market_prices for {updated} WalletHistory record(s)'
             )
         )
+
+

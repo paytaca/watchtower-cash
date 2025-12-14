@@ -1,0 +1,165 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static log %}
+
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" type="text/css" href="{% static "admin/css/dashboard.css" %}">{% endblock %}
+
+{% block coltype %}colM{% endblock %}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; {% trans 'Recent actions' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module recent-actions-page">
+        <h1 class="page-title">{% trans 'Recent actions' %}</h1>
+        <h2 class="page-subtitle">{% trans 'My actions' %}</h2>
+        
+        {% if not admin_log %}
+        <p class="no-actions">{% trans 'None available' %}</p>
+        {% else %}
+        <ul class="actionlist">
+        {% for entry in admin_log %}
+        <li class="action-item {% if entry.is_addition %}action-add{% endif %}{% if entry.is_change %}action-change{% endif %}{% if entry.is_deletion %}action-delete{% endif %}">
+            <div class="action-content">
+                {% if entry.is_deletion or not entry.get_admin_url %}
+                    <span class="action-object">{{ entry.object_repr }}</span>
+                {% else %}
+                    <a href="{{ entry.get_admin_url }}" class="action-object-link">{{ entry.object_repr }}</a>
+                {% endif %}
+                <div class="action-meta">
+                    {% if entry.content_type %}
+                        <span class="action-type">{% filter capfirst %}{{ entry.content_type.name }}{% endfilter %}</span>
+                    {% else %}
+                        <span class="action-type">{% trans 'Unknown content' %}</span>
+                    {% endif %}
+                    <span class="action-time">{{ entry.action_time|date:"DATETIME_FORMAT" }}</span>
+                </div>
+            </div>
+        </li>
+        {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .recent-actions-page {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .page-title {
+        font-size: 28px;
+        font-weight: 600;
+        color: #417690;
+        margin: 0 0 10px 0;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #417690;
+    }
+
+    .page-subtitle {
+        font-size: 16px;
+        font-weight: 500;
+        color: #666;
+        margin: 0 0 25px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .actionlist {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .action-item {
+        padding: 15px 0;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+    }
+
+    .action-item:last-child {
+        border-bottom: none;
+    }
+
+    .action-item:hover {
+        background-color: #f9f9f9;
+        margin: 0 -15px;
+        padding-left: 15px;
+        padding-right: 15px;
+        border-radius: 4px;
+    }
+
+    .action-content {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .action-object,
+    .action-object-link {
+        font-size: 15px;
+        font-weight: 500;
+        color: #333;
+        text-decoration: none;
+    }
+
+    .action-object-link:hover {
+        color: #417690;
+        text-decoration: underline;
+    }
+
+    .action-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .action-type {
+        font-size: 13px;
+        color: #999;
+        text-transform: capitalize;
+    }
+
+    .action-time {
+        font-size: 12px;
+        color: #999;
+    }
+
+    .action-add .action-object-link::before {
+        content: "➕ ";
+        color: #28a745;
+    }
+
+    .action-change .action-object-link::before {
+        content: "✏️ ";
+        color: #417690;
+    }
+
+    .action-delete .action-object::before {
+        content: "🗑️ ";
+        color: #dc3545;
+    }
+
+    .no-actions {
+        color: #999;
+        font-size: 14px;
+        font-style: italic;
+        margin: 20px 0;
+        padding: 20px;
+        text-align: center;
+        background: #f9f9f9;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
