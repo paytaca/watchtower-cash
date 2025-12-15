@@ -438,7 +438,8 @@ class WalletAdmin(DynamicRawIDMixin, admin.ModelAdmin):
         'wallet_type',
         'project',
         'last_balance_check',
-        'last_utxo_scan_succeeded'
+        'last_utxo_scan_succeeded',
+        'paytaca_app_version'
     ]
     actions = [ 'rescan_utxos' ]
     list_filter = [

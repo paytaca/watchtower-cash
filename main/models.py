@@ -177,6 +177,7 @@ class Wallet(PostgresModel):
 
     last_balance_check = models.DateTimeField(null=True)
     last_utxo_scan_succeeded = models.BooleanField(null=True)
+    paytaca_app_version = models.CharField(max_length=20, null=True, blank=True)
 
     def __str__(self):
         return self.wallet_hash

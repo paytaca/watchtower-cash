@@ -1,6 +1,7 @@
 # Generated migration to convert favorites from dict to list format
 
 from django.db import migrations
+import django.contrib.postgres.fields.jsonb
 
 
 def convert_favorites_to_list(apps, schema_editor):
@@ -136,6 +137,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='assetsetting',
             name='favorites',
-            field=models.JSONField(default=list),
+            field=django.contrib.postgres.fields.jsonb.JSONField(default=list, blank=True),
         ),
     ]
