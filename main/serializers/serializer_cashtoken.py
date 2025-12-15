@@ -3,8 +3,6 @@ from rest_framework import serializers
 from django.conf import settings
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
-from django.core.cache import cache
-import json
 
 from main.models import (
     CashNonFungibleToken,
@@ -97,25 +95,12 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
 
     def get_balance(self, obj):
         """
-        Get balance for this token from cache if available, otherwise calculate it.
+        Get balance for this token by calculating it from the database.
         Returns None if wallet_hash is not provided in context.
         """
         wallet_hash = self.context.get('wallet_hash')
         if not wallet_hash:
             return None
-
-        category = obj.category
-        cache_key = f'wallet:balance:token:{wallet_hash}:{category}'
-        
-        # Try to get from cache first
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            try:
-                data = json.loads(cached_data)
-                return data.get('balance', 0)
-            except (json.JSONDecodeError, TypeError):
-                # If cache data is corrupted, fall through to calculation
-                pass
 
         # Calculate balance from database
         try:
@@ -127,27 +112,18 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
         qs_balance = Transaction.objects.filter(query).aggregate(
             amount_sum=Coalesce(Sum('amount'), 0)
         )
-        
+
         balance = qs_balance['amount_sum'] or 0
         decimals = self.get_decimals(obj)
 
         if balance > 0:
             balance = self.truncate(balance, decimals)
 
-        # Cache the result for 5 minutes
-        cache_data = {
-            'balance': balance,
-            'spendable': balance,
-            'token_id': category,
-            'valid': True
-        }
-        cache.set(cache_key, json.dumps(cache_data), timeout=60 * 5)
-
         return balance
 
     def _get_favorites_data(self):
         """
-        Helper method to get favorites data from cache or database.
+        Helper method to get favorites data from database.
         Returns favorites list or None if not found.
         Favorites are always stored as a list: [{"id": "ct/...", "favorite": 1}, ...]
         """
@@ -155,33 +131,26 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
         if not wallet_hash:
             return None
 
-        # Try to get favorites from cache first
-        cache_key = f'asset_favorites:{wallet_hash}'
-        favorites = cache.get(cache_key)
-        
-        if favorites is None:
-            # Cache miss - query database
-            try:
-                asset_setting = AssetSetting.objects.only('favorites').get(wallet_hash=wallet_hash)
-                favorites = asset_setting.favorites
-                
-                # Ensure favorites is a list (should be after migration)
-                if not isinstance(favorites, list):
-                    favorites = []
-                
-                # Normalize empty list to None for consistency
-                if len(favorites) == 0:
-                    favorites = None
-                
-                # Cache for 1 hour (cache None as well to avoid repeated DB queries)
-                cache.set(cache_key, favorites, timeout=3600)
-            except AssetSetting.DoesNotExist:
-                return None
+        # Query database directly
+        try:
+            asset_setting = AssetSetting.objects.only('favorites').get(wallet_hash=wallet_hash)
+            favorites = asset_setting.favorites
+
+            # Ensure favorites is a list (should be after migration)
+            if not isinstance(favorites, list):
+                favorites = []
+
+            # Normalize empty list to None for consistency
+            if len(favorites) == 0:
+                favorites = None
+
+        except AssetSetting.DoesNotExist:
+            return None
 
         # Ensure we have a list (defensive check)
         if favorites is not None and not isinstance(favorites, list):
             return None
-            
+
         return favorites
 
     def get_favorite(self, obj):

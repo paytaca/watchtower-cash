@@ -68,29 +68,23 @@ class CashFungibleTokensViewSet(
         if wallet_hash:
             # Get favorites data for ordering and filtering
             from main.models import AssetSetting
-            from django.core.cache import cache
-            
-            cache_key = f'asset_favorites:{wallet_hash}'
-            favorites = cache.get(cache_key)
-            
-            if favorites is None:
-                try:
-                    asset_setting = AssetSetting.objects.only('favorites').get(wallet_hash=wallet_hash)
-                    favorites = asset_setting.favorites
-                    
-                    # Ensure favorites is a list (should be after migration)
-                    if not isinstance(favorites, list):
-                        favorites = []
-                    
-                    # Normalize empty list to None for consistency
-                    if len(favorites) == 0:
-                        favorites = None
-                    
-                    # Cache for 1 hour (cache None as well to avoid repeated DB queries)
-                    cache.set(cache_key, favorites, timeout=3600)
-                except AssetSetting.DoesNotExist:
+
+            # Query database directly
+            try:
+                asset_setting = AssetSetting.objects.only('favorites').get(wallet_hash=wallet_hash)
+                favorites = asset_setting.favorites
+
+                # Ensure favorites is a list (should be after migration)
+                if not isinstance(favorites, list):
+                    favorites = []
+
+                # Normalize empty list to None for consistency
+                if len(favorites) == 0:
                     favorites = None
-            
+
+            except AssetSetting.DoesNotExist:
+                favorites = None
+
             # Ensure we have a list (defensive check)
             if favorites is not None and not isinstance(favorites, list):
                 favorites = None
