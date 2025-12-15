@@ -878,11 +878,13 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
         'decimals',
     ]
 
+    actions = ['refetch_metadata']
+
     def name(self, obj):
         if obj.info:
             return obj.info.name
         return settings.DEFAULT_TOKEN_DETAILS['fungible']['name']
-    
+
     def symbol(self, obj):
         if obj.info:
             return obj.info.symbol
@@ -892,6 +894,39 @@ class CashFungibleTokenAdmin(admin.ModelAdmin):
         if obj.info:
             return obj.info.decimals
         return 0
+
+    def refetch_metadata(self, request, queryset):
+        """Refetch token metadata from BCMR indexer for selected tokens"""
+        updated_count = 0
+        error_count = 0
+        skipped_count = 0
+
+        for token in queryset:
+            try:
+                # Force refresh metadata
+                token.fetch_metadata(force_refresh=True)
+                updated_count += 1
+            except Exception as e:
+                error_count += 1
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f'Error refetching metadata for token {token.category}: {str(e)}')
+
+        if updated_count > 0:
+            self.message_user(
+                request,
+                f'Successfully refetched metadata for {updated_count} token(s).',
+                messages.SUCCESS
+            )
+
+        if error_count > 0:
+            self.message_user(
+                request,
+                f'Failed to refetch metadata for {error_count} token(s). Check logs for details.',
+                messages.WARNING
+            )
+
+    refetch_metadata.short_description = "Refetch metadata from BCMR"
 
 
 class CashNonFungibleTokenAdmin(admin.ModelAdmin):

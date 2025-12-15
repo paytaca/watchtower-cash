@@ -3,7 +3,6 @@ from rest_framework import serializers
 from django.conf import settings
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
-import requests
 
 from main.models import (
     CashNonFungibleToken,
@@ -39,51 +38,6 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
     balance = serializers.SerializerMethodField()
     favorite = serializers.SerializerMethodField()
     favorite_order = serializers.SerializerMethodField()
-
-    def _fetch_bcmr_metadata(self, obj):
-        """
-        Fetch token metadata directly from BCMR indexer.
-        Returns a dict with name, symbol, decimals, image_url or None if fetch fails.
-        """
-        bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{obj.category}/'
-        try:
-            # Short timeout to prevent API slowdown
-            response = requests.get(bcmr_url, timeout=3)
-            if response.status_code == 200:
-                data = response.json()
-                if 'error' not in data:
-                    token_data = data.get('token', {})
-                    uris = token_data.get('uris') or data.get('uris') or {}
-
-                    try:
-                        decimals = int(token_data.get('decimals', 0))
-                    except (TypeError, ValueError):
-                        decimals = 0
-
-                    # Truncate name and symbol if they're too long (same as model limits)
-                    name = data.get('name', f'CT-{obj.category[0:4]}')
-                    if len(name) > 200:
-                        name = name[:200]
-
-                    symbol = token_data.get('symbol', '')
-                    if symbol and len(symbol) > 100:
-                        symbol = symbol[:100]
-
-                    image_url = uris.get('icon')
-                    if image_url and len(image_url) > 200:
-                        image_url = image_url[:200]
-
-                    return {
-                        'name': name,
-                        'symbol': symbol,
-                        'decimals': decimals,
-                        'image_url': image_url
-                    }
-        except (requests.Timeout, requests.RequestException):
-            pass
-
-        # Return None if fetch fails - will fall back to defaults
-        return None
     
     class Meta:
         model = CashFungibleToken
@@ -99,41 +53,21 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
         ]
 
     def get_name(self, obj):
-        # Try to fetch live metadata from BCMR first
-        metadata = self._fetch_bcmr_metadata(obj)
-        if metadata:
-            return metadata['name']
-        # Fall back to saved database info if BCMR fetch fails
         if obj.info:
             return obj.info.name
         return settings.DEFAULT_TOKEN_DETAILS['fungible']['name']
 
     def get_symbol(self, obj):
-        # Try to fetch live metadata from BCMR first
-        metadata = self._fetch_bcmr_metadata(obj)
-        if metadata:
-            return metadata['symbol']
-        # Fall back to saved database info if BCMR fetch fails
         if obj.info:
             return obj.info.symbol
         return settings.DEFAULT_TOKEN_DETAILS['fungible']['symbol']
 
     def get_decimals(self, obj):
-        # Try to fetch live metadata from BCMR first
-        metadata = self._fetch_bcmr_metadata(obj)
-        if metadata is not None:
-            return metadata['decimals']
-        # Fall back to saved database info if BCMR fetch fails
         if obj.info:
             return obj.info.decimals
         return 0
 
     def get_image_url(self, obj):
-        # Try to fetch live metadata from BCMR first
-        metadata = self._fetch_bcmr_metadata(obj)
-        if metadata:
-            return metadata['image_url']
-        # Fall back to saved database info if BCMR fetch fails
         if obj.info:
             return obj.info.image_url
         return None

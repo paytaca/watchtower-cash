@@ -297,9 +297,9 @@ class CashFungibleToken(models.Model):
             'is_cashtoken': True
         }
     
-    def fetch_metadata(self):
-        # If metadata already exists, skip fetching to avoid blocking
-        if self.info:
+    def fetch_metadata(self, force_refresh=False):
+        # If metadata already exists and we're not forcing refresh, skip fetching to avoid blocking
+        if self.info and not force_refresh:
             return
         
         PAYTACA_BCMR_URL = f'{settings.PAYTACA_BCMR_URL}/tokens/{self.category}/'
