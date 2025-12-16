@@ -1038,7 +1038,7 @@ def get_bch_utxos(self, address):
                     'index': index,
                     'value': value,
                     'address': address,
-                    'token_data': output['token_data'],
+                    'token_data': output.get('token_data'),
                 }
                 processed_output_data = process_output(
                     output_data,
@@ -1047,6 +1047,11 @@ def get_bch_utxos(self, address):
                     source=NODE.BCH.source,
                 )
                 created = processed_output_data['created']
+                transaction_id = processed_output_data.get('transaction_id')
+                if transaction_id:
+                    # Ensure newly created UTXO is marked as unspent
+                    Transaction.objects.filter(id=transaction_id).update(spent=False)
+                    saved_utxo_ids.append(transaction_id)
                 if created:
                     if not block.requires_full_scan:
                         qs = BlockHeight.objects.filter(id=block.id)
@@ -1113,6 +1118,11 @@ def get_slp_utxos(self, address):
                         new_subscription=True
                     )
                     transaction_obj = Transaction.objects.filter(id=txn_id)
+                    
+                    # Ensure newly created UTXO is marked as unspent
+                    if txn_id:
+                        Transaction.objects.filter(id=txn_id).update(spent=False)
+                        saved_utxo_ids.append(txn_id)
                     
                     if created:
                         if not block.requires_full_scan:
