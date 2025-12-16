@@ -1048,7 +1048,7 @@ def get_bch_utxos(self, address):
                 )
                 created = processed_output_data['created']
                 transaction_id = processed_output_data.get('transaction_id')
-                if transaction_id:
+                if created and transaction_id:
                     # Ensure newly created UTXO is marked as unspent
                     Transaction.objects.filter(id=transaction_id).update(spent=False)
                     saved_utxo_ids.append(transaction_id)
@@ -1120,7 +1120,7 @@ def get_slp_utxos(self, address):
                     transaction_obj = Transaction.objects.filter(id=txn_id)
                     
                     # Ensure newly created UTXO is marked as unspent
-                    if txn_id:
+                    if created and txn_id:
                         Transaction.objects.filter(id=txn_id).update(spent=False)
                         saved_utxo_ids.append(txn_id)
                     
