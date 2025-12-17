@@ -24,6 +24,7 @@ from main.tasks import (
     update_wallet_history_currency,
 )
 from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
+from main.utils.address_validator import is_bch_address
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -60,6 +61,16 @@ def transaction_post_save(sender, instance=None, created=False, **kwargs):
     blockheight_id = None
     if instance.blockheight:
         blockheight_id = instance.blockheight.id
+
+    # Invalidate address-based balance cache when a new transaction is saved or when marked as spent
+    if instance.address:
+        cache = settings.REDISKV
+        # Invalidate both variants of the cache key (with and without include_token_sats)
+        if is_bch_address(address):
+            cache_key_false = f'address:balance:bch:{address}:False'
+            cache_key_true = f'address:balance:bch:{address}:True'
+            cache.delete(cache_key_false)
+            cache.delete(cache_key_true)
 
     if instance.address.wallet:
         wallet_hash = instance.address.wallet.wallet_hash

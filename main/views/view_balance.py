@@ -66,7 +66,7 @@ def _get_bch_balance(query, include_token_sats=False):
         # Use select_related to optimize the query
         qs = Transaction.objects.filter(query).select_related('address', 'token')
     else:
-        query = query & Q(value__gt=dust) & Q(token__name='bch')
+        query = query & Q(value__gt=dust) & Q(token__name__iexact='bch')
         # Use select_related to optimize the token join
         qs = Transaction.objects.filter(query).select_related('address', 'token')
     

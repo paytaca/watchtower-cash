@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db.models import F, Q
 
 from main.models import Transaction, WalletHistory, Wallet
+from main.utils.address_validator import is_bch_address
 
 
 def clear_transaction_cache(transaction_instance):
@@ -14,52 +15,67 @@ def clear_transaction_cache(transaction_instance):
     This can be called when transactions are updated using .update() 
     which doesn't trigger Django signals.
     """
-    if not transaction_instance.address or not transaction_instance.address.wallet:
-        return
-    
-    wallet_hash = transaction_instance.address.wallet.wallet_hash
     cache = settings.REDISKV
     
-    # delete cached bch balance
-    bch_cache_key = f'wallet:balance:bch:{wallet_hash}'
-    cache.delete(bch_cache_key)
+    # Clear address balance cache if address exists
+    if transaction_instance.address:
+        address = transaction_instance.address.address
+        if is_bch_address(address):
+            # Invalidate both variants of the address balance cache key
+            cache_key_false = f'address:balance:bch:{address}:False'
+            cache_key_true = f'address:balance:bch:{address}:True'
+            cache.delete(cache_key_false)
+            cache.delete(cache_key_true)
     
-    # delete cached token balance
-    category = None
-    if transaction_instance.cashtoken_ft:
-        category = transaction_instance.cashtoken_ft.category
-    elif transaction_instance.spent and transaction_instance.spending_txid:
-        # This is a spent input, try to get the category from the output
-        spent_tx = Transaction.objects.filter(txid=transaction_instance.txid, index=transaction_instance.index).first()
-        if spent_tx and spent_tx.cashtoken_ft:
-            category = spent_tx.cashtoken_ft.category
-    
-    if category:
-        ct_cache_key = f'wallet:balance:token:{wallet_hash}:{category}'
-        cache.delete(ct_cache_key)
-    
-    # delete cached wallet history
-    asset_key = category or 'bch'
-    history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
-    if history_cache_keys:
-        cache.delete(*history_cache_keys)
+    # Clear wallet balance cache if wallet exists
+    if transaction_instance.address and transaction_instance.address.wallet:
+        wallet_hash = transaction_instance.address.wallet.wallet_hash
+        
+        # delete cached bch balance
+        bch_cache_key = f'wallet:balance:bch:{wallet_hash}'
+        cache.delete(bch_cache_key)
+        
+        # delete cached token balance
+        category = None
+        if transaction_instance.cashtoken_ft:
+            category = transaction_instance.cashtoken_ft.category
+        elif transaction_instance.spent and transaction_instance.spending_txid:
+            # This is a spent input, try to get the category from the output
+            spent_tx = Transaction.objects.filter(txid=transaction_instance.txid, index=transaction_instance.index).first()
+            if spent_tx and spent_tx.cashtoken_ft:
+                category = spent_tx.cashtoken_ft.category
+        
+        if category:
+            ct_cache_key = f'wallet:balance:token:{wallet_hash}:{category}'
+            cache.delete(ct_cache_key)
+        
+        # delete cached wallet history
+        asset_key = category or 'bch'
+        history_cache_keys = cache.keys(f'wallet:history:{wallet_hash}:{asset_key}:*')
+        if history_cache_keys:
+            cache.delete(*history_cache_keys)
 
 
 def clear_cache_for_spent_transactions(transaction_queryset):
     """
     Clear cache for multiple transactions that are being marked as spent.
     This is more efficient than calling clear_transaction_cache for each transaction.
+    Clears both address and wallet balance caches.
     """
     if not transaction_queryset.exists():
         return
     
-    # Get unique wallet hashes and categories from the transactions
+    # Get unique addresses, wallet hashes and categories from the transactions
+    addresses = set()
     wallet_hashes = set()
     categories = set()
     
     for txn in transaction_queryset.select_related('address__wallet', 'cashtoken_ft'):
-        if txn.address and txn.address.wallet:
-            wallet_hashes.add(txn.address.wallet.wallet_hash)
+        if txn.address:
+            addresses.add(txn.address.address)
+            
+            if txn.address.wallet:
+                wallet_hashes.add(txn.address.wallet.wallet_hash)
             
             if txn.cashtoken_ft:
                 categories.add(txn.cashtoken_ft.category)
@@ -70,6 +86,15 @@ def clear_cache_for_spent_transactions(transaction_queryset):
                     categories.add(spent_tx.cashtoken_ft.category)
     
     cache = settings.REDISKV
+    
+    # Clear address balance cache for all affected addresses
+    for address in addresses:
+        if is_bch_address(address):
+            # Invalidate both variants of the address balance cache key
+            cache_key_false = f'address:balance:bch:{address}:False'
+            cache_key_true = f'address:balance:bch:{address}:True'
+            cache.delete(cache_key_false)
+            cache.delete(cache_key_true)
     
     # Clear BCH balance cache for all affected wallets
     for wallet_hash in wallet_hashes:

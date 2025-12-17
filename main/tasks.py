@@ -39,7 +39,7 @@ from main.utils.push_notification import (
     send_wallet_history_push_notification,
     send_wallet_history_push_notification_nft
 )
-from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache
+from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_cache, clear_cache_for_spent_transactions
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
@@ -533,6 +533,9 @@ def save_record(
             if spending_txid:
                 transaction_obj.spending_txid = spending_txid
                 transaction_obj.spent = True
+            else:
+                # Explicitly mark as unspent for UTXOs
+                transaction_obj.spent = False
 
             if transaction_obj.source != source:
                 transaction_obj.source = source
@@ -559,6 +562,9 @@ def save_record(
                 if spending_txid:
                     transaction_obj.spending_txid = spending_txid
                     transaction_obj.spent = True
+                else:
+                    # Explicitly mark as unspent for UTXOs
+                    transaction_obj.spent = False
                 
                 if transaction_obj.source != source:
                     transaction_obj.source = source
@@ -1061,10 +1067,14 @@ def get_bch_utxos(self, address):
             parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
         # Mark other transactions of the same address as spent
-        Transaction.objects \
+        transactions_to_mark_spent = Transaction.objects \
             .filter(address__address=address, spent=False) \
-            .exclude(id__in=saved_utxo_ids) \
-            .update(spent=True)
+            .exclude(id__in=saved_utxo_ids)
+        
+        # Clear cache before marking as spent
+        if transactions_to_mark_spent.exists():
+            clear_cache_for_spent_transactions(transactions_to_mark_spent)
+            transactions_to_mark_spent.update(spent=True)
 
     except Exception as exc:
         try:
