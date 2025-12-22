@@ -26,6 +26,7 @@ from rest_framework.authtoken import views
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from drf_yasg.generators import OpenAPISchemaGenerator
 from main.urls import main_urls, test_urls
 from paytacapos.urls import urlpatterns as paytacapos_urlpatterns
 from smartbch.urls import urlpatterns as sbch_urlpatterns
@@ -46,6 +47,108 @@ from memos.urls import urlpatterns as memos_urlpatterns
 from main.views import TelegramBotView
 
 
+class CustomOpenAPISchemaGenerator(OpenAPISchemaGenerator):
+    def get_operation_id(self, operation_keys):
+        """
+        Generate operation IDs using URL path components instead of view class names.
+        This prevents duplicate operationIds when multiple URLs use the same view.
+        
+        operation_keys format example: ['api', 'balance', 'ct', '{tokenaddress}', 'get']
+        """
+        # Extract method (last item)
+        method = operation_keys[-1] if operation_keys[-1] in ['get', 'post', 'patch', 'put', 'delete'] else 'get'
+        
+        # Get path parts (everything except 'api' prefix and method)
+        path_parts = []
+        for key in operation_keys:
+            if key == 'api':
+                continue
+            if key in ['get', 'post', 'patch', 'put', 'delete']:
+                break
+            # Handle path parameters like '{tokenaddress}' or 'tokenaddress'
+            if key.startswith('{') and key.endswith('}'):
+                param_name = key[1:-1]
+                # Map parameter names to shorter, clearer names
+                param_map = {
+                    'tokenaddress': 'ct_addr',
+                    'slpaddress': 'slp_addr',
+                    'bchaddress': 'bch_addr',
+                    'wallethash': 'wallet',
+                    'tokenid_or_category': 'token',
+                    'category': 'cat',
+                    'txid': 'tx',
+                    'index': 'idx',
+                    'proposal_identifier': 'proposal',
+                    'signer_identifier': 'signer',
+                    'id': 'id',
+                    'shard': 'shard',
+                    'address': 'addr',
+                    'tokenid': 'token_id',
+                }
+                path_parts.append(param_map.get(param_name, param_name))
+            else:
+                path_parts.append(key)
+        
+        # Create operation_id from path parts
+        if path_parts:
+            operation_id = '_'.join(path_parts)
+            # Clean up: remove any remaining special characters
+            operation_id = operation_id.replace('-', '_').replace('/', '_')
+            return f"{operation_id}_{method}"
+        
+        # Fallback to default behavior
+        return super().get_operation_id(operation_keys)
+    
+    def get_operation(self, view, path, prefix, method, components, request, **kwargs):
+        """
+        Override to ensure we always generate unique operationIds from the path.
+        This prevents duplicate operationIds when multiple URLs use the same view.
+        """
+        operation = super().get_operation(view, path, prefix, method, components, request, **kwargs)
+        
+        # Always generate operation_id from path to ensure uniqueness
+        # Combine prefix and path to get the full path
+        full_path = (prefix + path).strip('/')
+        path_parts = full_path.split('/')
+        # Remove 'api' prefix if present
+        if path_parts and path_parts[0] == 'api':
+            path_parts = path_parts[1:]
+        
+        # Process path parts
+        processed_parts = []
+        for part in path_parts:
+            # Handle path parameters
+            if part.startswith('{') and part.endswith('}'):
+                param_name = part[1:-1]
+                # Map parameter names to shorter names
+                param_map = {
+                    'tokenaddress': 'ct_addr',
+                    'slpaddress': 'slp_addr',
+                    'bchaddress': 'bch_addr',
+                    'wallethash': 'wallet',
+                    'tokenid_or_category': 'token',
+                    'category': 'cat',
+                    'txid': 'tx',
+                    'index': 'idx',
+                    'proposal_identifier': 'proposal',
+                    'signer_identifier': 'signer',
+                    'id': 'id',
+                    'shard': 'shard',
+                    'address': 'addr',
+                    'tokenid': 'token_id',
+                }
+                processed_parts.append(param_map.get(param_name, param_name))
+            else:
+                processed_parts.append(part.replace('-', '_'))
+        
+        # Create operation_id
+        if processed_parts:
+            operation_id = '_'.join(processed_parts)
+            operation['operationId'] = f"{operation_id}_{method.lower()}"
+        
+        return operation
+
+
 schema_view = get_schema_view(
    openapi.Info(
       title="watchtower",
@@ -55,6 +158,7 @@ schema_view = get_schema_view(
    ),
    public=True,
    permission_classes=(permissions.AllowAny,),
+   generator_class=CustomOpenAPISchemaGenerator,
 )
 
 

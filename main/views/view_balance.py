@@ -103,10 +103,6 @@ class Balance(APIView):
         else:
             return num
 
-    @swagger_auto_schema(
-        operation_id="balance_get",
-        operation_summary="Get balance for address or wallet",
-    )
     def get(self, request, *args, **kwargs):
         slpaddress = kwargs.get('slpaddress', '')
         bchaddress = kwargs.get('bchaddress', '')
