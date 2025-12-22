@@ -43,7 +43,7 @@ from main.utils.cache import clear_wallet_history_cache, clear_wallet_balance_ca
 from django.db.utils import IntegrityError
 from django.conf import settings
 from django.utils import timezone, dateparse
-from django.db import transaction as trans
+from django.db import transaction as trans, connection
 from celery.exceptions import TimeoutError
 from main.utils.chunk import chunks
 from channels.layers import get_channel_layer
@@ -535,7 +535,20 @@ def save_record(
                 transaction_obj.spent = True
             else:
                 # Explicitly mark as unspent for UTXOs
-                transaction_obj.spent = False
+                # CRITICAL FIX: Don't reset transactions that are already marked as spent
+                # This prevents parse_tx_wallet_histories from resetting transactions we just marked as spent in get_bch_utxos
+                # If a transaction is marked as spent, it means get_bch_utxos determined it's NOT in the fresh UTXO set
+                # So we should NOT reset it here, even if parse_tx_wallet_histories is processing it
+                if not transaction_obj.spent:
+                    # Already unspent, no need to reset
+                    pass
+                else:
+                    # Transaction is marked as spent - DON'T reset it to unspent
+                    # This prevents parse_tx_wallet_histories from undoing our get_bch_utxos updates
+                    LOGGER.warning(f"save_record NOT resetting transaction {transaction_obj.id} ({transactionid}:{index}) from spent to unspent. "
+                                 f"Transaction is already marked as spent (likely by get_bch_utxos), so it should remain spent. "
+                                 f"This prevents parse_tx_wallet_histories from undoing get_bch_utxos updates.")
+                    # Keep it as spent - don't reset to unspent
 
             if transaction_obj.source != source:
                 transaction_obj.source = source
@@ -1008,15 +1021,22 @@ def get_latest_block(self):
 
 @shared_task(bind=True, queue='get_utxos', max_retries=10)
 def get_bch_utxos(self, address):
+    LOGGER.info(f"Starting get_bch_utxos for address {address}")
     try:
         outputs = NODE.BCH.get_utxos(address)
         saved_utxo_ids = []
+        # Track fresh UTXOs by (txid, index) for checking which transactions should be marked as spent
+        fresh_utxo_set = set()
         
+        # Process each fresh UTXO from the node
         for output in outputs:
             index = output['tx_pos']
             block = output['height']
             tx_hash = output['tx_hash']
             value = output['value']
+            
+            # Add to fresh UTXO set
+            fresh_utxo_set.add((tx_hash, index))
 
             block, created = BlockHeight.objects.get_or_create(number=block)
             transaction_check = Transaction.objects.filter(
@@ -1025,21 +1045,17 @@ def get_bch_utxos(self, address):
                 index=index
             )
             if transaction_check.exists():
-                # Check if transaction wallet matches with address's wallet
-                # Correct this if not matching
-                # Also, Mark as unspent, just in case it's already marked spent
-                # and also update the blockheight
+                # Update existing transaction: mark as unspent, update value and blockheight
                 _txn = transaction_check.first()
                 if _txn.wallet == _txn.address.wallet:
                     transaction_check.update(spent=False, value=value, blockheight=block)
                 else:
-                    transaction_check.update(wallet=_txn.address.wallet, value=value, spent=False, blockheight=block)
+                    transaction_check.update(wallet=_txn.address.wallet, spent=False, value=value, blockheight=block)
                 
                 for obj in transaction_check:
                     saved_utxo_ids.append(obj.id)
             else:
-                # Keep track of token_data structure if there are changes in source data
-                # Refer to function docstring for expected structure
+                # Create new transaction record
                 output_data = {
                     'index': index,
                     'value': value,
@@ -1066,15 +1082,38 @@ def get_bch_utxos(self, address):
      
             parse_tx_wallet_histories.delay(tx_hash, immediate=True)
 
-        # Mark other transactions of the same address as spent
-        transactions_to_mark_spent = Transaction.objects \
-            .filter(address__address=address, spent=False) \
-            .exclude(id__in=saved_utxo_ids)
+        # Mark transactions as spent if they're not in the fresh UTXO set
+        connection.ensure_connection()
+        unspent_transactions = Transaction.objects.filter(
+            address__address=address,
+            spent=False
+        ).values_list('id', 'txid', 'index')
         
-        # Clear cache before marking as spent
-        if transactions_to_mark_spent.exists():
-            clear_cache_for_spent_transactions(transactions_to_mark_spent)
-            transactions_to_mark_spent.update(spent=True)
+        transactions_to_mark_spent = []
+        for txn_id, txid, index in unspent_transactions:
+            if (txid, index) not in fresh_utxo_set:
+                transactions_to_mark_spent.append(txn_id)
+        
+        # Mark transactions as spent
+        if transactions_to_mark_spent:
+            LOGGER.info(f"Marking {len(transactions_to_mark_spent)} transactions as spent for address {address}")
+            transactions_to_mark_spent_qs = Transaction.objects.filter(id__in=transactions_to_mark_spent)
+            clear_cache_for_spent_transactions(transactions_to_mark_spent_qs)
+            
+            with trans.atomic():
+                locked_qs = Transaction.objects.select_for_update().filter(
+                    id__in=transactions_to_mark_spent,
+                    spent=False
+                )
+                
+                transactions_to_update = list(locked_qs)
+                for txn in transactions_to_update:
+                    txn.spent = True
+                
+                Transaction.objects.bulk_update(transactions_to_update, ['spent'], batch_size=100)
+                LOGGER.info(f"Successfully marked {len(transactions_to_update)} transactions as spent for address {address}")
+        
+        LOGGER.info(f"Completed get_bch_utxos for address {address}")
 
     except Exception as exc:
         try:
@@ -1092,6 +1131,8 @@ def get_slp_utxos(self, address):
     try:
         outputs = NODE.SLP.get_utxos(address)
         saved_utxo_ids = []
+        # Track fresh UTXOs by (txid, index, token_id, amount) for explicit checking
+        fresh_utxo_set = set()
 
         for output in outputs:
             if output.slp_token.token_id:
@@ -1101,6 +1142,9 @@ def get_slp_utxos(self, address):
                 token_id = bytearray(output.slp_token.token_id).hex() 
                 amount = output.slp_token.amount
                 block = output.block_height
+                
+                # Add to fresh UTXO set
+                fresh_utxo_set.add((tx_hash, index, token_id, amount))
                 
                 block, _ = BlockHeight.objects.get_or_create(number=block)
 
@@ -1154,15 +1198,54 @@ def get_slp_utxos(self, address):
                     for obj in transaction_obj:
                         saved_utxo_ids.append(obj.id)
         
-        # Mark other transactions of the same address as spent
-        Transaction.objects.filter(
+        # Get all unspent transactions for this address and check against fresh UTXO list
+        # Use values_list to avoid loading full objects into memory
+        unspent_transactions = Transaction.objects.filter(
             address__address=address,
             spent=False
-        ).exclude(
-            id__in=saved_utxo_ids
-        ).update(
-            spent=True
-        )
+        ).select_related('token').values_list('id', 'txid', 'index', 'token__tokenid', 'amount')
+        
+        transactions_to_mark_spent = []
+        for txn_id, txid, index, token_id, amount in unspent_transactions:
+            # For SLP, check if (txid, index, token_id, amount) exists in fresh UTXO list
+            # Only check SLP transactions (those with tokens)
+            if token_id and amount is not None:
+                if (txid, index, token_id, amount) not in fresh_utxo_set:
+                    transactions_to_mark_spent.append(txn_id)
+        
+        # Clear cache before marking as spent
+        if transactions_to_mark_spent:
+            LOGGER.info(f"Found {len(transactions_to_mark_spent)} SLP transactions to mark as spent for address {address}")
+            transactions_to_mark_spent_qs = Transaction.objects.filter(id__in=transactions_to_mark_spent)
+            clear_cache_for_spent_transactions(transactions_to_mark_spent_qs)
+            # Use atomic transaction with select_for_update to lock rows and ensure update works in Celery tasks
+            with trans.atomic():
+                # Lock the rows to prevent concurrent modifications and get fresh queryset
+                locked_qs = Transaction.objects.select_for_update().filter(
+                    id__in=transactions_to_mark_spent,
+                    spent=False  # Only update if still unspent
+                )
+                
+                count_before = locked_qs.count()
+                LOGGER.info(f"Locked {count_before} SLP transactions for update (address: {address})")
+                
+                if count_before > 0:
+                    # Use queryset.update() directly - this should work with select_for_update
+                    updated_count = locked_qs.update(spent=True)
+                    LOGGER.info(f"Queryset.update() reported {updated_count} SLP transactions updated")
+                    
+                    # Verify the update actually persisted by querying again
+                    connection.ensure_connection()
+                    verification_count = Transaction.objects.filter(
+                        id__in=transactions_to_mark_spent,
+                        spent=True
+                    ).count()
+                    LOGGER.info(f"Verification query shows {verification_count} SLP transactions are now marked as spent (address: {address})")
+                    
+                    if verification_count != updated_count:
+                        LOGGER.error(f"MISMATCH: update() reported {updated_count} but verification shows {verification_count} for SLP address {address}")
+                else:
+                    LOGGER.warning(f"No SLP transactions found to update (may have been updated concurrently) for address {address}")
 
     except Exception as exc:
         try:
