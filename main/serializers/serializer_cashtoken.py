@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import requests
 
 from django.conf import settings
 from django.db.models import Q, Sum
@@ -224,6 +225,123 @@ class CashFungibleTokenSerializer(serializers.ModelSerializer):
         # Token not found or not favorited
         return None
             
+
+class CashNonFungibleTokenGroupsSerializer(serializers.ModelSerializer):
+    """Serializer for groups endpoint with only id, category, and metadata (fetched fresh from BCMR)"""
+    metadata = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CashNonFungibleToken
+        fields = [
+            'id',
+            'category',
+            'metadata',
+        ]
+    
+    def get_metadata(self, obj):
+        """
+        Fetch metadata fresh from BCMR indexer API.
+        Returns the entire JSON response from BCMR as metadata, or empty dict if fetch fails.
+        """
+        category = obj.category
+        bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
+        
+        try:
+            # Fetch fresh from BCMR with timeout
+            response = requests.get(bcmr_url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check for errors in response
+                if 'error' in data:
+                    return {}
+                
+                # Return the entire BCMR response as metadata
+                return data
+            else:
+                # Non-200 status code
+                return {}
+        except Exception:
+            # Any error (timeout, network, parsing, etc.) returns empty dict
+            return {}
+
+
+class CashNonFungibleCategorySerializer(serializers.Serializer):
+    category = serializers.CharField()
+    metadata = serializers.SerializerMethodField()
+    
+    def get_metadata(self, obj):
+        """
+        Return metadata from CashTokenInfo if available, otherwise return empty dict.
+        Excludes nft_details field.
+        """
+        if obj.info:
+            return {
+                'name': obj.info.name,
+                'description': obj.info.description,
+                'symbol': obj.info.symbol,
+                'decimals': obj.info.decimals,
+                'image_url': obj.info.image_url,
+            }
+        return {}
+
+
+
+
+class CashNonFungibleTokenItemsSerializer(serializers.ModelSerializer):
+    """Serializer for items endpoint with metadata fetched from BCMR using category and commitment"""
+    metadata = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CashNonFungibleToken
+        fields = [
+            'id',
+            'category',
+            'commitment',
+            'capability',
+            'current_txid',
+            'current_index',
+            'metadata',
+        ]
+    
+    def get_metadata(self, obj):
+        """
+        Fetch metadata fresh from BCMR indexer API using category and commitment.
+        Extracts and returns only the type_metadata field from BCMR response, or empty dict if not found.
+        """
+        category = obj.category
+        commitment = obj.commitment or ''
+        
+        # Build BCMR URL: /api/tokens/<category>/<commitment>/
+        # If commitment is empty, use just /api/tokens/<category>/
+        if commitment:
+            bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/{commitment}/'
+        else:
+            bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
+        
+        try:
+            # Fetch fresh from BCMR with timeout
+            response = requests.get(bcmr_url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check for errors in response
+                if 'error' in data:
+                    return {}
+                
+                # Extract only type_metadata from the response
+                type_metadata = data.get('type_metadata')
+                if type_metadata:
+                    return type_metadata
+                else:
+                    return {}
+            else:
+                # Non-200 status code
+                return {}
+        except Exception:
+            # Any error (timeout, network, parsing, etc.) returns empty dict
+            return {}
+
 
 class CashNonFungibleTokenSerializer(serializers.ModelSerializer):
     info = CashTokenInfoSerializer()

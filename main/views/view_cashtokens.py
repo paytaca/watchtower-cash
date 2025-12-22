@@ -19,6 +19,9 @@ from main.models import (
 from main.serializers import (
     CashFungibleTokenSerializer,
     CashNonFungibleTokenSerializer,
+    CashNonFungibleCategorySerializer,
+    CashNonFungibleTokenGroupsSerializer,
+    CashNonFungibleTokenItemsSerializer,
 )
 
 from smartbch.pagination import CustomLimitOffsetPagination
@@ -222,7 +225,12 @@ class CashNftsViewSet(
     )
     @decorators.action(detail=False, methods=["get"], filter_backends=[])
     def groups(self, request, *args, **kwargs):
+        """
+        Return a paginated list of unique NFT token categories.
+        Each category is represented once (by its minting capability NFT).
+        """
         wallet_hash = request.query_params.get("wallet_hash", None)
+        # filter_group() ensures only unique categories (one per category)
         queryset = CashNonFungibleToken.objects.filter_group()
         if wallet_hash:
             owned_nfts_subq = CashNonFungibleToken.objects \
@@ -235,8 +243,119 @@ class CashNftsViewSet(
 
         page = self.paginate_queryset(queryset)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            serializer = CashNonFungibleTokenGroupsSerializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = CashNonFungibleTokenGroupsSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                name="wallet_hash", type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY, required=False,
+                description="Filter categories to only those owned by this wallet",
+            ),
+            openapi.Parameter(
+                name="with_metadata", type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY, required=False,
+                description="Filter by metadata presence: 'true' for categories with metadata, 'false' for categories without metadata",
+            ),
+        ]
+    )
+    @decorators.action(detail=False, methods=["get"], filter_backends=[])
+    def non_fungible(self, request, *args, **kwargs):
+        """
+        Return a paginated list of unique NFT token categories.
+        Each item contains category and metadata (if available).
+        """
+        wallet_hash = request.query_params.get("wallet_hash", None)
+        queryset = CashNonFungibleToken.objects.filter_group()
+        
+        # Filter by wallet_hash if provided
+        if wallet_hash:
+            owned_nfts_subq = CashNonFungibleToken.objects \
+                .annotate_owner_wallet_hash() \
+                .filter(owner_wallet_hash=wallet_hash) \
+                .filter(category=OuterRef("category"))
+
+            queryset = queryset \
+                .filter(Exists(owned_nfts_subq))
+        
+        # Handle with_metadata filter parameter
+        with_metadata = request.query_params.get("with_metadata", None)
+        if with_metadata is not None:
+            with_metadata = with_metadata.lower() == 'true'
+            if with_metadata:
+                # Only categories that have metadata (info is not null)
+                queryset = queryset.filter(info__isnull=False)
+            else:
+                # Only categories that don't have metadata (info is null)
+                queryset = queryset.filter(info__isnull=True)
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = CashNonFungibleCategorySerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = CashNonFungibleCategorySerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                name="category", type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY, required=True,
+                description="Filter NFTs by category",
+            ),
+            openapi.Parameter(
+                name="wallet_hash", type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY, required=False,
+                description="Filter NFTs to only those owned by this wallet",
+            ),
+            openapi.Parameter(
+                name="has_metadata", type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY, required=False,
+                description="Filter by metadata presence: 'true' for NFTs with metadata, 'false' for NFTs without metadata",
+            ),
+        ]
+    )
+    @decorators.action(detail=False, methods=["get"], filter_backends=[TokensViewSetFilter, filters.DjangoFilterBackend])
+    def items(self, request, *args, **kwargs):
+        """
+        Return a paginated list of NFT items for a given category.
+        Can be filtered by wallet_hash and has_metadata.
+        Returns the same format as /api/cashtokens/nft/ endpoint.
+        """
+        category = request.query_params.get("category", None)
+        if not category:
+            from rest_framework import status
+            return Response(
+                {'error': 'category parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Start with all NFTs filtered by category, ordered by latest first
+        queryset = CashNonFungibleToken.objects.filter(category=category).order_by('-id')
+        
+        # Apply standard filters (wallet_hash, has_balance, etc.) using filter_backends
+        queryset = self.filter_queryset(queryset)
+        
+        # Handle has_metadata filter parameter
+        has_metadata = request.query_params.get("has_metadata", None)
+        if has_metadata is not None:
+            has_metadata = has_metadata.lower() == 'true'
+            if has_metadata:
+                # Only NFTs that have metadata (info is not null)
+                queryset = queryset.filter(info__isnull=False)
+            else:
+                # Only NFTs that don't have metadata (info is null)
+                queryset = queryset.filter(info__isnull=True)
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = CashNonFungibleTokenItemsSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = CashNonFungibleTokenItemsSerializer(queryset, many=True)
         return Response(serializer.data)

@@ -79,6 +79,9 @@ main_urls += [
 
     re_path(r"^tokens/wallet/(?P<wallethash>[\w+:]+)/$", views.WalletTokensView.as_view(),name='wallet-tokens'),
 
+    path('cashtokens/non-fungible/categories/', views.CashNftsViewSet.as_view({'get': 'non_fungible'}), name='cashtokens-non-fungible-categories'),
+    path('cashtokens/non-fungible/items/', views.CashNftsViewSet.as_view({'get': 'items'}), name='cashtokens-non-fungible-items'),
+
     re_path(r"^transactions/attributes/$", views.TransactionMetaAttributeView.as_view(),name='transaction-attributes'),
     re_path(r"^transactions/(?P<txid>[\w+]+)/$", views.TransactionDetailsView.as_view(),name='transaction-details'),
 
