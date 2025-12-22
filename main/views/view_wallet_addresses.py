@@ -11,6 +11,7 @@ class WalletAddressesView(APIView):
 
     @swagger_auto_schema(
         operation_description="Returns the addresses of provided wallet hash",
+        operation_id="wallet_addresses_list",
         responses={status.HTTP_200_OK: openapi.Response(
             description="List of wallet addresses",
             examples={
@@ -20,8 +21,10 @@ class WalletAddressesView(APIView):
                 ]
 
             },
-            type=openapi.TYPE_ARRAY,
-            items=openapi.Items(type=openapi.TYPE_STRING)
+            schema=openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=openapi.Items(type=openapi.TYPE_STRING)
+            )
         )},
         manual_parameters=[
             openapi.Parameter('change_index', openapi.IN_QUERY, description="Filters based on change index of BIP44 derivation path. Set to 0 for external or deposit addresses, 1 for change addresses.", required=False, type=openapi.TYPE_INTEGER),
@@ -52,14 +55,17 @@ class WalletAddressesView(APIView):
 class WalletAddressPathsView(APIView):
     @swagger_auto_schema(
         operation_description="Returns the address paths of provided wallet hash",
+        operation_id="wallet_address_paths_list",
         responses={status.HTTP_200_OK: openapi.Response(
             description="List of address paths",
             examples={
                 'application/json': ['0/0', '1/0', '0/1', '1/1' ],
 
             },
-            type=openapi.TYPE_ARRAY,
-            items=openapi.Items(type=openapi.TYPE_STRING)
+            schema=openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=openapi.Items(type=openapi.TYPE_STRING)
+            )
         )},
         manual_parameters=[
             openapi.Parameter('change_index', openapi.IN_QUERY, description="Filters based on change index of BIP44 derivation path. Set to 0 for external or deposit addresses, 1 for change addresses.", required=False, type=openapi.TYPE_INTEGER),

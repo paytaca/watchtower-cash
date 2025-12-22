@@ -50,7 +50,6 @@ schema_view = get_schema_view(
    openapi.Info(
       title="watchtower",
       default_version='v1',
-      url='https://watchtower.cash/',
       description="Instant and reliable infrastructure connecting you to the Bitcoin Cash blockchain",
       contact=openapi.Contact(name="Support",url="https://t.me/WatchTowerCash")
    ),

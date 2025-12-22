@@ -123,12 +123,18 @@ class WalletAddressAppRecordExistsView(APIView):
 
     @swagger_auto_schema(
         operation_description="Object indicating that address was connected to an (D)app",
+        operation_id="wallet_address_app_record_exists",
         responses={status.HTTP_200_OK: openapi.Response(
             description="Object indicating that address was connected to an (D)app",
             examples={
                 'application/json': { 'exists': True }
             },
-            type=openapi.TYPE_OBJECT
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'exists': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+                }
+            )
         )}
     )
     def get(self, request, *args, **kwargs):
