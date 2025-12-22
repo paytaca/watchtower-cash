@@ -160,6 +160,7 @@ class WalletHistoryView(APIView):
             openapi.Parameter(name="exclude_attr", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=True, required=False),
             openapi.Parameter(name="attribute", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False),
             openapi.Parameter(name="all", type=openapi.TYPE_BOOLEAN, in_=openapi.IN_QUERY, default=False, required=False, description="If true, returns combined BCH and all token transactions together"),
+            openapi.Parameter(name="token_type", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=False, enum=["nft"], description="Filter to show only CashToken NFT transactions"),
         ]
     )
     def get(self, request, *args, **kwargs):
@@ -177,6 +178,7 @@ class WalletHistoryView(APIView):
         attribute = request.query_params.get("attribute", "")
         include_attrs = str(request.query_params.get("exclude_attr", "true")).strip().lower() == "true"
         return_all = str(request.query_params.get("all", "false")).strip().lower() == "true"
+        token_type = request.query_params.get("token_type", None)
         
         is_cashtoken_nft = False
         if index and txid:
@@ -210,7 +212,7 @@ class WalletHistoryView(APIView):
             if use_cache:
                 cache = settings.REDISKV
                 # Include page_size and token_id_or_category in cache key to avoid collisions
-                token_key = token_id_or_category or category or 'bch'
+                token_key = token_id_or_category or category or (token_type if token_type else 'bch')
                 cache_key = f'wallet:history:{wallet_hash}:{token_key}:{str(page)}:{str(page_size)}'
                 data = retrieve_object(cache_key, cache)
 
@@ -276,8 +278,12 @@ class WalletHistoryView(APIView):
                         history = history.annotate(
                             encrypted_memo=Subquery(memo_subquery),
                             _token_id=F('cashtoken_nft__category'),
-                            _token_category=F('cashtoken_nft__category'),
-                            _token_decimals=F('cashtoken_nft__info__decimals')
+                            _token_decimals=F('cashtoken_nft__info__decimals'),
+                            is_nft=Case(
+                                When(cashtoken_nft__isnull=False, then=Value(True)),
+                                default=Value(False),
+                                output_field=IntegerField()
+                            )
                         ).values(
                             'record_type',
                             'txid',
@@ -293,15 +299,19 @@ class WalletHistoryView(APIView):
                             'attributes',
                             'encrypted_memo',
                             '_token_id',
-                            '_token_category',
                             '_token_decimals',
+                            'is_nft',
                         )
                     else:
                         history = history.annotate(
                             encrypted_memo=Subquery(memo_subquery),
                             _token_id=F('cashtoken_ft__category'),
-                            _token_category=F('cashtoken_ft__category'),
-                            _token_decimals=F('cashtoken_ft__info__decimals')
+                            _token_decimals=F('cashtoken_ft__info__decimals'),
+                            is_nft=Case(
+                                When(cashtoken_nft__isnull=False, then=Value(True)),
+                                default=Value(False),
+                                output_field=IntegerField()
+                            )
                         ).values(
                             'record_type',
                             'txid',
@@ -317,8 +327,8 @@ class WalletHistoryView(APIView):
                             'attributes',
                             'encrypted_memo',
                             '_token_id',
-                            '_token_category',
                             '_token_decimals',
+                            'is_nft',
                         )
                     
                     # Post-process to expand token field
@@ -327,9 +337,11 @@ class WalletHistoryView(APIView):
                         expand_token_from_dict(
                             item,
                             token_id_key='_token_id',
-                            token_category_key='_token_category',
+                            token_category_key='_token_id',
                             token_decimals_key='_token_decimals'
                         )
+                        # Convert is_nft from integer (1/0) to boolean
+                        item['is_nft'] = bool(item.get('is_nft', False))
                     
                     # Add fiat_amounts from computed property
                     # Collect unique txids to fetch WalletHistory objects efficiently
@@ -365,8 +377,12 @@ class WalletHistoryView(APIView):
                         _token=F('token__tokenid'),
                         encrypted_memo=Subquery(memo_subquery),
                         _token_id=F('token__id'),
-                        _token_tokenid=F('token__tokenid'),
-                        _token_decimals=F('token__decimals')
+                        _token_decimals=F('token__decimals'),
+                        is_nft=Case(
+                            When(cashtoken_nft__isnull=False, then=Value(True)),
+                            default=Value(False),
+                            output_field=IntegerField()
+                        )
                     ).values(
                         'record_type',
                         'txid',
@@ -382,8 +398,8 @@ class WalletHistoryView(APIView):
                         'attributes',
                         'encrypted_memo',
                         '_token_id',
-                        '_token_tokenid',
                         '_token_decimals',
+                        'is_nft',
                     )
                     
                     # Post-process to expand token field
@@ -392,9 +408,11 @@ class WalletHistoryView(APIView):
                         expand_token_from_dict(
                             item,
                             token_id_key='_token_id',
-                            token_tokenid_key='_token_tokenid',
+                            token_tokenid_key=None,
                             token_decimals_key='_token_decimals'
                         )
+                        # Convert is_nft from integer (1/0) to boolean
+                        item['is_nft'] = bool(item.get('is_nft', False))
                     
                     # Add fiat_amounts from computed property
                     # Collect unique txids to fetch WalletHistory objects efficiently
@@ -424,71 +442,148 @@ class WalletHistoryView(APIView):
             else:
                 memo_subquery = get_memo_subquery(wallet_hash)
                 
-                qs = qs.filter(token__name='bch').select_related('token')
-                history = qs.annotate(
-                    encrypted_memo=Subquery(memo_subquery),
-                    _token_id=F('token__id'),
-                    _token_tokenid=F('token__tokenid'),
-                    _token_decimals=F('token__decimals')
-                ).values(
-                    'record_type',
-                    'txid',
-                    'amount',
-                    'token',
-                    'tx_fee',
-                    'senders',
-                    'recipients',
-                    'date_created',
-                    'tx_timestamp',
-                    'usd_price',
-                    'market_prices',
-                    'attributes',
-                    'encrypted_memo',
-                    '_token_id',
-                    '_token_tokenid',
-                    '_token_decimals',
-                )
-                
-                # Post-process to expand token field
-                history = list(history)
-                for item in history:
-                    expand_token_from_dict(
-                        item,
-                        token_id_key='_token_id',
-                        token_tokenid_key='_token_tokenid',
-                        token_decimals_key='_token_decimals'
+                # Check if filtering for NFT transactions only
+                if token_type == 'nft' and wallet.wallet_type == 'bch':
+                    # Filter for all CashToken NFT transactions
+                    qs = qs.filter(cashtoken_nft__isnull=False).select_related('cashtoken_nft', 'cashtoken_nft__info')
+                    history = qs.annotate(
+                        encrypted_memo=Subquery(memo_subquery),
+                        _token_id=F('cashtoken_nft__category'),
+                        _token_decimals=F('cashtoken_nft__info__decimals'),
+                        is_nft=Case(
+                            When(cashtoken_nft__isnull=False, then=Value(True)),
+                            default=Value(False),
+                            output_field=IntegerField()
+                        )
+                    ).values(
+                        'record_type',
+                        'txid',
+                        'amount',
+                        'token',
+                        'tx_fee',
+                        'senders',
+                        'recipients',
+                        'date_created',
+                        'tx_timestamp',
+                        'usd_price',
+                        'market_prices',
+                        'attributes',
+                        'encrypted_memo',
+                        '_token_id',
+                        '_token_decimals',
+                        'is_nft',
                     )
-                
-                # Add fiat_amounts from computed property
-                # Collect unique txids to fetch WalletHistory objects efficiently
-                history_txids = {item['txid'] for item in history}
-                wallet_histories_list = list(WalletHistory.objects.filter(
-                    txid__in=history_txids,
-                    wallet=wallet
-                ).select_related('wallet', 'token'))
-                
-                # Create a lookup dict - use (txid, record_type, wallet_id) as key since amounts might have precision differences
-                # For outgoing transactions, amounts are stored as negative in DB, but we'll match by record_type
-                wallet_histories_lookup = {}
-                for h in wallet_histories_list:
-                    # Primary key: (txid, record_type, wallet_id)
-                    key = (h.txid, h.record_type, h.wallet_id)
-                    # If multiple records exist for same key, prefer the one that matches the amount
-                    if key not in wallet_histories_lookup:
-                        wallet_histories_lookup[key] = h
-                    else:
-                        # If we already have one, keep the first match (they should be the same anyway)
-                        pass
-                
-                # Add fiat_amounts to each item
-                for item in history:
-                    key = (item['txid'], item['record_type'], wallet.id)
-                    if key in wallet_histories_lookup:
-                        wallet_history_obj = wallet_histories_lookup[key]
-                        # Get fiat_amounts from the computed property
-                        item['fiat_amounts'] = wallet_history_obj.fiat_amounts
-                    else:
-                        item['fiat_amounts'] = None
+                    
+                    # Post-process to expand token field
+                    history = list(history)
+                    for item in history:
+                        expand_token_from_dict(
+                            item,
+                            token_id_key='_token_id',
+                            token_category_key='_token_id',
+                            token_decimals_key='_token_decimals'
+                        )
+                        # Convert is_nft from integer (1/0) to boolean
+                        item['is_nft'] = bool(item.get('is_nft', False))
+                    
+                    # Add fiat_amounts from computed property
+                    # Collect unique txids to fetch WalletHistory objects efficiently
+                    history_txids = {item['txid'] for item in history}
+                    wallet_histories_list = list(WalletHistory.objects.filter(
+                        txid__in=history_txids,
+                        wallet=wallet
+                    ).select_related('wallet', 'token', 'cashtoken_nft', 'cashtoken_nft__info'))
+                    
+                    # Create a lookup dict - use (txid, record_type, wallet_id) as key since amounts might have precision differences
+                    wallet_histories_lookup = {}
+                    for h in wallet_histories_list:
+                        # Primary key: (txid, record_type, wallet_id)
+                        key = (h.txid, h.record_type, h.wallet_id)
+                        if key not in wallet_histories_lookup:
+                            wallet_histories_lookup[key] = h
+                    
+                    # Add fiat_amounts to each item
+                    for item in history:
+                        key = (item['txid'], item['record_type'], wallet.id)
+                        if key in wallet_histories_lookup:
+                            wallet_history_obj = wallet_histories_lookup[key]
+                            # Get fiat_amounts from the computed property
+                            item['fiat_amounts'] = wallet_history_obj.fiat_amounts
+                        else:
+                            item['fiat_amounts'] = None
+                else:
+                    # Default: BCH transactions
+                    qs = qs.filter(token__name='bch').select_related('token')
+                    history = qs.annotate(
+                        encrypted_memo=Subquery(memo_subquery),
+                        _token_id=F('token__id'),
+                        _token_decimals=F('token__decimals'),
+                        is_nft=Case(
+                            When(cashtoken_nft__isnull=False, then=Value(True)),
+                            default=Value(False),
+                            output_field=IntegerField()
+                        )
+                    ).values(
+                        'record_type',
+                        'txid',
+                        'amount',
+                        'token',
+                        'tx_fee',
+                        'senders',
+                        'recipients',
+                        'date_created',
+                        'tx_timestamp',
+                        'usd_price',
+                        'market_prices',
+                        'attributes',
+                        'encrypted_memo',
+                        '_token_id',
+                        '_token_decimals',
+                        'is_nft',
+                    )
+                    
+                    # Post-process to expand token field
+                    history = list(history)
+                    for item in history:
+                        expand_token_from_dict(
+                            item,
+                            token_id_key='_token_id',
+                            token_tokenid_key=None,
+                            token_decimals_key='_token_decimals'
+                        )
+                        # Convert is_nft from integer (1/0) to boolean
+                        item['is_nft'] = bool(item.get('is_nft', False))
+                    
+                    # Add fiat_amounts from computed property
+                    # Collect unique txids to fetch WalletHistory objects efficiently
+                    history_txids = {item['txid'] for item in history}
+                    wallet_histories_list = list(WalletHistory.objects.filter(
+                        txid__in=history_txids,
+                        wallet=wallet
+                    ).select_related('wallet', 'token'))
+                    
+                    # Create a lookup dict - use (txid, record_type, wallet_id) as key since amounts might have precision differences
+                    # For outgoing transactions, amounts are stored as negative in DB, but we'll match by record_type
+                    wallet_histories_lookup = {}
+                    for h in wallet_histories_list:
+                        # Primary key: (txid, record_type, wallet_id)
+                        key = (h.txid, h.record_type, h.wallet_id)
+                        # If multiple records exist for same key, prefer the one that matches the amount
+                        if key not in wallet_histories_lookup:
+                            wallet_histories_lookup[key] = h
+                        else:
+                            # If we already have one, keep the first match (they should be the same anyway)
+                            pass
+                    
+                    # Add fiat_amounts to each item
+                    for item in history:
+                        key = (item['txid'], item['record_type'], wallet.id)
+                        if key in wallet_histories_lookup:
+                            wallet_history_obj = wallet_histories_lookup[key]
+                            # Get fiat_amounts from the computed property
+                            item['fiat_amounts'] = wallet_history_obj.fiat_amounts
+                        else:
+                            item['fiat_amounts'] = None
 
             if wallet.version == 1:
                 return Response(data=history, status=status.HTTP_200_OK)
@@ -576,24 +671,17 @@ class WalletHistoryView(APIView):
                     default=Value(None),
                     output_field=CharField()
                 ),
-                # Determine token category (for CashTokens) or tokenid (for SLP)
-                _token_category=Case(
-                    When(cashtoken_ft__isnull=False, then=F('cashtoken_ft__category')),
-                    When(cashtoken_nft__isnull=False, then=F('cashtoken_nft__category')),
-                    default=Value(None),
-                    output_field=CharField()
-                ),
-                _token_tokenid=Case(
-                    When(token__isnull=False, then=F('token__tokenid')),
-                    default=Value(None),
-                    output_field=CharField()
-                ),
                 # Determine decimals
                 _token_decimals=Case(
                     When(cashtoken_ft__isnull=False, then=F('cashtoken_ft__info__decimals')),
                     When(cashtoken_nft__isnull=False, then=F('cashtoken_nft__info__decimals')),
                     When(token__isnull=False, then=F('token__decimals')),
                     default=Value(0),
+                    output_field=IntegerField()
+                ),
+                is_nft=Case(
+                    When(cashtoken_nft__isnull=False, then=Value(True)),
+                    default=Value(False),
                     output_field=IntegerField()
                 ),
             ).values(
@@ -611,17 +699,20 @@ class WalletHistoryView(APIView):
                 'attributes',
                 'encrypted_memo',
                 '_token_id',
-                '_token_category',
-                '_token_tokenid',
                 '_token_decimals',
+                'is_nft',
             )
         else:
             # For SLP wallets: handle BCH and SLP tokens
             history = qs.annotate(
                 encrypted_memo=Subquery(memo_subquery),
                 _token_id=F('token__id'),
-                _token_tokenid=F('token__tokenid'),
-                _token_decimals=F('token__decimals')
+                _token_decimals=F('token__decimals'),
+                is_nft=Case(
+                    When(cashtoken_nft__isnull=False, then=Value(True)),
+                    default=Value(False),
+                    output_field=IntegerField()
+                )
             ).values(
                 'record_type',
                 'txid',
@@ -637,20 +728,23 @@ class WalletHistoryView(APIView):
                 'attributes',
                 'encrypted_memo',
                 '_token_id',
-                '_token_tokenid',
                 '_token_decimals',
+                'is_nft',
             )
 
         # Post-process to expand token field
         history = list(history)
         for item in history:
+            # Convert is_nft from integer (1/0) to boolean
+            item['is_nft'] = bool(item.get('is_nft', False))
+            
             if wallet.wallet_type == 'bch':
-                # Check if it's a CashToken (FT or NFT)
-                if item.get('_token_category'):
+                # Check if it's a CashToken (FT or NFT) - if _token_id exists and is not None, it's a CashToken
+                if item.get('_token_id'):
                     expand_token_from_dict(
                         item,
                         token_id_key='_token_id',
-                        token_category_key='_token_category',
+                        token_category_key='_token_id',
                         token_decimals_key='_token_decimals'
                     )
                 else:
@@ -658,15 +752,18 @@ class WalletHistoryView(APIView):
                     expand_token_from_dict(
                         item,
                         token_id_key='_token_id',
-                        token_tokenid_key='_token_tokenid',
+                        token_tokenid_key=None,
                         token_decimals_key='_token_decimals'
                     )
             else:
                 # SLP wallet - handle BCH and SLP tokens
+                # For SLP, we need to get tokenid from the token object
+                # Since we removed _token_tokenid, we'll need to fetch it from the database
+                # But for now, we'll use _token_id and assume it's the tokenid for SLP
                 expand_token_from_dict(
                     item,
                     token_id_key='_token_id',
-                    token_tokenid_key='_token_tokenid',
+                    token_tokenid_key='_token_id',
                     token_decimals_key='_token_decimals'
                 )
 
