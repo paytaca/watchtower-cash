@@ -48,7 +48,11 @@ def expand_token_from_dict(item, token_id_key, token_category_key=None, token_to
     
     if token_category_key:
         # CashToken (NFT or FT)
-        token_category = item.pop(token_category_key)
+        # If token_category_key is the same as token_id_key, reuse the value
+        if token_category_key == token_id_key:
+            token_category = token_id
+        else:
+            token_category = item.pop(token_category_key)
         item['token'] = {
             'id': token_id,
             'asset_id': f"ct/{token_category}",
@@ -262,9 +266,19 @@ class WalletHistoryView(APIView):
                             _token=F('cashtoken_nft__category')
                         )
                     else:
-                        qs = qs.filter(cashtoken_ft__category=token_id_or_category).select_related('cashtoken_ft', 'cashtoken_ft__info')
+                        # When only category is provided (without index/txid), check both FT and NFT
+                        category_to_filter = token_id_or_category or category
+                        qs = qs.filter(
+                            Q(cashtoken_ft__category=category_to_filter) | 
+                            Q(cashtoken_nft__category=category_to_filter)
+                        ).select_related('cashtoken_ft', 'cashtoken_ft__info', 'cashtoken_nft', 'cashtoken_nft__info')
                         history = qs.annotate(
-                            _token=F('cashtoken_ft__category'),
+                            _token=Case(
+                                When(cashtoken_ft__isnull=False, then=F('cashtoken_ft__category')),
+                                When(cashtoken_nft__isnull=False, then=F('cashtoken_nft__category')),
+                                default=Value(None),
+                                output_field=CharField()
+                            ),
                             amount=ExpressionWrapper(
                                 #F('amount') / (10 ** F('cashtoken_ft__info__decimals')),
                                 F('amount'),
@@ -305,8 +319,18 @@ class WalletHistoryView(APIView):
                     else:
                         history = history.annotate(
                             encrypted_memo=Subquery(memo_subquery),
-                            _token_id=F('cashtoken_ft__category'),
-                            _token_decimals=F('cashtoken_ft__info__decimals'),
+                            _token_id=Case(
+                                When(cashtoken_ft__isnull=False, then=F('cashtoken_ft__category')),
+                                When(cashtoken_nft__isnull=False, then=F('cashtoken_nft__category')),
+                                default=Value(None),
+                                output_field=CharField()
+                            ),
+                            _token_decimals=Case(
+                                When(cashtoken_ft__isnull=False, then=F('cashtoken_ft__info__decimals')),
+                                When(cashtoken_nft__isnull=False, then=F('cashtoken_nft__info__decimals')),
+                                default=Value(0),
+                                output_field=IntegerField()
+                            ),
                             is_nft=Case(
                                 When(cashtoken_nft__isnull=False, then=Value(True)),
                                 default=Value(False),
@@ -349,7 +373,7 @@ class WalletHistoryView(APIView):
                     wallet_histories_list = list(WalletHistory.objects.filter(
                         txid__in=history_txids,
                         wallet=wallet
-                    ).select_related('wallet', 'token'))
+                    ).select_related('wallet', 'token', 'cashtoken_ft', 'cashtoken_ft__info', 'cashtoken_nft', 'cashtoken_nft__info'))
                     
                     # Create a lookup dict - use (txid, record_type, wallet_id) as key since amounts might have precision differences
                     wallet_histories_lookup = {}
