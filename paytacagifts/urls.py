@@ -9,5 +9,6 @@ urlpatterns = [
     path('gifts/<str:gift_code_hash>/claim', views.GiftViewSet.as_view({'post': 'claim'}), name='gift-claim'),
     path('gifts/<str:gift_code_hash>/claim/', views.GiftViewSet.as_view({'post': 'claim'}), name='gift-claim-slash'),
     path('gifts/<str:gift_code_hash>/recover', views.GiftViewSet.as_view({'post': 'recover'}), name='gift-recover'),
+    path('gifts/<str:gift_code_hash>/', views.GiftViewSet.as_view({'get': 'retrieve_by_hash'}), name='gift-retrieve'),
     re_path(r"^claim/$", views.GiftClaimView.as_view(),name='claim'),
 ]

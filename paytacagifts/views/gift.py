@@ -4,7 +4,7 @@ from rest_framework.response import Response
 
 from paytacagifts.serializers import (ListGiftsResponseSerializer, CreateGiftPayloadSerializer, ClaimGiftPayloadSerializer,
                                     ClaimGiftResponseSerializer,RecoverGiftResponseSerializer, RecoverGiftPayloadSerializer,
-                                    CreateGiftResponseSerializer)
+                                    CreateGiftResponseSerializer, GetGiftResponseSerializer)
 from paytacagifts.models import Gift, Wallet, Campaign, Claim
 
 from drf_yasg import openapi
@@ -313,6 +313,30 @@ class GiftViewSet(viewsets.GenericViewSet):
                     "message": "This gift has been claimed",
                 }, status=400)
 
+
+    @swagger_auto_schema(
+        operation_description="Get share and encrypted_share for a gift by gift code hash.",
+        responses={
+            status.HTTP_200_OK: GetGiftResponseSerializer,
+            status.HTTP_404_NOT_FOUND: openapi.Response(description="Gift not found")
+        },
+        manual_parameters=[
+            openapi.Parameter('gift_code_hash', openapi.IN_PATH, description="Gift code hash", type=openapi.TYPE_STRING, required=True),
+        ]
+    )
+    def retrieve_by_hash(self, request, gift_code_hash=None):
+        """Retrieve share and encrypted_share for a gift given its gift_code_hash."""
+        gift_qs = Gift.objects.filter(gift_code_hash=gift_code_hash)
+        if not gift_qs.exists():
+            return Response({
+                "error": "Gift does not exist"
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        gift = gift_qs.first()
+        return Response({
+            "share": gift.share,
+            "encrypted_share": gift.encrypted_share
+        })
 
     @action(detail=True, methods=['post'])
     @swagger_auto_schema(

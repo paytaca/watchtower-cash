@@ -66,6 +66,11 @@ class RecoverGiftResponseSerializer(serializers.Serializer):
     encrypted_gift_code = serializers.CharField(required=False, allow_blank=True)
 
 
+class GetGiftResponseSerializer(serializers.Serializer):
+    share = serializers.CharField()
+    encrypted_share = serializers.CharField()
+
+
 class ListGiftsResponseSerializer(serializers.Serializer):
     gifts = GiftPayloadSerializer(many=True)
     pagination =  LimitOffsetPaginationInfoSerializer()
