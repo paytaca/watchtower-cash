@@ -37,6 +37,7 @@ class Gift(models.Model):
     amount = models.FloatField(default=0)
     share = models.CharField(max_length=255)
     encrypted_share = models.TextField(default='')
+    encrypted_gift_code = models.TextField(default='', blank=True)
     date_funded = models.DateTimeField(blank=True, null=True) 
     date_claimed = models.DateTimeField(blank=True, null=True)
     claim_txid = models.CharField(max_length=70, blank=True, db_index=True)

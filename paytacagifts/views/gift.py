@@ -10,8 +10,14 @@ from paytacagifts.models import Gift, Wallet, Campaign, Claim
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from main.utils.subscription import new_subscription
-from django.db.models import Sum
+from main.utils.queries.node import Node
+from main.models import Transaction
+from django.db.models import Sum, F, Q
 from datetime import datetime
+import logging
+
+NODE = Node()
+LOGGER = logging.getLogger(__name__)
 
 class GiftViewSet(viewsets.GenericViewSet):
     lookup_field = "wallet_hash"
@@ -25,13 +31,13 @@ class GiftViewSet(viewsets.GenericViewSet):
         manual_parameters=[
             openapi.Parameter('offset', openapi.IN_QUERY, description="Offset for pagination.", type=openapi.TYPE_INTEGER),
             openapi.Parameter('limit', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_INTEGER),
-            openapi.Parameter('claimed', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_BOOLEAN, default=None),
-            openapi.Parameter('campaign', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('type', openapi.IN_QUERY, description="Filter by gift type: 'unclaimed' or 'claimed'.", type=openapi.TYPE_STRING, enum=['unclaimed', 'claimed']),
+            openapi.Parameter('campaign', openapi.IN_QUERY, description="Filter by campaign ID.", type=openapi.TYPE_INTEGER),
         ]
     )
     def list_gifts(self, request, wallet_hash=None):
         count = None
-        claimed = None
+        type_filter = None
         campaign_filter = None
         offset = 0
         limit = 0
@@ -44,10 +50,10 @@ class GiftViewSet(viewsets.GenericViewSet):
         if query_args.get("limit"):
             limit = int(query_args.get("limit"))
 
-        if query_args.get("claimed"):
-            claimed = query_args.get("claimed", None)
-            if claimed is not None:
-                claimed = str(claimed).lower().strip() == "true"
+        if query_args.get("type"):
+            type_filter = query_args.get("type", None)
+            if type_filter:
+                type_filter = str(type_filter).lower().strip()
 
         if query_args.get("campaign"):
             campaign_filter = query_args.get("campaign", None)
@@ -56,21 +62,38 @@ class GiftViewSet(viewsets.GenericViewSet):
             wallet__wallet_hash=wallet_hash,
             date_funded__isnull=False
         )
-        if isinstance(claimed, bool):
-            queryset = queryset.filter(date_claimed__isnull=not claimed)
+        
+        # Apply type filter
+        if type_filter == "unclaimed":
+            # Unclaimed gifts: date_claimed is null (if date_claimed is None, it can't be recovered)
+            queryset = queryset.filter(date_claimed__isnull=True)
+        elif type_filter == "claimed":
+            # Claimed gifts: date_claimed is not null (includes both regular claims and recovered gifts)
+            queryset = queryset.filter(date_claimed__isnull=False)
 
         if isinstance(campaign_filter, str):
             queryset = queryset.filter(campaign__id=campaign_filter)
 
         count = queryset.count()
         queryset = queryset.order_by('-date_created')
+        
+        # Calculate has_next before slicing
+        has_next = False
+        if limit:
+            has_next = (offset + limit) < count
+        elif offset:
+            has_next = offset < count
+        
+        # Apply pagination
         if offset:
             queryset = queryset[offset:]
         if limit:
             queryset = queryset[:limit]
 
         gifts = []
-        for gift in queryset:
+        # Convert queryset to list to ensure all fields are loaded
+        gift_list = list(queryset)
+        for gift in gift_list:
             campaign = gift.campaign
             campaign_id = None
             campaign_name = None
@@ -80,8 +103,10 @@ class GiftViewSet(viewsets.GenericViewSet):
             recovered = False
             claim = gift.claims.first()
             if claim:
-                if gift.wallet_id == claim.wallet_id:
+                if gift.wallet_id == claim.wallet_id and gift.date_claimed is not None:
                     recovered = True
+            # Get encrypted_gift_code, handling both None and empty string
+            encrypted_gift_code = gift.encrypted_gift_code if gift.encrypted_gift_code else ''
             gifts.append({
                 "gift_code_hash": str(gift.gift_code_hash),
                 "date_created": str(gift.date_created),
@@ -89,7 +114,8 @@ class GiftViewSet(viewsets.GenericViewSet):
                 "campaign_id": campaign_id,
                 "campaign_name": campaign_name,
                 "date_claimed": str(gift.date_claimed),
-                "recovered": recovered
+                "recovered": recovered,
+                "encrypted_gift_code": encrypted_gift_code
             })
 
         data = {
@@ -98,6 +124,7 @@ class GiftViewSet(viewsets.GenericViewSet):
                 "count": count,
                 "offset": offset,
                 "limit": limit,
+                "has_next": has_next
             }
         }
         return Response(data)
@@ -134,6 +161,7 @@ class GiftViewSet(viewsets.GenericViewSet):
             gift.address=data["address"]
             gift.amount=data["amount"]
             gift.encrypted_share = data.get('encrypted_share') or ''
+            gift.encrypted_gift_code = data.get('encrypted_gift_code') or ''
             gift.share=data["share"]
             gift.campaign=campaign
             gift.save()
@@ -149,6 +177,71 @@ class GiftViewSet(viewsets.GenericViewSet):
     )
     def claim(self, request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
+        transaction_hex = request.data.get("transaction_hex", "").strip()
+        
+        # If transaction_hex is provided, broadcast it synchronously before proceeding
+        # Only proceed with claim creation if broadcast succeeds
+        broadcast_success = True
+        broadcast_error = None
+        if transaction_hex:
+            # Check if node is available
+            if not NODE.BCH.get_latest_block():
+                return Response({
+                    "success": False,
+                    "message": "Blockchain node is not available",
+                }, status=503)
+            
+            # Test mempool acceptance
+            try:
+                test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
+                if not test_accept.get('allowed', False):
+                    reject_reason = test_accept.get('reject-reason', 'Unknown error')
+                    return Response({
+                        "success": False,
+                        "message": f"Transaction rejected by mempool: {reject_reason}",
+                    }, status=400)
+            except Exception as exc:
+                error_msg = str(exc)
+                LOGGER.exception(f"Error testing mempool acceptance: {exc}")
+                return Response({
+                    "success": False,
+                    "message": f"Error testing mempool acceptance: {error_msg}",
+                }, status=400)
+            
+            # Check if transaction already exists
+            txid = test_accept.get('txid')
+            if not Transaction.objects.filter(txid=txid).exists():
+                # Broadcast synchronously
+                try:
+                    broadcast_result = NODE.BCH.broadcast_transaction(transaction_hex)
+                    # broadcast_transaction returns txid on success, or raises exception on failure
+                    if not broadcast_result:
+                        return Response({
+                            "success": False,
+                            "message": "Transaction broadcast failed: No txid returned",
+                        }, status=400)
+                    broadcast_success = True
+                except Exception as exc:
+                    error_msg = str(exc)
+                    # Some nodes return "already have transaction" which is actually success
+                    if 'already have transaction' not in error_msg.lower():
+                        LOGGER.exception(f"Error broadcasting transaction: {exc}")
+                        return Response({
+                            "success": False,
+                            "message": f"Transaction broadcast failed: {error_msg}",
+                        }, status=400)
+                    broadcast_success = True
+            else:
+                # Transaction already exists, consider broadcast successful
+                broadcast_success = True
+        
+        # Only proceed with claim creation if broadcast succeeded (or no transaction_hex was provided)
+        if transaction_hex and not broadcast_success:
+            return Response({
+                "success": False,
+                "message": broadcast_error or "Transaction broadcast failed",
+            }, status=400)
+        
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
         gift_qs = Gift.objects.filter(gift_code_hash=gift_code_hash)
         if not gift_qs.exists():
@@ -156,11 +249,17 @@ class GiftViewSet(viewsets.GenericViewSet):
         gift = gift_qs.first()
         claim = Claim.objects.filter(gift=gift.id, wallet=wallet).first()
         if claim:
-            return Response({
+            # Build response - old clients get original format, new clients get enhanced format
+            response_data = {
                 "share": gift.share,
                 "encrypted_share": gift.encrypted_share,
                 "claim_id": str(claim.id)
-            })
+            }
+            if transaction_hex:
+                # New clients get success and encrypted_gift_code
+                response_data["success"] = True
+                response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
+            return Response(response_data)
 
         if gift.campaign:
             claims = gift.campaign.claims.filter(wallet__wallet_hash=wallet_hash, succeeded=True)
@@ -173,9 +272,16 @@ class GiftViewSet(viewsets.GenericViewSet):
                     campaign=gift.campaign
                 )
             else:
-                return Response({
-                    "message": "You have exceeded the limit of gifts to claim for this campaign",
-                }, status=400)
+                # Error response - only include success/message for new clients
+                if transaction_hex:
+                    return Response({
+                        "success": False,
+                        "message": "You have exceeded the limit of gifts to claim for this campaign",
+                    }, status=400)
+                else:
+                    return Response({
+                        "message": "You have exceeded the limit of gifts to claim for this campaign",
+                    }, status=400)
         else:
             claim = Claim.objects.create(
                 wallet=wallet,
@@ -184,15 +290,28 @@ class GiftViewSet(viewsets.GenericViewSet):
             )
 
         if claim:
-            return Response({
+            # Build response - old clients get original format, new clients get enhanced format
+            response_data = {
                 "share": gift.share,
                 "encrypted_share": gift.encrypted_share,
                 "claim_id": str(claim.id)
-            })
+            }
+            if transaction_hex:
+                # New clients get success and encrypted_gift_code
+                response_data["success"] = True
+                response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
+            return Response(response_data)
         else:
-            return Response({
-                "message": "This gift has been claimed",
-            }, status=400)
+            # Error response - only include success/message for new clients
+            if transaction_hex:
+                return Response({
+                    "success": False,
+                    "message": "This gift has been claimed",
+                }, status=400)
+            else:
+                return Response({
+                    "message": "This gift has been claimed",
+                }, status=400)
 
 
     @action(detail=True, methods=['post'])
@@ -222,7 +341,8 @@ class GiftViewSet(viewsets.GenericViewSet):
                 )
                 return Response({
                     "share": gift.share,
-                    "encrypted_share": gift.encrypted_share
+                    "encrypted_share": gift.encrypted_share,
+                    "encrypted_gift_code": gift.encrypted_gift_code or ''
                 })
         else:
             raise Exception("This gift does not exist.")
