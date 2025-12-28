@@ -11,10 +11,11 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from main.utils.subscription import new_subscription
 from main.utils.queries.node import Node
-from main.models import Transaction
+from main.models import Transaction, TransactionMetaAttribute
 from django.db.models import Sum, F, Q
 from datetime import datetime
 import logging
+import hashlib
 
 NODE = Node()
 LOGGER = logging.getLogger(__name__)
@@ -141,7 +142,7 @@ class GiftViewSet(viewsets.GenericViewSet):
                     recovered = True
             # Get encrypted_gift_code, handling both None and empty string
             encrypted_gift_code = gift.encrypted_gift_code if gift.encrypted_gift_code else ''
-            gifts.append({
+            gift_data = {
                 "gift_code_hash": str(gift.gift_code_hash),
                 "date_created": str(gift.date_created),
                 "amount": gift.amount,
@@ -150,7 +151,11 @@ class GiftViewSet(viewsets.GenericViewSet):
                 "date_claimed": str(gift.date_claimed),
                 "recovered": recovered,
                 "encrypted_gift_code": encrypted_gift_code
-            })
+            }
+            # Add created_by field for claimed gifts (SHA-256 hash of creator's wallet_hash)
+            if gift.date_claimed is not None:
+                gift_data["created_by"] = hashlib.sha256(gift.wallet.wallet_hash.encode()).hexdigest()
+            gifts.append(gift_data)
 
         data = {
             "gifts": gifts,
@@ -217,6 +222,7 @@ class GiftViewSet(viewsets.GenericViewSet):
         # Only proceed with claim creation if broadcast succeeds
         broadcast_success = True
         broadcast_error = None
+        txid = None
         if transaction_hex:
             # Check if node is available
             if not NODE.BCH.get_latest_block():
@@ -234,6 +240,8 @@ class GiftViewSet(viewsets.GenericViewSet):
                         "success": False,
                         "message": f"Transaction rejected by mempool: {reject_reason}",
                     }, status=400)
+                # Extract txid for later use in metadata
+                txid = test_accept.get('txid')
             except Exception as exc:
                 error_msg = str(exc)
                 LOGGER.exception(f"Error testing mempool acceptance: {exc}")
@@ -243,7 +251,6 @@ class GiftViewSet(viewsets.GenericViewSet):
                 }, status=400)
             
             # Check if transaction already exists
-            txid = test_accept.get('txid')
             if not Transaction.objects.filter(txid=txid).exists():
                 # Broadcast synchronously
                 try:
@@ -282,7 +289,20 @@ class GiftViewSet(viewsets.GenericViewSet):
             raise Exception("Gift does not exist!")
         gift = gift_qs.first()
         claim = Claim.objects.filter(gift=gift.id, wallet=wallet).first()
+        
         if claim:
+            # Create or update transaction metadata if txid is available
+            if txid:
+                TransactionMetaAttribute.objects.update_or_create(
+                    txid=txid,
+                    wallet_hash=wallet_hash,
+                    system_generated=True,
+                    key="gift_claim",
+                    defaults=dict(
+                        value="Gift"
+                    )
+                )
+            
             # Build response - old clients get original format, new clients get enhanced format
             response_data = {
                 "share": gift.share,
@@ -324,6 +344,17 @@ class GiftViewSet(viewsets.GenericViewSet):
             )
 
         if claim:
+            # Create transaction metadata for gift claim
+            if txid:
+                TransactionMetaAttribute.objects.update_or_create(
+                    txid=txid,
+                    wallet_hash=wallet_hash,
+                    system_generated=True,
+                    key="gift_claim",
+                    defaults=dict(
+                        value="Gift"
+                    )
+                )
             # Build response - old clients get original format, new clients get enhanced format
             response_data = {
                 "share": gift.share,
