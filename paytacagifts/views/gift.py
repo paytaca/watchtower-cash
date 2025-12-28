@@ -33,12 +33,14 @@ class GiftViewSet(viewsets.GenericViewSet):
             openapi.Parameter('limit', openapi.IN_QUERY, description="Limit for pagination.", type=openapi.TYPE_INTEGER),
             openapi.Parameter('type', openapi.IN_QUERY, description="Filter by gift type: 'unclaimed' or 'claimed'.", type=openapi.TYPE_STRING, enum=['unclaimed', 'claimed']),
             openapi.Parameter('campaign', openapi.IN_QUERY, description="Filter by campaign ID.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('created_by_wallet', openapi.IN_QUERY, description="Filter by creation: true (only created by wallet), false (only claimed by wallet), null (both). Only applies when type=claimed.", type=openapi.TYPE_BOOLEAN),
         ]
     )
     def list_gifts(self, request, wallet_hash=None):
         count = None
         type_filter = None
         campaign_filter = None
+        created_by_wallet = None
         offset = 0
         limit = 0
         query_args = request.query_params
@@ -58,18 +60,50 @@ class GiftViewSet(viewsets.GenericViewSet):
         if query_args.get("campaign"):
             campaign_filter = query_args.get("campaign", None)
 
-        queryset = Gift.objects.filter(
-            wallet__wallet_hash=wallet_hash,
-            date_funded__isnull=False
-        )
+        # Parse created_by_wallet parameter
+        if query_args.get("created_by_wallet") is not None:
+            created_by_wallet_str = str(query_args.get("created_by_wallet")).lower().strip()
+            if created_by_wallet_str == "true":
+                created_by_wallet = True
+            elif created_by_wallet_str == "false":
+                created_by_wallet = False
+            # else remains None
+
+        # Base queryset: always filter by date_funded
+        queryset = Gift.objects.filter(date_funded__isnull=False)
         
         # Apply type filter
         if type_filter == "unclaimed":
             # Unclaimed gifts: date_claimed is null (if date_claimed is None, it can't be recovered)
-            queryset = queryset.filter(date_claimed__isnull=True)
+            # Only show gifts created by the wallet (unchanged behavior)
+            queryset = queryset.filter(
+                wallet__wallet_hash=wallet_hash,
+                date_claimed__isnull=True
+            )
         elif type_filter == "claimed":
             # Claimed gifts: date_claimed is not null (includes both regular claims and recovered gifts)
             queryset = queryset.filter(date_claimed__isnull=False)
+            
+            # Apply wallet filter based on created_by_wallet parameter
+            if created_by_wallet is True:
+                # Only gifts created by wallet
+                queryset = queryset.filter(wallet__wallet_hash=wallet_hash)
+            elif created_by_wallet is False:
+                # Only gifts claimed by wallet (but not created by it)
+                queryset = queryset.filter(
+                    claims__wallet__wallet_hash=wallet_hash
+                ).exclude(wallet__wallet_hash=wallet_hash)
+            else:
+                # Default (null): gifts created by wallet OR claimed by wallet
+                queryset = queryset.filter(
+                    Q(wallet__wallet_hash=wallet_hash) |
+                    Q(claims__wallet__wallet_hash=wallet_hash)
+                )
+            # Apply distinct() to avoid duplicates when a gift matches both conditions
+            queryset = queryset.distinct()
+        else:
+            # No type filter specified, default to gifts created by wallet
+            queryset = queryset.filter(wallet__wallet_hash=wallet_hash)
 
         if isinstance(campaign_filter, str):
             queryset = queryset.filter(campaign__id=campaign_filter)
