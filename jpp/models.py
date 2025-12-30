@@ -101,6 +101,7 @@ class InvoiceOutput(models.Model):
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="outputs")
     amount = models.BigIntegerField()
     address = models.CharField(max_length=70)
+    description = models.TextField(null=True, blank=True)
 
     category = models.CharField(max_length=70, null=True, blank=True)
     token_amount = models.BigIntegerField(null=True, blank=True)

@@ -208,6 +208,7 @@ class GiftViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=['post'])
     @swagger_auto_schema(
+        operation_id="gift_claim",
         operation_description="Claim a Gift record.",
         request_body=ClaimGiftPayloadSerializer,
         responses={

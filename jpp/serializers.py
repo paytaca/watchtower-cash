@@ -74,6 +74,7 @@ class OutputTokenSerializer(serializers.Serializer):
 class OutputSerializer(serializers.Serializer):
     amount = serializers.IntegerField()
     address = serializers.CharField()
+    description = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     token = OutputTokenSerializer(required=False)
 
     class Meta:
@@ -217,12 +218,36 @@ class InvoiceSerializer(serializers.ModelSerializer):
             return obj.get_absolute_uri(self.context["request"])
         return None
 
+    def to_representation(self, instance):
+        """Override to properly serialize outputs from InvoiceOutput instances"""
+        representation = super().to_representation(instance)
+        
+        # Serialize outputs from InvoiceOutput model instances
+        outputs_data = []
+        for output in instance.outputs.all():
+            output_data = {
+                "amount": output.amount,
+                "address": output.address,
+            }
+            if output.description:
+                output_data["description"] = output.description
+            if output.token():
+                output_data["token"] = output.token()
+            outputs_data.append(output_data)
+        
+        representation["outputs"] = outputs_data
+        return representation
+
     def validate(self, data):
         if "outputs" not in data or len(data["outputs"]) <= 0:
             raise serializers.ValidationError("must have at least 1 output")
         return data
 
     def flatten_output_data(self, output_data):
+        """
+        Flatten nested token data structure for database storage.
+        Preserves all other fields including description.
+        """
         if "token" not in output_data: return output_data
 
         token_data = output_data.pop("token")
@@ -241,8 +266,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
         instance = super().create(validated_data)
 
         for output_data in output_data_list:
+            # flatten_output_data preserves description and other non-token fields
             output_data = self.flatten_output_data(output_data)
             output_data["invoice"] = instance
+            # description field (if present) will be included in output_data and saved
             InvoiceOutput.objects.create(**output_data)
 
         send_invoice_push_notification(instance, self.context["request"])
