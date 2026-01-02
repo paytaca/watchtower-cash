@@ -2294,8 +2294,8 @@ def parse_tx_wallet_histories(txid, txn_details=None, proceed_with_zero_amount=F
     mark_transaction_inputs_as_spent(bch_tx)
 
     # parse inputs and outputs to desired structure
-    inputs = [parse_utxo_to_tuple(i) for i in bch_tx['inputs']]
-    outputs = [parse_utxo_to_tuple(i) for i in bch_tx['outputs']]
+    inputs = [parse_utxo_to_tuple(i) for i in bch_tx['inputs'] if i.get('address')]
+    outputs = [parse_utxo_to_tuple(i) for i in bch_tx['outputs'] if i.get('address')]
 
     # get bch wallets with addresses that are in inputs and outputs
     input_addresses = [i[0] for i in inputs]
