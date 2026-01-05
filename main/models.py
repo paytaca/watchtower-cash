@@ -1148,3 +1148,37 @@ class AssetSetting (models.Model):
     custom_list = JSONField(default=dict)
     unlisted_list = JSONField(default=dict)
     favorites = JSONField(default=list)
+
+class AddressBook(models.Model):
+    name = models.CharField(max_length=100)
+    is_favorite = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.CASCADE,
+        related_name='wallet_address_books'
+    )
+
+    def __str__(self):
+        return f"({self.pk}) {self.name}"
+
+class AddressBookAddress(models.Model):
+    class AddressType(models.TextChoices):
+        BCH = 'bch', 'BCH'
+        CT = 'ct', 'CashToken'
+
+    address = models.CharField(max_length=100)
+    address_type = models.CharField(max_length=10, choices=AddressType.choices, default=AddressType.BCH)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    address_book = models.ForeignKey(
+        AddressBook,
+        on_delete=models.CASCADE,
+        related_name='address_book_addresses'
+    )
+
+    def __str__(self):
+        return self.address

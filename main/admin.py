@@ -1072,3 +1072,39 @@ class AssetSettingAdmin (admin.ModelAdmin):
         'wallet_hash'        
     ]
 admin.site.register(AssetSetting, AssetSettingAdmin)
+
+@admin.register(AddressBook)
+class AddressBookAdmin(admin.ModelAdmin):
+    list_display = [
+        'name',
+        'is_favorite',
+        'wallet',
+        'created_at',
+        'updated_at'
+    ]
+
+    search_fields = [
+        'name',
+        'wallet__wallet_hash'
+    ]
+
+    list_filter = [
+        'is_favorite'
+    ]
+
+@admin.register(AddressBookAddress)
+class AddressBookAddressAdmin(admin.ModelAdmin):
+    list_display = [
+        'address',
+        'address_type'
+    ]
+
+    search_fields = [
+        'address',
+        'address_book__name'
+    ]
+
+    list_filter = [
+        'address_book__name',
+        'address_type'
+    ]
