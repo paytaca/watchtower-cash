@@ -2,6 +2,8 @@
 
 ## Overview
 This document contains notes for understanding design and implementation of features in the platform.
+ - [Whitepaper](https://github.com/paytaca/stablehedge-paper)
+ - [Bitcoincash Research Discussion](https://bitcoincashresearch.org/t/stablehedge/1504)
 
 ### Aggregated Short Payout Data
 The motivation is to provide minimal data to frontend(app) to calculate the estimated payout value of all short positions of a treasury contract at a given price.
