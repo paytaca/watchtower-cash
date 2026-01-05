@@ -971,3 +971,42 @@ def get_total_short_value(treasury_contract_address:str):
         satoshis=total_sats,
         unit_value=total_unit_value,
     )
+
+def get_aggregated_short_payout_data(treasury_contract_address:str):
+    """
+        See "Aggregated Short Payout Data" in docs/STABLEHEDGE.md for explanation
+    """
+    ongoing_short_positions = get_ongoing_short_positions(treasury_contract_address)
+    short_position_values = ongoing_short_positions \
+        .annotate(short_funding_sats = F("metadata__total_short_funding_sats")) \
+        .values(
+            "is_simple_hedge",
+            "satoshis",
+            "start_price",
+            "high_liquidation_multiplier",
+        )
+
+    total_nominal_units = decimal.Decimal(0)
+    total_nominal_units_at_high_liquidation = decimal.Decimal(0)
+
+    for data in short_position_values:
+        is_simple_hedge = data["is_simple_hedge"]
+        satoshis = decimal.Decimal(data["satoshis"])
+        start_price = decimal.Decimal(data["start_price"])
+        high_liquidation_multiplier = decimal.Decimal(data["high_liquidation_multiplier"])
+
+        nominal_units = satoshis * start_price
+
+        if is_simple_hedge:
+            nominal_units_at_high_liquidation = 0
+        else:
+            # shortcut for => satoshis * (starting_price / high_liquidation_price)
+            nominal_units_at_high_liquidation = satoshis * 1 / high_liquidation_multiplier
+
+        total_nominal_units += nominal_units
+        total_nominal_units_at_high_liquidation += nominal_units_at_high_liquidation
+
+    return dict(
+        total_nominal_units_x_sats_per_bch = total_nominal_units,
+        total_sats_for_nominal_units_at_high_liquidation = total_nominal_units_at_high_liquidation,
+    )
