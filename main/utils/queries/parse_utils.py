@@ -12,6 +12,9 @@ def extract_tx_utxos(bch_tx:dict):
 
     outputs = []
     for out in bch_tx['outputs']:
+        if not out.get('address'):
+            continue
+
         outputs.append({
             'txid': bch_tx['txid'],
             'index': out['index'],

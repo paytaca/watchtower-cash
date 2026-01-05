@@ -22,6 +22,7 @@ from stablehedge.functions.anyhedge import (
     update_short_proposal_funding_utxo_tx_auth_key,
     complete_short_proposal,
     get_total_short_value,
+    get_aggregated_short_payout_data,
 )
 from stablehedge.functions.transaction import (
     get_redemption_contract_tx_meta,
@@ -289,10 +290,12 @@ class TreasuryContractViewSet(
     def balance(self, request, *args, **kwargs):
         instance = self.get_object()
         short_values = get_total_short_value(instance.address)
+        short_payout_data = get_aggregated_short_payout_data(instance.address)
         balance_data = get_spendable_sats(instance.address)
         result = dict(
             **balance_data,
             in_short=short_values,
+            short_payout_data=short_payout_data,
         )
         return Response(result)
 
