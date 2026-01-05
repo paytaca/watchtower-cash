@@ -973,6 +973,9 @@ def get_total_short_value(treasury_contract_address:str):
     )
 
 def get_aggregated_short_payout_data(treasury_contract_address:str):
+    """
+        See "Aggregated Short Payout Data" in docs/STABLEHEDGE.md for explanation
+    """
     ongoing_short_positions = get_ongoing_short_positions(treasury_contract_address)
     short_position_values = ongoing_short_positions \
         .annotate(short_funding_sats = F("metadata__total_short_funding_sats")) \
