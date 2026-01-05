@@ -1076,6 +1076,7 @@ admin.site.register(AssetSetting, AssetSettingAdmin)
 @admin.register(AddressBook)
 class AddressBookAdmin(admin.ModelAdmin):
     list_display = [
+        'id',
         'name',
         'is_favorite',
         'wallet',
@@ -1096,7 +1097,8 @@ class AddressBookAdmin(admin.ModelAdmin):
 class AddressBookAddressAdmin(admin.ModelAdmin):
     list_display = [
         'address',
-        'address_type'
+        'address_type',
+        'address_book',
     ]
 
     search_fields = [
@@ -1105,6 +1107,5 @@ class AddressBookAddressAdmin(admin.ModelAdmin):
     ]
 
     list_filter = [
-        'address_book__name',
         'address_type'
     ]
