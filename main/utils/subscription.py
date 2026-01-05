@@ -89,10 +89,11 @@ def new_subscription(**kwargs):
         if isinstance(address, str):
             address_list.append([address.strip(), wallet_index])
         elif isinstance(addresses, dict):
-            address_list.append([addresses['receiving'], '0/' + str(address_index)])
-            if 'change' in addresses.keys():
+            if 'receiving' in addresses and bool(addresses.get('receiving')):
+                address_list.append([addresses['receiving'], '0/' + str(address_index)])
+            if 'change' in addresses and bool(addresses.get('change')):
                 address_list.append([addresses['change'], '1/' + str(address_index)])
-
+            
         for address, path in address_list:
             if (
                 is_bch_address(address) or 
