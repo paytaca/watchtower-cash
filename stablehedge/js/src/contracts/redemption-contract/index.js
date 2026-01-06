@@ -529,6 +529,7 @@ export class RedemptionContract {
    * @param {import("cashscript").Output} [opts.feeFunderOutput]
    * @param {import("cashscript").Utxo[]} opts.inputs
    * @param {Number} [opts.satoshis] falsey value would mean to consolidate all inputs into 1 utxo
+   * @param {Boolean} [opts.sendToTreasuryContract] If true, 'satoshis' in opts is meant for treasury contract, otherwise for redemption contract
    */
   async consolidate(opts) {
     const contract = this.getContract()
@@ -563,8 +564,13 @@ export class RedemptionContract {
     const tokenData = cashtokenInputs?.[0]?.token
     const recipient = tokenData ? contract.tokenAddress : contract.address
     if (opts.satoshis) {
-      builder.addOutput({ to: recipient, amount: BigInt(opts.satoshis), token: tokenData })
-      builder.addOutput({ to: contract.address, amount: totalSats - BigInt(opts.satoshis) })
+      if (opts?.sendToTreasuryContract) {
+        builder.addOutput({ to: recipient, amount: totalSats - BigInt(opts.satoshis), token: tokenData })
+        builder.addOutput({ to: this.params.treasuryContractAddress, amount: BigInt(opts.satoshis) })
+      } else {
+        builder.addOutput({ to: recipient, amount: BigInt(opts.satoshis), token: tokenData })
+        builder.addOutput({ to: contract.address, amount: totalSats - BigInt(opts.satoshis) })
+      }
     } else {
       builder.addOutput({ to: recipient, amount: totalSats, token: tokenData })
     }
