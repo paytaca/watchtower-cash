@@ -201,6 +201,7 @@ def consolidate_redemption_contract(
     manual_utxos:list=[],
     append_manual_utxos:bool=False,
     funding_utxo_data:dict=None,
+    sats_to_treasury_contract:int=None,
 ):
     redemption_contract = models.RedemptionContract.objects \
         .filter(address=redemption_contract_address) \
@@ -258,13 +259,17 @@ def consolidate_redemption_contract(
         funding_utxo_data["wif"] = fee_funder_wif
 
     # create transaction
-    result = ScriptFunctions.consolidateRedemptionContract(dict(
+    opts = dict(
         contractOpts=redemption_contract.contract_opts,
         locktime=locktime,
         feeFunderUtxo=funding_utxo_data,
         inputs=cashscript_utxos,
-        # satoshis=satoshis,
-    ))
+    )
+    if sats_to_treasury_contract is not None and sats_to_treasury_contract:
+        opts["satoshis"] = sats_to_treasury_contract
+        opts["sendToTreasuryContract"] = True
+
+    result = ScriptFunctions.consolidateRedemptionContract(opts)
 
     if "success" not in result or not result["success"]:
         raise StablehedgeException(result.get("error", "Unknown error"))

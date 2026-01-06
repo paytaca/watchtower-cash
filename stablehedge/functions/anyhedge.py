@@ -1007,6 +1007,6 @@ def get_aggregated_short_payout_data(treasury_contract_address:str):
         total_nominal_units_at_high_liquidation += nominal_units_at_high_liquidation
 
     return dict(
-        total_nominal_units_x_sats_per_bch = total_nominal_units,
-        total_sats_for_nominal_units_at_high_liquidation = total_nominal_units_at_high_liquidation,
+        total_nominal_units_x_sats_per_bch = round(total_nominal_units),
+        total_sats_for_nominal_units_at_high_liquidation = round(total_nominal_units_at_high_liquidation),
     )

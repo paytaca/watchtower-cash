@@ -1,5 +1,6 @@
 import time
 import json
+import decimal
 from celery import shared_task
 from django.conf import settings
 from bitcash import Key
@@ -26,7 +27,7 @@ from stablehedge.functions.treasury_contract import (
     get_wif_for_short_proposal,
     build_or_find_funding_utxo,
 )
-from stablehedge.functions.market import transfer_treasury_funds_to_redemption_contract
+from stablehedge.functions.market import transfer_treasury_funds_to_redemption_contract, transfer_redemption_funds_to_treasury_contract
 from stablehedge.utils.blockchain import broadcast_transaction
 from stablehedge.utils.wallet import wif_to_pubkey
 from stablehedge.utils.transaction import extract_unlocking_script
@@ -369,20 +370,34 @@ def rebalance_funds(treasury_contract_address:str):
         total_tvl = tvl_data["total"]
         redeemable = tvl_data["redeemable"]
 
-        required_sats = (total_tvl / 2) - redeemable
-        transferrable = tvl_data["satoshis"]
+        min_redeemable = round(total_tvl * decimal.Decimal(0.45))
+        max_redeemable = round(total_tvl * decimal.Decimal(0.55))
+        if redeemable > min_redeemable and redeemable < max_redeemable:
+            return dict(success=True, message="TVL satoshis is within ideal ratio of 45-55% redeemable")
 
-        if required_sats <= 0:
-            return dict(success=True, message="No rebalance required")
+        required_redeemable_sats = (total_tvl / 2) - redeemable
+        if required_redeemable_sats and abs(required_redeemable_sats) < 10_000:
+            return dict(success=True, message="Rebalance amount too small", amount=required_redeemable_sats)
 
-        satoshis_to_transfer = None
-        if transferrable > required_sats:
-            satoshis_to_transfer = int(required_sats)
+        # required_redeemable_sats > 0 : transfer from treasury to redemption contract
+        # required_redeemable_sats < 0 : transfer from redemption to treasury contract
+        if required_redeemable_sats > 0:
+            satoshis_to_transfer = None
+            transferrable = tvl_data["satoshis"]
+            if transferrable > required_redeemable_sats:
+                satoshis_to_transfer = int(required_redeemable_sats)
 
-        LOGGER.debug(f"REBALANCE | {treasury_contract_address} | TRANSFERRING {satoshis_to_transfer} satoshis")
-        result = transfer_treasury_funds_to_redemption_contract(
-            treasury_contract_address, satoshis=satoshis_to_transfer
-        )
+            LOGGER.debug(f"REBALANCE | {treasury_contract_address} | TRANSFERRING TREASURY => REDEMPTION | {satoshis_to_transfer} satoshis")
+            result = transfer_treasury_funds_to_redemption_contract(
+                treasury_contract_address, satoshis=satoshis_to_transfer
+            )
+        elif required_redeemable_sats < 0:
+            satoshis_to_transfer = abs(required_redeemable_sats)
+            satoshis_to_transfer__safe = max(redeemable - 1000, satoshis_to_transfer)
+            LOGGER.debug(f"REBALANCE | {treasury_contract_address} | TRANSFERRING REDEMPTION => TREASURY | {satoshis_to_transfer__safe} satoshis")
+            result = transfer_redemption_funds_to_treasury_contract(
+                treasury_contract_address, satoshis=int(satoshis_to_transfer__safe)
+            )
 
         LOGGER.info(f"REBALANCE TX RESULT | {json.dumps(result, indent=2)}")
 

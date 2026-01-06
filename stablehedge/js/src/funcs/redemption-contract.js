@@ -183,6 +183,7 @@ export async function unlockRedemptionContractWithNft(opts) {
  * @param {import("cashscript").Output} [opts.feeFunderOutput]
  * @param {import("cashscript").Utxo[]} opts.inputs
  * @param {Number} opts.satoshis
+ * @param {Boolean} [opts.sendToTreasuryContract]
  */
 export async function consolidateRedemptionContract(opts) {
   const redemptionContract = new RedemptionContract(opts?.contractOpts)
@@ -202,6 +203,7 @@ export async function consolidateRedemptionContract(opts) {
     inputs,
     satoshis: opts?.satoshis,
     locktime: opts?.locktime,
+    sendToTreasuryContract: opts?.sendToTreasuryContract,
   })
 
   if (typeof transaction === 'string') return { success: false, error: transaction }
