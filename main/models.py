@@ -951,7 +951,7 @@ class TransactionMetaAttribute(PostgresModel):
     wallet_hash = models.CharField(max_length=70, default="", blank=True, db_index=True)
 
     system_generated = models.BooleanField(default=False)
-    key = models.CharField(max_length=50, db_index=True)
+    key = models.CharField(max_length=500, db_index=True)
     value = models.TextField()
 
     class Meta:
