@@ -227,19 +227,64 @@ class CashNftsViewSet(
     def groups(self, request, *args, **kwargs):
         """
         Return a paginated list of unique NFT token categories.
-        Each category is represented once (by its minting capability NFT).
+        Each category is represented once (by its minting capability NFT if available, otherwise any NFT from the category).
+        Categories with BCMR metadata (with_bcmr_metadata=True) are prioritized and appear first.
         """
         wallet_hash = request.query_params.get("wallet_hash", None)
-        # filter_group() ensures only unique categories (one per category)
-        queryset = CashNonFungibleToken.objects.filter_group()
+        
         if wallet_hash:
-            owned_nfts_subq = CashNonFungibleToken.objects \
+            # Get all unique categories owned by this wallet
+            owned_categories = CashNonFungibleToken.objects \
                 .annotate_owner_wallet_hash() \
                 .filter(owner_wallet_hash=wallet_hash) \
-                .filter(category=OuterRef("category"))
+                .values_list("category", flat=True) \
+                .distinct()
+            
+            # For each category, prefer minting NFT (especially if wallet owns it), 
+            # but fallback to any NFT owned by wallet if minting doesn't exist
+            nft_ids = []
+            for category in owned_categories:
+                # First try to find minting NFT owned by wallet
+                minting_nft_owned = CashNonFungibleToken.objects.filter(
+                    category=category,
+                    capability=CashNonFungibleToken.Capability.MINTING
+                ).annotate_owner_wallet_hash() \
+                 .filter(owner_wallet_hash=wallet_hash) \
+                 .order_by('-id').first()
+                
+                if minting_nft_owned:
+                    nft_ids.append(minting_nft_owned.id)
+                else:
+                    # Try to find any minting NFT for this category (for representation)
+                    minting_nft = CashNonFungibleToken.objects.filter(
+                        category=category,
+                        capability=CashNonFungibleToken.Capability.MINTING
+                    ).order_by('-id').first()
+                    
+                    if minting_nft:
+                        nft_ids.append(minting_nft.id)
+                    else:
+                        # Fallback to any NFT from this category owned by wallet (latest one)
+                        any_nft = CashNonFungibleToken.objects.filter(
+                            category=category
+                        ).annotate_owner_wallet_hash() \
+                         .filter(owner_wallet_hash=wallet_hash) \
+                         .order_by('-id').first()
+                        if any_nft:
+                            nft_ids.append(any_nft.id)
+            
+            # If we found any NFTs, filter by their IDs, otherwise return empty queryset
+            if nft_ids:
+                queryset = CashNonFungibleToken.objects.filter(id__in=nft_ids)
+            else:
+                queryset = CashNonFungibleToken.objects.none()
+        else:
+            # No wallet filter - use existing filter_group logic (only minting NFTs)
+            queryset = CashNonFungibleToken.objects.filter_group()
 
-            queryset = queryset \
-                .filter(Exists(owned_nfts_subq))
+        # Order by metadata presence: categories with BCMR metadata (with_bcmr_metadata=True) first,
+        # then categories without BCMR metadata (with_bcmr_metadata=False)
+        queryset = queryset.order_by('-with_bcmr_metadata', '-id')
 
         page = self.paginate_queryset(queryset)
         if page is not None:

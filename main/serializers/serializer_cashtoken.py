@@ -242,6 +242,7 @@ class CashNonFungibleTokenGroupsSerializer(serializers.ModelSerializer):
         """
         Fetch metadata fresh from BCMR indexer API.
         Returns the entire JSON response from BCMR as metadata, or empty dict if fetch fails.
+        Updates with_bcmr_metadata field when metadata is successfully fetched.
         """
         category = obj.category
         bcmr_url = f'{settings.PAYTACA_BCMR_URL}/tokens/{category}/'
@@ -255,6 +256,21 @@ class CashNonFungibleTokenGroupsSerializer(serializers.ModelSerializer):
                 # Check for errors in response
                 if 'error' in data:
                     return {}
+                
+                # Metadata successfully fetched - update with_bcmr_metadata for all NFTs in this category
+                # Check if this category already has with_bcmr_metadata set to avoid redundant updates
+                has_metadata = CashNonFungibleToken.objects.filter(
+                    category=category,
+                    with_bcmr_metadata=True
+                ).exists()
+                
+                if not has_metadata:
+                    # Update all NFTs in this category to mark they have BCMR metadata
+                    CashNonFungibleToken.objects.filter(
+                        category=category
+                    ).update(with_bcmr_metadata=True)
+                    # Update the current object instance so subsequent calls use the updated value
+                    obj.with_bcmr_metadata = True
                 
                 # Return the entire BCMR response as metadata
                 return data
