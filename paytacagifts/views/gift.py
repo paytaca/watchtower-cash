@@ -218,10 +218,89 @@ class GiftViewSet(viewsets.GenericViewSet):
         wallet_hash = request.data["wallet_hash"]
         transaction_hex = request.data.get("transaction_hex", "").strip()
         
-        # If transaction_hex is provided, broadcast it synchronously before proceeding
-        # Only proceed with claim creation if broadcast succeeds
-        broadcast_success = True
-        broadcast_error = None
+        # Get wallet and gift first to validate and check limits before broadcasting
+        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
+        gift_qs = Gift.objects.filter(gift_code_hash=gift_code_hash)
+        if not gift_qs.exists():
+            raise Exception("Gift does not exist!")
+        gift = gift_qs.first()
+        claim = Claim.objects.filter(gift=gift.id, wallet=wallet).first()
+        
+        # If claim already exists, return early (but still handle transaction_hex if provided)
+        if claim:
+            txid = None
+            if transaction_hex:
+                # Extract txid for metadata even if claim exists
+                try:
+                    test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
+                    if test_accept.get('allowed', False):
+                        txid = test_accept.get('txid')
+                except Exception:
+                    pass  # Ignore errors if claim already exists
+            
+            # Create or update transaction metadata if txid is available
+            if txid:
+                TransactionMetaAttribute.objects.update_or_create(
+                    txid=txid,
+                    wallet_hash=wallet_hash,
+                    system_generated=True,
+                    key="gift_claim",
+                    defaults=dict(
+                        value="Gift"
+                    )
+                )
+            
+            # Build response - old clients get original format, new clients get enhanced format
+            response_data = {
+                "share": gift.share,
+                "encrypted_share": gift.encrypted_share,
+                "claim_id": str(claim.id)
+            }
+            if transaction_hex:
+                # New clients get success and encrypted_gift_code
+                response_data["success"] = True
+                response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
+            return Response(response_data)
+
+        # Check campaign limits BEFORE broadcasting transaction
+        if gift.campaign:
+            # Check existing succeeded claims for this wallet in this campaign
+            claims = gift.campaign.claims.filter(wallet__wallet_hash=wallet_hash, succeeded=True)
+            claims_sum = claims.aggregate(Sum('amount'))['amount__sum'] or 0
+            # Check if adding this gift amount would exceed the limit
+            if claims_sum + gift.amount > gift.campaign.limit_per_wallet:
+                # Create informative error message
+                limit = gift.campaign.limit_per_wallet
+                current_total = claims_sum
+                attempted_amount = gift.amount
+                remaining = max(0, limit - current_total)
+                
+                if current_total >= limit:
+                    error_msg = (
+                        f"You have reached the campaign limit of {limit} BCH per wallet. "
+                        f"Your current total: {current_total} BCH. "
+                        f"Cannot claim additional {attempted_amount} BCH."
+                    )
+                else:
+                    error_msg = (
+                        f"This claim would exceed the campaign limit of {limit} BCH per wallet. "
+                        f"Your current total: {current_total} BCH. "
+                        f"Attempted claim: {attempted_amount} BCH. "
+                        f"Remaining available: {remaining} BCH."
+                    )
+                
+                # Error response - only include success/message for new clients
+                if transaction_hex:
+                    return Response({
+                        "success": False,
+                        "message": error_msg,
+                    }, status=400)
+                else:
+                    return Response({
+                        "message": error_msg,
+                    }, status=400)
+        
+        # Now that limit check passed, handle transaction broadcasting if provided
         txid = None
         if transaction_hex:
             # Check if node is available
@@ -261,7 +340,6 @@ class GiftViewSet(viewsets.GenericViewSet):
                             "success": False,
                             "message": "Transaction broadcast failed: No txid returned",
                         }, status=400)
-                    broadcast_success = True
                 except Exception as exc:
                     error_msg = str(exc)
                     # Some nodes return "already have transaction" which is actually success
@@ -271,71 +349,15 @@ class GiftViewSet(viewsets.GenericViewSet):
                             "success": False,
                             "message": f"Transaction broadcast failed: {error_msg}",
                         }, status=400)
-                    broadcast_success = True
-            else:
-                # Transaction already exists, consider broadcast successful
-                broadcast_success = True
         
-        # Only proceed with claim creation if broadcast succeeded (or no transaction_hex was provided)
-        if transaction_hex and not broadcast_success:
-            return Response({
-                "success": False,
-                "message": broadcast_error or "Transaction broadcast failed",
-            }, status=400)
-        
-        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
-        gift_qs = Gift.objects.filter(gift_code_hash=gift_code_hash)
-        if not gift_qs.exists():
-            raise Exception("Gift does not exist!")
-        gift = gift_qs.first()
-        claim = Claim.objects.filter(gift=gift.id, wallet=wallet).first()
-        
-        if claim:
-            # Create or update transaction metadata if txid is available
-            if txid:
-                TransactionMetaAttribute.objects.update_or_create(
-                    txid=txid,
-                    wallet_hash=wallet_hash,
-                    system_generated=True,
-                    key="gift_claim",
-                    defaults=dict(
-                        value="Gift"
-                    )
-                )
-            
-            # Build response - old clients get original format, new clients get enhanced format
-            response_data = {
-                "share": gift.share,
-                "encrypted_share": gift.encrypted_share,
-                "claim_id": str(claim.id)
-            }
-            if transaction_hex:
-                # New clients get success and encrypted_gift_code
-                response_data["success"] = True
-                response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
-            return Response(response_data)
-
+        # Create the claim record (limit check already passed)
         if gift.campaign:
-            claims = gift.campaign.claims.filter(wallet__wallet_hash=wallet_hash, succeeded=True)
-            claims_sum = claims.aggregate(Sum('amount'))['amount__sum'] or 0
-            if claims_sum < gift.campaign.limit_per_wallet:
-                claim = Claim.objects.create(
-                    wallet=wallet,
-                    amount=gift.amount,
-                    gift=gift,
-                    campaign=gift.campaign
-                )
-            else:
-                # Error response - only include success/message for new clients
-                if transaction_hex:
-                    return Response({
-                        "success": False,
-                        "message": "You have exceeded the limit of gifts to claim for this campaign",
-                    }, status=400)
-                else:
-                    return Response({
-                        "message": "You have exceeded the limit of gifts to claim for this campaign",
-                    }, status=400)
+            claim = Claim.objects.create(
+                wallet=wallet,
+                amount=gift.amount,
+                gift=gift,
+                campaign=gift.campaign
+            )
         else:
             claim = Claim.objects.create(
                 wallet=wallet,
