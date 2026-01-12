@@ -112,26 +112,34 @@
                     <hr style="margin: 15px 0; border: 1px solid #ccc;">
                     
                     <div class="form-row" style="margin-top: 15px;">
-                        <strong style="font-size: 1.2em;">{{ assessment.is_gain|yesno:"GAIN,LOSS" }}:</strong> 
-                        <span style="font-size: 1.3em; font-weight: bold; color: {% if assessment.is_gain %}#2e7d32{% else %}#c62828{% endif %};">
+                        <strong style="font-size: 1.2em;">Total Gain/Loss:</strong> 
+                        <span style="font-size: 1.3em; font-weight: bold; color: {% if assessment.gain_loss >= 0 %}#2e7d32{% else %}#c62828{% endif %};">
                             {{ assessment.gain_loss|floatformat:2 }} {{ assessment.currency }}
                             ({{ assessment.percentage|floatformat:2 }}%)
                         </span>
+                        <div class="help" style="margin-top: 5px; color: #666;">
+                            Total gain/loss based on total output amount vs total input amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}).
+                        </div>
                     </div>
                     
-                    {% if assessment.is_gain and assessment.gain_portion_of_cashout is not None %}
-                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #e8f5e9; border-left: 4px solid #4CAF50;">
-                        <strong>Gain Portion of Cashout:</strong> 
-                        <span style="font-size: 1.1em; font-weight: bold; color: #2e7d32;">
-                            {{ assessment.gain_portion_of_cashout|floatformat:2 }} {{ assessment.currency }}
-                            {% if assessment.gain_portion_percentage is not None %}
-                            ({{ assessment.gain_portion_percentage|floatformat:2 }}% of cashout)
-                            {% endif %}
+                    <div class="form-row" style="margin-top: 15px;">
+                        <strong style="font-size: 1.2em;">Cashout {{ assessment.is_gain|yesno:"GAIN,LOSS" }}:</strong> 
+                        <span style="font-size: 1.3em; font-weight: bold; color: {% if assessment.is_gain %}#2e7d32{% else %}#c62828{% endif %};">
+                            {{ assessment.cashout_gain_loss|floatformat:2 }} {{ assessment.currency }}
                         </span>
                         <div class="help" style="margin-top: 5px; color: #666;">
-                            This is how much of the cashout amount ({{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}) is proportionally due to gain. 
-                            Calculated as: (Cashout Amount / Total Output Amount) × Total Gain.
-                            This proportionally allocates the gain to the cashout when there are multiple outputs (e.g., change).
+                            Cashout's portion of the gain/loss. Calculated as: (Cashout Amount / Total Output Amount) × Total Gain/Loss.
+                        </div>
+                    </div>
+                    
+                    {% if assessment.is_gain and assessment.charge_on_gain is not None %}
+                    <div class="form-row" style="margin-top: 15px; padding: 10px; background-color: #e8f5e9; border-left: 4px solid #4CAF50;">
+                        <strong>Charge on Gain (10%):</strong> 
+                        <span style="font-size: 1.1em; font-weight: bold; color: #2e7d32;">
+                            {{ assessment.charge_on_gain|floatformat:2 }} {{ assessment.currency }}
+                        </span>
+                        <div class="help" style="margin-top: 5px; color: #666;">
+                            10% charge on the cashout's gain amount ({{ assessment.cashout_gain_loss|floatformat:2 }} {{ assessment.currency }}).
                         </div>
                     </div>
                     {% endif %}
@@ -143,7 +151,7 @@
                             {{ assessment.loss_percentage_over_inputs|floatformat:2 }}%
                         </span>
                         <div class="help" style="margin-top: 5px; color: #666;">
-                            This represents what percentage of the original amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}) was lost.
+                            This represents what percentage of the original amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }}) was lost in the cashout portion.
                         </div>
                         
                         <div class="form-row" style="margin-top: 10px;">
@@ -152,7 +160,7 @@
                                 {{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}
                             </span>
                             <div class="help" style="margin-top: 5px; color: #666;">
-                                Amount to pay back to merchant to guarantee they receive what their customers paid.
+                                Amount to pay back to merchant to cover the cashout's portion of the loss. This is the cashout's proportional share of the total loss.
                             </div>
                         </div>
                         
@@ -163,7 +171,7 @@
                                 {{ assessment.total_after_reimbursement|floatformat:2 }} {{ assessment.currency }}
                             </span>
                             <div class="help" style="margin-top: 5px; color: #666;">
-                                Cashout ({{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}) + Reimbursement ({{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}) = Total Input Amount ({{ assessment.total_input_amount|floatformat:2 }} {{ assessment.currency }})
+                                Cashout ({{ assessment.cashout_amount|floatformat:2 }} {{ assessment.currency }}) + Reimbursement ({{ assessment.reimbursement_amount|floatformat:2 }} {{ assessment.currency }}) = {{ assessment.total_after_reimbursement|floatformat:2 }} {{ assessment.currency }}
                             </div>
                         </div>
                         {% endif %}

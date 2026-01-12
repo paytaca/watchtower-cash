@@ -263,61 +263,61 @@ class TransactionAdmin(DynamicRawIDMixin, admin.ModelAdmin):
                         total_output_amount = Decimal(str(tx_data.get('total_output_amount', 0) or 0))
                         
                         # Calculate gain/loss only if we have valid input and output amounts
-                        if total_input_amount > 0 and cashout_amount is not None:
-                            gain_loss = net_received - total_input_amount
-                            percentage = (gain_loss / total_input_amount) * 100
+                        if total_input_amount > 0 and total_output_amount > 0 and cashout_amount is not None:
+                            # Total gain/loss in fiat terms: total_output_amount - total_input_amount
+                            total_gain_loss = total_output_amount - total_input_amount
                             
-                            # Calculate gain portion of cashout (if gain)
-                            # The gain portion is proportional to the cashout amount relative to total output
-                            # If cashout is a subset of total output (e.g., with change), 
-                            # the gain should be proportionally allocated
+                            # Calculate cashout's portion of the gain/loss
+                            # Percentage of total output that is cashout
+                            cashout_percentage_of_output = float(cashout_amount) / float(total_output_amount)
+                            
+                            # Gain/loss for cashout = (cashout / total_output) * (total_output - total_input)
+                            cashout_gain_loss = cashout_percentage_of_output * float(total_gain_loss)
+                            
+                            # Overall percentage based on total gain/loss
+                            percentage = (float(total_gain_loss) / float(total_input_amount)) * 100
+                            
+                            # Calculate gain portion and charge (if gain)
                             gain_portion_of_cashout = None
                             gain_portion_percentage = None
-                            if gain_loss >= 0 and total_input_amount > 0:
-                                # Calculate total gain (difference between total output and total input)
-                                total_gain = total_output_amount - total_input_amount
-                                
-                                if total_gain > 0 and total_output_amount > 0:
-                                    # Gain portion of cashout = (cashout / total_output) * total_gain
-                                    # This proportionally allocates the gain to the cashout amount
-                                    gain_portion_of_cashout = (float(cashout_amount) / float(total_output_amount)) * float(total_gain)
-                                    # Also calculate as percentage of cashout
-                                    if cashout_amount > 0:
-                                        gain_portion_percentage = (gain_portion_of_cashout / float(cashout_amount)) * 100
-                                elif total_gain > 0:
-                                    # If total_output is 0 or invalid, fall back to simple calculation
-                                    gain_portion_of_cashout = float(gain_loss)
-                                    if cashout_amount > 0:
-                                        gain_portion_percentage = (gain_portion_of_cashout / float(cashout_amount)) * 100
+                            charge_on_gain = None
+                            if cashout_gain_loss > 0:
+                                # It's a gain - charge 10% on the gain
+                                gain_portion_of_cashout = cashout_gain_loss
+                                charge_on_gain = cashout_gain_loss * 0.10
+                                if cashout_amount > 0:
+                                    gain_portion_percentage = (gain_portion_of_cashout / float(cashout_amount)) * 100
                             
-                            # Calculate loss percentage over total inputs (if loss)
-                            # This represents what percentage of the original amount was lost
-                            # Used for calculating merchant reimbursement
+                            # Calculate loss and reimbursement (if loss)
                             loss_percentage_over_inputs = None
                             reimbursement_amount = None
                             total_after_reimbursement = None
-                            if gain_loss < 0:
-                                # Loss percentage: (loss / total_input_amount) * 100
-                                loss_percentage_over_inputs = abs(float(percentage))
-                                # Reimbursement amount = the loss amount (what needs to be paid back)
-                                reimbursement_amount = abs(float(gain_loss))
-                                # Total after reimbursement = cashout + reimbursement = total_input_amount
+                            if cashout_gain_loss < 0:
+                                # It's a loss - this is the amount to cover
+                                loss_percentage_over_inputs = abs((cashout_gain_loss / float(total_input_amount)) * 100)
+                                reimbursement_amount = abs(cashout_gain_loss)
+                                # Total after reimbursement = cashout + reimbursement
                                 total_after_reimbursement = float(cashout_amount) + reimbursement_amount
+                            
+                            # For display purposes, use total gain/loss
+                            gain_loss = float(total_gain_loss)
                             
                             assessment = {
                                 'total_input_amount': float(total_input_amount),
                                 'cashout_amount': float(cashout_amount),
                                 'change_amount': float(change_amount),
                                 'net_received': float(net_received),
-                                'gain_loss': float(gain_loss),
-                                'percentage': float(percentage),
-                                'is_gain': gain_loss >= 0,
+                                'gain_loss': float(total_gain_loss),  # Total gain/loss for display
+                                'percentage': float(percentage),  # Percentage based on total gain/loss
+                                'is_gain': cashout_gain_loss >= 0,  # Based on cashout's portion
                                 'currency': currency,
                                 'gain_portion_of_cashout': gain_portion_of_cashout,
                                 'gain_portion_percentage': gain_portion_percentage,
+                                'charge_on_gain': float(charge_on_gain) if charge_on_gain is not None else None,
                                 'loss_percentage_over_inputs': loss_percentage_over_inputs,
                                 'reimbursement_amount': reimbursement_amount,
                                 'total_after_reimbursement': total_after_reimbursement,
+                                'cashout_gain_loss': float(cashout_gain_loss),  # Cashout's portion of gain/loss
                             }
                         
                 except Exception as e:
