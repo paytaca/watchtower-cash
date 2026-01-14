@@ -2,10 +2,11 @@ from hashlib import sha224
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-from main.models import Address
+from main.models import Address, Transaction
 from main.serializers import AddressInfoSerializer
 from notifications.models import DeviceWallet
 
@@ -64,3 +65,59 @@ class AddressInfoView(APIView):
             has_subscribed_push_notifications=has_subscribed_push_notifications,
         ))
         return Response(serializer.data)
+
+
+class AddressIsUsedView(APIView):
+    """
+    Check if an address has transaction history.
+    Returns true if the address has had any transactions, false otherwise.
+    Useful for wallet discovery to determine if an address has been used.
+    """
+    
+    @swagger_auto_schema(
+        responses={
+            200: openapi.Response(
+                description="Success",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'is_used': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='True if address has transactions, false otherwise')
+                    }
+                )
+            ),
+            400: openapi.Response(description="Bad request - address parameter missing"),
+        },
+        manual_parameters=[
+            openapi.Parameter(
+                'bchaddress',
+                openapi.IN_PATH,
+                type=openapi.TYPE_STRING,
+                required=True,
+                description='BCH address to check for transaction history'
+            ),
+        ],
+    )
+    def get(self, request, *args, **kwargs):
+        address = kwargs.get('bchaddress', '')
+        
+        if not address:
+            return Response(
+                data={'error': 'Address parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            address_obj = Address.objects.get(address=address)
+        except Address.DoesNotExist:
+            return Response(
+                data={'is_used': False},
+                status=status.HTTP_200_OK
+            )
+        
+        # Check if the address has had any transactions
+        has_history = Transaction.objects.filter(address=address_obj).exists()
+        
+        return Response(
+            data={'is_used': has_history},
+            status=status.HTTP_200_OK
+        )
