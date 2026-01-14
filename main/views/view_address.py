@@ -106,9 +106,11 @@ class AddressIsUsedView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        try:
-            address_obj = Address.objects.get(address=address)
-        except Address.DoesNotExist:
+        address_obj = Address.objects.filter(
+            Q(address=address) | Q(token_address=address)
+        ).first()
+        
+        if not address_obj:
             return Response(
                 data={'is_used': False},
                 status=status.HTTP_200_OK
