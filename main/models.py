@@ -435,6 +435,7 @@ class CashNonFungibleToken(models.Model):
     current_txid = models.CharField(max_length=70, db_index=True)
     current_index = models.PositiveIntegerField(db_index=True)
     fixed_supply = models.BooleanField(null=True, blank=True, help_text="Null means unknown")
+    with_bcmr_metadata = models.BooleanField(default=False, db_index=True, help_text="True if BCMR indexer returned metadata for this category")
 
     class Meta:
         verbose_name_plural = 'CashToken NFTs'
@@ -1053,7 +1054,7 @@ class TransactionMetaAttribute(PostgresModel):
     wallet_hash = models.CharField(max_length=70, default="", blank=True, db_index=True)
 
     system_generated = models.BooleanField(default=False)
-    key = models.CharField(max_length=50, db_index=True)
+    key = models.CharField(max_length=500, db_index=True)
     value = models.TextField()
 
     class Meta:

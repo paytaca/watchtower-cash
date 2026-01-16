@@ -7,6 +7,7 @@ from anyhedge.utils.funding import (
 )
 from anyhedge.utils.liquidity import resolve_liquidity_fee
 from anyhedge.tasks import (
+    check_new_oracle_price_messages,
     validate_contract_funding,
     update_contract_settlement_from_service,
     settle_contract_maturity,
@@ -28,6 +29,14 @@ class OracleAdmin(admin.ModelAdmin):
         "asset_decimals",
         "active",
     ]
+
+    actions = [
+        "update_price",
+    ]
+
+    def update_price(self, request, queryset):
+        for oracle in queryset:
+            check_new_oracle_price_messages(oracle.pubkey)
 
 class HedgePositionOfferCounterPartyInline(admin.StackedInline):
     model = models.HedgePositionOfferCounterParty

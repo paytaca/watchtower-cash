@@ -9,8 +9,16 @@ from stablehedge.utils.transaction import (
 )
 
 from .auth_key import get_signed_auth_key_utxo
-from .redemption_contract import find_fiat_token_utxos, consolidate_redemption_contract
-from .treasury_contract import get_bch_utxos, get_funding_wif, consolidate_treasury_contract
+from .redemption_contract import (
+    find_fiat_token_utxos,
+    consolidate_redemption_contract,
+    get_redemption_contract_bch_utxos,
+)
+from .treasury_contract import (
+    get_bch_utxos,
+    get_funding_wif,
+    consolidate_treasury_contract,
+)
 
 
 def transfer_treasury_funds_to_redemption_contract(
@@ -123,3 +131,33 @@ def unmonitored_rebalance(
     )
 
     return dict(success=True, transactions=[tc_consolidate_tx, rc_consolidate_tx])
+
+
+def transfer_redemption_funds_to_treasury_contract(
+    treasury_contract_address,
+    satoshis:int=None,
+    locktime:int=0,
+):
+    """
+        Transfers funds from redemption contract to treasury contract,
+        auto consolidates any BCH utxos in redemption to reserve utxo
+    """
+    treasury_contract = models.TreasuryContract.objects.get(address=treasury_contract_address)
+    redemption_contract = treasury_contract.redemption_contract
+    if not redemption_contract:
+        raise StablehedgeException("No redemption contract", code="no-redemption-contract")
+
+    if redemption_contract.version == models.RedemptionContract.Version.V1:
+        raise StablehedgeException("Redemption contract is V1", code="invalid-redemption-contract-version")
+
+    fee_funder_wif = get_funding_wif(treasury_contract.address)
+
+    rc_consolidate_tx = consolidate_redemption_contract(
+        redemption_contract_address=redemption_contract.address,
+        with_reserve_utxo=True,
+        funding_wif=fee_funder_wif,
+        locktime=locktime,
+        sats_to_treasury_contract=satoshis,
+    )
+
+    return dict(success=True, transactions=[rc_consolidate_tx])

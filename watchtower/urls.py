@@ -108,7 +108,10 @@ class CustomOpenAPISchemaGenerator(OpenAPISchemaGenerator):
         
         # Always generate operation_id from path to ensure uniqueness
         # Combine prefix and path to get the full path
-        full_path = (prefix + path).strip('/')
+        # Preserve trailing slash information before stripping
+        original_path = prefix + path
+        has_trailing_slash = original_path.endswith('/') and not original_path.endswith('//')
+        full_path = original_path.strip('/')
         path_parts = full_path.split('/')
         # Remove 'api' prefix if present
         if path_parts and path_parts[0] == 'api':
@@ -136,6 +139,7 @@ class CustomOpenAPISchemaGenerator(OpenAPISchemaGenerator):
                     'shard': 'shard',
                     'address': 'addr',
                     'tokenid': 'token_id',
+                    'gift_code_hash': 'gift_code_hash',
                 }
                 processed_parts.append(param_map.get(param_name, param_name))
             else:
@@ -144,6 +148,9 @@ class CustomOpenAPISchemaGenerator(OpenAPISchemaGenerator):
         # Create operation_id
         if processed_parts:
             operation_id = '_'.join(processed_parts)
+            # Add suffix if path had trailing slash to ensure uniqueness
+            if has_trailing_slash:
+                operation_id = f"{operation_id}_slash"
             operation['operationId'] = f"{operation_id}_{method.lower()}"
         
         return operation

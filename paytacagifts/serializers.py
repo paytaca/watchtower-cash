@@ -44,6 +44,7 @@ class ClaimGiftPayloadSerializer(serializers.Serializer):
 
 class RecoverGiftPayloadSerializer(serializers.Serializer):
     wallet_hash = serializers.CharField()
+    transaction_hex = serializers.CharField(required=False, allow_blank=True, help_text='Optional transaction hex ready for broadcast. If provided, will be broadcast synchronously.')
 
 
 # #### responses

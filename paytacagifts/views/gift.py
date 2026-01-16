@@ -208,7 +208,6 @@ class GiftViewSet(viewsets.GenericViewSet):
 
     @action(detail=True, methods=['post'])
     @swagger_auto_schema(
-        operation_id="gift_claim",
         operation_description="Claim a Gift record.",
         request_body=ClaimGiftPayloadSerializer,
         responses={
@@ -219,10 +218,89 @@ class GiftViewSet(viewsets.GenericViewSet):
         wallet_hash = request.data["wallet_hash"]
         transaction_hex = request.data.get("transaction_hex", "").strip()
         
-        # If transaction_hex is provided, broadcast it synchronously before proceeding
-        # Only proceed with claim creation if broadcast succeeds
-        broadcast_success = True
-        broadcast_error = None
+        # Get wallet and gift first to validate and check limits before broadcasting
+        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
+        gift_qs = Gift.objects.filter(gift_code_hash=gift_code_hash)
+        if not gift_qs.exists():
+            raise Exception("Gift does not exist!")
+        gift = gift_qs.first()
+        claim = Claim.objects.filter(gift=gift.id, wallet=wallet).first()
+        
+        # If claim already exists, return early (but still handle transaction_hex if provided)
+        if claim:
+            txid = None
+            if transaction_hex:
+                # Extract txid for metadata even if claim exists
+                try:
+                    test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
+                    if test_accept.get('allowed', False):
+                        txid = test_accept.get('txid')
+                except Exception:
+                    pass  # Ignore errors if claim already exists
+            
+            # Create or update transaction metadata if txid is available
+            if txid:
+                TransactionMetaAttribute.objects.update_or_create(
+                    txid=txid,
+                    wallet_hash=wallet_hash,
+                    system_generated=True,
+                    key="gift_claim",
+                    defaults=dict(
+                        value="Gift"
+                    )
+                )
+            
+            # Build response - old clients get original format, new clients get enhanced format
+            response_data = {
+                "share": gift.share,
+                "encrypted_share": gift.encrypted_share,
+                "claim_id": str(claim.id)
+            }
+            if transaction_hex:
+                # New clients get success and encrypted_gift_code
+                response_data["success"] = True
+                response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
+            return Response(response_data)
+
+        # Check campaign limits BEFORE broadcasting transaction
+        if gift.campaign:
+            # Check existing succeeded claims for this wallet in this campaign
+            claims = gift.campaign.claims.filter(wallet__wallet_hash=wallet_hash, succeeded=True)
+            claims_sum = claims.aggregate(Sum('amount'))['amount__sum'] or 0
+            # Check if adding this gift amount would exceed the limit
+            if claims_sum + gift.amount > gift.campaign.limit_per_wallet:
+                # Create informative error message
+                limit = gift.campaign.limit_per_wallet
+                current_total = claims_sum
+                attempted_amount = gift.amount
+                remaining = max(0, limit - current_total)
+                
+                if current_total >= limit:
+                    error_msg = (
+                        f"You have reached the campaign limit of {limit} BCH per wallet. "
+                        f"Your current total: {current_total} BCH. "
+                        f"Cannot claim additional {attempted_amount} BCH."
+                    )
+                else:
+                    error_msg = (
+                        f"This claim would exceed the campaign limit of {limit} BCH per wallet. "
+                        f"Your current total: {current_total} BCH. "
+                        f"Attempted claim: {attempted_amount} BCH. "
+                        f"Remaining available: {remaining} BCH."
+                    )
+                
+                # Error response - only include success/message for new clients
+                if transaction_hex:
+                    return Response({
+                        "success": False,
+                        "message": error_msg,
+                    }, status=400)
+                else:
+                    return Response({
+                        "message": error_msg,
+                    }, status=400)
+        
+        # Now that limit check passed, handle transaction broadcasting if provided
         txid = None
         if transaction_hex:
             # Check if node is available
@@ -262,7 +340,6 @@ class GiftViewSet(viewsets.GenericViewSet):
                             "success": False,
                             "message": "Transaction broadcast failed: No txid returned",
                         }, status=400)
-                    broadcast_success = True
                 except Exception as exc:
                     error_msg = str(exc)
                     # Some nodes return "already have transaction" which is actually success
@@ -272,71 +349,15 @@ class GiftViewSet(viewsets.GenericViewSet):
                             "success": False,
                             "message": f"Transaction broadcast failed: {error_msg}",
                         }, status=400)
-                    broadcast_success = True
-            else:
-                # Transaction already exists, consider broadcast successful
-                broadcast_success = True
         
-        # Only proceed with claim creation if broadcast succeeded (or no transaction_hex was provided)
-        if transaction_hex and not broadcast_success:
-            return Response({
-                "success": False,
-                "message": broadcast_error or "Transaction broadcast failed",
-            }, status=400)
-        
-        wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
-        gift_qs = Gift.objects.filter(gift_code_hash=gift_code_hash)
-        if not gift_qs.exists():
-            raise Exception("Gift does not exist!")
-        gift = gift_qs.first()
-        claim = Claim.objects.filter(gift=gift.id, wallet=wallet).first()
-        
-        if claim:
-            # Create or update transaction metadata if txid is available
-            if txid:
-                TransactionMetaAttribute.objects.update_or_create(
-                    txid=txid,
-                    wallet_hash=wallet_hash,
-                    system_generated=True,
-                    key="gift_claim",
-                    defaults=dict(
-                        value="Gift"
-                    )
-                )
-            
-            # Build response - old clients get original format, new clients get enhanced format
-            response_data = {
-                "share": gift.share,
-                "encrypted_share": gift.encrypted_share,
-                "claim_id": str(claim.id)
-            }
-            if transaction_hex:
-                # New clients get success and encrypted_gift_code
-                response_data["success"] = True
-                response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
-            return Response(response_data)
-
+        # Create the claim record (limit check already passed)
         if gift.campaign:
-            claims = gift.campaign.claims.filter(wallet__wallet_hash=wallet_hash, succeeded=True)
-            claims_sum = claims.aggregate(Sum('amount'))['amount__sum'] or 0
-            if claims_sum < gift.campaign.limit_per_wallet:
-                claim = Claim.objects.create(
-                    wallet=wallet,
-                    amount=gift.amount,
-                    gift=gift,
-                    campaign=gift.campaign
-                )
-            else:
-                # Error response - only include success/message for new clients
-                if transaction_hex:
-                    return Response({
-                        "success": False,
-                        "message": "You have exceeded the limit of gifts to claim for this campaign",
-                    }, status=400)
-                else:
-                    return Response({
-                        "message": "You have exceeded the limit of gifts to claim for this campaign",
-                    }, status=400)
+            claim = Claim.objects.create(
+                wallet=wallet,
+                amount=gift.amount,
+                gift=gift,
+                campaign=gift.campaign
+            )
         else:
             claim = Claim.objects.create(
                 wallet=wallet,
@@ -414,25 +435,109 @@ class GiftViewSet(viewsets.GenericViewSet):
     )
     def recover(self, request, gift_code_hash):
         wallet_hash = request.data["wallet_hash"]
+        transaction_hex = request.data.get("transaction_hex", "").strip()
         wallet, _ = Wallet.objects.get_or_create(wallet_hash=wallet_hash)
         gift_qs = Gift.objects.filter(wallet=wallet, gift_code_hash=gift_code_hash)
         if not gift_qs.exists():
             raise Exception("Gift does not exist!")
         gift = gift_qs.first()
         if gift:
-            claim_check = Claim.objects.filter(gift=gift)
-            if claim_check.exists():
+            # Only check if gift has been claimed on-chain (funds have been spent)
+            # The existence of Claim records doesn't matter - they're just records of attempts
+            # The gift is only truly "claimed" when date_claimed is set (funds spent on-chain)
+            if gift.date_claimed is not None:
                 raise Exception("This gift has been claimed.")
-            else:
-                Claim.objects.create(
-                    wallet=wallet,
-                    amount=gift.amount,
-                    gift=gift
+            
+            # Handle transaction broadcasting if provided (similar to claim endpoint)
+            txid = None
+            if transaction_hex:
+                # Check if node is available
+                if not NODE.BCH.get_latest_block():
+                    return Response({
+                        "success": False,
+                        "message": "Blockchain node is not available",
+                    }, status=503)
+                
+                # Test mempool acceptance
+                try:
+                    test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
+                    if not test_accept.get('allowed', False):
+                        reject_reason = test_accept.get('reject-reason', 'Unknown error')
+                        return Response({
+                            "success": False,
+                            "message": f"Transaction rejected by mempool: {reject_reason}",
+                        }, status=400)
+                    # Extract txid for later use in metadata
+                    txid = test_accept.get('txid')
+                except Exception as exc:
+                    error_msg = str(exc)
+                    LOGGER.exception(f"Error testing mempool acceptance: {exc}")
+                    return Response({
+                        "success": False,
+                        "message": f"Error testing mempool acceptance: {error_msg}",
+                    }, status=400)
+                
+                # Check if transaction already exists
+                if not Transaction.objects.filter(txid=txid).exists():
+                    # Broadcast synchronously
+                    try:
+                        broadcast_result = NODE.BCH.broadcast_transaction(transaction_hex)
+                        # broadcast_transaction returns txid on success, or raises exception on failure
+                        if not broadcast_result:
+                            return Response({
+                                "success": False,
+                                "message": "Transaction broadcast failed: No txid returned",
+                            }, status=400)
+                    except Exception as exc:
+                        error_msg = str(exc)
+                        # Some nodes return "already have transaction" which is actually success
+                        if 'already have transaction' not in error_msg.lower():
+                            LOGGER.exception(f"Error broadcasting transaction: {exc}")
+                            return Response({
+                                "success": False,
+                                "message": f"Transaction broadcast failed: {error_msg}",
+                            }, status=400)
+            
+            # Check if a claim already exists for this wallet (from previous recovery attempt)
+            # If it exists, we can still allow recovery (return the data without creating duplicate claim)
+            existing_claim = Claim.objects.filter(gift=gift, wallet=wallet).first()
+            if not existing_claim:
+                # Create new claim for recovery
+                if gift.campaign:
+                    existing_claim = Claim.objects.create(
+                        wallet=wallet,
+                        amount=gift.amount,
+                        gift=gift,
+                        campaign=gift.campaign
+                    )
+                else:
+                    existing_claim = Claim.objects.create(
+                        wallet=wallet,
+                        amount=gift.amount,
+                        gift=gift
+                    )
+            
+            # Create transaction metadata if txid is available
+            if txid:
+                TransactionMetaAttribute.objects.update_or_create(
+                    txid=txid,
+                    wallet_hash=wallet_hash,
+                    system_generated=True,
+                    key="gift_recovery",
+                    defaults=dict(
+                        value="Gift Recovery"
+                    )
                 )
-                return Response({
-                    "share": gift.share,
-                    "encrypted_share": gift.encrypted_share,
-                    "encrypted_gift_code": gift.encrypted_gift_code or ''
-                })
+            
+            # Build response - old clients get original format, new clients get enhanced format
+            response_data = {
+                "share": gift.share,
+                "encrypted_share": gift.encrypted_share,
+                "encrypted_gift_code": gift.encrypted_gift_code or ''
+            }
+            if transaction_hex:
+                # New clients get success flag
+                response_data["success"] = True
+            return Response(response_data)
         else:
             raise Exception("This gift does not exist.")
