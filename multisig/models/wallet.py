@@ -26,7 +26,7 @@ class MultisigWallet(models.Model):
         self.save()
 
     def __str__(self):
-        return self.template.get("name", "Unnamed Wallet")
+        return self.name or f"Wallet {self.id}" if self.id else "Unnamed Wallet"
 
 class Signer(models.Model):
     wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
@@ -34,15 +34,16 @@ class Signer(models.Model):
     # xpub = models.CharField(max_length=512, db_index=True, help_text="The xpub owned by the signer", null=True, blank=True)
     # acknowledged = models.BooleanField(default=False, help_text="True if signer acknowledged the wallet", null=True, blank=True)
     name = models.CharField(max_length=255, help_text="Name of the signer", null=True, blank=True)
-    xpub_hash = models.CharField(max_length=64, help_text="The hash256 of the hd public key", null=True, blank=True)
+    # xpub_hash = models.CharField(max_length=64, help_text="The hash256 of the hd public key", null=True, blank=True)
+    pubkey_zero = models.CharField(max_length=66, help_text="The public key at address index 0", null=True, blank=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['wallet', 'xpub_hash'], name='unique_signer')
+            models.UniqueConstraint(fields=['wallet', 'pubkey_zero'], name='unique_signer')
         ]
 
     def __str__(self):
-        return f"{self.name}: {self.xpub_hash}"
+        return f"{self.name}: {self.pubkey_zero}"
 
 
 class MultisigWalletDescriptor(models.Model):
