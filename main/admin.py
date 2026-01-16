@@ -1077,7 +1077,7 @@ admin.site.register(AssetSetting, AssetSettingAdmin)
 class AddressBookAdmin(admin.ModelAdmin):
     list_display = [
         'id',
-        'name',
+        'truncated_name',
         'is_favorite',
         'wallet',
         'created_at',
@@ -1085,13 +1085,18 @@ class AddressBookAdmin(admin.ModelAdmin):
     ]
 
     search_fields = [
-        'name',
         'wallet__wallet_hash'
     ]
 
     list_filter = [
         'is_favorite'
     ]
+
+    def truncated_name(self, obj):
+        if obj.name:
+            return f'{obj.name[:30]}...'
+        return ''
+    truncated_name.short_description = 'Name'
 
 @admin.register(AddressBookAddress)
 class AddressBookAddressAdmin(admin.ModelAdmin):
@@ -1103,7 +1108,6 @@ class AddressBookAddressAdmin(admin.ModelAdmin):
 
     search_fields = [
         'address',
-        'address_book__name'
     ]
 
     list_filter = [
