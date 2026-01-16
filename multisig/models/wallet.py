@@ -1,17 +1,10 @@
 import logging
-import hashlib
-import json
 from django.db import models
-from django.contrib.postgres.fields import JSONField
 from django.utils import timezone
-from django.core.validators import MinValueValidator
 
 LOGGER = logging.getLogger(__name__)
 
 class MultisigWallet(models.Model):
-    # template = JSONField(help_text="Wallet template", null=True, blank=True)
-    # locking_data = JSONField(null=True, blank=True, help_text="Raw locking data")
-    # locking_bytecode = models.CharField(max_length=46, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
     updated_at = models.DateTimeField(auto_now=True)
@@ -30,11 +23,7 @@ class MultisigWallet(models.Model):
 
 class Signer(models.Model):
     wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
-    # entity_key = models.CharField(max_length=255, help_text="The signer's entity-key, Example: signer_1", null=True, blank=True)
-    # xpub = models.CharField(max_length=512, db_index=True, help_text="The xpub owned by the signer", null=True, blank=True)
-    # acknowledged = models.BooleanField(default=False, help_text="True if signer acknowledged the wallet", null=True, blank=True)
     name = models.CharField(max_length=255, help_text="Name of the signer", null=True, blank=True)
-    # xpub_hash = models.CharField(max_length=64, help_text="The hash256 of the hd public key", null=True, blank=True)
     pubkey_zero = models.CharField(max_length=66, help_text="The public key at address index 0", null=True, blank=True)
 
     class Meta:
