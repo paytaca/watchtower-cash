@@ -1163,7 +1163,7 @@ class AddressBook(models.Model):
     )
 
     def __str__(self):
-        return f"({self.pk}) {self.name[:10]}..."
+        return f"({self.pk}) {self.name[:30]}..."
 
 class AddressBookAddress(models.Model):
     class AddressType(models.TextChoices):
