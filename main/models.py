@@ -1150,7 +1150,7 @@ class AssetSetting (models.Model):
     favorites = JSONField(default=list)
 
 class AddressBook(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.TextField(blank=True)
     is_favorite = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
@@ -1170,7 +1170,7 @@ class AddressBookAddress(models.Model):
         CT = 'ct', 'CashToken'
 
     address = models.CharField(max_length=100)
-    address_type = models.CharField(max_length=10, choices=AddressType.choices, default=AddressType.BCH)
+    address_type = models.CharField(max_length=3, choices=AddressType.choices, default=AddressType.BCH)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
