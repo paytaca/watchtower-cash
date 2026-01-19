@@ -2,7 +2,6 @@ from rest_framework.serializers import ModelSerializer, SerializerMethodField
 from main.models import AddressBook, AddressBookAddress
 
 class AddressBookListSerializer(ModelSerializer):
-
     address_count = SerializerMethodField()
 
     def get_address_count(self, obj):
@@ -17,12 +16,31 @@ class AddressBookListSerializer(ModelSerializer):
             'address_count'
         ]
 
-class AddressBookSerializer(ModelSerializer):
-    class Meta:
-        model = AddressBook
-        fields = '__all__'
-
 class AddressBookAddressSerializer(ModelSerializer):
     class Meta:
         model = AddressBookAddress
+        fields = [
+            'id',
+            'address',
+            'address_type',
+        ]
+class AddressBookRetrieveSerializer(ModelSerializer):
+    addresses = SerializerMethodField()
+
+    def get_addresses(self, obj):
+        return AddressBookAddressSerializer(obj.address_book_addresses.all(), many=True).data
+
+    class Meta:
+        model = AddressBook
+        fields = [
+            'id',
+            'name',
+            'is_favorite',
+            'created_at',
+            'addresses'
+        ]
+
+class AddressBookSerializer(ModelSerializer):
+    class Meta:
+        model = AddressBook
         fields = '__all__'
