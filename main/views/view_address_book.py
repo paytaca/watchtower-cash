@@ -49,8 +49,6 @@ class AddressBookViewSet(
 
 class AddressBookAddressViewSet(
     viewsets.GenericViewSet,
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
     mixins.UpdateModelMixin,
     mixins.DestroyModelMixin
