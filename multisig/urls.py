@@ -1,8 +1,9 @@
 from django.urls import path
 from .views import (
-  MultisigWalletListCreateView,
-  RenameMultisigWalletView,
-  MultisigWalletDetailView,
+  # MultisigWalletListCreateView,
+  # RenameMultisigWalletView,
+  # MultisigWalletDetailView,
+  MultisigWalletCreateView,
   MultisigTransactionProposalListCreateView,
   MultisigTransactionProposalDetailView,
   SignerSignaturesAddView,
@@ -10,14 +11,15 @@ from .views import (
   BroadcastTransactionProposalView,
   FinalizeTransactionProposalView,
   TransactionProposalStatusView,
-  MultisigWalletUtxosView
+  # MultisigWalletUtxosView
 )
 
 urlpatterns = [
-    path('wallets/utxos/<str:address>/', MultisigWalletUtxosView.as_view(), name='wallet-utxos'),
-    path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
-    path('wallets/<str:wallet_identifier>/', MultisigWalletDetailView.as_view(), name='wallet_detail') ,
-    path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),
+    # path('wallets/utxos/<str:address>/', MultisigWalletUtxosView.as_view(), name='wallet-utxos'),
+    # path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
+    # path('wallets/<str:wallet_identifier>/', MultisigWalletDetailView.as_view(), name='wallet_detail') ,
+    # path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),
+    path('wallets/', MultisigWalletCreateView.as_view(), name='wallet-create'),
     path('wallets/<str:wallet_identifier>/transaction-proposals/', MultisigTransactionProposalListCreateView.as_view(), name='transaction-proposal-list-create'),
     path('transaction-proposals/<str:proposal_identifier>/', MultisigTransactionProposalDetailView.as_view(), name='transaction-proposal-detail'),
     path('transaction-proposals/<str:proposal_identifier>/signatures/', SignaturesAddView.as_view(), name='transaction-proposal-signatures-add'),

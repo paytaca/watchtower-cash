@@ -9,10 +9,9 @@ from .transaction_proposal import (
 )
 
 from .wallet import (
-    MultisigWalletListCreateView,
-    MultisigWalletDetailView,
-    RenameMultisigWalletView,
-    MultisigWalletUtxosView
+    MultisigWalletCreateView,
+    # MultisigWalletListCreateView,
+    # MultisigWalletDetailView,
 )
 
 __all__ = [
@@ -23,8 +22,7 @@ __all__ = [
     "BroadcastTransactionProposalView",
     "FinalizeTransactionProposalView",
     "TransactionProposalStatusView",
-    "MultisigWalletListCreateView",
-    "MultisigWalletDetailView",
-    "RenameMultisigWalletView"
-    "MultisigWalletUtxosView"
+    "MultisigWalletCreateView",
+    # "MultisigWalletListCreateView",
+    # "MultisigWalletDetailView"
 ]

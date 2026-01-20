@@ -1,4 +1,5 @@
 import logging
+from operator import truediv
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -27,6 +28,8 @@ class Signer(models.Model):
     wallet_bsms_descriptor = models.TextField(help_text="The bsms descriptor of the wallet curated for this signer", null=True, blank=True)
     name = models.CharField(max_length=255, help_text="Name of the signer", null=True, blank=True)
     pubkey_zero = models.CharField(max_length=66, help_text="The public key of the signer's xpub at address index 0", null=True, blank=True)
+    master_fingerprint = models.CharField(max_length=66, help_text="The master fingerprint of the signer's xpub", null=True, blank=True)
+    derivation_path = models.CharField(max_length=50, help_text="The derivation path of the signer's xpub", null=True, blank=True)
     coordinator = models.BooleanField(default=False, help_text="True if the signer is the coordinator", null=True, blank=True)
     
     class Meta:

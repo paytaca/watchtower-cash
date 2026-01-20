@@ -146,7 +146,7 @@ LOGGER = logging.getLogger(__name__)
 #         serializer = self.serializer_class(queryset, many=True)
 #         return Response(serializer.data)
 
-class MultisigWalletSyncView(generics.CreateAPIView):
+class MultisigWalletCreateView(generics.CreateAPIView):
     queryset = MultisigWallet.objects.all()
     serializer_class = MultisigWalletSerializer
 
@@ -154,9 +154,11 @@ class MultisigWalletSyncView(generics.CreateAPIView):
 
         wallet_hash = request.data.get('walletHash')
 
+        LOGGER.info(request.data)
+        LOGGER.info(f"wallet_hash: {wallet_hash}")
         if not wallet_hash:
             return Response(
-                {"error": "walletHash is required for syncing."}, 
+                {"error": "walletHash is required."}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -166,20 +168,36 @@ class MultisigWalletSyncView(generics.CreateAPIView):
             serializer = self.get_serializer(existing_wallet)
             return Response(
                 {
-                    "message": "Wallet already synced.",
+                    "message": "Wallet already exists.",
                     "wallet": serializer.data
                 }, 
                 status=status.HTTP_200_OK
             )
 
-        serializer = self.get_serializer(data=request.data)
+        # Ensure request.data is mutable for serializer usage
+        data = request.data.copy()
+        serializer = self.get_serializer(data=data)
+        
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "message": "Invalid data.",
+                    "errors": serializer.errors
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        
+        created = self.perform_create(serializer)
+
+        LOGGER.info(f"created: {created}")
         
         return Response(
             {
-                "message": "Wallet synced and created successfully.",
+                "message": "Wallet created successfully.",
                 "wallet": serializer.data
             }, 
             status=status.HTTP_201_CREATED
         )
+        
