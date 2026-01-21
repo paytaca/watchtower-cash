@@ -8,6 +8,32 @@ from django.conf import settings
 
 LOGGER = logging.getLogger(__name__)
 
+class IsPubKeyZeroOwner(permissions.BasePermission):
+    def has_permission(self, request, view):
+        if getattr(settings, 'MULTISIG', {}).get('ENABLE_AUTH', False) == False:
+            return True
+
+        pubkey_zero = request.query_params.get('pubkey_zero')
+
+        if not pubkey_zero:
+            return False
+
+        message = request.headers.get('X-Auth-Message', '')
+        auth_pubkey = request.headers.get('X-Auth-PubKey', '')
+        signature = request.headers.get('X-Auth-Signature', '')
+
+        if not signature or not message or not auth_pubkey:
+            return False
+
+        if pubkey_zero != auth_pubkey:
+            return False
+
+        signature = parse_x_signature_header(signature)
+        sig_verification_response = verify_signature(message, auth_pubkey, signature)
+        sig_verification_result = sig_verification_response.json()
+        if sig_verification_result['success']:
+            return True
+
 class IsCosigner(permissions.BasePermission):
     
     def has_permission(self, request, view):
