@@ -1,4 +1,5 @@
 import logging
+from multisig.auth.auth import MultisigAuthentication, PubKeySignatureMessageAuthentication
 from rest_framework.response import Response
 from rest_framework import status, generics
 from ..models.wallet import MultisigWallet
@@ -147,6 +148,8 @@ LOGGER = logging.getLogger(__name__)
 #         return Response(serializer.data)
 
 class MultisigWalletCreateView(generics.CreateAPIView):
+    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
+    
     queryset = MultisigWallet.objects.all()
     serializer_class = MultisigWalletSerializer
 
