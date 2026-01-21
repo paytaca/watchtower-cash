@@ -2,8 +2,11 @@ import logging
 from multisig.auth.auth import MultisigAuthentication, PubKeySignatureMessageAuthentication
 from rest_framework.response import Response
 from rest_framework import status, generics
+from rest_framework.views import APIView
+from rest_framework.exceptions import NotFound
 from ..models.wallet import MultisigWallet
 from ..serializers.wallet import MultisigWalletSerializer
+from ..auth.permission import IsCosigner, IsCosignerOfNewMultisigWallet, IsPubKeyZeroOwner
 
 LOGGER = logging.getLogger(__name__)
 
@@ -147,14 +150,58 @@ LOGGER = logging.getLogger(__name__)
 #         serializer = self.serializer_class(queryset, many=True)
 #         return Response(serializer.data)
 
-class MultisigWalletCreateView(generics.CreateAPIView):
-    authentication_classes = [PubKeySignatureMessageAuthentication, MultisigAuthentication]
-    
-    queryset = MultisigWallet.objects.all()
+class MultisigWalletListCreateView(APIView):
+    """
+    Combined view for listing and creating multisig wallets.
+    - GET: List wallets filtered by pubkey_zero query parameter
+    - POST: Create a new multisig wallet
+    """
+    # Order matters: PubKeySignatureMessageAuthentication should be first
+    # to catch missing headers and raise AuthenticationFailed (401)
+    authentication_classes = [PubKeySignatureMessageAuthentication]
     serializer_class = MultisigWalletSerializer
+    
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsPubKeyZeroOwner()]
+        elif self.request.method == 'POST':
+            return []
+        else:
+            return super().get_permissions()
 
-    def create(self, request, *args, **kwargs):
+    def get(self, request):
+        """
+        Get wallets where a signer with the specified pubkey_zero is a cosigner.
+        
+        Query parameters:
+        - pubkey_zero: Required. The public key at address index 0 to filter by
+        - include_deleted: If 'true' or '1', includes soft-deleted wallets
+        """
+        pubkey_zero = request.query_params.get('pubkey_zero')
+        
+        if not pubkey_zero:
+            return Response(
+                {"error": "pubkey_zero query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Build base queryset filtering by pubkey_zero
+        queryset = MultisigWallet.objects.filter(
+            signers__pubkey_zero=pubkey_zero
+        ).distinct().prefetch_related('signers')
+        
+        # Optionally exclude deleted wallets (default behavior)
+        include_deleted = request.query_params.get('include_deleted')
+        if not (include_deleted == '1' or include_deleted == 'true'):
+            queryset = queryset.filter(deleted_at__isnull=True)
+        
+        serializer = self.serializer_class(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def post(self, request):
+        """
+        Create a new multisig wallet.
+        """
         wallet_hash = request.data.get('walletHash')
 
         LOGGER.info(request.data)
@@ -168,7 +215,7 @@ class MultisigWalletCreateView(generics.CreateAPIView):
         existing_wallet = MultisigWallet.objects.filter(wallet_hash=wallet_hash).first()
         
         if existing_wallet:
-            serializer = self.get_serializer(existing_wallet)
+            serializer = self.serializer_class(existing_wallet)
             return Response(
                 {
                     "message": "Wallet already exists.",
@@ -179,7 +226,7 @@ class MultisigWalletCreateView(generics.CreateAPIView):
 
         # Ensure request.data is mutable for serializer usage
         data = request.data.copy()
-        serializer = self.get_serializer(data=data)
+        serializer = self.serializer_class(data=data, context={"request": request})
         
         serializer.is_valid(raise_exception=True)
         if not serializer.is_valid():
@@ -190,16 +237,14 @@ class MultisigWalletCreateView(generics.CreateAPIView):
                 }, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
         
-        created = self.perform_create(serializer)
-
-        LOGGER.info(f"created: {created}")
+        wallet = serializer.save()
+        LOGGER.info(f"created wallet: {wallet.id}")
         
         return Response(
             {
                 "message": "Wallet created successfully.",
-                "wallet": serializer.data
+                "wallet": self.serializer_class(wallet).data
             }, 
             status=status.HTTP_201_CREATED
         )
