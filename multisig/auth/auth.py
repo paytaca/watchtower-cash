@@ -172,18 +172,17 @@ class PubKeySignatureMessageAuthentication(BaseAuthentication):
     def authenticate(self, request):
        
         message = request.headers.get('X-Auth-Message', '')
+        public_key = request.headers.get('X-Auth-PubKey', '')
+        signature = request.headers.get('X-Auth-Signature', '')
+
+        if not signature or not message or not public_key:
+            return None
 
         if message:
             timestamp = message.split(':')[1]
             is_valid, error = is_valid_timestamp(int(timestamp)) # short circuits if timestamp is > ±drift
             if not is_valid:
                 raise AuthenticationFailed(error)
-
-        public_key = request.headers.get('X-Auth-PubKey', '')
-        signature = request.headers.get('X-Auth-Signature', '')
-
-        if not signature or not message or not public_key:
-            raise AuthenticationFailed('Invalid credentials')
         
         signature = parse_x_signature_header(signature)
 
