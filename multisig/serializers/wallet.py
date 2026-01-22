@@ -6,7 +6,6 @@ from django.db import transaction
 LOGGER = logging.getLogger(__name__)
 
 class SignerSerializer(serializers.ModelSerializer):
-    # Map camelCase client fields to snake_case model fields
     pubkeyZero = serializers.CharField(source='pubkey_zero')
     walletBsmsDescriptor = serializers.CharField(source='wallet_bsms_descriptor')
     derivationPath = serializers.CharField(source='derivation_path', required=False, allow_blank=True)
@@ -19,25 +18,21 @@ class SignerSerializer(serializers.ModelSerializer):
 
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
-    # Map camelCase client fields to snake_case model fields
     walletHash = serializers.CharField(source='wallet_hash')
     walletName = serializers.CharField(source='name')
-    # Accept but don't store this field (not in model)
     walletDescription = serializers.CharField(write_only=True, required=False, allow_blank=True)
     signers = SignerSerializer(many=True)
 
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'walletHash', 'walletName', 'walletDescription', 'signers', 'created_at', 'updated_at']
+        fields = ['id', 'walletHash', 'walletName', 'walletDescription', 'signers', 'version', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
         signers_data = validated_data.pop('signers')
         
-        # Remove fields that don't exist in the model
         validated_data.pop('walletDescription', None)
         
-        # Validate that pubkey_zero values are unique within this wallet
         pubkey_zeros = [
             signer_data.get('pubkey_zero') 
             for signer_data in signers_data 
@@ -48,7 +43,6 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
                 'signers': 'Each signer must have a unique pubkeyZero within the wallet.'
             })
         
-        LOGGER.info(f"validated_data: {validated_data}")
         with transaction.atomic():
             wallet = MultisigWallet.objects.create(**validated_data)
 
