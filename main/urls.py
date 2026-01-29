@@ -14,6 +14,7 @@ router = routers.DefaultRouter()
 
 router.register(r"", views.BcmrWebhookViewSet, basename="webhook")
 router.register(r"tokens", views.TokensViewSet, basename="tokens")
+router.register(r"slp-tokens/fungible", views.SlpFungibleTokensViewSet, basename="slp-tokens-ft")
 router.register(r"cashtokens/fungible", views.CashFungibleTokensViewSet, basename="cashtokens-ft")
 router.register(r"cashtokens/nft", views.CashNftsViewSet, basename="cashtokens-nft")
 router.register(r"wallet/address-scan", views.WalletAddressScanViewSet, basename="address-scan")
