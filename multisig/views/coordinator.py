@@ -28,16 +28,12 @@ class ServerIdentityListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-
         
         public_key = request.data.get('publicKey') or request.data.get('public_key')
-
         signature = parse_signatures(request.data.get('signature'))
-        
         sig_verification_response = verify_signature(request.data.get('message'), public_key, signature)
         sig_verification_result = sig_verification_response.json()  
         
-        LOGGER.info("sig verification result: " + str(sig_verification_result))
         if not sig_verification_result['success']:
             return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
         

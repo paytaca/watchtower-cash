@@ -37,6 +37,14 @@ def parse_x_signature_header(header_value):
 
     return result
 
+def parse_signatures(signature):
+    """
+    Parses a signature string 
+    That is 'schnorr=abc123;der=def456' always returns a dict with both keys: { 'schnorr': '', 'der': '' }.
+    """
+    return parse_x_signature_header(signature)
+
+
 def normalize_timestamp(raw_ts):
     """
     Normalize a Unix timestamp to seconds as an integer.
