@@ -8,56 +8,45 @@ from ..utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
 
 LOGGER = logging.getLogger(__name__)
 
-class SignerSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Signer
-        fields = ['entity_key', 'xpub']
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
-    signers = SignerSerializer(many=True, read_only=True)
-    lockingData = serializers.JSONField(source='locking_data')
-    template = serializers.JSONField()
+
+    walletDescriptorId = serializers.CharField(source='wallet_descriptor_id')
+    walletHash = serializers.CharField(source='wallet_hash')
 
     class Meta:
         model = MultisigWallet
-        fields = ['id', 'template', 'lockingData', 'signers', 'created_at', 'locking_bytecode']
-        read_only_fields = ['signers', 'created_at']
-    
-    def create(self, validated_data):
-        locking_data = validated_data.get('locking_data', {})
-        template = validated_data.get('template', {})
-        with transaction.atomic():
-            locking_bytecode = get_multisig_wallet_locking_script(template, locking_data)
-            wallet, created = MultisigWallet.objects.get_or_create(
-                locking_bytecode=locking_bytecode,
-                defaults= {
-                    'template': template,
-                    'locking_data':locking_data,
-                    'locking_bytecode':locking_bytecode    
-                }
-            )
-            
-            if created:
-                hd_public_keys = locking_data.get('hdKeys', {}).get('hdPublicKeys', {})
-                request = self.context.get('request')
-                for key, value in hd_public_keys.items():
-                    signer = Signer.objects.create(
-                        wallet=wallet,
-                        entity_key=key,
-                        xpub=value
-                    )
-                    if request:
-                      uploader_pubkey = request.headers.get('X-Auth-PubKey')
-                      derived_public_key = derive_pubkey_from_xpub(signer.xpub, 0)
-                      if uploader_pubkey == derived_public_key:
-                         wallet.created_by = signer
-                         wallet.save(update_fields=['created_by'])
-            else:
-                if wallet.deleted_at:
-                    wallet.deleted_at = None
-                    wallet.save(updated_fields=['deleted_at'])
-                    
-        return wallet
+        fields = [
+            'id',
+            'name',
+            'walletHash',
+            'walletDescriptorId',
+            'version',
+            'created_at',
+            'deleted_at',
+            'updated_at',
+            'coordinator',
+            # Add any additional MultisigWallet fields you'd like to expose
+        ]
+
+class SignerSerializer(serializers.ModelSerializer):
+    masterFingerprint = serializers.CharField(source='master_fingerprint')
+    derivationPath = serializers.CharField(source='derivation_path')
+    publicKey = serializers.CharField(source='public_key')
+    walletDescriptor = serializers.CharField(source='wallet_descriptor')
+    wallet = serializers.PrimaryKeyRelatedField(queryset=MultisigWallet.objects.all())
+
+    class Meta:
+        model = Signer
+        fields = [
+            'id',
+            'name',
+            'masterFingerprint',
+            'derivationPath',
+            'publicKey',
+            'walletDescriptor',
+            'wallet',
+        ]
 
 class MultisigWalletUtxoSerializer(serializers.Serializer):
 

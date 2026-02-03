@@ -1,10 +1,7 @@
 import logging
-import hashlib
-import json
 from django.db import models
-from django.contrib.postgres.fields import JSONField
 from django.utils import timezone
-from django.core.validators import MinValueValidator
+from multisig.models.coordinator import ServerIdentity
 
 LOGGER = logging.getLogger(__name__)
 
@@ -14,10 +11,14 @@ class MultisigWallet(models.Model):
     # locking_bytecode = models.CharField(max_length=46, null=True, blank=True, unique=True)
     name = models.CharField(max_length=255, help_text="The name of the wallet", null=True, blank=True)
     wallet_hash = models.CharField(max_length=255, null=True, blank=True)
+    wallet_descriptor_id = models.CharField(max_length=64, null=True, blank=True, help_text="SHA256 hash of the canonical BSMS descriptor")
     version = models.PositiveIntegerField(null=True, blank=True, default=0)
+    coordinator = models.ForeignKey(ServerIdentity, related_name='multisig_wallets', on_delete=models.CASCADE, null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
     updated_at = models.DateTimeField(auto_now=True)
+    
     
     # created_by = models.ForeignKey('Signer', on_delete=models.SET_NULL, null=True, blank=True)
     # @property
@@ -30,14 +31,19 @@ class MultisigWallet(models.Model):
         self.save()
 
     def __str__(self):
-        return self.get("name", "Unnamed Wallet")
+        return self.get("name")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['coordinator', 'wallet_descriptor_id'], name='unique_coordinator_wallet_descriptor')
+        ]
 
 class Signer(models.Model):
 
     name = models.CharField(max_length=255, help_text="The name of the signer", null=True, blank=True)
     master_fingerprint = models.CharField(max_length=8, help_text="The signer's xpub master fingerprint", null=True, blank=True)
     derivation_path = models.CharField(max_length=255, help_text="The derivation path of the xpub", null=True, blank=True)
-    public_key = models.CharField(max_length=65, help_text="The signer's xpub public key", null=True, blank=True)
+    public_key = models.CharField(max_length=66, help_text="The signer's xpub public key", null=True, blank=True)
     wallet_descriptor = models.TextField(help_text="The BSMS wallet descriptor encrypted by the coordinator to this signer's public key", null=True, blank=True)
     wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
     
@@ -53,3 +59,4 @@ class Signer(models.Model):
             ]
     def __str__(self):
         return f"{self.entity_key}: {self.xpub}"
+
