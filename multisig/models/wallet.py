@@ -31,7 +31,7 @@ class MultisigWallet(models.Model):
         self.save()
 
     def __str__(self):
-        return self.get("name")
+        return self.name or self.id
 
     class Meta:
         constraints = [
