@@ -8,27 +8,6 @@ from ..utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
 
 LOGGER = logging.getLogger(__name__)
 
-
-class MultisigWalletSerializer(serializers.ModelSerializer):
-
-    walletDescriptorId = serializers.CharField(source='wallet_descriptor_id')
-    walletHash = serializers.CharField(source='wallet_hash')
-
-    class Meta:
-        model = MultisigWallet
-        fields = [
-            'id',
-            'name',
-            'walletHash',
-            'walletDescriptorId',
-            'version',
-            'created_at',
-            'deleted_at',
-            'updated_at',
-            'coordinator',
-            # Add any additional MultisigWallet fields you'd like to expose
-        ]
-
 class SignerSerializer(serializers.ModelSerializer):
     masterFingerprint = serializers.CharField(source='master_fingerprint')
     derivationPath = serializers.CharField(source='derivation_path')
@@ -47,6 +26,30 @@ class SignerSerializer(serializers.ModelSerializer):
             'walletDescriptor',
             'wallet',
         ]
+
+
+class MultisigWalletSerializer(serializers.ModelSerializer):
+
+    walletDescriptorId = serializers.CharField(source='wallet_descriptor_id')
+    walletHash = serializers.CharField(source='wallet_hash')
+    signers = SignerSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = MultisigWallet
+        fields = [
+            'id',
+            'name',
+            'walletHash',
+            'walletDescriptorId',
+            'version',
+            'created_at',
+            'deleted_at',
+            'updated_at',
+            'coordinator',
+            'signers'
+            # Add any additional MultisigWallet fields you'd like to expose
+        ]
+
 
 class MultisigWalletUtxoSerializer(serializers.Serializer):
 
