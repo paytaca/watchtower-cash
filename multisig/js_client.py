@@ -37,3 +37,17 @@ def verify_signature(message: str, public_key: str, signature: dict):
         json={ 'message': message, 'publicKey': public_key, 'signature': signature},
         timeout=5
     )
+
+def decode_psbt(psbt: str):
+    return requests.post(
+        f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-psbt',
+        json={'psbt': psbt},
+        timeout=5
+    )
+
+def decode_transaction_hex(transaction_hex: str):
+    return requests.post(
+        f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-transaction-hex',
+        json={'transaction_hex': transaction_hex},
+        timeout=5
+    )
