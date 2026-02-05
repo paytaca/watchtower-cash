@@ -1,30 +1,29 @@
 from django.urls import path
-from multisig.views.coordinator import ServerIdentityListCreateView
-# from .views import (
-#   MultisigWalletListCreateView,
-#   RenameMultisigWalletView,
-#   MultisigWalletDetailView,
-#   MultisigTransactionProposalListCreateView,
-#   MultisigTransactionProposalDetailView,
-#   SignerSignaturesAddView,
-#   SignaturesAddView,
-#   BroadcastTransactionProposalView,
-#   FinalizeTransactionProposalView,
-#   TransactionProposalStatusView,
-#   MultisigWalletUtxosView
-# )
+from multisig.views.coordinator import (
+    ServerIdentityListCreateView,
+    ServerIdentityDetailView,
+)
+from multisig.views.wallet import (
+    MultisigWalletListCreateView,
+    SignerWalletListView
+)
+from multisig.views.transaction import (
+    ProposalListCreateView,
+    ProposalDetailView,
+    ProposalInputListView,
+    ProposalSigningSubmissionListCreateView,
+    ProposalSigningSubmissionDetailView,
+)
 
 urlpatterns = [
-    # path('wallets/utxos/<str:address>/', MultisigWalletUtxosView.as_view(), name='wallet-utxos'),
-    # path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
-    # path('wallets/<str:wallet_identifier>/', MultisigWalletDetailView.as_view(), name='wallet_detail') ,
-    # path('wallets/<int:pk>/rename/', RenameMultisigWalletView.as_view(), name='wallet-rename'),
-    # path('wallets/<str:wallet_identifier>/transaction-proposals/', MultisigTransactionProposalListCreateView.as_view(), name='transaction-proposal-list-create'),
-    # path('transaction-proposals/<str:proposal_identifier>/', MultisigTransactionProposalDetailView.as_view(), name='transaction-proposal-detail'),
-    # path('transaction-proposals/<str:proposal_identifier>/signatures/', SignaturesAddView.as_view(), name='transaction-proposal-signatures-add'),
-    # path('transaction-proposals/<str:proposal_identifier>/signatures/<str:signer_identifier>/', SignerSignaturesAddView.as_view(), name='transaction-proposal-signer-signatures-add'),
-    # path('transaction-proposals/<str:proposal_identifier>/broadcast/', BroadcastTransactionProposalView.as_view(), name='transaction-proposal-broadcast'),
-    # path('transaction-proposals/<str:proposal_identifier>/finalize/', FinalizeTransactionProposalView.as_view(), name='transaction-proposal-finalize'),
-    # path('transaction-proposals/<str:proposal_identifier>/status/', TransactionProposalStatusView.as_view(), name='transaction-proposal-status'),
+    path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
     path('coordinator/server-identities/', ServerIdentityListCreateView.as_view(), name='server-identity-list-create'),
+    path('coordinator/server-identities/<str:public_key>/', ServerIdentityDetailView.as_view(), name='server-identity-detail'),
+    path('signers/<str:public_key>/wallets/', SignerWalletListView.as_view(), name='signer-wallet-list'),
+    path('proposals/', ProposalListCreateView.as_view(), name='proposal-list-create'),
+    path('proposals/<int:pk>/', ProposalDetailView.as_view(), name='proposal-detail'),
+    path('proposals/<int:proposal_pk>/inputs/', ProposalInputListView.as_view(), name='proposal-input-list'),
+    path('proposals/<int:proposal_pk>/signing-submissions/', ProposalSigningSubmissionListCreateView.as_view(), name='proposal-signing-submission-list-create'),
+    path('proposals/<int:proposal_pk>/signing-submissions/<int:pk>/', ProposalSigningSubmissionDetailView.as_view(), name='proposal-signing-submission-detail'),
 ]
+
