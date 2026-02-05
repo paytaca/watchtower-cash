@@ -1,9 +1,10 @@
 from .wallet import MultisigWallet, Signer
-from .transaction_proposal import MultisigTransactionProposal, Signature
+from .transaction import Proposal, Input, SigningSubmission
 
 __all__ = [
     "MultisigWallet",
     "Signer",
-    "MultisigTransactionProposal",
-    "Signature"
+    "Proposal",
+    "Input",
+    "SigningSubmission",
 ]
