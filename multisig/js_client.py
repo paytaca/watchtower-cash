@@ -45,9 +45,9 @@ def decode_psbt(psbt: str):
         timeout=5
     )
 
-def decode_transaction_hex(transaction_hex: str):
+def decode_proposal(proposal: str, proposal_format: str):
     return requests.post(
-        f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-transaction-hex',
-        json={'transaction_hex': transaction_hex},
+        f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-proposal',
+        json={'proposal': proposal, 'proposal_format': proposal_format},
         timeout=5
     )

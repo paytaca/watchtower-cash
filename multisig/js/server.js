@@ -14,9 +14,11 @@ import {
     stringify,
     secp256k1,
     sha256,
-    utf8ToBin
+    utf8ToBin,
+    decodeTransactionCommon
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
+import { Pst } from './multisig/pst.js'
 import { ElectrumClient } from '@electrum-cash/network'
 
 if (typeof global.structuredClone === 'undefined') {
@@ -149,6 +151,39 @@ app.post('/multisig/message/verify-signature', async (req, res) => {
   }
   
   return res.send({ success })
+})
+
+app.post('/multisig/transaction/decode-psbt', async (req, res) => {
+  const { psbt } = req.body
+  console.log('PSBT', psbt)
+  const decoded = Pst.fromPsbt(psbt)
+  console.log('DECODED', decoded)
+  res.send(decoded)
+})
+
+app.post('/multisig/transaction/decode-proposal', async (req, res) => {
+  if (req.body.proposal_format !== 'psbt') {
+    return res.send({ error: 'Only psbt proposals are supported' })
+  }
+  const { proposal } = req.body
+  const decoded = Pst.fromPsbt(proposal)
+  const decodedProposal = {
+    unsigned_transaction_hex: decoded.unsignedTransactionHex,
+    unsigned_transaction_hash: decoded.unsignedTransactionHash, 
+    proposal_format: 'psbt',
+    proposal,
+    inputs: []
+  }
+  const decodedTransaction = decodeTransactionCommon(hexToBin(decoded.unsignedTransactionHex))
+  console.log('DECODED TRANSACTION', decodedTransaction)
+  for (const input of decodedTransaction.inputs) {
+    decodedProposal.inputs.push({
+      outpoint_transaction_hash: binToHex(input.outpointTransactionHash),
+      outpoint_index: input.outpointIndex,
+    })
+  }
+  console.log('DECODED PROPOSAL', decodedProposal)
+  res.send(decodedProposal)
 })
 
 app.get('/test', async (req, res) => {
