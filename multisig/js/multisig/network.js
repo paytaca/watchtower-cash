@@ -305,11 +305,20 @@ export class WatchtowerCoordinationServer {
         return response.data
     }
 
-    async uploadProposal({ psbt, authCredentialsGenerator }) {
+    /**
+     * @typedef {Object} Proposal
+     * @property {string} [wallet] - The wallet id associated with the proposal.
+     * @property {string} [proposal] - The serialized/encoded proposal.
+     * @property {string} [proposalFormat] - Example: 'psbt' | 'libauth-template' only 'psbt' is supported now.
+     * @param {Object} params
+     * @param {Proposal} params.proposal - The proposal to upload.
+     * @param {*} params.authCredentialsGenerator
+     */
+    async uploadProposal({ payload, authCredentialsGenerator }) {
         const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
         const response = await axios.post(
             `${this.hostname}/api/multisig/proposals/`,
-            { proposal: psbt, format: 'psbt' }, 
+            payload, 
             { headers: { ...authCredentials } }
         )
         return response.data

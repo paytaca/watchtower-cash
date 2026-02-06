@@ -750,7 +750,6 @@ export class Pst {
       allInputsAreSigned.push(
         publicKeySigned({ publicKey: publicKeyDerivedFromXpubForThisInput, pst: this })
       )
-
     }
 
     if (!allInputsAreSigned.length) return false
@@ -974,6 +973,10 @@ export class Pst {
       walletHash: getWalletHash(this.wallet),
     }
 
+    if (this.metadata) {
+      data.metadata = this.metadata
+    }
+    
     if (this.signedTransactionHash) {
       data.signedTransactionHash = this.signedTransactionHash
     }
@@ -1059,28 +1062,37 @@ export class Pst {
   async upload() {
     
     if (!this.options?.coordinationServer) return
-    
-    const remotePst = await this.options?.coordinationServer?.uploadPst(this)
-    
-    
-    if (!remotePst?.id || !(/^[0-9]+$/.test(remotePst.id))) {
-      this.isSynced = false
-      return
-    }
 
-    this.isSynced = true
-    
-    if (!this.updatedAt) {
-      Object.assign(this, remotePst)
-      this.save()
-      return this
-    }
+    const response = 
+      await this.options?.coordinationServer?.uploadProposal({
+        payload: {
+          wallet: this.wallet.id,
+          proposal: (await this.toPsbt()).toString(),
+          proposalFormat: 'psbt'
+        },
+        authCredentialsGenerator: this.wallet
+      })
 
-    if (new Date(remotePst.updatedAt) > new Date(this.updatedAt)) {
-      Object.assign(this, remotePst)
-      this.save()
-    }
-    return this
+    console.log(response)
+    
+    // if (!remotePst?.id || !(/^[0-9]+$/.test(remotePst.id))) {
+    //   this.isSynced = false
+    //   return
+    // }
+
+    // this.isSynced = true
+    
+    // if (!this.updatedAt) {
+    //   Object.assign(this, remotePst)
+    //   this.save()
+    //   return this
+    // }
+
+    // if (new Date(remotePst.updatedAt) > new Date(this.updatedAt)) {
+    //   Object.assign(this, remotePst)
+    //   this.save()
+    // }
+    // return this
   }
 
   /**
