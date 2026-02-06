@@ -12,12 +12,12 @@ LOGGER = logging.getLogger(__name__)
 
 class Proposal(models.Model):
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE, null=True, blank=True)
-    purpose = models.CharField(max_length=250, blank=True, null=True, help_text="The purpose of the transaction")
-    origin = models.CharField(max_length=250, blank=True, null=True, help_text="The origin of the transaction. Can be a wallet or dapp url")
     unsigned_transaction_hex = models.TextField(help_text="The Unsigned transaction hex.")
     unsigned_transaction_hash = models.CharField(max_length=64, help_text="The hash of the Unsigned transaction")
     signed_transaction = models.TextField(null=True, blank=True, help_text="The Signed transaction hex. This could be a partially signed transaction. This updates as signing submissions are received.")
     signed_transaction_hash = models.CharField(max_length=64, null=True, blank=True, help_text="The double sha256 hash of the Signed transaction")
+    proposal = models.TextField(null=True, blank=True, help_text="The serialized / encoded proposal data")
+    proposal_format = models.CharField(default='psbt', max_length=50, blank=True, null=True, help_text="The format of the proposal data")
 
     txid = models.CharField(
         max_length=64,
