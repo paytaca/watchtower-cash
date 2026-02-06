@@ -1,10 +1,11 @@
+import logging
 from django.db import transaction
 from rest_framework import serializers
 
+import multisig.js_client as js_client
 from multisig.models.transaction import Proposal, Input, SigningSubmission
-from main.utils.queries.bchn import BCHN
 
-bchn = BCHN()
+LOGGER = logging.getLogger(__name__)
 
 class InputSerializer(serializers.ModelSerializer):
     proposal = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -18,44 +19,55 @@ class InputSerializer(serializers.ModelSerializer):
 
 
 class ProposalSerializer(serializers.ModelSerializer):
-    purpose = serializers.CharField(required=False, allow_blank=True)
-    origin = serializers.CharField(required=False, allow_blank=True)
-    unsignedTransactionHex = serializers.CharField(source='unsigned_transaction_hex')
+    proposal = serializers.CharField(required=True)
+    proposalFormat = serializers.CharField(source='proposal_format', default='psbt', required=False, allow_blank=True)
+    unsignedTransactionHex = serializers.CharField(source='unsigned_transaction_hex', read_only=True)
     unsignedTransactionHash = serializers.CharField(source='unsigned_transaction_hash', read_only=True)
     signedTransaction = serializers.CharField(source='signed_transaction', read_only=True)
     signedTransactionHash = serializers.CharField(source='signed_transaction_hash', read_only=True)
     txid = serializers.CharField(read_only=True)
     signingProgress = serializers.CharField(source='signing_progress', read_only=True)
     broadcastStatus = serializers.CharField(source='broadcast_status', read_only=True)
-    inputs = InputSerializer(many=True, read_only=True)
 
     class Meta:
         model = Proposal
         fields = [
-            'id', 'wallet', 'purpose', 'origin',
+            'id', 'wallet', 'proposal', 'proposalFormat',
             'unsignedTransactionHex', 'unsignedTransactionHash',
             'signedTransaction', 'signedTransactionHash', 'txid',
-            'signingProgress', 'broadcastStatus', 'inputs'
+            'signingProgress', 'broadcastStatus'
         ]
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
-        rep['inputs'] = InputSerializer(instance.inputs.all(), many=True).data
-        return rep
+        # rep['inputs'] = InputSerializer(instance.inputs.all(), many=True).data
+        filtered_rep = {k: v for k, v in rep.items() if v not in [None, '', [], {}]}
+        return filtered_rep
 
     def create(self, validated_data):
-        decoded = bchn._decode_raw_transaction(validated_data['unsigned_transaction_hex'])
         with transaction.atomic():
-            proposal = Proposal.objects.create(**validated_data)
-            for item in decoded.get('vin', []):
-                outpoint = item.get('txid')
-                index = item.get('vout')
-                Input.objects.create(
-                    proposal=proposal,
-                    outpoint_transaction_hash=outpoint,
-                    outpoint_index=index,
+            if validated_data.get('proposal_format') == 'psbt':
+                decode_response = js_client.decode_proposal(validated_data['proposal'], validated_data['proposal_format'])
+                decode_response.raise_for_status()
+                decoded_proposal = decode_response.json()
+                inputs = decoded_proposal.pop('inputs', []) 
+
+                proposal, created= Proposal.objects.get_or_create(
+                    unsigned_transaction_hex=decoded_proposal.get('unsigned_transaction_hex'),
+                    defaults={
+                        'wallet': validated_data.get('wallet'),
+                        'proposal': validated_data['proposal'],
+                        'proposal_format': validated_data['proposal_format'],
+                    }
                 )
-        return proposal
+                if created:
+                    for input in inputs:
+                        Input.objects.create(
+                            proposal=proposal,
+                            outpoint_transaction_hash=input.get('outpoint_transaction_hash'),
+                            outpoint_index=input.get('outpoint_index'),
+                        )
+                return proposal
 
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
