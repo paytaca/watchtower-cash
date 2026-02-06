@@ -29,7 +29,7 @@ class ProposalListCreateView(APIView):
         return Response(serializer.data)
 
     @swagger_auto_schema(
-        operation_description="Create a new proposal. Inputs are derived from decoding the unsigned transaction hex.",
+        operation_description="Create a new proposal. Request body: { proposal: string, proposalFormat: string }.",
         request_body=ProposalSerializer,
         responses={
             status.HTTP_201_CREATED: ProposalSerializer,
