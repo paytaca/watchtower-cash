@@ -43,6 +43,7 @@ class AddressBookRetrieveSerializer(ModelSerializer):
             'name',
             'is_favorite',
             'created_at',
+            'updated_at',
             'addresses'
         ]
 
