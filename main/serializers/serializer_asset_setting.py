@@ -8,5 +8,5 @@ class AssetSettingSerializer (serializers.ModelSerializer):
             "wallet_hash",
             "custom_list",
             "unlisted_list",
-            "favorites"
+            "favorites",
         ]

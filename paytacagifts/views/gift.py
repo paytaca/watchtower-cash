@@ -11,7 +11,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from main.utils.subscription import new_subscription
 from main.utils.queries.node import Node
-from main.models import Transaction, TransactionMetaAttribute
+from main.models import Transaction, TransactionMetaAttribute, TransactionBroadcast
 from django.db.models import Sum, F, Q
 from datetime import datetime
 import logging
@@ -249,6 +249,19 @@ class GiftViewSet(viewsets.GenericViewSet):
                         value="Gift"
                     )
                 )
+
+                # Use the same async broadcast pipeline as /api/broadcast/
+                # (save a TransactionBroadcast record then enqueue Celery broadcast task)
+                try:
+                    txn_broadcast = TransactionBroadcast.objects.create(
+                        txid=txid,
+                        tx_hex=transaction_hex,
+                    )
+                    from main.tasks import broadcast_transaction
+                    broadcast_transaction.delay(transaction_hex, txid, txn_broadcast.id)
+                except Exception:
+                    # Don't fail the request if async pipeline can't be queued
+                    pass
             
             # Build response - old clients get original format, new clients get enhanced format
             response_data = {
@@ -260,6 +273,8 @@ class GiftViewSet(viewsets.GenericViewSet):
                 # New clients get success and encrypted_gift_code
                 response_data["success"] = True
                 response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
+                if txid:
+                    response_data["txid"] = txid
             return Response(response_data)
 
         # Check campaign limits BEFORE broadcasting transaction
@@ -303,13 +318,15 @@ class GiftViewSet(viewsets.GenericViewSet):
         # Now that limit check passed, handle transaction broadcasting if provided
         txid = None
         if transaction_hex:
-            # Check if node is available
+            # Match /api/broadcast/ behavior: do mempool test in-request,
+            # then broadcast asynchronously via Celery to avoid latency spikes.
+            # Check if node is available (fast failure vs long waits elsewhere)
             if not NODE.BCH.get_latest_block():
                 return Response({
                     "success": False,
                     "message": "Blockchain node is not available",
                 }, status=503)
-            
+
             # Test mempool acceptance
             try:
                 test_accept = NODE.BCH.test_mempool_accept(transaction_hex)
@@ -328,41 +345,42 @@ class GiftViewSet(viewsets.GenericViewSet):
                     "success": False,
                     "message": f"Error testing mempool acceptance: {error_msg}",
                 }, status=400)
-            
-            # Check if transaction already exists
-            if not Transaction.objects.filter(txid=txid).exists():
-                # Broadcast synchronously
-                try:
-                    broadcast_result = NODE.BCH.broadcast_transaction(transaction_hex)
-                    # broadcast_transaction returns txid on success, or raises exception on failure
-                    if not broadcast_result:
-                        return Response({
-                            "success": False,
-                            "message": "Transaction broadcast failed: No txid returned",
-                        }, status=400)
-                except Exception as exc:
-                    error_msg = str(exc)
-                    # Some nodes return "already have transaction" which is actually success
-                    if 'already have transaction' not in error_msg.lower():
-                        LOGGER.exception(f"Error broadcasting transaction: {exc}")
-                        return Response({
-                            "success": False,
-                            "message": f"Transaction broadcast failed: {error_msg}",
-                        }, status=400)
+
+            # Save broadcast attempt and enqueue async broadcaster (same as /api/broadcast/)
+            try:
+                txn_broadcast = TransactionBroadcast.objects.create(
+                    txid=txid,
+                    tx_hex=transaction_hex,
+                )
+                from main.tasks import broadcast_transaction
+                broadcast_transaction.delay(transaction_hex, txid, txn_broadcast.id)
+            except Exception as exc:
+                # If we cannot enqueue the async broadcast pipeline, fail like the old behavior.
+                # This keeps semantics closer to "broadcast requested" even though actual send is async.
+                error_msg = str(exc)
+                LOGGER.exception(f"Error queueing transaction broadcast: {exc}")
+                return Response({
+                    "success": False,
+                    "message": f"Transaction broadcast failed: {error_msg}",
+                }, status=400)
         
         # Create the claim record (limit check already passed)
         if gift.campaign:
-            claim = Claim.objects.create(
+            claim, _ = Claim.objects.get_or_create(
                 wallet=wallet,
-                amount=gift.amount,
                 gift=gift,
-                campaign=gift.campaign
+                defaults=dict(
+                    amount=gift.amount,
+                    campaign=gift.campaign,
+                )
             )
         else:
-            claim = Claim.objects.create(
+            claim, _ = Claim.objects.get_or_create(
                 wallet=wallet,
-                amount=gift.amount,
-                gift=gift
+                gift=gift,
+                defaults=dict(
+                    amount=gift.amount,
+                )
             )
 
         if claim:
@@ -387,6 +405,8 @@ class GiftViewSet(viewsets.GenericViewSet):
                 # New clients get success and encrypted_gift_code
                 response_data["success"] = True
                 response_data["encrypted_gift_code"] = gift.encrypted_gift_code or ''
+                if txid:
+                    response_data["txid"] = txid
             return Response(response_data)
         else:
             # Error response - only include success/message for new clients
@@ -448,7 +468,7 @@ class GiftViewSet(viewsets.GenericViewSet):
             if gift.date_claimed is not None:
                 raise Exception("This gift has been claimed.")
             
-            # Handle transaction broadcasting if provided (similar to claim endpoint)
+            # Handle transaction broadcasting if provided (match /api/broadcast/ behavior)
             txid = None
             if transaction_hex:
                 # Check if node is available
@@ -476,46 +496,42 @@ class GiftViewSet(viewsets.GenericViewSet):
                         "success": False,
                         "message": f"Error testing mempool acceptance: {error_msg}",
                     }, status=400)
-                
-                # Check if transaction already exists
-                if not Transaction.objects.filter(txid=txid).exists():
-                    # Broadcast synchronously
-                    try:
-                        broadcast_result = NODE.BCH.broadcast_transaction(transaction_hex)
-                        # broadcast_transaction returns txid on success, or raises exception on failure
-                        if not broadcast_result:
-                            return Response({
-                                "success": False,
-                                "message": "Transaction broadcast failed: No txid returned",
-                            }, status=400)
-                    except Exception as exc:
-                        error_msg = str(exc)
-                        # Some nodes return "already have transaction" which is actually success
-                        if 'already have transaction' not in error_msg.lower():
-                            LOGGER.exception(f"Error broadcasting transaction: {exc}")
-                            return Response({
-                                "success": False,
-                                "message": f"Transaction broadcast failed: {error_msg}",
-                            }, status=400)
+
+                # Save broadcast attempt and enqueue async broadcaster (same as /api/broadcast/)
+                try:
+                    txn_broadcast = TransactionBroadcast.objects.create(
+                        txid=txid,
+                        tx_hex=transaction_hex,
+                    )
+                    from main.tasks import broadcast_transaction
+                    broadcast_transaction.delay(transaction_hex, txid, txn_broadcast.id)
+                except Exception as exc:
+                    error_msg = str(exc)
+                    LOGGER.exception(f"Error queueing transaction broadcast: {exc}")
+                    return Response({
+                        "success": False,
+                        "message": f"Transaction broadcast failed: {error_msg}",
+                    }, status=400)
             
             # Check if a claim already exists for this wallet (from previous recovery attempt)
             # If it exists, we can still allow recovery (return the data without creating duplicate claim)
-            existing_claim = Claim.objects.filter(gift=gift, wallet=wallet).first()
-            if not existing_claim:
-                # Create new claim for recovery
-                if gift.campaign:
-                    existing_claim = Claim.objects.create(
-                        wallet=wallet,
+            if gift.campaign:
+                existing_claim, _ = Claim.objects.get_or_create(
+                    wallet=wallet,
+                    gift=gift,
+                    defaults=dict(
                         amount=gift.amount,
-                        gift=gift,
-                        campaign=gift.campaign
+                        campaign=gift.campaign,
                     )
-                else:
-                    existing_claim = Claim.objects.create(
-                        wallet=wallet,
+                )
+            else:
+                existing_claim, _ = Claim.objects.get_or_create(
+                    wallet=wallet,
+                    gift=gift,
+                    defaults=dict(
                         amount=gift.amount,
-                        gift=gift
                     )
+                )
             
             # Create transaction metadata if txid is available
             if txid:
@@ -538,6 +554,8 @@ class GiftViewSet(viewsets.GenericViewSet):
             if transaction_hex:
                 # New clients get success flag
                 response_data["success"] = True
+                if txid:
+                    response_data["txid"] = txid
             return Response(response_data)
         else:
             raise Exception("This gift does not exist.")
