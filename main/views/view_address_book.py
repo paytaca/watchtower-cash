@@ -1,4 +1,5 @@
 from rest_framework import viewsets, mixins, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from main.models import AddressBook, AddressBookAddress
 from main.serializers import (
@@ -14,7 +15,6 @@ from main.serializers import (
 
 class AddressBookViewSet(
     viewsets.GenericViewSet,
-    mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,
     mixins.UpdateModelMixin,
@@ -28,11 +28,6 @@ class AddressBookViewSet(
 
     def get_object(self):
         return self.queryset.get(pk=self.kwargs['pk'])
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = AddressBookListSerializer(queryset, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -58,6 +53,17 @@ class AddressBookViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=['GET'],
+        name='Get Wallet Address Book',
+        url_path=r'(?P<wallet_hash>[^/.]+)'
+    )
+    def get_wallet_address_book(self, request, *args, **kwargs):
+        queryset = self.queryset.filter(wallet__wallet_hash=kwargs.get('wallet_hash'))
+        serializer = AddressBookListSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class AddressBookAddressViewSet(
