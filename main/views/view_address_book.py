@@ -59,7 +59,7 @@ class AddressBookViewSet(
         detail=False,
         methods=['GET'],
         name='Get Wallet Address Book',
-        url_path=r'(?P<wallet_hash>[^/.]+)'
+        url_path=r'wallet/(?P<wallet_hash>[^/.]+)'
     )
     def get_wallet_address_book(self, request, *args, **kwargs):
         queryset = self.queryset.filter(wallet__wallet_hash=kwargs.get('wallet_hash'))
