@@ -78,6 +78,11 @@ class AddressBookCreateSerializer(ModelSerializer):
         validated_data['wallet'] = wallet
         return super().create(validated_data)
 
+class AddressBookUpdateSerializer(ModelSerializer):
+    class Meta:
+        model = AddressBook
+        fields = ['name', 'is_favorite']
+
 class AddressBookSerializer(ModelSerializer):
     class Meta:
         model = AddressBook

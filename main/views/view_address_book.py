@@ -11,6 +11,7 @@ from main.serializers import (
 
     AddressBookAddressCreateSerializer
 )
+from main.serializers.serializer_address_book import AddressBookUpdateSerializer
 
 
 class AddressBookViewSet(
@@ -20,6 +21,7 @@ class AddressBookViewSet(
     mixins.UpdateModelMixin,
     mixins.DestroyModelMixin
 ):
+    http_method_names = ['get', 'post', 'patch', 'delete']
     queryset = AddressBook.objects.all()
     serializer_class = AddressBookSerializer
 
@@ -49,14 +51,9 @@ class AddressBookViewSet(
         
         return Response(serializer.data['id'], status=status.HTTP_201_CREATED)
 
-    def update(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        return Response(status=status.HTTP_200_OK)
-
     def partial_update(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data, partial=True)
+        instance = self.get_object()
+        serializer = AddressBookUpdateSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
         return Response(status=status.HTTP_200_OK)
