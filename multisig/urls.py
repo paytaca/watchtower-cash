@@ -13,6 +13,9 @@ from multisig.views.transaction import (
     ProposalInputListView,
     ProposalSigningSubmissionListCreateView,
     ProposalSigningSubmissionDetailView,
+    ProposalSignatureListView,
+    ProposalSignatureDetailView,
+    SignatureBySignerIdentifierList,
 )
 
 urlpatterns = [
@@ -25,5 +28,8 @@ urlpatterns = [
     path('proposals/<int:proposal_pk>/inputs/', ProposalInputListView.as_view(), name='proposal-input-list'),
     path('proposals/<int:proposal_pk>/signing-submissions/', ProposalSigningSubmissionListCreateView.as_view(), name='proposal-signing-submission-list-create'),
     path('proposals/<int:proposal_pk>/signing-submissions/<int:pk>/', ProposalSigningSubmissionDetailView.as_view(), name='proposal-signing-submission-detail'),
+    path('proposals/<int:proposal_pk>/signatures/', ProposalSignatureListView.as_view(), name='proposal-signature-list'),
+    # path('proposals/<int:proposal_pk>/signatures/<int:pk>/', ProposalSignatureDetailView.as_view(), name='proposal-signature-detail'),
+    path('proposals/<str:proposal_unsigned_transaction_hash>/signatures/<str:identifier>/', SignatureBySignerIdentifierList.as_view(), name='signature-list-by-signature-identifier'),
 ]
 

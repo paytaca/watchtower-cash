@@ -1,14 +1,6 @@
-import logging
-import hashlib
-import json
-from django.core.exceptions import ValidationError
-from django.utils import timezone
 from django.db import models
-from django.contrib.postgres.fields import JSONField
-from multisig.models.wallet import MultisigWallet, Signer
+from multisig.models.wallet import MultisigWallet
 from multisig.utils import generate_transaction_hash
-
-LOGGER = logging.getLogger(__name__)
 
 class Proposal(models.Model):
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE, null=True, blank=True)
@@ -63,25 +55,29 @@ class Input(models.Model):
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='inputs')
     outpoint_transaction_hash = models.CharField(max_length=64)
     outpoint_index = models.PositiveIntegerField()
+    redeem_script = models.TextField(blank=True, null=True)
+    
     class Meta:
         unique_together = (
             'outpoint_transaction_hash',
             'outpoint_index',
         )
-    
+
+class Bip32Derivation(models.Model):
+    input = models.ForeignKey(Input, on_delete=models.CASCADE, related_name='bip32_derivation')
+    path = models.CharField(max_length=100, blank=True, null=True)
+    public_key = models.CharField(max_length=66, blank=True, null=True, help_text='Signer\'s public key', unique=True)
+    master_fingerprint = models.CharField(max_length=8, blank=True, null=True)
+
 class SigningSubmission(models.Model):
-    signer = models.ForeignKey(Signer, on_delete=models.CASCADE, related_name='signing_submissions')
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='signing_submissions')
     payload = models.TextField()
     payload_format = models.CharField(default='psbt', max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        unique_together = ('proposal', 'signer')
-
-    def save(self, *args, **kwargs):
-        if self.proposal.wallet_id != self.signer.wallet_id:
-            raise ValidationError(
-                "Signer is not a member of the proposal's wallet"
-            )
-        super().save(*args, **kwargs)
+class Signature(models.Model):
+    input = models.ForeignKey(Input, on_delete=models.CASCADE, related_name='signatures')
+    signing_submission = models.ForeignKey(SigningSubmission, on_delete=models.CASCADE, null=True, blank=True, related_name='signatures')
+    public_key = models.CharField(max_length=66, help_text='Signer\'s public key')
+    signature = models.CharField(max_length=160, help_text='Signature hex string')
+    
