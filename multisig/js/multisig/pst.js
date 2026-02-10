@@ -100,7 +100,11 @@ import {
   hash160,
   encodeLockingBytecodeP2sh20,
   decodeHdPublicKey,
-  decodeTransactionBch
+  decodeTransactionBch,
+  hash256,
+  secp256k1,
+  sha256,
+  numberToBinInt32TwosCompliment
 } from 'bitauth-libauth-v3'
 
 import { getCompiler, getWalletHash, MultisigWallet, sortPublicKeysBip67 } from './wallet.js'
@@ -109,6 +113,7 @@ import { bip32ExtractRelativePath } from './utils.js'
 import { Psbt } from './psbt.js'
 import { MultisigTransactionBuilder } from './transaction-builder.js'
 import { WatchtowerNetworkProvider } from './network.js'
+import { encodeSigningSerializationBCH, generateSigningSerializationBCH, generateSigningSerializationComponentsBCH } from '@bitauth/libauth'
 
 export const SIGNING_PROGRESS = {
   UNSIGNED: 'unsigned',
@@ -371,7 +376,6 @@ export const combine = (psts) => {
         }
         absorberPstInput.signatures[publicKeyOfPartialSignature] = partialSignaturesOfInput[publicKeyOfPartialSignature]
       }
-
     }
   }
   
@@ -516,6 +520,38 @@ export const publicKeySigned = ({ publicKey, pst }) => {
     if (!allInputsAreSigned.length) return false
 
     return allInputsAreSigned.every(isSigned => isSigned)
+}
+
+
+/**
+ * Context object for signature verification and transaction processing.
+ *
+ * @typedef {Object} Context
+ * @property {number} inputIndex - The index of the input being processed in the transaction.
+ * @property {Array} sourceOutputs - Array of source outputs for the transaction inputs.
+ * @property {Object} transaction - The transaction object (decoded).
+ *
+ * Verifies a Schnorr signature for a given transaction input context.
+ *
+ * @param {Object} params - The parameters for verification.
+ * @param {Uint8Array} params.signature - The Schnorr signature to verify.
+ * @param {Uint8Array} params.publicKey - The public key corresponding to the signature.
+ * @param {Context} params.context - Context object containing transaction, input index, and source outputs.
+ * @returns {boolean} True if signature is valid, otherwise false.
+ */
+export const verifyTransactionSignature = ({ signature, publicKey, redeemScript, context }) => {
+  const sigHashFlag = signature.slice(-1)[0]
+  const signingSerialization = generateSigningSerializationBCH(context, { 
+    coveredBytecode: redeemScript, 
+    signingSerializationType: new Uint8Array([sigHashFlag]) // Uint8Array([65]) for allOutputs
+  })
+  const sigHash = hash256(signingSerialization)
+  let signatureFormat = signature.length > 65 ? 'ecdsa' : 'schnorr'
+  if (signatureFormat === 'schnorr') {
+    const signatureVerificationResult = secp256k1.verifySignatureSchnorr(signature.slice(0, 64), publicKey, sigHash)
+    return signatureVerificationResult
+  }
+  return secp256k1.verifySignatureDERLowS(signature.slice(0, signature.length - 1), publicKey, sigHash)
 }
 
 export class Pst {
@@ -688,19 +724,19 @@ export class Pst {
       }
     } // end for
 
-    
     const signAttempt = generateTransaction({ ...transaction })
     
     if (signAttempt.success) return
 
     for (const [inputIndex, error] of Object.entries(signAttempt?.errors || {})) {
       const signerResolvedVariables = extractResolvedVariables({ ...signAttempt, errors: [error] })
-      const sigValue = Object.values(signerResolvedVariables)[0]
+      const signature = Object.values(signerResolvedVariables)[0]
       const inputUnlockingBytecode = transaction.inputs[inputIndex].unlockingBytecode
 
       const script = compileScript('lock', inputUnlockingBytecode.data, inputUnlockingBytecode.compiler.configuration)
       // const lockingScript = script.bytecode
       const redeemScript = script.reduce.bytecode
+
       const keyVariable = `${Object.keys(inputUnlockingBytecode.data.keys.privateKeys)[0]}.public_key`
       this.inputs[inputIndex].redeemScript = redeemScript
 
@@ -708,9 +744,9 @@ export class Pst {
         this.inputs[inputIndex].signatures = {}
       }
 
-      const signerPublicKeyForThisInput = binToHex(inputUnlockingBytecode.data.bytecode[keyVariable])
-      this.inputs[inputIndex].signatures[signerPublicKeyForThisInput] = sigValue
-
+      const signerPublicKey = inputUnlockingBytecode.data.bytecode[keyVariable]
+      this.inputs[inputIndex].signatures[binToHex(signerPublicKey)] = signature
+      
       if (this.options?.store) {
         this.save()
       }
@@ -883,7 +919,39 @@ export class Pst {
   }
 
   combine(psts) {
-    return combine([this, ...psts])
+    const inputSignatureVerificationResults = []
+    for (const pst of psts) {
+      for (const inputIndex in pst.inputs) {
+        if (!pst.inputs[inputIndex].redeemScript) continue 
+        const publicKeys = Object.keys(pst.inputs[inputIndex].signatures || {})
+        if (publicKeys.length === 0) continue
+        publicKeys.forEach((publicKey) => {
+          const signature = pst.inputs[inputIndex].signatures[publicKey]
+          const redeemScript = pst.inputs[inputIndex].redeemScript 
+          if (!redeemScript) return
+          const transactionBuilder = new MultisigTransactionBuilder()
+          transactionBuilder.addInputs(pst.inputs)
+          transactionBuilder.addOutputs(pst.outputs)
+          transactionBuilder.setLocktime(pst.locktime ?? 0)
+          transactionBuilder.setVersion(pst.version)
+          const sigVerifyResult = verifyTransactionSignature({ 
+            signature, 
+            publicKey: hexToBin(publicKey),
+            redeemScript,
+            context: {
+              inputIndex,
+              sourceOutputs: pst.inputs.map((i) => i.sourceOutput),
+              transaction: decodeTransactionCommon(hexToBin(transactionBuilder.build()))
+            }
+          })
+          inputSignatureVerificationResults.push(sigVerifyResult)
+        }) 
+      }
+    }
+
+    if (!inputSignatureVerificationResults.every(ok => Boolean(ok))) throw new Error('Signature Verification Failed')
+    const combined = combine([this, ...psts])
+    return combined
   }
 
   getSignatureCount() {
@@ -976,7 +1044,7 @@ export class Pst {
     if (this.metadata) {
       data.metadata = this.metadata
     }
-    
+
     if (this.signedTransactionHash) {
       data.signedTransactionHash = this.signedTransactionHash
     }
@@ -990,6 +1058,29 @@ export class Pst {
     }
 
     return JSON.parse(JSON.stringify(data, Pst.exportSafeJSONReplacer))
+  }
+
+  /**
+   * Resolves the outpoint transaction of each input 
+   */
+  async resolveInputsTransactionData() {
+    for (const [i, input] of this.inputs.entries()) {
+      if (!input.outpointTransaction) {
+        const tx = await this.options.provider.getRawTransaction(binToHex(input.outpointTransactionHash))
+        input.outpointTransaction = hexToBin(tx)
+      }
+
+      const computedTransactionHash = hashTransaction(input.outpointTransaction)
+      if (computedTransactionHash !== binToHex(input.outpointTransactionHash)) {
+        throw new Error(`Input ${i} references a previous transaction that doesn't much its outpoint transaction hash.`)
+      }
+
+      const decodedTx = decodeTransactionBch(input.outpointTransaction)
+      const expectedSourceOutput = decodedTx.outputs[input.outpointIndex]
+      if (!expectedSourceOutput) {
+        throw new Error(`Input ${i} references an output that does not exist in the previous transaction.`)
+      } 
+    }
   }
 
   async toPsbt(version = 145) {
@@ -1011,7 +1102,6 @@ export class Pst {
         throw new Error(`Input ${i} references an output that does not exist in the previous transaction.`)
       } 
     }
-
 
     const psbt = new Psbt()
     psbt.encode(this, version)
@@ -1060,9 +1150,7 @@ export class Pst {
   }
 
   async upload() {
-    
     if (!this.options?.coordinationServer) return
-
     const response = 
       await this.options?.coordinationServer?.uploadProposal({
         payload: {
@@ -1073,26 +1161,10 @@ export class Pst {
         authCredentialsGenerator: this.wallet
       })
 
-    console.log(response)
-    
-    // if (!remotePst?.id || !(/^[0-9]+$/.test(remotePst.id))) {
-    //   this.isSynced = false
-    //   return
-    // }
-
-    // this.isSynced = true
-    
-    // if (!this.updatedAt) {
-    //   Object.assign(this, remotePst)
-    //   this.save()
-    //   return this
-    // }
-
-    // if (new Date(remotePst.updatedAt) > new Date(this.updatedAt)) {
-    //   Object.assign(this, remotePst)
-    //   this.save()
-    // }
-    // return this
+    if (response?.id && !this.id) {
+      this.id = response.id
+      this.save()
+    }
   }
 
   /**

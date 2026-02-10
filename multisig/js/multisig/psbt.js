@@ -445,7 +445,6 @@ export class GlobalMap {
     const k = new Key(hexToBin(PSBT_GLOBAL_XPUB), encodedHdPublicKey)
     let mf = isHex(masterFingerprint) ? hexToBin(masterFingerprint): masterFingerprint 
     let dp = bip32EncodeDerivationPath(derivationPath)
-
     const v = new Value(new Uint8Array([...mf, ...dp]))
 
     if (!this.keypairs[PSBT_GLOBAL_XPUB]) {
@@ -1564,6 +1563,7 @@ export class Psbt {
       decodeResult.metadata = metadata
     }
 
+    
     decodeResult.inputs = []
 
     for(const psbtInput of this.inputMap?.inputs) {
