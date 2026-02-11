@@ -5,11 +5,12 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db import models
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
-from multisig.models.transaction import Proposal, SigningSubmission, Signature
+from multisig.models.transaction import Bip32Derivation, Proposal, SigningSubmission, Signature
 from multisig.models.wallet import MultisigWallet
 from multisig.serializers.transaction import (
     ProposalSerializer,
@@ -256,6 +257,7 @@ class SignatureBySignerIdentifierList(APIView):
         responses={status.HTTP_200_OK: SignatureWithBip32Serializer(many=True)},
     )
     def get_queryset(self, proposal_identifier, identifier):
+
         if proposal_identifier.isdigit():
             base = (
                 Signature.objects.filter(input__proposal__id=int(proposal_identifier))
@@ -269,10 +271,12 @@ class SignatureBySignerIdentifierList(APIView):
                 .prefetch_related('input__bip32_derivation')
             )
 
-        if len(identifier) == 8:
-            return base.filter(input__bip32_derivation__master_fingerprint=identifier).distinct()
 
-        return base.filter(input__bip32_derivation__public_key=identifier).distinct()
+        return base.filter(
+                input__bip32_derivation__master_fingerprint=identifier,
+                public_key=models.F('input__bip32_derivation__public_key')
+            ).distinct()
+
         
 
     def get(self, request, proposal_identifier, identifier):
