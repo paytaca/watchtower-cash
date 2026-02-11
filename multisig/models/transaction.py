@@ -1,3 +1,4 @@
+import hashlib
 from django.db import models
 from multisig.models.wallet import MultisigWallet
 from multisig.utils import generate_transaction_hash
@@ -70,11 +71,28 @@ class Bip32Derivation(models.Model):
     master_fingerprint = models.CharField(max_length=8, blank=True, null=True)
 
 class SigningSubmission(models.Model):
+    
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='signing_submissions')
     payload = models.TextField()
     payload_format = models.CharField(default='psbt', max_length=50, blank=True, null=True)
+    payload_hash = models.CharField(max_length=64, null=True, blank=True, help_text='The sha256 hash of the payload. Payload is treated as utf8 string. This is only used for deduplication')
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @staticmethod
+    def compute_payload_hash(payload):
+        """
+        Compute the SHA256 hash of the payload treated as a utf-8 string.
+        Returns a hex digest string.
+        """
+        if not isinstance(payload, str):
+            payload = str(payload)
+        return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+    def save(self, *args, **kwargs):
+        if self.payload:
+            self.payload_hash = SigningSubmission.compute_payload_hash(self.payload)
+        super().save(*args, **kwargs)
+        
 class Signature(models.Model):
     input = models.ForeignKey(Input, on_delete=models.CASCADE, related_name='signatures')
     signing_submission = models.ForeignKey(SigningSubmission, on_delete=models.CASCADE, null=True, blank=True, related_name='signatures')
