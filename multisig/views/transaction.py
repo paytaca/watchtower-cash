@@ -5,9 +5,12 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 
 from multisig.models.transaction import Proposal, SigningSubmission, Signature
+from multisig.models.wallet import MultisigWallet
 from multisig.serializers.transaction import (
     ProposalSerializer,
     InputSerializer,
@@ -26,6 +29,20 @@ def get_proposal_by_identifier(identifier, queryset=None):
     if identifier.isdigit():
         return get_object_or_404(queryset, pk=int(identifier))
     return get_object_or_404(queryset, unsigned_transaction_hash=identifier)
+
+
+def get_wallet_by_identifier(identifier, queryset=None):
+    """Resolve MultisigWallet by id (if identifier is numeric), wallet_hash, or wallet_descriptor_id."""
+    if queryset is None:
+        queryset = MultisigWallet.objects.all()
+    if identifier.isdigit():
+        return get_object_or_404(queryset, pk=int(identifier))
+    wallet = queryset.filter(
+        Q(wallet_hash=identifier) | Q(wallet_descriptor_id=identifier)
+    ).first()
+    if wallet is None:
+        raise Http404("No wallet matches the given identifier.")
+    return wallet
 
 
 class ProposalListCreateView(APIView):
@@ -58,6 +75,20 @@ class ProposalListCreateView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WalletProposalListView(APIView):
+    """Read-only list of proposals for a wallet. Identifier is wallet id, wallet_hash, or wallet_descriptor_id."""
+
+    @swagger_auto_schema(
+        operation_description="List proposals for a wallet. Identifier is wallet id (numeric), wallet_hash, or wallet_descriptor_id.",
+        responses={status.HTTP_200_OK: ProposalSerializer(many=True)},
+    )
+    def get(self, request, identifier):
+        wallet = get_wallet_by_identifier(identifier)
+        queryset = Proposal.objects.prefetch_related('inputs').filter(wallet=wallet)
+        serializer = ProposalSerializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 class ProposalDetailView(APIView):
@@ -244,9 +275,9 @@ class SignatureBySignerIdentifierList(APIView):
         return base.filter(input__bip32_derivation__public_key=identifier).distinct()
         
 
-    def get(self, request, proposal_unsigned_transaction_hash, identifier):
+    def get(self, request, proposal_identifier, identifier):
         # Ensure proposal exists (404 if not)
-        get_object_or_404(Proposal, unsigned_transaction_hash=proposal_unsigned_transaction_hash)
-        queryset = self.get_queryset(proposal_unsigned_transaction_hash, identifier)
+        get_object_or_404(Proposal, unsigned_transaction_hash=proposal_identifier)
+        queryset = self.get_queryset(proposal_identifier, identifier)
         serializer = SignatureWithBip32Serializer(queryset, many=True)
         return Response(serializer.data)
