@@ -155,10 +155,8 @@ app.post('/multisig/message/verify-signature', async (req, res) => {
 
 app.post('/multisig/transaction/decode-psbt', async (req, res) => {
   const { psbt } = req.body
-  console.log('PSBT', psbt)
   const decoded = Pst.fromPsbt(psbt)
-  console.log('DECODED', decoded)
-  res.send(decoded)
+  res.send({...decoded.toJSON(), signingProgress: decoded.getSigningProgress()})
 })
 
 app.post('/multisig/transaction/decode-proposal', async (req, res) => {
@@ -175,14 +173,12 @@ app.post('/multisig/transaction/decode-proposal', async (req, res) => {
     inputs: []
   }
   const decodedTransaction = decodeTransactionCommon(hexToBin(decoded.unsignedTransactionHex))
-  console.log('DECODED TRANSACTION', decodedTransaction)
   for (const input of decodedTransaction.inputs) {
     decodedProposal.inputs.push({
       outpoint_transaction_hash: binToHex(input.outpointTransactionHash),
       outpoint_index: input.outpointIndex,
     })
   }
-  console.log('DECODED PROPOSAL', decodedProposal)
   res.send(decodedProposal)
 })
 

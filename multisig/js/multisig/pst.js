@@ -2,18 +2,6 @@
 /// <reference path="./network.js" />
 /// <reference path="./utxo.js" />
 
-/**
-   * @typedef {Object} PartialSignature
-   * @property {Uint8Array} publicKey - The signer's public key (as bytecode).
-   * @property {string} publicKeyRelativePath - BIP32 derivation path (e.g., "0/0").
-   * @property {number} publicKeyRedeemScriptSlot - Index of redeem script slot.
-   * @property {string} signer - Name or ID of the signer.
-   * @property {string} sigHash - Sighash flag (usually one byte as hex).
-   * @property {string} sigAlgo - Signature algorithm (e.g., "ecdsa").
-   * @property {number} sigSlot - Index of the signature slot.
-   * @property {string} sig - The signature itself (likely a hex string).
-   */
-
   /**
    * @typedef {Object} TokenData
    * @property {string} category - Token ID.
@@ -38,8 +26,9 @@
    * @typedef {Object} Input
    * @property {number} outpointIndex - Transaction ID of the input.
    * @property {Uint8Array|string} outpointTransactionHash - Output index.
+   * @property {Uint8Array|string} outpointTransaction - The transaction pointed to by the outpoint index and hash
    * @property {SourceOutput} sourceOutput - Details about the output being spent.
-   * @property {PartialSignature[]} [partialSignatures] - Signatures (if partially signed).
+   * @property {Object.<string, Uint8Array>} [signatures] - Mapping of public key (hex string) to signature value (Uint8Array) for partially signed inputs.
    * @property {string} [scriptSig] - The final script
    */
 
@@ -75,7 +64,25 @@
    * 
    */
 
+  /**
+   * @typedef {Object} DecodedSignerSignatureData
+   * @property {string} signature - Hex-encoded signature string.
+   * @property {string} publicKey - Hex-encoded public key string.
+   * @property {Object} input - Input reference object.
+   * @property {number} [input.id] - Input coordination server identifier.
+   * @property {number} input.proposal - Proposal identifier.
+   * @property {string} input.outpointTransactionHash - Hex-encoded transaction hash.
+   * @property {number} input.outpointIndex - Outpoint index.
+   * @property {string} input.redeemScript - Hex-encoded redeem script.
+   * @property {Object} bip32Derivation - Derivation information.
+   * @property {number} [bip32Derivation.id] - Derivation coordination server identifier.
+   * @property {string} bip32Derivation.path - BIP32 derivation path string (e.g., "m/44'/145'/0'/1/10").
+   * @property {string} bip32Derivation.publicKey - Hex-encoded public key string.
+   * @property {string} bip32Derivation.masterFingerprint - Hex-encoded master fingerprint string.
+   */
 
+
+  
 import {
   encodeTransactionCommon,
   hashTransaction,
@@ -103,8 +110,7 @@ import {
   decodeTransactionBch,
   hash256,
   secp256k1,
-  sha256,
-  numberToBinInt32TwosCompliment
+  generateSigningSerializationBch
 } from 'bitauth-libauth-v3'
 
 import { getCompiler, getWalletHash, MultisigWallet, sortPublicKeysBip67 } from './wallet.js'
@@ -112,8 +118,7 @@ import { createTemplate } from './template.js'
 import { bip32ExtractRelativePath } from './utils.js'
 import { Psbt } from './psbt.js'
 import { MultisigTransactionBuilder } from './transaction-builder.js'
-import { WatchtowerNetworkProvider } from './network.js'
-import { encodeSigningSerializationBCH, generateSigningSerializationBCH, generateSigningSerializationComponentsBCH } from '@bitauth/libauth'
+import { WatchtowerCoordinationServer, WatchtowerNetworkProvider } from './network.js'
 
 export const SIGNING_PROGRESS = {
   UNSIGNED: 'unsigned',
@@ -121,44 +126,6 @@ export const SIGNING_PROGRESS = {
   FULLY_SIGNED: 'fully-signed',
   TOO_MANY_SIGNATURES: 'too-many-signatures',
   INCONSISTENT: 'inconsistent'
-}
-
-export const transactionBinObjectsToUint8Array = (transactionObject) => {
-  const transaction = structuredClone(transactionObject)
-  transaction.inputs.forEach(input => {
-    if (input.outpointTransactionHash && !(input?.outpointTransactionHash instanceof Uint8Array)) {
-      input.outpointTransactionHash = Uint8Array.from(Object.values((input.outpointTransactionHash)))
-    }
-    if (input.unlockingBytecode && !(input?.unlockingBytecode instanceof Uint8Array)) {
-      input.unlockingBytecode = Uint8Array.from(Object.values((input.unlockingBytecode)))
-    }
-    if (input.sourceOutput?.lockingBytecode && !(input.sourceOutput.lockingBytecode instanceof Uint8Array)) {
-      input.sourceOutput.lockingBytecode = Uint8Array.from(Object.values((input.sourceOutput.lockingBytecode)))
-    }
-    if (input.sourceOutput?.outpointTransactionHash && !(input.sourceOutput.outpointTransactionHash instanceof Uint8Array)) {
-      input.sourceOutput.outpointTransactionHash = Uint8Array.from(Object.values((input.sourceOutput.outpointTransactionHash)))
-    }
-  })
-
-  transaction.outputs.forEach(output => {
-    if (output.lockingBytecode && !(output?.lockingBytecode instanceof Uint8Array)) {
-      output.lockingBytecode = Uint8Array.from(Object.values(output.lockingBytecode))
-    }
-    if (output.token?.category && !(output.token?.category instanceof Uint8Array)) {
-      output.token.category = Uint8Array.from(Object.values(output.token.category))
-    }
-
-    if (output.token?.nft?.commitment && !(output.token.nft.commitment instanceof Uint8Array)) {
-      output.token.nft.commitment = Uint8Array.from(Object.values(output.token.nft.commitment))
-    }
-  })
-
-  return {
-    version: transaction.version,
-    locktime: transaction.locktime,
-    inputs: transaction.inputs,
-    outputs: transaction.outputs
-  }
 }
 
 /**
@@ -210,43 +177,6 @@ export const libauthStringifyReviver = (_, value) => {
   return value
 }
 
-export const libauthStringifyReviverExportable = (_, value) => {
-  if (typeof value !== 'string') return value
-
-  // Uint8Array pattern: "<Uint8Array: 0x...>"
-  const uint8ArrayMatch = value.match(/^<Uint8Array: 0x([0-9a-f]+)>$/i)
-  if (uint8ArrayMatch) {
-    return uint8ArrayMatch[1]
-  }
-
-  // Uint8Array pattern: "<Uint8Array: 0x> (Empty Uint8Array)"
-  const emptyUint8ArrayMatch = value.match(/^<Uint8Array: 0x>$/)
-  if (emptyUint8ArrayMatch) {
-    return new Uint8Array([])
-  }
-
-  // Bigint pattern: "<bigint: ...n>"
-  const bigintMatch = value.match(/^<bigint: (-?\d+)n>$/)
-  if (bigintMatch) {
-    return `${bigintMatch[1]}`
-  }
-
-  // Function pattern: "<function: ...>"
-  const functionMatch = value.match(/^<function: (.+)>$/)
-  if (functionMatch) {
-    // Note: We can't reconstruct actual functions, just return the string representation
-    return { type: 'function', value: functionMatch[1] }
-  }
-
-  // Symbol pattern: "<symbol: ...>"
-  const symbolMatch = value.match(/^<symbol: (.+)>$/)
-  if (symbolMatch) {
-    // Note: We can't reconstruct actual symbols, just return the string representation
-    return { type: 'symbol', value: symbolMatch[1] }
-  }
-
-  return value
-}
 
 export const extractMValue = (redeemScript) => {
   let firstByte;
@@ -539,9 +469,9 @@ export const publicKeySigned = ({ publicKey, pst }) => {
  * @param {Context} params.context - Context object containing transaction, input index, and source outputs.
  * @returns {boolean} True if signature is valid, otherwise false.
  */
-export const verifyTransactionSignature = ({ signature, publicKey, redeemScript, context }) => {
+export const verifyTransactionInputSignature = ({ signature, publicKey, redeemScript, context }) => {
   const sigHashFlag = signature.slice(-1)[0]
-  const signingSerialization = generateSigningSerializationBCH(context, { 
+  const signingSerialization = generateSigningSerializationBch(context, { 
     coveredBytecode: redeemScript, 
     signingSerializationType: new Uint8Array([sigHashFlag]) // Uint8Array([65]) for allOutputs
   })
@@ -553,6 +483,51 @@ export const verifyTransactionSignature = ({ signature, publicKey, redeemScript,
   }
   return secp256k1.verifySignatureDERLowS(signature.slice(0, signature.length - 1), publicKey, sigHash)
 }
+
+/**
+/**
+ * Verifies the signatures on all inputs of a transaction.
+ *
+ * @param {Object} params - The verification parameters.
+ * @param {string} params.transaction - Unsigned transaction hex string.
+ * @param {Array<Object>} params.inputs - Array of input objects, each optionally containing:
+ *   @param {Object.<string, Uint8Array>} [params.inputs.signatures] - Object mapping public key hex strings to their corresponding signatures.
+ *   @param {Uint8Array} [params.inputs.redeemScript] - The redeem script associated with each input.
+ *   @param {SourceOutput} params.inputs.sourceOutput
+ *
+ * @returns {Array<boolean>} Array of boolean values indicating the verification result for each signature in order processed.
+ */
+export const verifyTransactionInputsSignature = ({ transaction, inputs }) => {
+  const inputSignatureVerificationResults = []
+  for (const inputIndex in inputs) {
+    if (!inputs[inputIndex].redeemScript) continue 
+    const publicKeys = Object.keys(inputs[inputIndex].signatures || {})
+    if (publicKeys.length === 0) continue
+    publicKeys.forEach((publicKey) => {
+      const signature = inputs[inputIndex].signatures[publicKey]
+      const redeemScript = inputs[inputIndex].redeemScript 
+      if (!signature) return
+      if (!redeemScript) {
+        inputSignatureVerificationResults.push(false)
+        return
+      }
+      const sigVerifyResult = verifyTransactionInputSignature({ 
+        signature, 
+        publicKey: hexToBin(publicKey),
+        redeemScript,
+        context: {
+          inputIndex,
+          sourceOutputs: inputs.map((i) => i.sourceOutput),
+          transaction: decodeTransactionCommon(hexToBin(transaction))
+        }
+      })
+      inputSignatureVerificationResults.push(sigVerifyResult)
+    }) 
+  }
+  return inputSignatureVerificationResults.every(rOk => Boolean(rOk))
+}
+
+
 
 export class Pst {
 
@@ -650,7 +625,8 @@ export class Pst {
   set network(n) {
     this.options = {
       ...this.options,
-      provider: new WatchtowerNetworkProvider({ network: n })
+      provider: new WatchtowerNetworkProvider({ network: n }),
+      coordinationServer: new WatchtowerCoordinationServer({ network: n })
     }
   }
 
@@ -694,7 +670,8 @@ export class Pst {
         continue
       }
       
-      const template = createTemplate({ m: this.wallet.m, signers: sortedPublicKeys.map(p => ({ publicKey: p })) })
+      const m = extractMValue(correspondingInput.redeemScript)
+      const template = createTemplate({ m, signers: sortedPublicKeys.map(p => ({ publicKey: p })) })
       const compiler = getCompiler({ template })
       const bip32RelativeDerivationPath = bip32ExtractRelativePath(
         correspondingInput.bip32Derivation[Object.keys(correspondingInput.bip32Derivation)[0]].path
@@ -919,34 +896,10 @@ export class Pst {
   }
 
   combine(psts) {
+
     const inputSignatureVerificationResults = []
     for (const pst of psts) {
-      for (const inputIndex in pst.inputs) {
-        if (!pst.inputs[inputIndex].redeemScript) continue 
-        const publicKeys = Object.keys(pst.inputs[inputIndex].signatures || {})
-        if (publicKeys.length === 0) continue
-        publicKeys.forEach((publicKey) => {
-          const signature = pst.inputs[inputIndex].signatures[publicKey]
-          const redeemScript = pst.inputs[inputIndex].redeemScript 
-          if (!redeemScript) return
-          const transactionBuilder = new MultisigTransactionBuilder()
-          transactionBuilder.addInputs(pst.inputs)
-          transactionBuilder.addOutputs(pst.outputs)
-          transactionBuilder.setLocktime(pst.locktime ?? 0)
-          transactionBuilder.setVersion(pst.version)
-          const sigVerifyResult = verifyTransactionSignature({ 
-            signature, 
-            publicKey: hexToBin(publicKey),
-            redeemScript,
-            context: {
-              inputIndex,
-              sourceOutputs: pst.inputs.map((i) => i.sourceOutput),
-              transaction: decodeTransactionCommon(hexToBin(transactionBuilder.build()))
-            }
-          })
-          inputSignatureVerificationResults.push(sigVerifyResult)
-        }) 
-      }
+      inputSignatureVerificationResults.push(verifyTransactionInputsSignature({transaction: pst.unsignedTransactionHex, inputs: pst.inputs }))
     }
 
     if (!inputSignatureVerificationResults.every(ok => Boolean(ok))) throw new Error('Signature Verification Failed')
@@ -960,6 +913,108 @@ export class Pst {
 
   getSigningProgress() {
     return getSigningProgress(this)
+  }
+
+  /**
+   * Returns an array of decoded signer signature data objects for the given master fingerprint.
+   *
+   * @param {string} masterFingerprint - The hex-encoded master fingerprint to filter signatures by.
+   * @returns {DecodedSignerSignatureData[]} - Array of decoded signature data relevant to the provided master fingerprint.
+   */
+  getSignerSignatures(masterFingerprint) {
+    if (!this.inputs) return []
+    const result = []
+    for (const input of this.inputs) {
+      if (input.signatures && input.bip32Derivation) {
+        for (const [pubkeyHex, sig] of Object.entries(input.signatures)) {
+          const derivation = input.bip32Derivation[pubkeyHex]
+          if (
+            derivation &&
+            derivation.masterFingerprint &&
+            derivation.masterFingerprint.toLowerCase() === masterFingerprint.toLowerCase()
+          ) {
+            result.push({
+              signature: typeof sig === "string" ? sig : binToHex(sig),
+              publicKey: pubkeyHex,
+              input: {
+                outpointTransactionHash: typeof input.outpointTransactionHash === "string"
+                  ? input.outpointTransactionHash
+                  : binToHex(input.outpointTransactionHash),
+                outpointIndex: input.outpointIndex,
+                redeemScript: input.redeemScript ? input.redeemScript : undefined,
+                proposal: this.unsignedTransactionHash
+              },
+              bip32Derivation: {
+                ...derivation,
+                publicKey: pubkeyHex,
+                masterFingerprint: derivation.masterFingerprint,
+                path: derivation.path
+              }
+            })
+          }
+        }
+      }
+    }
+    return result
+  }
+
+  /**
+   /**
+    * Verifies an array of decoded signer signature data objects for validity.
+    *
+    * @param {DecodedSignerSignatureData[]} signerSignatures - Array of decoded signature data to verify.
+    * @returns {boolean} - Returns true if all signer signatures pass signature verification.
+    * @throws {Error} If verification fails.
+    */
+  verifySignerSignatures(signerSignatures) {
+    for (const signerSignature of signerSignatures) {
+      const proposalCorrespondingInputIndex = this.inputs?.findIndex(i => {
+        return (
+          binToHex(i.outpointTransactionHash) === signerSignature.input.outpointTransactionHash &&
+          Number(i.outpointIndex) === Number(signerSignature.input.outpointIndex)
+        )
+      })
+      if (proposalCorrespondingInputIndex === -1) {
+        throw new Error(`Signed input doesn't belong to this transaction`)
+      }
+      const success = verifyTransactionInputSignature({
+        signature: hexToBin(signerSignature.signature),
+        publicKey: hexToBin(signerSignature.publicKey),
+        redeemScript: hexToBin(signerSignature.input.redeemScript),
+        context: {
+          transaction: decodeTransactionCommon(hexToBin(this.unsignedTransactionHex)),
+          inputIndex: proposalCorrespondingInputIndex,
+          sourceOutputs: this.inputs.map(i => i.sourceOutput)
+        }
+      })
+      if (!success) {
+        throw new Error(`Failed to verify signature of input index ${proposalCorrespondingInputIndex}`)
+      }
+    }
+    return true
+  }
+
+   /** 
+    * Merges individual signer signature data with this pst
+    *
+    * @param {DecodedSignerSignatureData[]} signerSignatures - Array of decoded signature data to verify.
+    * @returns {boolean} - Returns true if all signer signatures pass signature verification.
+    * @throws {Error} If verification fails.
+    */
+   mergeSignerSignatures(signerSignatures) {
+    this.verifySignerSignatures(signerSignatures)
+    for (const signerSignature of signerSignatures) {
+      const input = this.inputs.find(i => {
+        return (
+          i.outpointIndex === signerSignature.input.outpointIndex &&
+          binToHex(i.outpointTransactionHash) === signerSignature.input.outpointTransactionHash
+        )
+      })
+      if (!input.signatures) {
+        input.signatures = {}
+      }
+      input.signatures[signerSignature.publicKey] = signerSignature.signature
+    }
   }
 
   getTotalSatsInput() {
@@ -1037,8 +1092,8 @@ export class Pst {
       purpose: this.purpose,
       unsignedTransactionHex: this.unsignedTransactionHex,
       inputs: this.inputs,
-      outputs: this.outputs,
-      walletHash: getWalletHash(this.wallet),
+      outputs: this.outputs
+      // walletHash: getWalletHash(this.wallet),
     }
 
     if (this.metadata) {
@@ -1128,7 +1183,12 @@ export class Pst {
   }
 
   static import(base64Psbt) {
-    return Pst.fromPsbt(base64Psbt)
+    const instance =  Pst.fromPsbt(base64Psbt)
+    const signaturesOk = verifyTransactionInputsSignature({ transaction: instance.unsignedTransactionHex, inputs: instance.inputs })
+    if (!signaturesOk) {
+      throw new Error('Failed verifying signatures.')
+    }
+    return instance
   }
 
 
@@ -1228,6 +1288,7 @@ export class Pst {
   static exportSafeJSONReplacer(k, v) {
     const binaryKeys = new Set([
       'outpointTransactionHash',
+      'outpointTransaction',
       'publicKey',
       'sig',
       'sigHash',
@@ -1269,7 +1330,7 @@ export class Pst {
     }
     
     if (bigintKeys.has(k) && typeof v !== 'string') {
-      return value.toString();
+      return v.toString();
     }    
     
     return v
@@ -1284,6 +1345,7 @@ export class Pst {
   static importSafeJSONReviver(k, v) {
     const binaryKeys = new Set([
       'outpointTransactionHash',
+      'outpointTransaction',
       'publicKey',
       'sig',
       'sigHash',

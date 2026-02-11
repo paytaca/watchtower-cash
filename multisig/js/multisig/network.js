@@ -323,4 +323,19 @@ export class WatchtowerCoordinationServer {
         )
         return response.data
     }
+
+    /**
+     * Fetches the list of decoded signer signature data for a proposal and signer.
+     *
+     * @param {Object} params
+     * @param {string} params.masterFingerprint - The signer's master fingerprint.
+     * @param {string} params.proposalUnsignedTransactionHash - The unsigned transaction hash for the proposal.
+     * @returns {Promise<import('./pst.js').DecodedSignerSignatureData[]>} Array of decoded signature data relevant to the provided master fingerprint.
+     */
+    async getSignerSignatures({ masterFingerprint, proposalUnsignedTransactionHash }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/signatures/${masterFingerprint}/`
+        )
+        return response.data
+    }
 }
