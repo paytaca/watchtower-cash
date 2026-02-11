@@ -75,5 +75,12 @@ class AddressBookAddressViewSet(
     mixins.UpdateModelMixin,
     mixins.DestroyModelMixin
 ):
+    http_method_names = ['post', 'patch', 'delete']
     queryset = AddressBookAddress.objects.all()
     serializer_class = AddressBookAddressSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = AddressBookAddressCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(status=status.HTTP_201_CREATED)
