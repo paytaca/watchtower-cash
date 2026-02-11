@@ -38,10 +38,11 @@ def verify_signature(message: str, public_key: str, signature: dict):
         timeout=5
     )
 
-def decode_psbt(psbt: str):
+
+def decode_proposal(proposal: str, proposal_format: str):
     return requests.post(
-        f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-psbt',
-        json={'psbt': psbt},
+        f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-proposal',
+        json={'proposal': proposal, 'proposal_format': proposal_format},
         timeout=5
     )
 
@@ -49,5 +50,12 @@ def decode_proposal(proposal: str, proposal_format: str):
     return requests.post(
         f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-proposal',
         json={'proposal': proposal, 'proposal_format': proposal_format},
+        timeout=5
+    )
+
+def decode_psbt(psbt: str):
+    return requests.post(
+        f'{MULTISIG_JS_SERVER}/multisig/transaction/decode-psbt',
+        json={'psbt': psbt},
         timeout=5
     )

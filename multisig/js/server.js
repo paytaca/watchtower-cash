@@ -182,9 +182,6 @@ app.post('/multisig/transaction/decode-proposal', async (req, res) => {
   res.send(decodedProposal)
 })
 
-app.get('/test', async (req, res) => {
-   res.send({hello: 'hello test'})
-})
 
 app.listen(port, () => {
     console.log(`Multisig express server listening on port ${port}`)
