@@ -90,29 +90,31 @@ class ProposalSerializer(serializers.ModelSerializer):
                         signatures = input.get('signatures', {})
                         bip32_derivation = input.get('bip32Derivation', {})
                         LOGGER.info(input)
-                        for public_key in signatures.keys():
+                        for pub_key, derivation in bip32_derivation.items():
+                                # Avoid double creation if already handled above for a pubkey that is also in 'signatures'
+                                Bip32Derivation.objects.get_or_create(
+                                    input=input_model,
+                                    public_key=pub_key,
+                                    defaults={
+                                        'path': derivation.get('path'),
+                                        'master_fingerprint': derivation.get('masterFingerprint'),
+                                    }
+                                )
+                                
+                        for public_key, signature in signatures.items():
                             if not bip32_derivation.get(public_key):
                                 raise ValidationError(f"BIP32 derivation data is missing for public key: {public_key}")
 
                             Signature.objects.get_or_create(
                                 input=input_model,
                                 public_key=public_key,
-                                signature=signatures[public_key],
                                 defaults={
                                     'input': input_model,
                                     'signing_submission': signing_submission,
                                     'public_key': public_key,
-                                    'signature': signatures[public_key]
+                                    'signature': signature
                                 }
                             )
-                        
-                            Bip32Derivation.objects.create(
-                                input=input_model,
-                                public_key=public_key,
-                                path=bip32_derivation[public_key].get('path'),
-                                master_fingerprint=bip32_derivation[public_key].get('masterFingerprint'),
-                            )
-
                 return proposal
 
     def update(self, instance, validated_data):
@@ -129,6 +131,68 @@ class SigningSubmissionSerializer(serializers.ModelSerializer):
         fields = ['id', 'proposal', 'payload', 'payloadFormat', 'createdAt']
         read_only_fields = ['id', 'proposal', 'createdAt']
 
+    def create(self, validated_data):
+        LOGGER.info(validated_data)
+
+        with transaction.atomic():
+            format = validated_data.get('payload_format') or 'psbt'
+            if format == 'psbt':
+                decode_response = js_client.decode_psbt(validated_data['payload'])
+                decode_response.raise_for_status()
+                decoded_proposal = decode_response.json()
+                decoded_proposal.pop('signingProgress', None) 
+                proposal = validated_data.get('proposal')
+                signing_submission = None
+                payload_hash = SigningSubmission.compute_payload_hash(validated_data['payload'])
+
+                signing_submission, created = SigningSubmission.objects.get_or_create(
+                    payload_hash=payload_hash,
+                    defaults={
+                        'proposal': proposal,
+                        'payload': validated_data['payload'],
+                        'payload_format': format
+                    }
+                )
+
+                if not created:
+                    return signing_submission
+
+                inputs = decoded_proposal.pop('inputs', [])
+
+                for input in inputs:
+
+                    input_model = Input.objects.filter(
+                        proposal_id=proposal.id,
+                        outpoint_transaction_hash=input.get('outpointTransactionHash'),
+                        outpoint_index=input.get('outpointIndex'),
+                        redeem_script=input.get('redeemScript')
+                    ).first()
+
+                    if not input_model:
+                        raise ValidationError(f"Signed an input that's not part of the proposal")
+
+                    signatures = input.get('signatures', {})
+                    bip32_derivation = input.get('bip32Derivation', {})
+                    
+                    for public_key in signatures.keys():
+                        if not bip32_derivation.get(public_key):
+                            raise ValidationError(f"BIP32 derivation data is missing for public key: {public_key}")
+
+                        Signature.objects.get_or_create(
+                            input=input_model,
+                            public_key=public_key,
+                            signature=signatures[public_key],
+                            defaults={
+                                'input': input_model,
+                                'signing_submission': signing_submission,
+                                'public_key': public_key,
+                                'signature': signatures[public_key]
+                            }
+                        )
+                    
+                        
+
+            return signing_submission
 
 class Bip32DerivationSerializer(serializers.ModelSerializer):
     """Read-only serializer for BIP32 derivation (path, publicKey, masterFingerprint)."""
