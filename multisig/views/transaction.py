@@ -18,6 +18,16 @@ from multisig.serializers.transaction import (
 
 LOGGER = logging.getLogger(__name__)
 
+
+def get_proposal_by_identifier(identifier, queryset=None):
+    """Resolve Proposal by id (if identifier is numeric) or unsigned_transaction_hash."""
+    if queryset is None:
+        queryset = Proposal.objects.all()
+    if identifier.isdigit():
+        return get_object_or_404(queryset, pk=int(identifier))
+    return get_object_or_404(queryset, unsigned_transaction_hash=identifier)
+
+
 class ProposalListCreateView(APIView):
     @swagger_auto_schema(
         operation_description="List proposals. Optionally filter by wallet id.",
@@ -51,15 +61,19 @@ class ProposalListCreateView(APIView):
 
 
 class ProposalDetailView(APIView):
-    def get_object(self, pk):
-        return get_object_or_404(Proposal.objects.prefetch_related('inputs', 'signing_submissions'), pk=pk)
+
+    def get_object(self, identifier):
+        return get_proposal_by_identifier(
+            identifier,
+            queryset=Proposal.objects.prefetch_related('inputs', 'signing_submissions'),
+        )
 
     @swagger_auto_schema(
         operation_description="Retrieve a proposal by id.",
         responses={status.HTTP_200_OK: ProposalSerializer},
     )
-    def get(self, request, pk):
-        proposal = self.get_object(pk)
+    def get(self, request, identifier):
+        proposal = self.get_object(identifier)
         serializer = ProposalSerializer(proposal)
         return Response(serializer.data)
 
@@ -71,8 +85,8 @@ class ProposalDetailView(APIView):
             status.HTTP_400_BAD_REQUEST: openapi.Response(description="Validation error"),
         },
     )
-    def put(self, request, pk):
-        proposal = self.get_object(pk)
+    def put(self, request, identifier):
+        proposal = self.get_object(identifier)
         serializer = ProposalSerializer(proposal, data=request.data, partial=False)
         if serializer.is_valid():
             serializer.save()
@@ -87,8 +101,8 @@ class ProposalDetailView(APIView):
             status.HTTP_400_BAD_REQUEST: openapi.Response(description="Validation error"),
         },
     )
-    def patch(self, request, pk):
-        proposal = self.get_object(pk)
+    def patch(self, request, identifier):
+        proposal = self.get_object(identifier)
         serializer = ProposalSerializer(proposal, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -99,33 +113,30 @@ class ProposalDetailView(APIView):
         operation_description="Delete a proposal.",
         responses={status.HTTP_204_NO_CONTENT: openapi.Response(description="No content")},
     )
-    def delete(self, request, pk):
-        proposal = self.get_object(pk)
+    def delete(self, request, identifier):
+        proposal = self.get_object(identifier)
         proposal.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProposalInputListView(APIView):
     @swagger_auto_schema(
-        operation_description="Read-only list of inputs for a proposal. Inputs are set at proposal creation only.",
+        operation_description="Read-only list of inputs for a proposal. Inputs are set at proposal creation only. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: InputSerializer(many=True)},
     )
-    def get(self, request, proposal_pk):
-        proposal = get_object_or_404(Proposal.objects.prefetch_related('inputs'), pk=proposal_pk)
+    def get(self, request, identifier):
+        proposal = get_proposal_by_identifier(identifier, Proposal.objects.prefetch_related('inputs'))
         serializer = InputSerializer(proposal.inputs.all(), many=True)
         return Response(serializer.data)
 
 
 class ProposalSigningSubmissionListCreateView(APIView):
-    def get_proposal(self, pk):
-        return get_object_or_404(Proposal, pk=pk)
-
     @swagger_auto_schema(
-        operation_description="List signing submissions for a proposal.",
+        operation_description="List signing submissions for a proposal. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: SigningSubmissionSerializer(many=True)},
     )
-    def get(self, request, proposal_pk):
-        proposal = self.get_proposal(proposal_pk)
+    def get(self, request, identifier):
+        proposal = get_proposal_by_identifier(identifier)
         submissions = proposal.signing_submissions.all()
         serializer = SigningSubmissionSerializer(submissions, many=True)
         return Response(serializer.data)
@@ -138,8 +149,8 @@ class ProposalSigningSubmissionListCreateView(APIView):
             status.HTTP_400_BAD_REQUEST: openapi.Response(description="Validation error"),
         },
     )
-    def post(self, request, proposal_pk):
-        proposal = self.get_proposal(proposal_pk)
+    def post(self, request, identifier):
+        proposal = get_proposal_by_identifier(identifier)
         serializer = SigningSubmissionSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(proposal=proposal)
@@ -148,15 +159,16 @@ class ProposalSigningSubmissionListCreateView(APIView):
 
 
 class ProposalSigningSubmissionDetailView(APIView):
-    def get_object(self, proposal_pk, pk):
-        return get_object_or_404(SigningSubmission, proposal_id=proposal_pk, pk=pk)
+    def get_object(self, identifier, pk):
+        proposal = get_proposal_by_identifier(identifier)
+        return get_object_or_404(SigningSubmission, proposal_id=proposal.pk, pk=pk)
 
     @swagger_auto_schema(
-        operation_description="Retrieve a signing submission by id.",
+        operation_description="Retrieve a signing submission by id. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: SigningSubmissionSerializer},
     )
-    def get(self, request, proposal_pk, pk):
-        submission = self.get_object(proposal_pk, pk)
+    def get(self, request, identifier, pk):
+        submission = self.get_object(identifier, pk)
         serializer = SigningSubmissionSerializer(submission)
         return Response(serializer.data)
 
@@ -164,8 +176,8 @@ class ProposalSigningSubmissionDetailView(APIView):
         operation_description="Delete a signing submission.",
         responses={status.HTTP_204_NO_CONTENT: openapi.Response(description="No content")},
     )
-    def delete(self, request, proposal_pk, pk):
-        submission = self.get_object(proposal_pk, pk)
+    def delete(self, request, identifier, pk):
+        submission = self.get_object(identifier, pk)
         submission.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -174,12 +186,12 @@ class ProposalSignatureListView(APIView):
     """Read-only list of signatures for a proposal (all inputs' signatures)."""
 
     @swagger_auto_schema(
-        operation_description="List signatures for a proposal. Read-only.",
+        operation_description="List signatures for a proposal. Identifier is proposal id or unsigned_transaction_hash. Read-only.",
         responses={status.HTTP_200_OK: SignatureSerializer(many=True)},
     )
-    def get(self, request, proposal_pk):
-        get_object_or_404(Proposal, pk=proposal_pk)
-        queryset = Signature.objects.filter(input__proposal_id=proposal_pk).select_related('input')
+    def get(self, request, identifier):
+        proposal = get_proposal_by_identifier(identifier)
+        queryset = Signature.objects.filter(input__proposal_id=proposal.pk).select_related('input')
         serializer = SignatureSerializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -187,19 +199,20 @@ class ProposalSignatureListView(APIView):
 class ProposalSignatureDetailView(APIView):
     """Read-only detail of a single signature scoped to a proposal."""
 
-    def get_object(self, proposal_pk, pk):
+    def get_object(self, identifier, pk):
+        proposal = get_proposal_by_identifier(identifier)
         return get_object_or_404(
             Signature.objects.select_related('input'),
             pk=pk,
-            input__proposal_id=proposal_pk,
+            input__proposal_id=proposal.pk,
         )
 
     @swagger_auto_schema(
-        operation_description="Retrieve a signature by id. Read-only.",
+        operation_description="Retrieve a signature by id. Identifier is proposal id or unsigned_transaction_hash. Read-only.",
         responses={status.HTTP_200_OK: SignatureSerializer},
     )
-    def get(self, request, proposal_pk, pk):
-        signature = self.get_object(proposal_pk, pk)
+    def get(self, request, identifier, pk):
+        signature = self.get_object(identifier, pk)
         serializer = SignatureSerializer(signature)
         return Response(serializer.data)
 
@@ -211,17 +224,25 @@ class SignatureBySignerIdentifierList(APIView):
         operation_description="List signatures for inputs whose BIP32 derivation has this master fingerprint. Returns signature, publicKey, input, bip32Derivation. Read-only.",
         responses={status.HTTP_200_OK: SignatureWithBip32Serializer(many=True)},
     )
-    def get_queryset(self, proposal_unsigned_transaction_hash, identifier):
-        base = (
-            Signature.objects.filter(input__proposal__unsigned_transaction_hash=proposal_unsigned_transaction_hash)
-            .select_related('input')
-            .prefetch_related('input__bip32_derivation')
-        )
+    def get_queryset(self, proposal_identifier, identifier):
+        if proposal_identifier.isdigit():
+            base = (
+                Signature.objects.filter(input__proposal__id=int(proposal_identifier))
+                .select_related('input')
+                .prefetch_related('input__bip32_derivation')
+            )
+        else:
+            base = (
+                Signature.objects.filter(input__proposal__unsigned_transaction_hash=proposal_identifier)
+                .select_related('input')
+                .prefetch_related('input__bip32_derivation')
+            )
 
         if len(identifier) == 8:
             return base.filter(input__bip32_derivation__master_fingerprint=identifier).distinct()
 
         return base.filter(input__bip32_derivation__public_key=identifier).distinct()
+        
 
     def get(self, request, proposal_unsigned_transaction_hash, identifier):
         # Ensure proposal exists (404 if not)
