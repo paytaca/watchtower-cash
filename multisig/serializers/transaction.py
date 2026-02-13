@@ -38,7 +38,7 @@ class ProposalSerializer(serializers.ModelSerializer):
             'id', 'wallet', 'proposal', 'proposalFormat',
             'unsignedTransactionHex', 'unsignedTransactionHash',
             'signedTransaction', 'signedTransactionHash', 'txid',
-            'signingProgress', 'broadcastStatus'
+            'signingProgress', 'broadcastStatus', 'coordinator'
         ]
 
     def to_representation(self, instance):
@@ -48,14 +48,13 @@ class ProposalSerializer(serializers.ModelSerializer):
         return filtered_rep
 
     def create(self, validated_data):
+        coordinator = self.context["coordinator"]
         with transaction.atomic():
             proposal_format = validated_data.get('proposal_format') or 'psbt'
             if proposal_format == 'psbt':
                 decode_response = js_client.decode_psbt(validated_data['proposal'])
                 decode_response.raise_for_status()
                 decoded_proposal = decode_response.json()
-                LOGGER.info(decoded_proposal)
-                LOGGER.info(decoded_proposal['signingProgress'])
                 signing_progress = decoded_proposal.get('signingProgress', {})
 
                 inputs = decoded_proposal.pop('inputs', [])
@@ -67,6 +66,7 @@ class ProposalSerializer(serializers.ModelSerializer):
                         'unsigned_transaction_hex': decoded_proposal.get('unsignedTransactionHex'),
                         'proposal': validated_data['proposal'],
                         'proposal_format': proposal_format,
+                        'coordinator': coordinator
                     }
                 )
 

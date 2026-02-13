@@ -1,5 +1,6 @@
 import hashlib
 from django.db import models
+from multisig.models.coordinator import ServerIdentity
 from multisig.models.wallet import MultisigWallet
 from multisig.utils import generate_transaction_hash
 
@@ -11,6 +12,7 @@ class Proposal(models.Model):
     signed_transaction_hash = models.CharField(max_length=64, null=True, blank=True, help_text="The double sha256 hash of the Signed transaction")
     proposal = models.TextField(null=True, blank=True, help_text="The serialized / encoded proposal data")
     proposal_format = models.CharField(default='psbt', max_length=50, blank=True, null=True, help_text="The format of the proposal data")
+    coordinator = models.ForeignKey(ServerIdentity, on_delete=models.CASCADE, null=True, blank=True)
 
     txid = models.CharField(
         max_length=64,

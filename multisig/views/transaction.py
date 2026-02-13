@@ -2,6 +2,8 @@ import logging
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from multisig.auth.auth import PubKeySignatureMessageAuthentication
+from multisig.models.coordinator import ServerIdentity
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -47,6 +49,12 @@ def get_wallet_by_identifier(identifier, queryset=None):
 
 
 class ProposalListCreateView(APIView):
+
+    def get_authenticators(self):
+        if self.request.method == "POST":
+            return [PubKeySignatureMessageAuthentication()]
+        return []
+    
     @swagger_auto_schema(
         operation_description="List proposals. Optionally filter by wallet id.",
         responses={status.HTTP_200_OK: ProposalSerializer(many=True)},
@@ -71,7 +79,12 @@ class ProposalListCreateView(APIView):
         },
     )
     def post(self, request):
-        serializer = ProposalSerializer(data=request.data)
+        coordinator = ServerIdentity.objects.filter(public_key=request.headers.get('X-Auth-PubKey')).first()
+        if not coordinator:
+                return Response({'error': 'Coordinator needs server identity'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        LOGGER.info(coordinator)
+        serializer = ProposalSerializer(data=request.data, context={'coordinator': coordinator})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
