@@ -1,5 +1,7 @@
 import logging
 from django.db import transaction
+from multisig.models.coordinator import KeyRecord, ServerIdentity
+from multisig.serializers.coordinator import KeyRecordSerializer, ServerIdentitySerializer
 from rest_framework import serializers
 from typing import Dict
 from main.models import Transaction
@@ -13,7 +15,8 @@ class SignerSerializer(serializers.ModelSerializer):
     derivationPath = serializers.CharField(source='derivation_path')
     publicKey = serializers.CharField(source='public_key')
     walletDescriptor = serializers.CharField(source='wallet_descriptor')
-    wallet = serializers.PrimaryKeyRelatedField(queryset=MultisigWallet.objects.all())
+    wallet = serializers.PrimaryKeyRelatedField(read_only=True)
+    coordinatorKeyRecord = serializers.CharField(write_only=True)
 
     class Meta:
         model = Signer
@@ -25,14 +28,13 @@ class SignerSerializer(serializers.ModelSerializer):
             'publicKey',
             'walletDescriptor',
             'wallet',
+            'coordinatorKeyRecord'
         ]
 
-
 class MultisigWalletSerializer(serializers.ModelSerializer):
-
+    signers = SignerSerializer(many=True, required=False)
     walletDescriptorId = serializers.CharField(source='wallet_descriptor_id')
     walletHash = serializers.CharField(source='wallet_hash')
-    signers = SignerSerializer(many=True, read_only=True)
 
     class Meta:
         model = MultisigWallet
@@ -47,9 +49,67 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             'updated_at',
             'coordinator',
             'signers'
-            # Add any additional MultisigWallet fields you'd like to expose
+        ]
+        read_only_fields = [
+            'id',
+            'created_at',
+            'updated_at',
+            'deleted_at'
         ]
 
+    def create(self, validated_data):
+        coordinator = self.context["coordinator"]
+        signers_data = validated_data.pop("signers", [])
+        wallet_descriptor_id = validated_data.get("wallet_descriptor_id")
+
+        with transaction.atomic():
+            wallet = MultisigWallet.objects.filter(
+                coordinator=coordinator,
+                wallet_descriptor_id=wallet_descriptor_id
+            ).first()
+
+            if wallet:
+                return wallet
+
+            wallet = MultisigWallet.objects.create(
+                coordinator=coordinator,
+                **validated_data
+            )
+
+            for signer_data in signers_data:
+                signer_server_identity = ServerIdentity.objects.filter(public_key=signer_data['public_key']).first()
+                coordinatorKeyRecordHex = signer_data.pop('coordinatorKeyRecord', None)
+                
+                if not signer_server_identity:
+                    
+                    server_identity_serializer = ServerIdentitySerializer(
+                      data={'publicKey': signer_data['public_key']}
+                    )
+
+                    if server_identity_serializer.is_valid():
+                      signer_server_identity = server_identity_serializer.save()
+                      if coordinatorKeyRecordHex:
+                        KeyRecord.objects.get_or_create(
+                          publisher=coordinator,
+                          recipient=signer_server_identity,
+                          key_record=coordinatorKeyRecordHex,
+                          defaults = {
+                            'publisher': coordinator,
+                            'recipient': signer_server_identity,
+                            'key_record': coordinatorKeyRecordHex,
+                          }
+                        )
+                        
+                    else:
+                        raise serializers.ValidationError(server_identity_serializer.errors)
+                
+                Signer.objects.create(
+                    wallet=wallet,
+                    server_identity=signer_server_identity,
+                    **signer_data
+                )
+
+        return wallet
 
 class MultisigWalletUtxoSerializer(serializers.Serializer):
 
