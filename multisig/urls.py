@@ -4,6 +4,7 @@ from multisig.views.coordinator import (
     ServerIdentityDetailView,
 )
 from multisig.views.wallet import (
+    MultisigWalletDetailView,
     MultisigWalletListCreateView,
     SignerWalletListView
 )
@@ -21,6 +22,7 @@ from multisig.views.transaction import (
 
 urlpatterns = [
     path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
+    path('wallets/<str:identifier>/', MultisigWalletDetailView.as_view(), name='wallet-detail'),
     path('wallets/<str:identifier>/proposals/', WalletProposalListView.as_view(), name='wallet-list-proposals'),
     path('coordinator/server-identities/', ServerIdentityListCreateView.as_view(), name='server-identity-list-create'),
     path('coordinator/server-identities/<str:public_key>/', ServerIdentityDetailView.as_view(), name='server-identity-detail'),
