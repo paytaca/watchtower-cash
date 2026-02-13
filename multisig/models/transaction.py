@@ -34,11 +34,15 @@ class Proposal(models.Model):
     )
 
     class BroadcastStatus(models.TextChoices):
-        PENDING = "pending", "pending"
-        DONE = "done", "done"
+        PENDING = "pending", "Pending"          # Proposal exists, not broadcast
+        BROADCASTED = "broadcasted", "Broadcasted"  # Sent to node but not yet seen in mempool
+        MEMPOOL = "mempool", "In mempool"       # Node sees tx in mempool
+        CONFIRMED = "confirmed", "Confirmed"    # At least 1 confirmation
+        CONFLICTED = "conflicted", "Conflicted" # Inputs spent elsewhere
+        FAILED = "failed", "Failed to broadcast"
     
     broadcast_status = models.CharField(
-        max_length=10,
+        max_length=25,
         choices=BroadcastStatus.choices,
         default=BroadcastStatus.PENDING
     )
@@ -59,6 +63,7 @@ class Input(models.Model):
     outpoint_transaction_hash = models.CharField(max_length=64)
     outpoint_index = models.PositiveIntegerField()
     redeem_script = models.TextField(blank=True, null=True)
+    spent_on_transaction = models.CharField(max_length=64, null=True, blank=True, help_text='The txid where this was spent. It could be the proposal or other tx. This can be used to invalidate the proposal or flag it as `Broadcasted`.')
     
     class Meta:
         unique_together = (

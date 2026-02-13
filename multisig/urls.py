@@ -11,6 +11,7 @@ from multisig.views.wallet import (
 from multisig.views.transaction import (
     ProposalListCreateView,
     ProposalDetailView,
+    ProposalStatusView,
     WalletProposalListView,
     ProposalInputListView,
     ProposalSigningSubmissionListCreateView,
@@ -29,6 +30,7 @@ urlpatterns = [
     path('signers/<str:public_key>/wallets/', SignerWalletListView.as_view(), name='signer-wallet-list'),
     path('proposals/', ProposalListCreateView.as_view(), name='proposal-list-create'),
     path('proposals/<str:identifier>/', ProposalDetailView.as_view(), name='proposal-detail'),
+    path('proposals/<str:identifier>/status/', ProposalStatusView.as_view(), name='proposal-status'),
     path('proposals/<str:identifier>/inputs/', ProposalInputListView.as_view(), name='proposal-input-list'),
     path('proposals/<str:identifier>/signing-submissions/', ProposalSigningSubmissionListCreateView.as_view(), name='proposal-signing-submission-list-create'),
     path('proposals/<str:identifier>/signing-submissions/<int:pk>/', ProposalSigningSubmissionDetailView.as_view(), name='proposal-signing-submission-detail'),

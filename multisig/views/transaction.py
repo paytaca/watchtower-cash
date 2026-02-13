@@ -1,5 +1,5 @@
 import logging
-
+import requests
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
@@ -173,6 +173,72 @@ class ProposalInputListView(APIView):
         proposal = get_proposal_by_identifier(identifier, Proposal.objects.prefetch_related('inputs'))
         serializer = InputSerializer(proposal.inputs.all(), many=True)
         return Response(serializer.data)
+
+
+
+class ProposalStatusView(APIView):
+    """
+    Returns the broadcast status and current spend status of inputs for a proposal.
+    """
+    def get(self, request, identifier):
+        proposal = get_object_or_404(
+            Proposal,
+            pk=identifier if str(identifier).isdigit() else None,
+            unsigned_transaction_hash=None if str(identifier).isdigit() else identifier
+        )
+
+        response_data = {
+            "broadcast_status": proposal.broadcast_status,
+            "inputs": [],
+            "all_inputs_spent": None
+        }
+        any_spent = False
+        all_spent = True
+        checked_any = False
+
+        for inp in proposal.inputs.all():
+            checked_any = True
+            txid = inp.outpoint_transaction_hash
+            vout = inp.outpoint_index
+            ## TODO: use the Transaction table in prod, this is for local testing only
+            url = f"https://watchtower.cash/api/transactions/outputs/?txid={txid}"
+            spent = None
+            spending_txid = None
+            try:
+                api_resp = requests.get(url, timeout=10)
+                data = api_resp.json()
+                for result in data.get("results", []):
+                    if result.get("txid") == txid and result.get("index") == vout:
+                        spent = result.get("spent", None)
+                        spending_txid = result.get("spending_txid", "")
+                        if spent and spending_txid:
+                            inp.spent_on_transaction = spending_txid
+                            inp.save(update_fields=['spent_on_transaction'])
+                            # TODO: mark proposal as conflicted if the spending tx unsigned transaction hash isn't the same as this proposal's unsigned transaction hash
+                        break
+            except Exception as e:
+                spent = None  
+
+            response_data["inputs"].append({
+                "outpoint_transaction_hash": txid,
+                "outpoint_index": vout,
+                "spent": spent,
+                "spending_txid": spending_txid,
+            })
+            if spent is None:
+                all_spent = None
+            elif spent:
+                any_spent = True
+            else:
+                all_spent = False
+
+        if not checked_any:
+            all_spent = None  
+
+        response_data["any_input_spent"] = any_spent
+        response_data["all_inputs_spent"] = all_spent
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class ProposalSigningSubmissionListCreateView(APIView):
