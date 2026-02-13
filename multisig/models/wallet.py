@@ -36,7 +36,7 @@ class Signer(models.Model):
     public_key = models.CharField(max_length=66, help_text="The signer's xpub public key", null=True, blank=True)
     wallet_descriptor = models.TextField(help_text="The BSMS wallet descriptor encrypted by the coordinator to this signer's public key", null=True, blank=True)
     wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
-    server_identity = models.ForeignKey(ServerIdentity, related_name='server_identity', on_delete=models.SET_NULL, null=True, blank=True)
+    server_identity = models.ForeignKey(ServerIdentity, related_name='signers', on_delete=models.SET_NULL, null=True, blank=True)
     
 
     class Meta:
