@@ -1,20 +1,15 @@
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, mixins, decorators
-# from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import OuterRef, Q, Exists
+from django.db.models import OuterRef, Exists, Subquery
 from django_filters import rest_framework as filters
-# from rest_framework import status
 
 from main.filters import CashNftFilter, TokensViewSetFilter
 from main.models import (
     CashFungibleToken,
     CashNonFungibleToken,
-    Transaction,
-    # WalletHistory,
-    # Token,
-    # WalletNftToken
+    WalletHistory,
 )
 from main.serializers import (
     CashFungibleTokenSerializer,
@@ -202,6 +197,17 @@ class CashNftsViewSet(
         filters.DjangoFilterBackend,
     ]
     filterset_class = CashNftFilter
+
+
+    def get_queryset(self):
+        history_subquery = WalletHistory.objects.filter(
+            txid=OuterRef('current_txid')
+        ).values('tx_timestamp')
+
+        return CashNonFungibleToken.objects.annotate(
+            history_timestamp=Subquery(history_subquery[:1])
+        ).order_by('-history_timestamp')
+    
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
