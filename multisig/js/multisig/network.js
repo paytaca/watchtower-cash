@@ -75,6 +75,7 @@ export class WatchtowerNetworkProvider {
      */
     constructor(config) {
         this.hostname = 'https://watchtower.cash'
+        // this.hostname = 'http://localhost:8000'
         this.cashAddressNetworkPrefix = CashAddressNetworkPrefix.mainnet
         this.network = config?.network || WatchtowerNetwork.mainnet
         if (this.network === WatchtowerNetwork.chipnet) {
@@ -144,7 +145,7 @@ export class WatchtowerNetworkProvider {
     }
 
     async getRawTransaction(txid) {
-        const provider = new ElectrumNetworkProvider(this.network)
+        const provider = new ElectrumNetworkProvider(this.network)  
         return await provider.getRawTransaction(txid)
     }
 
@@ -161,6 +162,7 @@ export class WatchtowerNetworkProvider {
         return await axios.get(url)
       }
       
+
       
 }
 
@@ -298,6 +300,14 @@ export class WatchtowerCoordinationServer {
         return response.data
     }
 
+    async getWallet({ identifier }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/wallets/${identifier}/`
+        )
+        console.log('response', response)
+        return response.data
+    }
+
     async getSignerWallets({ publicKey }) {        
         const response = await axios.get(
             `${this.hostname}/api/multisig/signers/${publicKey}/wallets/`
@@ -324,6 +334,20 @@ export class WatchtowerCoordinationServer {
         return response.data
     }
 
+    async getProposalStatus({ unsignedTransactionHash }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/status/`
+        )
+        return response?.data
+    }
+
+    async getProposalByUnsignedTransactionHash(unsignedTransactionHash) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/`
+        )
+        return response.data
+    }
+
     /**
      * Fetches the list of decoded signer signature data for a proposal and signer.
      *
@@ -335,6 +359,44 @@ export class WatchtowerCoordinationServer {
     async getSignerSignatures({ masterFingerprint, proposalUnsignedTransactionHash }) {
         const response = await axios.get(
             `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/signatures/${masterFingerprint}/`
+        )
+        return response.data
+    }
+
+    /**
+     * Submits a partial signature for a multisig proposal.
+     *
+     * @param {Object} params
+     * @param {string} params.proposalUnsignedTransactionHash - The unsigned transaction hash for the proposal.
+     * @param {string} params.payload - The partial signature payload; could be a PSBT base64 string or some other format. Currently only supports PSBT.
+     * @param {string} [params.payloadFormat='psbt'] - The format of the payload, default is 'psbt'.
+     * @returns {Promise<Object>} Response data from the signature submission.
+     */
+    async submitPartialSignature({ payload, payloadFormat = 'psbt', proposalUnsignedTransactionHash }) {
+        const response = await axios.post(
+            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/signing-submissions/`, 
+            { payload, payloadFormat }
+        )
+        return response?.data
+    }
+
+    /**
+    /**
+     /**
+      * Fetches proposals for a wallet.
+      *
+      * @param {string} walletIdentifier - Identifier for the wallet; can be a wallet id, walletHash, or walletDescriptorId.
+      * @returns {Promise<Array<{ 
+      *   id: number, 
+      *   wallet: number, 
+      *   proposal: string, 
+      *   proposalFormat: string, 
+      *   unsignedTransactionHex: string 
+      * }>>} Array of proposals associated with the given wallet.
+      */
+    async getWalletProposals(walletIdentifier) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/wallets/${walletIdentifier}/proposals/`
         )
         return response.data
     }

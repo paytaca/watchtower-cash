@@ -114,10 +114,6 @@ import {
   decodeHdPublicKey,
   decodeHdPrivateKey,
   deriveHdPathRelative,
-  deriveHdPrivateNodeFromBip39Mnemonic,
-  deriveHdPath,
-  deriveHdPublicKey,
-  encodeHdPrivateKey,
   utf8ToBin,
   base64ToBin,
   binToUtf8,
@@ -145,8 +141,10 @@ import { estimateFee, getMofNDustThreshold, recipientsToLibauthTransactionOutput
 import { Pst } from './pst.js'
 import { PsbtWallet, WALLET_MAGIC } from './psbt-wallet.js'
 import { retryWithBackoff } from './utils.js'
-import { decryptECIESMessage, encryptECIESMessage } from './ecies.js'
-import { BsmsDescriptor } from './bsms.js'
+import { encryptECIESMessage } from './ecies.js'
+import { BsmsDescriptor, BsmsKeyRecord } from './bsms.js'
+import { generateCoordinationServerCredentialsFromMnemonic } from './coordination.js'
+import { deriveHdKeysFromMnemonic } from './utils.js'
 
 export const getLockingData = ({ signers, addressDerivationPath }) => {
   const signersWithPublicKeys = derivePublicKeys({ signers, addressDerivationPath })
@@ -196,22 +194,6 @@ export const getMultisigCashAddress = ({
   })
   return address
 }
-
-export const deriveHdKeysFromMnemonic = ({ mnemonic, network, hdPath }) => {
-  const node = deriveHdPath(
-    deriveHdPrivateNodeFromBip39Mnemonic(
-      mnemonic
-    ),
-    hdPath || "m/44'/145'/0'"
-  )
-  const { hdPrivateKey } = encodeHdPrivateKey({ network: network || 'mainnet', node })
-  const { hdPublicKey } = deriveHdPublicKey(hdPrivateKey)
-  return {
-    hdPrivateKey,
-    hdPublicKey
-  }
-}
-
 
 export const generateFilename = multisigWallet => {
   if (multisigWallet.name) {
@@ -381,56 +363,6 @@ export const getMasterFingerprintUintLE = (mnemonic) => {
   )
 }
 
-export const generateCoordinationServerSignature = (privateKey, message) => {
-  const hash = sha256.hash(utf8ToBin(message))
-  const schnorr = secp256k1.signMessageHashSchnorr(privateKey, hash)
-  const der = secp256k1.signMessageHashDER(privateKey, hash)
-  return `schnorr=${binToHex(schnorr)};der=${binToHex(der)}`
-}
-
-export const generateCoordinatorServerIdentityFromXprv = ({ name, xprv }) => {
-  const { hdPublicKey } = deriveHdPublicKey(xprv)
-  const privateKey = decodeHdPrivateKey(xprv).node.privateKey
-  const publicKey  = decodeHdPublicKey(hdPublicKey).node.publicKey
-  const message = `iam:${binToHex(publicKey)}:${Date.now()}`
-  return {
-    name,
-    publicKey: binToHex(publicKey),
-    message,
-    signature: generateCoordinationServerSignature(privateKey, message)
-  }
-}
-
-export const generateCoordinatorServerIdentityFromMnemonic = ({ name, mnemonic, network = 'mainnet', hdPath = `m/4501'/145'/0'/0'` }) => {
-  const { hdPrivateKey } = deriveHdKeysFromMnemonic({ 
-    mnemonic,
-    network, 
-    hdPath
-  })
-  return generateCoordinatorServerIdentityFromXprv({ name, xprv: hdPrivateKey, network })
-}
-
-export const generateCoordinationServerCredentialsFromXprv = ({ xprv }) => {
-  const { hdPublicKey } = deriveHdPublicKey(xprv)
-  const privateKey = decodeHdPrivateKey(xprv).node.privateKey
-  const publicKey  = decodeHdPublicKey(hdPublicKey).node.publicKey
-  const message = `multisig:${Date.now()}`
-  
-  return {
-      'X-Auth-PubKey': binToHex(publicKey),
-      'X-Auth-Signature': generateCoordinationServerSignature(privateKey, message),
-      'X-Auth-Message': message
-  }
-}
-export const generateCoordinationServerCredentialsFromMnemonic = ({ mnemonic, network = 'mainnet', hdPath = `m/4501'/145'/0'/0'` }) => {
-  const { hdPrivateKey } = deriveHdKeysFromMnemonic({ 
-    mnemonic,
-    network, 
-    hdPath 
-  })
-  return generateCoordinationServerCredentialsFromXprv({ xprv: hdPrivateKey })
-}
-
 export class PriceOracle {
   /**
    * @param {string} asset - 'bch' or token id (token id not yet implemented, need cauldron)
@@ -441,7 +373,6 @@ export class PriceOracle {
     return await fetch(url)
   }
 }
-
 
 export class MultisigWallet {
 
@@ -465,7 +396,6 @@ export class MultisigWallet {
     }
     
     this.options = options || {}
-    
   }
 
   setStore(store) {
@@ -887,6 +817,7 @@ export class MultisigWallet {
     return await this.options?.provider?.getWalletTransactionHistory({walletHash, type, all, tokenCategory, page })
   }
 
+
   /**
    * Marks the address at addressIndex as issued.
    * 
@@ -1203,6 +1134,11 @@ export class MultisigWallet {
     return pst 
   }
 
+  async fetchProposals() {
+    if (!this.options?.coordinationServer) return 
+    return await this.options.coordinationServer.getWalletProposals(this.generateBsmsDescriptorId())
+  }
+
   isOnline() {
     if(this.id && /^[0-9]+$/.test(this.id)) return true 
     return false
@@ -1263,11 +1199,12 @@ export class MultisigWallet {
 
     let coordinator = null
     for (const signer of wallet.signers) {
+      // Elect first found signer with private key on this device as coordinator
       if (!coordinator) {
         const mnemonic = await this.options?.resolveMnemonicOfXpub({ xpub: signer.xpub })
         if (mnemonic) {
           coordinator = signer 
-          coordinator.mnemonic = mnemonic
+          coordinator.mnemonic = mnemonic 
         }
       }
       if (enablePrivacy) {
@@ -1280,7 +1217,9 @@ export class MultisigWallet {
         signer.derivationPath = signer.path || signer.derivationPath || `m/44'/145'/0'`
         signer.publicKey = binToHex(MultisigWallet.extractRawPublicKeyFromXpub(signer.xpub))
         signer.walletDescriptor = encryptedBsmsDescriptor 
-        if (coordinator &&signer.xpub === coordinator.xpub) {
+        
+        
+        if (coordinator && signer.xpub === coordinator.xpub) {
           signer.coordinator = true
         }
         delete signer.xpub
@@ -1290,10 +1229,27 @@ export class MultisigWallet {
     if (!coordinator) {
       throw new Error('You must be a cosigner with a private key on this device to upload the multisig wallet setup!')
     }
+
     const mnemonic = coordinator.mnemonic
-    wallet.signers.forEach(s => {
-      delete s.mnemonic
+    const { hdPrivateKey } = deriveHdKeysFromMnemonic({ 
+      mnemonic,
+      network: 'mainnet', // This is ok we only use xpub hd prefix even on chipnet 
+      hdPath: coordinator.path 
     })
+
+    const decodedHdPrivateKey = decodeHdPrivateKey(hdPrivateKey)
+    const coordinatorKeyRecord = new BsmsKeyRecord({
+      masterFingerprint: coordinator.masterFingerprint,
+      derivationPath: coordinator.path,
+      key: coordinator.publicKey 
+    })
+    coordinatorKeyRecord.sign(decodedHdPrivateKey.node.privateKey)
+
+    for (const s of wallet.signers) {
+      delete s.mnemonic 
+      s.coordinatorKeyRecord = await coordinatorKeyRecord.toEciesEncryptedString(hexToBin(s.publicKey))
+    }
+
     const uploadedWallet = await this.options?.coordinationServer?.uploadWallet({ 
       wallet, authCredentialsGenerator: this 
     })
@@ -1465,6 +1421,20 @@ async generateAuthCredentials(xpub) {
   }
   return null
 }
+
+async syncId () {
+  try {
+    if (!this.options?.coordinationServer) return
+    const response = 
+      await this.options?.coordinationServer?.getWallet({identifier: this.generateBsmsDescriptorId()})
+    this.id = response?.id
+  } catch (error) {
+    if (error?.response?.status === 404 && this.id) {
+      this.options?.store?.commit('multisig/updateWalletId', { oldId: this.id, newId: '' })
+    } 
+  }
+}
+
 
 async loadSignersServerIdentity() {
   if (!this.options?.coordinationServer) return

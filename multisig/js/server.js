@@ -20,6 +20,7 @@ import {
 import * as Multisig from './multisig/index.js'
 import { Pst } from './multisig/pst.js'
 import { ElectrumClient } from '@electrum-cash/network'
+import { MultisigTransactionBuilder } from './multisig/index.js'
 
 if (typeof global.structuredClone === 'undefined') {
   global.structuredClone = structuredClone;
@@ -181,6 +182,30 @@ app.post('/multisig/transaction/decode-proposal', async (req, res) => {
   }
   res.send(decodedProposal)
 })
+
+app.get('/multisig/transaction/unsigned-transaction-hash', async (req, res) => {
+  console.log('req', req.query)
+  console.log('transaction hex', req.query.transaction_hex)
+  const decodedTransaction = decodeTransactionCommon(hexToBin(req.query.transaction_hex))
+  const pst = new Pst()
+  console.log('DECODED transaction', stringify(decodedTransaction))
+  pst.setTxVersion(decodedTransaction.version)
+  pst.setLocktime(decodedTransaction.locktime)
+  pst.addInputs(decodedTransaction.inputs)
+  pst.addOutputs(decodedTransaction.outputs)
+
+  // decodedTransaction.inputs[0].unlockingBytecode = []
+  // const transactionBuilder = new MultisigTransactionBuilder()
+  // transactionBuilder.setVersion(decodedTransaction.version)
+  // transactionBuilder.setLocktime(decodedTransaction.locktime)
+  // transactionBuilder.addInputs(decodedTransaction.inputs)
+  // transactionBuilder.addOutputs(decodedTransaction.outputs)
+  res.send({
+    unsigned_transaction_hash: pst.unsignedTransactionHash
+  })
+})
+
+
 
 
 app.listen(port, () => {
