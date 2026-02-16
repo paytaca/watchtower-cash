@@ -67,6 +67,7 @@ class ProposalListCreateView(APIView):
         ],
     )
     def get(self, request):
+
         queryset = Proposal.objects.prefetch_related('inputs').all()
         wallet_id = request.query_params.get('wallet')
         if wallet_id:
@@ -104,7 +105,10 @@ class WalletProposalListView(APIView):
     )
     def get(self, request, identifier):
         wallet = get_wallet_by_identifier(identifier)
-        queryset = Proposal.objects.prefetch_related('inputs').filter(wallet=wallet)
+        queryset = Proposal.objects.prefetch_related('inputs').filter(
+            wallet=wallet, broadcast_status=(request.query_params.get('broadcast_status', Proposal.BroadcastStatus.PENDING))
+        )
+        
         serializer = ProposalSerializer(queryset, many=True)
         return Response(serializer.data)
 

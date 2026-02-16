@@ -14,10 +14,12 @@ class InputSerializer(serializers.ModelSerializer):
     outpointTransactionHash = serializers.CharField(source='outpoint_transaction_hash')
     outpointIndex = serializers.IntegerField(source='outpoint_index')
     redeemScript = serializers.CharField(source='redeem_script', read_only=True, allow_blank=True, allow_null=True)
-
+    spendingTxid = serializers.CharField(source='spending_txid', read_only=True, allow_blank=True, allow_null=True)
+    conflictingProposalIdentifier = serializers.CharField(source='conflicting_proposal_identifier', read_only=True, allow_blank=True, allow_null=True)
+    
     class Meta:
         model = Input
-        fields = ['id', 'proposal', 'outpointTransactionHash', 'outpointIndex', 'redeemScript']
+        fields = ['id', 'proposal', 'outpointTransactionHash', 'outpointIndex', 'redeemScript', 'spendingTxid', 'conflictingProposalIdentifier']
         read_only_fields = ['id', 'proposal']
 
 
@@ -245,44 +247,3 @@ class SignatureWithBip32Serializer(serializers.ModelSerializer):
         if derivation is None:
             return None
         return Bip32DerivationSerializer(derivation).data
-
-
-# class SigningSubmissionSerializer(serializers.ModelSerializer):
-#     payloadFormat = serializers.CharField(source='payload_format', default='psbt')
-#     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
-#     proposal = serializers.PrimaryKeyRelatedField(read_only=True)
-
-#     class Meta:
-#         model = SigningSubmission
-#         fields = ['id', 'proposal', 'payload', 'payloadFormat', 'createdAt']
-#         read_only_fields = ['id', 'proposal', 'createdAt']
-
-#     def create(self, validated_data):
-#         signing_submission = SigningSubmission.objects.create(**validated_data)
-
-#         if signing_submission.payload_format == 'psbt':
-#             resp = js_client.decode_psbt(signing_submission.payload)
-#             resp.raise_for_status()
-#             decoded = resp.json()
-
-#             if not decoded.get('unsignedTransactionHash'):
-#                 return signing_submission
-
-#             proposal = Proposal.objects.filter(unsigned_transaction_hex=decoded.get('unsignedTransactionHash')).first()
-#             if not proposal:
-#                 return signing_submission
-
-#             # Example pseudo-structure – adjust keys to match `decode_psbt` output
-#             multisig_tx = ...  # MultisigTransactionProposal instance
-#             for input_index, input_data in enumerate(decoded.get('inputs', [])):
-#                 for sig in input_data.get('signatures', []):
-#                     signer = ...  # lookup `Signer` from pubkey/fingerprint in sig
-#                     Signature.objects.create(
-#                         transaction_proposal=multisig_tx,
-#                         signer=signer,
-#                         input_index=input_index,
-#                         signature_key=sig['key'],    # e.g. "key1.schnorr_signature.alloutputs"
-#                         signature_value=sig['value'],  # actual signature
-#                     )
-
-#         return signing_submission
