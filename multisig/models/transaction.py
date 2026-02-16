@@ -78,8 +78,11 @@ class Input(models.Model):
 class Bip32Derivation(models.Model):
     input = models.ForeignKey(Input, on_delete=models.CASCADE, related_name='bip32_derivation')
     path = models.CharField(max_length=100, blank=True, null=True)
-    public_key = models.CharField(max_length=66, blank=True, null=True, help_text='Signer\'s public key', unique=True)
+    public_key = models.CharField(max_length=66, blank=True, null=True, help_text='Signer\'s public key')
     master_fingerprint = models.CharField(max_length=8, blank=True, null=True)
+
+    class Meta:
+        unique_together = ('input', 'public_key')
 
 class SigningSubmission(models.Model):
     
