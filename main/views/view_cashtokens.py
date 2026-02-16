@@ -201,7 +201,7 @@ class CashNftsViewSet(
 
     def get_queryset(self):
         history_subquery = WalletHistory.objects.filter(
-            txid=OuterRef('txid')
+            txid=OuterRef('current_txid')
         ).values('tx_timestamp')
 
         return CashNonFungibleToken.objects.annotate(
