@@ -11,12 +11,26 @@ from django.conf import settings
 import logging
 logger = logging.getLogger(__name__)
 
+def get_wallet_hash_from_request(request):
+    """
+    Best-effort retrieval of wallet hash from headers.
+
+    We support both `wallet-hash` (preferred, HTTP-standard) and `wallet_hash`
+    (legacy). Some proxies (e.g., nginx) may drop headers containing underscores
+    unless explicitly configured.
+    """
+    return (
+        request.headers.get('wallet-hash')
+        or request.headers.get('wallet_hash')
+        or request.META.get('HTTP_WALLET_HASH')
+    )
+
 class TokenAuthentication(BaseAuthentication):
     '''
     P2P Ramp-specific token-based authentication
     '''
     def authenticate(self, request):
-        wallet_hash = request.headers.get('wallet_hash')        
+        wallet_hash = get_wallet_hash_from_request(request)
         auth_header = request.headers.get('Authorization', '').split()
 
         if len(auth_header) != 2:
@@ -26,6 +40,9 @@ class TokenAuthentication(BaseAuthentication):
             raise AuthenticationFailed('No auth credentials provided')
 
         try:
+            if not wallet_hash:
+                raise AuthenticationFailed('wallet_hash header is required')
+
             peer_wallet = PeerWallet.objects.filter(wallet_hash=wallet_hash)
             arbiter_wallet = ArbiterWallet.objects.filter(wallet_hash=wallet_hash)
 
@@ -56,6 +73,10 @@ class TokenAuthentication(BaseAuthentication):
             raise AuthenticationFailed('Invalid token')
         
         return (wallet, None)
+    
+    def authenticate_header(self, request):
+        # Ensures DRF can respond with 401 + WWW-Authenticate instead of 403.
+        return 'Token'
 
 class IgnoreInvalidTokenAuthentication(TokenAuthentication):
     def authenticate(self, request):
@@ -69,7 +90,7 @@ class IgnoreInvalidTokenAuthentication(TokenAuthentication):
 
 class WalletAuthentication(BaseAuthentication):
     def get_auth_headers(self, request):
-        wallet_hash = request.headers.get('wallet_hash', None)
+        wallet_hash = get_wallet_hash_from_request(request)
         auth_header = request.headers.get('Authorization', '').split()
         token_key = None
 
