@@ -2,8 +2,11 @@ import logging
 import requests
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from main.models import TransactionBroadcast
+from multisig import js_client
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
 from multisig.models.coordinator import ServerIdentity
+from rampp2p.utils import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,6 +14,7 @@ from django.db import models
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from main.tasks import NODE
 
 from multisig.models.transaction import Bip32Derivation, Proposal, SigningSubmission, Signature
 from multisig.models.wallet import MultisigWallet
@@ -181,62 +185,68 @@ class ProposalStatusView(APIView):
     Returns the broadcast status and current spend status of inputs for a proposal.
     """
     def get(self, request, identifier):
-        proposal = get_object_or_404(
-            Proposal,
-            pk=identifier if str(identifier).isdigit() else None,
-            unsigned_transaction_hash=None if str(identifier).isdigit() else identifier
-        )
-
+        proposal = get_proposal_by_identifier(identifier)
+        broadcast_status = proposal.broadcast_status
         response_data = {
-            "broadcast_status": proposal.broadcast_status,
-            "inputs": [],
-            "all_inputs_spent": None
+            'proposal_id': proposal.id,
+            'proposal_unsigned_transaction_hash': proposal.unsigned_transaction_hash,
+            'broadcast_status': broadcast_status,
+            "inputs": []
         }
-        any_spent = False
-        all_spent = True
-        checked_any = False
 
         for inp in proposal.inputs.all():
-            checked_any = True
-            txid = inp.outpoint_transaction_hash
-            vout = inp.outpoint_index
-            ## TODO: use the Transaction table in prod, this is for local testing only
-            url = f"https://watchtower.cash/api/transactions/outputs/?txid={txid}"
-            spent = None
-            spending_txid = None
-            try:
-                api_resp = requests.get(url, timeout=10)
-                data = api_resp.json()
-                for result in data.get("results", []):
-                    if result.get("txid") == txid and result.get("index") == vout:
-                        spent = result.get("spent", None)
-                        spending_txid = result.get("spending_txid", "")
-                        if spent and spending_txid:
-                            inp.spent_on_transaction = spending_txid
-                            inp.save(update_fields=['spent_on_transaction'])
-                            # TODO: mark proposal as conflicted if the spending tx unsigned transaction hash isn't the same as this proposal's unsigned transaction hash
-                        break
-            except Exception as e:
-                spent = None  
 
+            ## TODO: use the Transaction table in prod, this is for local testing only
+            url = f"https://watchtower.cash/api/transactions/outputs/?txid={inp.outpoint_transaction_hash}"
+
+            spending_txid = None
+            
+            api_resp = requests.get(url, timeout=10)
+            data = api_resp.json()
+            for result in data.get("results", []):
+                
+                spending_txid = result.get("spending_txid", "")
+
+                if result.get("txid") == inp.outpoint_transaction_hash and result.get("index") == inp.outpoint_index:
+                    spending_txid = result.get("spending_txid", "")
+                    
+                spending_transaction = None
+
+                if spending_txid:
+                    inp.spending_txid = spending_txid
+                    inp.save(update_fields=['spending_txid'])
+                    spending_transaction = NODE.BCH._get_raw_transaction(spending_txid)
+                        
+                spending_transaction_unsigned_transaction_hash = None
+                if spending_transaction:
+                    get_unsigned_transaction_hash_resp = js_client.get_unsigned_transaction_hash(spending_transaction['hex'])
+                    spending_transaction_unsigned_transaction_hash = get_unsigned_transaction_hash_resp.json().get('unsigned_transaction_hash')
+                    
+                if spending_transaction_unsigned_transaction_hash and spending_transaction_unsigned_transaction_hash == proposal.unsigned_transaction_hash:
+                    proposal.broadcast_status = proposal.BroadcastStatus.BROADCASTED
+                elif spending_transaction_unsigned_transaction_hash and spending_transaction_unsigned_transaction_hash != proposal.unsigned_transaction_hash:
+                    proposal.broadcast_status = proposal.BroadcastStatus.CONFLICTED
+                    inp.conflicting_proposal_identifier = spending_transaction_unsigned_transaction_hash 
+
+                if broadcast_status != proposal.broadcast_status:
+                    proposal.save(update_fields=['broadcast_status'])
+
+                if broadcast_status == proposal.BroadcastStatus.BROADCASTED:
+                    transaction_broadcast = TransactionBroadcast.objects.filter(txid=spending_txid)
+                    if transaction_broadcast:
+                        proposal.on_premise_transaction_broadcast = transaction_broadcast
+                        proposal.save(update_fields=['on_premise_transaction_broadcast'])
+                    
+                    if not transaction_broadcast and proposal.broadcast_status == proposal.BroadcastStatus.BROADCASTED:
+                        proposal.off_premise_transaction_broadcast = spending_txid
+                        proposal.save(update_fields=['off_premise_transaction_broadcast'])
+                    
+            
             response_data["inputs"].append({
-                "outpoint_transaction_hash": txid,
-                "outpoint_index": vout,
-                "spent": spent,
+                "outpoint_transaction_hash": inp.outpoint_transaction_hash,
+                "outpoint_index": inp.outpoint_index,
                 "spending_txid": spending_txid,
             })
-            if spent is None:
-                all_spent = None
-            elif spent:
-                any_spent = True
-            else:
-                all_spent = False
-
-        if not checked_any:
-            all_spent = None  
-
-        response_data["any_input_spent"] = any_spent
-        response_data["all_inputs_spent"] = all_spent
 
         return Response(response_data, status=status.HTTP_200_OK)
 
