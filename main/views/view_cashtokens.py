@@ -197,21 +197,23 @@ class CashNftsViewSet(
         filters.DjangoFilterBackend,
     ]
     filterset_class = CashNftFilter
-
-
-    def get_queryset(self):
-        history_subquery = WalletHistory.objects.filter(
-            txid=OuterRef('current_txid')
-        ).values('tx_timestamp')
-
-        return CashNonFungibleToken.objects.annotate(
-            history_timestamp=Subquery(history_subquery[:1])
-        ).order_by('-history_timestamp')
     
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         queryset = self.filter_queryset(queryset)
+
+        ordering = request.query_params.get('ordering')
+        if ordering == 'tx_timestamp':
+            history_subquery = WalletHistory.objects.filter(
+                txid=OuterRef('current_txid')
+            ).values('tx_timestamp')
+
+            queryset = queryset.annotate(
+                history_timestamp=Subquery(history_subquery[:1])
+            ).order_by('id', '-history_timestamp').distinct('id')
+        else:
+            queryset = queryset.order_by('-id')
 
         page = self.paginate_queryset(queryset)
         if page is not None:
