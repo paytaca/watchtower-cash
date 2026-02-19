@@ -211,7 +211,7 @@ class CashNftsViewSet(
 
             queryset = queryset.annotate(
                 history_timestamp=Subquery(history_subquery[:1])
-            ).order_by('id', '-history_timestamp').distinct('id')
+            ).order_by('-history_timestamp').distinct()
         else:
             queryset = queryset.order_by('-id')
 
