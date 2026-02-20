@@ -23,6 +23,14 @@ from cryptography.fernet import Fernet, InvalidToken
 import logging
 logger = logging.getLogger(__name__)
 
+def get_wallet_hash_from_request(request):
+    # Keep consistent with `authentication.token.get_wallet_hash_from_request`
+    return (
+        request.headers.get('wallet-hash')
+        or request.headers.get('wallet_hash')
+        or request.META.get('HTTP_WALLET_HASH')
+    )
+
 class LoginView(APIView):
     def post(self, request):
 
@@ -91,7 +99,7 @@ class AuthNonceView(APIView):
     def get(self, request):
         try:
             # TODO: cooldown
-            wallet_hash = request.headers.get('wallet_hash')
+            wallet_hash = get_wallet_hash_from_request(request)
             path = request.path
             wallet = None
             if path == '/api/auth/otp/main':
@@ -120,7 +128,7 @@ class RevokeTokenView(APIView):
     authentication_classes = [TokenAuthentication]
     def post(self, request):
         try:
-            wallet_hash = request.headers.get('wallet_hash')
+            wallet_hash = get_wallet_hash_from_request(request)
             auth_token = AuthToken.objects.get(wallet_hash=wallet_hash)
             auth_token.delete()
         except AuthToken.DoesNotExist:
@@ -131,7 +139,7 @@ class RevokeTokenView(APIView):
 class UserView(APIView):
     @swagger_auto_schema(responses={200: serializers.UserSerializer})
     def get(self, request):
-        wallet_hash = request.headers.get('wallet_hash')
+        wallet_hash = get_wallet_hash_from_request(request)
         if wallet_hash is None:
             return Response({'error': 'wallet_hash is required'}, status=400)
         
