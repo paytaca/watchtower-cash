@@ -1,5 +1,5 @@
 from django.urls import path
-from multisig.views.coordinator import (
+from multisig.views.auth import (
     ServerIdentityListCreateView,
     ServerIdentityDetailView,
 )

@@ -5,8 +5,8 @@ from rest_framework import status
 from rest_framework.exceptions import NotFound
 
 from multisig.auth.auth import PubKeySignatureMessageAuthentication, parse_signatures
-from multisig.models.coordinator import ServerIdentity
-from multisig.serializers.coordinator import ServerIdentitySerializer
+from multisig.models.auth import ServerIdentity
+from multisig.serializers.auth import ServerIdentitySerializer
 from multisig.js_client import verify_signature
 
 LOGGER = logging.getLogger(__name__)

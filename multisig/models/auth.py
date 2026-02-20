@@ -13,7 +13,3 @@ class ServerIdentity(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     # type = coordinator = has public_key, signature, message
     # type viewer = has public_key
-class KeyRecord(models.Model):
-    publisher = models.ForeignKey(ServerIdentity, related_name='key_records_published', null=True, blank=True, on_delete=models.CASCADE)
-    recipient = models.ForeignKey(ServerIdentity, related_name='key_records_received', null=True, blank=True, on_delete=models.CASCADE)
-    key_record = models.TextField()

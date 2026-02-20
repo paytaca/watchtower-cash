@@ -3,7 +3,7 @@ from functools import wraps
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
-from multisig.models.coordinator import ServerIdentity
+from multisig.models.auth import ServerIdentity
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status

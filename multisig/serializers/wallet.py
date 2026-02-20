@@ -1,12 +1,12 @@
 import logging
 from django.db import transaction
-from multisig.models.coordinator import KeyRecord, ServerIdentity
-from multisig.serializers.coordinator import KeyRecordSerializer, ServerIdentitySerializer
+from multisig.models.auth import ServerIdentity
+from multisig.serializers.auth import  ServerIdentitySerializer
 from rest_framework import serializers
 from typing import Dict
 from main.models import Transaction
-from ..models.wallet import MultisigWallet, Signer
-from ..utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
+from multisig.models.wallet import MultisigWallet, Signer, KeyRecord
+from multisig.utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
 
 LOGGER = logging.getLogger(__name__)
 
@@ -160,3 +160,13 @@ class MultisigWalletUtxoSerializer(serializers.Serializer):
   class Meta:
     model = Transaction
     fields = ['txid','vout', 'satoshis', 'height', 'coinbase', 'token']
+
+
+class KeyRecordSerializer(serializers.Serializer):
+    publisher = serializers.PrimaryKeyRelatedField(queryset=ServerIdentity.objects.all(), required=False)
+    recipient = serializers.PrimaryKeyRelatedField(queryset=ServerIdentity.objects.all(), required=False)
+    key_record = serializers.CharField()
+
+    class Meta:
+        model = KeyRecord
+        fields = ['id', 'publisher', 'recipient', 'key_record']

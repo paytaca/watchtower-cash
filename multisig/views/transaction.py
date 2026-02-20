@@ -5,7 +5,7 @@ from drf_yasg.utils import swagger_auto_schema
 from main.models import TransactionBroadcast
 from multisig import js_client
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
-from multisig.models.coordinator import ServerIdentity
+from multisig.models.auth import ServerIdentity
 from rampp2p.utils import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response

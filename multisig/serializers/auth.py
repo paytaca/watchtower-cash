@@ -3,7 +3,7 @@ from multisig.auth.auth import parse_signatures
 from multisig.js_client import verify_signature
 from django.utils import timezone
 from rest_framework import serializers
-from multisig.models.coordinator import KeyRecord, ServerIdentity
+from multisig.models.auth import ServerIdentity
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,11 +35,3 @@ class ServerIdentitySerializer(serializers.ModelSerializer):
         model = ServerIdentity
         fields = ['id', 'name', 'publicKey', 'message', 'signature']
 
-class KeyRecordSerializer(serializers.Serializer):
-    publisher = serializers.PrimaryKeyRelatedField(queryset=ServerIdentity.objects.all(), required=False)
-    recipient = serializers.PrimaryKeyRelatedField(queryset=ServerIdentity.objects.all(), required=False)
-    key_record = serializers.CharField()
-
-    class Meta:
-        model = KeyRecord
-        fields = ['id', 'publisher', 'recipient', 'key_record']

@@ -1,7 +1,8 @@
 import logging
+import hashlib
 from django.db import models
 from django.utils import timezone
-from multisig.models.coordinator import ServerIdentity
+from multisig.models.auth import ServerIdentity
 
 LOGGER = logging.getLogger(__name__)
 
@@ -11,11 +12,11 @@ class MultisigWallet(models.Model):
     wallet_descriptor_id = models.CharField(max_length=64, null=True, blank=True, help_text="SHA256 hash of the canonical BSMS descriptor")
     version = models.PositiveIntegerField(null=True, blank=True, default=0)
     coordinator = models.ForeignKey(ServerIdentity, related_name='multisig_wallets', on_delete=models.CASCADE, null=True, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
     updated_at = models.DateTimeField(auto_now=True)
-    
+    # wallet_descriptor = AES-GCM encrypted bsms descryptor 
+
     def soft_delete(self):
         self.deleted_at = timezone.now()
         self.save()
@@ -37,6 +38,7 @@ class Signer(models.Model):
     wallet_descriptor = models.TextField(help_text="The BSMS wallet descriptor encrypted by the coordinator to this signer's public key", null=True, blank=True)
     wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
     server_identity = models.ForeignKey(ServerIdentity, related_name='signers', on_delete=models.SET_NULL, null=True, blank=True)
+    # wallet_descriptor_access_key = 12 bytes iv + AES-GCM encryption key encrypted using ecies
     
 
     class Meta:
@@ -46,3 +48,8 @@ class Signer(models.Model):
     def __str__(self):
         return f"{self.entity_key}: {self.xpub}"
 
+    
+class KeyRecord(models.Model):
+    publisher = models.ForeignKey(ServerIdentity, related_name='key_records_published', null=True, blank=True, on_delete=models.CASCADE)
+    recipient = models.ForeignKey(ServerIdentity, related_name='key_records_received', null=True, blank=True, on_delete=models.CASCADE)
+    key_record = models.TextField()
