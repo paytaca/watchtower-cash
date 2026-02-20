@@ -1,5 +1,6 @@
 import hashlib
 from django.db import models
+from django.utils import timezone
 from main.models import TransactionBroadcast
 from multisig.models.auth import ServerIdentity
 from multisig.models.wallet import MultisigWallet
@@ -49,6 +50,16 @@ class Proposal(models.Model):
         choices=BroadcastStatus.choices,
         default=BroadcastStatus.PENDING
     )
+
+    deleted_at = models.DateTimeField(null=True, blank=True, default=None)
+
+    def soft_delete(self):
+        """
+        Mark the Proposal as deleted by setting deleted_at to the current timestamp.
+        """
+        
+        self.deleted_at = timezone.now()
+        self.save(update_fields=["deleted_at"])
 
     def save(self, *args, **kwargs):
 

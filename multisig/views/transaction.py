@@ -105,8 +105,12 @@ class WalletProposalListView(APIView):
     )
     def get(self, request, identifier):
         wallet = get_wallet_by_identifier(identifier)
+        show_deleted = str(request.query_params.get('include_deleted')).lower() in ('1', 'true')
+        deleted_filter = {} if show_deleted else {"deleted_at__isnull": True}
         queryset = Proposal.objects.prefetch_related('inputs').filter(
-            wallet=wallet, broadcast_status=(request.query_params.get('broadcast_status', Proposal.BroadcastStatus.PENDING))
+            wallet=wallet,
+            **deleted_filter,
+            broadcast_status=(request.query_params.get('broadcast_status', Proposal.BroadcastStatus.PENDING))
         )
         
         serializer = ProposalSerializer(queryset, many=True)
@@ -168,7 +172,7 @@ class ProposalDetailView(APIView):
     )
     def delete(self, request, identifier):
         proposal = self.get_object(identifier)
-        proposal.delete()
+        proposal.soft_delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
