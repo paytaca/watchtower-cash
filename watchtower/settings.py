@@ -429,6 +429,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-paytaca-app-version",
     "paytaca-app-version",
     "wallet-hash",
+    "wallet_hash",
     "signature",
     "timestamp",
     "public-key",
