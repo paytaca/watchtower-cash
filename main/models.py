@@ -1163,7 +1163,8 @@ class AddressBook(models.Model):
     )
 
     def __str__(self):
-        return f"({self.pk}) {self.name[:30]}..."
+        truncated_name = self.name[:30] if self.name else '-'
+        return f"({self.pk}) {truncated_name}..."
 
 class AddressBookAddress(models.Model):
     class AddressType(models.TextChoices):
