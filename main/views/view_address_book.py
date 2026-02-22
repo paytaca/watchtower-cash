@@ -1,6 +1,8 @@
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+from authentication.token import WalletAuthentication
 from main.models import AddressBook, AddressBookAddress
 from main.serializers import (
     AddressBookSerializer,
@@ -21,6 +23,7 @@ class AddressBookViewSet(
     mixins.UpdateModelMixin,
     mixins.DestroyModelMixin
 ):
+    authentication_classes = [WalletAuthentication]
     http_method_names = ['get', 'post', 'patch', 'delete']
     queryset = AddressBook.objects.all()
     serializer_class = AddressBookSerializer
@@ -75,6 +78,7 @@ class AddressBookAddressViewSet(
     mixins.UpdateModelMixin,
     mixins.DestroyModelMixin
 ):
+    authentication_classes = [WalletAuthentication]
     http_method_names = ['post', 'patch', 'delete']
     queryset = AddressBookAddress.objects.all()
     serializer_class = AddressBookAddressSerializer
