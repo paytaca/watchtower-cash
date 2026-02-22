@@ -1171,6 +1171,9 @@ class AddressBookAddress(models.Model):
         BCH = 'bch', 'BCH'
         CT = 'ct', 'CashToken'
 
+    class Meta:
+        unique_together = ('address_book', 'address')
+
     address = models.CharField(max_length=100)
     address_type = models.CharField(max_length=3, choices=AddressType.choices, default=AddressType.BCH)
     created_at = models.DateTimeField(auto_now_add=True)
