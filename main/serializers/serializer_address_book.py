@@ -34,7 +34,10 @@ class AddressBookRetrieveSerializer(ModelSerializer):
     addresses = SerializerMethodField()
 
     def get_addresses(self, obj):
-        return AddressBookAddressSerializer(obj.address_book_addresses.all(), many=True).data
+        return AddressBookAddressSerializer(
+            obj.address_book_addresses.all().prefetch_related('address_book_addresses'),
+            many=True
+        ).data
 
     class Meta:
         model = AddressBook
