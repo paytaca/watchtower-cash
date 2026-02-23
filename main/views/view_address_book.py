@@ -83,7 +83,10 @@ class AddressBookViewSet(
         url_path=r'wallet/(?P<wallet_hash>[^/.]+)'
     )
     def get_wallet_address_book(self, request, *args, **kwargs):
-        queryset = self.queryset.filter(wallet__wallet_hash=kwargs.get('wallet_hash'))
+        wallet_hash = kwargs.get('wallet_hash')
+        if wallet_hash != request.user.wallet_hash:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        queryset = self.get_queryset().filter(wallet__wallet_hash=wallet_hash)
         serializer = AddressBookListSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
