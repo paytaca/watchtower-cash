@@ -12,7 +12,7 @@ from rest_framework.exceptions import ValidationError
 from main.models import Transaction
 from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
-from multisig.auth.auth import PubKeySignatureMessageAuthentication, MultisigAuthentication
+from multisig.auth.auth import PubKeySignatureMessageAuthentication
 from multisig.models.wallet import MultisigWallet, Signer
 from multisig.serializers.wallet import MultisigWalletSerializer, SignerSerializer, MultisigWalletUtxoSerializer
 from multisig.auth.permission import IsCosigner, IsCosignerOfNewMultisigWallet

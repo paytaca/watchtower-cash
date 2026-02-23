@@ -17,6 +17,7 @@ class SignerSerializer(serializers.ModelSerializer):
     walletDescriptor = serializers.CharField(source='wallet_descriptor')
     wallet = serializers.PrimaryKeyRelatedField(read_only=True)
     coordinatorKeyRecord = serializers.CharField(write_only=True)
+    authPublicKey = serializers.CharField(source='auth_public_key')
 
     class Meta:
         model = Signer
@@ -28,7 +29,8 @@ class SignerSerializer(serializers.ModelSerializer):
             'publicKey',
             'walletDescriptor',
             'wallet',
-            'coordinatorKeyRecord'
+            'coordinatorKeyRecord',
+            'authPublicKey'
         ]
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
@@ -77,35 +79,19 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             )
 
             for signer_data in signers_data:
-                signer_server_identity = ServerIdentity.objects.filter(public_key=signer_data['public_key']).first()
                 coordinatorKeyRecordHex = signer_data.pop('coordinatorKeyRecord', None)
-                
-                if not signer_server_identity:
-                    
-                    server_identity_serializer = ServerIdentitySerializer(
-                      data={'publicKey': signer_data['public_key']}
-                    )
-
-                    if server_identity_serializer.is_valid():
-                      signer_server_identity = server_identity_serializer.save()
-                      if coordinatorKeyRecordHex:
-                        KeyRecord.objects.get_or_create(
-                          publisher=coordinator,
-                          recipient=signer_server_identity,
-                          key_record=coordinatorKeyRecordHex,
-                          defaults = {
-                            'publisher': coordinator,
-                            'recipient': signer_server_identity,
-                            'key_record': coordinatorKeyRecordHex,
-                          }
-                        )
-                        
-                    else:
-                        raise serializers.ValidationError(server_identity_serializer.errors)
-                
+                if coordinatorKeyRecordHex:
+                  KeyRecord.objects.get_or_create(
+                    publisher=coordinator,
+                    key_record=coordinatorKeyRecordHex,
+                    defaults = {
+                      'publisher': coordinator,
+                      'key_record': coordinatorKeyRecordHex,
+                      'audience_auth_public_key': signer_data['auth_public_key']
+                    }
+                  )
                 Signer.objects.create(
                     wallet=wallet,
-                    server_identity=signer_server_identity,
                     **signer_data
                 )
 
