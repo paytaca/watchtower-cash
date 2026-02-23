@@ -14,8 +14,6 @@ class AddressBookAddressCreateSerializer(ModelSerializer):
         ]
 
     def create(self, validated_data):
-        wallet_hash = self.context.get('wallet_hash')
-        validated_data['wallet_hash'] = wallet_hash
         address_book_id = validated_data.pop('address_book_id', None)
         try:
             address_book = AddressBook.objects.get(id=address_book_id)
@@ -75,7 +73,8 @@ class AddressBookCreateSerializer(ModelSerializer):
         fields = ['id', 'name', 'is_favorite', 'wallet_hash']
 
     def create(self, validated_data):
-        wallet_hash = validated_data.pop('wallet_hash', None)
+        wallet_hash = self.context.get('wallet_hash')  # From authenticated user
+        validated_data.pop('wallet_hash', None)  # Ignore any wallet_hash from request
         try:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         except Wallet.DoesNotExist:
