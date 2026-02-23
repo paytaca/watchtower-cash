@@ -29,9 +29,6 @@ class AddressBookViewSet(
     queryset = AddressBook.objects.all().prefetch_related('address_book_addresses')
     serializer_class = AddressBookSerializer
 
-    def get_queryset(self):
-        return self.queryset.all()
-
     def get_object(self):
         return self.queryset.get(pk=self.kwargs['pk'])
 
