@@ -14,6 +14,8 @@ class AddressBookAddressCreateSerializer(ModelSerializer):
         ]
 
     def create(self, validated_data):
+        wallet_hash = self.context.get('wallet_hash')
+        validated_data['wallet_hash'] = wallet_hash
         address_book_id = validated_data.pop('address_book_id', None)
         try:
             address_book = AddressBook.objects.get(id=address_book_id)
