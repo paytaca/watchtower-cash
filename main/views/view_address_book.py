@@ -29,8 +29,13 @@ class AddressBookViewSet(
     queryset = AddressBook.objects.all().prefetch_related('address_book_addresses')
     serializer_class = AddressBookSerializer
 
+    def get_queryset(self):
+        wallet_hash = self.request.user.wallet_hash
+        return super().get_queryset().filter(wallet__wallet_hash=wallet_hash)
+
     def get_object(self):
-        return self.queryset.get(pk=self.kwargs['pk'])
+        queryset = self.get_queryset()
+        return queryset.get(pk=self.kwargs['pk'])
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
