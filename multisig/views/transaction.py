@@ -59,7 +59,11 @@ def get_wallet_by_identifier(identifier, queryset=None):
 
 
 class ProposalListCreateView(APIView):
-    permission_classes = [IsCosigner]
+    
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsCosigner()]
+        return []
 
     @swagger_auto_schema(
         operation_description="List proposals. Optionally filter by wallet id.",
@@ -103,7 +107,7 @@ class ProposalListCreateView(APIView):
         serializer = ProposalSerializer(
             data=request.data, context={"coordinator": signer}
         )
-        
+
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
