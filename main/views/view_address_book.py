@@ -32,10 +32,6 @@ class AddressBookViewSet(
     def get_queryset(self):
         wallet_hash = self.request.user.wallet_hash
         return super().get_queryset().filter(wallet__wallet_hash=wallet_hash)
-
-    def get_object(self):
-        queryset = self.get_queryset()
-        return queryset.get(pk=self.kwargs['pk'])
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
