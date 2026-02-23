@@ -29,18 +29,20 @@ class MultisigWallet(models.Model):
             models.UniqueConstraint(fields=['coordinator', 'wallet_descriptor_id'], name='unique_coordinator_wallet_descriptor')
         ]
 
-class Signer(models.Model):
+class KeyRecord(models.Model):
+    publisher = models.ForeignKey(ServerIdentity, related_name='key_records_published', null=True, blank=True, on_delete=models.CASCADE)
+    recipient = models.ForeignKey(ServerIdentity, related_name='key_records_received', null=True, blank=True, on_delete=models.CASCADE)
+    key_record = models.TextField() # description = wallet_descriptor_id? encrypted bsms key record with ecies
 
+class Signer(models.Model):
     name = models.CharField(max_length=255, help_text="The name of the signer", null=True, blank=True)
     master_fingerprint = models.CharField(max_length=8, help_text="The signer's xpub master fingerprint", null=True, blank=True)
     derivation_path = models.CharField(max_length=255, help_text="The derivation path of the xpub", null=True, blank=True)
     public_key = models.CharField(max_length=66, help_text="The signer's xpub public key", null=True, blank=True)
     wallet_descriptor = models.TextField(help_text="The BSMS wallet descriptor encrypted by the coordinator to this signer's public key", null=True, blank=True)
     wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
-    server_identity = models.ForeignKey(ServerIdentity, related_name='signers', on_delete=models.SET_NULL, null=True, blank=True)
-    # wallet_descriptor_access_key = 12 bytes iv + AES-GCM encryption key encrypted using ecies
+    cosigner_auth_public_key = models.CharField(max_length=66, help_text="The double sha256 child non-hardened public key derived at 999/0 from this cosigner's xpub", null=True, blank=True)
     
-
     class Meta:
         constraints = [
                 models.UniqueConstraint(fields=['wallet', 'public_key'], name='unique_signer')
@@ -48,8 +50,3 @@ class Signer(models.Model):
     def __str__(self):
         return f"{self.entity_key}: {self.xpub}"
 
-    
-class KeyRecord(models.Model):
-    publisher = models.ForeignKey(ServerIdentity, related_name='key_records_published', null=True, blank=True, on_delete=models.CASCADE)
-    recipient = models.ForeignKey(ServerIdentity, related_name='key_records_received', null=True, blank=True, on_delete=models.CASCADE)
-    key_record = models.TextField()
