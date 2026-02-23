@@ -15,7 +15,6 @@ class MultisigWallet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
     updated_at = models.DateTimeField(auto_now=True)
-    # wallet_descriptor = AES-GCM encrypted bsms descryptor 
 
     def soft_delete(self):
         self.deleted_at = timezone.now()
@@ -31,22 +30,23 @@ class MultisigWallet(models.Model):
 
 class KeyRecord(models.Model):
     publisher = models.ForeignKey(ServerIdentity, related_name='key_records_published', null=True, blank=True, on_delete=models.CASCADE)
-    recipient = models.ForeignKey(ServerIdentity, related_name='key_records_received', null=True, blank=True, on_delete=models.CASCADE)
-    key_record = models.TextField() # description = wallet_descriptor_id? encrypted bsms key record with ecies
+    key_record = models.TextField(help_text="An ECIES encrypted BSMS 1.0 key record") 
+    audience_auth_public_key = models.CharField(max_length=66, help_text="The auth public key of the intended audience for this key record", null=True, blank=True)
+    wallet = models.ForeignKey(MultisigWallet, related_name='key_records', null=True, blank=True, on_delete=models.SET_NULL) 
 
 class Signer(models.Model):
     name = models.CharField(max_length=255, help_text="The name of the signer", null=True, blank=True)
     master_fingerprint = models.CharField(max_length=8, help_text="The signer's xpub master fingerprint", null=True, blank=True)
     derivation_path = models.CharField(max_length=255, help_text="The derivation path of the xpub", null=True, blank=True)
     public_key = models.CharField(max_length=66, help_text="The signer's xpub public key", null=True, blank=True)
-    wallet_descriptor = models.TextField(help_text="The BSMS wallet descriptor encrypted by the coordinator to this signer's public key", null=True, blank=True)
+    wallet_descriptor = models.TextField(help_text="The BSMS wallet descriptor encrypted by the coordinator with this signer's public key", null=True, blank=True)
     wallet = models.ForeignKey(MultisigWallet, related_name='signers', on_delete=models.CASCADE)
-    cosigner_auth_public_key = models.CharField(max_length=66, help_text="The double sha256 child non-hardened public key derived at 999/0 from this cosigner's xpub", null=True, blank=True)
+    auth_public_key = models.CharField(max_length=66, help_text="The child non-hardened public key derived at 999/0 from this cosigner's xpub", null=True, blank=True)
     
     class Meta:
         constraints = [
                 models.UniqueConstraint(fields=['wallet', 'public_key'], name='unique_signer')
             ]
     def __str__(self):
-        return f"{self.entity_key}: {self.xpub}"
+        return f"{self.name}"
 

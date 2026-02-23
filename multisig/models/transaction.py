@@ -2,19 +2,21 @@ import hashlib
 from django.db import models
 from django.utils import timezone
 from main.models import TransactionBroadcast
-from multisig.models.auth import ServerIdentity
-from multisig.models.wallet import MultisigWallet
+# from multisig.models.auth import ServerIdentity
+from multisig.models.wallet import MultisigWallet, Signer
 from multisig.utils import generate_transaction_hash
 
 class Proposal(models.Model):
+    
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE, null=True, blank=True)
+    coordinator = models.ForeignKey(Signer, on_delete=models.CASCADE, null=True, blank=True) 
+    
     unsigned_transaction_hex = models.TextField(help_text="The Unsigned transaction hex.")
     unsigned_transaction_hash = models.CharField(max_length=64, help_text="The hash of the Unsigned transaction")
     signed_transaction = models.TextField(null=True, blank=True, help_text="The Signed transaction hex. This could be a partially signed transaction. This updates as signing submissions are received.")
     signed_transaction_hash = models.CharField(max_length=64, null=True, blank=True, help_text="The double sha256 hash of the Signed transaction")
     proposal = models.TextField(null=True, blank=True, help_text="The serialized / encoded proposal data.")
     proposal_format = models.CharField(default='psbt', max_length=50, blank=True, null=True, help_text="The format of the proposal data")
-    coordinator = models.ForeignKey(ServerIdentity, on_delete=models.CASCADE, null=True, blank=True) 
     on_premise_transaction_broadcast = models.ForeignKey(TransactionBroadcast, on_delete=models.SET_NULL, null=True, blank=True, help_text="If set transaction was broadcasted thru watchtower.")
     off_premise_transaction_broadcast = models.CharField(max_length=64, null=True, blank=True, help_text="If set transaction was broadcasted outside watchtower")
 
