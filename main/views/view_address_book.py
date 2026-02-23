@@ -98,8 +98,16 @@ class AddressBookAddressViewSet(
     queryset = AddressBookAddress.objects.all()
     serializer_class = AddressBookAddressSerializer
 
+    def get_queryset(self):
+        wallet_hash = self.request.user.wallet_hash
+        return super().get_queryset().filter(address_book__wallet__wallet_hash=wallet_hash)
+
     def create(self, request, *args, **kwargs):
         serializer = AddressBookAddressCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # Add ownership check
+        address_book = serializer.validated_data.get('address_book')
+        if address_book and address_book.wallet.wallet_hash != request.user.wallet_hash:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         self.perform_create(serializer)
-        return Response(status=status.HTTP_201_CREATED)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
