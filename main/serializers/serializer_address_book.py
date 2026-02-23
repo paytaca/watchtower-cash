@@ -35,7 +35,7 @@ class AddressBookRetrieveSerializer(ModelSerializer):
 
     def get_addresses(self, obj):
         return AddressBookAddressSerializer(
-            obj.address_book_addresses.all().prefetch_related('address_book_addresses'),
+            obj.address_book_addresses.all(),
             many=True
         ).data
 

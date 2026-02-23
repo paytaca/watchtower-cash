@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -25,7 +26,7 @@ class AddressBookViewSet(
 ):
     authentication_classes = [WalletAuthentication]
     http_method_names = ['get', 'post', 'patch', 'delete']
-    queryset = AddressBook.objects.all()
+    queryset = AddressBook.objects.all().prefetch_related('address_book_addresses')
     serializer_class = AddressBookSerializer
 
     def get_queryset(self):
@@ -45,14 +46,26 @@ class AddressBookViewSet(
         self.perform_create(serializer)
 
         addresses = request.data.get('addresses')
-        if addresses and isinstance(addresses, list) and len(addresses) > 0:
-            for address in addresses:
-                address['address_book_id'] = serializer.data['id']
-                addresses_serializer = AddressBookAddressCreateSerializer(data=address)
-                addresses_serializer.is_valid(raise_exception=True)
-                addresses_serializer.save()
+        error = ''
+        status = status.HTTP_201_CREATED
+        try:
+            with transaction.atomic():
+                if addresses and isinstance(addresses, list) and len(addresses) > 0:
+                    for address in addresses:
+                        address['address_book_id'] = serializer.data['id']
+                        addresses_serializer = AddressBookAddressCreateSerializer(data=address)
+                        addresses_serializer.is_valid(raise_exception=True)
+                        addresses_serializer.save()
+        except Exception as e:
+            status = status.HTTP_400_BAD_REQUEST
+            error = ' '.join(str(arg) for arg in e.args) if e.args else str(e)
         
-        return Response(serializer.data['id'], status=status.HTTP_201_CREATED)
+        data = {
+            'id': serializer.data['id'],
+            'error': error
+        }
+        
+        return Response(data, status=status)
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
