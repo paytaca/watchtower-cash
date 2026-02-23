@@ -35,7 +35,7 @@ class AddressBookViewSet(
 
     def get_object(self):
         queryset = self.get_queryset()
-        return queryset.get_object_or_404(pk=self.kwargs['pk'])
+        return queryset.get(pk=self.kwargs['pk'])
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
