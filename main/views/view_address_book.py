@@ -49,7 +49,7 @@ class AddressBookViewSet(
 
         addresses = request.data.get('addresses')
         error = ''
-        status = status.HTTP_201_CREATED
+        status_resp = status.HTTP_201_CREATED
         try:
             with transaction.atomic():
                 if addresses and isinstance(addresses, list) and len(addresses) > 0:
@@ -59,7 +59,7 @@ class AddressBookViewSet(
                         addresses_serializer.is_valid(raise_exception=True)
                         addresses_serializer.save()
         except Exception as e:
-            status = status.HTTP_400_BAD_REQUEST
+            status_resp = status.HTTP_400_BAD_REQUEST
             error = ' '.join(str(arg) for arg in e.args) if e.args else str(e)
         
         data = {
@@ -67,7 +67,7 @@ class AddressBookViewSet(
             'error': error
         }
         
-        return Response(data, status=status)
+        return Response(data, status=status_resp)
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
