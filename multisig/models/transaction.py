@@ -10,7 +10,6 @@ class Proposal(models.Model):
     
     wallet = models.ForeignKey(MultisigWallet, on_delete=models.CASCADE, null=True, blank=True)
     coordinator = models.ForeignKey(Signer, on_delete=models.CASCADE, null=True, blank=True) 
-    
     unsigned_transaction_hex = models.TextField(help_text="The Unsigned transaction hex.")
     unsigned_transaction_hash = models.CharField(max_length=64, help_text="The hash of the Unsigned transaction")
     signed_transaction = models.TextField(null=True, blank=True, help_text="The Signed transaction hex. This could be a partially signed transaction. This updates as signing submissions are received.")
@@ -53,6 +52,21 @@ class Proposal(models.Model):
         default=BroadcastStatus.PENDING
     )
 
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"          # Proposal exists, not broadcast
+        BROADCASTED = "broadcasted", "Broadcasted"  # Sent to node but not yet seen in mempool
+        MEMPOOL = "mempool", "In mempool"       # Node sees tx in mempool
+        CONFIRMED = "confirmed", "Confirmed"    # At least 1 confirmation
+        CONFLICTED = "conflicted", "Conflicted" # Inputs spent elsewhere
+        FAILED = "failed", "Failed to broadcast"
+        DELETED = "deleted", "Deleted"          # Soft deleted proposal
+
+    status = models.CharField(
+        max_length=25,
+        choices=Status.choices,
+        default=Status.PENDING
+    )
+
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
 
     def soft_delete(self):
@@ -61,7 +75,8 @@ class Proposal(models.Model):
         """
         
         self.deleted_at = timezone.now()
-        self.save(update_fields=["deleted_at"])
+        self.status = Proposal.Status.DELETED
+        self.save(update_fields=["deleted_at", "status"])
 
     def save(self, *args, **kwargs):
 
