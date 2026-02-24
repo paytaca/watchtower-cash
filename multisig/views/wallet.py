@@ -15,7 +15,7 @@ import multisig.js_client as js_client
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
 from multisig.models.wallet import MultisigWallet, Signer
 from multisig.serializers.wallet import MultisigWalletSerializer, SignerSerializer, MultisigWalletUtxoSerializer
-from multisig.auth.permission import IsCosigner, IsCosignerOfNewMultisigWallet
+from multisig.auth.permission import IsCosigner
 from rest_framework.generics import get_object_or_404 as drf_get_object_or_404
 
 LOGGER = logging.getLogger(__name__)
