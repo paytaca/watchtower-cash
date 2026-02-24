@@ -63,6 +63,7 @@ class ProposalSerializer(serializers.ModelSerializer):
                 decoded_proposal.pop('signingProgress', None) 
                 proposal, created= Proposal.objects.get_or_create(
                     unsigned_transaction_hex=decoded_proposal.get('unsignedTransactionHex'),
+                    deleted_at__isnull=True,
                     defaults={
                         'wallet': validated_data.get('wallet'),
                         'unsigned_transaction_hex': decoded_proposal.get('unsignedTransactionHex'),
