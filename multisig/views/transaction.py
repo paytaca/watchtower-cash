@@ -5,7 +5,7 @@ from drf_yasg.utils import swagger_auto_schema
 from main.models import TransactionBroadcast
 from multisig import js_client
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
-from multisig.auth.permission import IsCosigner
+from multisig.auth.permission import IsCosigner, IsProposalCoordinator
 from multisig.models.auth import ServerIdentity
 from rampp2p.utils import transaction
 from rest_framework.views import APIView
@@ -120,8 +120,8 @@ class WalletProposalListView(APIView):
         operation_description="List proposals for a wallet. Identifier is wallet id (numeric), wallet_hash, or wallet_descriptor_id.",
         responses={status.HTTP_200_OK: ProposalSerializer(many=True)},
     )
-    def get(self, request, identifier):
-        wallet = get_wallet_by_identifier(identifier)
+    def get(self, request, wallet_identifier):
+        wallet = get_wallet_by_identifier(wallet_identifier)
         show_deleted = str(request.query_params.get("include_deleted")).lower() in (
             "1",
             "true",
@@ -143,6 +143,12 @@ class WalletProposalListView(APIView):
 
 
 class ProposalDetailView(APIView):
+
+    def get_permissions(self):
+        if self.request.method == "DELETE" or self.request.method == "PUT" or self.request.method == "PATCH":
+            return [IsProposalCoordinator()]
+        return []
+
     def get_object(self, identifier):
         return get_proposal_by_identifier(
             identifier,
@@ -153,8 +159,8 @@ class ProposalDetailView(APIView):
         operation_description="Retrieve a proposal by id.",
         responses={status.HTTP_200_OK: ProposalSerializer},
     )
-    def get(self, request, identifier):
-        proposal = self.get_object(identifier)
+    def get(self, request, proposal_identifier):
+        proposal = self.get_object(proposal_identifier)
         serializer = ProposalSerializer(proposal)
         return Response(serializer.data)
 
@@ -168,8 +174,8 @@ class ProposalDetailView(APIView):
             ),
         },
     )
-    def put(self, request, identifier):
-        proposal = self.get_object(identifier)
+    def put(self, request, proposal_identifier):
+        proposal = self.get_object(proposal_identifier)
         serializer = ProposalSerializer(proposal, data=request.data, partial=False)
         if serializer.is_valid():
             serializer.save()
@@ -186,8 +192,8 @@ class ProposalDetailView(APIView):
             ),
         },
     )
-    def patch(self, request, identifier):
-        proposal = self.get_object(identifier)
+    def patch(self, request, proposal_identifier):
+        proposal = self.get_object(proposal_identifier)
         serializer = ProposalSerializer(proposal, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -200,8 +206,8 @@ class ProposalDetailView(APIView):
             status.HTTP_204_NO_CONTENT: openapi.Response(description="No content")
         },
     )
-    def delete(self, request, identifier):
-        proposal = self.get_object(identifier)
+    def delete(self, request, proposal_identifier):
+        proposal = self.get_object(proposal_identifier)
         proposal.soft_delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -211,7 +217,7 @@ class ProposalInputListView(APIView):
         operation_description="Read-only list of inputs for a proposal. Inputs are set at proposal creation only. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: InputSerializer(many=True)},
     )
-    def get(self, request, identifier):
+    def get(self, request, proposal_identifier):
         proposal = get_proposal_by_identifier(
             identifier, Proposal.objects.prefetch_related("inputs")
         )
@@ -224,13 +230,14 @@ class ProposalStatusView(APIView):
     Returns the broadcast status and current spend status of inputs for a proposal.
     """
 
-    def get(self, request, identifier):
-        proposal = get_proposal_by_identifier(identifier, Proposal.objects.filter(deleted_at__isnull=True))
+    def get(self, request, proposal_identifier):
+        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
         broadcast_status = proposal.broadcast_status
         response_data = {
             "proposal_id": proposal.id,
             "proposal_unsigned_transaction_hash": proposal.unsigned_transaction_hash,
             "broadcast_status": broadcast_status,
+            "status": proposal.status,
             "inputs": [],
         }
 
@@ -328,8 +335,8 @@ class ProposalSigningSubmissionListCreateView(APIView):
         operation_description="List signing submissions for a proposal. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: SigningSubmissionSerializer(many=True)},
     )
-    def get(self, request, identifier):
-        proposal = get_proposal_by_identifier(identifier)
+    def get(self, request, proposal_identifier):
+        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
         submissions = proposal.signing_submissions.all()
         serializer = SigningSubmissionSerializer(submissions, many=True)
         return Response(serializer.data)
@@ -344,8 +351,8 @@ class ProposalSigningSubmissionListCreateView(APIView):
             ),
         },
     )
-    def post(self, request, identifier):
-        proposal = get_proposal_by_identifier(identifier)
+    def post(self, request, proposal_identifier):
+        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
         serializer = SigningSubmissionSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(proposal=proposal)
@@ -354,16 +361,16 @@ class ProposalSigningSubmissionListCreateView(APIView):
 
 
 class ProposalSigningSubmissionDetailView(APIView):
-    def get_object(self, identifier, pk):
-        proposal = get_proposal_by_identifier(identifier)
+    def get_object(self, proposal_identifier, pk):
+        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
         return get_object_or_404(SigningSubmission, proposal_id=proposal.pk, pk=pk)
 
     @swagger_auto_schema(
         operation_description="Retrieve a signing submission by id. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: SigningSubmissionSerializer},
     )
-    def get(self, request, identifier, pk):
-        submission = self.get_object(identifier, pk)
+    def get(self, request, proposal_identifier, pk):
+        submission = self.get_object(proposal_identifier, pk)
         serializer = SigningSubmissionSerializer(submission)
         return Response(serializer.data)
 
@@ -373,8 +380,8 @@ class ProposalSigningSubmissionDetailView(APIView):
             status.HTTP_204_NO_CONTENT: openapi.Response(description="No content")
         },
     )
-    def delete(self, request, identifier, pk):
-        submission = self.get_object(identifier, pk)
+    def delete(self, request, proposal_identifier, pk):
+        submission = self.get_object(proposal_identifier, pk)
         submission.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -386,8 +393,8 @@ class ProposalSignatureListView(APIView):
         operation_description="List signatures for a proposal. Identifier is proposal id or unsigned_transaction_hash. Read-only.",
         responses={status.HTTP_200_OK: SignatureSerializer(many=True)},
     )
-    def get(self, request, identifier):
-        proposal = get_proposal_by_identifier(identifier)
+    def get(self, request, proposal_identifier):
+        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
         queryset = Signature.objects.filter(
             input__proposal_id=proposal.pk
         ).select_related("input")
@@ -398,8 +405,8 @@ class ProposalSignatureListView(APIView):
 class ProposalSignatureDetailView(APIView):
     """Read-only detail of a single signature scoped to a proposal."""
 
-    def get_object(self, identifier, pk):
-        proposal = get_proposal_by_identifier(identifier)
+    def get_object(self, proposal_identifier, pk):
+        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
         return get_object_or_404(
             Signature.objects.select_related("input"),
             pk=pk,
@@ -410,8 +417,8 @@ class ProposalSignatureDetailView(APIView):
         operation_description="Retrieve a signature by id. Identifier is proposal id or unsigned_transaction_hash. Read-only.",
         responses={status.HTTP_200_OK: SignatureSerializer},
     )
-    def get(self, request, identifier, pk):
-        signature = self.get_object(identifier, pk)
+    def get(self, request, proposal_identifier, pk):
+        signature = self.get_object(proposal_identifier, pk)
         serializer = SignatureSerializer(signature)
         return Response(serializer.data)
 
@@ -423,7 +430,7 @@ class SignatureBySignerIdentifierList(APIView):
         operation_description="List signatures for inputs whose BIP32 derivation has this master fingerprint. Returns signature, publicKey, input, bip32Derivation. Read-only.",
         responses={status.HTTP_200_OK: SignatureWithBip32Serializer(many=True)},
     )
-    def get_queryset(self, proposal_identifier, identifier):
+    def get_queryset(self, proposal_identifier, signature_identifier):
 
         if proposal_identifier.isdigit():
             base = (
@@ -441,13 +448,13 @@ class SignatureBySignerIdentifierList(APIView):
             )
 
         return base.filter(
-            input__bip32_derivation__master_fingerprint=identifier,
+            input__bip32_derivation__master_fingerprint=signature_identifier,
             public_key=models.F("input__bip32_derivation__public_key"),
         ).distinct()
 
-    def get(self, request, proposal_identifier, identifier):
+    def get(self, request, proposal_identifier, signature_identifier):
         # Ensure proposal exists (404 if not)
         get_object_or_404(Proposal, unsigned_transaction_hash=proposal_identifier)
-        queryset = self.get_queryset(proposal_identifier, identifier)
+        queryset = self.get_queryset(proposal_identifier, signature_identifier)
         serializer = SignatureWithBip32Serializer(queryset, many=True)
         return Response(serializer.data)
