@@ -10,6 +10,12 @@ def get_transaction_hash(transaction_hex: str):
         f'{MULTISIG_JS_SERVER}/multisig/utils/get-transaction-hash',
         data = {'transaction': transaction_hex }, timeout=5
     )
+
+def get_unsigned_transaction_hash(transaction_hex: str):
+    return requests.get(
+        f'{MULTISIG_JS_SERVER}/multisig/transaction/unsigned-transaction-hash?transaction_hex={transaction_hex}',
+        timeout=5
+    )
     
 def finalize_transaction(multisig_transaction, multisig_wallet):
     return requests.post(

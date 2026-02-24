@@ -184,24 +184,20 @@ app.post('/multisig/transaction/decode-proposal', async (req, res) => {
 })
 
 app.get('/multisig/transaction/unsigned-transaction-hash', async (req, res) => {
-  console.log('req', req.query)
-  console.log('transaction hex', req.query.transaction_hex)
   const decodedTransaction = decodeTransactionCommon(hexToBin(req.query.transaction_hex))
-  const pst = new Pst()
-  console.log('DECODED transaction', stringify(decodedTransaction))
-  pst.setTxVersion(decodedTransaction.version)
-  pst.setLocktime(decodedTransaction.locktime)
-  pst.addInputs(decodedTransaction.inputs)
-  pst.addOutputs(decodedTransaction.outputs)
-
-  // decodedTransaction.inputs[0].unlockingBytecode = []
-  // const transactionBuilder = new MultisigTransactionBuilder()
-  // transactionBuilder.setVersion(decodedTransaction.version)
-  // transactionBuilder.setLocktime(decodedTransaction.locktime)
-  // transactionBuilder.addInputs(decodedTransaction.inputs)
-  // transactionBuilder.addOutputs(decodedTransaction.outputs)
+  decodedTransaction.inputs[0].unlockingBytecode = []
+  const transactionBuilder = new MultisigTransactionBuilder()
+  transactionBuilder.setVersion(decodedTransaction.version)
+  transactionBuilder.setLocktime(decodedTransaction.locktime)
+  transactionBuilder.addInputs(decodedTransaction.inputs.map(i => {
+    return {
+      ...i,
+      unlockingBytecode: new Uint8Array([])
+    }
+  }))
+  transactionBuilder.addOutputs(decodedTransaction.outputs)
   res.send({
-    unsigned_transaction_hash: pst.unsignedTransactionHash
+    unsigned_transaction_hash: hashTransaction(hexToBin(transactionBuilder.build()))
   })
 })
 
