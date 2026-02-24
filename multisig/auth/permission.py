@@ -8,7 +8,7 @@ from multisig.models.transaction import Proposal
 from multisig.models.auth import ServerIdentity
 from multisig.models.wallet import MultisigWallet
 from rest_framework import permissions
-from rest_framework.exceptions import ValidationError, AuthenticationFailed
+from rest_framework.exceptions import ValidationError, AuthenticationFailed, PermissionDenied
 from django.conf import settings
 from django.db.models import Q
 
@@ -50,7 +50,7 @@ class IsCosigner(permissions.BasePermission):
         ).first()
 
         if not signer:
-            return False
+            raise PermissionDenied("User is not a cosigner of the proposal.")
 
         signature = parse_x_signature_header(signature)
         sig_verification_response = verify_signature(
@@ -73,23 +73,18 @@ class IsProposalCoordinator(IsCosigner):
 
     def has_permission(self, request, view):
         super().has_permission(request, view)
-        signer = getattr(request, "signer", None)
-        if not signer:
-            return False
-        
+        signer = getattr(request, "signer")
         proposal_identifier = request.resolver_match.kwargs.get('proposal_identifier', None) 
         if not proposal_identifier:
-            return False
-        
+            raise PermissionDenied("Invalid proposal identifier.")
         queryset = Proposal.objects.all()
         if proposal_identifier.isdigit():
             proposal = queryset.filter(pk=int(proposal_identifier)).first()
         else:
             proposal = queryset.filter(unsigned_transaction_hash=proposal_identifier).first()
         if not proposal:
-            return False
-        
-        if proposal.coordinator != signer:
-            return False    
-        
+            raise PermissionDenied("User non existing proposal.")
+        if proposal.coordinator.id != signer.id:
+            raise PermissionDenied("User is not the coordinator of this proposal.")
+
         return True
