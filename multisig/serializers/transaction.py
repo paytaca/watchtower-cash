@@ -33,6 +33,7 @@ class ProposalSerializer(serializers.ModelSerializer):
     txid = serializers.CharField(read_only=True)
     signingProgress = serializers.CharField(source='signing_progress', read_only=True)
     broadcastStatus = serializers.CharField(source='broadcast_status', read_only=True)
+    status = serializers.CharField(read_only=True)
 
     class Meta:
         model = Proposal
@@ -40,7 +41,7 @@ class ProposalSerializer(serializers.ModelSerializer):
             'id', 'wallet', 'proposal', 'proposalFormat',
             'unsignedTransactionHex', 'unsignedTransactionHash',
             'signedTransaction', 'signedTransactionHash', 'txid',
-            'signingProgress', 'broadcastStatus', 'coordinator'
+            'signingProgress', 'broadcastStatus', 'coordinator', 'status'
         ]
 
     def to_representation(self, instance):
