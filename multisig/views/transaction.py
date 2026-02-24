@@ -34,7 +34,6 @@ from multisig.serializers.transaction import (
 
 LOGGER = logging.getLogger(__name__)
 
-
 def get_proposal_by_identifier(identifier, queryset=None):
     """Resolve Proposal by id (if identifier is numeric) or unsigned_transaction_hash."""
     if queryset is None:
@@ -127,16 +126,17 @@ class WalletProposalListView(APIView):
             "1",
             "true",
         )
-        deleted_filter = {} if show_deleted else {"deleted_at__isnull": False}
         queryset = Proposal.objects.prefetch_related("inputs").filter(
             wallet=wallet,
-            **deleted_filter,
             broadcast_status=(
                 request.query_params.get(
                     "broadcast_status", Proposal.BroadcastStatus.PENDING
                 )
             ),
         )
+
+        if not show_deleted:
+            queryset = queryset.filter(deleted_at__isnull=True)
 
         serializer = ProposalSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -146,7 +146,7 @@ class ProposalDetailView(APIView):
     def get_object(self, identifier):
         return get_proposal_by_identifier(
             identifier,
-            queryset=Proposal.objects.prefetch_related("inputs", "signing_submissions"),
+            queryset=Proposal.objects.prefetch_related("inputs", "signing_submissions").filter(deleted_at__isnull=True),
         )
 
     @swagger_auto_schema(
@@ -225,7 +225,7 @@ class ProposalStatusView(APIView):
     """
 
     def get(self, request, identifier):
-        proposal = get_proposal_by_identifier(identifier)
+        proposal = get_proposal_by_identifier(identifier, Proposal.objects.filter(deleted_at__isnull=True))
         broadcast_status = proposal.broadcast_status
         response_data = {
             "proposal_id": proposal.id,
