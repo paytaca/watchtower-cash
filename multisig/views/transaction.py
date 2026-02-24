@@ -127,7 +127,7 @@ class WalletProposalListView(APIView):
             "1",
             "true",
         )
-        deleted_filter = {} if show_deleted else {"deleted_at__isnull": True}
+        deleted_filter = {} if show_deleted else {"deleted_at__isnull": False}
         queryset = Proposal.objects.prefetch_related("inputs").filter(
             wallet=wallet,
             **deleted_filter,
