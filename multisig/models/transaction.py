@@ -84,6 +84,7 @@ class Input(models.Model):
 
     class Meta:
         unique_together = (
+            'proposal',
             'outpoint_transaction_hash',
             'outpoint_index',
         )
