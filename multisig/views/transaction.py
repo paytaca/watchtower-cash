@@ -25,6 +25,7 @@ from multisig.models.transaction import (
 )
 from multisig.models.wallet import MultisigWallet
 from multisig.serializers.transaction import (
+    ProposalCoordinatorSerializer,
     ProposalSerializer,
     InputSerializer,
     SigningSubmissionSerializer,
@@ -211,6 +212,24 @@ class ProposalDetailView(APIView):
         proposal.soft_delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+class ProposalCoordinatorDetailView(APIView):
+
+    def get_object(self, identifier):
+        return get_proposal_by_identifier(
+            identifier,
+            queryset=Proposal.objects.filter(deleted_at__isnull=True),
+        )
+
+    @swagger_auto_schema(
+        operation_description="Retrieve a proposal coordinator by proposal's identifier.",
+        responses={status.HTTP_200_OK: ProposalCoordinatorSerializer},
+    )
+    def get(self, request, proposal_identifier):
+        proposal = self.get_object(proposal_identifier)
+        serializer = ProposalCoordinatorSerializer(proposal)
+        return Response(serializer.data)
+
+
 
 class ProposalInputListView(APIView):
     @swagger_auto_schema(
@@ -219,7 +238,7 @@ class ProposalInputListView(APIView):
     )
     def get(self, request, proposal_identifier):
         proposal = get_proposal_by_identifier(
-            identifier, Proposal.objects.prefetch_related("inputs")
+            proposal_identifier, Proposal.objects.prefetch_related("inputs")
         )
         serializer = InputSerializer(proposal.inputs.all(), many=True)
         return Response(serializer.data)

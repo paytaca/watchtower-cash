@@ -1,6 +1,7 @@
 import logging
 import json
 from django.db import transaction
+from multisig.serializers.wallet import SignerSerializer
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -34,7 +35,8 @@ class ProposalSerializer(serializers.ModelSerializer):
     signingProgress = serializers.CharField(source='signing_progress', read_only=True)
     broadcastStatus = serializers.CharField(source='broadcast_status', read_only=True)
     status = serializers.CharField(read_only=True)
-
+    coordinator = SignerSerializer(read_only=True)
+    
     class Meta:
         model = Proposal
         fields = [
@@ -93,7 +95,6 @@ class ProposalSerializer(serializers.ModelSerializer):
                         )
                         signatures = input.get('signatures', {})
                         bip32_derivation = input.get('bip32Derivation', {})
-                        LOGGER.info(input)
                         for pub_key, derivation in bip32_derivation.items():
                                 # Avoid double creation if already handled above for a pubkey that is also in 'signatures'
                                 Bip32Derivation.objects.get_or_create(
@@ -124,6 +125,15 @@ class ProposalSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
 
+
+class ProposalCoordinatorSerializer(serializers.ModelSerializer):
+    coordinator = SignerSerializer(read_only=True)
+
+    class Meta:
+        model = Proposal
+        fields = ['id', 'coordinator']
+        read_only_fields = ['id', 'coordinator']
+        
 
 class SigningSubmissionSerializer(serializers.ModelSerializer):
     payloadFormat = serializers.CharField(source='payload_format', default='psbt')
