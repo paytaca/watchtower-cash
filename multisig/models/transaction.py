@@ -14,8 +14,9 @@ class Proposal(models.Model):
     unsigned_transaction_hash = models.CharField(max_length=64, help_text="The hash of the Unsigned transaction")
     signed_transaction = models.TextField(null=True, blank=True, help_text="The Signed transaction hex. This could be a partially signed transaction. This updates as signing submissions are received.")
     signed_transaction_hash = models.CharField(max_length=64, null=True, blank=True, help_text="The double sha256 hash of the Signed transaction")
-    proposal = models.TextField(null=True, blank=True, help_text="The serialized / encoded proposal data.")
+    proposal = models.TextField(null=True, blank=True, help_text="The original submitted serialized / encoded proposal data.")
     proposal_format = models.CharField(default='psbt', max_length=50, blank=True, null=True, help_text="The format of the proposal data")
+    proposal_combined = models.TextField(null=True, blank=True, help_text="The combined proposal from Signing Submissions. Updated everytime new signing submission comes in.")
     on_premise_transaction_broadcast = models.ForeignKey(TransactionBroadcast, on_delete=models.SET_NULL, null=True, blank=True, help_text="If set transaction was broadcasted thru watchtower.")
     off_premise_transaction_broadcast = models.CharField(max_length=64, null=True, blank=True, help_text="If set transaction was broadcasted outside watchtower")
 
@@ -86,6 +87,9 @@ class Proposal(models.Model):
         if self.signed_transaction:
             self.signed_transaction_hash = generate_transaction_hash(self.signed_transaction)
 
+        if self.proposal and not self.proposal_combined:
+            self.proposal_combined = self.proposal
+            
         super().save(*args, **kwargs)
 
 
@@ -114,7 +118,6 @@ class Bip32Derivation(models.Model):
         unique_together = ('input', 'public_key')
 
 class SigningSubmission(models.Model):
-    
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='signing_submissions')
     payload = models.TextField()
     payload_format = models.CharField(default='psbt', max_length=50, blank=True, null=True)

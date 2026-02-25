@@ -27,6 +27,7 @@ class InputSerializer(serializers.ModelSerializer):
 class ProposalSerializer(serializers.ModelSerializer):
     proposal = serializers.CharField(required=True)
     proposalFormat = serializers.CharField(source='proposal_format', default='psbt', required=False, allow_blank=True)
+    proposalCombined = serializers.CharField(source='proposal_combined', read_only=True)
     unsignedTransactionHex = serializers.CharField(source='unsigned_transaction_hex', read_only=True)
     unsignedTransactionHash = serializers.CharField(source='unsigned_transaction_hash', read_only=True)
     signedTransaction = serializers.CharField(source='signed_transaction', read_only=True)
@@ -40,7 +41,7 @@ class ProposalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Proposal
         fields = [
-            'id', 'wallet', 'proposal', 'proposalFormat',
+            'id', 'wallet', 'proposal', 'proposalFormat', 'proposalCombined',
             'unsignedTransactionHex', 'unsignedTransactionHash',
             'signedTransaction', 'signedTransactionHash', 'txid',
             'signingProgress', 'broadcastStatus', 'coordinator', 'status'
@@ -76,6 +77,7 @@ class ProposalSerializer(serializers.ModelSerializer):
                     }
                 )
 
+
                 if created:
                     signing_submission = None
                     if signing_progress.get('signingProgress', '') and signing_progress.get('signingProgress', '') != 'unsigned':
@@ -86,7 +88,6 @@ class ProposalSerializer(serializers.ModelSerializer):
                         )
 
                     for input in inputs:
-                        
                         input_model = Input.objects.create(
                             proposal=proposal,
                             outpoint_transaction_hash=input.get('outpointTransactionHash'),
@@ -133,7 +134,7 @@ class ProposalCoordinatorSerializer(serializers.ModelSerializer):
         model = Proposal
         fields = ['id', 'coordinator']
         read_only_fields = ['id', 'coordinator']
-        
+
 
 class SigningSubmissionSerializer(serializers.ModelSerializer):
     payloadFormat = serializers.CharField(source='payload_format', default='psbt')
@@ -170,6 +171,17 @@ class SigningSubmissionSerializer(serializers.ModelSerializer):
 
                 if not created:
                     return signing_submission
+                
+                if format == 'psbt':
+                    base_proposal = proposal.proposal_combined
+                    response = js_client.combine_psbts([base_proposal, validated_data['payload']])
+                    response.raise_for_status()
+                    response_json = response.json()
+                    LOGGER.info(f"response.json {response_json}")
+                    LOGGER.info(f"combined PSBT: {response_json.get('result')}")
+                    if response_json.get('result'):
+                        proposal.proposal_combined = response_json.get('result')
+                        proposal.save(update_fields=["proposal_combined"])
 
                 inputs = decoded_proposal.pop('inputs', [])
 
