@@ -24,6 +24,8 @@ router.register(r"wallet/shard", views.WalletShardViewSet, basename="wallet-shar
 router.register(r"app-control", views.AppControlViewSet, basename="app-control")
 router.register(r"transactions/outputs", views.TransactionOutputViewSet, basename="transaction-outputs")
 router.register(r"projects", views.ProjectViewSet, basename="projects")
+router.register(r"address-book", views.AddressBookViewSet, basename="address-book")
+router.register(r"address-book-address", views.AddressBookAddressViewSet, basename="address-book-address")
 
 main_urls = router.urls
 
