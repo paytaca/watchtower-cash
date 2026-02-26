@@ -20,7 +20,6 @@ from main.tasks import NODE
 from multisig.models.transaction import (
     Bip32Derivation,
     Proposal,
-    SigningSubmission,
     Signature,
 )
 from multisig.models.wallet import MultisigWallet
@@ -28,7 +27,7 @@ from multisig.serializers.transaction import (
     ProposalCoordinatorSerializer,
     ProposalSerializer,
     InputSerializer,
-    SigningSubmissionSerializer,
+    PsbtSerializer,
     SignatureSerializer,
     SignatureWithBip32Serializer,
 )
@@ -229,8 +228,6 @@ class ProposalCoordinatorDetailView(APIView):
         serializer = ProposalCoordinatorSerializer(proposal)
         return Response(serializer.data)
 
-
-
 class ProposalInputListView(APIView):
     @swagger_auto_schema(
         operation_description="Read-only list of inputs for a proposal. Inputs are set at proposal creation only. Identifier is proposal id or unsigned_transaction_hash.",
@@ -242,7 +239,6 @@ class ProposalInputListView(APIView):
         )
         serializer = InputSerializer(proposal.inputs.all(), many=True)
         return Response(serializer.data)
-
 
 class ProposalStatusView(APIView):
     """
@@ -349,22 +345,22 @@ class ProposalStatusView(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-class ProposalSigningSubmissionListCreateView(APIView):
+class PsbtListCreateView(APIView):
     @swagger_auto_schema(
         operation_description="List signing submissions for a proposal. Identifier is proposal id or unsigned_transaction_hash.",
-        responses={status.HTTP_200_OK: SigningSubmissionSerializer(many=True)},
+        responses={status.HTTP_200_OK: PsbtSerializer(many=True)},
     )
     def get(self, request, proposal_identifier):
         proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
-        submissions = proposal.signing_submissions.all()
-        serializer = SigningSubmissionSerializer(submissions, many=True)
+        psbts = proposal.psbts.all()
+        serializer = PsbtSerializer(psbts, many=True)
         return Response(serializer.data)
 
     @swagger_auto_schema(
         operation_description="Submit a signing payload for a proposal.",
-        request_body=SigningSubmissionSerializer,
+        request_body=PsbtSerializer,
         responses={
-            status.HTTP_201_CREATED: SigningSubmissionSerializer,
+            status.HTTP_201_CREATED: PsbtSerializer,
             status.HTTP_400_BAD_REQUEST: openapi.Response(
                 description="Validation error"
             ),
@@ -372,39 +368,12 @@ class ProposalSigningSubmissionListCreateView(APIView):
     )
     def post(self, request, proposal_identifier):
         proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
-        serializer = SigningSubmissionSerializer(data=request.data)
+        serializer = PsbtSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(proposal=proposal)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class ProposalSigningSubmissionDetailView(APIView):
-    def get_object(self, proposal_identifier, pk):
-        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
-        return get_object_or_404(SigningSubmission, proposal_id=proposal.pk, pk=pk)
-
-    @swagger_auto_schema(
-        operation_description="Retrieve a signing submission by id. Identifier is proposal id or unsigned_transaction_hash.",
-        responses={status.HTTP_200_OK: SigningSubmissionSerializer},
-    )
-    def get(self, request, proposal_identifier, pk):
-        submission = self.get_object(proposal_identifier, pk)
-        serializer = SigningSubmissionSerializer(submission)
-        return Response(serializer.data)
-
-    @swagger_auto_schema(
-        operation_description="Delete a signing submission.",
-        responses={
-            status.HTTP_204_NO_CONTENT: openapi.Response(description="No content")
-        },
-    )
-    def delete(self, request, proposal_identifier, pk):
-        submission = self.get_object(proposal_identifier, pk)
-        submission.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
+    
 class ProposalSignatureListView(APIView):
     """Read-only list of signatures for a proposal (all inputs' signatures)."""
 

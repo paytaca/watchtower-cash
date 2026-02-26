@@ -16,9 +16,9 @@ class Proposal(models.Model):
     signed_transaction_hash = models.CharField(max_length=64, null=True, blank=True, help_text="The double sha256 hash of the Signed transaction")
     proposal = models.TextField(null=True, blank=True, help_text="The original submitted serialized / encoded proposal data.")
     proposal_format = models.CharField(default='psbt', max_length=50, blank=True, null=True, help_text="The format of the proposal data")
-    proposal_combined = models.TextField(null=True, blank=True, help_text="The combined proposal from Signing Submissions. Updated everytime new signing submission comes in.")
     on_premise_transaction_broadcast = models.ForeignKey(TransactionBroadcast, on_delete=models.SET_NULL, null=True, blank=True, help_text="If set transaction was broadcasted thru watchtower.")
     off_premise_transaction_broadcast = models.CharField(max_length=64, null=True, blank=True, help_text="If set transaction was broadcasted outside watchtower")
+    combined_psbt = models.TextField(null=True, blank=True, help_text="The combined psbts. Updated everytime new psbt comes in.")
 
     txid = models.CharField(
         max_length=64,
@@ -37,20 +37,6 @@ class Proposal(models.Model):
         choices=SigningProgress.choices,
         blank=True,
         null=True
-    )
-
-    class BroadcastStatus(models.TextChoices):
-        PENDING = "pending", "Pending"          # Proposal exists, not broadcast
-        BROADCASTED = "broadcasted", "Broadcasted"  # Sent to node but not yet seen in mempool
-        MEMPOOL = "mempool", "In mempool"       # Node sees tx in mempool
-        CONFIRMED = "confirmed", "Confirmed"    # At least 1 confirmation
-        CONFLICTED = "conflicted", "Conflicted" # Inputs spent elsewhere
-        FAILED = "failed", "Failed to broadcast"
-    
-    broadcast_status = models.CharField(
-        max_length=25,
-        choices=BroadcastStatus.choices,
-        default=BroadcastStatus.PENDING
     )
 
     class Status(models.TextChoices):
@@ -87,8 +73,8 @@ class Proposal(models.Model):
         if self.signed_transaction:
             self.signed_transaction_hash = generate_transaction_hash(self.signed_transaction)
 
-        if self.proposal and not self.proposal_combined:
-            self.proposal_combined = self.proposal
+        if self.proposal and not self.combined_psbt:
+            self.combined_psbt = self.proposal
             
         super().save(*args, **kwargs)
 
@@ -117,31 +103,33 @@ class Bip32Derivation(models.Model):
     class Meta:
         unique_together = ('input', 'public_key')
 
-class SigningSubmission(models.Model):
-    proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='signing_submissions')
-    payload = models.TextField()
-    payload_format = models.CharField(default='psbt', max_length=50, blank=True, null=True)
-    payload_hash = models.CharField(max_length=64, null=True, blank=True, help_text='The sha256 hash of the payload. Payload is treated as utf8 string. This is only used for deduplication')
+class Psbt(models.Model):
+    proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='psbts')
+    content = models.TextField()
+    content_hash = models.CharField(max_length=64, null=True, blank=True, help_text='The sha256 hash of the psbt payload is treated as utf8 string. This is only used for deduplication')
+    standard = models.CharField(default='psbt', max_length=50, blank=True, null=True)
+    encoding = models.CharField(default='base64', max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_proposal = models.BooleanField(default=False, help_text="Whether this PSBT is the original proposal PSBT.")
 
     @staticmethod
-    def compute_payload_hash(payload):
+    def compute_content_hash(content):
         """
         Compute the SHA256 hash of the payload treated as a utf-8 string.
         Returns a hex digest string.
         """
-        if not isinstance(payload, str):
-            payload = str(payload)
-        return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+        if not isinstance(content, str):
+            content = str(content)
+        return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
     def save(self, *args, **kwargs):
-        if self.payload:
-            self.payload_hash = SigningSubmission.compute_payload_hash(self.payload)
+        if self.content:
+            self.content_hash = Psbt.compute_content_hash(self.content)
         super().save(*args, **kwargs)
         
 class Signature(models.Model):
-    input = models.ForeignKey(Input, on_delete=models.CASCADE, related_name='signatures')
-    signing_submission = models.ForeignKey(SigningSubmission, on_delete=models.CASCADE, null=True, blank=True, related_name='signatures')
+    input = models.ForeignKey(Input, null=True, blank=True, on_delete=models.CASCADE, related_name='signatures')
+    psbt = models.ForeignKey(Psbt, null=True, blank=True, on_delete=models.CASCADE, related_name='signatures')
     public_key = models.CharField(max_length=66, help_text='Signer\'s public key')
     signature = models.CharField(max_length=160, help_text='Signature hex string')
     

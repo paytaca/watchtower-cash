@@ -6,7 +6,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 import multisig.js_client as js_client
-from multisig.models.transaction import Bip32Derivation, Proposal, Input, Signature, SigningSubmission
+from multisig.models.transaction import Bip32Derivation, Proposal, Input, Psbt, Signature
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,24 +27,23 @@ class InputSerializer(serializers.ModelSerializer):
 class ProposalSerializer(serializers.ModelSerializer):
     proposal = serializers.CharField(required=True)
     proposalFormat = serializers.CharField(source='proposal_format', default='psbt', required=False, allow_blank=True)
-    proposalCombined = serializers.CharField(source='proposal_combined', read_only=True)
     unsignedTransactionHex = serializers.CharField(source='unsigned_transaction_hex', read_only=True)
     unsignedTransactionHash = serializers.CharField(source='unsigned_transaction_hash', read_only=True)
     signedTransaction = serializers.CharField(source='signed_transaction', read_only=True)
     signedTransactionHash = serializers.CharField(source='signed_transaction_hash', read_only=True)
     txid = serializers.CharField(read_only=True)
     signingProgress = serializers.CharField(source='signing_progress', read_only=True)
-    broadcastStatus = serializers.CharField(source='broadcast_status', read_only=True)
     status = serializers.CharField(read_only=True)
     coordinator = SignerSerializer(read_only=True)
-    
+    combinedPsbt = serializers.CharField(source='combined_psbt', read_only=True)
+
     class Meta:
         model = Proposal
         fields = [
-            'id', 'wallet', 'proposal', 'proposalFormat', 'proposalCombined',
+            'id', 'wallet', 'proposal', 'proposalFormat', 'combinedPsbt',
             'unsignedTransactionHex', 'unsignedTransactionHash',
             'signedTransaction', 'signedTransactionHash', 'txid',
-            'signingProgress', 'broadcastStatus', 'coordinator', 'status'
+            'signingProgress', 'coordinator', 'status'
         ]
 
     def to_representation(self, instance):
@@ -77,14 +76,13 @@ class ProposalSerializer(serializers.ModelSerializer):
                     }
                 )
 
-
                 if created:
-                    signing_submission = None
+                    psbt = None
                     if signing_progress.get('signingProgress', '') and signing_progress.get('signingProgress', '') != 'unsigned':
-                        signing_submission = SigningSubmission.objects.create(
+                        psbt = Psbt.objects.create(
                             proposal=proposal,
-                            payload=validated_data['proposal'],
-                            payload_format=proposal_format,
+                            content=validated_data['proposal'],
+                            is_proposal=True
                         )
 
                     for input in inputs:
@@ -116,7 +114,7 @@ class ProposalSerializer(serializers.ModelSerializer):
                                 public_key=public_key,
                                 defaults={
                                     'input': input_model,
-                                    'signing_submission': signing_submission,
+                                    'psbt': psbt,
                                     'public_key': public_key,
                                     'signature': signature
                                 }
@@ -135,58 +133,58 @@ class ProposalCoordinatorSerializer(serializers.ModelSerializer):
         fields = ['id', 'coordinator']
         read_only_fields = ['id', 'coordinator']
 
-
-class SigningSubmissionSerializer(serializers.ModelSerializer):
-    payloadFormat = serializers.CharField(source='payload_format', default='psbt')
-    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+class PsbtSerializer(serializers.ModelSerializer):
+    standard = serializers.CharField(default='psbt')
+    encoding = serializers.CharField(default='base64')
+    content = serializers.CharField()
+    contentHash = serializers.CharField(source='content_hash', read_only=True)
     proposal = serializers.PrimaryKeyRelatedField(read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    isProposal = serializers.BooleanField(source='is_proposal', read_only=True)
 
     class Meta:
-        model = SigningSubmission
-        fields = ['id', 'proposal', 'payload', 'payloadFormat', 'createdAt']
-        read_only_fields = ['id', 'proposal', 'createdAt']
+        model = Psbt
+        fields = ['id', 'proposal', 'content', 'standard', 'encoding', 'contentHash', 'createdAt', 'isProposal']
+        read_only_fields = ['id', 'proposal', 'createdAt', 'contentHash', 'isProposal']
 
     def create(self, validated_data):
-        LOGGER.info(validated_data)
 
         with transaction.atomic():
-            format = validated_data.get('payload_format') or 'psbt'
-            if format == 'psbt':
-                decode_response = js_client.decode_psbt(validated_data['payload'])
+            standard = validated_data.get('standard') or 'psbt'
+            if standard == 'psbt':
+                decode_response = js_client.decode_psbt(validated_data['content'])
                 decode_response.raise_for_status()
                 decoded_proposal = decode_response.json()
                 decoded_proposal.pop('signingProgress', None) 
                 proposal = validated_data.get('proposal')
-                signing_submission = None
-                payload_hash = SigningSubmission.compute_payload_hash(validated_data['payload'])
+                psbt = None
+                content_hash = Psbt.compute_content_hash(validated_data['content'])
 
-                signing_submission, created = SigningSubmission.objects.get_or_create(
-                    payload_hash=payload_hash,
+                psbt, created = Psbt.objects.get_or_create(
+                    content_hash=content_hash,
                     defaults={
                         'proposal': proposal,
-                        'payload': validated_data['payload'],
-                        'payload_format': format
+                        'content': validated_data['content'],
+                        'standard': standard,
+                        'encoding': validated_data.get('encoding') or 'base64',
                     }
                 )
 
                 if not created:
-                    return signing_submission
-                
-                if format == 'psbt':
-                    base_proposal = proposal.proposal_combined
-                    response = js_client.combine_psbts([base_proposal, validated_data['payload']])
-                    response.raise_for_status()
-                    response_json = response.json()
-                    LOGGER.info(f"response.json {response_json}")
-                    LOGGER.info(f"combined PSBT: {response_json.get('result')}")
-                    if response_json.get('result'):
-                        proposal.proposal_combined = response_json.get('result')
-                        proposal.save(update_fields=["proposal_combined"])
+                    return psbt
+
+                response = js_client.combine_psbts([proposal.combined_psbt, validated_data['content']])
+                response.raise_for_status()
+                response_json = response.json()
+                LOGGER.info(f"response.json {response_json}")
+                LOGGER.info(f"combined PSBT: {response_json.get('result')}")
+                if response_json.get('result'):
+                    proposal.combined_psbt = response_json.get('result')
+                    proposal.save(update_fields=["combined_psbt"])
 
                 inputs = decoded_proposal.pop('inputs', [])
 
                 for input in inputs:
-
                     input_model = Input.objects.filter(
                         proposal_id=proposal.id,
                         outpoint_transaction_hash=input.get('outpointTransactionHash'),
@@ -210,15 +208,13 @@ class SigningSubmissionSerializer(serializers.ModelSerializer):
                             signature=signatures[public_key],
                             defaults={
                                 'input': input_model,
-                                'signing_submission': signing_submission,
+                                'psbt': psbt,
                                 'public_key': public_key,
                                 'signature': signatures[public_key]
                             }
                         )
-                    
-                        
 
-            return signing_submission
+            return psbt
 
 class Bip32DerivationSerializer(serializers.ModelSerializer):
     """Read-only serializer for BIP32 derivation (path, publicKey, masterFingerprint)."""
@@ -235,14 +231,12 @@ class SignatureSerializer(serializers.ModelSerializer):
     """Read-only serializer; hydrates the related Input."""
     input = InputSerializer(read_only=True)
     publicKey = serializers.CharField(source='public_key', read_only=True)
-    signingSubmission = serializers.PrimaryKeyRelatedField(
-        source='signing_submission', read_only=True, allow_null=True
-    )
+    psbt = serializers.PrimaryKeyRelatedField(read_only=True, allow_null=True)
 
     class Meta:
         model = Signature
-        fields = ['id', 'input', 'publicKey', 'signature', 'signingSubmission']
-        read_only_fields = ['id', 'input', 'publicKey', 'signature', 'signingSubmission']
+        fields = ['id', 'input', 'publicKey', 'signature', 'psbt']
+        read_only_fields = ['id', 'input', 'publicKey', 'signature', 'psbt']
 
 
 class SignatureWithBip32Serializer(serializers.ModelSerializer):
