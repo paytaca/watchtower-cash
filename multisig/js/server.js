@@ -18,7 +18,7 @@ import {
     decodeTransactionCommon
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
-import { Pst } from './multisig/pst.js'
+import { Pst, combine as combinePsts } from './multisig/pst.js'
 import { ElectrumClient } from '@electrum-cash/network'
 import { MultisigTransactionBuilder } from './multisig/index.js'
 
@@ -183,6 +183,22 @@ app.post('/multisig/transaction/decode-proposal', async (req, res) => {
   res.send(decodedProposal)
 })
 
+app.post('/multisig/transaction/combine-psbts', async (req, res) => {
+  const { psbts } = req.body
+  try {
+    const decodedPsbts = psbts.map(psbt => Pst.import(psbt))
+    const combined = await combinePsts(decodedPsbts)
+    console.log('Combined PSBT:', await combined.export('psbt'))
+    res.send({
+      result: await combined.export('psbt')
+    })    
+  } catch (error) {
+    console.error('Error combining PSBTs:', error)
+    return res.status(500).send({ error: 'Failed to combine PSBTs: ' + error.message })
+  }
+  
+})
+
 app.get('/multisig/transaction/unsigned-transaction-hash', async (req, res) => {
   const decodedTransaction = decodeTransactionCommon(hexToBin(req.query.transaction_hex))
   decodedTransaction.inputs[0].unlockingBytecode = []
@@ -200,6 +216,8 @@ app.get('/multisig/transaction/unsigned-transaction-hash', async (req, res) => {
     unsigned_transaction_hash: hashTransaction(hexToBin(transactionBuilder.build()))
   })
 })
+
+
 
 
 
