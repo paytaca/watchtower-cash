@@ -203,9 +203,9 @@ class PubKeySignatureMessageAuthentication(BaseAuthentication):
             
             raise AuthenticationFailed('Invalid signature')
 
-        identity = ServerIdentity.objects.get(public_key=public_key)
+        identity = ServerIdentity.objects.filter(public_key=public_key).first()
         if not identity:
-            return (None, None)
+            raise AuthenticationFailed('Invalid credentials')
 
         auth = { 'public_key': public_key, 'message': message, 'signature': signature, 'sig_verification_result': sig_verification_result }
 
