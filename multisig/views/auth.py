@@ -13,8 +13,6 @@ LOGGER = logging.getLogger(__name__)
 
 class ServerIdentityListCreateView(APIView):
     
-    authentication_classes = [PubKeySignatureMessageAuthentication]
-    
     def get(self, request):
         
         queryset = ServerIdentity.objects.filter(deleted_at__isnull=True)
