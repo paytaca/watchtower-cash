@@ -128,9 +128,9 @@ class WalletProposalListView(APIView):
         )
         queryset = Proposal.objects.prefetch_related("inputs").filter(
             wallet=wallet,
-            broadcast_status=(
+            status=(
                 request.query_params.get(
-                    "broadcast_status", Proposal.BroadcastStatus.PENDING
+                    "status", Proposal.Status.PENDING
                 )
             ),
         )
@@ -152,7 +152,7 @@ class ProposalDetailView(APIView):
     def get_object(self, identifier):
         return get_proposal_by_identifier(
             identifier,
-            queryset=Proposal.objects.prefetch_related("inputs", "signing_submissions").filter(deleted_at__isnull=True),
+            queryset=Proposal.objects.prefetch_related("inputs").filter(deleted_at__isnull=True),
         )
 
     @swagger_auto_schema(
@@ -247,11 +247,9 @@ class ProposalStatusView(APIView):
 
     def get(self, request, proposal_identifier):
         proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
-        broadcast_status = proposal.broadcast_status
         response_data = {
             "proposal_id": proposal.id,
             "proposal_unsigned_transaction_hash": proposal.unsigned_transaction_hash,
-            "broadcast_status": broadcast_status,
             "status": proposal.status,
             "inputs": [],
         }
@@ -298,21 +296,21 @@ class ProposalStatusView(APIView):
                     and spending_transaction_unsigned_transaction_hash
                     == proposal.unsigned_transaction_hash
                 ):
-                    proposal.broadcast_status = proposal.BroadcastStatus.BROADCASTED
+                    proposal.status = Proposal.Status.BROADCASTED
                 elif (
                     spending_transaction_unsigned_transaction_hash
                     and spending_transaction_unsigned_transaction_hash
                     != proposal.unsigned_transaction_hash
                 ):
-                    proposal.broadcast_status = proposal.BroadcastStatus.CONFLICTED
+                    proposal.status = Proposal.Status.CONFLICTED
                     inp.conflicting_proposal_identifier = (
                         spending_transaction_unsigned_transaction_hash
                     )
 
-                if broadcast_status != proposal.broadcast_status:
-                    proposal.save(update_fields=["broadcast_status"])
+                if status != proposal.status:
+                    proposal.save(update_fields=["status"])
 
-                if broadcast_status == proposal.BroadcastStatus.BROADCASTED:
+                if status == Proposal.Status.BROADCASTED:
                     transaction_broadcast = TransactionBroadcast.objects.filter(
                         txid=spending_txid
                     )
@@ -326,8 +324,8 @@ class ProposalStatusView(APIView):
 
                     if (
                         not transaction_broadcast
-                        and proposal.broadcast_status
-                        == proposal.BroadcastStatus.BROADCASTED
+                        and proposal.status
+                        == Proposal.Status.BROADCASTED
                     ):
                         proposal.off_premise_transaction_broadcast = spending_txid
                         proposal.save(
