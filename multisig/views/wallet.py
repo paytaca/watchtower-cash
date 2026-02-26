@@ -47,10 +47,11 @@ class MultisigWalletListCreateView(APIView):
         """
         data = request.data.copy()
         # signers_data = data.pop('signers', None)
-        
+        LOGGER.info(f"request user: {request.user}")
         coordinator = ServerIdentity.objects.filter(public_key=request.headers.get('X-Auth-PubKey')).first()
         if not coordinator:
                 return Response({'error': 'Coordinator needs server identity'}, status=status.HTTP_400_BAD_REQUEST)
+        
         
         LOGGER.info(coordinator)
         serializer = MultisigWalletSerializer(
@@ -74,7 +75,7 @@ class MultisigWalletDetailView(APIView):
     Retrieve a single MultisigWallet by its identifier (wallet_hash or wallet_descriptor_id).
     """
 
-    def get(self, request, identifier):
+    def get(self, request, wallet_identifier):
         """
         Return details of a specific MultisigWallet matching the identifier.
         """
@@ -83,10 +84,10 @@ class MultisigWalletDetailView(APIView):
 
         wallet = None
 
-        filter_q = Q(wallet_hash=identifier) | Q(wallet_descriptor_id=identifier)
+        filter_q = Q(wallet_hash=wallet_identifier) | Q(wallet_descriptor_id=wallet_identifier)
 
-        if identifier.isdigit():
-            filter_q = Q(id=identifier)
+        if wallet_identifier.isdigit():
+            filter_q = Q(id=wallet_identifier)
 
         wallet = (
             MultisigWallet.objects.filter(
