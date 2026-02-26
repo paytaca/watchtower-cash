@@ -188,13 +188,12 @@ app.post('/multisig/transaction/combine-psbts', async (req, res) => {
   try {
     const decodedPsbts = psbts.map(psbt => Pst.import(psbt))
     const combined = await combinePsts(decodedPsbts)
-    console.log('Combined PSBT:', await combined.export('psbt'))
     res.send({
       result: await combined.export('psbt')
     })    
   } catch (error) {
     console.error('Error combining PSBTs:', error)
-    return res.status(500).send({ error: 'Failed to combine PSBTs: ' + error.message })
+    return res.status(400).send({ error: 'Failed to combine PSBTs: ' + error.message })
   }
   
 })
