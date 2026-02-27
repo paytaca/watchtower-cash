@@ -246,11 +246,13 @@ class ProposalStatusView(APIView):
     """
 
     def get(self, request, proposal_identifier):
-        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
+
+        proposal = get_proposal_by_identifier(proposal_identifier)
+        current_status = proposal.status
         response_data = {
             "proposal_id": proposal.id,
             "proposal_unsigned_transaction_hash": proposal.unsigned_transaction_hash,
-            "status": proposal.status,
+            "status": current_status,
             "inputs": [],
         }
 
@@ -263,16 +265,12 @@ class ProposalStatusView(APIView):
             api_resp = requests.get(url, timeout=10)
             data = api_resp.json()
             for result in data.get("results", []):
-                spending_txid = result.get("spending_txid", "")
-
-                if (
-                    result.get("txid") == inp.outpoint_transaction_hash
-                    and result.get("index") == inp.outpoint_index
-                ):
+                if result.get("txid") == inp.outpoint_transaction_hash and result.get("index") == inp.outpoint_index:
                     spending_txid = result.get("spending_txid", "")
+                else: 
+                    continue
 
                 spending_transaction = None
-
                 if spending_txid:
                     inp.spending_txid = spending_txid
                     inp.save(update_fields=["spending_txid"])
@@ -291,26 +289,28 @@ class ProposalStatusView(APIView):
                         )
                     )
 
+
                 if (
                     spending_transaction_unsigned_transaction_hash
                     and spending_transaction_unsigned_transaction_hash
                     == proposal.unsigned_transaction_hash
                 ):
-                    proposal.status = Proposal.Status.BROADCASTED
+                    new_status = Proposal.Status.BROADCASTED
                 elif (
                     spending_transaction_unsigned_transaction_hash
                     and spending_transaction_unsigned_transaction_hash
                     != proposal.unsigned_transaction_hash
                 ):
-                    proposal.status = Proposal.Status.CONFLICTED
+                    new_status = Proposal.Status.CONFLICTED
                     inp.conflicting_proposal_identifier = (
                         spending_transaction_unsigned_transaction_hash
                     )
 
-                if status != proposal.status:
+                if current_status != new_status:
+                    proposal.status = new_status
                     proposal.save(update_fields=["status"])
 
-                if status == Proposal.Status.BROADCASTED:
+                if new_status == Proposal.Status.BROADCASTED:
                     transaction_broadcast = TransactionBroadcast.objects.filter(
                         txid=spending_txid
                     )
@@ -324,13 +324,15 @@ class ProposalStatusView(APIView):
 
                     if (
                         not transaction_broadcast
-                        and proposal.status
+                        and new_status
                         == Proposal.Status.BROADCASTED
                     ):
                         proposal.off_premise_transaction_broadcast = spending_txid
                         proposal.save(
                             update_fields=["off_premise_transaction_broadcast"]
                         )
+
+                    response_data["txid"] = spending_txid
 
             response_data["inputs"].append(
                 {
