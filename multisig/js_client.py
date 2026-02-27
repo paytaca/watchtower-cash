@@ -65,3 +65,10 @@ def decode_psbt(psbt: str):
         json={'psbt': psbt},
         timeout=5
     )
+
+def combine_psbts(psbts: list):
+    return requests.post(
+        f'{MULTISIG_JS_SERVER}/multisig/transaction/combine-psbts',
+        json={'psbts': psbts},
+        timeout=5
+    )
