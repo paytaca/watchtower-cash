@@ -8,6 +8,7 @@
  * @property {string} xpub - The extended public key of the signer
  * @property {string} name - The name of the signer
  * @property {string} [publicKey] - The public key derived from the xpub
+ * @property {string} [authPublicKey] - The public key derived from the signer's xpub at the relative path defined in SIGNER_AUTH_PUBLIC_KEY_RELATIVE_PATH, used for signing authentication messages with ECIES to wallet connect peers
  */
 
 /**
@@ -143,8 +144,10 @@ import { PsbtWallet, WALLET_MAGIC } from './psbt-wallet.js'
 import { retryWithBackoff } from './utils.js'
 import { encryptECIESMessage } from './ecies.js'
 import { BsmsDescriptor, BsmsKeyRecord } from './bsms.js'
-import { generateCoordinationServerCredentialsFromMnemonic } from './coordination.js'
+import { generateCoordinationServerCosignerCredentialsFromMnemonic, generateCoordinationServerCredentialsFromMnemonic } from './coordination.js'
 import { deriveHdKeysFromMnemonic } from './utils.js'
+
+export const SIGNER_AUTH_PUBLIC_KEY_RELATIVE_PATH = '999/0'
 
 export const getLockingData = ({ signers, addressDerivationPath }) => {
   const signersWithPublicKeys = derivePublicKeys({ signers, addressDerivationPath })
@@ -219,6 +222,13 @@ export const derivePublicKey = (xpub, relativeDerivationPath) => {
   const { publicKey } = deriveHdPathRelative(decodedHdPublicKey.node, relativeDerivationPath)
   return publicKey
 }
+
+export const derivePrivateKey = (xprv, relativeDerivationPath) => {
+  const decodedHdPrivateKey = decodeHdPrivateKey(xprv, relativeDerivationPath)
+  const { privateKey } = deriveHdPathRelative(decodedHdPrivateKey.node, relativeDerivationPath)
+  return privateKey
+}
+
 /**
  * @param {Object} params
  * @param {MultisigWalletSigner[]} params.signers
@@ -400,6 +410,10 @@ export class MultisigWallet {
 
   setStore(store) {
     this.options.store = store
+  }
+
+  setProvider(provider) {
+    this.options.provider = provider
   }
 
   set utxos(utxos) {
@@ -803,10 +817,15 @@ export class MultisigWallet {
   }
 
   async subscribeWalletAddressIndex(addressIndex, type) {
+    const receiveAddress = this.getDepositAddress(addressIndex, this.cashAddressNetworkPrefix).address
+    const changeAddress = this.getChangeAddress(addressIndex, this.cashAddressNetworkPrefix).address
+    const addresses = {
+      receiving: receiveAddress,
+      change: changeAddress
+    }
     return retryWithBackoff(async () => {
-      return await this.options?.store?.dispatch(
-        'multisig/subscribeWalletAddressIndex',
-        { wallet: this, addressIndex: addressIndex, type: type }
+      return await this.options?.provider?.subscribeWalletAddressIndex(
+        { walletHash: this.walletHash, addresses, addressIndex: addressIndex, type: type }
       )},
       2,
       1000
@@ -840,6 +859,7 @@ export class MultisigWallet {
 
     // await this.subscribeWalletAddress(this.getDepositAddress(addressIndex, this.cashAddressNetworkPrefix).address)
     await this.subscribeWalletAddressIndex(addressIndex, 'deposit')
+    
 
   }
 
@@ -1120,7 +1140,6 @@ export class MultisigWallet {
     }
     
     const pst = new Pst()
-
     pst
       .setOrigin(proposal.origin)
       .setCreator(proposal.creator)
@@ -1131,12 +1150,17 @@ export class MultisigWallet {
       .setStore(options?.store)
       .setProvider(options?.provider)
       .setCoordinationServer(options?.coordinationServer)
+    
+    if (this.isOnline()) {
+      await pst.upload()
+    }
+    
     return pst 
   }
 
-  async fetchProposals() {
+  async fetchProposals(status='pending') {
     if (!this.options?.coordinationServer) return 
-    return await this.options.coordinationServer.getWalletProposals(this.generateBsmsDescriptorId())
+    return await this.options.coordinationServer.getWalletProposals(this.generateBsmsDescriptorId(), status)
   }
 
   isOnline() {
@@ -1217,8 +1241,7 @@ export class MultisigWallet {
         signer.derivationPath = signer.path || signer.derivationPath || `m/44'/145'/0'`
         signer.publicKey = binToHex(MultisigWallet.extractRawPublicKeyFromXpub(signer.xpub))
         signer.walletDescriptor = encryptedBsmsDescriptor 
-        
-        
+        signer.authPublicKey = binToHex(derivePublicKey(signer.xpub, SIGNER_AUTH_PUBLIC_KEY_RELATIVE_PATH))
         if (coordinator && signer.xpub === coordinator.xpub) {
           signer.coordinator = true
         }
@@ -1422,12 +1445,29 @@ async generateAuthCredentials(xpub) {
   return null
 }
 
-async syncId () {
+async generateCosignerAuthCredentials(xpub) {
+  if (xpub) {
+    const mnemonic = await this.options?.resolveMnemonicOfXpub({ xpub })
+    if (!mnemonic) return null
+    return generateCoordinationServerCosignerCredentialsFromMnemonic({ mnemonic })
+  }
+  for (const signer of this.signers) {
+    // use first mnemonic found
+    const mnemonic = await this.options?.resolveMnemonicOfXpub({ xpub: signer.xpub })
+    if (mnemonic) {
+      return generateCoordinationServerCosignerCredentialsFromMnemonic({ mnemonic })
+    }
+  }
+  return null
+}
+
+async sync() {
   try {
     if (!this.options?.coordinationServer) return
-    const response = 
-      await this.options?.coordinationServer?.getWallet({identifier: this.generateBsmsDescriptorId()})
+    const response =
+      await this.options?.coordinationServer?.getWallet({ identifier: this.generateBsmsDescriptorId() })
     this.id = response?.id
+    this.save()
   } catch (error) {
     if (error?.response?.status === 404 && this.id) {
       this.options?.store?.commit('multisig/updateWalletId', { oldId: this.id, newId: '' })

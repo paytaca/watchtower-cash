@@ -163,6 +163,36 @@ export class WatchtowerNetworkProvider {
       }
       
 
+    async subscribeWalletAddressIndex ({ walletHash, addresses, addressIndex, type = 'pair' }) {
+      
+        if (type === 'pair') {
+            addresses.receiving = receiveAddress
+            addresses.change = changeAddress
+        }
+
+        if (type === 'deposit') {
+            delete addresses.change 
+        }
+        
+        if (type === 'change') {
+            delete addresses.receiving
+        }
+        
+        const projectId = {
+            mainnet: process.env.WATCHTOWER_PROJECT_ID,
+            chipnet: process.env.WATCHTOWER_CHIP_PROJECT_ID
+        }
+
+        return await axios.post(`${this.hostname}/api/subscription/`, {
+            project_id: projectId[this.network],
+            addresses,
+            address_index: addressIndex,
+            wallet_hash: walletHash
+        }) 
+    }
+
+
+
       
 }
 
@@ -326,10 +356,31 @@ export class WatchtowerCoordinationServer {
      */
     async uploadProposal({ payload, authCredentialsGenerator }) {
         const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
+        const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
+        console.log('AUTHcosigner', authCosignerAuthCredentials)
         const response = await axios.post(
             `${this.hostname}/api/multisig/proposals/`,
             payload, 
-            { headers: { ...authCredentials } }
+            { headers: { ...authCredentials, ...authCosignerAuthCredentials } }
+        )
+        return response.data
+    }
+
+    /**
+     * @typedef {Object} Proposal
+     * @property {string} [wallet] - The wallet id associated with the proposal.
+     * @property {string} [proposal] - The serialized/encoded proposal.
+     * @property {string} [proposalFormat] - Example: 'psbt' | 'libauth-template' only 'psbt' is supported now.
+     * @param {Object} params
+     * @param {Proposal} params.proposal - The proposal to upload.
+     * @param {*} params.authCredentialsGenerator
+     */
+    async deleteProposal({ id, walletId, authCredentialsGenerator }) {
+        const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
+        const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
+        const response = await axios.delete(
+            `${this.hostname}/api/multisig/proposals/${id}/?wallet_id=${walletId}`, 
+            { headers: { ...authCredentials, ...authCosignerAuthCredentials } }
         )
         return response.data
     }
@@ -348,6 +399,13 @@ export class WatchtowerCoordinationServer {
         return response.data
     }
 
+    async getProposalCoordinator({ unsignedTransactionHash }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/coordinator/`
+        )
+        return response?.data
+    }
+
     /**
      * Fetches the list of decoded signer signature data for a proposal and signer.
      *
@@ -363,25 +421,30 @@ export class WatchtowerCoordinationServer {
         return response.data
     }
 
+    async getSignatures({ proposalUnsignedTransactionHash }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/signatures/`
+        )
+        return response.data
+    }
+
     /**
      * Submits a partial signature for a multisig proposal.
      *
      * @param {Object} params
      * @param {string} params.proposalUnsignedTransactionHash - The unsigned transaction hash for the proposal.
-     * @param {string} params.payload - The partial signature payload; could be a PSBT base64 string or some other format. Currently only supports PSBT.
-     * @param {string} [params.payloadFormat='psbt'] - The format of the payload, default is 'psbt'.
+     * @param {string} params.content - The partial signature payload; could be a PSBT base64 string or some other format. Currently only supports PSBT.
+     * @param {string} [params.standard='psbt'] - The standard serialization format of the payload, default is 'psbt'.
      * @returns {Promise<Object>} Response data from the signature submission.
      */
-    async submitPartialSignature({ payload, payloadFormat = 'psbt', proposalUnsignedTransactionHash }) {
+    async submitPsbt({ content, standard = 'psbt', encoding = 'base64', proposalUnsignedTransactionHash }) {
         const response = await axios.post(
-            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/signing-submissions/`, 
-            { payload, payloadFormat }
+            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/psbts/`, 
+            { content, standard, encoding }
         )
         return response?.data
     }
 
-    /**
-    /**
      /**
       * Fetches proposals for a wallet.
       *
@@ -394,9 +457,9 @@ export class WatchtowerCoordinationServer {
       *   unsignedTransactionHex: string 
       * }>>} Array of proposals associated with the given wallet.
       */
-    async getWalletProposals(walletIdentifier) {
+    async getWalletProposals(walletIdentifier, status='pending') {
         const response = await axios.get(
-            `${this.hostname}/api/multisig/wallets/${walletIdentifier}/proposals/`
+            `${this.hostname}/api/multisig/wallets/${walletIdentifier}/proposals/?status=${status}`
         )
         return response.data
     }

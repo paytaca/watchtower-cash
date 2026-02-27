@@ -119,6 +119,7 @@ import { bip32ExtractRelativePath } from './utils.js'
 import { Psbt } from './psbt.js'
 import { MultisigTransactionBuilder } from './transaction-builder.js'
 import { WatchtowerCoordinationServer, WatchtowerNetworkProvider } from './network.js'
+import { generateCosignerAuthPublicKeyFromFromXpub } from './coordination.js'
 
 export const SIGNING_PROGRESS = {
   UNSIGNED: 'unsigned',
@@ -126,6 +127,15 @@ export const SIGNING_PROGRESS = {
   FULLY_SIGNED: 'fully-signed',
   TOO_MANY_SIGNATURES: 'too-many-signatures',
   INCONSISTENT: 'inconsistent'
+}
+
+export const STATUS = {
+  PENDING: 'pending',
+  BROADCASTED: 'broadcasted',
+  CONFLICTED: 'conflicted',
+  MEMPOOL: 'mempool',
+  CONFIRMED: 'confirmed',
+  DELETED: 'deleted'
 }
 
 /**
@@ -636,10 +646,10 @@ export class Pst {
     }
   }
 
-  sign(xprv) {
+  async sign(xprv) {
     const { hdPublicKey: xpub } = deriveHdPublicKey(xprv)
     let signer = this.wallet.signers.find(signer => signer.xpub === xpub)
-  
+    
     if (!signer) {
       throw new Error('Private key provided does not match any signer')
     }
@@ -731,6 +741,9 @@ export class Pst {
       this.inputs[inputIndex].signatures[binToHex(signerPublicKey)] = signature
       
       if (this.options?.store) {
+        if (this.id) {
+          await this.uploadSignerPsbt(signer.masterFingerprint)
+        }
         this.save()
       }
     }
@@ -921,10 +934,19 @@ export class Pst {
     return getSigningProgress(this)
   }
 
-  getStatus() {
-    return this.options?.coordinationServer?.getProposalStatus({ 
+  async fetchStatus({ deleteIfBroadcasted }) {
+    const status = await this.options?.coordinationServer?.getProposalStatus({ 
       unsignedTransactionHash: this.unsignedTransactionHash 
     })
+    if (
+      status.status === STATUS.BROADCASTED || 
+      status.status === STATUS.MEMPOOL || 
+      status.status === STATUS.CONFIRMED
+    )
+    if(deleteIfBroadcasted) {
+      return await this.delete()
+    }
+    this.status = status
   }
 
   /**
@@ -1005,12 +1027,11 @@ export class Pst {
   async uploadSignerPsbt(masterFingerprint) {
     if (!this.options.coordinationServer) return 
     const psbt = this.getSignerPsbt(masterFingerprint)
-    const response = await this.options.coordinationServer.submitPartialSignature({
-      payload: psbt,
+    const response = await this.options.coordinationServer.submitPsbt({
+      content: psbt,
       proposalUnsignedTransactionHash: this.unsignedTransactionHash
     })
-
-    console.log('response', response)
+    return response?.status
   }
 
   /**
@@ -1069,6 +1090,22 @@ export class Pst {
         input.signatures = {}
       }
       input.signatures[signerSignature.publicKey] = signerSignature.signature
+    }
+  }
+
+  async fetchAndMergeSignatures() {
+    if (this.id && this.options?.coordinationServer) {
+      const signatures = await this.options.coordinationServer.getSignatures({ 
+        proposalUnsignedTransactionHash: this.unsignedTransactionHash 
+      })
+      if (signatures) {
+        try {
+          this.mergeSignerSignatures(signatures)
+          this.save()
+        } catch (error) {
+          // Ignore Signatures That Fail Verification
+        }
+      }
     }
   }
 
@@ -1145,6 +1182,8 @@ export class Pst {
     const data = {
       origin: this.origin,
       purpose: this.purpose,
+      creator: this.creator,
+      network: this.network,
       unsignedTransactionHex: this.unsignedTransactionHex,
       inputs: this.inputs,
       outputs: this.outputs
@@ -1247,11 +1286,15 @@ export class Pst {
   }
 
 
-  async delete({ sync = false } = {}) {
+  async delete() {
     if (!this.options?.store) return
     this.options.store.commit('multisig/deletePsbt', this.unsignedTransactionHash) 
-    if (sync) {
-      return await this.options.store.dispatch('multisig/deletePsbt', this.unsignedTransactionHash)
+    if (this.id) {
+      await this.options?.coordinationServer?.deleteProposal({
+        id: this.id,
+        walletId: this.wallet.id,
+        authCredentialsGenerator: this.wallet
+      })
     }
   }
 
@@ -1283,6 +1326,24 @@ export class Pst {
     const response = 
       await this.options?.coordinationServer?.getProposalByUnsignedTransactionHash(this.unsignedTransactionHash)
     this.id = response?.id
+  }
+
+  async fetchCoordinatorInfo() {
+    if (!this.id || !this.options?.coordinationServer) return
+    const response = await this.options?.coordinationServer?.getProposalCoordinator({
+      unsignedTransactionHash: this.unsignedTransactionHash
+    })
+    this.coordinatorInfo = response?.coordinator
+  }
+
+  /**
+   * Identifies and returns the signer that created this proposal based on the `creator` metadata.
+   */
+  getSignerWhoCreatedProposal() {
+    if (!this.wallet || !this.wallet.signers || !this.creator) return
+    return this.wallet.signers.find(signer => {
+      return this.creator === generateCosignerAuthPublicKeyFromFromXpub({ xpub: signer.xpub })
+    })
   }
 
   /**
