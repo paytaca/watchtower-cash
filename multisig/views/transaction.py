@@ -249,6 +249,7 @@ class ProposalStatusView(APIView):
 
         proposal = get_proposal_by_identifier(proposal_identifier)
         current_status = proposal.status
+        new_status = current_status
         response_data = {
             "proposal_id": proposal.id,
             "proposal_unsigned_transaction_hash": proposal.unsigned_transaction_hash,
@@ -288,7 +289,6 @@ class ProposalStatusView(APIView):
                             "unsigned_transaction_hash"
                         )
                     )
-
 
                 if (
                     spending_transaction_unsigned_transaction_hash
@@ -333,7 +333,8 @@ class ProposalStatusView(APIView):
                         )
 
                     response_data["txid"] = spending_txid
-
+                    
+            response_data["status"] = new_status
             response_data["inputs"].append(
                 {
                     "outpoint_transaction_hash": inp.outpoint_transaction_hash,
@@ -346,10 +347,17 @@ class ProposalStatusView(APIView):
 
 
 class PsbtListCreateView(APIView):
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsCosigner()]
+        return []
+
     @swagger_auto_schema(
         operation_description="List signing submissions for a proposal. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: PsbtSerializer(many=True)},
     )
+
     def get(self, request, proposal_identifier):
         proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
         psbts = proposal.psbts.all()
@@ -367,8 +375,9 @@ class PsbtListCreateView(APIView):
         },
     )
     def post(self, request, proposal_identifier):
+        signer = getattr(request, "signer", None)
         proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
-        serializer = PsbtSerializer(data=request.data)
+        serializer = PsbtSerializer(data=request.data, context={"submitted_by": signer })
         if serializer.is_valid():
             serializer.save(proposal=proposal)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
