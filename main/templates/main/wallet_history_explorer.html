@@ -1,0 +1,362 @@
+{% extends "main/base.html" %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-12">
+    <h1>Wallet History Explorer</h1>
+    <p class="text-muted">View transaction history for any wallet with fiat currency conversion.</p>
+    
+    <form id="walletHistoryForm" class="form-horizontal">
+      <div class="form-group">
+        <label for="walletHash" class="col-sm-2 control-label">Wallet Hash</label>
+        <div class="col-sm-6">
+          <input type="text" class="form-control" id="walletHash" name="wallet_hash" placeholder="Enter wallet hash" required>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="fiatCurrency" class="col-sm-2 control-label">Fiat Currency</label>
+        <div class="col-sm-6">
+          <select class="form-control" id="fiatCurrency" name="fiat_currency" required>
+            <option value="USD" selected>USD - US Dollar</option>
+            <option value="EUR">EUR - Euro</option>
+            <option value="GBP">GBP - British Pound</option>
+            <option value="JPY">JPY - Japanese Yen</option>
+            <option value="AUD">AUD - Australian Dollar</option>
+            <option value="CAD">CAD - Canadian Dollar</option>
+            <option value="CHF">CHF - Swiss Franc</option>
+            <option value="CNY">CNY - Chinese Yuan</option>
+            <option value="HKD">HKD - Hong Kong Dollar</option>
+            <option value="NZD">NZD - New Zealand Dollar</option>
+            <option value="SGD">SGD - Singapore Dollar</option>
+            <option value="PHP">PHP - Philippine Peso</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="col-sm-2 control-label">Date Range (Optional)</label>
+        <div class="col-sm-3">
+          <input type="date" class="form-control" id="startDate" name="start_date">
+          <span class="help-block">Start Date</span>
+        </div>
+        <div class="col-sm-3">
+          <input type="date" class="form-control" id="endDate" name="end_date">
+          <span class="help-block">End Date</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="col-sm-offset-2 col-sm-6">
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            <span class="glyphicon glyphicon-search"></span> View History
+          </button>
+          <span id="loadingSpinner" style="display: none; margin-left: 10px;">
+            <span class="glyphicon glyphicon-refresh glyphicon-spin"></span> Loading...
+          </span>
+        </div>
+      </div>
+    </form>
+    
+    <div id="errorMessage" class="alert alert-danger" style="display: none;"></div>
+    
+    <div id="resultsSection" style="display: none;">
+      <hr>
+      <h3>Transaction History</h3>
+      <p id="resultSummary" class="text-muted"></p>
+      
+      <div class="table-responsive">
+        <table class="table table-striped table-hover" id="historyTable">
+          <thead>
+            <tr>
+              <th>TXID</th>
+              <th>Type</th>
+              <th>Date (UTC)</th>
+              <th>Amount (BCH)</th>
+              <th id="fiatHeader">Amount (USD)</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+          </tbody>
+        </table>
+      </div>
+      
+      <nav aria-label="Page navigation" id="paginationNav" style="display: none;">
+        <ul class="pagination">
+          <li id="prevPage" class="disabled">
+            <a href="#" aria-label="Previous" onclick="changePage(-1); return false;">
+              <span aria-hidden="true">&laquo;</span>
+            </a>
+          </li>
+          <li id="pageInfo" class="active"><span>Page 1</span></li>
+          <li id="nextPage" class="disabled">
+            <a href="#" aria-label="Next" onclick="changePage(1); return false;">
+              <span aria-hidden="true">&raquo;</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<style>
+  .glyphicon-spin {
+    animation: spin 1s infinite linear;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .tx-type-incoming {
+    color: #5cb85c;
+    font-weight: bold;
+  }
+  .tx-type-outgoing {
+    color: #d9534f;
+    font-weight: bold;
+  }
+  .txid-short {
+    font-family: monospace;
+    font-size: 0.9em;
+  }
+  input[type="date"] {
+    font-size: 16px;
+    line-height: 1.5;
+    padding: 8px 12px;
+    height: auto;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    padding: 4px;
+  }
+  .help-block {
+    margin-top: 5px;
+    margin-bottom: 0;
+    color: #737373;
+  }
+</style>
+{% endblock content %}
+
+{% block script %}
+<script>
+  let currentPage = 1;
+  let totalPages = 1;
+  let currentWalletHash = '';
+  let currentFiatCurrency = '';
+  let currentStartDate = '';
+  let currentEndDate = '';
+  
+  $(document).ready(function() {
+    // Check for URL parameters and auto-submit if present
+    const urlParams = new URLSearchParams(window.location.search);
+    const walletHash = urlParams.get('wallet_hash');
+    const fiatCurrency = urlParams.get('fiat_currency');
+    const startDate = urlParams.get('start_date');
+    const endDate = urlParams.get('end_date');
+
+    if (walletHash) {
+      $('#walletHash').val(walletHash);
+    }
+    if (fiatCurrency) {
+      $('#fiatCurrency').val(fiatCurrency);
+    }
+    if (startDate) {
+      $('#startDate').val(startDate);
+    }
+    if (endDate) {
+      $('#endDate').val(endDate);
+    }
+
+    if (walletHash) {
+      loadHistory(1);
+    }
+
+    $('#walletHistoryForm').on('submit', function(e) {
+      e.preventDefault();
+      currentPage = 1;
+      loadHistory(1);
+    });
+  });
+  
+  function changePage(direction) {
+    const newPage = currentPage + direction;
+    if (newPage >= 1 && newPage <= totalPages) {
+      loadHistory(newPage);
+    }
+  }
+  
+  function loadHistory(page) {
+    currentWalletHash = $('#walletHash').val().trim();
+    currentFiatCurrency = $('#fiatCurrency').val();
+    currentStartDate = $('#startDate').val();
+    currentEndDate = $('#endDate').val();
+
+    if (!currentWalletHash) {
+      showError('Please enter a wallet hash');
+      return;
+    }
+
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set('wallet_hash', currentWalletHash);
+    url.searchParams.set('fiat_currency', currentFiatCurrency);
+    if (currentStartDate) {
+      url.searchParams.set('start_date', currentStartDate);
+    } else {
+      url.searchParams.delete('start_date');
+    }
+    if (currentEndDate) {
+      url.searchParams.set('end_date', currentEndDate);
+    } else {
+      url.searchParams.delete('end_date');
+    }
+    window.history.pushState({}, '', url);
+
+    // Show loading
+    $('#submitBtn').prop('disabled', true);
+    $('#loadingSpinner').show();
+    $('#errorMessage').hide();
+
+    // Build API params
+    const apiParams = {
+      page: page,
+      page_size: 20
+    };
+    if (currentStartDate) {
+      apiParams.start_date = currentStartDate;
+    }
+    if (currentEndDate) {
+      apiParams.end_date = currentEndDate;
+    }
+
+    // Make API call
+    $.ajax({
+      url: `/api/history/wallet/${encodeURIComponent(currentWalletHash)}/`,
+      method: 'GET',
+      data: apiParams,
+      success: function(response) {
+        displayResults(response, page);
+      },
+      error: function(xhr) {
+        let errorMsg = 'An error occurred while fetching the wallet history.';
+        if (xhr.status === 404) {
+          errorMsg = 'Wallet not found. Please check the wallet hash and try again.';
+        } else if (xhr.responseJSON && xhr.responseJSON.error) {
+          errorMsg = xhr.responseJSON.error;
+        }
+        showError(errorMsg);
+      },
+      complete: function() {
+        $('#submitBtn').prop('disabled', false);
+        $('#loadingSpinner').hide();
+      }
+    });
+  }
+  
+  function showError(message) {
+    $('#errorMessage').text(message).show();
+    $('#resultsSection').hide();
+  }
+  
+  function displayResults(data, page) {
+    $('#errorMessage').hide();
+    
+    if (!data || !data.history || data.history.length === 0) {
+      showError('No transaction history found for this wallet.');
+      return;
+    }
+    
+    currentPage = parseInt(data.page) || page;
+    totalPages = parseInt(data.num_pages) || 1;
+    
+    // Update fiat header
+    $('#fiatHeader').text(`Amount (${currentFiatCurrency})`);
+    
+    // Build table rows
+    let rows = '';
+    data.history.forEach(function(tx) {
+      const txid = tx.txid;
+      const txidShort = txid.substring(0, 16) + '...' + txid.substring(txid.length - 8);
+      const type = tx.record_type === 'incoming' ? 'Received' : 'Sent';
+      const typeClass = tx.record_type === 'incoming' ? 'tx-type-incoming' : 'tx-type-outgoing';
+      
+      // Format date
+      let dateStr = 'N/A';
+      if (tx.tx_timestamp) {
+        const date = new Date(tx.tx_timestamp);
+        dateStr = date.toUTCString();
+      } else if (tx.date_created) {
+        const date = new Date(tx.date_created);
+        dateStr = date.toUTCString();
+      }
+      
+      // Format BCH amount
+      const bchAmount = parseFloat(tx.amount) || 0;
+      const bchFormatted = bchAmount.toFixed(8);
+      
+      // Get fiat amount
+      let fiatAmount = 'N/A';
+      if (tx.fiat_amounts && tx.fiat_amounts[currentFiatCurrency] !== undefined) {
+        const fiatValue = parseFloat(tx.fiat_amounts[currentFiatCurrency]);
+        fiatAmount = fiatValue.toLocaleString('en-US', {
+          style: 'currency',
+          currency: currentFiatCurrency
+        });
+      } else if (tx.market_prices && tx.market_prices[currentFiatCurrency]) {
+        // Fallback: calculate from market price
+        const price = parseFloat(tx.market_prices[currentFiatCurrency]);
+        const fiatValue = Math.abs(bchAmount) * price;
+        fiatAmount = fiatValue.toLocaleString('en-US', {
+          style: 'currency',
+          currency: currentFiatCurrency
+        });
+      } else if (tx.usd_price && currentFiatCurrency === 'USD') {
+        // Fallback to USD price if available
+        const fiatValue = Math.abs(bchAmount) * parseFloat(tx.usd_price);
+        fiatAmount = fiatValue.toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'USD'
+        });
+      }
+      
+      rows += `
+        <tr>
+          <td class="txid-short" title="${txid}">
+            <a href="https://bchexplorer.info/tx/${txid}" target="_blank">${txidShort}</a>
+          </td>
+          <td class="${typeClass}">${type}</td>
+          <td>${dateStr}</td>
+          <td>${bchFormatted}</td>
+          <td>${fiatAmount}</td>
+        </tr>
+      `;
+    });
+    
+    $('#historyTableBody').html(rows);
+    $('#resultSummary').text(`Showing page ${currentPage} of ${totalPages} (${data.history.length} transactions on this page)`);
+    
+    // Update pagination
+    if (totalPages > 1) {
+      $('#paginationNav').show();
+      $('#pageInfo').html(`<span>Page ${currentPage} of ${totalPages}</span>`);
+      
+      if (currentPage > 1) {
+        $('#prevPage').removeClass('disabled');
+      } else {
+        $('#prevPage').addClass('disabled');
+      }
+      
+      if (data.has_next) {
+        $('#nextPage').removeClass('disabled');
+      } else {
+        $('#nextPage').addClass('disabled');
+      }
+    } else {
+      $('#paginationNav').hide();
+    }
+    
+    $('#resultsSection').show();
+  }
+</script>
+{% endblock script %}
