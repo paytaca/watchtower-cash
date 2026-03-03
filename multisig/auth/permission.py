@@ -36,14 +36,14 @@ class IsCosigner(permissions.BasePermission):
 
         wallet_id = request.data.get("wallet") or request.query_params.get("wallet_id")
         if not wallet_id:
-            return False
+            raise PermissionDenied("Invalid wallet identifier.")
 
         auth_public_key = request.headers.get("X-Auth-Cosigner-Auth-PubKey", "")
         message = request.headers.get("X-Auth-Cosigner-Auth-Message", "")
         signature = request.headers.get("X-Auth-Cosigner-Auth-Signature", "")
 
         if not auth_public_key or not message or not signature:
-            return False
+            raise PermissionDenied("Missing authentication headers.")
 
         signer = Signer.objects.filter(
             wallet_id=wallet_id, auth_public_key=auth_public_key
@@ -53,16 +53,19 @@ class IsCosigner(permissions.BasePermission):
             raise PermissionDenied("User is not a cosigner of the proposal.")
 
         signature = parse_x_signature_header(signature)
+
         sig_verification_response = verify_signature(
             message, auth_public_key, signature
         )
         sig_verification_result = sig_verification_response.json()
 
-        if sig_verification_result.get("success", False):
-            request.signer = signer
-            return True
+        if not sig_verification_result.get("success", False):
+            raise PermissionDenied("Access denied, Invalid Signature.")
+        
+        request.signer = signer
 
-        return False
+        return True
+
 
 
 class IsProposalCoordinator(IsCosigner):
