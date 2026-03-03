@@ -262,33 +262,47 @@
   function displayResults(data, page) {
     $('#errorMessage').hide();
     
-    if (!data || !data.history || data.history.length === 0) {
+    // Handle both response formats:
+    // - Version 1 wallets: returns array directly
+    // - Version >1 wallets: returns object with {history, page, num_pages, has_next}
+    let historyData;
+    let isLegacyFormat = Array.isArray(data);
+    
+    if (isLegacyFormat) {
+      historyData = data;
+    } else {
+      historyData = data.history;
+    }
+    
+    if (!historyData || historyData.length === 0) {
       showError('No transaction history found for this wallet.');
       return;
     }
     
-    currentPage = parseInt(data.page) || page;
-    totalPages = parseInt(data.num_pages) || 1;
+    currentPage = isLegacyFormat ? page : (parseInt(data.page) || page);
+    totalPages = isLegacyFormat ? 1 : (parseInt(data.num_pages) || 1);
     
     // Update fiat header
     $('#fiatHeader').text(`Amount (${currentFiatCurrency})`);
     
     // Build table rows
     let rows = '';
-    data.history.forEach(function(tx) {
+    historyData.forEach(function(tx) {
       const txid = tx.txid;
       const txidShort = txid.substring(0, 16) + '...' + txid.substring(txid.length - 8);
       const type = tx.record_type === 'incoming' ? 'Received' : 'Sent';
       const typeClass = tx.record_type === 'incoming' ? 'tx-type-incoming' : 'tx-type-outgoing';
       
-      // Format date
+      // Format date - ensure proper UTC handling
       let dateStr = 'N/A';
-      if (tx.tx_timestamp) {
-        const date = new Date(tx.tx_timestamp);
-        dateStr = date.toUTCString();
-      } else if (tx.date_created) {
-        const date = new Date(tx.date_created);
-        dateStr = date.toUTCString();
+      let timestamp = tx.tx_timestamp || tx.date_created;
+      if (timestamp) {
+        // Parse the timestamp and ensure it's treated as UTC
+        const date = new Date(timestamp);
+        if (!isNaN(date.getTime())) {
+          // Format as UTC string explicitly
+          dateStr = date.toUTCString();
+        }
       }
       
       // Format BCH amount
@@ -334,7 +348,7 @@
     });
     
     $('#historyTableBody').html(rows);
-    $('#resultSummary').text(`Showing page ${currentPage} of ${totalPages} (${data.history.length} transactions on this page)`);
+    $('#resultSummary').text(`Showing page ${currentPage} of ${totalPages} (${historyData.length} transactions on this page)`);
     
     // Update pagination
     if (totalPages > 1) {
@@ -347,7 +361,8 @@
         $('#prevPage').addClass('disabled');
       }
       
-      if (data.has_next) {
+      let hasNext = isLegacyFormat ? false : data.has_next;
+      if (hasNext) {
         $('#nextPage').removeClass('disabled');
       } else {
         $('#nextPage').addClass('disabled');
