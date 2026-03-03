@@ -148,7 +148,7 @@ class PsbtSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'proposal', 'createdAt', 'contentHash', 'isProposal']
 
     def create(self, validated_data):
-
+        signer = self.context["submitted_by"]
         with transaction.atomic():
             standard = validated_data.get('standard') or 'psbt'
             if standard == 'psbt':
@@ -167,6 +167,7 @@ class PsbtSerializer(serializers.ModelSerializer):
                         'content': validated_data['content'],
                         'standard': standard,
                         'encoding': validated_data.get('encoding') or 'base64',
+                        'submitted_by': signer
                     }
                 )
 
@@ -176,8 +177,6 @@ class PsbtSerializer(serializers.ModelSerializer):
                 response = js_client.combine_psbts([proposal.combined_psbt, validated_data['content']])
                 response.raise_for_status()
                 response_json = response.json()
-                LOGGER.info(f"response.json {response_json}")
-                LOGGER.info(f"combined PSBT: {response_json.get('result')}")
                 if response_json.get('result'):
                     proposal.combined_psbt = response_json.get('result')
                     proposal.save(update_fields=["combined_psbt"])

@@ -46,7 +46,7 @@ class Proposal(models.Model):
         CONFIRMED = "confirmed", "Confirmed"    # At least 1 confirmation
         CONFLICTED = "conflicted", "Conflicted" # Inputs spent elsewhere
         FAILED = "failed", "Failed to broadcast"
-        DELETED = "deleted", "Deleted"          # Soft deleted proposal
+        # DELETED = "deleted", "Deleted"          
 
     status = models.CharField(
         max_length=25,
@@ -61,9 +61,15 @@ class Proposal(models.Model):
         Mark the Proposal as deleted by setting deleted_at to the current timestamp.
         """
         
+        update_fields = ["deleted_at"]
+
+        # if self.status == Proposal.Status.PENDING:
+        #     self.status = Proposal.Status.DELETED
+        #     update_fields.append("status")
+        
         self.deleted_at = timezone.now()
-        self.status = Proposal.Status.DELETED
-        self.save(update_fields=["deleted_at", "status"])
+        
+        self.save(update_fields=update_fields)
 
     def save(self, *args, **kwargs):
 
@@ -106,10 +112,11 @@ class Bip32Derivation(models.Model):
 class Psbt(models.Model):
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='psbts')
     content = models.TextField()
-    content_hash = models.CharField(max_length=64, null=True, blank=True, help_text='The sha256 hash of the psbt payload is treated as utf8 string. This is only used for deduplication')
+    content_hash = models.CharField(max_length=64, null=True, blank=True, unique=True, help_text='The sha256 hash of the psbt payload is treated as utf8 string. This is only used for deduplication')
     standard = models.CharField(default='psbt', max_length=50, blank=True, null=True)
     encoding = models.CharField(default='base64', max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    submitted_by = models.ForeignKey(Signer, null=True, blank=True, on_delete=models.SET_NULL, related_name='psbts_submitted')
     is_proposal = models.BooleanField(default=False, help_text="Whether this PSBT is the original proposal PSBT.")
 
     @staticmethod
@@ -127,6 +134,7 @@ class Psbt(models.Model):
             self.content_hash = Psbt.compute_content_hash(self.content)
         super().save(*args, **kwargs)
         
+    
 class Signature(models.Model):
     input = models.ForeignKey(Input, null=True, blank=True, on_delete=models.CASCADE, related_name='signatures')
     psbt = models.ForeignKey(Psbt, null=True, blank=True, on_delete=models.CASCADE, related_name='signatures')
