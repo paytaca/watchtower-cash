@@ -62,6 +62,31 @@
     
     <div id="resultsSection" style="display: none;">
       <hr>
+      
+      <!-- Total Sums Summary Panel -->
+      <div class="row" id="totalsPanel" style="margin-bottom: 20px;">
+        <div class="col-md-6">
+          <div class="panel panel-success">
+            <div class="panel-heading">
+              <h3 class="panel-title">Total BCH Received</h3>
+            </div>
+            <div class="panel-body">
+              <h2 id="totalBchReceived" style="margin: 0; color: #5cb85c;">0.00000000 BCH</h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="panel panel-info">
+            <div class="panel-heading">
+              <h3 class="panel-title" id="totalFiatTitle">Total USD Received</h3>
+            </div>
+            <div class="panel-body">
+              <h2 id="totalFiatReceived" style="margin: 0; color: #5bc0de;">$0.00</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <h3>Transaction History</h3>
       <p id="resultSummary" class="text-muted"></p>
       
@@ -146,6 +171,8 @@
   let currentFiatCurrency = '';
   let currentStartDate = '';
   let currentEndDate = '';
+  let allHistoryData = []; // Store all data for client-side pagination
+  const PAGE_SIZE = 20;
   
   $(document).ready(function() {
     // Check for URL parameters and auto-submit if present
@@ -182,7 +209,18 @@
   function changePage(direction) {
     const newPage = currentPage + direction;
     if (newPage >= 1 && newPage <= totalPages) {
-      loadHistory(newPage);
+      // Check if we have all data stored (legacy format with client-side pagination)
+      if (allHistoryData.length > 0) {
+        // Client-side pagination - just re-render with stored data
+        displayResults(allHistoryData, newPage);
+        // Scroll to top of results
+        $('html, body').animate({
+          scrollTop: $('#resultsSection').offset().top - 20
+        }, 200);
+      } else {
+        // Server-side pagination - fetch new page from API
+        loadHistory(newPage);
+      }
     }
   }
   
@@ -263,15 +301,26 @@
     $('#errorMessage').hide();
     
     // Handle both response formats:
-    // - Version 1 wallets: returns array directly
+    // - Version 1 wallets: returns array directly (needs client-side pagination)
     // - Version >1 wallets: returns object with {history, page, num_pages, has_next}
     let historyData;
     let isLegacyFormat = Array.isArray(data);
     
     if (isLegacyFormat) {
-      historyData = data;
+      // Store all data for client-side pagination
+      allHistoryData = data;
+      currentPage = page;
+      totalPages = Math.ceil(allHistoryData.length / PAGE_SIZE);
+      
+      // Slice data for current page
+      const startIdx = (currentPage - 1) * PAGE_SIZE;
+      const endIdx = startIdx + PAGE_SIZE;
+      historyData = allHistoryData.slice(startIdx, endIdx);
     } else {
+      allHistoryData = []; // Clear stored data
       historyData = data.history;
+      currentPage = parseInt(data.page) || page;
+      totalPages = parseInt(data.num_pages) || 1;
     }
     
     if (!historyData || historyData.length === 0) {
@@ -279,11 +328,41 @@
       return;
     }
     
-    currentPage = isLegacyFormat ? page : (parseInt(data.page) || page);
-    totalPages = isLegacyFormat ? 1 : (parseInt(data.num_pages) || 1);
-    
     // Update fiat header
     $('#fiatHeader').text(`Amount (${currentFiatCurrency})`);
+    
+    // Calculate totals for incoming transactions on CURRENT page
+    let totalBch = 0;
+    let totalFiat = 0;
+    let incomingCount = 0;
+    
+    historyData.forEach(function(tx) {
+      if (tx.record_type === 'incoming') {
+        const bchAmount = parseFloat(tx.amount) || 0;
+        totalBch += Math.abs(bchAmount);
+        incomingCount++;
+        
+        // Calculate fiat amount
+        let fiatValue = 0;
+        if (tx.fiat_amounts && tx.fiat_amounts[currentFiatCurrency] !== undefined) {
+          fiatValue = parseFloat(tx.fiat_amounts[currentFiatCurrency]);
+        } else if (tx.market_prices && tx.market_prices[currentFiatCurrency]) {
+          const price = parseFloat(tx.market_prices[currentFiatCurrency]);
+          fiatValue = Math.abs(bchAmount) * price;
+        } else if (tx.usd_price && currentFiatCurrency === 'USD') {
+          fiatValue = Math.abs(bchAmount) * parseFloat(tx.usd_price);
+        }
+        totalFiat += Math.abs(fiatValue);
+      }
+    });
+    
+    // Update totals display
+    $('#totalBchReceived').text(totalBch.toFixed(8) + ' BCH');
+    $('#totalFiatReceived').text(totalFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#totalFiatTitle').text(`Total ${currentFiatCurrency} Received (This Page)`);
     
     // Build table rows
     let rows = '';
@@ -348,7 +427,14 @@
     });
     
     $('#historyTableBody').html(rows);
-    $('#resultSummary').text(`Showing page ${currentPage} of ${totalPages} (${historyData.length} transactions on this page)`);
+    // Show summary with total count info
+    let summaryText;
+    if (isLegacyFormat && allHistoryData.length > 0) {
+      summaryText = `Showing page ${currentPage} of ${totalPages} (${historyData.length} of ${allHistoryData.length} total transactions)`;
+    } else {
+      summaryText = `Showing page ${currentPage} of ${totalPages} (${historyData.length} transactions on this page)`;
+    }
+    $('#resultSummary').html(`${summaryText}<br><small class="text-muted">Totals above are calculated from ${incomingCount} incoming transaction(s) on this page</small>`);
     
     // Update pagination
     if (totalPages > 1) {
@@ -361,7 +447,15 @@
         $('#prevPage').addClass('disabled');
       }
       
-      let hasNext = isLegacyFormat ? false : data.has_next;
+      // For legacy format, check if there are more pages locally
+      // For new format, use server's has_next flag
+      let hasNext;
+      if (isLegacyFormat) {
+        hasNext = currentPage < totalPages;
+      } else {
+        hasNext = data.has_next;
+      }
+      
       if (hasNext) {
         $('#nextPage').removeClass('disabled');
       } else {
