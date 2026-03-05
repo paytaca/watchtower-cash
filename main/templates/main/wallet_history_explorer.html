@@ -331,16 +331,17 @@
     // Update fiat header
     $('#fiatHeader').text(`Amount (${currentFiatCurrency})`);
     
-    // Calculate totals for incoming transactions on CURRENT page
+    // Calculate totals for ALL incoming transactions across all pages
+    let allTransactions = isLegacyFormat ? allHistoryData : historyData;
     let totalBch = 0;
     let totalFiat = 0;
-    let incomingCount = 0;
+    let totalIncomingCount = 0;
     
-    historyData.forEach(function(tx) {
+    allTransactions.forEach(function(tx) {
       if (tx.record_type === 'incoming') {
         const bchAmount = parseFloat(tx.amount) || 0;
         totalBch += Math.abs(bchAmount);
-        incomingCount++;
+        totalIncomingCount++;
         
         // Calculate fiat amount
         let fiatValue = 0;
@@ -362,7 +363,7 @@
       style: 'currency',
       currency: currentFiatCurrency
     }));
-    $('#totalFiatTitle').text(`Total ${currentFiatCurrency} Received (This Page)`);
+    $('#totalFiatTitle').text(`Total ${currentFiatCurrency} Received`);
     
     // Build table rows
     let rows = '';
@@ -434,7 +435,7 @@
     } else {
       summaryText = `Showing page ${currentPage} of ${totalPages} (${historyData.length} transactions on this page)`;
     }
-    $('#resultSummary').html(`${summaryText}<br><small class="text-muted">Totals above are calculated from ${incomingCount} incoming transaction(s) on this page</small>`);
+    $('#resultSummary').html(`${summaryText}<br><small class="text-muted">Totals above are calculated from ${totalIncomingCount} incoming transaction(s) total</small>`);
     
     // Update pagination
     if (totalPages > 1) {
