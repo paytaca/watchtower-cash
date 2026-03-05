@@ -20,6 +20,20 @@ class Proposal(models.Model):
     off_premise_transaction_broadcast = models.CharField(max_length=64, null=True, blank=True, help_text="If set transaction was broadcasted outside watchtower")
     combined_psbt = models.TextField(null=True, blank=True, help_text="The combined psbts. Updated everytime new psbt comes in.")
 
+    coordinator_proposal_signature = models.CharField(
+        max_length=512,
+        null=True,
+        blank=True,
+        help_text="The coordinator/uploader signature over the unsigned_transaction_hash, using the Signer auth_public_key. Used for tamper detection / integrity check before cosigner signing."
+    )
+
+    coordinator_proposal_signature_scheme = models.CharField(
+        max_length=20,
+        default="schnorr",
+        blank=True,
+        help_text="The signature scheme used for coordinator_proposal_signature ('schnorr' or 'ecdsa')."
+    )
+
     txid = models.CharField(
         max_length=64,
         null=True,
