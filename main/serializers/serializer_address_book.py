@@ -66,7 +66,7 @@ class AddressBookListSerializer(ModelSerializer):
         ]
 
 class AddressBookCreateSerializer(ModelSerializer):
-    wallet_hash = serializers.CharField(max_length=70, write_only=True, required=True)
+    wallet_hash = serializers.CharField(max_length=70, write_only=True, required=False)
 
     class Meta:
         model = AddressBook
@@ -74,7 +74,6 @@ class AddressBookCreateSerializer(ModelSerializer):
 
     def create(self, validated_data):
         wallet_hash = self.context.get('wallet_hash')  # From authenticated user
-        validated_data.pop('wallet_hash', None)  # Ignore any wallet_hash from request
         try:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         except Wallet.DoesNotExist:
