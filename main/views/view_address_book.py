@@ -56,7 +56,7 @@ class AddressBookViewSet(
         try:
             with transaction.atomic():
                 # Create AddressBook inside the transaction
-                serializer = self.get_serializer(data=request.data.get('address_book'))
+                serializer = AddressBookCreateSerializer(data=request.data.get('address_book'), context=self.get_serializer_context())
                 serializer.is_valid(raise_exception=True)
                 self.perform_create(serializer)
                 address_book_id = serializer.data['id']
