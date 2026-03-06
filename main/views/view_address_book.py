@@ -1,7 +1,8 @@
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 
 from authentication.token import WalletAuthentication
 from main.models import AddressBook, AddressBookAddress
@@ -64,9 +65,19 @@ class AddressBookViewSet(
                         addresses_serializer = AddressBookAddressCreateSerializer(data=address, context=self.get_serializer_context())
                         addresses_serializer.is_valid(raise_exception=True)
                         addresses_serializer.save()
-        except Exception as e:
+        except ValidationError as e:
             status_resp = status.HTTP_400_BAD_REQUEST
             error = ' '.join(str(arg) for arg in e.args) if e.args else str(e)
+        except IntegrityError as e:
+            status_resp = status.HTTP_400_BAD_REQUEST
+            error = f'Database integrity error: {str(e)}'
+        except Exception as e:
+            # Log unexpected errors for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f'Unexpected error in AddressBook creation: {e}', exc_info=True)
+            status_resp = status.HTTP_500_INTERNAL_SERVER_ERROR
+            error = 'An unexpected error occurred. Please try again.'
         
         data = {
             'id': address_book_id,
