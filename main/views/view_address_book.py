@@ -17,6 +17,9 @@ from main.serializers import (
 )
 from main.serializers.serializer_address_book import AddressBookUpdateSerializer
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class AddressBookViewSet(
     viewsets.GenericViewSet,
@@ -96,9 +99,6 @@ class AddressBookViewSet(
             status_resp = status.HTTP_400_BAD_REQUEST
             error = f'Database integrity error: {str(e)}'
         except Exception as e:
-            # Log unexpected errors for debugging
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f'Unexpected error in AddressBook creation: {e}', exc_info=True)
             status_resp = status.HTTP_500_INTERNAL_SERVER_ERROR
             error = 'An unexpected error occurred. Please try again.'
