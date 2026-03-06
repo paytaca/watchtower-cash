@@ -5,6 +5,7 @@ from main.models import AddressBook, AddressBookAddress, Wallet
 
 class AddressBookAddressCreateSerializer(ModelSerializer):
     address_book_id = serializers.IntegerField(write_only=True, required=True)
+    
     class Meta:
         model = AddressBookAddress
         fields = [
@@ -13,12 +14,28 @@ class AddressBookAddressCreateSerializer(ModelSerializer):
             'address_book_id'
         ]
 
-    def create(self, validated_data):
-        address_book_id = validated_data.pop('address_book_id', None)
+    def validate(self, data):
+        # Check ownership during validation phase
+        wallet_hash = self.context.get('wallet_hash')
+        address_book_id = data.get('address_book_id')
+        
         try:
             address_book = AddressBook.objects.get(id=address_book_id)
         except AddressBook.DoesNotExist:
             raise serializers.ValidationError({'address_book_id': 'Address book not found.'})
+        
+        # Verify ownership
+        if address_book.wallet.wallet_hash != wallet_hash:
+            raise serializers.ValidationError({'address_book_id': 'Unauthorized access to this address book.'})
+        
+        # Cache address_book in context for create() method
+        self.context['address_book'] = address_book
+        
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop('address_book_id', None)
+        address_book = self.context.get('address_book')
         validated_data['address_book'] = address_book
         return super().create(validated_data)
 
@@ -66,7 +83,7 @@ class AddressBookListSerializer(ModelSerializer):
         ]
 
 class AddressBookCreateSerializer(ModelSerializer):
-    wallet_hash = serializers.CharField(max_length=70, write_only=True, required=True)
+    wallet_hash = serializers.CharField(max_length=70, write_only=True, required=False)
 
     class Meta:
         model = AddressBook
@@ -74,7 +91,6 @@ class AddressBookCreateSerializer(ModelSerializer):
 
     def create(self, validated_data):
         wallet_hash = self.context.get('wallet_hash')  # From authenticated user
-        validated_data.pop('wallet_hash', None)  # Ignore any wallet_hash from request
         try:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         except Wallet.DoesNotExist:
@@ -90,4 +106,4 @@ class AddressBookUpdateSerializer(ModelSerializer):
 class AddressBookSerializer(ModelSerializer):
     class Meta:
         model = AddressBook
-        fields = '__all__'
+        fields = ['id', 'name', 'is_favorite', 'wallet', 'created_at', 'updated_at']
