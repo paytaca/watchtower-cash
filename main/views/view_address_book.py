@@ -44,19 +44,24 @@ class AddressBookViewSet(
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data.get('address_book'))
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-
         addresses = request.data.get('addresses')
         error = ''
         status_resp = status.HTTP_201_CREATED
+        address_book_id = None
+        
         try:
             with transaction.atomic():
+                # Create AddressBook inside the transaction
+                serializer = self.get_serializer(data=request.data.get('address_book'))
+                serializer.is_valid(raise_exception=True)
+                self.perform_create(serializer)
+                address_book_id = serializer.data['id']
+                
+                # Create addresses inside the same transaction
                 if addresses and isinstance(addresses, list) and len(addresses) > 0:
                     for address in addresses:
-                        address['address_book_id'] = serializer.data['id']
-                        addresses_serializer = AddressBookAddressCreateSerializer(data=address)
+                        address['address_book_id'] = address_book_id
+                        addresses_serializer = AddressBookAddressCreateSerializer(data=address, context=self.get_serializer_context())
                         addresses_serializer.is_valid(raise_exception=True)
                         addresses_serializer.save()
         except Exception as e:
@@ -64,7 +69,7 @@ class AddressBookViewSet(
             error = ' '.join(str(arg) for arg in e.args) if e.args else str(e)
         
         data = {
-            'id': serializer.data['id'],
+            'id': address_book_id,
             'error': error
         }
         
@@ -107,11 +112,7 @@ class AddressBookAddressViewSet(
         return super().get_queryset().filter(address_book__wallet__wallet_hash=wallet_hash)
 
     def create(self, request, *args, **kwargs):
-        serializer = AddressBookAddressCreateSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # Add ownership check
-        address_book = serializer.validated_data.get('address_book')
-        if address_book and address_book.wallet.wallet_hash != request.user.wallet_hash:
-            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
