@@ -152,8 +152,13 @@ class AddressBookAddressViewSet(
         wallet_hash = self.request.user.wallet_hash
         return super().get_queryset().filter(address_book__wallet__wallet_hash=wallet_hash)
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['wallet_hash'] = self.request.user.wallet_hash
+        return context
+
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        serializer = AddressBookAddressCreateSerializer(data=request.data, context=self.get_serializer_context())
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         return Response(serializer.data, status=status.HTTP_201_CREATED)

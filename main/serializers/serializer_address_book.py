@@ -40,12 +40,15 @@ class AddressBookAddressCreateSerializer(ModelSerializer):
         return super().create(validated_data)
 
 class AddressBookAddressSerializer(ModelSerializer):
+    address_book = serializers.PrimaryKeyRelatedField(read_only=True)
+    
     class Meta:
         model = AddressBookAddress
         fields = [
             'id',
             'address',
             'address_type',
+            'address_book'
         ]
 class AddressBookRetrieveSerializer(ModelSerializer):
     addresses = SerializerMethodField()
