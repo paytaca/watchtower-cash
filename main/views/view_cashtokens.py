@@ -388,10 +388,22 @@ class CashNftsViewSet(
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Start with all NFTs filtered by category, ordered by latest first
-        queryset = CashNonFungibleToken.objects.filter(category=category).order_by('-id')
+        wallet_hash = request.query_params.get("wallet_hash", None)
         
-        # Apply standard filters (wallet_hash, has_balance, etc.) using filter_backends
+        if wallet_hash:
+            # When wallet_hash is provided, only show NFTs currently owned by the wallet
+            # (i.e., NFTs with unspent transactions from this wallet)
+            queryset = CashNonFungibleToken.objects.filter(
+                category=category
+            ).annotate_owner_wallet_hash().filter(
+                owner_wallet_hash=wallet_hash
+            ).order_by('-id')
+        else:
+            # Start with all NFTs filtered by category, ordered by latest first
+            queryset = CashNonFungibleToken.objects.filter(category=category).order_by('-id')
+        
+        # Apply standard filters using filter_backends
+        # (this will still apply other filters like address, exclude_token_ids, etc.)
         queryset = self.filter_queryset(queryset)
         
         # Handle has_metadata filter parameter
