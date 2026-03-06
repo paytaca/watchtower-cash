@@ -91,6 +91,7 @@ class AddressBookCreateSerializer(ModelSerializer):
 
     def create(self, validated_data):
         wallet_hash = self.context.get('wallet_hash')  # From authenticated user
+        validated_data.pop('wallet_hash', None)  # Remove from validated_data before saving
         try:
             wallet = Wallet.objects.get(wallet_hash=wallet_hash)
         except Wallet.DoesNotExist:
