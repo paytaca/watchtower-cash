@@ -257,6 +257,18 @@ class ProposalStatusView(APIView):
             "inputs": [],
         }
 
+        psbts = list(proposal.psbts.values_list("content", flat=True))
+        combine_request = js_client.combine_psbts(psbts)
+        combine_request.raise_for_status()
+        combine_result = combine_request.json()
+        signing_progress = combine_result.get("signingProgress", {})
+        signing_progress = signing_progress.get("signingProgress")
+        if signing_progress:
+            response_data["signingProgress"] = signing_progress
+            proposal.signing_progress = signing_progress
+            proposal.save(update_fields="signing_progress")
+        
+        LOGGER.info(f"combine result {combine_result}")
         for inp in proposal.inputs.all():
             ## TODO: use the Transaction table in prod, this is for local testing only
             url = f"https://watchtower.cash/api/transactions/outputs/?txid={inp.outpoint_transaction_hash}"
@@ -295,7 +307,7 @@ class ProposalStatusView(APIView):
                     and spending_transaction_unsigned_transaction_hash
                     == proposal.unsigned_transaction_hash
                 ):
-                    new_status = Proposal.Status.BROADCASTED
+                    new_status = Proposal.Status.BROADCAST_INITIATED
                 elif (
                     spending_transaction_unsigned_transaction_hash
                     and spending_transaction_unsigned_transaction_hash
@@ -310,7 +322,7 @@ class ProposalStatusView(APIView):
                     proposal.status = new_status
                     proposal.save(update_fields=["status"])
 
-                if new_status == Proposal.Status.BROADCASTED:
+                if new_status == Proposal.Status.BROADCAST_INITIATED:
                     transaction_broadcast = TransactionBroadcast.objects.filter(
                         txid=spending_txid
                     )
@@ -325,7 +337,7 @@ class ProposalStatusView(APIView):
                     if (
                         not transaction_broadcast
                         and new_status
-                        == Proposal.Status.BROADCASTED
+                        == Proposal.Status.BROADCAST_INITIATED
                     ):
                         proposal.off_premise_transaction_broadcast = spending_txid
                         proposal.save(
@@ -335,6 +347,7 @@ class ProposalStatusView(APIView):
                     response_data["txid"] = spending_txid
                     
             response_data["status"] = new_status
+            response_data["wallet"] = proposal.wallet.id
             response_data["inputs"].append(
                 {
                     "outpoint_transaction_hash": inp.outpoint_transaction_hash,
