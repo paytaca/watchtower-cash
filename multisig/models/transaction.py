@@ -1,6 +1,7 @@
 import hashlib
 from django.db import models
 from django.utils import timezone
+from django.contrib.postgres.fields import JSONField
 from main.models import TransactionBroadcast
 # from multisig.models.auth import ServerIdentity
 from multisig.models.wallet import MultisigWallet, Signer
@@ -55,12 +56,12 @@ class Proposal(models.Model):
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"          # Proposal exists, not broadcast
-        BROADCASTED = "broadcasted", "Broadcasted"  # Sent to node but not yet seen in mempool
+        CANCELLED = "cancelled", "Cancelled"
+        BROADCAST_INITIATED = "broadcasted", "Broadcasted"  # Sent to node but not yet seen in mempool
+        BROADCAST_FAILED = "broadcast_failed", "Broadcast Failed"
         MEMPOOL = "mempool", "In mempool"       # Node sees tx in mempool
         CONFIRMED = "confirmed", "Confirmed"    # At least 1 confirmation
         CONFLICTED = "conflicted", "Conflicted" # Inputs spent elsewhere
-        FAILED = "failed", "Failed to broadcast"
-        # DELETED = "deleted", "Deleted"          
 
     status = models.CharField(
         max_length=25,
@@ -70,6 +71,12 @@ class Proposal(models.Model):
 
     deleted_at = models.DateTimeField(null=True, blank=True, default=None)
 
+    errors = JSONField(
+        default=list, 
+        blank=True,
+        help_text="List of errors: [{'type': 'broadcast', 'message': '...', 'timestamp': '...'}]"
+    )
+        
     def soft_delete(self):
         """
         Mark the Proposal as deleted by setting deleted_at to the current timestamp.
@@ -77,9 +84,9 @@ class Proposal(models.Model):
         
         update_fields = ["deleted_at"]
 
-        # if self.status == Proposal.Status.PENDING:
-        #     self.status = Proposal.Status.DELETED
-        #     update_fields.append("status")
+        if self.status == Proposal.Status.PENDING:
+            self.status = Proposal.Status.CANCELLED
+            update_fields.append("status")
         
         self.deleted_at = timezone.now()
         
