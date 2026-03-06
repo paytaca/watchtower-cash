@@ -64,16 +64,16 @@ class AddressBookViewSet(
                 # Create addresses inside the same transaction
                 if addresses and isinstance(addresses, list) and len(addresses) > 0:
                     all_errors = []
-                    validated_data_list = []
+                    validated_serializers = []
                     
-                    # Single pass: Validate all and collect errors + validated data
+                    # Single pass: Validate all and collect errors + serializers
                     for idx, address in enumerate(addresses):
                         address['address_book_id'] = address_book_id
                         addresses_serializer = AddressBookAddressCreateSerializer(data=address, context=self.get_serializer_context())
                         
                         if addresses_serializer.is_valid():
-                            # Store only the validated data, not the serializer instance
-                            validated_data_list.append(addresses_serializer.validated_data)
+                            # Store the serializer instance for later save
+                            validated_serializers.append(addresses_serializer)
                         else:
                             # Collect errors with index for identification
                             all_errors.append({
@@ -89,9 +89,9 @@ class AddressBookViewSet(
                             'message': f'Validation failed for {len(all_errors)} of {len(addresses)} addresses'
                         })
                     
-                    # All validations passed - now save all addresses (memory-efficient)
-                    for validated_address_data in validated_data_list:
-                        AddressBookAddress.objects.create(**validated_address_data)
+                    # All validations passed - now save all addresses using proper serializer.save()
+                    for addresses_serializer in validated_serializers:
+                        addresses_serializer.save()
         except ValidationError as e:
             status_resp = status.HTTP_400_BAD_REQUEST
             error = ' '.join(str(arg) for arg in e.args) if e.args else str(e)
