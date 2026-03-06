@@ -1,4 +1,4 @@
-from django.db import transaction, IntegrityError
+from django.db import transaction, IntegrityError, DatabaseError, OperationalError
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -98,6 +98,12 @@ class AddressBookViewSet(
         except IntegrityError as e:
             status_resp = status.HTTP_400_BAD_REQUEST
             error = f'Database integrity error: {str(e)}'
+        except DatabaseError as e:
+            status_resp = status.HTTP_503_SERVICE_UNAVAILABLE
+            error = f'Database error: {str(e)}'
+        except OperationalError as e:
+            status_resp = status.HTTP_503_SERVICE_UNAVAILABLE
+            error = f'Service temporarily unavailable: {str(e)}'
         except Exception as e:
             logger.error(f'Unexpected error in AddressBook creation: {e}', exc_info=True)
             status_resp = status.HTTP_500_INTERNAL_SERVER_ERROR
