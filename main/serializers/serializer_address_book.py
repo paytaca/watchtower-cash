@@ -28,14 +28,14 @@ class AddressBookAddressCreateSerializer(ModelSerializer):
         if address_book.wallet.wallet_hash != wallet_hash:
             raise serializers.ValidationError({'address_book_id': 'Unauthorized access to this address book.'})
         
+        # Cache address_book in context for create() method
+        self.context['address_book'] = address_book
+        
         return data
 
     def create(self, validated_data):
-        address_book_id = validated_data.pop('address_book_id', None)
-        try:
-            address_book = AddressBook.objects.get(id=address_book_id)
-        except AddressBook.DoesNotExist:
-            raise serializers.ValidationError({'address_book_id': 'Address book not found.'})
+        validated_data.pop('address_book_id', None)
+        address_book = self.context.get('address_book')
         validated_data['address_book'] = address_book
         return super().create(validated_data)
 
