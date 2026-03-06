@@ -60,10 +60,34 @@ class AddressBookViewSet(
                 
                 # Create addresses inside the same transaction
                 if addresses and isinstance(addresses, list) and len(addresses) > 0:
-                    for address in addresses:
+                    # First pass: Validate all addresses and collect errors
+                    all_errors = []
+                    validated_serializers = []
+                    
+                    for idx, address in enumerate(addresses):
                         address['address_book_id'] = address_book_id
                         addresses_serializer = AddressBookAddressCreateSerializer(data=address, context=self.get_serializer_context())
-                        addresses_serializer.is_valid(raise_exception=True)
+                        
+                        if addresses_serializer.is_valid():
+                            validated_serializers.append(addresses_serializer)
+                        else:
+                            # Collect errors with index for identification
+                            errors = addresses_serializer.errors
+                            all_errors.append({
+                                'index': idx,
+                                'address': address.get('address', 'unknown'),
+                                'errors': errors
+                            })
+                    
+                    # If any validation errors exist, raise them all at once
+                    if all_errors:
+                        raise ValidationError({
+                            'addresses': all_errors,
+                            'message': f'Validation failed for {len(all_errors)} of {len(addresses)} addresses'
+                        })
+                    
+                    # Second pass: Save all validated addresses
+                    for addresses_serializer in validated_serializers:
                         addresses_serializer.save()
         except ValidationError as e:
             status_resp = status.HTTP_400_BAD_REQUEST
