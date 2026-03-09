@@ -142,7 +142,7 @@ import { estimateFee, getMofNDustThreshold, recipientsToLibauthTransactionOutput
 import { Pst } from './pst.js'
 import { PsbtWallet, WALLET_MAGIC } from './psbt-wallet.js'
 import { retryWithBackoff } from './utils.js'
-import { encryptECIESMessage } from './ecies.js'
+import { encryptECIES } from './encryption.js'
 import { BsmsDescriptor, BsmsKeyRecord } from './bsms.js'
 import { generateCoordinationServerCosignerCredentialsFromMnemonic, generateCoordinationServerCredentialsFromMnemonic } from './coordination.js'
 import { deriveHdKeysFromMnemonic } from './utils.js'
@@ -437,6 +437,10 @@ export class MultisigWallet {
 
   get walletHash() {
     return this.getWalletHash(this)
+  }
+
+  getSigners() {
+    return [...this.signers].sort((a, b) => (a.xpub || '').localeCompare(b.xpub || ''))
   }
 
   getLastIssuedDepositAddressIndex(network) {
@@ -1150,12 +1154,77 @@ export class MultisigWallet {
       .setStore(options?.store)
       .setProvider(options?.provider)
       .setCoordinationServer(options?.coordinationServer)
-    
-    if (this.isOnline()) {
-      await pst.upload()
-    }
-    
     return pst 
+  }
+
+  async wcCreateProposalFromSessionRequest(sessionRequest) {
+    const proposal = new Pst()
+    const inputs = sessionRequest.params.request.params.transaction.inputs?.map((input) => {
+      const mappedInput = JSON.parse(JSON.stringify(input, Pst.exportSafeJSONReplacer), Pst.importSafeJSONReviver)
+      const wcExpectedLockingBytecode = cashAddressToLockingBytecode(this.getDepositAddress(0).address)
+      if (mappedInput.sourceOutput.lockingBytecode && binsAreEqual(mappedInput.sourceOutput.lockingBytecode, wcExpectedLockingBytecode.bytecode)) {
+        const signersWithPublicKeys = derivePublicKeys({ signers: this.signers, addressDerivationPath: '0/0' })
+        const bip32Derivation = Object.assign({}, ...signersWithPublicKeys.map((s) => {
+        const fullDerivationPath = (this.derivationPath || `m/44'/145'/0'/`) + '0/0'
+            return {
+              [s.publicKey]: {
+                path: fullDerivationPath,
+                masterFingerprint: s.masterFingerprint
+              }
+            }
+          }))
+        
+        mappedInput.sigHash = SigningSerializationTypeBch.allOutputs
+        mappedInput.bip32Derivation = bip32Derivation
+        mappedInput.redeemScript = generateRedeemScript(this.m, signersWithPublicKeys.map(s => hexToBin(s.publicKey)))
+      }
+      return mappedInput
+    })
+
+    const outputs = sessionRequest.params.request.params.transaction.outputs.map(output => {
+      const wcExpectedLockingBytecode = cashAddressToLockingBytecode(this.getDepositAddress(0).address)
+      const mappedOutput = JSON.parse(JSON.stringify(output, Pst.exportSafeJSONReplacer), Pst.importSafeJSONReviver)
+      if (mappedOutput.lockingBytecode && binsAreEqual(mappedOutput.lockingBytecode, wcExpectedLockingBytecode.bytecode)) {
+        const signersWithPublicKeys = derivePublicKeys({ signers: this.signers, addressDerivationPath: '0/0' })
+        const bip32Derivation = Object.assign({}, ...signersWithPublicKeys.map((s) => {
+        const fullDerivationPath = (this.derivationPath || `m/44'/145'/0'/`) + '0/0'
+            return {
+              [s.publicKey]: {
+                path: fullDerivationPath,
+                masterFingerprint: s.masterFingerprint
+              }
+            }
+          }))
+        
+        mappedOutput.purpose = 'self-external'
+        mappedOutput.bip32Derivation = bip32Derivation
+        mappedOutput.redeemScript = generateRedeemScript(this.m, signersWithPublicKeys.map(s => hexToBin(s.publicKey)))
+      }
+      return mappedOutput
+    })
+
+    proposal
+      .setOrigin(sessionRequest.session.peer.metadata.url || "")
+      .setPurpose(sessionRequest.params.request.params.userPrompt || "Not Specified")
+      .addInputs(inputs)
+      .addOutputs(outputs)
+      .setLocktime(sessionRequest.params.request.params.transaction.locktime)
+      .setTxVersion(sessionRequest.params.request.params.transaction.version)
+      .setWallet(this)
+      .setStore(this.options?.store)
+      .setProvider(this.options?.provider)
+      .setCoordinationServer(this.options?.coordinationServer)
+
+    const cosignerAuthCredentials = await this.generateCosignerAuthCredentials()
+
+    if (cosignerAuthCredentials && cosignerAuthCredentials["X-Auth-Cosigner-Auth-PubKey"]) {
+      proposal.setCreator(cosignerAuthCredentials["X-Auth-Cosigner-Auth-PubKey"])
+    }
+    return proposal
+  }
+
+  wcGetDefaultAddress() {
+    return this.getDepositAddress(0).address
   }
 
   async fetchProposals(status='pending') {
@@ -1233,9 +1302,9 @@ export class MultisigWallet {
       }
       if (enablePrivacy) {
         const unencryptedBsmsDescriptor = this.generateBsmsDescriptor()
-        const encryptedBsmsDescriptor = await encryptECIESMessage(
+        const encryptedBsmsDescriptor = await encryptECIES(
           MultisigWallet.extractRawPublicKeyFromXpub(signer.xpub),
-          unencryptedBsmsDescriptor
+          utf8ToBin(unencryptedBsmsDescriptor)
         )
         
         signer.derivationPath = signer.path || signer.derivationPath || `m/44'/145'/0'`
@@ -1301,7 +1370,7 @@ export class MultisigWallet {
    */
   async resolveXprvsOfXpubs() {
     if (this.options?.resolveXprvOfXpub) {
-      for (const signer of this.signers) {
+      for (const signer of this.getSigners()) {
         const xprv = await this.options?.resolveXprvOfXpub({ xpub: signer.xpub})
         if (xprv) {
           if (!signer.xprv) {
@@ -1317,11 +1386,15 @@ export class MultisigWallet {
   }
   
   toJSON() {
+    const signers = this.getSigners().map(s => {
+      const { xprv, ...safe } = s 
+      return safe
+    })
     return {
       id: this.id,
       name: this.name,
       m: this.m,
-      signers: this.signers,
+      signers: signers,
       networks: this.networks
     }
   }
@@ -1435,7 +1508,7 @@ async generateAuthCredentials(xpub) {
     if (!mnemonic) return null
     return generateCoordinationServerCredentialsFromMnemonic({ mnemonic })
   }
-  for (const signer of this.signers) {
+  for (const signer of this.getSigners()) {
     // use first mnemonic found
     const mnemonic = await this.options?.resolveMnemonicOfXpub({ xpub: signer.xpub })
     if (mnemonic) {
@@ -1451,7 +1524,7 @@ async generateCosignerAuthCredentials(xpub) {
     if (!mnemonic) return null
     return generateCoordinationServerCosignerCredentialsFromMnemonic({ mnemonic })
   }
-  for (const signer of this.signers) {
+  for (const signer of this.getSigners()) {
     // use first mnemonic found
     const mnemonic = await this.options?.resolveMnemonicOfXpub({ xpub: signer.xpub })
     if (mnemonic) {
@@ -1479,7 +1552,7 @@ async sync() {
 async loadSignersServerIdentity() {
   if (!this.options?.coordinationServer) return
   let modified = false
-  for (const signer of this.signers) {
+  for (const signer of this.getSigners()) {
     const authCredentials = await this.generateAuthCredentials(signer.xpub)
     if (!authCredentials) continue
     try {
@@ -1547,8 +1620,6 @@ static cashAddressToTokenAddress(cashAddress) {
         'X-Auth-Message': rawMessage
     }
   }
-
-  
 
   /**
    * Extracts the compressed raw public key (33 bytes) from a recipient's xpub string.
@@ -1623,9 +1694,13 @@ static cashAddressToTokenAddress(cashAddress) {
    */
   generateBsmsDescriptor() {
       const firstAddress = this.getDepositAddress(0, this.cashAddressNetworkPrefix).address
+      const signers = this.getSigners().map(s => {
+        const { xprv, ...safe } = s 
+        return safe
+      })
       const descriptor = new BsmsDescriptor({
         m: this.m,
-        signers: this.signers.sort((a, b) => a.xpub.localeCompare(b.xpub)),
+        signers: signers,
         firstAddress: firstAddress
       })
       return descriptor.toString()

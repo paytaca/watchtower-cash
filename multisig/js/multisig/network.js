@@ -1,6 +1,5 @@
 import axios from 'axios'
-import { binToHex, CashAddressNetworkPrefix, decodeCashAddress, decodeHdPrivateKey, decodeHdPublicKey, secp256k1, utf8ToBin } from "bitauth-libauth-v3";
-import { MultisigWallet } from './wallet.js';
+import { CashAddressNetworkPrefix, decodeCashAddress } from "bitauth-libauth-v3";
 import { ElectrumNetworkProvider } from 'cashscript';
 
 /**
@@ -38,6 +37,7 @@ import { ElectrumNetworkProvider } from 'cashscript';
  *   "schnorr=<hex>;der=<hex>".
  * @property {string} "X-Auth-Message" - The raw message that was signed, typically provided by the server.
  */
+
 
 
 /**
@@ -354,9 +354,7 @@ export class WatchtowerCoordinationServer {
      * @param {Proposal} params.proposal - The proposal to upload.
      * @param {*} params.authCredentialsGenerator
      */
-    async uploadProposal({ payload, authCredentialsGenerator }) {
-        const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
-        const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
+    async uploadProposal({ payload, authCosignerAuthCredentials, authCredentials }) {
         console.log('AUTHcosigner', authCosignerAuthCredentials)
         const response = await axios.post(
             `${this.hostname}/api/multisig/proposals/`,
@@ -373,14 +371,17 @@ export class WatchtowerCoordinationServer {
      * @property {string} [proposalFormat] - Example: 'psbt' | 'libauth-template' only 'psbt' is supported now.
      * @param {Object} params
      * @param {Proposal} params.proposal - The proposal to upload.
-     * @param {*} params.authCredentialsGenerator
+     * @param {*} [params.authCosignerCredentials] - Cosigner auth credentials 
+     * @param {*} [params.authCredentialsGenerator] - 
      */
-    async deleteProposal({ id, walletId, authCredentialsGenerator }) {
-        const authCredentials = await authCredentialsGenerator.generateAuthCredentials()
-        const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
+    async deleteProposal({ id, walletId, authCosignerCredentials, authCredentialsGenerator }) {
+        let credentials = authCosignerCredentials
+        if (!authCosignerCredentials && authCredentialsGenerator) {
+            credentials = await authCredentialsGenerator.generateCosignerAuthCredentials()    
+        }
         const response = await axios.delete(
             `${this.hostname}/api/multisig/proposals/${id}/?wallet_id=${walletId}`, 
-            { headers: { ...authCredentials, ...authCosignerAuthCredentials } }
+            { headers: { ...credentials } }
         )
         return response.data
     }
@@ -428,6 +429,13 @@ export class WatchtowerCoordinationServer {
         return response.data
     }
 
+    async getPsbts({ proposalUnsignedTransactionHash }) {
+        const response = await axios.get(
+            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/psbts/`
+        )
+        return response.data
+    }
+
     /**
      * Submits a partial signature for a multisig proposal.
      *
@@ -435,13 +443,19 @@ export class WatchtowerCoordinationServer {
      * @param {string} params.proposalUnsignedTransactionHash - The unsigned transaction hash for the proposal.
      * @param {string} params.content - The partial signature payload; could be a PSBT base64 string or some other format. Currently only supports PSBT.
      * @param {string} [params.standard='psbt'] - The standard serialization format of the payload, default is 'psbt'.
+     * @param {string} params.authCredentialsGenerator - Object or class instance that knows how to generate cosigner credential for this particular proposal.
      * @returns {Promise<Object>} Response data from the signature submission.
      */
-    async submitPsbt({ content, standard = 'psbt', encoding = 'base64', proposalUnsignedTransactionHash }) {
+    async submitPsbt({ content, standard = 'psbt', encoding = 'base64', proposalUnsignedTransactionHash, walletId, authCredentialsGenerator }) {
+
+        const authCosignerAuthCredentials = await authCredentialsGenerator.generateCosignerAuthCredentials()
+        
         const response = await axios.post(
-            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/psbts/`, 
-            { content, standard, encoding }
+            `${this.hostname}/api/multisig/proposals/${proposalUnsignedTransactionHash}/psbts/?wallet_id=${walletId}`,
+            { content, standard, encoding },
+            { headers: { ...authCosignerAuthCredentials } }
         )
+
         return response?.data
     }
 
