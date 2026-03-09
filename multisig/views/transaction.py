@@ -34,6 +34,7 @@ from multisig.serializers.transaction import (
 
 LOGGER = logging.getLogger(__name__)
 
+
 def get_proposal_by_identifier(identifier, queryset=None):
     """Resolve Proposal by id (if identifier is numeric) or unsigned_transaction_hash."""
     if queryset is None:
@@ -41,6 +42,24 @@ def get_proposal_by_identifier(identifier, queryset=None):
     if identifier.isdigit():
         return get_object_or_404(queryset, pk=int(identifier))
     return get_object_or_404(queryset, unsigned_transaction_hash=identifier)
+
+
+def should_include_deleted(request):
+    return str(request.query_params.get("include_deleted")).lower() in ("1", "true")
+
+
+def get_status_filter(request, default=Proposal.Status.PENDING):
+    return request.query_params.get("status", default)
+
+
+def get_proposal_queryset(request):
+    queryset = Proposal.objects.all()
+    if not should_include_deleted(request):
+        queryset = queryset.filter(deleted_at__isnull=True)
+    status_filter = get_status_filter(request)
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
+    return queryset
 
 
 def get_wallet_by_identifier(identifier, queryset=None):
@@ -58,7 +77,6 @@ def get_wallet_by_identifier(identifier, queryset=None):
 
 
 class ProposalListCreateView(APIView):
-    
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsCosigner()]
@@ -74,11 +92,23 @@ class ProposalListCreateView(APIView):
                 description="Filter by wallet id",
                 type=openapi.TYPE_INTEGER,
             ),
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
         ],
     )
     def get(self, request):
 
-        queryset = Proposal.objects.prefetch_related("inputs").all()
+        queryset = get_proposal_queryset(request).prefetch_related("inputs")
         wallet_id = request.query_params.get("wallet")
         if wallet_id:
             queryset = queryset.filter(wallet_id=wallet_id)
@@ -119,48 +149,70 @@ class WalletProposalListView(APIView):
     @swagger_auto_schema(
         operation_description="List proposals for a wallet. Identifier is wallet id (numeric), wallet_hash, or wallet_descriptor_id.",
         responses={status.HTTP_200_OK: ProposalSerializer(many=True)},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
     def get(self, request, wallet_identifier):
         wallet = get_wallet_by_identifier(wallet_identifier)
-        show_deleted = str(request.query_params.get("include_deleted")).lower() in (
-            "1",
-            "true",
+        queryset = (
+            get_proposal_queryset(request)
+            .prefetch_related("inputs")
+            .filter(
+                wallet=wallet,
+            )
         )
-        queryset = Proposal.objects.prefetch_related("inputs").filter(
-            wallet=wallet,
-            status=(
-                request.query_params.get(
-                    "status", Proposal.Status.PENDING
-                )
-            ),
-        )
-
-        if not show_deleted:
-            queryset = queryset.filter(deleted_at__isnull=True)
-
         serializer = ProposalSerializer(queryset, many=True)
         return Response(serializer.data)
 
 
 class ProposalDetailView(APIView):
-
     def get_permissions(self):
-        if self.request.method == "DELETE" or self.request.method == "PUT" or self.request.method == "PATCH":
+        if (
+            self.request.method == "DELETE"
+            or self.request.method == "PUT"
+            or self.request.method == "PATCH"
+        ):
             return [IsProposalCoordinator()]
         return []
 
-    def get_object(self, identifier):
-        return get_proposal_by_identifier(
-            identifier,
-            queryset=Proposal.objects.prefetch_related("inputs").filter(deleted_at__isnull=True),
-        )
+    def get_object(self, identifier, request):
+        queryset = Proposal.objects.prefetch_related("inputs")
+        if not should_include_deleted(request):
+            queryset = queryset.filter(deleted_at__isnull=True)
+        return get_proposal_by_identifier(identifier, queryset=queryset)
 
     @swagger_auto_schema(
         operation_description="Retrieve a proposal by id.",
         responses={status.HTTP_200_OK: ProposalSerializer},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
     def get(self, request, proposal_identifier):
-        proposal = self.get_object(proposal_identifier)
+        proposal = self.get_object(proposal_identifier, request)
         serializer = ProposalSerializer(proposal)
         return Response(serializer.data)
 
@@ -175,7 +227,7 @@ class ProposalDetailView(APIView):
         },
     )
     def put(self, request, proposal_identifier):
-        proposal = self.get_object(proposal_identifier)
+        proposal = self.get_object(proposal_identifier, request)
         serializer = ProposalSerializer(proposal, data=request.data, partial=False)
         if serializer.is_valid():
             serializer.save()
@@ -193,7 +245,7 @@ class ProposalDetailView(APIView):
         },
     )
     def patch(self, request, proposal_identifier):
-        proposal = self.get_object(proposal_identifier)
+        proposal = self.get_object(proposal_identifier, request)
         serializer = ProposalSerializer(proposal, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -207,47 +259,93 @@ class ProposalDetailView(APIView):
         },
     )
     def delete(self, request, proposal_identifier):
-        proposal = self.get_object(proposal_identifier)
+        proposal = self.get_object(proposal_identifier, request)
         proposal.soft_delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-class ProposalCoordinatorDetailView(APIView):
 
-    def get_object(self, identifier):
-        return get_proposal_by_identifier(
-            identifier,
-            queryset=Proposal.objects.filter(deleted_at__isnull=True),
-        )
+class ProposalCoordinatorDetailView(APIView):
+    def get_object(self, identifier, request):
+        queryset = Proposal.objects.all()
+        if not should_include_deleted(request):
+            queryset = queryset.filter(deleted_at__isnull=True)
+        return get_proposal_by_identifier(identifier, queryset=queryset)
 
     @swagger_auto_schema(
         operation_description="Retrieve a proposal coordinator by proposal's identifier.",
         responses={status.HTTP_200_OK: ProposalCoordinatorSerializer},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
     def get(self, request, proposal_identifier):
-        proposal = self.get_object(proposal_identifier)
+        proposal = self.get_object(proposal_identifier, request)
         serializer = ProposalCoordinatorSerializer(proposal)
         return Response(serializer.data)
+
 
 class ProposalInputListView(APIView):
     @swagger_auto_schema(
         operation_description="Read-only list of inputs for a proposal. Inputs are set at proposal creation only. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: InputSerializer(many=True)},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
     def get(self, request, proposal_identifier):
-        proposal = get_proposal_by_identifier(
-            proposal_identifier, Proposal.objects.prefetch_related("inputs")
-        )
+        queryset = Proposal.objects.prefetch_related("inputs")
+        if not should_include_deleted(request):
+            queryset = queryset.filter(deleted_at__isnull=True)
+        proposal = get_proposal_by_identifier(proposal_identifier, queryset)
         serializer = InputSerializer(proposal.inputs.all(), many=True)
         return Response(serializer.data)
+
 
 class ProposalStatusView(APIView):
     """
     Returns the broadcast status and current spend status of inputs for a proposal.
     """
 
+    @swagger_auto_schema(
+        operation_description="Returns the broadcast status and current spend status of inputs for a proposal.",
+        responses={status.HTTP_200_OK: openapi.Response(description="Status info")},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+        ],
+    )
     def get(self, request, proposal_identifier):
 
-        proposal = get_proposal_by_identifier(proposal_identifier)
+        queryset = Proposal.objects.all()
+        if not should_include_deleted(request):
+            queryset = queryset.filter(deleted_at__isnull=True)
+        proposal = get_proposal_by_identifier(proposal_identifier, queryset)
         current_status = proposal.status
         new_status = current_status
         response_data = {
@@ -258,17 +356,19 @@ class ProposalStatusView(APIView):
         }
 
         psbts = list(proposal.psbts.values_list("content", flat=True))
-        combine_request = js_client.combine_psbts(psbts)
-        combine_request.raise_for_status()
-        combine_result = combine_request.json()
-        signing_progress = combine_result.get("signingProgress", {})
-        signing_progress = signing_progress.get("signingProgress")
-        if signing_progress:
+        signing_progress = proposal.signing_progress
+        if len(psbts) > 0:
+            combine_request = js_client.combine_psbts([proposal.combined_psbt, *psbts])
+            combine_request.raise_for_status()
+            combine_result = combine_request.json()
+            LOGGER.info(f"combine result {combine_result}")
+            signing_progress = combine_result.get("signingProgress", {})
+            signing_progress = signing_progress.get("signingProgress")
+        if signing_progress != proposal.signing_progress:
             response_data["signingProgress"] = signing_progress
             proposal.signing_progress = signing_progress
-            proposal.save(update_fields="signing_progress")
-        
-        LOGGER.info(f"combine result {combine_result}")
+            proposal.save(update_fields=["signing_progress"])
+
         for inp in proposal.inputs.all():
             ## TODO: use the Transaction table in prod, this is for local testing only
             url = f"https://watchtower.cash/api/transactions/outputs/?txid={inp.outpoint_transaction_hash}"
@@ -278,9 +378,12 @@ class ProposalStatusView(APIView):
             api_resp = requests.get(url, timeout=10)
             data = api_resp.json()
             for result in data.get("results", []):
-                if result.get("txid") == inp.outpoint_transaction_hash and result.get("index") == inp.outpoint_index:
+                if (
+                    result.get("txid") == inp.outpoint_transaction_hash
+                    and result.get("index") == inp.outpoint_index
+                ):
                     spending_txid = result.get("spending_txid", "")
-                else: 
+                else:
                     continue
 
                 spending_transaction = None
@@ -336,8 +439,7 @@ class ProposalStatusView(APIView):
 
                     if (
                         not transaction_broadcast
-                        and new_status
-                        == Proposal.Status.BROADCAST_INITIATED
+                        and new_status == Proposal.Status.BROADCAST_INITIATED
                     ):
                         proposal.off_premise_transaction_broadcast = spending_txid
                         proposal.save(
@@ -345,7 +447,7 @@ class ProposalStatusView(APIView):
                         )
 
                     response_data["txid"] = spending_txid
-                    
+
             response_data["status"] = new_status
             response_data["wallet"] = proposal.wallet.id
             response_data["inputs"].append(
@@ -360,7 +462,6 @@ class ProposalStatusView(APIView):
 
 
 class PsbtListCreateView(APIView):
-
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsCosigner()]
@@ -369,10 +470,25 @@ class PsbtListCreateView(APIView):
     @swagger_auto_schema(
         operation_description="List signing submissions for a proposal. Identifier is proposal id or unsigned_transaction_hash.",
         responses={status.HTTP_200_OK: PsbtSerializer(many=True)},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
-
     def get(self, request, proposal_identifier):
-        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
+        proposal = get_proposal_by_identifier(
+            proposal_identifier, get_proposal_queryset(request)
+        )
         psbts = proposal.psbts.all()
         serializer = PsbtSerializer(psbts, many=True)
         return Response(serializer.data)
@@ -389,22 +505,41 @@ class PsbtListCreateView(APIView):
     )
     def post(self, request, proposal_identifier):
         signer = getattr(request, "signer", None)
-        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
-        serializer = PsbtSerializer(data=request.data, context={"submitted_by": signer })
+        proposal = get_proposal_by_identifier(
+            proposal_identifier, get_proposal_queryset(request)
+        )
+        serializer = PsbtSerializer(data=request.data, context={"submitted_by": signer})
         if serializer.is_valid():
             serializer.save(proposal=proposal)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+
 class ProposalSignatureListView(APIView):
     """Read-only list of signatures for a proposal (all inputs' signatures)."""
 
     @swagger_auto_schema(
         operation_description="List signatures for a proposal. Identifier is proposal id or unsigned_transaction_hash. Read-only.",
         responses={status.HTTP_200_OK: SignatureSerializer(many=True)},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
     def get(self, request, proposal_identifier):
-        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
+        proposal = get_proposal_by_identifier(
+            proposal_identifier, get_proposal_queryset(request)
+        )
         queryset = Signature.objects.filter(
             input__proposal_id=proposal.pk
         ).select_related("input")
@@ -415,8 +550,10 @@ class ProposalSignatureListView(APIView):
 class ProposalSignatureDetailView(APIView):
     """Read-only detail of a single signature scoped to a proposal."""
 
-    def get_object(self, proposal_identifier, pk):
-        proposal = get_proposal_by_identifier(proposal_identifier, Proposal.objects.filter(deleted_at__isnull=True))
+    def get_object(self, proposal_identifier, pk, request):
+        proposal = get_proposal_by_identifier(
+            proposal_identifier, get_proposal_queryset(request)
+        )
         return get_object_or_404(
             Signature.objects.select_related("input"),
             pk=pk,
@@ -426,9 +563,23 @@ class ProposalSignatureDetailView(APIView):
     @swagger_auto_schema(
         operation_description="Retrieve a signature by id. Identifier is proposal id or unsigned_transaction_hash. Read-only.",
         responses={status.HTTP_200_OK: SignatureSerializer},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
     def get(self, request, proposal_identifier, pk):
-        signature = self.get_object(proposal_identifier, pk)
+        signature = self.get_object(proposal_identifier, pk, request)
         serializer = SignatureSerializer(signature)
         return Response(serializer.data)
 
@@ -439,23 +590,40 @@ class SignatureBySignerIdentifierList(APIView):
     @swagger_auto_schema(
         operation_description="List signatures for inputs whose BIP32 derivation has this master fingerprint. Returns signature, publicKey, input, bip32Derivation. Read-only.",
         responses={status.HTTP_200_OK: SignatureWithBip32Serializer(many=True)},
+        manual_parameters=[
+            openapi.Parameter(
+                "include_deleted",
+                openapi.IN_QUERY,
+                description="Include soft-deleted proposals (default: false)",
+                type=openapi.TYPE_BOOLEAN,
+            ),
+            openapi.Parameter(
+                "status",
+                openapi.IN_QUERY,
+                description="Filter by status (default: pending)",
+                type=openapi.TYPE_STRING,
+            ),
+        ],
     )
-    def get_queryset(self, proposal_identifier, signature_identifier):
+    def get_queryset(self, proposal_identifier, signature_identifier, request):
+
+        queryset = Proposal.objects.all()
+        if not should_include_deleted(request):
+            queryset = queryset.filter(deleted_at__isnull=True)
+        status_filter = get_status_filter(request)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
 
         if proposal_identifier.isdigit():
-            base = (
-                Signature.objects.filter(input__proposal__id=int(proposal_identifier))
-                .select_related("input")
-                .prefetch_related("input__bip32_derivation")
-            )
+            queryset = queryset.filter(id=int(proposal_identifier))
         else:
-            base = (
-                Signature.objects.filter(
-                    input__proposal__unsigned_transaction_hash=proposal_identifier
-                )
-                .select_related("input")
-                .prefetch_related("input__bip32_derivation")
-            )
+            queryset = queryset.filter(unsigned_transaction_hash=proposal_identifier)
+
+        base = (
+            Signature.objects.filter(input__proposal__in=queryset)
+            .select_related("input")
+            .prefetch_related("input__bip32_derivation")
+        )
 
         return base.filter(
             input__bip32_derivation__master_fingerprint=signature_identifier,
@@ -463,8 +631,6 @@ class SignatureBySignerIdentifierList(APIView):
         ).distinct()
 
     def get(self, request, proposal_identifier, signature_identifier):
-        # Ensure proposal exists (404 if not)
-        get_object_or_404(Proposal, unsigned_transaction_hash=proposal_identifier)
-        queryset = self.get_queryset(proposal_identifier, signature_identifier)
+        queryset = self.get_queryset(proposal_identifier, signature_identifier, request)
         serializer = SignatureWithBip32Serializer(queryset, many=True)
         return Response(serializer.data)
