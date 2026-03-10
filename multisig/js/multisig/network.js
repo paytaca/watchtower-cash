@@ -116,8 +116,16 @@ export class WatchtowerNetworkProvider {
         return response?.data || []
     }
 
-    async getWalletHashUtxos(walletHash, utxoType = 'bch') {
-        return await axios.get(`${this.hostname}/api/utxo/wallet/${walletHash}?is_cashtoken=${utxoType === 'cashtoken' ? 'true': 'false'}`) 
+    async getWalletHashUtxos(walletHash, utxoType = 'bch', tokenFilter = 'ft') {
+        let url = `${this.hostname}/api/utxo/wallet/${walletHash}?is_cashtoken=${utxoType === 'cashtoken' ? 'true': 'false'}`
+        if (utxoType === 'cashtoken' && tokenFilter === 'ft') {
+            url += `&is_cashtoken_nft=false`
+        }
+        if (utxoType === 'cashtoken' && tokenFilter === 'nft') {
+            url += `&is_cashtoken_nft=true`
+        }
+        return await axios.get(url) 
+
     }
 
     async getWalletUtxos(address) {
@@ -386,10 +394,14 @@ export class WatchtowerCoordinationServer {
         return response.data
     }
 
-    async getProposalStatus({ unsignedTransactionHash }) {
-        const response = await axios.get(
-            `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/status/`
-        )
+    async getProposalStatus({ unsignedTransactionHash, queryFilter }) {
+        let url = `${this.hostname}/api/multisig/proposals/${unsignedTransactionHash}/status/`
+
+        console.log('QUERY FILTER', queryFilter)
+        if (queryFilter?.includeDeleted) {
+            url += '?include_deleted=true'
+        }
+        const response = await axios.get(url)
         return response?.data
     }
 

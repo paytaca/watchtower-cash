@@ -626,12 +626,12 @@ export class MultisigWallet {
     return this._utxos
   }
 
-  async getWalletHashUtxos() {
+  async getWalletHashUtxos(tokenFilter = 'ft') {
 
     if (!this.options?.provider) throw new Error('Missing provider') 
 
     const r1 = this.options?.provider?.getWalletHashUtxos(this.getWalletHash())
-    const r2 = this.options?.provider?.getWalletHashUtxos(this.getWalletHash(), 'cashtoken')
+    const r2 = this.options?.provider?.getWalletHashUtxos(this.getWalletHash(), 'cashtoken', tokenFilter)
 
     const responses = await Promise.allSettled([r1, r2])
 
@@ -1161,6 +1161,12 @@ export class MultisigWallet {
     const proposal = new Pst()
     const inputs = sessionRequest.params.request.params.transaction.inputs?.map((input) => {
       const mappedInput = JSON.parse(JSON.stringify(input, Pst.exportSafeJSONReplacer), Pst.importSafeJSONReviver)
+      if (input?.sourceOutput?.unlockingBytecode && input?.sourceOutput?.contract?.redeemScript) {
+        mappedInput.redeemScript = input.sourceOutput.contract.redeemScript
+        mappedInput.scriptSig = input.sourceOutput.unlockingBytecode
+        return mappedInput
+      }
+
       const wcExpectedLockingBytecode = cashAddressToLockingBytecode(this.getDepositAddress(0).address)
       if (mappedInput.sourceOutput.lockingBytecode && binsAreEqual(mappedInput.sourceOutput.lockingBytecode, wcExpectedLockingBytecode.bytecode)) {
         const signersWithPublicKeys = derivePublicKeys({ signers: this.signers, addressDerivationPath: '0/0' })

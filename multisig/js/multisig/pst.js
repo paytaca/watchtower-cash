@@ -113,7 +113,7 @@ import {
   generateSigningSerializationBch
 } from 'bitauth-libauth-v3'
 
-import { getCompiler, getWalletHash, MultisigWallet, sortPublicKeysBip67 } from './wallet.js'
+import { derivePublicKey, getCompiler, getWalletHash, MultisigWallet, sortPublicKeysBip67 } from './wallet.js'
 import { createTemplate } from './template.js'
 import { 
   bip32ExtractRelativePath, 
@@ -255,7 +255,6 @@ export const extractPublicKeysFromRedeemScript = (redeemScript) => {
 }
 
 export const combine = (psts) => {
-  console.log('PSTS', psts)
   if (psts?.length === 1) return psts[0]
   const finalizedPst = psts.find(pst => pst.scriptSig)
   if (finalizedPst) return finalizedPst
@@ -345,10 +344,20 @@ export const getSigningProgress = (pst) => {
     const lockingBytecode = encodeLockingBytecodeP2sh20(hash160(correspondingInput.redeemScript))
 
     // Not our input continue
-    if (!binsAreEqual(correspondingInput.sourceOutput.lockingBytecode, lockingBytecode)) {
+    if (Object.keys(correspondingInput?.bip32Derivation || {}).length === 0 || !binsAreEqual(correspondingInput.sourceOutput.lockingBytecode, lockingBytecode)) {
       continue
     }
 
+    if (pst.wallet?.signers) {
+      const walletPublicKeys = Object.keys(correspondingInput.bip32Derivation).map(publicKeyAsKey => {
+        const signer = pst.wallet.signers.find(s => s.masterFingerprint === correspondingInput.bip32Derivation[publicKeyAsKey].masterFingerprint)
+        if (!signer) return ''
+        return derivePublicKey(signer.xpub, bip32ExtractRelativePath(correspondingInput.bip32Derivation[publicKeyAsKey].path))
+      })
+
+      if (walletPublicKeys.length !== Object.keys(correspondingInput.bip32Derivation).length) continue
+    }
+    
     const redeemScriptPublicKeys = extractPublicKeysFromRedeemScript(pst.inputs[inputIndex].redeemScript)
 
     const m = extractMValue(correspondingInput.redeemScript)
@@ -591,7 +600,11 @@ export class Pst {
       })
 
       if (!correspondingInput.redeemScript) continue
-
+      if (correspondingInput.scriptSig?.length > 0) {
+        input.unlockingBytecode = correspondingInput.scriptSig
+        continue
+      }
+      
       const sortedPublicKeys = sortPublicKeysBip67(extractPublicKeysFromRedeemScript(correspondingInput.redeemScript))
       const inputLockingBytecode = encodeLockingBytecodeP2sh20(hash160(correspondingInput.redeemScript))
 
@@ -608,7 +621,6 @@ export class Pst {
       }
       
       // Not our input continue
-      console.log(`Processing Input: ${binsAreEqual(correspondingInput.sourceOutput.lockingBytecode, inputLockingBytecode)}`, input)
       if (!binsAreEqual(correspondingInput.sourceOutput.lockingBytecode, inputLockingBytecode)) {
         continue
       }
@@ -645,35 +657,31 @@ export class Pst {
     } // end for
 
     const signAttempt = generateTransaction({ ...transaction })
-    
-    console.log("sign attempt", signAttempt)
+
     if (signAttempt.success) return
 
-    for (const [inputIndex, error] of Object.entries(signAttempt?.errors || {})) {
+    for (const error of signAttempt?.errors) {
+      // error.index = the input index that caused the error, i.e. The expected 'not enough signature' error
       const signerResolvedVariables = extractResolvedVariables({ ...signAttempt, errors: [error] })
       const signature = Object.values(signerResolvedVariables)[0]
-      const inputUnlockingBytecode = transaction.inputs[inputIndex].unlockingBytecode
-
+      const inputUnlockingBytecode = transaction.inputs[error.index].unlockingBytecode
       const script = compileScript('lock', inputUnlockingBytecode.data, inputUnlockingBytecode.compiler.configuration)
       // const lockingScript = script.bytecode
       const redeemScript = script.reduce.bytecode
-
-      const keyVariable = `${Object.keys(inputUnlockingBytecode.data.keys.privateKeys)[0]}.public_key`
-      this.inputs[inputIndex].redeemScript = redeemScript
-
-      if (!this.inputs[inputIndex].signatures) {
-        this.inputs[inputIndex].signatures = {}
+      this.inputs[error.index].redeemScript = redeemScript
+      if (!this.inputs[error.index].signatures) {
+        this.inputs[error.index].signatures = {}
       }
-
+      const keyVariable = `${Object.keys(inputUnlockingBytecode.data.keys.privateKeys)[0]}.public_key`
       const signerPublicKey = inputUnlockingBytecode.data.bytecode[keyVariable]
-      this.inputs[inputIndex].signatures[binToHex(signerPublicKey)] = signature
-      
-      // if (this.options?.store) {
-      //   if (this.id) {
-      //     await this.uploadSignerPsbt(signer.masterFingerprint)
-      //   }
-      //   this.save()
-      // }
+      this.inputs[error.index].signatures[binToHex(signerPublicKey)] = signature
+    }
+
+    if (this.options?.store) {
+      if (this.id) {
+        await this.uploadSignerPsbt(signer.masterFingerprint)
+      }
+      this.save()
     }
     return 
   }
@@ -692,7 +700,8 @@ export class Pst {
         )
       })
 
-      if (!correspondingInput?.redeemScript) {
+      
+      if (!correspondingInput?.redeemScript || Object.keys(correspondingInput?.bip32Derivation || {}).length === 0) {
         continue
       }
       
@@ -760,12 +769,16 @@ export class Pst {
   finalize () {
     const transaction = decodeTransactionCommon(hexToBin(this.unsignedTransactionHex))
     for (const inputIndex in transaction.inputs) {
-        let correspondingInput = this.inputs.find((i) => {
-          return (
-            Number(transaction.inputs[inputIndex].outpointIndex) === Number(i.outpointIndex) &&
-            binsAreEqual(transaction.inputs[inputIndex].outpointTransactionHash, i.outpointTransactionHash) 
-          )
-        })
+        if (
+          Object.keys(this.inputs[inputIndex].bip32Derivation || {}).length === 0 && 
+          Object.keys(this.inputs[inputIndex].signatures || {}).length === 0
+        ) {
+          if (this.inputs[inputIndex].unlockingBytecode.length > 0) {
+            transaction.inputs[inputIndex].unlockingBytecode = this.inputs[inputIndex].unlockingBytecode 
+          }
+          continue
+        }
+
         const inputUnlockingData = {
           bytecode: {}
         }
@@ -796,6 +809,13 @@ export class Pst {
         const m = extractMValue(this.inputs[inputIndex].redeemScript)
         const template = createTemplate({ m, signers: publicKeys.map(p => ({ publicKey: p })) })
         const compiler = getCompiler({ template })
+
+        let correspondingInput = this.inputs.find((i) => {
+          return (
+            Number(transaction.inputs[inputIndex].outpointIndex) === Number(i.outpointIndex) &&
+            binsAreEqual(transaction.inputs[inputIndex].outpointTransactionHash, i.outpointTransactionHash) 
+          )
+        })
 
         transaction.inputs[inputIndex].unlockingBytecode = {
           compiler,
@@ -858,9 +878,10 @@ export class Pst {
     return getSigningProgress(this)
   }
 
-  async fetchStatus() {
+  async fetchStatus(queryFilter) {
     this.status = await this.options?.coordinationServer?.getProposalStatus({ 
-      unsignedTransactionHash: this.unsignedTransactionHash 
+      unsignedTransactionHash: this.unsignedTransactionHash,
+      queryFilter: queryFilter
     })
     return this.status 
   }
@@ -1081,7 +1102,7 @@ export class Pst {
    * @param {string} category
    */
   getTotalTokenInput(category) {
-    return this.inputs.filter(i => i.sourceOutput?.token && binToHex(i.sourceOutput.token.category) === category).reduce((total, input) => {
+    return this.inputs.filter(i => Object.keys(i.bip32Derivation || {}).length > 0 && i.sourceOutput?.token && binToHex(i.sourceOutput.token.category) === category).reduce((total, input) => {
       return total + BigInt(input.sourceOutput.token.amount)
     }, 0n)
   }
@@ -1097,7 +1118,7 @@ export class Pst {
       const pubkey = Object.keys(output.bip32Derivation)[0] 
       const path = output.bip32Derivation[pubkey].path
       const relativePath = bip32ExtractRelativePath(path)
-      if (relativePath.startsWith('1/') ) {
+      if (relativePath.startsWith('1/')) {
         total += BigInt(output.token.amount)
        }
      }
@@ -1130,9 +1151,10 @@ export class Pst {
   getTotalNftDebit(category) {
     const inputs = this.inputs.filter(i => i.sourceOutput?.token && binToHex(i.sourceOutput.token.category) === category)
     let quantity = 0
+    
     inputs.forEach((i) => {
       if (i.bip32Derivation) {
-        total++
+        quantity++
       }
     })
     return quantity
@@ -1269,10 +1291,13 @@ export class Pst {
   }
 
 
-  async delete() {
+  async delete({ sync }) {
+
     if (!this.options?.store) return
   
     this.options.store.commit('multisig/deletePsbt', this.unsignedTransactionHash) 
+
+    if (!sync) return 
 
     if (this.id && this.coordinatorInfo && this.wallet.signers.length > 0 && this.wallet?.options?.resolveXprvOfXpub) {
 
@@ -1287,7 +1312,7 @@ export class Pst {
       if (!coordinatorXprv) return
 
       const authCosignerCredentials = await this.wallet.generateCosignerAuthCredentials(coordinator.xpub)
-      
+
       await this.options?.coordinationServer?.deleteProposal({
         id: this.id,
         walletId: this.wallet.id,
@@ -1353,9 +1378,15 @@ export class Pst {
 
   async sync() {
     if (!this.options?.coordinationServer) return
-    const response = 
-      await this.options?.coordinationServer?.getProposalByUnsignedTransactionHash(this.unsignedTransactionHash)
-    this.id = response?.id
+    try {
+      const response = 
+        await this.options?.coordinationServer?.getProposalByUnsignedTransactionHash(this.unsignedTransactionHash)
+      this.id = response?.id  
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        this.id = null
+      }
+    }
   }
 
   async fetchCoordinatorInfo() {

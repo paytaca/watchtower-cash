@@ -698,7 +698,6 @@ export class PsbtInput {
       this.keypairs[PSBT_IN_PARTIAL_SIG] = []
     }
 
-    console.log('ADDING PARTIAL SIGNATURE ', publicKey, sig)
     this.keypairs[PSBT_IN_PARTIAL_SIG].push(new KeyPair(k, v))
     return this
   }
@@ -1089,13 +1088,10 @@ export class PsbtOutput {
 
     let _token = token 
     
-    console.log('TOKEN', token)
-
     if (typeof token === 'object' && token.category) {
       token.amount = BigInt(token.amount)
       if (typeof token.category === 'string') {
         token.category = hexToBin(token.category)
-
         if (token.nft && typeof token.nft.commitment === 'string') {
           token.nft.commitment = hexToBin(token.nft.commitment || '')
         }
@@ -1616,7 +1612,8 @@ export class Psbt {
         bip32Derivation: psbtInput.getBip32Derivation(),
         redeemScript: psbtInput.getRedeemScript(),
         sourceOutput: psbtInput.getSourceUtxo(),
-        unlockingBytecode: psbtInput.getFinalScriptSig() || []
+        unlockingBytecode: psbtInput.getFinalScriptSig() || [],
+        scriptSig: psbtInput.getFinalScriptSig() || []
       })
     }
 
