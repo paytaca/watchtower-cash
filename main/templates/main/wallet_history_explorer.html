@@ -48,6 +48,16 @@
 
       <div class="form-group">
         <div class="col-sm-offset-2 col-sm-6">
+          <div class="checkbox">
+            <label>
+              <input type="checkbox" id="showMinerFee" name="show_miner_fee"> Show miner fee
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="col-sm-offset-2 col-sm-6">
           <button type="submit" class="btn btn-primary" id="submitBtn">
             <span class="glyphicon glyphicon-search"></span> View History
           </button>
@@ -99,6 +109,7 @@
               <th>Date (UTC)</th>
               <th>Amount (BCH)</th>
               <th id="fiatHeader">Amount (USD)</th>
+              <th class="miner-fee-col" style="display: none;">Miner Fee</th>
             </tr>
           </thead>
           <tbody id="historyTableBody">
@@ -181,6 +192,7 @@
     const fiatCurrency = urlParams.get('fiat_currency');
     const startDate = urlParams.get('start_date');
     const endDate = urlParams.get('end_date');
+    const showMinerFee = urlParams.get('show_miner_fee');
 
     if (walletHash) {
       $('#walletHash').val(walletHash);
@@ -193,6 +205,9 @@
     }
     if (endDate) {
       $('#endDate').val(endDate);
+    }
+    if (showMinerFee === '1') {
+      $('#showMinerFee').prop('checked', true);
     }
 
     if (walletHash) {
@@ -248,6 +263,11 @@
       url.searchParams.set('end_date', currentEndDate);
     } else {
       url.searchParams.delete('end_date');
+    }
+    if ($('#showMinerFee').is(':checked')) {
+      url.searchParams.set('show_miner_fee', '1');
+    } else {
+      url.searchParams.delete('show_miner_fee');
     }
     window.history.pushState({}, '', url);
 
@@ -330,6 +350,14 @@
     
     // Update fiat header
     $('#fiatHeader').text(`Amount (${currentFiatCurrency})`);
+    
+    // Check if miner fee column should be shown
+    const showMinerFee = $('#showMinerFee').is(':checked');
+    if (showMinerFee) {
+      $('.miner-fee-col').show();
+    } else {
+      $('.miner-fee-col').hide();
+    }
     
     // Calculate totals for ALL incoming transactions across all pages
     let allTransactions = isLegacyFormat ? allHistoryData : historyData;
@@ -414,6 +442,36 @@
         });
       }
       
+      // Calculate miner fee in BCH and fiat
+      let minerFeeCell = '';
+      if (showMinerFee) {
+        let minerFeeDisplay = 'N/A';
+        if (tx.tx_fee != null) {
+          const feeBch = tx.tx_fee / 100000000;
+          const feeBchFormatted = feeBch.toFixed(8);
+          
+          // Convert fee to fiat using same price sources as amount
+          let feeFiatStr = '';
+          let feeFiatValue = null;
+          if (tx.market_prices && tx.market_prices[currentFiatCurrency]) {
+            const price = parseFloat(tx.market_prices[currentFiatCurrency]);
+            feeFiatValue = feeBch * price;
+          } else if (tx.usd_price && currentFiatCurrency === 'USD') {
+            feeFiatValue = feeBch * parseFloat(tx.usd_price);
+          }
+          
+          if (feeFiatValue !== null) {
+            feeFiatStr = ' (' + feeFiatValue.toLocaleString('en-US', {
+              style: 'currency',
+              currency: currentFiatCurrency
+            }) + ')';
+          }
+          
+          minerFeeDisplay = feeBchFormatted + ' BCH' + feeFiatStr;
+        }
+        minerFeeCell = `<td class="miner-fee-col" style="font-family: monospace; font-size: 0.9em;">${minerFeeDisplay}</td>`;
+      }
+
       rows += `
         <tr>
           <td class="txid-short" title="${txid}">
@@ -423,6 +481,7 @@
           <td>${dateStr}</td>
           <td>${bchFormatted}</td>
           <td>${fiatAmount}</td>
+          ${minerFeeCell}
         </tr>
       `;
     });
