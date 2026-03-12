@@ -159,6 +159,6 @@ class Psbt(models.Model):
 class Signature(models.Model):
     input = models.ForeignKey(Input, null=True, blank=True, on_delete=models.CASCADE, related_name='signatures')
     psbt = models.ForeignKey(Psbt, null=True, blank=True, on_delete=models.CASCADE, related_name='signatures')
-    public_key = models.CharField(max_length=66, help_text='Signer\'s public key')
-    signature = models.CharField(max_length=160, help_text='Signature hex string')
+    public_key = models.CharField(max_length=66, null=True, blank=True, help_text='Signer\'s public key')
+    signature = models.CharField(max_length=160, null=True, blank=True, help_text='Signature hex string')
     
