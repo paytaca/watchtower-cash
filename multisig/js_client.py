@@ -37,10 +37,15 @@ def get_wallet_utxos(address):
         timeout=5
     )
 
-def verify_signature(message: str, public_key: str, signature: dict):
+def verify_signature(message: str, public_key: str, signature: dict, encoding: str = 'utf8'):
     return requests.post(
         f'{MULTISIG_JS_SERVER}/multisig/message/verify-signature',
-        json={ 'message': message, 'publicKey': public_key, 'signature': signature},
+        json={ 
+            'message': message, 
+            'publicKey': public_key, 
+            'signature': signature, 
+            'encoding': encoding
+        },
         timeout=5
     )
 
