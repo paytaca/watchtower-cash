@@ -5,7 +5,7 @@ from drf_yasg.utils import swagger_auto_schema
 from main.models import TransactionBroadcast
 from multisig import js_client
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
-from multisig.auth.permission import IsCosigner, IsProposalCoordinator
+from multisig.auth.permission import IsCosigner, IsProposalCoordinator, ProposalCoordinatorHasValidSignature
 from multisig.models.auth import ServerIdentity
 from rampp2p.utils import transaction
 from rest_framework.views import APIView
@@ -79,7 +79,7 @@ def get_wallet_by_identifier(identifier, queryset=None):
 class ProposalListCreateView(APIView):
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsCosigner()]
+            return [IsCosigner(), ProposalCoordinatorHasValidSignature()]
         return []
 
     @swagger_auto_schema(
