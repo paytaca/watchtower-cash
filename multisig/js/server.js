@@ -132,8 +132,16 @@ app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
 })
 
 app.post('/multisig/message/verify-signature', async (req, res) => {
-  const { message, publicKey, signature } = req.body
-  const messageHash = sha256.hash(utf8ToBin(message))
+  const { message, publicKey, signature, encoding } = req.body
+
+  let messageHash = sha256.hash(utf8ToBin(message))
+
+  if (encoding === 'hex') {
+    // Assumes message is already a sha256 hash of the data
+    // Update this if there's any other user case
+    messageHash = hexToBin(message)
+  }
+
   let success = false
   try {
     if (signature.schnorr) {
@@ -188,8 +196,10 @@ app.post('/multisig/transaction/combine-psbts', async (req, res) => {
   try {
     const decodedPsbts = psbts.map(psbt => Pst.import(psbt))
     const combined = await combinePsts(decodedPsbts)
+    console.log('COMBINED', combined)
     res.send({
-      result: await combined.export('psbt')
+      combinedPsbt: await combined.export('psbt'),
+      signingProgress: combined.getSigningProgress()
     })    
   } catch (error) {
     console.error('Error combining PSBTs:', error)
