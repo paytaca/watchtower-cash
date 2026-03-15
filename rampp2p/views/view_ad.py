@@ -754,7 +754,10 @@ class AdViewSet(viewsets.GenericViewSet):
         if payment_methods and not self.has_payment_method_permissions(
             wallet_hash, payment_methods
         ):
-            return Response({"error": err.args[0]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No permission to use these payment methods"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             caller = models.Peer.objects.get(wallet_hash=wallet_hash)
