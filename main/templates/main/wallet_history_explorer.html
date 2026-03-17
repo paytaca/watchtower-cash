@@ -760,6 +760,9 @@
           style: 'currency',
           currency: currentFiatCurrency
         });
+      } else {
+        // Add tooltip explaining why N/A
+        fiatAmount = '<span title="Historical price not available for this date">N/A</span>';
       }
       
       // Calculate miner fee in BCH and fiat
