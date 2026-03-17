@@ -18,26 +18,34 @@ from main.tasks import get_latest_bch_price, market_price_task
 from main.utils.market_price import get_ft_bch_price_log
 
 
-
 LOGGER = logging.getLogger(__name__)
 
 
 class LatestBCHPriceView(generics.GenericAPIView):
     serializer_class = serializers.AssetPriceLogSerializer
-    permission_classes = [AllowAny,]
+    permission_classes = [
+        AllowAny,
+    ]
 
     @swagger_auto_schema(
-        responses = {200: serializer_class(many=True)},
+        responses={200: serializer_class(many=True)},
         manual_parameters=[
-            openapi.Parameter(name="currencies", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=True),
-        ]
+            openapi.Parameter(
+                name="currencies",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=True,
+            ),
+        ],
     )
     def get(self, request, *args, **kwargs):
-        currencies = request.query_params.get('currencies', '')
+        currencies = request.query_params.get("currencies", "")
 
-        currencies_list = [currency.strip().upper() for currency in currencies.split(",")]
-        currencies_list = [c for c in currencies_list if c] # remove empty
-        currencies_list = list(set(currencies_list)) # remove duplicates
+        currencies_list = [
+            currency.strip().upper() for currency in currencies.split(",")
+        ]
+        currencies_list = [c for c in currencies_list if c]  # remove empty
+        currencies_list = list(set(currencies_list))  # remove duplicates
 
         if not currencies_list:
             raise exceptions.APIException("currencies not provided")
@@ -54,29 +62,248 @@ class LatestBCHPriceView(generics.GenericAPIView):
         return Response(serializer.data)
 
 
-class LatestMarketPriceView(generics.GenericAPIView):
+class HistoricalBCHPriceView(generics.GenericAPIView):
+    """
+    Get historical BCH price closest to a specific timestamp.
+    """
+
     serializer_class = serializers.AssetPriceLogSerializer
-    permission_classes = [AllowAny,]
+    permission_classes = [
+        AllowAny,
+    ]
 
     @swagger_auto_schema(
-        responses = {200: serializer_class(many=True)},
+        responses={200: serializer_class},
         manual_parameters=[
-            openapi.Parameter(name="currencies", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=True),
-            openapi.Parameter(name="coin_ids", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=True),
-        ]
+            openapi.Parameter(
+                name="currency",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=True,
+                description="Currency code (e.g., HKD, USD, PHP)",
+            ),
+            openapi.Parameter(
+                name="timestamp",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=True,
+                description="Target timestamp in ISO format (e.g., 2025-01-28T10:30:00Z)",
+            ),
+        ],
     )
     def get(self, request, *args, **kwargs):
-        currencies = request.query_params.get('currencies', '')
-        coin_ids = request.query_params.get('coin_ids', '')
+        currency = request.query_params.get("currency", "").upper().strip()
+        timestamp_str = request.query_params.get("timestamp", "")
 
-        currencies_list = [currency.strip().upper() for currency in currencies.split(",")]
-        currencies_list = [c for c in currencies_list if c] # remove empty
-        currencies_list = list(set(currencies_list)) # remove duplicates
+        if not currency:
+            raise exceptions.APIException("currency not provided")
+
+        if not timestamp_str:
+            raise exceptions.APIException("timestamp not provided")
+
+        # Parse timestamp
+        try:
+            target_time = timezone.datetime.fromisoformat(
+                timestamp_str.replace("Z", "+00:00")
+            )
+        except ValueError:
+            raise exceptions.APIException(
+                "Invalid timestamp format. Use ISO format (e.g., 2025-01-28T10:30:00Z)"
+            )
+
+        # Ensure target_time is timezone-aware (UTC)
+        if timezone.is_naive(target_time):
+            target_time = timezone.make_aware(target_time, timezone.utc)
+
+        LOGGER.info(
+            f"Historical price query: currency={currency}, timestamp={target_time}"
+        )
+
+        # Define time window (±6 hours from target time)
+        time_window = timezone.timedelta(hours=6)
+        min_time = target_time - time_window
+        max_time = target_time + time_window
+
+        # Query for prices within the time window
+        filter_kwargs = {
+            "currency": currency,
+            "relative_currency": "BCH",
+            "timestamp__gte": min_time,
+            "timestamp__lte": max_time,
+        }
+
+        # For ARS, use coingecko-yadio source
+        if currency == "ARS":
+            filter_kwargs["source"] = "coingecko-yadio"
+
+        price_logs = AssetPriceLog.objects.filter(**filter_kwargs).order_by("timestamp")
+
+        LOGGER.info(
+            f"Found {price_logs.count()} price logs in DB for {currency} between {min_time} and {max_time}"
+        )
+
+        if not price_logs.exists():
+            LOGGER.info(
+                f"No price in DB for {currency} near {target_time}, fetching from CoinGecko..."
+            )
+            # If no price in window, try to fetch from CoinGecko
+            price_log = self._fetch_historical_price_from_coingecko(
+                currency, target_time
+            )
+            if price_log:
+                LOGGER.info(
+                    f"Successfully fetched and saved price from CoinGecko: {price_log.price_value}"
+                )
+                serializer = self.serializer_class(price_log)
+                return Response(serializer.data)
+            LOGGER.error(
+                f"Failed to fetch price from CoinGecko for {currency} near {target_time}"
+            )
+            raise exceptions.APIException(
+                f"No historical price found for {currency} near {timestamp_str}"
+            )
+
+        # Find the closest price to the target timestamp
+        closest_price = None
+        closest_diff = None
+        for price_log in price_logs:
+            time_diff = abs((price_log.timestamp - target_time).total_seconds())
+            if closest_diff is None or time_diff < closest_diff:
+                closest_diff = time_diff
+                closest_price = price_log
+
+        LOGGER.info(
+            f"Returning cached price from DB: {closest_price.price_value} at {closest_price.timestamp}"
+        )
+        serializer = self.serializer_class(closest_price)
+        return Response(serializer.data)
+
+    def _fetch_historical_price_from_coingecko(self, currency, target_time):
+        """
+        Fetch historical price from CoinGecko API Pro.
+        Saves all price points to database for reuse.
+        """
+        try:
+            from django.conf import settings
+            import requests
+
+            # Calculate time range (±1 hour from target)
+            from_timestamp = int(
+                (target_time - timezone.timedelta(hours=1)).timestamp()
+            )
+            to_timestamp = int((target_time + timezone.timedelta(hours=1)).timestamp())
+
+            url = "https://pro-api.coingecko.com/api/v3/coins/bitcoin-cash/market_chart/range"
+            params = {
+                "vs_currency": currency,
+                "from": from_timestamp,
+                "to": to_timestamp,
+            }
+            headers = {"x-cg-pro-api-key": settings.COINGECKO_API_KEY}
+
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            prices = data.get("prices", [])
+            if not prices:
+                return None
+
+            # Save all price points to database for future reuse
+            target_timestamp_ms = int(target_time.timestamp() * 1000)
+            closest_price_data = None
+            closest_diff = None
+
+            saved_count = 0
+            for price_data in prices:
+                timestamp_ms = price_data[0]
+                price_value = price_data[1]
+
+                # Save each price point to database
+                price_time = timezone.datetime.fromtimestamp(
+                    timestamp_ms / 1000, tz=timezone.utc
+                )
+
+                obj, created = AssetPriceLog.objects.get_or_create(
+                    currency=currency,
+                    relative_currency="BCH",
+                    timestamp=price_time,
+                    defaults={
+                        "price_value": price_value,
+                        "source": "coingecko",
+                    },
+                )
+                if created:
+                    saved_count += 1
+
+                # Track closest price to target time
+                diff = abs(timestamp_ms - target_timestamp_ms)
+                if closest_diff is None or diff < closest_diff:
+                    closest_diff = diff
+                    closest_price_data = price_data
+
+            LOGGER.info(
+                f"Saved {saved_count} new price points from CoinGecko for {currency}"
+            )
+
+            if closest_price_data:
+                # Return the closest price log
+                timestamp_ms = closest_price_data[0]
+                price_time = timezone.datetime.fromtimestamp(
+                    timestamp_ms / 1000, tz=timezone.utc
+                )
+                price_log = AssetPriceLog.objects.get(
+                    currency=currency,
+                    relative_currency="BCH",
+                    timestamp=price_time,
+                )
+                LOGGER.info(
+                    f"Returning closest price: {price_log.price_value} at {price_log.timestamp}"
+                )
+                return price_log
+
+        except Exception as e:
+            LOGGER.error(f"Error fetching historical price from CoinGecko: {e}")
+
+        return None
+
+
+class LatestMarketPriceView(generics.GenericAPIView):
+    serializer_class = serializers.AssetPriceLogSerializer
+    permission_classes = [
+        AllowAny,
+    ]
+
+    @swagger_auto_schema(
+        responses={200: serializer_class(many=True)},
+        manual_parameters=[
+            openapi.Parameter(
+                name="currencies",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=True,
+            ),
+            openapi.Parameter(
+                name="coin_ids",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=True,
+            ),
+        ],
+    )
+    def get(self, request, *args, **kwargs):
+        currencies = request.query_params.get("currencies", "")
+        coin_ids = request.query_params.get("coin_ids", "")
+
+        currencies_list = [
+            currency.strip().upper() for currency in currencies.split(",")
+        ]
+        currencies_list = [c for c in currencies_list if c]  # remove empty
+        currencies_list = list(set(currencies_list))  # remove duplicates
 
         coin_ids_list = [coin_id.strip().lower() for coin_id in coin_ids.split(",")]
-        coin_ids_list = [c for c in coin_ids_list if c] # remove empty
-        coin_ids_list = list(set(coin_ids_list)) # remove duplicates
-
+        coin_ids_list = [c for c in coin_ids_list if c]  # remove empty
+        coin_ids_list = list(set(coin_ids_list))  # remove duplicates
 
         if not currencies_list and not coin_ids_list:
             raise exceptions.APIException("currencies and coin_ids not provided")
@@ -85,18 +312,17 @@ class LatestMarketPriceView(generics.GenericAPIView):
         elif not coin_ids_list:
             raise exceptions.APIException("coin_ids not provided")
 
-
         # --- flatten 2 lists into list of pairs ---
         pair_names = set()
         for currency in currencies_list:
             for coin_id in coin_ids_list:
                 pair_name = market_price_task.construct_pair(
-                    coin_id=coin_id, currency=currency,
+                    coin_id=coin_id,
+                    currency=currency,
                 )
                 pair_names.add(pair_name)
 
         LOGGER.info(f"pair_names={pair_names}")
-
 
         # --- resolve pairs fetched by running tasks and pairs the need to be queued ----
         pair_name_asset_price_logs_map = {}
@@ -115,8 +341,9 @@ class LatestMarketPriceView(generics.GenericAPIView):
 
             pairs_to_queue.add(pair_name)
 
-        LOGGER.info(f"running_task_ids={running_task_ids} | pairs_to_queue={pairs_to_queue} | pair_name_asset_price_logs_map={pair_name_asset_price_logs_map}")
-
+        LOGGER.info(
+            f"running_task_ids={running_task_ids} | pairs_to_queue={pairs_to_queue} | pair_name_asset_price_logs_map={pair_name_asset_price_logs_map}"
+        )
 
         # --- queue pairs, wait(for throttling), and run market price task ---
         if pairs_to_queue:
@@ -157,7 +384,7 @@ class LatestMarketPriceView(generics.GenericAPIView):
         serializer = self.serializer_class(price_logs, many=True)
         return Response(serializer.data)
 
-    def wait_task_ids(self, task_ids:list, max_timeout=30):
+    def wait_task_ids(self, task_ids: list, max_timeout=30):
         tasks = [celery_app.AsyncResult(task_id) for task_id in task_ids]
         start_time = time.time()
         try:
@@ -171,44 +398,61 @@ class LatestMarketPriceView(generics.GenericAPIView):
 
 class PriceChartView(generics.GenericAPIView):
     serializer_class = serializers.AssetPriceChartSerializer
-    permission_classes = [AllowAny,]
-    
+    permission_classes = [
+        AllowAny,
+    ]
+
     @swagger_auto_schema(
-        responses = {200: serializer_class(many=True)},
+        responses={200: serializer_class(many=True)},
         manual_parameters=[
-            openapi.Parameter(name="vs_currency", type=openapi.TYPE_STRING, in_=openapi.IN_QUERY, required=True),
-            openapi.Parameter(name="days", type=openapi.TYPE_INTEGER, in_=openapi.IN_QUERY, required=True),
-        ]
+            openapi.Parameter(
+                name="vs_currency",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
+                required=True,
+            ),
+            openapi.Parameter(
+                name="days",
+                type=openapi.TYPE_INTEGER,
+                in_=openapi.IN_QUERY,
+                required=True,
+            ),
+        ],
     )
     def get(self, request, *args, **kwargs):
-        relative_currency = kwargs.get('relative_currency', 'bitcoin-cash')
-        vs_currency = request.query_params.get('vs_currency', 'USD')
-        days = request.query_params.get('days', 1)
+        relative_currency = kwargs.get("relative_currency", "bitcoin-cash")
+        vs_currency = request.query_params.get("vs_currency", "USD")
+        days = request.query_params.get("days", 1)
         days = int(days)
 
         self.get_latest_pair(coin_id=relative_currency, currency=vs_currency)
 
-        if relative_currency == 'bitcoin-cash':
-            relative_currency = 'BCH'
+        if relative_currency == "bitcoin-cash":
+            relative_currency = "BCH"
 
         min_timestamp = timezone.now() - timezone.timedelta(days=days)
         filter_kwargs = {
-            'currency': vs_currency,
-            'relative_currency': relative_currency,
-            'timestamp__gte': min_timestamp,
+            "currency": vs_currency,
+            "relative_currency": relative_currency,
+            "timestamp__gte": min_timestamp,
         }
-        
-        if vs_currency == 'ARS':
-            filter_kwargs['source'] = 'coingecko-yadio'
-            
-        data = AssetPriceLog.objects.filter(**filter_kwargs).order_by("-timestamp").values("timestamp", "price_value")
+
+        if vs_currency == "ARS":
+            filter_kwargs["source"] = "coingecko-yadio"
+
+        data = (
+            AssetPriceLog.objects.filter(**filter_kwargs)
+            .order_by("-timestamp")
+            .values("timestamp", "price_value")
+        )
 
         serializer = self.serializer_class(data, many=True)
         return Response(serializer.data)
 
-    def get_latest_pair(self, coin_id:str, currency:str):
+    def get_latest_pair(self, coin_id: str, currency: str):
         pair_name = market_price_task.construct_pair(
-            coin_id=coin_id, currency=currency,
+            coin_id=coin_id,
+            currency=currency,
         )
         asset_price_log = market_price_task.get_latest(pair_name=pair_name)
 
@@ -223,20 +467,21 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
     """
     Retrieve a single AssetPriceLog record by ID with enriched asset information
     """
+
     serializer_class = serializers.UnifiedAssetPriceSerializer
     permission_classes = [AllowAny]
     queryset = AssetPriceLog.objects.all()
-    lookup_field = 'id'
+    lookup_field = "id"
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        
+
         # Determine asset type and enrich data
         asset_data = self._enrich_price_log(instance)
-        
+
         serializer = self.get_serializer(asset_data)
         return Response(serializer.data)
-    
+
     def _enrich_price_log(self, price_log):
         """
         Transform AssetPriceLog into enriched format with asset information
@@ -245,19 +490,19 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
         if not price_log.currency_ft_token and not price_log.relative_currency_ft_token:
             # This is a BCH/fiat price
             return {
-                'id': price_log.id,
-                'asset': 'BCH',
-                'asset_type': 'bch',
-                'asset_name': 'Bitcoin Cash',
-                'asset_symbol': 'BCH',
-                'currency': price_log.currency,
-                'price_value': price_log.price_value,
-                'timestamp': price_log.timestamp,
-                'source': price_log.source,
-                'source_ids': None,
-                'calculation': None,
+                "id": price_log.id,
+                "asset": "BCH",
+                "asset_type": "bch",
+                "asset_name": "Bitcoin Cash",
+                "asset_symbol": "BCH",
+                "currency": price_log.currency,
+                "price_value": price_log.price_value,
+                "timestamp": price_log.timestamp,
+                "source": price_log.source,
+                "source_ids": None,
+                "calculation": None,
             }
-        
+
         # This is a token price
         token = price_log.currency_ft_token
         if token:
@@ -266,38 +511,40 @@ class AssetPriceLogDetailView(generics.RetrieveAPIView):
             token_category = token.category
             token_name = token.info.name if token.info else None
             token_symbol = token.info.symbol if token.info else None
-            
+
             # Get source_ids and calculation for calculated prices
             source_ids = price_log.source_price_logs
-            calculation = price_log.calculation if price_log.source == 'calculated' else None
-            
+            calculation = (
+                price_log.calculation if price_log.source == "calculated" else None
+            )
+
             return {
-                'id': price_log.id,
-                'asset': f'ct/{token_category}',
-                'asset_type': 'cashtoken',
-                'asset_name': token_name,
-                'asset_symbol': token_symbol,
-                'currency': price_log.currency,
-                'price_value': price_log.price_value,
-                'timestamp': price_log.timestamp,
-                'source': price_log.source,
-                'source_ids': source_ids,
-                'calculation': calculation,
+                "id": price_log.id,
+                "asset": f"ct/{token_category}",
+                "asset_type": "cashtoken",
+                "asset_name": token_name,
+                "asset_symbol": token_symbol,
+                "currency": price_log.currency,
+                "price_value": price_log.price_value,
+                "timestamp": price_log.timestamp,
+                "source": price_log.source,
+                "source_ids": source_ids,
+                "calculation": calculation,
             }
-        
+
         # Fallback: return basic info
         return {
-            'id': price_log.id,
-            'asset': price_log.currency,
-            'asset_type': 'unknown',
-            'asset_name': None,
-            'asset_symbol': None,
-            'currency': price_log.relative_currency,
-            'price_value': price_log.price_value,
-            'timestamp': price_log.timestamp,
-            'source': price_log.source,
-            'source_ids': None,
-            'calculation': None,
+            "id": price_log.id,
+            "asset": price_log.currency,
+            "asset_type": "unknown",
+            "asset_name": None,
+            "asset_symbol": None,
+            "currency": price_log.relative_currency,
+            "price_value": price_log.price_value,
+            "timestamp": price_log.timestamp,
+            "source": price_log.source,
+            "source_ids": None,
+            "calculation": None,
         }
 
 
@@ -305,49 +552,56 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
     """
     Unified API endpoint for getting prices of both BCH and tokens
     """
+
     serializer_class = serializers.UnifiedAssetPriceSerializer
-    permission_classes = [AllowAny,]
+    permission_classes = [
+        AllowAny,
+    ]
 
     @swagger_auto_schema(
         responses={200: serializer_class(many=True)},
         manual_parameters=[
             openapi.Parameter(
-                name="assets", 
-                type=openapi.TYPE_STRING, 
-                in_=openapi.IN_QUERY, 
+                name="assets",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
                 required=True,
-                description="Comma-separated list of assets. Use 'BCH' for Bitcoin Cash or token category hashes"
+                description="Comma-separated list of assets. Use 'BCH' for Bitcoin Cash or token category hashes",
             ),
             openapi.Parameter(
-                name="vs_currencies", 
-                type=openapi.TYPE_STRING, 
-                in_=openapi.IN_QUERY, 
+                name="vs_currencies",
+                type=openapi.TYPE_STRING,
+                in_=openapi.IN_QUERY,
                 required=True,
-                description="Comma-separated list of currencies (USD, PHP, BCH, etc.)"
+                description="Comma-separated list of currencies (USD, PHP, BCH, etc.)",
             ),
             openapi.Parameter(
                 name="include_calculated",
                 type=openapi.TYPE_BOOLEAN,
                 in_=openapi.IN_QUERY,
                 required=False,
-                description="Include calculated token/fiat prices (default: true)"
+                description="Include calculated token/fiat prices (default: true)",
             ),
-        ]
+        ],
     )
     def get(self, request, *args, **kwargs):
         # Parse parameters
-        assets_param = request.query_params.get('assets', '')
-        currencies_param = request.query_params.get('vs_currencies', '')
-        include_calculated = request.query_params.get('include_calculated', 'true').lower() == 'true'
-        
+        assets_param = request.query_params.get("assets", "")
+        currencies_param = request.query_params.get("vs_currencies", "")
+        include_calculated = (
+            request.query_params.get("include_calculated", "true").lower() == "true"
+        )
+
         assets = [a.strip() for a in assets_param.split(",") if a.strip()]
-        currencies = [c.strip().upper() for c in currencies_param.split(",") if c.strip()]
-        
+        currencies = [
+            c.strip().upper() for c in currencies_param.split(",") if c.strip()
+        ]
+
         if not assets or not currencies:
             raise exceptions.APIException("Both assets and vs_currencies are required")
-        
+
         results = []
-        
+
         # Process each asset-currency pair
         for asset in assets:
             for currency in currencies:
@@ -356,57 +610,64 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
                     if price_data:
                         results.extend(price_data)
                 except Exception as exc:
-                    LOGGER.error(f"Error getting price for asset={asset}, currency={currency}: {exc}", exc_info=True)
+                    LOGGER.error(
+                        f"Error getting price for asset={asset}, currency={currency}: {exc}",
+                        exc_info=True,
+                    )
                     # Continue processing other asset-currency pairs instead of failing completely
-        
+
         serializer = self.serializer_class(results, many=True)
         return Response({"prices": serializer.data})
-    
+
     def _get_price(self, asset, currency, include_calculated=True):
         """
         Get price for an asset in a given currency.
         Returns list of price data dictionaries.
         """
         results = []
-        
+
         # Check if asset is BCH
-        if asset.upper() == 'BCH':
+        if asset.upper() == "BCH":
             # BCH price in fiat currency
-            if currency != 'BCH':
+            if currency != "BCH":
                 price_log = get_latest_bch_price(currency)
                 if price_log:
-                    results.append({
-                        'id': price_log.id,
-                        'asset': 'BCH',
-                        'asset_type': 'bch',
-                        'asset_name': 'Bitcoin Cash',
-                        'asset_symbol': 'BCH',
-                        'currency': currency,
-                        'price_value': price_log.price_value,
-                        'timestamp': price_log.timestamp,
-                        'source': price_log.source,
-                    })
+                    results.append(
+                        {
+                            "id": price_log.id,
+                            "asset": "BCH",
+                            "asset_type": "bch",
+                            "asset_name": "Bitcoin Cash",
+                            "asset_symbol": "BCH",
+                            "currency": currency,
+                            "price_value": price_log.price_value,
+                            "timestamp": price_log.timestamp,
+                            "source": price_log.source,
+                        }
+                    )
             else:
                 # BCH/BCH = 1
-                results.append({
-                    'id': None,
-                    'asset': 'BCH',
-                    'asset_type': 'bch',
-                    'asset_name': 'Bitcoin Cash',
-                    'asset_symbol': 'BCH',
-                    'currency': 'BCH',
-                    'price_value': Decimal('1.0'),
-                    'timestamp': timezone.now(),
-                    'source': 'constant',
-                })
+                results.append(
+                    {
+                        "id": None,
+                        "asset": "BCH",
+                        "asset_type": "bch",
+                        "asset_name": "Bitcoin Cash",
+                        "asset_symbol": "BCH",
+                        "currency": "BCH",
+                        "price_value": Decimal("1.0"),
+                        "timestamp": timezone.now(),
+                        "source": "constant",
+                    }
+                )
         else:
             # Asset is a token category
             # Handle both formats: "ct/<category>" or just "<category>"
-            if asset.startswith('ct/'):
+            if asset.startswith("ct/"):
                 token_category = asset[3:]  # Remove 'ct/' prefix
             else:
                 token_category = asset
-            
+
             # Get token info
             try:
                 token = CashFungibleToken.objects.get(category=token_category)
@@ -415,80 +676,98 @@ class UnifiedAssetPriceView(generics.GenericAPIView):
             except CashFungibleToken.DoesNotExist:
                 token_name = None
                 token_symbol = None
-            
+
             # Token price in BCH
-            if currency == 'BCH':
+            if currency == "BCH":
                 try:
                     price_log = get_ft_bch_price_log(token_category)
                     if price_log:
-                        results.append({
-                            'id': price_log.id,
-                            'asset': f'ct/{token_category}',
-                            'asset_type': 'cashtoken',
-                            'asset_name': token_name,
-                            'asset_symbol': token_symbol,
-                            'currency': 'BCH',
-                            'price_value': price_log.price_value,
-                            'timestamp': price_log.timestamp,
-                            'source': price_log.source,
-                        })
+                        results.append(
+                            {
+                                "id": price_log.id,
+                                "asset": f"ct/{token_category}",
+                                "asset_type": "cashtoken",
+                                "asset_name": token_name,
+                                "asset_symbol": token_symbol,
+                                "currency": "BCH",
+                                "price_value": price_log.price_value,
+                                "timestamp": price_log.timestamp,
+                                "source": price_log.source,
+                            }
+                        )
                 except Exception as exc:
-                    LOGGER.error(f"Error getting BCH price for token {token_category}: {exc}", exc_info=True)
+                    LOGGER.error(
+                        f"Error getting BCH price for token {token_category}: {exc}",
+                        exc_info=True,
+                    )
             else:
                 # Token price in fiat - need to calculate via BCH
                 if include_calculated:
                     try:
                         token_bch_price = get_ft_bch_price_log(token_category)
                         bch_fiat_price = get_latest_bch_price(currency)
-                        
+
                         if token_bch_price and bch_fiat_price:
                             # Calculate token/fiat price
                             # token_bch_price.price_value = amount of tokens per 1 BCH
                             # bch_fiat_price.price_value = amount of fiat per 1 BCH
                             # Result: amount of tokens per 1 fiat unit
-                            calculated_price = token_bch_price.price_value / bch_fiat_price.price_value
-                            calculated_timestamp = min(token_bch_price.timestamp, bch_fiat_price.timestamp)
-                            
+                            calculated_price = (
+                                token_bch_price.price_value / bch_fiat_price.price_value
+                            )
+                            calculated_timestamp = min(
+                                token_bch_price.timestamp, bch_fiat_price.timestamp
+                            )
+
                             # Save calculated price to database
                             try:
-                                token_obj = CashFungibleToken.objects.get(category=token_category)
+                                token_obj = CashFungibleToken.objects.get(
+                                    category=token_category
+                                )
                             except CashFungibleToken.DoesNotExist:
                                 token_obj = None
-                            
+
                             # Create or update calculated price record
                             source_ids = {
-                                'token_bch_price_id': token_bch_price.id,
-                                'bch_fiat_price_id': bch_fiat_price.id,
+                                "token_bch_price_id": token_bch_price.id,
+                                "bch_fiat_price_id": bch_fiat_price.id,
                             }
-                            calculation_formula = f'token/{currency} = (tokens/BCH) / ({currency}/BCH)'
-                            
+                            calculation_formula = (
+                                f"token/{currency} = (tokens/BCH) / ({currency}/BCH)"
+                            )
+
                             price_log, created = AssetPriceLog.objects.update_or_create(
                                 currency=currency,
-                                relative_currency='BCH',
+                                relative_currency="BCH",
                                 currency_ft_token=token_obj,
-                                source='calculated',
+                                source="calculated",
                                 timestamp=calculated_timestamp,
                                 defaults={
-                                    'price_value': calculated_price,
-                                    'source_price_logs': source_ids,
-                                    'calculation': calculation_formula,
+                                    "price_value": calculated_price,
+                                    "source_price_logs": source_ids,
+                                    "calculation": calculation_formula,
+                                },
+                            )
+
+                            results.append(
+                                {
+                                    "id": price_log.id,
+                                    "asset": f"ct/{token_category}",
+                                    "asset_type": "cashtoken",
+                                    "asset_name": token_name,
+                                    "asset_symbol": token_symbol,
+                                    "currency": currency,
+                                    "price_value": calculated_price,
+                                    "timestamp": calculated_timestamp,
+                                    "source": "calculated",
+                                    "source_ids": source_ids,
+                                    "calculation": calculation_formula,
                                 }
                             )
-                            
-                            results.append({
-                                'id': price_log.id,
-                                'asset': f'ct/{token_category}',
-                                'asset_type': 'cashtoken',
-                                'asset_name': token_name,
-                                'asset_symbol': token_symbol,
-                                'currency': currency,
-                                'price_value': calculated_price,
-                                'timestamp': calculated_timestamp,
-                                'source': 'calculated',
-                                'source_ids': source_ids,
-                                'calculation': calculation_formula,
-                            })
                     except Exception as exc:
-                        LOGGER.error(f"Error calculating fiat price for token {token_category} in {currency}: {exc}", exc_info=True)
-        
+                        LOGGER.error(
+                            f"Error calculating fiat price for token {token_category} in {currency}: {exc}",
+                            exc_info=True,
+                        )
+
         return results
