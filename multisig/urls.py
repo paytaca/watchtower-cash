@@ -6,7 +6,7 @@ from multisig.views.auth import (
 from multisig.views.wallet import (
     MultisigWalletDetailView,
     MultisigWalletListCreateView,
-    SignerWalletListView
+    SignerWalletListView,
 )
 from multisig.views.transaction import (
     ProposalCoordinatorDetailView,
@@ -22,20 +22,71 @@ from multisig.views.transaction import (
 )
 
 urlpatterns = [
-    path('wallets/', MultisigWalletListCreateView.as_view(), name='wallet-list-create'),
-    path('wallets/<str:wallet_identifier>/', MultisigWalletDetailView.as_view(), name='wallet-detail'),
-    path('wallets/<str:wallet_identifier>/proposals/', WalletProposalListView.as_view(), name='wallet-list-proposals'),
-    path('coordinator/server-identities/', ServerIdentityListCreateView.as_view(), name='server-identity-list-create'),
-    path('coordinator/server-identities/<str:public_key>/', ServerIdentityDetailView.as_view(), name='server-identity-detail'),
-    path('signers/<str:public_key>/wallets/', SignerWalletListView.as_view(), name='signer-wallet-list'),
-    path('proposals/', ProposalListCreateView.as_view(), name='proposal-list-create'),
-    path('proposals/<str:proposal_identifier>/', ProposalDetailView.as_view(), name='proposal-detail'),
-    path('proposals/<str:proposal_identifier>/coordinator/', ProposalCoordinatorDetailView.as_view(), name='proposal-coordinator-detail'),
-    path('proposals/<str:proposal_identifier>/status/', ProposalStatusView.as_view(), name='proposal-status'),
-    path('proposals/<str:proposal_identifier>/inputs/', ProposalInputListView.as_view(), name='proposal-input-list'),
-    path('proposals/<str:proposal_identifier>/psbts/', PsbtListCreateView.as_view(), name='proposal-psbt-list-create'),
-    path('proposals/<str:proposal_identifier>/signatures/', ProposalSignatureListView.as_view(), name='proposal-signature-list'),
-    path('proposals/<str:proposal_identifier>/signatures/<int:pk>/', ProposalSignatureDetailView.as_view(), name='proposal-signature-detail'),
-    path('proposals/<str:proposal_identifier>/signatures/<str:signature_identifier>/', SignatureBySignerIdentifierList.as_view(), name='signature-list-by-signature-identifier'),
+    path("wallets/", MultisigWalletListCreateView.as_view(), name="wallet-list-create"),
+    path(
+        "wallets/<str:wallet_identifier>/",
+        MultisigWalletDetailView.as_view(),
+        name="wallet-detail",
+    ),
+    path(
+        "wallets/<str:wallet_identifier>/proposals/",
+        WalletProposalListView.as_view(),
+        name="wallet-list-proposals",
+    ),
+    path(
+        "coordinator/server-identities/",
+        ServerIdentityListCreateView.as_view(),
+        name="server-identity-list-create",
+    ),
+    path(
+        "coordinator/server-identities/<str:public_key>/",
+        ServerIdentityDetailView.as_view(),
+        name="server-identity-detail",
+    ),
+    path(
+        "signers/<str:identifier>/wallets/",
+        SignerWalletListView.as_view(),
+        name="signer-wallet-list",
+    ),
+    path("proposals/", ProposalListCreateView.as_view(), name="proposal-list-create"),
+    path(
+        "proposals/<str:proposal_identifier>/",
+        ProposalDetailView.as_view(),
+        name="proposal-detail",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/coordinator/",
+        ProposalCoordinatorDetailView.as_view(),
+        name="proposal-coordinator-detail",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/status/",
+        ProposalStatusView.as_view(),
+        name="proposal-status",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/inputs/",
+        ProposalInputListView.as_view(),
+        name="proposal-input-list",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/psbts/",
+        PsbtListCreateView.as_view(),
+        name="proposal-psbt-list-create",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/signatures/",
+        ProposalSignatureListView.as_view(),
+        name="proposal-signature-list",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/signatures/<int:pk>/",
+        ProposalSignatureDetailView.as_view(),
+        name="proposal-signature-detail",
+    ),
+    path(
+        "proposals/<str:proposal_identifier>/signatures/<str:signature_identifier>/",
+        SignatureBySignerIdentifierList.as_view(),
+        name="signature-list-by-signature-identifier",
+    ),
 ]
-
