@@ -96,6 +96,64 @@
           </div>
         </div>
       </div>
+
+      <!-- Statistics Panel -->
+      <div class="row" id="statsPanel" style="margin-bottom: 20px;">
+        <div class="col-md-6">
+          <div class="panel panel-default">
+            <div class="panel-heading">
+              <h3 class="panel-title">BCH Transaction Statistics</h3>
+            </div>
+            <div class="panel-body">
+              <table class="table table-condensed" style="margin-bottom: 0;">
+                <tr>
+                  <td><strong>Min:</strong></td>
+                  <td id="minBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+                <tr>
+                  <td><strong>Max:</strong></td>
+                  <td id="maxBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+                <tr>
+                  <td><strong>Average:</strong></td>
+                  <td id="avgBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+                <tr>
+                  <td><strong>Median:</strong></td>
+                  <td id="medianBchReceived" style="text-align: right; font-family: monospace;">0.00000000 BCH</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="panel panel-default">
+            <div class="panel-heading">
+              <h3 class="panel-title" id="statsFiatTitle">USD Transaction Statistics</h3>
+            </div>
+            <div class="panel-body">
+              <table class="table table-condensed" style="margin-bottom: 0;">
+                <tr>
+                  <td><strong>Min:</strong></td>
+                  <td id="minFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+                <tr>
+                  <td><strong>Max:</strong></td>
+                  <td id="maxFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+                <tr>
+                  <td><strong>Average:</strong></td>
+                  <td id="avgFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+                <tr>
+                  <td><strong>Median:</strong></td>
+                  <td id="medianFiatReceived" style="text-align: right; font-family: monospace;">$0.00</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <h3>Transaction History</h3>
       <p id="resultSummary" class="text-muted"></p>
@@ -246,7 +304,23 @@
     date.setSeconds(0, 0);
     return date.toISOString();
   }
-  
+
+  function calculateMedian(values) {
+    if (values.length === 0) return 0;
+
+    // Sort the array
+    const sorted = values.slice().sort(function(a, b) { return a - b; });
+    const mid = Math.floor(sorted.length / 2);
+
+    if (sorted.length % 2 === 0) {
+      // Even number of elements - average the two middle values
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      // Odd number of elements - return the middle value
+      return sorted[mid];
+    }
+  }
+
   function fetchHistoricalBchPrice(timestamp) {
     return new Promise(function(resolve, reject) {
       const cacheKey = getCacheKey(timestamp);
@@ -549,17 +623,21 @@
       $('.miner-fee-col').hide();
     }
     
-    // Calculate totals for ALL incoming transactions across all pages
+    // Calculate totals and statistics for ALL incoming transactions across all pages
     let allTransactions = isLegacyFormat ? allHistoryData : historyData;
     let totalBch = 0;
     let totalFiat = 0;
     let totalIncomingCount = 0;
+    let bchAmounts = [];
+    let fiatAmounts = [];
     
     allTransactions.forEach(function(tx) {
       if (tx.record_type === 'incoming') {
         const bchAmount = parseFloat(tx.amount) || 0;
-        totalBch += Math.abs(bchAmount);
+        const absBchAmount = Math.abs(bchAmount);
+        totalBch += absBchAmount;
         totalIncomingCount++;
+        bchAmounts.push(absBchAmount);
         
         // Calculate fiat amount
         let fiatValue = 0;
@@ -567,17 +645,36 @@
           fiatValue = parseFloat(tx.fiat_amounts[currentFiatCurrency]);
         } else if (tx.market_prices && tx.market_prices[currentFiatCurrency]) {
           const price = parseFloat(tx.market_prices[currentFiatCurrency]);
-          fiatValue = Math.abs(bchAmount) * price;
+          fiatValue = absBchAmount * price;
         } else if (tx.usd_price && currentFiatCurrency === 'USD') {
-          fiatValue = Math.abs(bchAmount) * parseFloat(tx.usd_price);
+          fiatValue = absBchAmount * parseFloat(tx.usd_price);
         } else if (tx.historical_prices && tx.historical_prices[currentFiatCurrency]) {
           // Use historical price fetched from API
           const price = parseFloat(tx.historical_prices[currentFiatCurrency]);
-          fiatValue = Math.abs(bchAmount) * price;
+          fiatValue = absBchAmount * price;
         }
         totalFiat += Math.abs(fiatValue);
+        fiatAmounts.push(Math.abs(fiatValue));
       }
     });
+    
+    // Calculate statistics
+    let minBch = 0, maxBch = 0, avgBch = 0, medianBch = 0;
+    let minFiat = 0, maxFiat = 0, avgFiat = 0, medianFiat = 0;
+    
+    if (bchAmounts.length > 0) {
+      minBch = Math.min.apply(null, bchAmounts);
+      maxBch = Math.max.apply(null, bchAmounts);
+      avgBch = totalBch / bchAmounts.length;
+      medianBch = calculateMedian(bchAmounts);
+    }
+    
+    if (fiatAmounts.length > 0) {
+      minFiat = Math.min.apply(null, fiatAmounts);
+      maxFiat = Math.max.apply(null, fiatAmounts);
+      avgFiat = totalFiat / fiatAmounts.length;
+      medianFiat = calculateMedian(fiatAmounts);
+    }
     
     // Update totals display
     $('#totalBchReceived').text(totalBch.toFixed(8) + ' BCH');
@@ -585,7 +682,31 @@
       style: 'currency',
       currency: currentFiatCurrency
     }));
-    $('#totalFiatTitle').text(`Total ${currentFiatCurrency} Received`);
+    $('#totalFiatTitle').text('Total ' + currentFiatCurrency + ' Received');
+    
+    // Update statistics display
+    $('#minBchReceived').text(minBch.toFixed(8) + ' BCH');
+    $('#maxBchReceived').text(maxBch.toFixed(8) + ' BCH');
+    $('#avgBchReceived').text(avgBch.toFixed(8) + ' BCH');
+    $('#medianBchReceived').text(medianBch.toFixed(8) + ' BCH');
+    
+    $('#minFiatReceived').text(minFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#maxFiatReceived').text(maxFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#avgFiatReceived').text(avgFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#medianFiatReceived').text(medianFiat.toLocaleString('en-US', {
+      style: 'currency',
+      currency: currentFiatCurrency
+    }));
+    $('#statsFiatTitle').text(currentFiatCurrency + ' Transaction Statistics');
     
     // Build table rows
     let rows = '';
