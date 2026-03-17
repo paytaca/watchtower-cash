@@ -370,8 +370,8 @@
       }
       
       // Collect all transactions that need historical prices
-      // Use a Set to deduplicate by cache key (minute-level)
-      const seenCacheKeys = new Set();
+      // Use a Map to group transactions by cache key (minute-level)
+      const cacheKeyToIndices = new Map();
       transactions.forEach(function(tx, index) {
         const hasPrice = (tx.fiat_amounts && tx.fiat_amounts[currentFiatCurrency] !== undefined) ||
                          (tx.market_prices && tx.market_prices[currentFiatCurrency]) ||
@@ -379,10 +379,11 @@
         
         if (!hasPrice && tx.tx_timestamp) {
           const cacheKey = getCacheKey(tx.tx_timestamp);
-          if (!seenCacheKeys.has(cacheKey)) {
-            seenCacheKeys.add(cacheKey);
-            requests.push({ index: index, timestamp: tx.tx_timestamp, cacheKey: cacheKey });
+          if (!cacheKeyToIndices.has(cacheKey)) {
+            cacheKeyToIndices.set(cacheKey, []);
+            requests.push({ cacheKey: cacheKey, timestamp: tx.tx_timestamp });
           }
+          cacheKeyToIndices.get(cacheKey).push(index);
         }
       });
       
@@ -401,21 +402,25 @@
         const start = currentBatch * BATCH_SIZE;
         const end = Math.min(start + BATCH_SIZE, requests.length);
         const batch = requests.slice(start, end);
-        
+
         console.log('Processing batch', currentBatch + 1, 'of', Math.ceil(requests.length / BATCH_SIZE));
-        
+
         const promises = batch.map(function(req) {
           return fetchHistoricalBchPrice(req.timestamp).then(function(price) {
             if (price !== null) {
-              if (!updatedTransactions[req.index].historical_prices) {
-                updatedTransactions[req.index].historical_prices = {};
-              }
-              updatedTransactions[req.index].historical_prices[currentFiatCurrency] = price;
+              // Get all transaction indices that share this cache key
+              const indices = cacheKeyToIndices.get(req.cacheKey);
+              indices.forEach(function(idx) {
+                if (!updatedTransactions[idx].historical_prices) {
+                  updatedTransactions[idx].historical_prices = {};
+                }
+                updatedTransactions[idx].historical_prices[currentFiatCurrency] = price;
+              });
             }
             return price;
           });
         });
-        
+
         Promise.all(promises).then(function() {
           currentBatch++;
           if (start + BATCH_SIZE < requests.length) {
