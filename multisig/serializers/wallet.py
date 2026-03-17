@@ -13,8 +13,7 @@ LOGGER = logging.getLogger(__name__)
 class SignerSerializer(serializers.ModelSerializer):
     masterFingerprint = serializers.CharField(source='master_fingerprint')
     derivationPath = serializers.CharField(source='derivation_path')
-    publicKey = serializers.CharField(source='public_key')
-    walletDescriptor = serializers.CharField(source='wallet_descriptor')
+    walletDescriptorWrappedDek = serializers.CharField(source='wallet_descriptor_wrapped_dek')
     wallet = serializers.PrimaryKeyRelatedField(read_only=True)
     coordinatorKeyRecord = serializers.CharField(write_only=True)
     authPublicKey = serializers.CharField(source='auth_public_key')
@@ -26,8 +25,7 @@ class SignerSerializer(serializers.ModelSerializer):
             'name',
             'masterFingerprint',
             'derivationPath',
-            'publicKey',
-            'walletDescriptor',
+            'walletDescriptorWrappedDek',
             'wallet',
             'coordinatorKeyRecord',
             'authPublicKey'
@@ -37,6 +35,7 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
     signers = SignerSerializer(many=True, required=False)
     walletDescriptorId = serializers.CharField(source='wallet_descriptor_id')
     walletHash = serializers.CharField(source='wallet_hash')
+    walletDescriptor = serializers.CharField(source='wallet_descriptor')
 
     class Meta:
         model = MultisigWallet
@@ -45,6 +44,7 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             'name',
             'walletHash',
             'walletDescriptorId',
+            'walletDescriptor',
             'version',
             'created_at',
             'deleted_at',
@@ -87,7 +87,7 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
                     defaults = {
                       'publisher': coordinator,
                       'key_record': coordinatorKeyRecordHex,
-                      'audience_auth_public_key': signer_data['auth_public_key']
+                      'audience_auth_public_key': signer_data['auth_public_key'] 
                     }
                   )
                 Signer.objects.create(

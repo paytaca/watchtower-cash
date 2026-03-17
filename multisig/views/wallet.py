@@ -14,7 +14,11 @@ from smartbch.pagination import CustomLimitOffsetPagination
 import multisig.js_client as js_client
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
 from multisig.models.wallet import MultisigWallet, Signer
-from multisig.serializers.wallet import MultisigWalletSerializer, SignerSerializer, MultisigWalletUtxoSerializer
+from multisig.serializers.wallet import (
+    MultisigWalletSerializer,
+    SignerSerializer,
+    MultisigWalletUtxoSerializer,
+)
 from multisig.auth.permission import IsCosigner
 from rest_framework.generics import get_object_or_404 as drf_get_object_or_404
 
@@ -22,10 +26,12 @@ LOGGER = logging.getLogger(__name__)
 
 from django.db import transaction
 
+
 class MultisigWalletListCreateView(APIView):
     """
     Lists all multisig wallets or creates a new multisig wallet.
     """
+
     authentication_classes = [PubKeySignatureMessageAuthentication]
 
     def get(self, request):
@@ -34,8 +40,8 @@ class MultisigWalletListCreateView(APIView):
         Optional: Add filter for include_deleted if needed.
         """
         queryset = MultisigWallet.objects.filter(deleted_at__isnull=True)
-        include_deleted = request.query_params.get('include_deleted')
-        if include_deleted in ('1', 'true', 'True'):
+        include_deleted = request.query_params.get("include_deleted")
+        if include_deleted in ("1", "true", "True"):
             queryset = MultisigWallet.objects.all()
         serializer = MultisigWalletSerializer(queryset, many=True)
         return Response(serializer.data)
@@ -48,27 +54,32 @@ class MultisigWalletListCreateView(APIView):
         data = request.data.copy()
         # signers_data = data.pop('signers', None)
         LOGGER.info(f"request user: {request.user}")
-        coordinator = ServerIdentity.objects.filter(public_key=request.headers.get('X-Auth-PubKey')).first()
+        coordinator = ServerIdentity.objects.filter(
+            public_key=request.headers.get("X-Auth-PubKey")
+        ).first()
         if not coordinator:
-                return Response({'error': 'Coordinator needs server identity'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
+            return Response(
+                {"error": "Coordinator needs server identity"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         LOGGER.info(coordinator)
         serializer = MultisigWalletSerializer(
-            data=data,
-            context={"coordinator": coordinator}
+            data=data, context={"coordinator": coordinator}
         )
 
         serializer.is_valid(raise_exception=True)
         LOGGER.info(serializer.errors)
         wallet = serializer.save()
 
-        status_code = status.HTTP_201_CREATED if getattr(serializer, "_created", True) else status.HTTP_200_OK
-
-        return Response(
-            MultisigWalletSerializer(wallet).data,
-            status=status_code
+        status_code = (
+            status.HTTP_201_CREATED
+            if getattr(serializer, "_created", True)
+            else status.HTTP_200_OK
         )
+
+        return Response(MultisigWalletSerializer(wallet).data, status=status_code)
+
 
 class MultisigWalletDetailView(APIView):
     """
@@ -81,38 +92,43 @@ class MultisigWalletDetailView(APIView):
         """
         # Optimize wallet lookup to allow searching by wallet_hash, wallet_descriptor_id, or id (as int).
 
-
         wallet = None
 
-        filter_q = Q(wallet_hash=wallet_identifier) | Q(wallet_descriptor_id=wallet_identifier)
+        filter_q = Q(wallet_hash=wallet_identifier) | Q(
+            wallet_descriptor_id=wallet_identifier
+        )
 
         if wallet_identifier.isdigit():
             filter_q = Q(id=wallet_identifier)
 
-        wallet = (
-            MultisigWallet.objects.filter(
-                filter_q,
-                deleted_at__isnull=True
-            ).first()
-        )
-        
+        wallet = MultisigWallet.objects.filter(
+            filter_q, deleted_at__isnull=True
+        ).first()
+
         if wallet is None:
-            return Response({"error": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = MultisigWalletSerializer(wallet)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class SignerWalletListView(APIView):
-
-    def get(self, request, public_key=None):
+    def get(self, request, identifier=None):
         """
         Returns all MultisigWallets associated with a signer,
-        given a signer public key from the URL path (signers/<public_key>/wallets).
+        given a signer identifier (public_key or master_fingerprint) from the URL path (signers/<identifier>/wallets).
         """
-        if not public_key:
-            return Response({'error': 'Missing public_key parameter in URL'}, status=status.HTTP_400_BAD_REQUEST)
-        wallets = MultisigWallet.objects.filter(signers__public_key=public_key, deleted_at__isnull=True).distinct()
+        if not identifier:
+            return Response(
+                {"error": "Missing identifier parameter in URL"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        wallets = MultisigWallet.objects.filter(
+            Q(signers__auth_public_key=identifier)
+            | Q(signers__master_fingerprint=identifier),
+            deleted_at__isnull=True,
+        ).distinct()
         serializer = MultisigWalletSerializer(wallets, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
