@@ -1,7 +1,7 @@
 import logging
 from django.db import transaction
 from multisig.models.auth import ServerIdentity
-from multisig.serializers.auth import  ServerIdentitySerializer
+from multisig.serializers.auth import ServerIdentitySerializer
 from rest_framework import serializers
 from typing import Dict
 from main.models import Transaction
@@ -10,54 +10,71 @@ from multisig.utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_
 
 LOGGER = logging.getLogger(__name__)
 
+class KeyRecordReadOnlySerializer(serializers.ModelSerializer):
+    audienceAuthPublicKey = serializers.CharField(
+        source="audience_auth_public_key", read_only=True
+    )
+
+    class Meta:
+        model = KeyRecord
+        fields = ["id", "publisher", "key_record", "audienceAuthPublicKey", "wallet"]
+        read_only_fields = [
+            "id",
+            "publisher",
+            "key_record",
+            "audienceAuthPublicKey",
+            "wallet",
+        ]
+
+
 class SignerSerializer(serializers.ModelSerializer):
-    masterFingerprint = serializers.CharField(source='master_fingerprint')
-    derivationPath = serializers.CharField(source='derivation_path')
-    walletDescriptorWrappedDek = serializers.CharField(source='wallet_descriptor_wrapped_dek')
+    masterFingerprint = serializers.CharField(source="master_fingerprint")
+    derivationPath = serializers.CharField(source="derivation_path")
+    walletDescriptorWrappedDek = serializers.CharField(
+        source="wallet_descriptor_wrapped_dek"
+    )
     wallet = serializers.PrimaryKeyRelatedField(read_only=True)
     coordinatorKeyRecord = serializers.CharField(write_only=True)
-    authPublicKey = serializers.CharField(source='auth_public_key')
+    authPublicKey = serializers.CharField(source="auth_public_key")
 
     class Meta:
         model = Signer
         fields = [
-            'id',
-            'name',
-            'masterFingerprint',
-            'derivationPath',
-            'walletDescriptorWrappedDek',
-            'wallet',
-            'coordinatorKeyRecord',
-            'authPublicKey'
+            "id",
+            "name",
+            "masterFingerprint",
+            "derivationPath",
+            "walletDescriptorWrappedDek",
+            "wallet",
+            "coordinatorKeyRecord",
+            "authPublicKey",
         ]
+
 
 class MultisigWalletSerializer(serializers.ModelSerializer):
     signers = SignerSerializer(many=True, required=False)
-    walletDescriptorId = serializers.CharField(source='wallet_descriptor_id')
-    walletHash = serializers.CharField(source='wallet_hash')
-    walletDescriptor = serializers.CharField(source='wallet_descriptor')
+    walletDescriptorId = serializers.CharField(source="wallet_descriptor_id")
+    walletHash = serializers.CharField(source="wallet_hash")
+    walletDescriptor = serializers.CharField(source="wallet_descriptor")
+    keyRecords = KeyRecordReadOnlySerializer(source="key_records", many=True, required=False)
 
     class Meta:
         model = MultisigWallet
         fields = [
-            'id',
-            'name',
-            'walletHash',
-            'walletDescriptorId',
-            'walletDescriptor',
-            'version',
-            'created_at',
-            'deleted_at',
-            'updated_at',
-            'coordinator',
-            'signers'
+            "id",
+            "name",
+            "walletHash",
+            "walletDescriptorId",
+            "walletDescriptor",
+            "version",
+            "created_at",
+            "deleted_at",
+            "updated_at",
+            "coordinator",
+            "signers",
+            "keyRecords",
         ]
-        read_only_fields = [
-            'id',
-            'created_at',
-            'updated_at',
-            'deleted_at'
-        ]
+        read_only_fields = ["id", "created_at", "updated_at", "deleted_at", "keyRecords"]
 
     def create(self, validated_data):
         coordinator = self.context["coordinator"]
@@ -66,94 +83,81 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             wallet = MultisigWallet.objects.filter(
-                coordinator=coordinator,
-                wallet_descriptor_id=wallet_descriptor_id
+                coordinator=coordinator, wallet_descriptor_id=wallet_descriptor_id
             ).first()
 
             if wallet:
                 return wallet
 
             wallet = MultisigWallet.objects.create(
-                coordinator=coordinator,
-                **validated_data
+                coordinator=coordinator, **validated_data
             )
 
             for signer_data in signers_data:
-                coordinatorKeyRecordHex = signer_data.pop('coordinatorKeyRecord', None)
+                coordinatorKeyRecordHex = signer_data.pop("coordinatorKeyRecord", None)
                 if coordinatorKeyRecordHex:
-                  KeyRecord.objects.get_or_create(
-                    publisher=coordinator,
-                    key_record=coordinatorKeyRecordHex,
-                    defaults = {
-                      'publisher': coordinator,
-                      'key_record': coordinatorKeyRecordHex,
-                      'audience_auth_public_key': signer_data['auth_public_key'] 
-                    },
-                    wallet=wallet
-                  )
-                Signer.objects.create(
-                    wallet=wallet,
-                    **signer_data
-                )
+                    KeyRecord.objects.get_or_create(
+                        publisher=coordinator,
+                        key_record=coordinatorKeyRecordHex,
+                        defaults={
+                            "publisher": coordinator,
+                            "key_record": coordinatorKeyRecordHex,
+                            "audience_auth_public_key": signer_data["auth_public_key"],
+                        },
+                        wallet=wallet,
+                    )
+                Signer.objects.create(wallet=wallet, **signer_data)
 
         return wallet
 
+
 class MultisigWalletUtxoSerializer(serializers.Serializer):
+    txid = serializers.CharField()
+    vout = serializers.SerializerMethodField()
+    satoshis = serializers.SerializerMethodField()
+    height = serializers.SerializerMethodField()
+    coinbase = serializers.SerializerMethodField()
+    token = serializers.SerializerMethodField()
 
-  txid = serializers.CharField()
-  vout = serializers.SerializerMethodField()
-  satoshis = serializers.SerializerMethodField()
-  height = serializers.SerializerMethodField()
-  coinbase = serializers.SerializerMethodField()
-  token = serializers.SerializerMethodField()
+    def get_vout(self, obj):
+        return obj.index
 
-  def get_vout(self, obj):
-    return obj.index
+    def get_satoshis(self, obj):
+        return obj.value
 
-  def get_satoshis(self, obj):
-    return obj.value
+    def get_height(self, obj):
+        if obj.blockheight:
+            return obj.blockheight.number
+        else:
+            return 0
 
-  def get_height(self, obj):
-    if obj.blockheight:
-      return obj.blockheight.number
-    else:
-      return 0
+    def get_coinbase(self, obj) -> bool:
+        return False  # We just assume watchtower is not indexing coinbase txs, verify.
 
-  def get_coinbase(self, obj) -> bool:
-    return False # We just assume watchtower is not indexing coinbase txs, verify.
+    def get_token(self, obj) -> Dict[str, str]:
 
-  def get_token(self, obj) -> Dict[str,str]:
-    
-    token = {}
+        token = {}
 
-    if obj.amount:
-      token['amount'] = str(obj.amount)
+        if obj.amount:
+            token["amount"] = str(obj.amount)
 
-    if obj.cashtoken_ft and obj.cashtoken_ft.category:
-      token['category'] = obj.cashtoken_ft.category
+        if obj.cashtoken_ft and obj.cashtoken_ft.category:
+            token["category"] = obj.cashtoken_ft.category
 
-    if obj.cashtoken_nft:
-      if not token.get('category'):
-        token['category'] = obj.cashtoken_nft.category
-      token['nft'] = {
-          'commitment': obj.cashtoken_nft.commitment,
-          'capability': obj.cashtoken_nft.capability
-      }
-    if len(token.keys()) > 0:
-      return token 
-    
-    return None
+        if obj.cashtoken_nft:
+            if not token.get("category"):
+                token["category"] = obj.cashtoken_nft.category
+            token["nft"] = {
+                "commitment": obj.cashtoken_nft.commitment,
+                "capability": obj.cashtoken_nft.capability,
+            }
+        if len(token.keys()) > 0:
+            return token
 
-  class Meta:
-    model = Transaction
-    fields = ['txid','vout', 'satoshis', 'height', 'coinbase', 'token']
-
-
-class KeyRecordSerializer(serializers.Serializer):
-    publisher = serializers.PrimaryKeyRelatedField(queryset=ServerIdentity.objects.all(), required=False)
-    recipient = serializers.PrimaryKeyRelatedField(queryset=ServerIdentity.objects.all(), required=False)
-    key_record = serializers.CharField()
+        return None
 
     class Meta:
-        model = KeyRecord
-        fields = ['id', 'publisher', 'recipient', 'key_record']
+        model = Transaction
+        fields = ["txid", "vout", "satoshis", "height", "coinbase", "token"]
+
+
