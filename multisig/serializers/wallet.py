@@ -1,12 +1,9 @@
 import logging
 from django.db import transaction
-from multisig.models.auth import ServerIdentity
-from multisig.serializers.auth import ServerIdentitySerializer
 from rest_framework import serializers
 from typing import Dict
 from main.models import Transaction
 from multisig.models.wallet import MultisigWallet, Signer, KeyRecord
-from multisig.utils import derive_pubkey_from_xpub, get_multisig_wallet_locking_script
 
 LOGGER = logging.getLogger(__name__)
 
@@ -14,13 +11,22 @@ class KeyRecordReadOnlySerializer(serializers.ModelSerializer):
     audienceAuthPublicKey = serializers.CharField(
         source="audience_auth_public_key", read_only=True
     )
+    publisherServerId = serializers.PrimaryKeyRelatedField(
+        source="publisher", read_only=True
+    )
 
     class Meta:
         model = KeyRecord
-        fields = ["id", "publisher", "key_record", "audienceAuthPublicKey", "wallet"]
+        fields = [
+            "id",
+            "publisherServerId",
+            "key_record",
+            "audienceAuthPublicKey",
+            "wallet",
+        ]
         read_only_fields = [
             "id",
-            "publisher",
+            "publisherServerId",
             "key_record",
             "audienceAuthPublicKey",
             "wallet",
@@ -56,7 +62,12 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
     walletDescriptorId = serializers.CharField(source="wallet_descriptor_id")
     walletHash = serializers.CharField(source="wallet_hash")
     walletDescriptor = serializers.CharField(source="wallet_descriptor")
-    keyRecords = KeyRecordReadOnlySerializer(source="key_records", many=True, required=False)
+    keyRecords = KeyRecordReadOnlySerializer(
+        source="key_records", many=True, required=False
+    )
+    coordinatorServerId = serializers.PrimaryKeyRelatedField(
+        source="coordinator", read_only=True
+    )
 
     class Meta:
         model = MultisigWallet
@@ -70,11 +81,18 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
             "created_at",
             "deleted_at",
             "updated_at",
-            "coordinator",
+            "coordinatorServerId",
             "signers",
             "keyRecords",
         ]
-        read_only_fields = ["id", "created_at", "updated_at", "deleted_at", "keyRecords"]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+            "keyRecords",
+            "coordinatorServerId",
+        ]
 
     def create(self, validated_data):
         coordinator = self.context["coordinator"]
@@ -159,5 +177,3 @@ class MultisigWalletUtxoSerializer(serializers.Serializer):
     class Meta:
         model = Transaction
         fields = ["txid", "vout", "satoshis", "height", "coinbase", "token"]
-
-
