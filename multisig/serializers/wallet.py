@@ -88,7 +88,8 @@ class MultisigWalletSerializer(serializers.ModelSerializer):
                       'publisher': coordinator,
                       'key_record': coordinatorKeyRecordHex,
                       'audience_auth_public_key': signer_data['auth_public_key'] 
-                    }
+                    },
+                    wallet=wallet
                   )
                 Signer.objects.create(
                     wallet=wallet,
