@@ -18,7 +18,9 @@ from multisig.serializers.wallet import (
     MultisigWalletSerializer,
     SignerSerializer,
     MultisigWalletUtxoSerializer,
+    KeyRecordReadOnlySerializer,
 )
+from multisig.models.wallet import KeyRecord
 from multisig.auth.permission import IsCosigner
 from rest_framework.generics import get_object_or_404 as drf_get_object_or_404
 
@@ -131,4 +133,31 @@ class SignerWalletListView(APIView):
             deleted_at__isnull=True,
         ).distinct()
         serializer = MultisigWalletSerializer(wallets, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class KeyRecordListView(APIView):
+    def get(self, request):
+        publisher_server_id = request.query_params.get("publisherServerId")
+        audience_auth_public_key = request.query_params.get("audience_auth_public_key")
+
+        if not publisher_server_id and not audience_auth_public_key:
+            return Response(
+                {
+                    "error": "Either publisherServerId or audience_auth_public_key is required"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        queryset = KeyRecord.objects.all()
+
+        if publisher_server_id:
+            queryset = queryset.filter(publisher_id=int(publisher_server_id))
+
+        if audience_auth_public_key:
+            queryset = queryset.filter(
+                audience_auth_public_key=audience_auth_public_key
+            )
+
+        serializer = KeyRecordReadOnlySerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

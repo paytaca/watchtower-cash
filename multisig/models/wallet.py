@@ -33,7 +33,7 @@ class KeyRecord(models.Model):
     publisher = models.ForeignKey(ServerIdentity, related_name='key_records_published', null=True, blank=True, on_delete=models.CASCADE)
     key_record = models.TextField(help_text="An ECIES encrypted BSMS 1.0 key record") 
     audience_auth_public_key = models.CharField(max_length=66, help_text="The auth public key of the intended audience for this key record, the one that can decrypt the key record.", null=True, blank=True)
-    wallet = models.ForeignKey(MultisigWallet, related_name='key_records', null=True, blank=True, on_delete=models.SET_NULL) 
+    wallet = models.ForeignKey(MultisigWallet, related_name='key_records', null=True, blank=True, on_delete=models.CASCADE) 
 
 class Signer(models.Model):
     name = models.CharField(max_length=255, help_text="The name of the signer", null=True, blank=True)
