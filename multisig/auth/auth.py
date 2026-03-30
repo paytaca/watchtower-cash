@@ -4,10 +4,6 @@ from django.conf import settings
 from multisig.models.auth import ServerIdentity
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.authentication import BaseAuthentication
-from django.conf import settings
-from django.urls import resolve
-from ..utils import derive_pubkey_from_xpub
-from ..models import MultisigWallet
 
 
 LOGGER = logging.getLogger(__name__)
