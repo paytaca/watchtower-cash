@@ -14,10 +14,13 @@ import {
     stringify,
     secp256k1,
     sha256,
-    utf8ToBin
+    utf8ToBin,
+    decodeTransactionCommon
 } from 'bitauth-libauth-v3'
 import * as Multisig from './multisig/index.js'
+import { Pst, combine as combinePsts } from './multisig/pst.js'
 import { ElectrumClient } from '@electrum-cash/network'
+import { MultisigTransactionBuilder } from './multisig/index.js'
 
 if (typeof global.structuredClone === 'undefined') {
   global.structuredClone = structuredClone;
@@ -129,8 +132,16 @@ app.post('/multisig/transaction/get-signing-progress', async (req, res) => {
 })
 
 app.post('/multisig/message/verify-signature', async (req, res) => {
-  const { message, publicKey, signature } = req.body
-  const messageHash = sha256.hash(utf8ToBin(message))
+  const { message, publicKey, signature, encoding } = req.body
+
+  let messageHash = sha256.hash(utf8ToBin(message))
+
+  if (encoding === 'hex') {
+    // Assumes message is already a sha256 hash of the data
+    // Update this if there's any other user case
+    messageHash = hexToBin(message)
+  }
+
   let success = false
   try {
     if (signature.schnorr) {
@@ -151,9 +162,74 @@ app.post('/multisig/message/verify-signature', async (req, res) => {
   return res.send({ success })
 })
 
-app.get('/test', async (req, res) => {
-   res.send({hello: 'hello test'})
+app.post('/multisig/transaction/decode-psbt', async (req, res) => {
+  const { psbt } = req.body
+  const decoded = Pst.fromPsbt(psbt)
+  res.send({...decoded.toJSON(), signingProgress: decoded.getSigningProgress()})
 })
+
+app.post('/multisig/transaction/decode-proposal', async (req, res) => {
+  if (req.body.proposal_format !== 'psbt') {
+    return res.send({ error: 'Only psbt proposals are supported' })
+  }
+  const { proposal } = req.body
+  const decoded = Pst.fromPsbt(proposal)
+  const decodedProposal = {
+    unsigned_transaction_hex: decoded.unsignedTransactionHex,
+    unsigned_transaction_hash: decoded.unsignedTransactionHash, 
+    proposal_format: 'psbt',
+    proposal,
+    inputs: []
+  }
+  const decodedTransaction = decodeTransactionCommon(hexToBin(decoded.unsignedTransactionHex))
+  for (const input of decodedTransaction.inputs) {
+    decodedProposal.inputs.push({
+      outpoint_transaction_hash: binToHex(input.outpointTransactionHash),
+      outpoint_index: input.outpointIndex,
+    })
+  }
+  res.send(decodedProposal)
+})
+
+app.post('/multisig/transaction/combine-psbts', async (req, res) => {
+  const { psbts } = req.body
+  try {
+    const decodedPsbts = psbts.map(psbt => Pst.import(psbt))
+    const combined = await combinePsts(decodedPsbts)
+    console.log('COMBINED', combined)
+    res.send({
+      combinedPsbt: await combined.export('psbt'),
+      signingProgress: combined.getSigningProgress()
+    })    
+  } catch (error) {
+    console.error('Error combining PSBTs:', error)
+    return res.status(400).send({ error: 'Failed to combine PSBTs: ' + error.message })
+  }
+  
+})
+
+app.get('/multisig/transaction/unsigned-transaction-hash', async (req, res) => {
+  const decodedTransaction = decodeTransactionCommon(hexToBin(req.query.transaction_hex))
+  decodedTransaction.inputs[0].unlockingBytecode = []
+  const transactionBuilder = new MultisigTransactionBuilder()
+  transactionBuilder.setVersion(decodedTransaction.version)
+  transactionBuilder.setLocktime(decodedTransaction.locktime)
+  transactionBuilder.addInputs(decodedTransaction.inputs.map(i => {
+    return {
+      ...i,
+      unlockingBytecode: new Uint8Array([])
+    }
+  }))
+  transactionBuilder.addOutputs(decodedTransaction.outputs)
+  res.send({
+    unsigned_transaction_hash: hashTransaction(hexToBin(transactionBuilder.build()))
+  })
+})
+
+
+
+
+
 
 app.listen(port, () => {
     console.log(`Multisig express server listening on port ${port}`)

@@ -1,7 +1,8 @@
 FROM nikolaik/python-nodejs:python3.8-nodejs16-slim
 
 RUN apt-key adv --refresh-keys --keyserver keyserver.ubuntu.com
-RUN apt-get update -y
+RUN rm -f /etc/apt/sources.list.d/yarn.list
+RUN apt-get update -y || true
 RUN apt-get -y install build-essential sudo postgresql libpq-dev postgresql-client curl \
     postgresql-client-common libncurses5-dev libjpeg-dev zlib1g-dev git wget redis-server && \
     wget -O /usr/local/bin/wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/8ed92e8cab83cfed76ff012ed4a36cef74b28096/wait-for-it.sh && \

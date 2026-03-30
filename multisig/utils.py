@@ -1,4 +1,5 @@
 import logging
+import hashlib
 from bip_utils import Bip32Secp256k1
 from coincurve import PublicKey
 from bip_utils import Bip32Secp256k1, Hash160
@@ -113,3 +114,26 @@ def is_transaction_fully_signed(signatures, required_signatures):
         if not is_input_fully_signed(input_index, grouped_signatures, required_m):
             return False
     return True
+
+
+def generate_transaction_hash(transaction_hex):
+    """
+    Generates the transaction hash (txid) for a bitcoin-style transaction.
+
+    This function double-SHA256 hashes the transaction_hex, then reverses
+    the resulting bytes, following the convention used in Bitcoin and 
+    similar to the implementation in @bitauth/libauth's hashTransaction.
+
+    Args:
+        transaction_hex (str): The encoded transaction in hex string format.
+
+    Returns:
+        str: The hex-encoded txid (transaction hash).
+    """
+    return hashlib.sha256(
+        hashlib.sha256(
+            bytes.fromhex(transaction_hex)
+        ).digest()
+    ).digest()[::-1].hex()
+
+
