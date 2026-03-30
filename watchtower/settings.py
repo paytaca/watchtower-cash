@@ -753,4 +753,5 @@ STABLEHEDGE = {
 MULTISIG = {
     "ENABLE_AUTH": False,
     "TIMESTAMP_DRIFT_SECONDS": 60 * 2,  # ±60 * n seconds allowed
+    "JS_SERVER": config("MULTISIG_JS_SERVER", "http://localhost:3004"),
 }
