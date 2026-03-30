@@ -70,7 +70,7 @@ def get_timestamp_drift_limit():
 
 def get_timestamp_from_auth_data(auth_data):
     message, *ignore = auth_data.split('|')
-    return int(message.split(':'))
+    return int(message.split(':')[1])
 
 def is_valid_timestamp(timestamp: int):
     """
