@@ -5,6 +5,7 @@ from django.utils import timezone
 from multisig.serializers.wallet import SignerSerializer
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+import requests.exceptions
 
 import multisig.js_client as js_client
 from multisig.models.transaction import (
@@ -110,7 +111,7 @@ class ProposalSerializer(serializers.ModelSerializer):
                     raise ValidationError(
                         f"Invalid PSBT format: {decode_response.text}"
                     )
-            except Exception as e:
+            except requests.exceptions.RequestException as e:
                 raise ValidationError(f"Failed to validate PSBT: {str(e)}")
         return value
 
@@ -263,7 +264,7 @@ class PsbtSerializer(serializers.ModelSerializer):
                     raise ValidationError(
                         f"Invalid PSBT format: {decode_response.text}"
                     )
-            except Exception as e:
+            except requests.exceptions.RequestException as e:
                 raise ValidationError(f"Failed to validate PSBT: {str(e)}")
         return value
 
