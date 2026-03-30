@@ -2,7 +2,7 @@ import logging
 import requests
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from main.models import TransactionBroadcast
+from main.models import Transaction, TransactionBroadcast
 from multisig import js_client
 from multisig.auth.auth import PubKeySignatureMessageAuthentication
 from multisig.auth.permission import IsCosigner, IsProposalCoordinator, ProposalCoordinatorHasValidSignature
@@ -15,6 +15,7 @@ from django.db import models
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from django.db.models.functions import Coalesce
 from main.tasks import NODE
 
 from multisig.models.transaction import (
@@ -371,61 +372,66 @@ class ProposalStatusView(APIView):
 
         for inp in proposal.inputs.all():
             ## TODO: use the Transaction table in prod, this is for local testing only
-            url = f"https://watchtower.cash/api/transactions/outputs/?txid={inp.outpoint_transaction_hash}"
+            # url = f"https://watchtower.cash/api/transactions/outputs/?txid={inp.outpoint_transaction_hash}"
 
+            spending_tx = Transaction.objects.filter(txid=inp.outpoint_transaction_hash, index=inp.outpoint_index).first()
+            
             spending_txid = None
 
-            api_resp = requests.get(url, timeout=10)
-            data = api_resp.json()
-            for result in data.get("results", []):
-                if (
-                    result.get("txid") == inp.outpoint_transaction_hash
-                    and result.get("index") == inp.outpoint_index
-                ):
-                    spending_txid = result.get("spending_txid", "")
-                else:
-                    continue
+            if spending_tx:
+                spending_txid = spending_tx.spending_txid
 
-                spending_transaction = None
-                if spending_txid:
-                    inp.spending_txid = spending_txid
-                    inp.save(update_fields=["spending_txid"])
-                    spending_transaction = NODE.BCH._get_raw_transaction(spending_txid)
+            # api_resp = requests.get(url, timeout=10)
+            # data = api_resp.json()
+            # for result in data.get("results", []):
+            #     if (
+            #         result.get("txid") == inp.outpoint_transaction_hash
+            #         and result.get("index") == inp.outpoint_index
+            #     ):
+            #         spending_txid = result.get("spending_txid", "")
+            #     else:
+            #         continue
 
-                spending_transaction_unsigned_transaction_hash = None
-                if spending_transaction:
-                    get_unsigned_transaction_hash_resp = (
-                        js_client.get_unsigned_transaction_hash(
-                            spending_transaction["hex"]
-                        )
+            spending_transaction = None
+            if spending_txid:
+                inp.spending_txid = spending_txid
+                inp.save(update_fields=["spending_txid"])
+                spending_transaction = NODE.BCH._get_raw_transaction(spending_txid)
+
+            spending_transaction_unsigned_transaction_hash = None
+            if spending_transaction:
+                get_unsigned_transaction_hash_resp = (
+                    js_client.get_unsigned_transaction_hash(
+                        spending_transaction["hex"]
                     )
-                    spending_transaction_unsigned_transaction_hash = (
-                        get_unsigned_transaction_hash_resp.json().get(
-                            "unsigned_transaction_hash"
-                        )
+                )
+                spending_transaction_unsigned_transaction_hash = (
+                    get_unsigned_transaction_hash_resp.json().get(
+                        "unsigned_transaction_hash"
                     )
+                )
 
-                if (
+            if (
+                spending_transaction_unsigned_transaction_hash
+                and spending_transaction_unsigned_transaction_hash
+                == proposal.unsigned_transaction_hash
+            ):
+                new_status = Proposal.Status.BROADCAST_INITIATED
+            elif (
+                spending_transaction_unsigned_transaction_hash
+                and spending_transaction_unsigned_transaction_hash
+                != proposal.unsigned_transaction_hash
+            ):
+                new_status = Proposal.Status.CONFLICTED
+                inp.conflicting_proposal_identifier = (
                     spending_transaction_unsigned_transaction_hash
-                    and spending_transaction_unsigned_transaction_hash
-                    == proposal.unsigned_transaction_hash
-                ):
-                    new_status = Proposal.Status.BROADCAST_INITIATED
-                elif (
-                    spending_transaction_unsigned_transaction_hash
-                    and spending_transaction_unsigned_transaction_hash
-                    != proposal.unsigned_transaction_hash
-                ):
-                    new_status = Proposal.Status.CONFLICTED
-                    inp.conflicting_proposal_identifier = (
-                        spending_transaction_unsigned_transaction_hash
-                    )
+                )
 
-                if current_status != new_status:
-                    proposal.status = new_status
-                    proposal.save(update_fields=["status"])
+            if current_status != new_status:
+                proposal.status = new_status
+                proposal.save(update_fields=["status"])
 
-                if new_status == Proposal.Status.BROADCAST_INITIATED:
+            if new_status == Proposal.Status.BROADCAST_INITIATED:
                     transaction_broadcast = TransactionBroadcast.objects.filter(
                         txid=spending_txid
                     )
